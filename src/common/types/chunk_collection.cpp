@@ -42,15 +42,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			index_t old_count = new_chunk.size();
-			for (index_t c = 0; c < new_chunk.column_count; c++) {
-				new_chunk.data[c].count = added_data;
-			}
+			new_chunk.SetCardinality(added_data);
+
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
-			for (index_t c = 0; c < new_chunk.column_count; c++) {
-				new_chunk.data[c].count = old_count;
-			}
+			new_chunk.SetCardinality(old_count);
 			offset = added_data;
 		}
 	}
@@ -136,8 +133,8 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, inde
 		Vector &left_vec = left_chunk->data[col_idx];
 		Vector &right_vec = right_chunk->data[col_idx];
 
-		assert(!left_vec.sel_vector);
-		assert(!right_vec.sel_vector);
+		assert(!left_vec.sel_vector());
+		assert(!right_vec.sel_vector());
 		assert(left_vec.type == right_vec.type);
 
 		auto comp_res = compare_value(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -274,8 +271,6 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 	assert(target.GetTypes() == types);
 
 	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		target.data[col_idx].count = remaining_data;
-
 		switch (types[col_idx]) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
@@ -299,10 +294,27 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+		case TypeId::STRUCT: {
+			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+				index_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+				auto &src_chunk = chunks[chunk_idx_src];
+				Vector &src_vec = src_chunk->data[col_idx];
+				auto &tgt_vec = target.data[col_idx];
+				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+				if (tgt_vec.nullmask[row_idx]) {
+					continue;
+				}
+				// FIXME vectorize this!
+				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
+			}
+		} break;
 		default:
-			throw NotImplementedException("Type for setting");
+			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
 		}
 	}
+	target.SetCardinality(remaining_data);
 	target.Verify();
 }
 
@@ -413,9 +425,8 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 	index_t remaining_data = min((index_t)STANDARD_VECTOR_SIZE, heap_size - start_offset);
 	assert(target.GetTypes() == types);
 
+	target.SetCardinality(remaining_data);
 	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		target.data[col_idx].count = remaining_data;
-
 		switch (types[col_idx]) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
@@ -439,8 +450,27 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+			// TODO this is ugly and sloooow!
+		case TypeId::STRUCT:
+		case TypeId::LIST: {
+			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
+				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
+				index_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
+
+				auto &src_chunk = chunks[chunk_idx_src];
+				Vector &src_vec = src_chunk->data[col_idx];
+				auto &tgt_vec = target.data[col_idx];
+				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
+				if (tgt_vec.nullmask[row_idx]) {
+					continue;
+				}
+				// FIXME vectorize this!
+				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
+			}
+		} break;
+
 		default:
-			throw NotImplementedException("Type for setting");
+			throw NotImplementedException("Type is unsupported in MaterializeHeapChunk()");
 		}
 	}
 	target.Verify();

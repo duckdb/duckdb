@@ -57,8 +57,8 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 	assert(input1.type == TypeId::INT64);
 	assert(input2.type == TypeId::INT64);
 
-	result.count = input1.count;
-	result.sel_vector = input1.sel_vector;
+	result.SetCount(input1.size());
+	result.SetSelVector(input1.sel_vector());
 
 	string output_buffer;
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, const char *, true>(

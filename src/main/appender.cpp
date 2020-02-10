@@ -43,30 +43,34 @@ void Appender::CheckInvalidated() {
 
 void Appender::BeginRow() {
 	CheckInvalidated();
-	column = 0;
 }
 
 void Appender::EndRow() {
 	CheckInvalidated();
 	// check that all rows have been appended to
 	if (column != chunk.column_count) {
-		string msg = "Call to EndRow before all rows have been appended to!";
-		Invalidate(msg, true);
-		throw Exception(msg);
+		InvalidateException("Call to EndRow before all rows have been appended to!");
 	}
+	chunk.SetCardinality(chunk.size() + 1);
+	column = 0;
 	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		Flush();
 	}
 }
 
 template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
-	((DST *)col.GetData())[col.count++] = Cast::Operation<SRC, DST>(input);
+	((DST *)col.GetData())[col.size()] = Cast::Operation<SRC, DST>(input);
+}
+
+void Appender::InvalidateException(string msg) {
+	Invalidate(msg);
+	throw Exception(msg);
 }
 
 template <class T> void Appender::AppendValueInternal(T input) {
 	CheckInvalidated();
 	if (column >= chunk.column_count) {
-		throw Exception("Too many appends for chunk!");
+		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
 	switch (col.type) {
@@ -128,21 +132,21 @@ template <> void Appender::Append(double value) {
 
 template <> void Appender::Append(Value value) {
 	if (column >= chunk.column_count) {
-		throw Exception("Too many appends for chunk!");
+		InvalidateException("Too many appends for chunk!");
 	}
 	AppendValue(move(value));
 }
 
 template <> void Appender::Append(nullptr_t value) {
 	if (column >= chunk.column_count) {
-		throw Exception("Too many appends for chunk!");
+		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
-	col.nullmask[col.count++] = true;
+	col.nullmask[col.size()] = true;
 }
 
 void Appender::AppendValue(Value value) {
-	chunk.data[column].SetValue(chunk.data[column].count++, value);
+	chunk.data[column].SetValue(chunk.data[column].size(), value);
 	column++;
 }
 
@@ -154,22 +158,18 @@ Vector &Appender::GetAppendVector(index_t col_idx) {
 }
 
 void Appender::Flush() {
-	if (chunk.size() == 0) {
-		return;
-	}
 	CheckInvalidated();
 	try {
 		// check that all vectors have the same length before appending
-		index_t chunk_size = chunk.size();
-		for (index_t i = 1; i < chunk.column_count; i++) {
-			if (chunk.data[i].count != chunk_size) {
-				throw Exception("Failed to Flush appender: vectors have different number of rows");
-			}
+		if (column != 0) {
+			throw Exception("Failed to Flush appender: incomplete append to row!");
 		}
 
+		if (chunk.size() == 0) {
+			return;
+		}
 		con.Append(*description, chunk);
 	} catch (Exception &ex) {
-		con.context->RemoveAppender(this);
 		Invalidate(ex.what());
 		throw ex;
 	}
@@ -184,7 +184,7 @@ void Appender::Close() {
 	if (column == 0 || column == chunk.column_count) {
 		Flush();
 	}
-	Invalidate("The appender has been closed!", true);
+	Invalidate("The appender has been closed!");
 }
 
 void Appender::Invalidate(string msg, bool close) {

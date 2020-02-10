@@ -61,8 +61,8 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 			Execute(*expr.result_if_true, res_true_state, res_true);
 			Execute(*expr.result_if_false, res_false_state, res_false);
 
-			result.sel_vector = check.sel_vector;
-			result.count = check.count;
+			result.SetSelVector(check.sel_vector());
+			result.SetCount(check.size());
 
 			Case(res_true, res_false, result, tside, tcount, fside, fcount);
 		}

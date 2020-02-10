@@ -91,7 +91,7 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 		VectorOperations::Exec(dest, [&](index_t i, index_t k) { (*destinations[i])++; });
 
 	} else if (source.vector_type == VectorType::SEQUENCE_VECTOR) {
-		VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
 			if (!source.nullmask[i]) {
 				(*destinations[i])++;
 			}
@@ -111,12 +111,12 @@ template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source
 	auto data = (T *)source.GetData();
 	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (!source.nullmask[0]) {
-			VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(source, [&](index_t i, index_t k) {
 				auto destination = (T *)(dest[i] + offset);
 				*destination = data[0];
 			});
 		} else {
-			VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(source, [&](index_t i, index_t k) {
 				auto destination = (T *)(dest[i] + offset);
 				*destination = NullValue<T>();
 			});

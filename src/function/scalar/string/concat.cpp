@@ -14,8 +14,8 @@ namespace duckdb {
 static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	result.nullmask.reset();
-	result.sel_vector = args.data[0].sel_vector;
-	result.count = args.data[0].count;
+	result.SetSelVector(args.sel_vector);
+	result.SetCount(args.size());
 	// iterate over the vectors to check if the result is a constant vector or not
 	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
@@ -23,13 +23,13 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			// regular vector: set the result type to a flat vector
 			assert(input.vector_type == VectorType::FLAT_VECTOR);
-			assert(input.sel_vector == result.sel_vector && input.count == result.count);
+			assert(input.SameCardinality(result));
 			result.vector_type = VectorType::FLAT_VECTOR;
 		}
 	}
 
 	// now perform the actual concatenation
-	vector<string> results(result.count);
+	vector<string> results(args.size());
 	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
@@ -68,7 +68,7 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 
 static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<string> &results, string sep) {
 	// now perform the actual concatenation
-	vector<bool> has_results(result.count, false);
+	vector<bool> has_results(args.size(), false);
 	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
@@ -107,7 +107,7 @@ static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<strin
 static void concat_ws_variable_sep(DataChunk &args, Vector &result, vector<string> &results, Vector &separator) {
 	auto sep_data = (const char **)separator.GetData();
 	// now perform the actual concatenation
-	vector<bool> has_results(result.count, false);
+	vector<bool> has_results(result.size(), false);
 	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
@@ -151,8 +151,8 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 	auto sep_data = (const char **)separator.GetData();
 
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	result.sel_vector = args.data[0].sel_vector;
-	result.count = args.data[0].count;
+	result.SetSelVector(args.sel_vector);
+	result.SetCount(args.size());
 	// iterate over the vectors to check the result vector type
 	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
 		auto &input = args.data[col_idx];
@@ -160,13 +160,13 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
 			// regular vector: set the result type to a flat vector
 			assert(input.vector_type == VectorType::FLAT_VECTOR);
-			assert(input.sel_vector == result.sel_vector && input.count == result.count);
+			assert(input.SameCardinality(result));
 			result.vector_type = VectorType::FLAT_VECTOR;
 		}
 	}
 
 	// check if we are dealing with a constant separator or a variable separator
-	vector<string> results(result.count);
+	vector<string> results(result.size());
 	if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR) {
 		if (separator.nullmask[0]) {
 			// constant NULL as separator: return constant NULL vector

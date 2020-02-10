@@ -495,7 +495,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 		                      column + 1);
 	}
 	// insert the line number into the chunk
-	index_t row_entry = parse_chunk.data[column].count++;
+	index_t row_entry = parse_chunk.size();
 
 	str_val[length] = '\0';
 	// test against null string
@@ -530,8 +530,8 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, index_t &column) {
 	if (column < sql_types.size()) {
 		throw ParserException("Error on line %lld: expected %lld values but got %d", linenr, sql_types.size(), column);
 	}
-	nr_elements++;
-	if (nr_elements == STANDARD_VECTOR_SIZE) {
+	parse_chunk.SetCardinality(parse_chunk.size() + 1);
+	if (parse_chunk.size() == STANDARD_VECTOR_SIZE) {
 		Flush(insert_chunk);
 		return true;
 	}
@@ -541,7 +541,7 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, index_t &column) {
 }
 
 void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
-	if (nr_elements == 0) {
+	if (parse_chunk.size() == 0) {
 		return;
 	}
 	// convert the columns in the parsed chunk to the types of the table
@@ -565,6 +565,5 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		}
 	}
 	parse_chunk.Reset();
-
-	nr_elements = 0;
+	parse_chunk.SetCardinality(0);
 }

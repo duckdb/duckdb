@@ -19,7 +19,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(op.types);
-	chunk.data[0].count = chunk.data[1].count = keys.size();
+	chunk.SetCardinality(keys.size());
 	for (index_t i = 0; i < keys.size(); i++) {
 		chunk.data[0].SetValue(i, Value(keys[i]));
 		chunk.data[1].SetValue(i, Value(values[i]));

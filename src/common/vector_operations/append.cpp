@@ -26,18 +26,18 @@ template <class T> static void vector_append_loop(Vector &left, Vector &right, b
 	auto ldata = (T *)left.GetData();
 	auto rdata = (T *)right.GetData();
 	if (has_null) {
-		vector_append_function<T, true>(ldata, rdata, left.count, left.sel_vector, right.nullmask, right.count);
+		vector_append_function<T, true>(ldata, rdata, left.size(), left.sel_vector(), right.nullmask, right.size());
 	} else {
-		vector_append_function<T, false>(ldata, rdata, left.count, left.sel_vector, right.nullmask, right.count);
+		vector_append_function<T, false>(ldata, rdata, left.size(), left.sel_vector(), right.nullmask, right.size());
 	}
-	right.count += left.count;
+	right.SetCount(right.size() + left.size());
 }
 
 void VectorOperations::AppendFromStorage(Vector &source, Vector &target, bool has_null) {
-	if (source.count == 0)
+	if (source.size() == 0)
 		return;
 
-	if (source.count + target.count > STANDARD_VECTOR_SIZE) {
+	if (source.size() + target.size() > STANDARD_VECTOR_SIZE) {
 		throw Exception("Trying to append past STANDARD_VECTOR_SIZE!");
 	}
 

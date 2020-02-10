@@ -66,9 +66,11 @@ public:
 		return column;
 	}
 
-	void Invalidate(string msg, bool close = false);
-
+	void Invalidate(string msg, bool close = true);
 private:
+	//! Invalidate the appender with a specific message and throw an exception with the same message
+	void InvalidateException(string msg);
+
 	template <class T> void AppendValueInternal(T value);
 	template <class SRC, class DST> void AppendValueInternal(Vector &vector, SRC input);
 
@@ -84,6 +86,7 @@ private:
 	}
 
 	void AppendValue(Value value);
+
 };
 
 template <> void Appender::Append(bool value);

@@ -45,7 +45,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	for (index_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
-	result.sel_vector = result.data[0].sel_vector;
+	result.sel_vector = result.data[0].sel_vector();
 	result.Verify();
 }
 

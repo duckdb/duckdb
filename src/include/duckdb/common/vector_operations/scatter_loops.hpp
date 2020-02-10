@@ -43,6 +43,7 @@ static inline void scatter_loop(T *__restrict ldata, T **__restrict destination,
 }
 
 template <class T, class OP> void scatter_templated_loop(Vector &source, Vector &dest) {
+	assert(dest.SameCardinality(source));
 	auto ldata = (T *)source.GetData();
 	auto destination = (T **)dest.GetData();
 	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -53,11 +54,10 @@ template <class T, class OP> void scatter_templated_loop(Vector &source, Vector 
 		}
 
 		auto constant = ldata[0];
-		scatter_loop_constant<T, OP>(constant, destination, dest.count, dest.sel_vector);
+		scatter_loop_constant<T, OP>(constant, destination, dest.size(), dest.sel_vector());
 	} else {
 		// source and dest are equal-length vectors
-		assert(dest.sel_vector == source.sel_vector);
-		scatter_loop<T, OP>(ldata, destination, dest.count, dest.sel_vector, source.nullmask);
+		scatter_loop<T, OP>(ldata, destination, dest.size(), dest.sel_vector(), source.nullmask);
 	}
 }
 

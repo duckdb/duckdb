@@ -161,7 +161,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == ROW_TYPE);
-	assert(input.size() == row_ids.count);
+	assert(input.size() == row_ids.size());
 	assert(types[0] == input.data[0].type);
 
 	// generate the keys for the given input
@@ -171,13 +171,14 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// now insert the elements into the index
 	row_ids.Normalify();
 	auto row_identifiers = (row_t *)row_ids.GetData();
+	auto rsel = row_ids.sel_vector();
 	index_t failed_index = INVALID_INDEX;
-	for (index_t i = 0; i < row_ids.count; i++) {
+	for (index_t i = 0; i < row_ids.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
 
-		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
+		row_t row_id = row_identifiers[rsel ? rsel[i] : i];
 		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
@@ -196,7 +197,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (!keys[i]) {
 				continue;
 			}
-			index_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
+			index_t k = rsel ? rsel[i] : i;
 			row_t row_id = row_identifiers[k];
 			Erase(tree, *keys[i], 0, row_id);
 		}
@@ -328,7 +329,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	row_ids.Normalify();
 	auto row_identifiers = (int64_t *)row_ids.GetData();
 
-	for (index_t i = 0; i < row_ids.count; i++) {
+	for (index_t i = 0; i < row_ids.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -762,12 +763,12 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 
 	// create a vector pointing to the current set of row ids
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
-	row_identifiers.count =
-	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
+	index_t scan_count = std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
+	row_identifiers.SetCount(scan_count);
 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
 
 	// move to the next set of row ids
-	state->result_index += row_identifiers.count;
+	state->result_index += scan_count;
 }

@@ -44,19 +44,19 @@ static void copy_loop(Vector &input, void *target, index_t offset, index_t eleme
 	auto ldata = (T *)input.GetData();
 	auto result_data = (T *)target;
 	if (SET_NULL) {
-		copy_function_set_null(ldata, result_data, offset, element_count, input.sel_vector, input.nullmask);
+		copy_function_set_null(ldata, result_data, offset, element_count, input.sel_vector(), input.nullmask);
 	} else {
-		copy_function(ldata, result_data, offset, element_count, input.sel_vector);
+		copy_function(ldata, result_data, offset, element_count, input.sel_vector());
 	}
 }
 
 template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, index_t offset, index_t element_count) {
-	if (source.count == 0)
+	if (source.size() == 0)
 		return;
 	if (element_count == 0) {
-		element_count = source.count;
+		element_count = source.size();
 	}
-	assert(offset + element_count <= source.count);
+	assert(offset + element_count <= source.size());
 
 	switch (source.type) {
 	case TypeId::BOOL:
@@ -110,9 +110,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
-	assert(offset <= source.count);
-	target.count = source.count - offset;
+	assert(offset <= source.size());
+	target.SetCount(source.size() - offset);
 	VectorOperations::Exec(
 	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
-	VectorOperations::Copy(source, target.GetData(), offset, target.count);
+	VectorOperations::Copy(source, target.GetData(), offset, target.size());
 }

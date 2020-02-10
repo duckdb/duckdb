@@ -89,11 +89,11 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	assert(args.column_count == 1 && args.data[0].type == TypeId::VARCHAR);
 	auto &input = args.data[0];
 	if (state.root.executor->chunk) {
-		result.count = state.root.executor->chunk->size();
-		result.sel_vector = state.root.executor->chunk->sel_vector;
+		result.SetCount(state.root.executor->chunk->size());
+		result.SetSelVector(state.root.executor->chunk->sel_vector);
 	} else {
-		result.count = input.count;
-		result.sel_vector = input.sel_vector;
+		result.SetCount(input.size());
+		result.SetSelVector(input.sel_vector());
 	}
 	Transaction &transaction = info.context.ActiveTransaction();
 	if (info.sequence) {
@@ -106,7 +106,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		});
 	} else {
 		// sequence to use comes from the input
-		assert(result.count == input.count && result.sel_vector == input.sel_vector);
+		assert(result.SameCardinality(input));
 		auto result_data = (int64_t *)result.GetData();
 		VectorOperations::ExecType<const char *>(input, [&](const char *value, index_t i, index_t k) {
 			// first get the sequence schema/name

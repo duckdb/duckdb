@@ -73,14 +73,6 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-static void SetChunkSelectionVector(DataChunk &chunk, sel_t *sel_vector, index_t count) {
-	chunk.sel_vector = sel_vector;
-	for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-		chunk.data[col_idx].count = count;
-		chunk.data[col_idx].sel_vector = sel_vector;
-	}
-}
-
 static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count, sel_t *sel, index_t count) {
 	assert(count > 0);
 	if (result_count == 0) {
@@ -221,7 +213,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			}
 			if (new_count != current_count) {
 				// disqualify all non-qualifying tuples by updating the selection vector
-				SetChunkSelectionVector(*chunk, result, new_count);
+				chunk->SetCardinality(new_count, result);
 				current_count = new_count;
 			}
 		}
@@ -232,7 +224,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
 		// restore the initial selection vector and count
-		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
+		chunk->SetCardinality(initial_count, initial_sel);
 		return current_count;
 	} else {
 		sel_t *initial_sel = chunk->sel_vector;
@@ -289,7 +281,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			}
 			current_sel = remaining;
 			current_count = remaining_count;
-			SetChunkSelectionVector(*chunk, remaining, remaining_count);
+			chunk->SetCardinality(remaining_count, remaining);
 		}
 
 		// adapt runtime statistics
@@ -297,7 +289,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		AdaptRuntimeStatistics(expr, state,
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
-		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
+		chunk->SetCardinality(initial_count, initial_sel);
 		if (result_vector != result && result_count > 0) {
 			memcpy(result, result_vector, result_count * sizeof(sel_t));
 		}

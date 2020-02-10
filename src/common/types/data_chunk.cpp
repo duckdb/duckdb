@@ -21,7 +21,7 @@ void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 		data[i].type = types[i];
 		data[i].data = nullptr;
 		data[i].count = 0;
-		data[i].sel_vector = nullptr;
+		data[i].selection_vector = nullptr;
 	}
 }
 
@@ -32,9 +32,10 @@ void DataChunk::Initialize(vector<TypeId> &types) {
 	for (auto &type : types) {
 		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
 	}
-	assert(size > 0);
-	owned_data = unique_ptr<data_t[]>(new data_t[size]);
-	memset(owned_data.get(), 0, size);
+	if (size > 0) {
+		owned_data = unique_ptr<data_t[]>(new data_t[size]);
+		memset(owned_data.get(), 0, size);
+	}
 
 	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {
@@ -48,7 +49,7 @@ void DataChunk::Reset() {
 	for (index_t i = 0; i < column_count; i++) {
 		data[i].data = ptr;
 		data[i].count = 0;
-		data[i].sel_vector = nullptr;
+		data[i].selection_vector = nullptr;
 		data[i].buffer.reset();
 		data[i].auxiliary.reset();
 		data[i].nullmask.reset();
@@ -243,12 +244,12 @@ void DataChunk::Verify() {
 	// verify that all vectors in this chunk have the chunk selection vector
 	sel_t *v = sel_vector;
 	for (index_t i = 0; i < column_count; i++) {
-		assert(data[i].sel_vector == v);
+		assert(data[i].selection_vector == v);
 		data[i].Verify();
 	}
 	// verify that all vectors in the chunk have the same count
 	for (index_t i = 0; i < column_count; i++) {
-		assert(size() == data[i].count);
+		assert(size() == data[i].size());
 	}
 #endif
 }

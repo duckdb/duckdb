@@ -75,16 +75,14 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			if (aggr.children.size()) {
 				for (index_t j = 0; j < aggr.children.size(); ++j) {
 					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
-					++payload_idx;
-					++payload_expr_idx;
+					payload_idx++;
+					payload_expr_idx++;
 				}
 			} else {
-				payload_chunk.data[payload_idx].count = group_chunk.size();
-				payload_chunk.data[payload_idx].sel_vector = group_chunk.sel_vector;
-				++payload_idx;
+				payload_idx++;
 			}
 		}
-		payload_chunk.sel_vector = group_chunk.sel_vector;
+		payload_chunk.SetCardinality(group_chunk.size(), group_chunk.sel_vector);
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
@@ -114,9 +112,9 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			aggr.function.initialize(aggr_state.get(), aggr.return_type);
 
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
-			state->aggregate_chunk.data[i].count = 1;
 			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
 		}
+		state->aggregate_chunk.SetCardinality(1);
 		state->finished = true;
 	}
 	if (elements_found == 0 && !state->finished) {

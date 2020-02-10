@@ -23,6 +23,12 @@ const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 
+// TODO these are incomplete and should maybe not exist as such
+const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
+const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
+
+const SQLType SQLType::ANY = SQLType(SQLTypeId::ANY);
+
 const vector<SQLType> SQLType::NUMERIC = {
     SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
     SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
@@ -33,6 +39,7 @@ const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
     SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
     SQLType::VARCHAR};
+// TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;
 
@@ -60,6 +67,10 @@ string TypeIdToString(TypeId type) {
 		return "VARCHAR";
 	case TypeId::VARBINARY:
 		return "VARBINARY";
+	case TypeId::STRUCT:
+		return "STRUCT<?>";
+	case TypeId::LIST:
+		return "LIST<?>";
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -87,6 +98,10 @@ index_t GetTypeIdSize(TypeId type) {
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
 		return sizeof(void *);
+	case TypeId::STRUCT:
+		return 0; // no own payload
+	case TypeId::LIST:
+		return 16; // offset + len
 	case TypeId::VARBINARY:
 		return sizeof(blob_t);
 	default:
@@ -114,6 +129,10 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
+	case TypeId::STRUCT:
+		return SQLType(SQLTypeId::STRUCT); // TODO we do not know the child types here
+	case TypeId::LIST:
+		return SQLType(SQLTypeId::LIST);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -181,6 +200,10 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "NULL";
 	case SQLTypeId::ANY:
 		return "ANY";
+	case SQLTypeId::STRUCT:
+		return "STRUCT<?>";
+	case SQLTypeId::LIST:
+		return "LIST<?>";
 	default:
 		return "INVALID";
 	}
@@ -188,7 +211,25 @@ string SQLTypeIdToString(SQLTypeId id) {
 
 string SQLTypeToString(SQLType type) {
 	// FIXME: display width/scale
-	return SQLTypeIdToString(type.id);
+	switch (type.id) {
+	case SQLTypeId::STRUCT: {
+		string ret = "STRUCT<";
+		for (size_t i = 0; i < type.child_type.size(); i++) {
+			ret += type.child_type[i].first + ": " + SQLTypeToString(type.child_type[i].second);
+			if (i < type.child_type.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		assert(type.child_type.size() == 1);
+		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
+	}
+	default:
+		return SQLTypeIdToString(type.id);
+	}
 }
 
 bool SQLType::IsIntegral() const {
@@ -246,8 +287,14 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+	case SQLTypeId::STRUCT:
+		return TypeId::STRUCT;
+	case SQLTypeId::LIST:
+		return TypeId::LIST;
+	case SQLTypeId::ANY:
+		return TypeId::INVALID;
 	default:
-		throw ConversionException("Invalid SQLType %d", type);
+		throw ConversionException("Invalid SQLType %s", SQLTypeToString(type).c_str());
 	}
 }
 

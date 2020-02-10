@@ -35,8 +35,8 @@ static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLTy
 	}
 	result.vector_type = source.vector_type;
 	result.nullmask = source.nullmask;
-	result.sel_vector = source.sel_vector;
-	result.count = source.count;
+	result.SetSelVector(source.sel_vector());
+	result.SetCount(source.size());
 }
 
 template <class SRC>
@@ -237,8 +237,8 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		// cast a NULL to another type, just copy the properties and change the type
 		result.vector_type = source.vector_type;
 		result.nullmask = source.nullmask;
-		result.sel_vector = source.sel_vector;
-		result.count = source.count;
+		result.SetSelVector(source.sel_vector());
+		result.SetCount(source.size());
 		break;
 	}
 	default:

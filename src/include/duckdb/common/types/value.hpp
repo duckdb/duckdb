@@ -89,6 +89,9 @@ public:
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
+	//! Create a struct value with given list of entries
+	static Value STRUCT(child_list_t<Value> values);
+
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
@@ -132,6 +135,9 @@ public:
 
 	//! The value of the object, if it is of a variable size type
 	string str_value;
+
+	child_list_t<Value> struct_value;
+	std::vector<Value> list_value;
 
 	//! Serializes a Value to a stand-alone binary blob
 	void Serialize(Serializer &serializer);

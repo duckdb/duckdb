@@ -16,7 +16,8 @@ using namespace std;
 
 TEST_CASE("Casting vectors", "[vector_ops]") {
 	Vector v(TypeId::BOOL, true, false);
-	v.count = 3;
+	v.SetCount(3);
+
 	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
@@ -45,7 +46,8 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 
 TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	Vector v(TypeId::BOOL, true, false);
-	v.count = 3;
+	v.SetCount(3);
+
 	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
@@ -98,7 +100,7 @@ static void require_compare(Vector &val) {
 
 TEST_CASE("Compare vectors", "[vector_ops]") {
 	Vector v(TypeId::BOOL, true, false);
-	v.count = 3;
+	v.SetCount(3);
 	v.SetValue(0, Value::BOOLEAN(true));
 	v.SetValue(1, Value::BOOLEAN(false));
 	v.SetValue(2, Value());
@@ -122,14 +124,14 @@ static void require_sg(Vector &v) {
 	uint64_t ptrs[2];
 
 	Vector p(TypeId::POINTER, true, false);
-	p.count = v.count;
+	p.SetCount(v.size());
 	p.SetValue(0, Value::POINTER((uintptr_t)&ptrs[0]));
 	p.SetValue(1, Value::POINTER((uintptr_t)&ptrs[1]));
 
 	VectorOperations::Scatter::Set(v, p);
 
 	Vector r(v.type, true, false);
-	r.count = p.count;
+	r.SetCount(p.size());
 
 	VectorOperations::Gather::Set(p, r, false);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
@@ -153,7 +155,7 @@ static void require_sg(Vector &v) {
 
 TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 	Vector v(TypeId::INT8, true, false);
-	v.count = 2;
+	v.SetCount(2);
 	v.SetValue(0, Value::TINYINT(true));
 	v.SetValue(1, Value::TINYINT(false));
 
@@ -172,13 +174,13 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 
 static void require_generate(TypeId t) {
 	Vector v(t, true, false);
-	v.count = 100;
+	v.SetCount(100);
 	VectorOperations::GenerateSequence(v, 42, 1);
-	for (size_t i = 0; i < v.count; i++) {
+	for (size_t i = 0; i < v.size(); i++) {
 		REQUIRE(v.GetValue(i).CastAs(TypeId::INT64) == Value::BIGINT(i + 42));
 	}
 	Vector hash(TypeId::HASH, true, false);
-	hash.count = v.count;
+	hash.SetCount(v.size());
 	VectorOperations::Hash(v, hash);
 }
 
@@ -192,10 +194,10 @@ TEST_CASE("Generator sequence vectors", "[vector_ops]") {
 
 static void require_arith(TypeId t) {
 	Vector v1(t, true, false);
-	v1.count = 6;
+	v1.SetCount(6);
 
 	Vector v2(t, true, false);
-	v2.count = v1.count;
+	v2.SetCount(v1.size());
 
 	// v1: 1, 2, 3, NULL, 42, NULL
 	// v2: 4, 5, 6, 7, NULL, NULL
@@ -214,7 +216,7 @@ static void require_arith(TypeId t) {
 	v2.SetValue(5, Value());
 
 	Vector r(t, true, false);
-	r.count = v1.count;
+	r.SetCount(v1.size());
 
 	VectorOperations::Add(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(5));
@@ -267,10 +269,10 @@ static void require_arith(TypeId t) {
 
 static void require_mod(TypeId t) {
 	Vector v1(t, true, false);
-	v1.count = 7;
+	v1.SetCount(7);
 
 	Vector v2(t, true, false);
-	v2.count = v1.count;
+	v2.SetCount(v1.size());
 
 	v1.SetValue(0, Value::BIGINT(10));
 	v1.SetValue(1, Value::BIGINT(10));
@@ -289,7 +291,7 @@ static void require_mod(TypeId t) {
 	v2.SetValue(6, Value());
 
 	Vector r(t, true, false);
-	r.count = v1.count;
+	r.SetCount(v1.size());
 
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(0));
@@ -303,10 +305,10 @@ static void require_mod(TypeId t) {
 
 static void require_mod_double() {
 	Vector v1(TypeId::DOUBLE, true, false);
-	v1.count = 2;
+	v1.SetCount(2);
 
 	Vector v2(TypeId::DOUBLE, true, false);
-	v2.count = v1.count;
+	v2.SetCount(v1.size());
 
 	v1.SetValue(0, Value::DOUBLE(10));
 	v1.SetValue(1, Value::DOUBLE(10));
@@ -315,7 +317,7 @@ static void require_mod_double() {
 	v2.SetValue(1, Value::DOUBLE(4));
 
 	Vector r(TypeId::DOUBLE, true, false);
-	r.count = v1.count;
+	r.SetCount(v1.size());
 
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));

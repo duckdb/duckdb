@@ -173,6 +173,13 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
+Value Value::STRUCT(child_list_t<Value> values) {
+	Value result(TypeId::STRUCT);
+	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -324,6 +331,30 @@ string Value::ToString(SQLType sql_type) const {
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+	case SQLTypeId::STRUCT: {
+		string ret = "<";
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &child = struct_value[i];
+			ret += child.first + ": " + child.second.ToString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}

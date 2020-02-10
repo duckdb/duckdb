@@ -393,9 +393,9 @@ int main(int argc, char **argv) {
 			is_active = false;
 			interrupt_thread.join();
 
-			j = {{"success", true}, {"ref", ref}, {"count", chunk->data[0].count}, {"data", json::array()}};
+			j = {{"success", true}, {"ref", ref}, {"count", chunk->size()}, {"data", json::array()}};
 			serialize_chunk(state.res.get(), chunk.get(), j);
-			if (chunk->data[0].count != 0) {
+			if (chunk->size() != 0) {
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
 				state.touched = std::time(nullptr);
 				client_state_map[ref] = move(state);

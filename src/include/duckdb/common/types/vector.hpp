@@ -74,14 +74,25 @@ public:
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
-	//! The amount of elements in the vector.
-	index_t count;
-	//! The selection vector of the vector.
-	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
-
 public:
+	index_t size() const {
+		return count;
+	}
+	sel_t *sel_vector() const {
+		return selection_vector;
+	}
+	bool SameCardinality(const Vector &other) const {
+		return size() == other.size() && sel_vector() == other.sel_vector();
+	}
+	void SetCount(index_t count) {
+		this->count = count;
+	}
+	void SetSelVector(sel_t *sel) {
+		this->selection_vector = sel;
+	}
+
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
@@ -92,7 +103,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type, bool zero_data = false);
+	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector.
@@ -134,7 +145,15 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
+	child_list_t<unique_ptr<Vector>>& GetChildren();
+	void AddChild(unique_ptr<Vector> vector, string name="");
+
+
 protected:
+	//! The amount of elements in the vector.
+	index_t count;
+	//! The selection vector of the vector.
+	sel_t *selection_vector;
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The main buffer holding the data of the vector
@@ -142,5 +161,7 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
+	//! child vectors used for nested data
+	child_list_t<unique_ptr<Vector>> children;
 };
 } // namespace duckdb

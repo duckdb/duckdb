@@ -34,8 +34,8 @@ template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &i
 	assert(input.type == TypeId::VARCHAR);
 
 	result.nullmask = input.nullmask;
-	result.count = input.count;
-	result.sel_vector = input.sel_vector;
+	result.SetCount(input.size());
+	result.SetSelVector(input.sel_vector());
 
 	auto result_data = (const char **)result.GetData();
 	auto input_data = (const char **)input.GetData();

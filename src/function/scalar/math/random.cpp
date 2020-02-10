@@ -25,10 +25,11 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
 
-	result.count = 1;
 	if (state.root.executor->chunk) {
-		result.count = state.root.executor->chunk->size();
-		result.sel_vector = state.root.executor->chunk->sel_vector;
+		result.SetCount(state.root.executor->chunk->size());
+		result.SetSelVector(state.root.executor->chunk->sel_vector);
+	} else {
+		result.SetCount(1);
 	}
 
 	auto result_data = (double *)result.GetData();

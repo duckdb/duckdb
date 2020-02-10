@@ -25,8 +25,8 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
 	result.nullmask.set();
-	result.sel_vector = input.sel_vector;
-	result.count = input.count;
+	result.SetCount(input.size());
+	result.SetSelVector(input.sel_vector());
 
 	auto input_seeds = (double *)input.GetData();
 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;

@@ -55,11 +55,8 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		// found NULL entries!
 		assert(sizeof(not_null_vector) == sizeof(chunk.owned_sel_vector));
 		memcpy(chunk.owned_sel_vector, not_null_vector, sizeof(not_null_vector));
-		chunk.sel_vector = chunk.owned_sel_vector;
-		for (index_t i = 0; i < chunk.column_count; i++) {
-			chunk.data[i].sel_vector = chunk.sel_vector;
-			chunk.data[i].count = not_null_entries;
-		}
+
+		chunk.SetCardinality(not_null_entries, chunk.owned_sel_vector);
 		chunk.Verify();
 		return true;
 	} else {
@@ -82,13 +79,11 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 	if (result_count > 0) {
 		// we only return the columns on the left side
 		// project them using the result selection vector
-		result.sel_vector = result.owned_sel_vector;
 		// reference the columns of the left side from the result
 		for (index_t i = 0; i < left.column_count; i++) {
 			result.data[i].Reference(left.data[i]);
-			result.data[i].sel_vector = result.sel_vector;
-			result.data[i].count = result_count;
 		}
+		result.SetCardinality(result_count, result.owned_sel_vector);
 	} else {
 		assert(result.size() == 0);
 	}
@@ -247,16 +242,16 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// create a reference to the chunk on the left side using the lvector
 			for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
-				chunk.data[i].count = match_count;
-				chunk.data[i].sel_vector = lvector;
+				chunk.data[i].SetCount(match_count);
+				chunk.data[i].SetSelVector(lvector);
 				chunk.data[i].Flatten();
 			}
 			// now create a reference to the chunk on the right side using the rvector
 			for (index_t i = 0; i < right_data.column_count; i++) {
 				index_t chunk_entry = state->child_chunk.column_count + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
-				chunk.data[chunk_entry].count = match_count;
-				chunk.data[chunk_entry].sel_vector = rvector;
+				chunk.data[chunk_entry].SetCount(match_count);
+				chunk.data[chunk_entry].SetSelVector(rvector);
 				chunk.data[chunk_entry].Flatten();
 			}
 			chunk.sel_vector = nullptr;

@@ -89,7 +89,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				// resolve the join key
 				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
-				if (state->right_orders[i].count < state->join_keys.data[k].count) {
+				if (state->right_orders[i].count < state->join_keys.data[k].size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
 					// this only happens if there are NULL values in the right-hand side
 					// hence we set the has_null to true (this is required for the MARK join)
@@ -178,16 +178,16 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			} else {
 				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
-					chunk.data[i].count = result_count;
-					chunk.data[i].sel_vector = left_info.result;
+					chunk.data[i].SetCount(result_count);
+					chunk.data[i].SetSelVector(left_info.result);
 					chunk.data[i].Flatten();
 				}
 				// now create a reference to the chunk on the right side
 				for (index_t i = 0; i < right_chunk.column_count; i++) {
 					index_t chunk_entry = state->child_chunk.column_count + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-					chunk.data[chunk_entry].count = result_count;
-					chunk.data[chunk_entry].sel_vector = right.result;
+					chunk.data[chunk_entry].SetCount(result_count);
+					chunk.data[chunk_entry].SetSelVector(right.result);
 					chunk.data[chunk_entry].Flatten();
 				}
 			}

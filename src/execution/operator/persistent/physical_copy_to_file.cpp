@@ -199,7 +199,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 	}
 	writer.Close();
 
-	chunk.data[0].count = 1;
+	chunk.SetCardinality(1);
 	chunk.data[0].SetValue(0, Value::BIGINT(total));
 
 	state->finished = true;

@@ -57,7 +57,7 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 			v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
 			v.count = end - begin;
 			v.nullmask <<= start_in_vector;
-			assert(!v.sel_vector);
+			assert(!v.sel_vector());
 			v.Verify();
 		}
 		aggregate.update(&inputs[0], input_count, s);
@@ -66,7 +66,7 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 		v.data = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		v.count = end - begin;
 		v.type = result_type;
-		assert(!v.sel_vector);
+		assert(!v.sel_vector());
 		v.Verify();
 		aggregate.combine(v, s);
 	}

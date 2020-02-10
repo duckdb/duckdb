@@ -10,6 +10,7 @@
 using namespace duckdb;
 using namespace std;
 
+
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	AggregateBinder aggregate_binder(binder, context);
@@ -46,6 +47,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		types.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
+
 	// bind the aggregate
 	index_t best_function = Function::BindFunction(func->name, func->functions, types);
 	// found a matching function!

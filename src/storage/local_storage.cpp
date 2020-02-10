@@ -85,10 +85,8 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}
-		result.data[i].sel_vector = sel_vector;
-		result.data[i].count = count;
 	}
-	result.sel_vector = sel_vector;
+	result.SetCardinality(count, sel_vector);
 	state.chunk_index++;
 }
 
@@ -108,8 +106,8 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 
 		// first generate the vector of row identifiers
 		Vector row_identifiers(ROW_TYPE);
-		row_identifiers.sel_vector = chunk.sel_vector;
-		row_identifiers.count = chunk.size();
+		row_identifiers.SetSelVector(chunk.sel_vector);
+		row_identifiers.SetCount(chunk.size());
 		VectorOperations::GenerateSequence(row_identifiers, base_id, 1, true);
 
 		// now append the entries to the indices
@@ -133,7 +131,8 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 static index_t GetChunk(Vector &row_identifiers) {
 	row_identifiers.Normalify();
 	auto ids = (row_t *)row_identifiers.GetData();
-	auto first_id = ids[row_identifiers.sel_vector ? row_identifiers.sel_vector[0] : 0] - MAX_ROW_ID;
+	auto rsel = row_identifiers.sel_vector();
+	auto first_id = ids[rsel ? rsel[0] : 0] - MAX_ROW_ID;
 
 	index_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
 	// verify that all row ids belong to the same chunk
@@ -189,7 +188,7 @@ static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_
 static void update_chunk(Vector &data, Vector &updates, Vector &row_identifiers, index_t base_index) {
 	assert(data.type == updates.type);
 	assert(row_identifiers.type == ROW_TYPE);
-	assert(updates.sel_vector == row_identifiers.sel_vector);
+	assert(updates.sel_vector() == row_identifiers.sel_vector());
 
 	switch (data.type) {
 	case TypeId::INT8:

@@ -78,9 +78,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count++;
-	}
+	chunk.SetCardinality(chunk.size() + 1);
 }
 
 static void append_order(order_t *o, tpch_append_information *info) {

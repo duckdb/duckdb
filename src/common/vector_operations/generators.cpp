@@ -34,7 +34,7 @@ void generate_sequence_function(T *__restrict result_data, T value, T increment,
 
 template <class T> void templated_generate_sequence(Vector &result, T start, T increment, bool ignore_sel_vector) {
 	auto ldata = (T *)result.GetData();
-	generate_sequence_function<T>(ldata, start, increment, result.count, result.sel_vector, ignore_sel_vector);
+	generate_sequence_function<T>(ldata, start, increment, result.size(), result.sel_vector(), ignore_sel_vector);
 }
 
 void VectorOperations::GenerateSequence(Vector &result, int64_t start, int64_t increment, bool ignore_sel_vector) {

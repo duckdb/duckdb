@@ -132,10 +132,6 @@ struct VectorOperations {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
 		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
-		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and
-		//! converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is
-		//! added to
-		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);
 	};
 
 	//===--------------------------------------------------------------------===//
@@ -210,11 +206,11 @@ struct VectorOperations {
 		} else {
 			assert(vector.vector_type == VectorType::FLAT_VECTOR);
 			if (count == 0) {
-				count = vector.count;
+				count = vector.size();
 			} else {
 				count += offset;
 			}
-			Exec(vector.sel_vector, count, fun, offset);
+			Exec(vector.sel_vector(), count, fun, offset);
 		}
 	}
 
@@ -233,8 +229,9 @@ struct VectorOperations {
 		if (vector.vector_type == VectorType::SEQUENCE_VECTOR) {
 			int64_t start, increment;
 			vector.GetSequence(start, increment);
-			for (index_t i = 0; i < vector.count; i++) {
-				index_t idx = vector.sel_vector ? vector.sel_vector[i] : i;
+			auto vsel = vector.sel_vector();
+			for (index_t i = 0; i < vector.size(); i++) {
+				index_t idx = vsel ? vsel[i] : i;
 				fun((T)(start + increment * idx), idx, i);
 			}
 		} else if (vector.vector_type == VectorType::CONSTANT_VECTOR) {

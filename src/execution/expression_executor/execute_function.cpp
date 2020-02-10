@@ -35,6 +35,8 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 			arguments.data[i].Initialize(state->child_types[i]);
 			Execute(*expr.children[i], state->child_states[i].get(), arguments.data[i]);
 		}
+		arguments.sel_vector = arguments.data[0].sel_vector();
+		arguments.Verify();
 	}
 	expr.function.function(arguments, *state, result);
 	if (result.type != expr.return_type) {

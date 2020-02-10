@@ -100,26 +100,20 @@ index_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *s
 	Vector probe_result(TypeId::BOOL);
 
 	auto probe_data = (bool *)probe_result.GetData();
-	probe_result.count = chunk.data.get()->count;
+	probe_result.SetCount(chunk.size());
 
 	// Use the HT to find duplicate rows
 	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
 
 	// Update the sel_vector of the DataChunk
 	index_t match_count = 0;
-	for (index_t probe_idx = 0; probe_idx < probe_result.count; probe_idx++) {
+	for (index_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
 		index_t sel_idx = probe_idx;
 		if (probe_data[sel_idx]) {
 			chunk.owned_sel_vector[match_count++] = sel_idx;
 		}
 	}
-
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = match_count;
-		chunk.data[i].sel_vector = chunk.owned_sel_vector;
-	}
-
-	chunk.sel_vector = chunk.owned_sel_vector;
+	chunk.SetCardinality(match_count, chunk.owned_sel_vector);
 
 	return match_count;
 }

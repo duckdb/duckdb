@@ -81,7 +81,7 @@ void CleanupState::Flush() {
 
 	// set up the row identifiers vector
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
-	row_identifiers.count = count;
+	row_identifiers.SetCount(count);
 
 	// delete the tuples from all the indexes
 	current_table->RemoveFromIndexes(row_identifiers);

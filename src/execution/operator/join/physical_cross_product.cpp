@@ -61,12 +61,12 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 		// first duplicate the values of the left side
 		auto lvalue = left_chunk.data[i].GetValue(state->left_position);
 		chunk.data[i].Reference(lvalue);
-		chunk.data[i].count = right_chunk.size();
 	}
 	for (index_t i = 0; i < right_chunk.column_count; i++) {
 		// now create a reference to the vectors of the right chunk
 		chunk.data[left_chunk.column_count + i].Reference(right_chunk.data[i]);
 	}
+	chunk.SetCardinality(right_chunk.size());
 
 	// for the next iteration, move to the next position on the left side
 	state->left_position++;

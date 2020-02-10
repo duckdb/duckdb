@@ -53,7 +53,14 @@ public:
 		if (column_count == 0) {
 			return 0;
 		}
-		return data[0].count;
+		return data[0].size();
+	}
+	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
+		for(index_t i = 0; i < column_count; i++) {
+			data[i].SetCount(count);
+			data[i].SetSelVector(sel_vector);
+		}
+		this->sel_vector = sel_vector;
 	}
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! This will create one vector of the specified type for each TypeId in the

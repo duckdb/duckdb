@@ -13,7 +13,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConstantExp
 void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result) {
 	result.Reference(expr.value);
 	if (chunk) {
-		result.count = chunk->size();
-		result.sel_vector = chunk->sel_vector;
+		result.SetCount(chunk->size());
+		result.SetSelVector(chunk->sel_vector);
 	}
 }

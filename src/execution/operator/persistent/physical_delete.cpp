@@ -20,7 +20,7 @@ void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		deleted_count += state->child_chunk.size();
 	}
 
-	chunk.data[0].count = 1;
+	chunk.SetCardinality(1);
 	chunk.data[0].SetValue(0, Value::BIGINT(deleted_count));
 
 	state->finished = true;

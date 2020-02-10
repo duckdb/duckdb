@@ -141,6 +141,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
 	auto &expression = **expr;
+	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
 		return string();
@@ -152,6 +153,12 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth,
 	} else {
 		// successfully bound: replace the node with a BoundExpression
 		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr), result.sql_type);
+		auto be = (BoundExpression*) expr->get();
+		assert(be);
+		be->alias = alias;
+		if (!alias.empty()) {
+			be->expr->alias = alias;
+		}
 		return string();
 	}
 }

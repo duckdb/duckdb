@@ -118,7 +118,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				assert(chunk.column_count == state->child_chunk.column_count + 1);
 				auto &result_vector = chunk.data[state->child_chunk.column_count];
 				assert(result_vector.type == TypeId::BOOL);
-				result_vector.count = state->child_chunk.size();
+				result_vector.SetCount(state->child_chunk.size());
 				// for every data vector, we just reference the child chunk
 				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
@@ -129,7 +129,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
 					auto bool_result = (bool *)result_vector.GetData();
-					for (index_t i = 0; i < result_vector.count; i++) {
+					for (index_t i = 0; i < result_vector.size(); i++) {
 						bool_result[i] = false;
 					}
 				} else {
@@ -145,9 +145,9 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				}
 				// for the RHS
 				for (index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
-					chunk.data[k].count = state->child_chunk.size();
 					chunk.data[k].nullmask.set();
 				}
+				chunk.SetCardinality(state->child_chunk.size());
 				return;
 			}
 		}

@@ -28,8 +28,8 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		// init result to false
 		Vector intermediate;
 		intermediate.Initialize(TypeId::BOOL);
-		intermediate.count = left.count;
-		intermediate.sel_vector = left.sel_vector;
+		intermediate.SetCount(left.size());
+		intermediate.SetSelVector(left.sel_vector());
 		VectorOperations::Set(intermediate, Value(false));
 
 		// in rhs is a list of constants

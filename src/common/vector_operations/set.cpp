@@ -20,7 +20,7 @@ static inline void set_loop(T *__restrict result_data, T value, index_t count, s
 template <class T> void templated_set_loop(Vector &result, T value) {
 	auto result_data = (T *)result.GetData();
 
-	set_loop<T>(result_data, value, result.count, result.sel_vector);
+	set_loop<T>(result_data, value, result.size(), result.sel_vector());
 }
 
 //===--------------------------------------------------------------------===//
@@ -66,7 +66,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 		case TypeId::VARCHAR: {
 			auto str = result.AddString(value.str_value);
 			auto dataptr = (const char **)result.GetData();
-			VectorOperations::Exec(result.sel_vector, result.count, [&](index_t i, index_t k) { dataptr[i] = str; });
+			VectorOperations::Exec(result, [&](index_t i, index_t k) { dataptr[i] = str; });
 			break;
 		}
 		default:

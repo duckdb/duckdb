@@ -51,7 +51,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 					payload_cnt++;
 				}
 			} else {
-				payload_chunk.data[payload_idx + payload_cnt].count = state->child_chunk.size();
+				payload_chunk.data[payload_idx + payload_cnt].SetCount(state->child_chunk.size());
 				payload_cnt++;
 			}
 			// perform the actual aggregation

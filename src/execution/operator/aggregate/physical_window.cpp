@@ -479,8 +479,8 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (index_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk window_chunk;
 			window_chunk.Initialize(window_types);
+			window_chunk.SetCardinality(big_data.chunks[i]->size());
 			for (index_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
-				window_chunk.data[col_idx].count = big_data.chunks[i]->size();
 				VectorOperations::Set(window_chunk.data[col_idx], Value());
 			}
 			window_chunk.Verify();

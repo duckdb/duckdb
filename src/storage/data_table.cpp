@@ -120,10 +120,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			// scan actual base column
 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
 		}
-		result.data[i].sel_vector = sel_vector;
-		result.data[i].count = count;
 	}
-	result.sel_vector = sel_vector;
+	result.SetCardinality(count, sel_vector);
 
 	current_row += STANDARD_VECTOR_SIZE;
 	return true;
@@ -184,7 +182,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
 			assert(result.data[col_idx].type == TypeId::INT64);
-			result.data[col_idx].count = count;
+			result.data[col_idx].SetCount(count);
 			auto data = (row_t *)result.data[col_idx].GetData();
 			for (index_t i = 0; i < count; i++) {
 				data[i] = rows[i];
@@ -249,8 +247,9 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 
 	auto dataptr = (int *)result.GetData();
-	for (index_t i = 0; i < result.count; i++) {
-		index_t index = result.sel_vector ? result.sel_vector[i] : i;
+	auto rsel = result.sel_vector();
+	for (index_t i = 0; i < result.size(); i++) {
+		index_t index = rsel ? rsel[i] : i;
 		if (!result.nullmask[index] && dataptr[index] == 0) {
 			throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
 		}
@@ -359,8 +358,8 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(ROW_TYPE);
-	row_identifiers.sel_vector = chunk.sel_vector;
-	row_identifiers.count = chunk.size();
+	row_identifiers.SetSelVector(chunk.sel_vector);
+	row_identifiers.SetCount(chunk.size());
 	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	index_t failed_index = INVALID_INDEX;
@@ -388,8 +387,8 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(ROW_TYPE);
-	row_identifiers.sel_vector = chunk.sel_vector;
-	row_identifiers.count = chunk.size();
+	row_identifiers.SetSelVector(chunk.sel_vector);
+	row_identifiers.SetCount(chunk.size());
 	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	// now remove the entries from the indices
@@ -403,11 +402,11 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 }
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
-	assert(!row_identifiers.sel_vector);
+	assert(!row_identifiers.sel_vector());
 	auto row_ids = (row_t *)row_identifiers.GetData();
 	// create a selection vector from the row_ids
 	sel_t sel[STANDARD_VECTOR_SIZE];
-	for (index_t i = 0; i < row_identifiers.count; i++) {
+	for (index_t i = 0; i < row_identifiers.size(); i++) {
 		sel[i] = row_ids[i] % STANDARD_VECTOR_SIZE;
 	}
 
@@ -418,10 +417,8 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 	auto states = unique_ptr<ColumnScanState[]>(new ColumnScanState[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
 		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
-		result.data[i].count = row_identifiers.count;
-		result.data[i].sel_vector = sel;
 	}
-	result.sel_vector = sel;
+	result.SetCardinality(row_identifiers.size(), sel);
 	for (index_t i = 0; i < indexes.size(); i++) {
 		indexes[i]->Delete(result, row_identifiers);
 	}
@@ -432,7 +429,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
 	assert(row_identifiers.type == ROW_TYPE);
-	if (row_identifiers.count == 0) {
+	if (row_identifiers.size() == 0) {
 		return;
 	}
 
@@ -440,7 +437,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	row_identifiers.Normalify();
 	auto ids = (row_t *)row_identifiers.GetData();
-	auto sel_vector = row_identifiers.sel_vector;
+	auto sel_vector = row_identifiers.sel_vector();
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 
 	if (first_id >= MAX_ROW_ID) {
@@ -464,9 +461,8 @@ static void CreateMockChunk(vector<TypeId> &types, vector<column_t> &column_ids,
 	mock_chunk.InitializeEmpty(types);
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i]].Reference(chunk.data[i]);
-		mock_chunk.sel_vector = mock_chunk.data[column_ids[i]].sel_vector;
 	}
-	mock_chunk.data[0].count = chunk.size();
+	mock_chunk.SetCardinality(chunk.size(), chunk.sel_vector);
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, vector<column_t> &column_ids,
@@ -537,11 +533,11 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers,
                        vector<column_t> &column_ids, DataChunk &updates) {
 	assert(row_identifiers.type == ROW_TYPE);
-	assert(updates.sel_vector == row_identifiers.sel_vector);
-	assert(updates.size() == row_identifiers.count);
+	assert(updates.sel_vector == row_identifiers.sel_vector());
+	assert(updates.size() == row_identifiers.size());
 
 	updates.Verify();
-	if (row_identifiers.count == 0) {
+	if (row_identifiers.size() == 0) {
 		return;
 	}
 
@@ -552,7 +548,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	Transaction &transaction = context.ActiveTransaction();
 
 	auto ids = (row_t *)row_identifiers.GetData();
-	auto sel_vector = row_identifiers.sel_vector;
+	auto sel_vector = row_identifiers.sel_vector();
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 
 	if (first_id >= MAX_ROW_ID) {
@@ -614,8 +610,8 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 			// scan actual base column
 			columns[column].IndexScan(state.column_scans[i], result.data[i]);
 		}
-		result.data[i].count = count;
 	}
+	result.SetCardinality(count);
 
 	current_row += STANDARD_VECTOR_SIZE;
 	return count > 0;

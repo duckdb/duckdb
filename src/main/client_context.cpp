@@ -51,7 +51,7 @@ void ClientContext::Cleanup() {
 		statement->is_invalidated = true;
 	}
 	for (auto &appender : appenders) {
-		appender->Invalidate("Connection has been closed!");
+		appender->Invalidate("Connection has been closed!", false);
 	}
 	CleanupInternal();
 }
@@ -458,7 +458,7 @@ void ClientContext::Invalidate() {
 	}
 	// and close any open appenders
 	for (auto &appender : appenders) {
-		appender->Invalidate("Database that this appender belongs to has been closed!");
+		appender->Invalidate("Database that this appender belongs to has been closed!", false);
 	}
 	appenders.clear();
 }

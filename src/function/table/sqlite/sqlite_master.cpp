@@ -67,11 +67,8 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		return;
 	}
 	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
+	output.SetCardinality(next - data.offset);
 
-	index_t output_count = next - data.offset;
-	for (index_t j = 0; j < output.column_count; j++) {
-		output.data[j].count = output_count;
-	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	for (index_t i = data.offset; i < next; i++) {

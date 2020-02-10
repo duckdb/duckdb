@@ -71,10 +71,10 @@ private:
 			result.vector_type = VectorType::FLAT_VECTOR;
 			result.nullmask = input.nullmask;
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, input.count, input.sel_vector, input.nullmask, fun);
+			    ldata, result_data, input.size(), input.sel_vector(), input.nullmask, fun);
 		}
-		result.sel_vector = input.sel_vector;
-		result.count = input.count;
+		result.SetCount(input.size());
+		result.SetSelVector(input.sel_vector());
 	}
 
 public:

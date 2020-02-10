@@ -41,15 +41,15 @@ template <class T> void templated_loop_hash(Vector &input, Vector &result) {
 		input.Normalify();
 		auto ldata = (T *)input.GetData();
 		result.vector_type = VectorType::FLAT_VECTOR;
-		tight_loop_hash<T>(ldata, result_data, input.count, input.sel_vector, input.nullmask);
+		tight_loop_hash<T>(ldata, result_data, input.size(), input.sel_vector(), input.nullmask);
 	}
 }
 
 void VectorOperations::Hash(Vector &input, Vector &result) {
 	assert(result.type == TypeId::HASH);
 	assert(!result.nullmask.any());
-	result.sel_vector = input.sel_vector;
-	result.count = input.count;
+	result.SetCount(input.size());
+	result.SetSelVector(input.sel_vector());
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -109,14 +109,14 @@ template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashe
 	} else {
 		input.Normalify();
 		hashes.Normalify();
-		tight_loop_combine_hash<T>((T *)input.GetData(), (uint64_t *)hashes.GetData(), input.count, input.sel_vector,
+		tight_loop_combine_hash<T>((T *)input.GetData(), (uint64_t *)hashes.GetData(), input.size(), input.sel_vector(),
 		                           input.nullmask);
 	}
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
 	assert(hashes.type == TypeId::HASH);
-	assert(input.sel_vector == hashes.sel_vector && input.count == hashes.count);
+	assert(input.SameCardinality(hashes));
 	assert(!hashes.nullmask.any());
 	switch (input.type) {
 	case TypeId::BOOL:

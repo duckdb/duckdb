@@ -57,7 +57,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		insert_count += chunk.size();
 	}
 
-	chunk.data[0].count = 1;
+	chunk.SetCardinality(1);
 	chunk.data[0].SetValue(0, Value::BIGINT(insert_count));
 
 	state->finished = true;
