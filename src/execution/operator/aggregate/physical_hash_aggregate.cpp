@@ -105,6 +105,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
 		assert(state->aggregate_chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
+		state->aggregate_chunk.SetCardinality(1);
 		for (index_t i = 0; i < state->aggregate_chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
@@ -114,7 +115,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
 		}
-		state->aggregate_chunk.SetCardinality(1);
 		state->finished = true;
 	}
 	if (elements_found == 0 && !state->finished) {

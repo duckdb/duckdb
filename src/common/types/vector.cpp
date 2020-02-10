@@ -65,42 +65,41 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	nullmask.reset();
 }
 
-void Vector::SetValue(uint64_t index_, Value val) {
+void Vector::SetValue(index_t index_, Value val) {
 	Value newVal = val.CastAs(type);
 
 	uint64_t index = selection_vector ? selection_vector[index_] : index_;
 	nullmask[index] = newVal.is_null;
+	if (newVal.is_null) {
+		return;
+	}
 	switch (type) {
 	case TypeId::BOOL:
-		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.boolean;
+		((int8_t *)data)[index] = newVal.value_.boolean;
 		break;
 	case TypeId::INT8:
-		((int8_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.tinyint;
+		((int8_t *)data)[index] = newVal.value_.tinyint;
 		break;
 	case TypeId::INT16:
-		((int16_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.smallint;
+		((int16_t *)data)[index] = newVal.value_.smallint;
 		break;
 	case TypeId::INT32:
-		((int32_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.integer;
+		((int32_t *)data)[index] = newVal.value_.integer;
 		break;
 	case TypeId::INT64:
-		((int64_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.bigint;
+		((int64_t *)data)[index] = newVal.value_.bigint;
 		break;
 	case TypeId::FLOAT:
-		((float *)data)[index] = newVal.is_null ? 0 : newVal.value_.float_;
+		((float *)data)[index] = newVal.value_.float_;
 		break;
 	case TypeId::DOUBLE:
-		((double *)data)[index] = newVal.is_null ? 0 : newVal.value_.double_;
+		((double *)data)[index] = newVal.value_.double_;
 		break;
 	case TypeId::POINTER:
-		((uintptr_t *)data)[index] = newVal.is_null ? 0 : newVal.value_.pointer;
+		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
-		if (newVal.is_null) {
-			((const char **)data)[index] = nullptr;
-		} else {
-			((const char **)data)[index] = AddString(newVal.str_value);
-		}
+		((const char **)data)[index] = AddString(newVal.str_value);
 		break;
 	}
 	case TypeId::STRUCT: {
@@ -125,18 +124,16 @@ void Vector::SetValue(uint64_t index_, Value val) {
 	case TypeId::LIST: {
 		// TODO hmmm how do we make space for the value?
 	}
-
-	break;
 	default:
 		throw NotImplementedException("Unimplemented type for adding");
 	}
 }
 
-Value Vector::GetValue(uint64_t index) const {
+Value Vector::GetValue(index_t index) const {
 	if (index >= count) {
 		throw OutOfRangeException("GetValue() out of range");
 	}
-	uint64_t entry = selection_vector ? selection_vector[index] : index;
+	index_t entry = selection_vector ? selection_vector[index] : index;
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		entry = 0;
 	}
@@ -159,9 +156,9 @@ Value Vector::GetValue(uint64_t index) const {
 	case TypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[entry]);
 	case TypeId::FLOAT:
-		return Value(((float *)data)[entry]);
+		return Value::FLOAT(((float *)data)[entry]);
 	case TypeId::DOUBLE:
-		return Value(((double *)data)[entry]);
+		return Value::DOUBLE(((double *)data)[entry]);
 	case TypeId::VARCHAR: {
 		char *str = ((char **)data)[entry];
 		assert(str);

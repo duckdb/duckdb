@@ -83,15 +83,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
+		index_t i;
+		for (i = 0; i < state->child_chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
+		chunk.SetCardinality(state->child_chunk.size(), state->child_chunk.sel_vector);
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
-			chunk.SetCardinality(chunk.size(), chunk.sel_vector);
-			for (index_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
-				VectorOperations::Set(chunk.data[i], Value());
+			for (; i < chunk.column_count(); i++) {
+				chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				chunk.data[i].nullmask[0] = true;
 			}
 		}
 		return;
@@ -119,14 +121,15 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 				}
 				if (result_count > 0) {
 					// have to create the chunk, set the selection vector and count
-					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
+					index_t i;
+					for (i = 0; i < state->child_chunk.column_count(); i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (index_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
-						chunk.data[i].nullmask.set();
+					for (; i < chunk.column_count(); i++) {
+						chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+						chunk.data[i].nullmask[0] = true;
 					}
 					chunk.SetCardinality(result_count, chunk.owned_sel_vector);
 					state->checked_found_match = true;
@@ -174,7 +177,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (state->lhs_found_match) {
 				state->lhs_found_match[state->left_position] = true;
 			}
-			chunk.SetCardinality(result_count, result_count == chunk.size() ? nullptr : chunk.owned_sel_vector);
+			chunk.SetCardinality(result_count, result_count == rchunk.size() ? nullptr : chunk.owned_sel_vector);
 
 			// set the match flags in the RHS
 			if (state->rhs_found_match) {

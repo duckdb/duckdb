@@ -565,5 +565,4 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		}
 	}
 	parse_chunk.Reset();
-	parse_chunk.SetCardinality(0);
 }

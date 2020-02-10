@@ -108,9 +108,9 @@ void SuperLargeHashTable::Resize(index_t size) {
 			}
 			addresses.SetCount(entry);
 			// fetch the group columns
+			groups.SetCardinality(entry);
 			for (index_t i = 0; i < groups.column_count(); i++) {
 				auto &column = groups.data[i];
-				column.SetCount(entry);
 				VectorOperations::Gather::Set(addresses, column);
 				VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type));
 			}
@@ -425,22 +425,18 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 			// for each of the locations that are empty, serialize the group columns to the locations
 			auto old_sel_vector = groups.sel_vector;
 			index_t old_count = groups.size();
+			groups.SetCardinality(empty_count, empty_vector);
 			for (index_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 				// set up the new sel vector with the entries we need to write
 				auto &group_column = groups.data[group_idx];
-				group_column.SetSelVector(empty_vector);
-				group_column.SetCount(empty_count);
 				pointers.SetSelVector(empty_vector);
 				pointers.SetCount(empty_count);
 
 				VectorOperations::Scatter::SetAll(group_column, pointers);
-
-				// restore the old sel_vector and count
-				group_column.SetSelVector(old_sel_vector);
-				group_column.SetCount(old_count);
-
 				VectorOperations::AddInPlace(pointers, GetTypeIdSize(group_column.type));
 			}
+			// restore the old sel_vector and count
+			groups.SetCardinality(old_count, old_sel_vector);
 			entries += empty_count;
 		}
 		// now we have only the tuples remaining that might match to an existing group

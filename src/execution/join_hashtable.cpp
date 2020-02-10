@@ -104,8 +104,7 @@ static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vecto
 	index_t result_count = keys.size();
 	// first we loop over all the columns and figure out where the
 	for (index_t i = 0; i < keys.column_count(); i++) {
-		keys.data[i].SetSelVector(sel_vector);
-		keys.data[i].SetCount(result_count);
+		keys.SetCardinality(result_count, sel_vector);
 		result_count = VectorOperations::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
 	}
 	keys.SetCardinality(result_count, sel_vector);;
@@ -560,19 +559,17 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		// matches were found
 		// construct the result
 		build_pointer_vector.SetCount(result_count);
-		build_pointer_vector.SetSelVector(result.owned_sel_vector);
-
 		// reference the columns of the left side from the result
 		for (index_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
+		result.SetCardinality(result_count, result.owned_sel_vector);
 		// now fetch the right side data from the HT
 		for (index_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.column_count() + i];
 			VectorOperations::Gather::Set(build_pointer_vector, vector);
 			VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 		}
-		result.SetCardinality(result_count, result.owned_sel_vector);
 	}
 }
 
@@ -760,7 +757,8 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 			}
 			// now set the right side to NULL
 			for (; i < result.column_count(); i++) {
-				result.data[i].nullmask.set();
+				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				result.data[i].nullmask[0] = true;
 			}
 			result.SetCardinality(remaining_count, result.owned_sel_vector);
 		}

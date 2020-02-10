@@ -47,7 +47,6 @@ extern nullmask_t ZERO_MASK;
   (2) Ordering data
 */
 class Vector {
-	friend class ExpressionExecutor;
 	friend class DataChunk;
 	friend class WindowSegmentTree;
 

@@ -38,7 +38,7 @@ static void templated_boolean_function_loop(bool *__restrict ldata, bool *__rest
 
 template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
-	assert(left.size() == right.size() && left.sel_vector() == right.sel_vector());
+	assert(left.SameCardinality(right));
 	result.SetCount(left.size());
 	result.SetSelVector(left.sel_vector());
 

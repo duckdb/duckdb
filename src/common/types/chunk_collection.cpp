@@ -42,12 +42,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			index_t old_count = new_chunk.size();
-			new_chunk.SetCardinality(added_data);
+			new_chunk.SetCardinality(added_data, new_chunk.sel_vector);
 
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
-			new_chunk.SetCardinality(old_count);
+			new_chunk.SetCardinality(old_count, new_chunk.sel_vector);
 			offset = added_data;
 		}
 	}
