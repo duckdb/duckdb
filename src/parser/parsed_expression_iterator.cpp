@@ -78,6 +78,7 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:
 	case ExpressionClass::STAR:
+	case ExpressionClass::TABLE_STAR:
 	case ExpressionClass::PARAMETER:
 		// these node types have no children
 		break;
