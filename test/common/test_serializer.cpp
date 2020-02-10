@@ -43,7 +43,7 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	DataChunk other_chunk;
 	REQUIRE_NOTHROW(other_chunk.Deserialize(source));
 	REQUIRE(other_chunk.size() == 2);
-	REQUIRE(other_chunk.column_count == 2);
+	REQUIRE(other_chunk.column_count() == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
 	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(0), a));
 	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(1), b));

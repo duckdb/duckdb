@@ -68,7 +68,7 @@ void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
 static void append_to_append_info(tpch_append_information &info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.column_count == 0) {
+	if (chunk.column_count() == 0) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);

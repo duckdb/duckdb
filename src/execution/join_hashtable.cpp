@@ -19,7 +19,7 @@ static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
 	target_vector.SetSelVector(source.sel_vector);
 
 	index_t offset = 0;
-	for (index_t i = 0; i < source.column_count; i++) {
+	for (index_t i = 0; i < source.column_count(); i++) {
 		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
 		offset += GetTypeIdSize(source.data[i].type);
 	}
@@ -103,7 +103,7 @@ static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vecto
 	sel_t *sel_vector = keys.data[0].sel_vector();
 	index_t result_count = keys.size();
 	// first we loop over all the columns and figure out where the
-	for (index_t i = 0; i < keys.column_count; i++) {
+	for (index_t i = 0; i < keys.column_count(); i++) {
 		keys.data[i].SetSelVector(sel_vector);
 		keys.data[i].SetCount(result_count);
 		result_count = VectorOperations::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
@@ -149,9 +149,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	payload.Normalify();
 
 	// for any columns for which null values are equal, fill the NullMask
-	assert(keys.column_count == null_values_are_equal.size());
+	assert(keys.column_count() == null_values_are_equal.size());
 	bool null_values_equal_for_all = true;
-	for (index_t i = 0; i < keys.column_count; i++) {
+	for (index_t i = 0; i < keys.column_count(); i++) {
 		if (null_values_are_equal[i]) {
 			VectorOperations::FillNullMask(keys.data[i]);
 		} else {
@@ -326,7 +326,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(finalized);
 	assert(!keys.sel_vector); // should be flattened before
 
-	for (index_t i = 0; i < keys.column_count; i++) {
+	for (index_t i = 0; i < keys.column_count(); i++) {
 		if (null_values_are_equal[i]) {
 			VectorOperations::FillNullMask(keys.data[i]);
 		}
@@ -549,7 +549,7 @@ index_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	assert(result.column_count == left.column_count + ht.build_types.size());
+	assert(result.column_count() == left.column_count() + ht.build_types.size());
 	if (pointers.size() == 0) {
 		// no pointers left to chase
 		return;
@@ -563,12 +563,12 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		build_pointer_vector.SetSelVector(result.owned_sel_vector);
 
 		// reference the columns of the left side from the result
-		for (index_t i = 0; i < left.column_count; i++) {
+		for (index_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
 		// now fetch the right side data from the HT
 		for (index_t i = 0; i < ht.build_types.size(); i++) {
-			auto &vector = result.data[left.column_count + i];
+			auto &vector = result.data[left.column_count() + i];
 			VectorOperations::Gather::Set(build_pointer_vector, vector);
 			VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 		}
@@ -611,7 +611,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 }
 
 template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	assert(left.column_count == result.column_count);
+	assert(left.column_count() == result.column_count());
 	assert(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	index_t result_count = 0;
@@ -625,7 +625,7 @@ template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, Da
 	if (result_count > 0) {
 		// we only return the columns on the left side
 		// reference the columns of the left side from the result
-		for (index_t i = 0; i < left.column_count; i++) {
+		for (index_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
 		// project them using the result selection vector
@@ -656,15 +656,15 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],
                              bool right_has_null) {
 	// for the initial set of columns we just reference the left side
-	for (index_t i = 0; i < child.column_count; i++) {
+	for (index_t i = 0; i < child.column_count(); i++) {
 		result.data[i].Reference(child.data[i]);
 	}
-	auto &result_vector = result.data[child.column_count];
+	auto &result_vector = result.data.back();
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
-	if (join_keys.column_count > 0) {
+	if (join_keys.column_count() > 0) {
 		result_vector.nullmask = join_keys.data[0].nullmask;
-		for (index_t i = 1; i < join_keys.column_count; i++) {
+		for (index_t i = 1; i < join_keys.column_count(); i++) {
 			result_vector.nullmask |= join_keys.data[i].nullmask;
 		}
 	}
@@ -685,8 +685,8 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
-	assert(result.column_count == input.column_count + 1);
-	assert(result.data[input.column_count].type == TypeId::BOOL);
+	assert(result.column_count() == input.column_count() + 1);
+	assert(result.data.back().type == TypeId::BOOL);
 	assert(!input.sel_vector);
 	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);
@@ -698,8 +698,8 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		auto &info = ht.correlated_mark_join_info;
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
-		assert(keys.column_count == info.group_chunk.column_count + 1);
-		for (index_t i = 0; i < info.group_chunk.column_count; i++) {
+		assert(keys.column_count() == info.group_chunk.column_count() + 1);
+		for (index_t i = 0; i < info.group_chunk.column_count(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
 		info.group_chunk.sel_vector = keys.sel_vector;
@@ -707,13 +707,13 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		assert(!info.result_chunk.sel_vector);
 
 		// for the initial set of columns we just reference the left side
-		for (index_t i = 0; i < input.column_count; i++) {
+		for (index_t i = 0; i < input.column_count(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
 		// create the result matching vector
-		auto &result_vector = result.data[input.column_count];
+		auto &result_vector = result.data.back();
 		// first set the nullmask based on whether or not there were NULL values in the join key
-		result_vector.nullmask = keys.data[keys.column_count - 1].nullmask;
+		result_vector.nullmask = keys.data[keys.column_count() - 1].nullmask;
 
 		auto bool_result = (bool *)result_vector.GetData();
 		auto count_star = (int64_t *)info.result_chunk.data[0].GetData();
@@ -755,11 +755,11 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 			// have remaining tuples
 			// first set the left side
 			index_t i = 0;
-			for (; i < left.column_count; i++) {
+			for (; i < left.column_count(); i++) {
 				result.data[i].Reference(left.data[i]);
 			}
 			// now set the right side to NULL
-			for (; i < result.column_count; i++) {
+			for (; i < result.column_count(); i++) {
 				result.data[i].nullmask.set();
 			}
 			result.SetCardinality(remaining_count, result.owned_sel_vector);
@@ -809,13 +809,13 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// now we construct the final result
 	build_pointer_vector.SetCount(result_count);
 	// reference the columns of the left side from the result
-	assert(input.column_count > 0);
-	for (index_t i = 0; i < input.column_count; i++) {
+	assert(input.column_count() > 0);
+	for (index_t i = 0; i < input.column_count(); i++) {
 		result.data[i].Reference(input.data[i]);
 	}
 	// now fetch the data from the RHS
 	for (index_t i = 0; i < ht.build_types.size(); i++) {
-		auto &vector = result.data[input.column_count + i];
+		auto &vector = result.data[input.column_count() + i];
 		// set NULL entries for every entry that was not found
 		vector.nullmask.set();
 		for (index_t j = 0; j < result_count; j++) {

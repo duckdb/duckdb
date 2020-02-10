@@ -148,7 +148,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				bool found_match[STANDARD_VECTOR_SIZE] = {false};
 				ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
 				// RHS empty: result is not NULL but just false
-				chunk.data[chunk.column_count - 1].nullmask.reset();
+				chunk.data[chunk.column_count() - 1].nullmask.reset();
 			}
 			state->right_chunk_index = state->right_orders.size();
 			return;
@@ -176,15 +176,15 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->left_position = 0;
 				state->right_position = 0;
 			} else {
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 					chunk.data[i].SetCount(result_count);
 					chunk.data[i].SetSelVector(left_info.result);
 					chunk.data[i].Flatten();
 				}
 				// now create a reference to the chunk on the right side
-				for (index_t i = 0; i < right_chunk.column_count; i++) {
-					index_t chunk_entry = state->child_chunk.column_count + i;
+				for (index_t i = 0; i < right_chunk.column_count(); i++) {
+					index_t chunk_entry = state->child_chunk.column_count() + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
 					chunk.data[chunk_entry].SetCount(result_count);
 					chunk.data[chunk_entry].SetSelVector(right.result);

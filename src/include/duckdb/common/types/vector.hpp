@@ -68,6 +68,8 @@ public:
 	Vector(TypeId type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
+	// but moving of vectors is allowed
+    Vector(Vector&& other) noexcept;
 
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)

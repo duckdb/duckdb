@@ -35,7 +35,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			index_t chunk_count = min(limit, state->child_chunk.size() - start_position);
 
 			// first reference all the columns and set up the counts
-			for (index_t i = 0; i < chunk.column_count; i++) {
+			for (index_t i = 0; i < chunk.column_count(); i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 			}
 			// now set up the selection vector of the chunk
@@ -57,7 +57,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			chunk_count = state->child_chunk.size();
 		}
 		// instead of copying we just change the pointer in the current chunk
-		for (index_t i = 0; i < chunk.column_count; i++) {
+		for (index_t i = 0; i < chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		chunk.SetCardinality(chunk_count, state->child_chunk.sel_vector);

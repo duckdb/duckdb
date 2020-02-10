@@ -41,12 +41,12 @@ static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, s
 }
 
 static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	assert(input.column_count == 2 || input.column_count == 1);
+	assert(input.column_count() == 2 || input.column_count() == 1);
 
 	auto &input1 = input.data[0];
 	Vector input2;
 
-	if (input.column_count == 1) {
+	if (input.column_count() == 1) {
 		auto current_timestamp = Timestamp::GetCurrentTimestamp();
 		auto value_timestamp = Value::TIMESTAMP(current_timestamp);
 		Vector vector_timestamp(value_timestamp);

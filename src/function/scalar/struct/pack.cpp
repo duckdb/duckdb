@@ -14,10 +14,10 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	auto &info = (StructPackBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	assert(input.column_count == info.stype.child_type.size());
+	assert(input.column_count() == info.stype.child_type.size());
 
 	bool all_const = true;
-	for (size_t i = 0; i < input.column_count; i++) {
+	for (size_t i = 0; i < input.column_count(); i++) {
 		// same holds for this
 		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
 		auto new_child = make_unique<Vector>();

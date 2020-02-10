@@ -39,7 +39,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 static bool RemoveNullValues(DataChunk &chunk) {
 	// OR all nullmasks together
 	nullmask_t nullmask = chunk.data[0].nullmask;
-	for (index_t i = 1; i < chunk.column_count; i++) {
+	for (index_t i = 1; i < chunk.column_count(); i++) {
 		nullmask |= chunk.data[i].nullmask;
 	}
 	// now create a selection vector
@@ -66,7 +66,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 
 template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
-	assert(left.column_count == result.column_count);
+	assert(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
 	index_t result_count = 0;
 	for (index_t i = 0; i < left.size(); i++) {
@@ -80,7 +80,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// we only return the columns on the left side
 		// project them using the result selection vector
 		// reference the columns of the left side from the result
-		for (index_t i = 0; i < left.column_count; i++) {
+		for (index_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
 		result.SetCardinality(result_count, result.owned_sel_vector);
@@ -240,15 +240,15 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// we have matching tuples!
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
-			for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+			for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].SetCount(match_count);
 				chunk.data[i].SetSelVector(lvector);
 				chunk.data[i].Flatten();
 			}
 			// now create a reference to the chunk on the right side using the rvector
-			for (index_t i = 0; i < right_data.column_count; i++) {
-				index_t chunk_entry = state->child_chunk.column_count + i;
+			for (index_t i = 0; i < right_data.column_count(); i++) {
+				index_t chunk_entry = state->child_chunk.column_count() + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].SetCount(match_count);
 				chunk.data[chunk_entry].SetSelVector(rvector);

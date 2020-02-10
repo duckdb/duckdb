@@ -32,7 +32,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		if (input.size() != 1) {
 			throw Exception("Expected a single table name as input");
 		}
-		if (input.column_count != 1 || input.data[0].type != TypeId::VARCHAR) {
+		if (input.column_count() != 1 || input.data[0].type != TypeId::VARCHAR) {
 			throw Exception("Expected a single table name as input");
 		}
 		auto table_name = input.data[0].GetValue(0).str_value;

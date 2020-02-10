@@ -10,7 +10,7 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	assert(input.column_count == 1);
+	assert(input.column_count() == 1);
 	auto& vec = input.data[0];
 
 	if (info.index >= vec.GetChildren().size()) {

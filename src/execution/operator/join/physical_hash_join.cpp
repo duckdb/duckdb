@@ -107,20 +107,20 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 			if (hash_table->join_type == JoinType::ANTI) {
 				// anti join with empty hash table, NOP join
 				// return the input
-				assert(chunk.column_count == state->child_chunk.column_count);
-				for (index_t i = 0; i < chunk.column_count; i++) {
+				assert(chunk.column_count() == state->child_chunk.column_count());
+				for (index_t i = 0; i < chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				return;
 			} else if (hash_table->join_type == JoinType::MARK) {
 				// MARK join with empty hash table
 				assert(hash_table->join_type == JoinType::MARK);
-				assert(chunk.column_count == state->child_chunk.column_count + 1);
-				auto &result_vector = chunk.data[state->child_chunk.column_count];
+				assert(chunk.column_count() == state->child_chunk.column_count() + 1);
+				auto &result_vector = chunk.data.back();
 				assert(result_vector.type == TypeId::BOOL);
 				result_vector.SetCount(state->child_chunk.size());
 				// for every data vector, we just reference the child chunk
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the MARK vector:
@@ -140,11 +140,11 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 			           hash_table->join_type == JoinType::SINGLE) {
 				// LEFT/FULL OUTER/SINGLE join and build side is empty
 				// for the LHS we reference the data
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the RHS
-				for (index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
+				for (index_t k = state->child_chunk.column_count(); k < chunk.column_count(); k++) {
 					chunk.data[k].nullmask.set();
 				}
 				chunk.SetCardinality(state->child_chunk.size());
@@ -182,7 +182,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		if (chunk.size() == 0) {
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (index_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
 					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
@@ -194,7 +194,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			state->cached_chunk.Append(chunk);
 			if (state->cached_chunk.size() >= (1024 - 64)) {
 				// chunk cache full: return it
-				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (index_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
 					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;

@@ -83,14 +83,14 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+		for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			chunk.SetCardinality(chunk.size(), chunk.sel_vector);
-			for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+			for (index_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
 				VectorOperations::Set(chunk.data[i], Value());
 			}
 		}
@@ -121,11 +121,11 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					// have to create the chunk, set the selection vector and count
 					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+					for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+					for (index_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
 						chunk.data[i].nullmask.set();
 					}
 					chunk.SetCardinality(result_count, chunk.owned_sel_vector);
@@ -155,14 +155,14 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
 
 		// fill in the current element of the LHS into the chunk
-		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for (index_t i = 0; i < lchunk.column_count; i++) {
+		assert(chunk.column_count() == lchunk.column_count() + rchunk.column_count());
+		for (index_t i = 0; i < lchunk.column_count(); i++) {
 			auto lvalue = lchunk.data[i].GetValue(state->left_position);
 			chunk.data[i].Reference(lvalue);
 		}
 		// for the RHS we just reference the entire vector
-		for (index_t i = 0; i < rchunk.column_count; i++) {
-			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
+		for (index_t i = 0; i < rchunk.column_count(); i++) {
+			chunk.data[lchunk.column_count() + i].Reference(rchunk.data[i]);
 		}
 		chunk.SetCardinality(rchunk.size());
 

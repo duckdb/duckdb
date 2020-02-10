@@ -39,7 +39,7 @@ void ExpressionExecutor::Initialize(Expression &expression, ExpressionExecutorSt
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	SetChunk(input);
 
-	assert(expressions.size() == result.column_count);
+	assert(expressions.size() == result.column_count());
 	assert(expressions.size() > 0);
 	result.Reset();
 	for (index_t i = 0; i < expressions.size(); i++) {

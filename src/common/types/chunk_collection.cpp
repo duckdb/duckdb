@@ -29,7 +29,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	} else {
 #ifdef DEBUG
 		// the types of the new chunk should match the types of the previous one
-		assert(types.size() == new_chunk.column_count);
+		assert(types.size() == new_chunk.column_count());
 		auto new_types = new_chunk.GetTypes();
 		for (index_t i = 0; i < types.size(); i++) {
 			assert(new_types[i] == types[i]);

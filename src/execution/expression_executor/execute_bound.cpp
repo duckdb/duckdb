@@ -11,6 +11,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceEx
 
 void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result) {
 	assert(expr.index != INVALID_INDEX);
-	assert(expr.index < chunk->column_count);
+	assert(expr.index < chunk->column_count());
 	result.Reference(chunk->data[expr.index]);
 }

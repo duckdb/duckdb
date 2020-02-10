@@ -41,14 +41,14 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 					default_executor.ExecuteExpression(i, insert_chunk.data[i]);
 				} else {
 					// get value from child chunk
-					assert((index_t)column_index_map[i] < chunk.column_count);
+					assert((index_t)column_index_map[i] < chunk.column_count());
 					assert(insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
 					insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 				}
 			}
 		} else {
 			// no columns specified, just append directly
-			for (index_t i = 0; i < insert_chunk.column_count; i++) {
+			for (index_t i = 0; i < insert_chunk.column_count(); i++) {
 				assert(insert_chunk.data[i].type == chunk.data[i].type);
 				insert_chunk.data[i].Reference(chunk.data[i]);
 			}

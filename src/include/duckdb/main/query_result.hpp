@@ -107,7 +107,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->column_count > 0;
+			return result->iterator_chunk && result->iterator_chunk->column_count() > 0;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;

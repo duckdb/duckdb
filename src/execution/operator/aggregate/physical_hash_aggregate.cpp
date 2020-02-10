@@ -86,7 +86,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
-		assert(payload_chunk.column_count == 0 || group_chunk.size() == payload_chunk.size());
+		assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
 		// move the strings inside the groups to the string heap
 		group_chunk.MoveStringsToHeap(state->ht->string_heap);
@@ -103,9 +103,9 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
-		assert(state->aggregate_chunk.column_count == aggregates.size());
+		assert(state->aggregate_chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
-		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
+		for (index_t i = 0; i < state->aggregate_chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
@@ -124,15 +124,15 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// we finished the child chunk
 	// actually compute the final projection list now
 	index_t chunk_index = 0;
-	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
-		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
+	if (state->group_chunk.column_count() + state->aggregate_chunk.column_count() == chunk.column_count()) {
+		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
 		}
 	} else {
-		assert(state->aggregate_chunk.column_count == chunk.column_count);
+		assert(state->aggregate_chunk.column_count() == chunk.column_count());
 	}
 
-	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count(); col_idx++) {
 		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
 	}
 }

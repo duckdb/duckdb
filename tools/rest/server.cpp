@@ -58,7 +58,7 @@ enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
 	Vector v2;
-	for (size_t col_idx = 0; col_idx < chunk->column_count; col_idx++) {
+	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 		auto *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
 		case SQLTypeId::DATE:

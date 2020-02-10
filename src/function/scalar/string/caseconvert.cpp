@@ -62,12 +62,12 @@ template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &i
 }
 
 static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 1);
+	assert(args.column_count() == 1);
 	caseconvert_function<strtoupper>(args.data[0], result);
 }
 
 static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 1);
+	assert(args.column_count() == 1);
 	caseconvert_function<strtolower>(args.data[0], result);
 }
 

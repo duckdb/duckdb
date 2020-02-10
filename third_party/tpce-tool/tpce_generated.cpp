@@ -60,7 +60,7 @@ void append_char(DataChunk & chunk, size_t index, size_t & column,
 static void append_to_append_info(tpce_append_information & info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.column_count == 0) {
+	if (chunk.column_count() == 0) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
@@ -112,7 +112,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBAddressLoad : public DuckDBBaseLoader<ADDRESS_ROW> {
 public:
 	DuckDBAddressLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -134,7 +134,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBBrokerLoad : public DuckDBBaseLoader<BROKER_ROW> {
 public:
 	DuckDBBrokerLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -156,7 +156,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCashTransactionLoad : public DuckDBBaseLoader<CASH_TRANSACTION_ROW> {
 public:
 	DuckDBCashTransactionLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -177,7 +177,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBChargeLoad : public DuckDBBaseLoader<CHARGE_ROW> {
 public:
 	DuckDBChargeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -197,7 +197,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCommissionRateLoad : public DuckDBBaseLoader<COMMISSION_RATE_ROW> {
 public:
 	DuckDBCommissionRateLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -220,7 +220,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCompanyLoad : public DuckDBBaseLoader<COMPANY_ROW> {
 public:
 	DuckDBCompanyLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -246,7 +246,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCompanyCompetitorLoad : public DuckDBBaseLoader<COMPANY_COMPETITOR_ROW> {
 public:
 	DuckDBCompanyCompetitorLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -266,7 +266,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCustomerLoad : public DuckDBBaseLoader<CUSTOMER_ROW> {
 public:
 	DuckDBCustomerLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -307,7 +307,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCustomerAccountLoad : public DuckDBBaseLoader<CUSTOMER_ACCOUNT_ROW> {
 public:
 	DuckDBCustomerAccountLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -330,7 +330,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBCustomerTaxrateLoad : public DuckDBBaseLoader<CUSTOMER_TAXRATE_ROW> {
 public:
 	DuckDBCustomerTaxrateLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -349,7 +349,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBDailyMarketLoad : public DuckDBBaseLoader<DAILY_MARKET_ROW> {
 public:
 	DuckDBDailyMarketLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -372,7 +372,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBExchangeLoad : public DuckDBBaseLoader<EXCHANGE_ROW> {
 public:
 	DuckDBExchangeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -396,7 +396,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBFinancialLoad : public DuckDBBaseLoader<FINANCIAL_ROW> {
 public:
 	DuckDBFinancialLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -427,7 +427,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBHoldingLoad : public DuckDBBaseLoader<HOLDING_ROW> {
 public:
 	DuckDBHoldingLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -450,7 +450,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBHoldingHistoryLoad : public DuckDBBaseLoader<HOLDING_HISTORY_ROW> {
 public:
 	DuckDBHoldingHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -471,7 +471,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBHoldingSummaryLoad : public DuckDBBaseLoader<HOLDING_SUMMARY_ROW> {
 public:
 	DuckDBHoldingSummaryLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -491,7 +491,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBIndustryLoad : public DuckDBBaseLoader<INDUSTRY_ROW> {
 public:
 	DuckDBIndustryLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -511,7 +511,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBLastTradeLoad : public DuckDBBaseLoader<LAST_TRADE_ROW> {
 public:
 	DuckDBLastTradeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -533,7 +533,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBNewsItemLoad : public DuckDBBaseLoader<NEWS_ITEM_ROW> {
 public:
 	DuckDBNewsItemLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -557,7 +557,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBNewsXRefLoad : public DuckDBBaseLoader<NEWS_XREF_ROW> {
 public:
 	DuckDBNewsXRefLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -576,7 +576,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBSectorLoad : public DuckDBBaseLoader<SECTOR_ROW> {
 public:
 	DuckDBSectorLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -595,7 +595,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBSecurityLoad : public DuckDBBaseLoader<SECURITY_ROW> {
 public:
 	DuckDBSecurityLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -628,7 +628,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBSettlementLoad : public DuckDBBaseLoader<SETTLEMENT_ROW> {
 public:
 	DuckDBSettlementLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -649,7 +649,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBStatusTypeLoad : public DuckDBBaseLoader<STATUS_TYPE_ROW> {
 public:
 	DuckDBStatusTypeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -668,7 +668,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBTaxRateLoad : public DuckDBBaseLoader<TAX_RATE_ROW> {
 public:
 	DuckDBTaxRateLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -688,7 +688,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBTradeLoad : public DuckDBBaseLoader<TRADE_ROW> {
 public:
 	DuckDBTradeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -720,7 +720,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBTradeHistoryLoad : public DuckDBBaseLoader<TRADE_HISTORY_ROW> {
 public:
 	DuckDBTradeHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -740,7 +740,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBTradeRequestLoad : public DuckDBBaseLoader<TRADE_REQUEST_ROW> {
 public:
 	DuckDBTradeRequestLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -763,7 +763,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBTradeTypeLoad : public DuckDBBaseLoader<TRADE_TYPE_ROW> {
 public:
 	DuckDBTradeTypeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -784,7 +784,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBWatchItemLoad : public DuckDBBaseLoader<WATCH_ITEM_ROW> {
 public:
 	DuckDBWatchItemLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -803,7 +803,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBWatchListLoad : public DuckDBBaseLoader<WATCH_LIST_ROW> {
 public:
 	DuckDBWatchListLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -822,7 +822,7 @@ public:
 	}
 
 };
-	
+
 class DuckDBZipCodeLoad : public DuckDBBaseLoader<ZIP_CODE_ROW> {
 public:
 	DuckDBZipCodeLoad(TableCatalogEntry *table, ClientContext *context) :
@@ -842,7 +842,7 @@ public:
 	}
 
 };
-	
+
 CBaseLoader<ACCOUNT_PERMISSION_ROW> *
 DuckDBLoaderFactory::CreateAccountPermissionLoader() {
 	auto table = context->db.catalog->GetTable(*context,

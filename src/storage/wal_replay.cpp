@@ -277,7 +277,7 @@ void ReplayState::ReplayDelete() {
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
+	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
 	row_identifiers.SetCount(1);
@@ -306,8 +306,8 @@ void ReplayState::ReplayUpdate() {
 	}
 
 	// remove the row id vector from the chunk
-	auto &row_ids = chunk.data[chunk.column_count - 1];
-	chunk.column_count = chunk.column_count - 1;
+	auto row_ids = move(chunk.data.back());
+	chunk.data.pop_back();
 
 	// now perform the update
 	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);

@@ -12,7 +12,7 @@ void PhysicalPruneColumns::GetChunkInternal(ClientContext &context, DataChunk &c
 	if (state->child_chunk.size() == 0) {
 		return;
 	}
-	assert(column_limit <= state->child_chunk.column_count);
+	assert(column_limit <= state->child_chunk.column_count());
 	for (index_t i = 0; i < column_limit; i++) {
 		chunk.data[i].Reference(state->child_chunk.data[i]);
 	}

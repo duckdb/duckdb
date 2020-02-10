@@ -17,7 +17,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetSelVector(args.sel_vector);
 	result.SetCount(args.size());
 	// iterate over the vectors to check if the result is a constant vector or not
-	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		assert(input.type == TypeId::VARCHAR);
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
@@ -30,7 +30,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 
 	// now perform the actual concatenation
 	vector<string> results(args.size());
-	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
@@ -69,7 +69,7 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<string> &results, string sep) {
 	// now perform the actual concatenation
 	vector<bool> has_results(args.size(), false);
-	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
@@ -108,7 +108,7 @@ static void concat_ws_variable_sep(DataChunk &args, Vector &result, vector<strin
 	auto sep_data = (const char **)separator.GetData();
 	// now perform the actual concatenation
 	vector<bool> has_results(result.size(), false);
-	for (index_t col_idx = 1; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		auto input_data = (const char **)input.GetData();
 		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
@@ -154,7 +154,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 	result.SetSelVector(args.sel_vector);
 	result.SetCount(args.size());
 	// iterate over the vectors to check the result vector type
-	for (index_t col_idx = 0; col_idx < args.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		assert(input.type == TypeId::VARCHAR);
 		if (input.vector_type != VectorType::CONSTANT_VECTOR) {

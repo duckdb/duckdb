@@ -38,25 +38,25 @@ public:
 	//! Creates an empty DataChunk
 	DataChunk();
 
-	//! The amount of vectors that are part of this DataChunk.
-	index_t column_count;
 	//! The vectors owned by the DataChunk.
-	unique_ptr<Vector[]> data;
+	vector<Vector> data;
 	//! The (optional) selection vector of the DataChunk. Each of the member
 	//! vectors reference this selection vector.
 	sel_t *sel_vector;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
-
 public:
-	index_t size() {
-		if (column_count == 0) {
+	index_t size() const {
+		if (column_count() == 0) {
 			return 0;
 		}
 		return data[0].size();
 	}
+	index_t column_count() const {
+		return data.size();
+	}
 	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
-		for(index_t i = 0; i < column_count; i++) {
+		for(index_t i = 0; i < column_count(); i++) {
 			data[i].SetCount(count);
 			data[i].SetSelVector(sel_vector);
 		}
@@ -111,11 +111,6 @@ public:
 	//! Converts this DataChunk to a printable string representation
 	string ToString() const;
 	void Print();
-
-	Vector &GetVector(index_t index) {
-		assert(index < column_count);
-		return data[index];
-	}
 
 	DataChunk(const DataChunk &) = delete;
 

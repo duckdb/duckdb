@@ -36,6 +36,10 @@ Vector::Vector()
     : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), selection_vector(nullptr), data(nullptr) {
 }
 
+Vector::Vector(Vector&& other) noexcept :
+	vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), count(other.count), selection_vector(other.selection_vector), data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+}
+
 void Vector::Reference(Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
 	selection_vector = nullptr;

@@ -108,7 +108,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 			}
 			addresses.SetCount(entry);
 			// fetch the group columns
-			for (index_t i = 0; i < groups.column_count; i++) {
+			for (index_t i = 0; i < groups.column_count(); i++) {
 				auto &column = groups.data[i];
 				column.SetCount(entry);
 				VectorOperations::Gather::Set(addresses, column);
@@ -164,7 +164,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	index_t payload_idx = 0;
 
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		assert(payload.column_count > payload_idx);
+		assert(payload.column_count() > payload_idx);
 
 		// for any entries for which a group was found, update the aggregate
 		auto aggr = aggregates[aggr_idx];
@@ -228,8 +228,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
 	groups.Verify();
-	assert(groups.column_count == group_types.size());
-	for (index_t i = 0; i < result.column_count; i++) {
+	assert(groups.column_count() == group_types.size());
+	for (index_t i = 0; i < result.column_count(); i++) {
 		assert(result.data[i].type == payload_types[i]);
 	}
 	result.SetCardinality(groups.size(), groups.sel_vector);
@@ -243,7 +243,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		assert(result.column_count > aggr_idx);
+		assert(result.column_count() > aggr_idx);
 		// assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
 		//       aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
 		assert(payload_types[aggr_idx] == TypeId::INT64);
@@ -364,7 +364,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	}
 
 	// for each group, fill in the NULL value
-	for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+	for (index_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 		VectorOperations::FillNullMask(groups.data[group_idx]);
 	}
 
@@ -425,7 +425,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 			// for each of the locations that are empty, serialize the group columns to the locations
 			auto old_sel_vector = groups.sel_vector;
 			index_t old_count = groups.size();
-			for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+			for (index_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 				// set up the new sel vector with the entries we need to write
 				auto &group_column = groups.data[group_idx];
 				group_column.SetSelVector(empty_vector);
@@ -447,7 +447,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		// start performing comparisons with each of the groups
 		sel_t no_match_vector[STANDARD_VECTOR_SIZE];
 		index_t no_match_count = 0;
-		for (index_t group_idx = 0; group_idx < groups.column_count; group_idx++) {
+		for (index_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 			CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector,
 			                   no_match_count);
 		}
@@ -491,7 +491,7 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 	groups.SetCardinality(entry);
 	result.SetCardinality(entry);
 	// fetch the group columns
-	for (index_t i = 0; i < groups.column_count; i++) {
+	for (index_t i = 0; i < groups.column_count(); i++) {
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(addresses, column);
 		VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type));

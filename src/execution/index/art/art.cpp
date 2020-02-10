@@ -129,7 +129,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
-	for (index_t i = 1; i < input.column_count; i++) {
+	for (index_t i = 1; i < input.column_count(); i++) {
 		// for each fo the remaining columns, concatenate
 		switch (input.data[i].type) {
 		case TypeId::INT8:
