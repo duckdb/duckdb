@@ -70,7 +70,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
-#if defined(__DARWIN__) || defined(__APPLE__)
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
 		open_flags |= O_SYNC;
 #else
