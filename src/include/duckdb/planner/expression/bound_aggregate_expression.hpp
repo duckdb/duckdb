@@ -22,6 +22,12 @@ public:
 	bool distinct;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
+	//! Argument types
+	vector<SQLType> arguments;
+	//! The bound function data (if any)
+	unique_ptr<FunctionData> bind_info;
+	//! The return type
+	SQLType sql_return_type;
 
 public:
 	bool IsAggregate() const override {

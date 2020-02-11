@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class BoundAggregateExpression;
+
 //! The type used for sizing hashed aggregate function states
 typedef index_t (*aggregate_size_t)(TypeId return_type);
 //! The type used for initializing hashed aggregate function states
@@ -26,20 +28,24 @@ typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, data_ptr_t state);
 
+//! Binds the scalar function and creates the function data
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context);
+
+
 class AggregateFunction : public SimpleFunction {
 public:
 	AggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
-	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr)
+	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr)
 	    : SimpleFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
-	      update(update), combine(combine), finalize(finalize), simple_update(simple_update) {
+	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind) {
 	}
 
 	AggregateFunction(vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
-	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr)
+	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update) {
+	                        simple_update, bind) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -54,6 +60,8 @@ public:
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
+
+	bind_aggregate_function_t bind;
 
 	bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
