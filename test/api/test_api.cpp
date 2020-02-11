@@ -253,7 +253,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 }
 
 static void VerifyStreamResult(unique_ptr<QueryResult> result) {
-	REQUIRE(result->types[0] == TypeId::INTEGER);
+	REQUIRE(result->types[0] == TypeId::INT32);
 	size_t current_row = 0;
 	size_t current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
@@ -262,7 +262,7 @@ static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 		if (chunk->size() == 0) {
 			break;
 		}
-		int *col1_data = (int *)chunk->data[0].data;
+		auto col1_data = (int *)chunk->data[0].GetData();
 		for (size_t k = 0; k < chunk->size(); k++) {
 			if (current_row % 500 == 0) {
 				current_expected_value++;

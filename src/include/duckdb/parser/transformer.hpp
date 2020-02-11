@@ -109,6 +109,8 @@ private:
 	unique_ptr<ParsedExpression> TransformResTarget(PGResTarget *root);
 	unique_ptr<ParsedExpression> TransformNullTest(PGNullTest *root);
 	unique_ptr<ParsedExpression> TransformParamRef(PGParamRef *node);
+	unique_ptr<ParsedExpression> TransformNamedArg(PGNamedArgExpr *root);
+
 	unique_ptr<ParsedExpression> TransformSQLValueFunction(PGSQLValueFunction *node);
 
 	unique_ptr<ParsedExpression> TransformSubquery(PGSubLink *root);
@@ -124,6 +126,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(PGAlias *root);
 	void TransformCTE(PGWithClause *de_with_clause, SelectStatement &select);
+    unique_ptr<QueryNode> TransformRecursiveCTE(PGCommonTableExpr *node);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 

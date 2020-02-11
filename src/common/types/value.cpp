@@ -25,19 +25,19 @@ Value Value::MinimumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		result.value_.boolean = false;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		result.value_.tinyint = std::numeric_limits<int8_t>::min();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		result.value_.smallint = std::numeric_limits<int16_t>::min();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		result.value_.integer = std::numeric_limits<int32_t>::min();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
 		break;
 	case TypeId::FLOAT:
@@ -60,19 +60,19 @@ Value Value::MaximumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		result.value_.boolean = true;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		result.value_.tinyint = std::numeric_limits<int8_t>::max();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		result.value_.smallint = std::numeric_limits<int16_t>::max();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		result.value_.integer = std::numeric_limits<int32_t>::max();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
 		break;
 	case TypeId::FLOAT:
@@ -91,35 +91,35 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::BOOLEAN(int8_t value) {
-	Value result(TypeId::BOOLEAN);
+	Value result(TypeId::BOOL);
 	result.value_.boolean = value ? true : false;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TINYINT(int8_t value) {
-	Value result(TypeId::TINYINT);
+	Value result(TypeId::INT8);
 	result.value_.tinyint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::SMALLINT(int16_t value) {
-	Value result(TypeId::SMALLINT);
+	Value result(TypeId::INT16);
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::INTEGER(int32_t value) {
-	Value result(TypeId::INTEGER);
+	Value result(TypeId::INT32);
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BIGINT(int64_t value) {
-	Value result(TypeId::BIGINT);
+	Value result(TypeId::INT64);
 	result.value_.bigint = value;
 	result.is_null = false;
 	return result;
@@ -173,6 +173,13 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
 }
 
+Value Value::STRUCT(child_list_t<Value> values) {
+	Value result(TypeId::STRUCT);
+	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -220,15 +227,15 @@ template <class T> T Value::GetValueInternal() {
 		return NullValue<T>();
 	}
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return Cast::Operation<bool, T>(value_.boolean);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Cast::Operation<int8_t, T>(value_.tinyint);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Cast::Operation<int16_t, T>(value_.smallint);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Cast::Operation<int32_t, T>(value_.integer);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Cast::Operation<int64_t, T>(value_.bigint);
 	case TypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
@@ -272,16 +279,16 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		assert(value <= std::numeric_limits<int8_t>::max());
 		return Value::TINYINT((int8_t)value);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		assert(value <= std::numeric_limits<int16_t>::max());
 		return Value::SMALLINT((int16_t)value);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		assert(value <= std::numeric_limits<int32_t>::max());
 		return Value::INTEGER((int32_t)value);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Value::BIGINT(value);
 	case TypeId::FLOAT:
 		return Value((float)value);
@@ -324,13 +331,44 @@ string Value::ToString(SQLType sql_type) const {
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+	case SQLTypeId::STRUCT: {
+		string ret = "<";
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &child = struct_value[i];
+			ret += child.first + ": " + child.second.ToString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}
 }
 
 string Value::ToString() const {
-	return ToString(SQLTypeFromInternalType(type));
+	switch (type) {
+	case TypeId::POINTER:
+		return to_string(value_.pointer);
+	case TypeId::HASH:
+		return to_string(value_.hash);
+	default:
+		return ToString(SQLTypeFromInternalType(type));
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -431,19 +469,19 @@ void Value::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(is_null);
 	if (!is_null) {
 		switch (type) {
-		case TypeId::BOOLEAN:
+		case TypeId::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
 			break;
-		case TypeId::TINYINT:
+		case TypeId::INT8:
 			serializer.Write<int8_t>(value_.tinyint);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			serializer.Write<int16_t>(value_.smallint);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			serializer.Write<int32_t>(value_.integer);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
 		case TypeId::FLOAT:
@@ -473,19 +511,19 @@ Value Value::Deserialize(Deserializer &source) {
 	}
 	new_value.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		new_value.value_.tinyint = source.Read<int8_t>();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		new_value.value_.smallint = source.Read<int16_t>();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		new_value.value_.integer = source.Read<int32_t>();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
 	case TypeId::FLOAT:

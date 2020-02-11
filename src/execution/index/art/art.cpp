@@ -21,10 +21,10 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 		is_little_endian = false;
 	}
 	switch (types[0]) {
-	case TypeId::TINYINT:
-	case TypeId::SMALLINT:
-	case TypeId::INTEGER:
-	case TypeId::BIGINT:
+	case TypeId::INT8:
+	case TypeId::INT16:
+	case TypeId::INT32:
+	case TypeId::INT64:
 	case TypeId::FLOAT:
 	case TypeId::DOUBLE:
 	case TypeId::VARCHAR:
@@ -71,12 +71,10 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T>
-static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool is_little_endian,
-                          index_t current_column) {
-	auto input_data = (T *)input.data[current_column].data;
-	VectorOperations::Exec(input.data[current_column], [&](index_t i, index_t k) {
-		if (input.data[current_column].nullmask[i]) {
+template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	auto input_data = (T *)input.GetData();
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+		if (input.nullmask[i]) {
 			keys.push_back(nullptr);
 		} else {
 			keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
@@ -84,30 +82,76 @@ static void generate_keys(DataChunk &input, vector<unique_ptr<Key>> &keys, bool 
 	});
 }
 
+template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	auto input_data = (T *)input.GetData();
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+		if (input.nullmask[i] || !keys[k]) {
+			// either this column is NULL, or the previous column is NULL!
+			keys[k] = nullptr;
+		} else {
+			// concatenate the keys
+			auto old_key = move(keys[k]);
+			auto new_key = Key::CreateKey<T>(input_data[i], is_little_endian);
+			auto keyLen = old_key->len + new_key->len;
+			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
+			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
+			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
+			keys[k] = make_unique<Key>(move(compound_data), keyLen);
+		}
+	});
+}
+
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
-	keys.reserve(STANDARD_VECTOR_SIZE * input.column_count);
-	for (index_t i = 0; i < input.column_count; i++) {
+	keys.reserve(STANDARD_VECTOR_SIZE);
+	// generate keys for the first input column
+	switch (input.data[0].type) {
+	case TypeId::INT8:
+		generate_keys<int8_t>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::INT16:
+		generate_keys<int16_t>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::INT32:
+		generate_keys<int32_t>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::INT64:
+		generate_keys<int64_t>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::FLOAT:
+		generate_keys<float>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::DOUBLE:
+		generate_keys<double>(input.data[0], keys, is_little_endian);
+		break;
+	case TypeId::VARCHAR:
+		generate_keys<char *>(input.data[0], keys, is_little_endian);
+		break;
+	default:
+		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
+	}
+	for (index_t i = 1; i < input.column_count; i++) {
+		// for each fo the remaining columns, concatenate
 		switch (input.data[i].type) {
-		case TypeId::TINYINT:
-			generate_keys<int8_t>(input, keys, is_little_endian, i);
+		case TypeId::INT8:
+			concatenate_keys<int8_t>(input.data[i], keys, is_little_endian);
 			break;
-		case TypeId::SMALLINT:
-			generate_keys<int16_t>(input, keys, is_little_endian, i);
+		case TypeId::INT16:
+			concatenate_keys<int16_t>(input.data[i], keys, is_little_endian);
 			break;
-		case TypeId::INTEGER:
-			generate_keys<int32_t>(input, keys, is_little_endian, i);
+		case TypeId::INT32:
+			concatenate_keys<int32_t>(input.data[i], keys, is_little_endian);
 			break;
-		case TypeId::BIGINT:
-			generate_keys<int64_t>(input, keys, is_little_endian, i);
+		case TypeId::INT64:
+			concatenate_keys<int64_t>(input.data[i], keys, is_little_endian);
 			break;
 		case TypeId::FLOAT:
-			generate_keys<float>(input, keys, is_little_endian, i);
+			concatenate_keys<float>(input.data[i], keys, is_little_endian);
 			break;
 		case TypeId::DOUBLE:
-			generate_keys<double>(input, keys, is_little_endian, i);
+			concatenate_keys<double>(input.data[i], keys, is_little_endian);
 			break;
 		case TypeId::VARCHAR:
-			generate_keys<char *>(input, keys, is_little_endian, i);
+			concatenate_keys<char *>(input.data[i], keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -116,7 +160,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == TypeId::BIGINT);
+	assert(row_ids.type == ROW_TYPE);
 	assert(input.size() == row_ids.count);
 	assert(types[0] == input.data[0].type);
 
@@ -125,39 +169,16 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
-	auto row_identifiers = (row_t *)row_ids.data;
+	row_ids.Normalify();
+	auto row_identifiers = (row_t *)row_ids.GetData();
 	index_t failed_index = INVALID_INDEX;
-	auto rows = keys.size() / expression_result.column_count;
-	for (index_t i = 0; i < rows; i++) {
+	for (index_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
 			continue;
 		}
 
 		row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
-		unique_ptr<Key> key;
-		// if the index is compound we need to concatenate the keys
-		if (expression_result.column_count > 1) {
-			// check length of compound key
-			index_t keyLen = 0;
-			for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
-				keyLen += keys[i + cur_col * row_ids.count]->len;
-			}
-			// reserve key size
-			unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
-			// concatenate keys
-			keyLen = 0;
-			for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
-				auto key_value = keys[i + cur_col * row_ids.count]->data.get();
-				for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++) {
-					compound_data[keyLen++] = key_value[key_idx];
-				}
-			}
-			key = make_unique<Key>(move(compound_data), keyLen);
-		} else {
-			key = move(keys[i]);
-		}
-
-		if (!Insert(tree, move(key), 0, row_id)) {
+		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
 			break;
@@ -175,29 +196,9 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (!keys[i]) {
 				continue;
 			}
-			if (input.column_count > 1) {
-				// check length of compound key
-				index_t keyLen = 0;
-				for (index_t cur_col = 0; cur_col < input.column_count; cur_col++) {
-					keyLen += keys[i + cur_col * row_ids.count]->len;
-				}
-				// reserve key size
-				unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
-				// concatenate keys
-				keyLen = 0;
-				for (index_t cur_col = 0; cur_col < input.column_count; cur_col++) {
-					auto key_value = keys[i + cur_col * row_ids.count]->data.get();
-					for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++) {
-						compound_data[keyLen++] = key_value[key_idx];
-					}
-				}
-				key = make_unique<Key>(move(compound_data), keyLen);
-			} else {
-				key = move(keys[i]);
-			}
 			index_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
 			row_t row_id = row_identifiers[k];
-			Erase(tree, *key, 0, row_id);
+			Erase(tree, *keys[i], 0, row_id);
 		}
 		return false;
 	}
@@ -225,36 +226,11 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	vector<unique_ptr<Key>> keys;
 	GenerateKeys(expression_result, keys);
 
-	unique_ptr<Key> key;
-
-	auto rows = keys.size() / expression_result.column_count;
-
-	for (index_t i = 0; i < rows; i++) {
-		// if the index is compound we need to concatenate the keys
-		if (expression_result.column_count > 1) {
-			// check length of compound key
-			index_t keyLen = 0;
-			for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
-				if (!keys[i + cur_col * rows]) {
-					throw ConstraintException("NULL key value violates primary key");
-				}
-				keyLen += keys[i + cur_col * rows]->len;
-			}
-			// reserve key size
-			unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
-			// concatenate keys
-			keyLen = 0;
-			for (index_t cur_col = 0; cur_col < expression_result.column_count; cur_col++) {
-				auto key_value = keys[i + cur_col * rows]->data.get();
-				for (index_t key_idx = 0; key_idx < keys[i + cur_col * rows]->len; key_idx++) {
-					compound_data[keyLen++] = key_value[key_idx];
-				}
-			}
-			key = make_unique<Key>(move(compound_data), keyLen);
-		} else {
-			key = move(keys[i]);
+	for (index_t i = 0; i < chunk.size(); i++) {
+		if (!keys[i]) {
+			continue;
 		}
-		if (key && Lookup(tree, *key, 0) != nullptr) {
+		if (Lookup(tree, *keys[i], 0) != nullptr) {
 			// node already exists in tree
 			throw ConstraintException("duplicate key value violates primary key or unique constraint");
 		}
@@ -349,39 +325,16 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	auto row_identifiers = (int64_t *)row_ids.data;
+	row_ids.Normalify();
+	auto row_identifiers = (int64_t *)row_ids.GetData();
 
 	for (index_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
 			continue;
 		}
-		//        row_t row_id = row_identifiers[row_ids.sel_vector ? row_ids.sel_vector[i] : i];
-		unique_ptr<Key> key;
-		// if the index is compound we need to concatenate the keys
-		if (this->unbound_expressions.size() > 1) {
-			// check length of compound key
-			index_t keyLen = 0;
-			for (index_t cur_col = 0; cur_col < this->unbound_expressions.size(); cur_col++) {
-				keyLen += keys[i + cur_col * row_ids.count]->len;
-			}
-			// reserve key size
-			unique_ptr<data_t[]> compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
-			// concatenate keys
-			keyLen = 0;
-			for (index_t cur_col = 0; cur_col < this->unbound_expressions.size(); cur_col++) {
-				auto key_value = keys[i + cur_col * row_ids.count]->data.get();
-				for (index_t key_idx = 0; key_idx < keys[i + cur_col * row_ids.count]->len; key_idx++) {
-					compound_data[keyLen++] = key_value[key_idx];
-				}
-			}
-			key = make_unique<Key>(move(compound_data), keyLen);
-		} else {
-			key = move(keys[i]);
-		}
-
-		Erase(tree, *key, 0, row_identifiers[i]);
+		Erase(tree, *keys[i], 0, row_identifiers[i]);
 		// assert that the entry was erased properly
-		assert(!is_unique || Lookup(tree, *key, 0) == nullptr);
+		assert(!is_unique || Lookup(tree, *keys[i], 0) == nullptr);
 	}
 }
 
@@ -434,13 +387,13 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
 	case TypeId::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);

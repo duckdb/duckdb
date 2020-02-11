@@ -1,6 +1,5 @@
 #include "duckdb/execution/expression_executor.hpp"
 
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -45,7 +44,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	result.Reset();
 	for (index_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
-		result.heap.MergeHeap(result.data[i].string_heap);
 	}
 	result.sel_vector = result.data[0].sel_vector;
 	result.Verify();
@@ -70,29 +68,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
 	assert(expr_idx < expressions.size());
 	assert(result.type == expressions[expr_idx]->return_type);
-
-	auto owned_data = move(result.owned_data);
-	auto initial_data = result.data;
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), result);
-	if (chunk) {
-		// we have an input chunk: result of this vector should have the same length as input chunk
-		// check if the result is a single constant value
-		if (result.IsConstant()) {
-			// have to duplicate the constant value to match the rows in the
-			// other columns
-			auto constant_value = result.GetValue(0);
-			result.data = initial_data;
-			result.count = chunk->size();
-			result.sel_vector = chunk->sel_vector;
-			VectorOperations::Set(result, constant_value);
-		} else if (result.count != chunk->size()) {
-			throw Exception("Computed vector length does not match expected length!");
-		}
-		assert(result.sel_vector == chunk->sel_vector);
-	}
-	if (result.data == initial_data) {
-		result.owned_data = move(owned_data);
-	}
 }
 
 Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
@@ -103,7 +79,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	Vector result(expr.return_type, true, false);
 	executor.ExecuteExpression(result);
 
-	assert(result.count == 1);
+	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
 	return result.GetValue(0);
 }
 
@@ -186,7 +162,7 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 }
 
 index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
-	assert(expr.return_type == TypeId::BOOLEAN);
+	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, result);
@@ -204,11 +180,11 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOLEAN, (data_ptr_t)intermediate_bools);
+	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
-	auto intermediate_result = (bool *)intermediate.data;
-	if (intermediate.IsConstant()) {
+	auto intermediate_result = (bool *)intermediate.GetData();
+	if (intermediate.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant result: get the value
 		if (intermediate_result[0] && !intermediate.nullmask[0]) {
 			// constant true: return everything; we skip filling the selection vector here as it will not be used

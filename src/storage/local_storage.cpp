@@ -80,9 +80,8 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	for (index_t i = 0; i < column_ids.size(); i++) {
 		auto id = column_ids[i];
 		if (id == COLUMN_IDENTIFIER_ROW_ID) {
-			// row identifier: return MAX_ROW_ID plus the row offset in the chunk
-			result.data[i].count = chunk_count;
-			VectorOperations::GenerateSequence(result.data[i], MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE);
+			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1, chunk_count);
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}
@@ -108,10 +107,10 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		index_t base_id = MAX_ROW_ID + storage->collection.count;
 
 		// first generate the vector of row identifiers
-		StaticVector<row_t> row_identifiers;
+		Vector row_identifiers(ROW_TYPE);
 		row_identifiers.sel_vector = chunk.sel_vector;
 		row_identifiers.count = chunk.size();
-		VectorOperations::GenerateSequence(row_identifiers, base_id);
+		VectorOperations::GenerateSequence(row_identifiers, base_id, 1, true);
 
 		// now append the entries to the indices
 		for (auto &index : storage->indexes) {
@@ -132,8 +131,9 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 }
 
 static index_t GetChunk(Vector &row_identifiers) {
-	auto ids = (row_t *)row_identifiers.data;
-	auto first_id = ids[0] - MAX_ROW_ID;
+	row_identifiers.Normalify();
+	auto ids = (row_t *)row_identifiers.GetData();
+	auto first_id = ids[row_identifiers.sel_vector ? row_identifiers.sel_vector[0] : 0] - MAX_ROW_ID;
 
 	index_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
 	// verify that all row ids belong to the same chunk
@@ -168,7 +168,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 	// now actually mark the entries as deleted in the deleted vector
 	index_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		deleted[id] = true;
@@ -177,9 +177,9 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 
 template <class T>
 static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_identifiers, index_t base_index) {
-	auto target = (T *)data_vector.data;
-	auto updates = (T *)update_vector.data;
-	auto ids = (row_t *)row_identifiers.data;
+	auto target = (T *)data_vector.GetData();
+	auto updates = (T *)update_vector.GetData();
+	auto ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto id = ids[i] - base_index;
 		target[id] = updates[i];
@@ -192,16 +192,16 @@ static void update_chunk(Vector &data, Vector &updates, Vector &row_identifiers,
 	assert(updates.sel_vector == row_identifiers.sel_vector);
 
 	switch (data.type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		update_data<int8_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		update_data<int16_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		update_data<int32_t>(data, updates, row_identifiers, base_index);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		update_data<int64_t>(data, updates, row_identifiers, base_index);
 		break;
 	case TypeId::FLOAT:

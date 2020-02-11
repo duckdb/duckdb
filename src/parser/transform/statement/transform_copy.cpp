@@ -92,7 +92,7 @@ void HandleOptions(PGCopyStmt *stmt, CopyInfo &info) {
 				break;
 			case T_PGString: {
 				auto val = duckdb::Value(string(header_val->val.str));
-				info.header = val.CastAs(TypeId::BOOLEAN).value_.boolean;
+				info.header = val.CastAs(TypeId::BOOL).value_.boolean;
 				break;
 			}
 			default:

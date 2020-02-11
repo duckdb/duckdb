@@ -1,8 +1,6 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/types/constant_vector.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"

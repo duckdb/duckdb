@@ -2,7 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/vector_operations/ternary_select_loops.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -34,21 +34,21 @@ struct ExclusiveBetweenOperator {
 template <class OP>
 static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, sel_t result[]) {
 	switch (input.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
-		return templated_ternary_select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
-	case TypeId::SMALLINT:
-		return templated_ternary_select<int16_t, int16_t, int16_t, OP>(input, lower, upper, result);
-	case TypeId::INTEGER:
-		return templated_ternary_select<int32_t, int32_t, int32_t, OP>(input, lower, upper, result);
-	case TypeId::BIGINT:
-		return templated_ternary_select<int64_t, int64_t, int64_t, OP>(input, lower, upper, result);
+	case TypeId::BOOL:
+	case TypeId::INT8:
+		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, result);
+	case TypeId::INT16:
+		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, result);
+	case TypeId::INT32:
+		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, result);
+	case TypeId::INT64:
+		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, result);
 	case TypeId::FLOAT:
-		return templated_ternary_select<float, float, float, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, result);
 	case TypeId::DOUBLE:
-		return templated_ternary_select<double, double, double, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, result);
 	case TypeId::VARCHAR:
-		return templated_ternary_select<const char *, const char *, const char *, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<const char *, const char *, const char *, OP>(input, lower, upper, result);
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for BETWEEN");
 	}
@@ -70,8 +70,8 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);
 
-	Vector intermediate1(TypeId::BOOLEAN, true, false);
-	Vector intermediate2(TypeId::BOOLEAN, true, false);
+	Vector intermediate1(TypeId::BOOL, true, false);
+	Vector intermediate2(TypeId::BOOL, true, false);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
@@ -108,9 +108,5 @@ index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState
 	} else {
 		result_count = between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, result);
 	}
-	if (input.IsConstant() && lower.IsConstant() && upper.IsConstant()) {
-		return result_count == 0 ? 0 : chunk->size();
-	} else {
-		return result_count;
-	}
+	return result_count;
 }

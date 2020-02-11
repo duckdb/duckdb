@@ -117,7 +117,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				assert(hash_table->join_type == JoinType::MARK);
 				assert(chunk.column_count == state->child_chunk.column_count + 1);
 				auto &result_vector = chunk.data[state->child_chunk.column_count];
-				assert(result_vector.type == TypeId::BOOLEAN);
+				assert(result_vector.type == TypeId::BOOL);
 				result_vector.count = state->child_chunk.size();
 				// for every data vector, we just reference the child chunk
 				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
@@ -128,7 +128,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
-					auto bool_result = (bool *)result_vector.data;
+					auto bool_result = (bool *)result_vector.GetData();
 					for (index_t i = 0; i < result_vector.count; i++) {
 						bool_result[i] = false;
 					}
@@ -183,7 +183,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
 				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
+					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
 				state->cached_chunk.Reset();
@@ -195,7 +195,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			if (state->cached_chunk.size() >= (1024 - 64)) {
 				// chunk cache full: return it
 				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-					state->cached_chunk.data[col_idx].Move(chunk.data[col_idx]);
+					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
 				state->cached_chunk.Reset();

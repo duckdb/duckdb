@@ -20,32 +20,32 @@ struct tpce_append_information {
 
 static void append_value(DataChunk & chunk, size_t index,
                          size_t & column, int32_t value) {
-	((int32_t *)chunk.data[column++].data)[index] = value;
+	((int32_t *)chunk.data[column++].GetData())[index] = value;
 }
 
 static void append_bigint(DataChunk & chunk, size_t index,
                           size_t & column, int64_t value) {
-	((int64_t *)chunk.data[column++].data)[index] = value;
+	((int64_t *)chunk.data[column++].GetData())[index] = value;
 }
 
 static void append_string(DataChunk & chunk, size_t index,
                           size_t & column, const char *value) {
-	chunk.data[column++].SetStringValue(index, value);
+	chunk.data[column++].SetValue(index, Value(value));
 }
 
 static void append_double(DataChunk & chunk, size_t index,
                           size_t & column, double value) {
-	((double *)chunk.data[column++].data)[index] = value;
+	((double *)chunk.data[column++].GetData())[index] = value;
 }
 
 static void append_bool(DataChunk & chunk, size_t index,
                         size_t & column, bool value) {
-	((bool *)chunk.data[column++].data)[index] = value;
+	((bool *)chunk.data[column++].GetData())[index] = value;
 }
 
 static void append_timestamp(DataChunk & chunk, size_t index,
                              size_t & column, CDateTime time) {
-	((timestamp_t *)chunk.data[column++].data)[index] =
+	((timestamp_t *)chunk.data[column++].GetData())[index] =
 	    0; // Timestamp::FromString(time.ToStr(1));
 }
 

@@ -10,8 +10,8 @@
 
 #include "duckdb/function/function.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_loops.hpp"
-#include "duckdb/common/vector_operations/binary_loops.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
@@ -71,13 +71,13 @@ public:
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count >= 1);
-		templated_unary_loop<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
+		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
 	};
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count == 2);
-		templated_binary_loop<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result);
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result);
 	};
 
 public:
@@ -135,26 +135,6 @@ public:
 			return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
-		}
-	}
-	template <class TB, class OP> static scalar_function_t GetScalarBinaryFunctionFixedArgument(SQLType type) {
-		switch (type.id) {
-		case SQLTypeId::TINYINT:
-			return ScalarFunction::BinaryFunction<int8_t, TB, int8_t, OP>;
-		case SQLTypeId::SMALLINT:
-			return ScalarFunction::BinaryFunction<int16_t, TB, int16_t, OP>;
-		case SQLTypeId::INTEGER:
-			return ScalarFunction::BinaryFunction<int32_t, TB, int32_t, OP>;
-		case SQLTypeId::BIGINT:
-			return ScalarFunction::BinaryFunction<int64_t, TB, int64_t, OP>;
-		case SQLTypeId::FLOAT:
-			return ScalarFunction::BinaryFunction<float, TB, float, OP>;
-		case SQLTypeId::DOUBLE:
-			return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-		case SQLTypeId::DECIMAL:
-			return ScalarFunction::BinaryFunction<double, TB, double, OP>;
-		default:
-			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
 		}
 	}
 };

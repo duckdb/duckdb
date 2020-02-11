@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 using namespace std;
 
@@ -44,19 +45,17 @@ static const char *substring_scalar_function(const char *input_string, int offse
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INTEGER &&
-	       args.data[2].type == TypeId::INTEGER);
+	assert(args.column_count == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
+	       args.data[2].type == TypeId::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	auto &length_vector = args.data[2];
 
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
-	VectorOperations::TernaryExec<const char *, int, int, const char *>(
-	    input_vector, offset_vector, length_vector, result,
-	    [&](const char *input_string, int offset, int length, index_t result_index) {
-		    return result.string_heap.AddString(
-		        substring_scalar_function(input_string, offset, length, output, current_len));
+	TernaryExecutor::Execute<const char *, int, int, const char *, true>(
+	    input_vector, offset_vector, length_vector, result, [&](const char *input_string, int offset, int length) {
+		    return result.AddString(substring_scalar_function(input_string, offset, length, output, current_len));
 	    });
 }
 

@@ -39,6 +39,7 @@ class ExplainStatement;
 class QueryNode;
 class SelectNode;
 class SetOperationNode;
+class RecursiveCTENode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

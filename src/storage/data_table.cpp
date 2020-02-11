@@ -4,7 +4,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/list.hpp"
@@ -115,9 +114,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::BIGINT);
-			result.data[i].count = max_count;
-			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
+			assert(result.data[i].type == ROW_TYPE);
+			result.data[i].Sequence(base_row + current_row, 1, max_count);
 		} else {
 			// scan actual base column
 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
@@ -185,9 +183,9 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type == TypeId::BIGINT);
+			assert(result.data[col_idx].type == TypeId::INT64);
 			result.data[col_idx].count = count;
-			auto data = (int64_t *)result.data[col_idx].data;
+			auto data = (row_t *)result.data[col_idx].GetData();
 			for (index_t i = 0; i < count; i++) {
 				data[i] = rows[i];
 			}
@@ -211,7 +209,7 @@ index_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, 
 	// now iterate over the row ids and figure out which rows to use
 	index_t count = 0;
 
-	auto row_ids = (row_t *)row_identifiers.data;
+	auto row_ids = (row_t *)row_identifiers.GetData();
 	VectorOperations::Exec(row_identifiers, [&](index_t i, index_t k) {
 		auto row_id = row_ids[i];
 		bool use_row;
@@ -241,7 +239,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, st
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(TypeId::INTEGER, true, false);
+	Vector result(TypeId::INT32, true, false);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
@@ -250,7 +248,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 	}
 
-	int *dataptr = (int *)result.data;
+	auto dataptr = (int *)result.GetData();
 	for (index_t i = 0; i < result.count; i++) {
 		index_t index = result.sel_vector ? result.sel_vector[i] : i;
 		if (!result.nullmask[index] && dataptr[index] == 0) {
@@ -360,10 +358,10 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return true;
 	}
 	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
+	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
+	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	index_t failed_index = INVALID_INDEX;
 	// now append the entries to the indices
@@ -389,10 +387,10 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 		return;
 	}
 	// first generate the vector of row identifiers
-	StaticVector<row_t> row_identifiers;
+	Vector row_identifiers(ROW_TYPE);
 	row_identifiers.sel_vector = chunk.sel_vector;
 	row_identifiers.count = chunk.size();
-	VectorOperations::GenerateSequence(row_identifiers, row_start);
+	VectorOperations::GenerateSequence(row_identifiers, row_start, 1, true);
 
 	// now remove the entries from the indices
 	RemoveFromIndexes(state, chunk, row_identifiers);
@@ -406,7 +404,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
 	assert(!row_identifiers.sel_vector);
-	auto row_ids = (row_t *)row_identifiers.data;
+	auto row_ids = (row_t *)row_identifiers.GetData();
 	// create a selection vector from the row_ids
 	sel_t sel[STANDARD_VECTOR_SIZE];
 	for (index_t i = 0; i < row_identifiers.count; i++) {
@@ -440,7 +438,8 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (row_t *)row_identifiers.data;
+	row_identifiers.Normalify();
+	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 
@@ -552,7 +551,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now perform the actual update
 	Transaction &transaction = context.ActiveTransaction();
 
-	auto ids = (row_t *)row_identifiers.data;
+	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector;
 	auto first_id = sel_vector ? ids[sel_vector[0]] : ids[0];
 
@@ -609,9 +608,8 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == TypeId::BIGINT);
-			result.data[i].count = count;
-			VectorOperations::GenerateSequence(result.data[i], base_row + current_row);
+			assert(result.data[i].type == ROW_TYPE);
+			result.data[i].Sequence(base_row + current_row, 1, count);
 		} else {
 			// scan actual base column
 			columns[column].IndexScan(state.column_scans[i], result.data[i]);

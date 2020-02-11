@@ -8,7 +8,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<LowerFun>();
 	Register<UpperFun>();
 	Register<ConcatFun>();
-	Register<ConcatWSFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
 	Register<RegexpFun>();

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,6 +21,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
+
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
                                           index_t depth) {
@@ -40,9 +42,10 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		arguments.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
+
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
-	auto return_type = result->function.return_type;
-	return BindResult(move(result), return_type);
+	auto sql_return_type = result->sql_return_type;
+	return BindResult(move(result), sql_return_type);
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,

@@ -9,6 +9,7 @@ add_library(duckdb_common_types OBJECT
             timestamp.cpp
             time.cpp
             value.cpp
+            vector_buffer.cpp
             vector.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>

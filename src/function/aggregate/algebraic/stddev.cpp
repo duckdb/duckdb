@@ -26,16 +26,18 @@ static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
+	auto states = (stddev_state_t **)state.GetData();
+	auto input_data = (double *)inputs[0].GetData();
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		if (inputs[0].nullmask[i]) {
 			return;
 		}
 
-		auto state_ptr = (stddev_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		// update running mean and d^2
 		state_ptr->count++;
-		const double new_value = ((double *)inputs[0].data)[i];
+		const double new_value = input_data[i];
 		const double mean_differential = (new_value - state_ptr->mean) / state_ptr->count;
 		const double new_mean = state_ptr->mean + mean_differential;
 		const double dsquared_increment = (new_value - new_mean) * (new_value - state_ptr->mean);
@@ -49,8 +51,8 @@ static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
 
 static void stddev_combine(Vector &state, Vector &combined) {
 	// combine streaming stddev states
-	auto combined_data = (stddev_state_t **)combined.data;
-	auto state_data = (stddev_state_t *)state.data;
+	auto combined_data = (stddev_state_t **)combined.GetData();
+	auto state_data = (stddev_state_t *)state.GetData();
 
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
 		auto combined_ptr = combined_data[i];
@@ -72,8 +74,10 @@ static void stddev_combine(Vector &state, Vector &combined) {
 
 static void varsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (stddev_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -81,14 +85,16 @@ static void varsamp_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->count > 1 ? (state_ptr->dsquared / (state_ptr->count - 1)) : 0;
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 
 static void varpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (stddev_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -96,14 +102,16 @@ static void varpop_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->count > 1 ? (state_ptr->dsquared / state_ptr->count) : 0;
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 
 static void stddevsamp_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (stddev_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -111,14 +119,16 @@ static void stddevsamp_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->count > 1 ? sqrt(state_ptr->dsquared / (state_ptr->count - 1)) : 0;
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 
 static void stddevpop_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming stddev of sample
+	auto states = (stddev_state_t **)state.GetData();
+	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (stddev_state_t *)((data_ptr_t *)state.data)[i];
+		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {
 			result.nullmask[i] = true;
@@ -126,7 +136,7 @@ static void stddevpop_finalize(Vector &state, Vector &result) {
 		}
 		double res = state_ptr->count > 1 ? sqrt(state_ptr->dsquared / state_ptr->count) : 0;
 
-		((double *)result.data)[i] = res;
+		result_data[i] = res;
 	});
 }
 

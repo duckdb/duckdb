@@ -102,7 +102,7 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		output.data[1].SetValue(index, Value(entry->name));
 		// "tbl_name", TypeId::VARCHAR
 		output.data[2].SetValue(index, Value(entry->name));
-		// "rootpage", TypeId::INTEGER
+		// "rootpage", TypeId::INT32
 		output.data[3].SetValue(index, Value::INTEGER(0));
 		// "sql", TypeId::VARCHAR
 		output.data[4].SetValue(index, Value(GenerateQuery(entry)));

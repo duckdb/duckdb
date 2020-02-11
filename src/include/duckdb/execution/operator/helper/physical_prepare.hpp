@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalPrepare : public PhysicalOperator {
 public:
 	PhysicalPrepare(string name, unique_ptr<PreparedStatementData> prepared)
-	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {TypeId::BOOLEAN}), name(name), prepared(move(prepared)) {
+	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {TypeId::BOOL}), name(name), prepared(move(prepared)) {
 	}
 
 	string name;

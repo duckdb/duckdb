@@ -1,6 +1,5 @@
 add_library_unity(duckdb_vector_operations
                   OBJECT
-                  aggregate_operators.cpp
                   append.cpp
                   boolean_operators.cpp
                   cast_operators.cpp
@@ -12,7 +11,6 @@ add_library_unity(duckdb_vector_operations
                   hash.cpp
                   null_operations.cpp
                   numeric_inplace_operators.cpp
-                  numeric_inplace_bitwise_operators.cpp
                   numeric_binary_operators.cpp
                   scatter.cpp
                   set.cpp

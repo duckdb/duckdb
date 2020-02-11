@@ -15,28 +15,28 @@ using namespace std;
 // TODO add null checks
 
 TEST_CASE("Casting vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOLEAN, true, false);
+	Vector v(TypeId::BOOL, true, false);
 	v.count = 3;
-	v.SetNull(0, 1);
+	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
-	v.Cast(TypeId::TINYINT);
-	v.Cast(TypeId::SMALLINT);
-	v.Cast(TypeId::INTEGER);
-	v.Cast(TypeId::BIGINT);
+	v.Cast(TypeId::INT8);
+	v.Cast(TypeId::INT16);
+	v.Cast(TypeId::INT32);
+	v.Cast(TypeId::INT64);
 	v.Cast(TypeId::FLOAT);
 	v.Cast(TypeId::DOUBLE);
 	v.Cast(TypeId::VARCHAR);
 
 	v.Cast(TypeId::DOUBLE);
 	v.Cast(TypeId::FLOAT);
-	v.Cast(TypeId::BIGINT);
-	v.Cast(TypeId::INTEGER);
-	v.Cast(TypeId::SMALLINT);
-	v.Cast(TypeId::TINYINT);
+	v.Cast(TypeId::INT64);
+	v.Cast(TypeId::INT32);
+	v.Cast(TypeId::INT16);
+	v.Cast(TypeId::INT8);
 
-	v.Cast(TypeId::BOOLEAN);
+	v.Cast(TypeId::BOOL);
 
 	REQUIRE(v.GetValue(0).is_null);
 	REQUIRE(v.GetValue(1) == Value::BOOLEAN(true));
@@ -44,48 +44,20 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 }
 
 TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOLEAN, true, false);
+	Vector v(TypeId::BOOL, true, false);
 	v.count = 3;
-	v.SetNull(0, 1);
+	v.SetValue(0, Value());
 	v.SetValue(1, Value::BOOLEAN(true));
 	v.SetValue(2, Value::BOOLEAN(false));
 
 	REQUIRE(VectorOperations::HasNull(v));
 }
 
-static void require_aggrs(Vector &v) {
-	REQUIRE(VectorOperations::Min(v).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(VectorOperations::Max(v).CastAs(TypeId::BIGINT) == Value::BIGINT(40));
-	REQUIRE(VectorOperations::Count(v).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(VectorOperations::Sum(v).CastAs(TypeId::BIGINT) == Value::BIGINT(42));
-}
-
-TEST_CASE("Aggregating numeric vectors", "[vector_ops]") {
-	Vector v(TypeId::TINYINT, true, false);
-	v.count = 2;
-	v.SetValue(0, Value::TINYINT(40));
-	v.SetValue(1, Value::TINYINT(2));
-
-	REQUIRE(!VectorOperations::HasNull(v));
-
-	require_aggrs(v);
-	v.Cast(TypeId::SMALLINT);
-	require_aggrs(v);
-	v.Cast(TypeId::INTEGER);
-	require_aggrs(v);
-	v.Cast(TypeId::BIGINT);
-	require_aggrs(v);
-	v.Cast(TypeId::FLOAT);
-	require_aggrs(v);
-	v.Cast(TypeId::DOUBLE);
-	require_aggrs(v);
-}
-
 static void require_compare(Vector &val) {
 	Vector v1(val.type, true, false);
 	val.Copy(v1);
 
-	Vector res(TypeId::BOOLEAN, true, false);
+	Vector res(TypeId::BOOL, true, false);
 
 	VectorOperations::Equals(val, v1, res);
 
@@ -125,18 +97,18 @@ static void require_compare(Vector &val) {
 }
 
 TEST_CASE("Compare vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOLEAN, true, false);
+	Vector v(TypeId::BOOL, true, false);
 	v.count = 3;
 	v.SetValue(0, Value::BOOLEAN(true));
 	v.SetValue(1, Value::BOOLEAN(false));
-	v.SetNull(2, true);
+	v.SetValue(2, Value());
 
 	require_compare(v);
-	v.Cast(TypeId::SMALLINT);
+	v.Cast(TypeId::INT16);
 	require_compare(v);
-	v.Cast(TypeId::INTEGER);
+	v.Cast(TypeId::INT32);
 	require_compare(v);
-	v.Cast(TypeId::BIGINT);
+	v.Cast(TypeId::INT64);
 	require_compare(v);
 	v.Cast(TypeId::FLOAT);
 	require_compare(v);
@@ -160,37 +132,37 @@ static void require_sg(Vector &v) {
 	r.count = p.count;
 
 	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
 
 	VectorOperations::Scatter::Add(v, p);
 	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(2));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
 
 	VectorOperations::Scatter::Max(v, p);
 	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(2));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
 
 	VectorOperations::Scatter::Min(v, p);
 	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
 }
 
 TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
-	Vector v(TypeId::TINYINT, true, false);
+	Vector v(TypeId::INT8, true, false);
 	v.count = 2;
 	v.SetValue(0, Value::TINYINT(true));
 	v.SetValue(1, Value::TINYINT(false));
 
 	require_sg(v);
-	v.Cast(TypeId::SMALLINT);
+	v.Cast(TypeId::INT16);
 	require_sg(v);
-	v.Cast(TypeId::INTEGER);
+	v.Cast(TypeId::INT32);
 	require_sg(v);
-	v.Cast(TypeId::BIGINT);
+	v.Cast(TypeId::INT64);
 	require_sg(v);
 	v.Cast(TypeId::FLOAT);
 	require_sg(v);
@@ -203,7 +175,7 @@ static void require_generate(TypeId t) {
 	v.count = 100;
 	VectorOperations::GenerateSequence(v, 42, 1);
 	for (size_t i = 0; i < v.count; i++) {
-		REQUIRE(v.GetValue(i).CastAs(TypeId::BIGINT) == Value::BIGINT(i + 42));
+		REQUIRE(v.GetValue(i).CastAs(TypeId::INT64) == Value::BIGINT(i + 42));
 	}
 	Vector hash(TypeId::HASH, true, false);
 	hash.count = v.count;
@@ -211,9 +183,9 @@ static void require_generate(TypeId t) {
 }
 
 TEST_CASE("Generator sequence vectors", "[vector_ops]") {
-	require_generate(TypeId::SMALLINT);
-	require_generate(TypeId::INTEGER);
-	require_generate(TypeId::BIGINT);
+	require_generate(TypeId::INT16);
+	require_generate(TypeId::INT32);
+	require_generate(TypeId::INT64);
 	require_generate(TypeId::FLOAT);
 	require_generate(TypeId::DOUBLE);
 }
@@ -230,64 +202,64 @@ static void require_arith(TypeId t) {
 	v1.SetValue(0, Value::BIGINT(1));
 	v1.SetValue(1, Value::BIGINT(2));
 	v1.SetValue(2, Value::BIGINT(3));
-	v1.SetNull(3, true);
+	v1.SetValue(3, Value());
 	v1.SetValue(4, Value::BIGINT(42));
-	v1.SetNull(5, true);
+	v1.SetValue(5, Value());
 
 	v2.SetValue(0, Value::BIGINT(4));
 	v2.SetValue(1, Value::BIGINT(5));
 	v2.SetValue(2, Value::BIGINT(6));
 	v2.SetValue(3, Value::BIGINT(7));
-	v2.SetNull(4, true);
-	v2.SetNull(5, true);
+	v2.SetValue(4, Value());
+	v2.SetValue(5, Value());
 
 	Vector r(t, true, false);
 	r.count = v1.count;
 
 	VectorOperations::Add(v1, v2, r);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(5));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(7));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(9));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(5));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(7));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(9));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
 	VectorOperations::AddInPlace(r, v2);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(9));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(12));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(15));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(9));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(12));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(15));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
 	VectorOperations::AddInPlace(r, 10);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(19));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(22));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(25));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(19));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(22));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(25));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
 	VectorOperations::Subtract(v1, v2, r);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(-3));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
 	VectorOperations::Subtract(v1, v2, r);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(-3));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(-3));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
 	VectorOperations::Multiply(v1, v2, r);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(4));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(10));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(18));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(4));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(10));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(18));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
@@ -304,47 +276,29 @@ static void require_mod(TypeId t) {
 	v1.SetValue(1, Value::BIGINT(10));
 	v1.SetValue(2, Value::BIGINT(10));
 	v1.SetValue(3, Value::BIGINT(10));
-	v1.SetNull(4, true);
+	v1.SetValue(4, Value());
 	v1.SetValue(5, Value::BIGINT(10));
-	v1.SetNull(6, true);
+	v1.SetValue(6, Value());
 
 	v2.SetValue(0, Value::BIGINT(2));
 	v2.SetValue(1, Value::BIGINT(4));
 	v2.SetValue(2, Value::BIGINT(7));
 	v2.SetValue(3, Value::BIGINT(0));
 	v2.SetValue(4, Value::BIGINT(42));
-	v2.SetNull(5, true);
-	v2.SetNull(6, true);
+	v2.SetValue(5, Value());
+	v2.SetValue(6, Value());
 
 	Vector r(t, true, false);
 	r.count = v1.count;
 
 	VectorOperations::Modulo(v1, v2, r);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(3));
+	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(0));
+	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(2));
+	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(3));
 	REQUIRE(r.GetValue(3).is_null);
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 	REQUIRE(r.GetValue(6).is_null);
-
-	VectorOperations::ModuloInPlace(v1, v2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(2));
-	REQUIRE(v1.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(3));
-	REQUIRE(v1.GetValue(3).is_null);
-	REQUIRE(v1.GetValue(4).is_null);
-	REQUIRE(v1.GetValue(5).is_null);
-	REQUIRE(v2.GetValue(6).is_null);
-
-	VectorOperations::ModuloInPlace(v1, 2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::BIGINT) == Value::BIGINT(0));
-	REQUIRE(v1.GetValue(2).CastAs(TypeId::BIGINT) == Value::BIGINT(1));
-	REQUIRE(v1.GetValue(3).is_null);
-	REQUIRE(v1.GetValue(4).is_null);
-	REQUIRE(v1.GetValue(5).is_null);
-	REQUIRE(v2.GetValue(6).is_null);
 }
 
 static void require_mod_double() {
@@ -366,25 +320,17 @@ static void require_mod_double() {
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
-
-	VectorOperations::ModuloInPlace(v1, v2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(2));
-
-	VectorOperations::ModuloInPlace(v1, 2);
-	REQUIRE(v1.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
-	REQUIRE(v1.GetValue(1).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));
 }
 
 TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
-	require_arith(TypeId::SMALLINT);
-	require_arith(TypeId::INTEGER);
-	require_arith(TypeId::BIGINT);
+	require_arith(TypeId::INT16);
+	require_arith(TypeId::INT32);
+	require_arith(TypeId::INT64);
 	require_arith(TypeId::FLOAT);
 	require_arith(TypeId::DOUBLE);
 
-	require_mod(TypeId::SMALLINT);
-	require_mod(TypeId::INTEGER);
-	require_mod(TypeId::BIGINT);
+	require_mod(TypeId::INT16);
+	require_mod(TypeId::INT32);
+	require_mod(TypeId::INT64);
 	require_mod_double();
 }

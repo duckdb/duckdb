@@ -33,15 +33,15 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 	size_t this_rows = std::min(data.nrow, (size_t)1024);
 	data.nrow -= this_rows;
 
-	auto int_data = (int32_t *)output.data[0].data;
+	auto int_data = (int32_t *)output.data[0].GetData();
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
 	}
 	output.data[0].count = this_rows;
-	for (size_t row = 0; row < this_rows; row++) {
-		output.data[1].SetStringValue(row, ("hello_" + std::to_string(row)).c_str());
-	}
 	output.data[1].count = this_rows;
+	for (size_t row = 0; row < this_rows; row++) {
+		output.data[1].SetValue(row, Value("hello_" + std::to_string(row)));
+	}
 }
 
 class MyScanFunction : public TableFunction {
@@ -109,7 +109,7 @@ int main() {
 	                TABLE_FUNCTION
 	*/
 
-	vector<TypeId> types{TypeId::INTEGER, TypeId::VARCHAR};
+	vector<TypeId> types{TypeId::INT32, TypeId::VARCHAR};
 
 	// TABLE_FUNCTION my_scan
 	vector<unique_ptr<ParsedExpression>> children; // empty
@@ -123,12 +123,12 @@ int main() {
 
 	auto lte_expr = make_unique_base<Expression, BoundComparisonExpression>(
 	    ExpressionType::COMPARE_LESSTHANOREQUALTO,
-	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INTEGER, 0),
+	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0),
 	    make_unique_base<Expression, BoundConstantExpression>(Value::INTEGER(7)));
 
 	auto gte_expr = make_unique_base<Expression, BoundComparisonExpression>(
 	    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INTEGER, 0),
+	    make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0),
 	    make_unique_base<Expression, BoundConstantExpression>(Value::INTEGER(3)));
 
 	filter_expressions.push_back(move(lte_expr));
@@ -138,19 +138,19 @@ int main() {
 	filter->children.push_back(move(scan_function));
 
 	// HASH_GROUP_BY some_int aggregating COUNT(*)
-	vector<TypeId> aggr_types{TypeId::INTEGER, TypeId::BIGINT};
+	vector<TypeId> aggr_types{TypeId::INT32, TypeId::INT64};
 	vector<unique_ptr<Expression>> aggr_expressions;
 	aggr_expressions.push_back(resolve_aggregate(con, "count", {}));
 
 	vector<unique_ptr<Expression>> aggr_groups;
-	aggr_groups.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INTEGER, 0));
+	aggr_groups.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0));
 
 	auto group_by = make_unique<PhysicalHashAggregate>(aggr_types, move(aggr_expressions), move(aggr_groups));
 	group_by->children.push_back(move(filter));
 
 	// PROJECTION[%(+(some_int, 42), 2) count()]
 	auto add_expr = resolve_function(con, "+", {SQLTypeId::INTEGER, SQLTypeId::INTEGER});
-	add_expr->children.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INTEGER, 0));
+	add_expr->children.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0));
 	add_expr->children.push_back(make_unique_base<Expression, BoundConstantExpression>(Value::INTEGER(42)));
 
 	auto mod_expr = resolve_function(con, "%", {SQLTypeId::INTEGER, SQLTypeId::INTEGER});
@@ -159,14 +159,14 @@ int main() {
 
 	vector<unique_ptr<Expression>> proj_expressions;
 	proj_expressions.push_back(move(mod_expr));
-	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::BIGINT, 1));
+	proj_expressions.push_back(make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT64, 1));
 	auto projection = make_unique<PhysicalProjection>(aggr_types, move(proj_expressions));
 	projection->children.push_back(move(group_by));
 
 	// ORDER_BY 1
 	BoundOrderByNode order_by;
 	order_by.type = OrderType::ASCENDING;
-	order_by.expression = make_unique_base<Expression, BoundReferenceExpression>(TypeId::INTEGER, 0);
+	order_by.expression = make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0);
 
 	vector<BoundOrderByNode> orders;
 	orders.push_back(move(order_by));

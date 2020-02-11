@@ -26,8 +26,8 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 	// first execute the check expression
 	Execute(*expr.check, check_state, check);
-	auto check_data = (bool *)check.data;
-	if (check.IsConstant()) {
+	auto check_data = (bool *)check.GetData();
+	if (check.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant check: only need to execute one side
 		if (!check_data[0] || check.nullmask[0]) {
 			// constant false or NULL; result is FALSE
@@ -68,9 +68,9 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 }
 
 template <class T> void fill_loop(Vector &vector, Vector &result, sel_t sel[], sel_t count) {
-	auto data = (T *)vector.data;
-	auto res = (T *)result.data;
-	if (vector.IsConstant()) {
+	auto data = (T *)vector.GetData();
+	auto res = (T *)result.GetData();
+	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (vector.nullmask[0]) {
 			for (index_t i = 0; i < count; i++) {
 				result.nullmask[sel[i]] = true;
@@ -100,17 +100,17 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
 	switch (result.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		case_loop<int16_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		case_loop<int32_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		case_loop<int64_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case TypeId::FLOAT:
@@ -121,8 +121,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 		break;
 	case TypeId::VARCHAR:
 		case_loop<const char *>(res_true, res_false, result, tside, tcount, fside, fcount);
-		result.string_heap.MergeHeap(res_true.string_heap);
-		result.string_heap.MergeHeap(res_false.string_heap);
+		result.AddHeapReference(res_true);
+		result.AddHeapReference(res_false);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for case expression");

@@ -12,6 +12,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -24,6 +25,9 @@ public:
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
+	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
+	//! This data structure is used to establish it.
+    unordered_map<index_t, std::shared_ptr<ChunkCollection>> rec_ctes;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical
@@ -65,6 +69,8 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSimple &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalRecursiveCTE &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 
 	unique_ptr<PhysicalOperator> CreateDistinct(unique_ptr<PhysicalOperator> child);
 	unique_ptr<PhysicalOperator> CreateDistinctOn(unique_ptr<PhysicalOperator> child,

@@ -13,8 +13,8 @@ using namespace std;
 
 struct GatherLoopSetNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		auto source = (data_ptr_t *)src.data;
-		auto ldata = (T *)result.data;
+		auto source = (data_ptr_t *)src.GetData();
+		auto ldata = (T *)result.GetData();
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
@@ -41,8 +41,8 @@ struct GatherLoopSetNull {
 
 struct GatherLoopIgnoreNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		auto source = (data_ptr_t *)src.data;
-		auto ldata = (T *)result.data;
+		auto source = (data_ptr_t *)src.GetData();
+		auto ldata = (T *)result.GetData();
 		if (result.sel_vector) {
 			VectorOperations::Exec(src, [&](index_t i, index_t k) {
 				data_ptr_t ptr = source[i] + offset;
@@ -64,17 +64,17 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
 	switch (dest.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		LOOP::template Operation<int8_t, OP>(source, dest, offset);
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		LOOP::template Operation<int16_t, OP>(source, dest, offset);
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		LOOP::template Operation<int32_t, OP>(source, dest, offset);
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		LOOP::template Operation<int64_t, OP>(source, dest, offset);
 		break;
 	case TypeId::FLOAT:
@@ -105,8 +105,8 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, 
 
 struct GatherLoopAppendNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		auto source = (data_ptr_t *)src.data;
-		auto ldata = (T *)result.data;
+		auto source = (data_ptr_t *)src.GetData();
+		auto ldata = (T *)result.GetData();
 		VectorOperations::Exec(src, [&](index_t i, index_t k) {
 			T val = *((T *)(source[i] + offset));
 			result.nullmask[result.count] = IsNullValue<T>(val);
@@ -118,8 +118,8 @@ struct GatherLoopAppendNull {
 
 struct GatherLoopAppend {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
-		auto source = (data_t **)src.data;
-		auto ldata = (T *)result.data;
+		auto source = (data_t **)src.GetData();
+		auto ldata = (T *)result.GetData();
 		VectorOperations::Exec(src,
 		                       [&](index_t i, index_t k) { ldata[result.count++] = *((T *)(source[i] + offset)); });
 	}

@@ -55,13 +55,12 @@ public:
 };
 
 void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
-	auto ids = (row_t *)row_ids.data;
-
 	VersionDeleteState del_state(*this, transaction, base_row);
 
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
-	VectorOperations::Exec(row_ids, [&](index_t i, index_t k) { del_state.Delete(ids[i] - base_row); });
+	VectorOperations::ExecNumeric<row_t>(row_ids,
+	                                     [&](row_t idx, index_t i, index_t k) { del_state.Delete(idx - base_row); });
 	del_state.Flush();
 }
 

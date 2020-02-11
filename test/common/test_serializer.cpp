@@ -26,7 +26,7 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	Value d = Value("world");
 	// test serializing of DataChunk
 	DataChunk chunk;
-	vector<TypeId> types = {TypeId::INTEGER, TypeId::VARCHAR};
+	vector<TypeId> types = {TypeId::INT32, TypeId::VARCHAR};
 	chunk.Initialize(types);
 	chunk.data[0].count = chunk.data[1].count = 2;
 	chunk.data[0].SetValue(0, a);

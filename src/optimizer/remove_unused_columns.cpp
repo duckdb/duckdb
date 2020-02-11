@@ -57,7 +57,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(TypeId::BIGINT, CountStarFun::GetFunction(), false));
+				    make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false));
 			}
 		}
 
@@ -150,6 +150,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
 		// FIXME: DISTINCT with expression list does not implicitly reference everything
+		everything_referenced = true;
+		break;
+	}
+	case LogicalOperatorType::RECURSIVE_CTE: {
+		everything_referenced = true;
+		break;
+	}
+	case LogicalOperatorType::CTE_REF: {
 		everything_referenced = true;
 		break;
 	}

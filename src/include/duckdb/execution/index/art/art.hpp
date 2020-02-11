@@ -14,7 +14,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/common/types/static_vector.hpp"
 
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"

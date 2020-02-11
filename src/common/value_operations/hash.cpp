@@ -11,15 +11,15 @@ uint64_t ValueOperations::Hash(const Value &op) {
 		return 0;
 	}
 	switch (op.type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return duckdb::Hash(op.value_.boolean);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return duckdb::Hash(op.value_.tinyint);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return duckdb::Hash(op.value_.smallint);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return duckdb::Hash(op.value_.integer);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return duckdb::Hash(op.value_.bigint);
 	case TypeId::FLOAT:
 		return duckdb::Hash(op.value_.float_);

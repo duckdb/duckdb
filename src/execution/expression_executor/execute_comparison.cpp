@@ -77,9 +77,5 @@ index_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionSt
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
-	if (left.IsConstant() && right.IsConstant()) {
-		return result_count == 0 ? 0 : chunk->size();
-	} else {
-		return result_count;
-	}
+	return result_count;
 }

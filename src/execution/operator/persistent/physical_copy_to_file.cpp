@@ -188,7 +188,8 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 				}
 
 				// non-null value, fetch the string value from the cast chunk
-				auto str_value = ((const char **)cast_chunk.data[col_idx].data)[i];
+				auto str_data = (const char **)cast_chunk.data[col_idx].GetData();
+				auto str_value = str_data[i];
 				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str,
 				                  info.force_quote[col_idx]);
 			}

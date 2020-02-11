@@ -19,6 +19,17 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) 
 	return expr;
 }
 
+unique_ptr<ParsedExpression> Transformer::TransformNamedArg(PGNamedArgExpr *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto expr = TransformExpression((PGNode *)root->arg);
+	if (root->name) {
+		expr->alias = string(root->name);
+	}
+	return expr;
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 	if (!node) {
 		return nullptr;
@@ -49,6 +60,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 		return TransformResTarget(reinterpret_cast<PGResTarget *>(node));
 	case T_PGParamRef:
 		return TransformParamRef(reinterpret_cast<PGParamRef *>(node));
+	case T_PGNamedArgExpr:
+		return TransformNamedArg(reinterpret_cast<PGNamedArgExpr *>(node));
 	case T_PGSQLValueFunction:
 		return TransformSQLValueFunction(reinterpret_cast<PGSQLValueFunction *>(node));
 	case T_PGSetToDefault:
