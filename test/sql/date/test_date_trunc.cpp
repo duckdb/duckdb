@@ -19,7 +19,7 @@ TEST_CASE("Test date truncate functionality", "[date]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO dates VALUES ('1992-12-02', 'year'), ('1993-03-03', 'month'), ('1994-05-05', 'day');"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO timestamps VALUES "
-	                          "('1992-02-02 02:02:03', 'millenium'), "
+	                          "('1992-02-02 02:02:03', 'millennium'), "
 	                          "('1992-02-02 02:02:03', 'century'), "
 	                          "('1992-02-02 02:02:03', 'decade'), "
 	                          "('1992-02-02 02:02:03', 'year'), "
@@ -66,7 +66,7 @@ TEST_CASE("Test date truncate functionality", "[date]") {
 	result = con.Query("SELECT date_trunc(s, d) FROM timestamps;");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {
-	                         Value::BIGINT(Timestamp::FromString("1000-01-01 00:00:00")), // millenium
+	                         Value::BIGINT(Timestamp::FromString("1000-01-01 00:00:00")), // millennium
 	                         Value::BIGINT(Timestamp::FromString("1900-01-01 00:00:00")), // century
 	                         Value::BIGINT(Timestamp::FromString("1990-01-01 00:00:00")), // decade
 	                         Value::BIGINT(Timestamp::FromString("1992-01-01 00:00:00")), // year
@@ -85,7 +85,7 @@ TEST_CASE("Test date truncate functionality", "[date]") {
 	result = con.Query("SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {
-	                         Value::BIGINT(Timestamp::FromString("1000-01-01 00:00:00")), // millenium
+	                         Value::BIGINT(Timestamp::FromString("1000-01-01 00:00:00")), // millennium
 	                         Value::BIGINT(Timestamp::FromString("1900-01-01 00:00:00")), // century
 	                         Value::BIGINT(Timestamp::FromString("1990-01-01 00:00:00")), // decade
 	                         Value::BIGINT(Timestamp::FromString("1992-01-01 00:00:00")), // year
@@ -115,4 +115,7 @@ TEST_CASE("Test date truncate functionality", "[date]") {
 	result = con.Query("SELECT date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;");
 	REQUIRE(result->sql_types[0] == SQLType::TIMESTAMP);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2019-01-01 00:00:00"))}));
+
+	// Unknown specifier should fail
+    REQUIRE_FAIL(con.Query("SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;"));
 }

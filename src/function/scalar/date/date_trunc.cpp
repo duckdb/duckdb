@@ -1,5 +1,5 @@
 #include "duckdb/function/scalar/date_functions.hpp"
-#include "duckdb/common/enums/date_trunc_specifier.hpp"
+#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -12,47 +12,14 @@ using namespace std;
 
 namespace duckdb {
 
-DateTruncSpecifier GetDateTruncSpecifier(string specifier) {
-	specifier = StringUtil::Lower(specifier);
-	if (specifier == "millenium") {
-		return DateTruncSpecifier::MILLENNIUM;
-	} else if (specifier == "century") {
-		return DateTruncSpecifier::CENTURY;
-	} else if (specifier == "decade") {
-		return DateTruncSpecifier::DECADE;
-	} else if (specifier == "year") {
-		return DateTruncSpecifier::YEAR;
-	} else if (specifier == "quarter") {
-		return DateTruncSpecifier::QUARTER;
-	} else if (specifier == "month") {
-		return DateTruncSpecifier::MONTH;
-	} else if (specifier == "week") {
-		return DateTruncSpecifier::WEEK;
-	} else if (specifier == "day") {
-		return DateTruncSpecifier::DAY;
-	} else if (specifier == "hour") {
-		return DateTruncSpecifier::HOUR;
-	} else if (specifier == "minute") {
-		return DateTruncSpecifier::MINUTE;
-	} else if (specifier == "second") {
-		return DateTruncSpecifier::SECOND;
-	} else if (specifier == "milliseconds") {
-		return DateTruncSpecifier::MILLISECONDS;
-	} else if (specifier == "microseconds") {
-		return DateTruncSpecifier::MICROSECONDS;
-	} else {
-		throw ConversionException("truncate specifier \"%s\" not recognized", specifier.c_str());
-	}
-}
-
-struct MilleniumTruncOperator {
+struct MillenniumTruncOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		date_t date = Timestamp::GetDate(input);
 		return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 1000) * 1000, 1, 1), 0);
 	}
 };
-template <> timestamp_t MilleniumTruncOperator::Operation(date_t input) {
-	return MilleniumTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
+template <> timestamp_t MillenniumTruncOperator::Operation(date_t input) {
+	return MillenniumTruncOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, 0));
 }
 
 struct CenturyTruncOperator {
@@ -170,33 +137,33 @@ template <> timestamp_t MilliSecondsTruncOperator::Operation(date_t input) {
 	return Timestamp::FromDatetime(input, 0);
 }
 
-template <class TA, class TR> static TR truncate_element(DateTruncSpecifier type, TA element) {
+template <class TA, class TR> static TR truncate_element(DatePartSpecifier type, TA element) {
 	switch (type) {
-	case DateTruncSpecifier::MILLENNIUM:
-		return MilleniumTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::CENTURY:
+	case DatePartSpecifier::MILLENNIUM:
+		return MillenniumTruncOperator::Operation<TA, TR>(element);
+	case DatePartSpecifier::CENTURY:
 		return CenturyTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::DECADE:
+	case DatePartSpecifier::DECADE:
 		return DecadeTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::YEAR:
+	case DatePartSpecifier::YEAR:
 		return YearTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::QUARTER:
+	case DatePartSpecifier::QUARTER:
 		return QuarterTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::MONTH:
+	case DatePartSpecifier::MONTH:
 		return MonthTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::WEEK:
+	case DatePartSpecifier::WEEK:
 		return WeekTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::DAY:
+	case DatePartSpecifier::DAY:
 		return DayTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::HOUR:
+	case DatePartSpecifier::HOUR:
 		return HourTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::MINUTE:
+	case DatePartSpecifier::MINUTE:
 		return MinuteTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::SECOND:
+	case DatePartSpecifier::SECOND:
 		return SecondsTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::MILLISECONDS:
+	case DatePartSpecifier::MILLISECONDS:
 		return MilliSecondsTruncOperator::Operation<TA, TR>(element);
-	case DateTruncSpecifier::MICROSECONDS:
+	case DatePartSpecifier::MICROSECONDS:
 		// Since microseconds are not stored truncating to microseconds does the same as to milliseconds.
 		return MilliSecondsTruncOperator::Operation<TA, TR>(element);
 	default:
@@ -206,7 +173,7 @@ template <class TA, class TR> static TR truncate_element(DateTruncSpecifier type
 
 struct DateTruncOperator {
     template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
-		return truncate_element<TB, TR>(GetDateTruncSpecifier(specifier), date);
+		return truncate_element<TB, TR>(GetDatePartSpecifier(specifier), date);
 	}
 };
 
