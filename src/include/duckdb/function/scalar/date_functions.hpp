@@ -22,7 +22,7 @@ struct DatePartFun {
 };
 
 struct DateTruncFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CurrentTimeFun {

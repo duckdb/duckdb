@@ -56,7 +56,6 @@ public:
 	//! Extract the week number
 	static int32_t ExtractWeekNumber(date_t date);
 	//! Returns the date of the monday of the current week.
-    static date_t GetMondayOfCurrentWeek(date_t date);
-
+	static date_t GetMondayOfCurrentWeek(date_t date);
 };
 } // namespace duckdb
