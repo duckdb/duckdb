@@ -204,9 +204,9 @@ template <class TA, class TR> static TR truncate_element(DateTruncSpecifier type
 	}
 }
 
-template <class TR> struct DateTruncOperator {
-	template <class TA> static inline TR Operation(const char *specifier, TA date) {
-		return truncate_element<TA, TR>(GetDateTruncSpecifier(specifier), date);
+struct DateTruncOperator {
+    template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
+		return truncate_element<TB, TR>(GetDateTruncSpecifier(specifier), date);
 	}
 };
 
@@ -214,10 +214,10 @@ void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(ScalarFunction(
 	    {SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::TIMESTAMP,
-	    ScalarFunction::BinaryFunction<const char *, timestamp_t, timestamp_t, DateTruncOperator<timestamp_t>>));
+	    ScalarFunction::BinaryFunction<const char *, timestamp_t, timestamp_t, DateTruncOperator>));
 	date_trunc.AddFunction(ScalarFunction(
 	    {SQLType::VARCHAR, SQLType::DATE}, SQLType::TIMESTAMP,
-	    ScalarFunction::BinaryFunction<const char *, date_t, timestamp_t, DateTruncOperator<timestamp_t>>));
+	    ScalarFunction::BinaryFunction<const char *, date_t, timestamp_t, DateTruncOperator>));
 	set.AddFunction(date_trunc);
 	date_trunc.name = "datetrunc";
 	set.AddFunction(date_trunc);
