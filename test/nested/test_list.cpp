@@ -106,41 +106,12 @@ unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext
 	return make_unique<ListBindData>(expr.sql_return_type);
 }
 
-//
-//
-////! Type used for initialization function
-//typedef FunctionData *(*table_function_init_t)(ClientContext &);
-////! Type used for table-returning function
-//typedef void (*table_function_t)(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
-////! Type used for final (cleanup) function
-//typedef void (*table_function_final_t)(ClientContext &, FunctionData *dataptr);
-//
-//class TableFunction : public Function {
-//public:
-//	TableFunction(string name, vector<SQLType> arguments, vector<SQLType> return_types, vector<string> names,
-//	              table_function_init_t init, table_function_t function, table_function_final_t final)
-//	    : Function(name), types(move(return_types)), names(move(names)), arguments(move(arguments)), init(init),
-//	      function(function), final(final) {
-//	}
-
-//FunctionData unnest_init(ClientContext &) {
-//	return nullptr;
-//}
-
-void unnest_fun(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
-
-}
-
-void unnest_final(ClientContext &, FunctionData *dataptr) {
-
-}
 
 
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
-
 
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
@@ -151,16 +122,8 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	CreateAggregateFunctionInfo agg_info(agg);
 	con.context->catalog.CreateFunction(trans, &agg_info);
 
-
-	auto unnest = TableFunction("unnest", {}, {}, {}, nullptr, unnest_fun, unnest_final);
-
-	CreateTableFunctionInfo unnest_info(unnest);
-	con.context->catalog.CreateTableFunction(trans, &unnest_info);
-
-
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
-
 
 	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
 	result->Print();
@@ -179,8 +142,10 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result->Print();
 
 
-	result = con.Query("SELECT * FROM UNNEST(42) u1");
-	result->Print();
+
+
+//	result = con.Query("SELECT * FROM UNNEST(SELECT LIST(e) l FROM list_data GROUP BY g, l) u1");
+//	result->Print();
 
 
 
