@@ -2,6 +2,7 @@ add_library_unity(test_sql_date
                   OBJECT
                   test_date.cpp
                   test_date_part.cpp
+                  test_date_trunc.cpp
                   test_extract.cpp
                   test_timestamp.cpp)
 set(ALL_OBJECT_FILES
