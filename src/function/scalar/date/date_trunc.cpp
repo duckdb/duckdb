@@ -15,7 +15,7 @@ namespace duckdb {
 DateTruncSpecifier GetDateTruncSpecifier(string specifier) {
 	specifier = StringUtil::Lower(specifier);
 	if (specifier == "millenium") {
-		return DateTruncSpecifier::MILLENIUM;
+		return DateTruncSpecifier::MILLENNIUM;
 	} else if (specifier == "century") {
 		return DateTruncSpecifier::CENTURY;
 	} else if (specifier == "decade") {
@@ -172,7 +172,7 @@ template <> timestamp_t MilliSecondsTruncOperator::Operation(date_t input) {
 
 template <class TA, class TR> static TR truncate_element(DateTruncSpecifier type, TA element) {
 	switch (type) {
-	case DateTruncSpecifier::MILLENIUM:
+	case DateTruncSpecifier::MILLENNIUM:
 		return MilleniumTruncOperator::Operation<TA, TR>(element);
 	case DateTruncSpecifier::CENTURY:
 		return CenturyTruncOperator::Operation<TA, TR>(element);

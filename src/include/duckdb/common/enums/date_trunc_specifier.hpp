@@ -25,7 +25,7 @@ enum class DateTruncSpecifier : uint8_t {
 	YEAR,
 	DECADE,
 	CENTURY,
-	MILLENIUM,
+	MILLENNIUM,
 };
 
 DateTruncSpecifier GetDateTruncSpecifier(string specifier);
