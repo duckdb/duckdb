@@ -22,7 +22,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "century") {
 		return DatePartSpecifier::CENTURY;
 	} else if (specifier == "millennium") {
-		return DatePartSpecifier::MILLENIUM;
+		return DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds") {
 		return DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds") {
@@ -241,7 +241,7 @@ template <class T> static int64_t extract_element(DatePartSpecifier type, T elem
 		return DecadeOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::CENTURY:
 		return CenturyOperator::Operation<T, int64_t>(element);
-	case DatePartSpecifier::MILLENIUM:
+	case DatePartSpecifier::MILLENNIUM:
 		return MilleniumOperator::Operation<T, int64_t>(element);
 	case DatePartSpecifier::QUARTER:
 		return QuarterOperator::Operation<T, int64_t>(element);

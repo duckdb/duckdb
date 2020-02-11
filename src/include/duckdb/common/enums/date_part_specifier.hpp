@@ -18,7 +18,7 @@ enum class DatePartSpecifier : uint8_t {
 	DAY,
 	DECADE,
 	CENTURY,
-	MILLENIUM,
+	MILLENNIUM,
 	MICROSECONDS,
 	MILLISECONDS,
 	SECOND,
