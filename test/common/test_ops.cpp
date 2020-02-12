@@ -50,11 +50,13 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	REQUIRE(VectorOperations::HasNull(chunk.data[0]));
 }
 
-static void require_compare(Vector &val) {
-	Vector v1(val.type, true, false);
-	val.Copy(v1);
+static void require_compare(DataChunk &chunk, index_t idx) {
+	auto &val = chunk.data[idx];
+	Vector v1(val.type);
+	VectorCardinality cardinality(chunk.size(), chunk.sel_vector);
+	VectorOperations::Copy(val, v1, cardinality);
 
-	Vector res(TypeId::BOOL, true, false);
+	Vector res(TypeId::BOOL);
 
 	VectorOperations::Equals(val, v1, res);
 
@@ -104,7 +106,7 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	chunk.SetValue(0, 2, Value());
 
 	for(index_t i = 0; i < types.size(); i++) {
-		require_compare(chunk.data[i]);
+		require_compare(chunk, i);
 		if (i + 1 < types.size()) {
 			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
 		}
@@ -182,30 +184,30 @@ TEST_CASE("Generator sequence vectors", "[vector_ops]") {
 }
 
 static void require_arith(TypeId t) {
-	Vector v1(t, true, false);
-	v1.SetCount(6);
+	vector<TypeId> types { t, t, t };
+	DataChunk chunk;
+	chunk.Initialize(types);
+	chunk.SetCardinality(6);
 
-	Vector v2(t, true, false);
-	v2.SetCount(v1.size());
+	auto &v1 = chunk.data[0];
+	auto &v2 = chunk.data[1];
+	auto &r = chunk.data[2];
 
 	// v1: 1, 2, 3, NULL, 42, NULL
+	chunk.SetValue(0, 0, Value::BIGINT(1));
+	chunk.SetValue(0, 1, Value::BIGINT(2));
+	chunk.SetValue(0, 2, Value::BIGINT(3));
+	chunk.SetValue(0, 3, Value());
+	chunk.SetValue(0, 4, Value::BIGINT(42));
+	chunk.SetValue(0, 5, Value());
+
 	// v2: 4, 5, 6, 7, NULL, NULL
-	v1.SetValue(0, Value::BIGINT(1));
-	v1.SetValue(1, Value::BIGINT(2));
-	v1.SetValue(2, Value::BIGINT(3));
-	v1.SetValue(3, Value());
-	v1.SetValue(4, Value::BIGINT(42));
-	v1.SetValue(5, Value());
-
-	v2.SetValue(0, Value::BIGINT(4));
-	v2.SetValue(1, Value::BIGINT(5));
-	v2.SetValue(2, Value::BIGINT(6));
-	v2.SetValue(3, Value::BIGINT(7));
-	v2.SetValue(4, Value());
-	v2.SetValue(5, Value());
-
-	Vector r(t, true, false);
-	r.SetCount(v1.size());
+	chunk.SetValue(1, 0, Value::BIGINT(4));
+	chunk.SetValue(1, 1, Value::BIGINT(5));
+	chunk.SetValue(1, 2, Value::BIGINT(6));
+	chunk.SetValue(1, 3, Value::BIGINT(7));
+	chunk.SetValue(1, 4, Value());
+	chunk.SetValue(1, 5, Value());
 
 	VectorOperations::Add(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(5));
@@ -257,11 +259,14 @@ static void require_arith(TypeId t) {
 }
 
 static void require_mod(TypeId t) {
-	Vector v1(t, true, false);
-	v1.SetCount(7);
+	vector<TypeId> types { t, t, t };
+	DataChunk chunk;
+	chunk.Initialize(types);
+	chunk.SetCardinality(7);
 
-	Vector v2(t, true, false);
-	v2.SetCount(v1.size());
+	auto &v1 = chunk.data[0];
+	auto &v2 = chunk.data[1];
+	auto &r = chunk.data[2];
 
 	v1.SetValue(0, Value::BIGINT(10));
 	v1.SetValue(1, Value::BIGINT(10));
@@ -279,9 +284,6 @@ static void require_mod(TypeId t) {
 	v2.SetValue(5, Value());
 	v2.SetValue(6, Value());
 
-	Vector r(t, true, false);
-	r.SetCount(v1.size());
-
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(0));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(2));
@@ -293,20 +295,20 @@ static void require_mod(TypeId t) {
 }
 
 static void require_mod_double() {
-	Vector v1(TypeId::DOUBLE, true, false);
-	v1.SetCount(2);
+	vector<TypeId> types { TypeId::DOUBLE, TypeId::DOUBLE, TypeId::DOUBLE };
+	DataChunk chunk;
+	chunk.Initialize(types);
+	chunk.SetCardinality(7);
 
-	Vector v2(TypeId::DOUBLE, true, false);
-	v2.SetCount(v1.size());
+	auto &v1 = chunk.data[0];
+	auto &v2 = chunk.data[1];
+	auto &r = chunk.data[2];
 
 	v1.SetValue(0, Value::DOUBLE(10));
 	v1.SetValue(1, Value::DOUBLE(10));
 
 	v2.SetValue(0, Value::DOUBLE(2));
 	v2.SetValue(1, Value::DOUBLE(4));
-
-	Vector r(TypeId::DOUBLE, true, false);
-	r.SetCount(v1.size());
 
 	VectorOperations::Modulo(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::DOUBLE) == Value::DOUBLE(0));

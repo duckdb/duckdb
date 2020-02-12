@@ -167,7 +167,7 @@ struct VectorOperations {
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, index_t offset = 0);
+	static void Copy(Vector &source, Vector &target, const VectorCardinality &cardinality, index_t offset = 0);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
 	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
@@ -199,19 +199,30 @@ struct VectorOperations {
 	}
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
+	template <class T> static void Exec(const VectorCardinality &cardinality, T &&fun, index_t offset = 0, index_t count = 0) {
+		if (count == 0) {
+			count = cardinality.count;
+		} else {
+			count += offset;
+		}
+		Exec(cardinality.sel_vector, count, fun, offset);
+	}
+
 	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
+		VectorCardinality cardinality;
 		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			assert(count == 0 && offset == 0);
-			Exec(nullptr, 1, fun, offset);
+			cardinality.count = 1;
+			cardinality.sel_vector = nullptr;
 		} else {
 			assert(vector.vector_type == VectorType::FLAT_VECTOR);
 			if (count == 0) {
-				count = vector.size();
+				cardinality.count = vector.size();
 			} else {
-				count += offset;
+				cardinality.count = count + offset;
 			}
-			Exec(vector.sel_vector(), count, fun, offset);
+			cardinality.sel_vector = vector.sel_vector();
 		}
+		VectorOperations::Exec(cardinality, fun, offset, count);
 	}
 
 	//! Exec over a specific type. Note that it is up to the caller to verify

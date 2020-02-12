@@ -81,7 +81,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		auto id = column_ids[i];
 		if (id == COLUMN_IDENTIFIER_ROW_ID) {
 			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1, chunk_count);
+			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}

@@ -106,13 +106,72 @@ void VectorOperations::CopyToStorage(Vector &source, void *target, index_t offse
 	generic_copy_loop<true>(source, target, offset, element_count);
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
+void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinality &cardinality, index_t offset) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
-	assert(offset <= source.size());
-	target.SetCount(source.size() - offset);
-	VectorOperations::Exec(
-	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
-	VectorOperations::Copy(source, target.GetData(), offset, target.size());
+	source.Normalify();
+
+	assert(target.vector_type == VectorType::FLAT_VECTOR);
+	assert(!target.sel_vector());
+	assert(offset <= cardinality.count);
+	target.SetCount(cardinality.count - offset);
+
+	VectorOperations::Exec(cardinality, [&](index_t i, index_t k) {
+		target.nullmask[k - offset] = source.nullmask[i];
+	}, offset);
+
+	if (!TypeIsConstantSize(source.type)) {
+		switch (source.type) {
+		case TypeId::VARCHAR: {
+			auto source_data = (const char **)source.GetData();
+			auto target_data = (const char **)target.GetData();
+			VectorOperations::Exec(
+			    cardinality,
+			    [&](index_t i, index_t k) {
+				    if (!target.nullmask[k - offset]) {
+					    target_data[k - offset] = target.AddString(source_data[i]);
+				    }
+			    },
+			    offset);
+		} break;
+		case TypeId::STRUCT: {
+			// the main vector only has a nullmask, so set that with offset
+			// recursively apply to children
+			auto &source_children = source.GetChildren();
+			for (auto &child : source_children) {
+				auto child_copy = make_unique<Vector>(child.second->type);
+
+				VectorOperations::Copy(*child.second, *child_copy, cardinality, offset);
+				target.AddChild(move(child_copy), child.first);
+			}
+		} break;
+		case TypeId::LIST: {
+			throw NotImplementedException("FIXME: copy list");
+
+			// // copy main vector
+			// // FIXME
+			// assert(offset == 0);
+			// other.Initialize(TypeId::LIST);
+			// other.count = count - offset;
+			// other.selection_vector = nullptr;
+
+			// // FIXME :/
+			// memcpy(other.data, data, count * GetTypeIdSize(type));
+
+			// // copy child
+			// assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
+			// auto &child = children[0].second;
+			// auto child_copy = make_unique<Vector>();
+			// child_copy->Initialize(child->type, true, child->count);
+			// child->Copy(*child_copy.get(), offset);
+
+			// other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
+		} break;
+		default:
+			throw NotImplementedException("Unimplemented type for copy");
+		}
+	} else {
+		VectorOperations::Copy(source, target.GetData(), offset, target.size());
+	}
 }

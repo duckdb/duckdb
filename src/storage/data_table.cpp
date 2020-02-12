@@ -115,7 +115,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
 			assert(result.data[i].type == ROW_TYPE);
-			result.data[i].Sequence(base_row + current_row, 1, max_count);
+			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
@@ -605,7 +605,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
 			assert(result.data[i].type == ROW_TYPE);
-			result.data[i].Sequence(base_row + current_row, 1, count);
+			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
 			columns[column].IndexScan(state.column_scans[i], result.data[i]);

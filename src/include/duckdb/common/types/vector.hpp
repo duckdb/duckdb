@@ -107,20 +107,16 @@ public:
 		this->selection_vector = sel;
 	}
 
+	//! Causes this vector to reference the data held by the other vector.
+	void Reference(Vector &other);
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
-	//! Appends the other vector to this vector.
-	void Append(Vector &other);
-	//! Copies the data from this vector to another vector.
-	void Copy(Vector &other, index_t offset = 0);
 	//! Flattens the vector, removing any selection vector
 	void Flatten();
-	//! Causes this vector to reference the data held by the other vector.
-	void Reference(Vector &other);
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;
@@ -130,7 +126,7 @@ public:
 	void Normalify();
 
 	//! Turn the vector into a sequence vector
-	void Sequence(int64_t start, int64_t increment, index_t count);
+	void Sequence(int64_t start, int64_t increment);
 	//! Get the sequence attributes of a sequence vector
 	void GetSequence(int64_t &start, int64_t &increment) const;
 
@@ -173,5 +169,8 @@ protected:
 	buffer_ptr<VectorBuffer> auxiliary;
 	//! child vectors used for nested data
 	child_list_t<unique_ptr<Vector>> children;
+protected:
+	//! Appends the other vector to this vector.
+	void Append(Vector &other);
 };
 } // namespace duckdb

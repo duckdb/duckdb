@@ -74,8 +74,10 @@ void DataChunk::Copy(DataChunk &other, index_t offset) {
 	assert(column_count() == other.column_count());
 	other.sel_vector = nullptr;
 
+	// FIXME: use self as cardinality
+	VectorCardinality cardinality(size(), sel_vector);
 	for (index_t i = 0; i < column_count(); i++) {
-		data[i].Copy(other.data[i], offset);
+		VectorOperations::Copy(data[i], other.data[i], cardinality, offset);
 	}
 }
 

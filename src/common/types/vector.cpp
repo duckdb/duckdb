@@ -209,91 +209,10 @@ void Vector::Flatten() {
 	if (!selection_vector) {
 		return;
 	}
-	Vector other(type, true, false);
-	this->Copy(other);
+	Vector other(type);
+	VectorCardinality cardinality(size(), sel_vector());
+	VectorOperations::Copy(*this, other, cardinality);
 	this->Reference(other);
-}
-
-void Vector::Copy(Vector &other, uint64_t offset) {
-	if (other.type != type) {
-		throw TypeMismatchException(type, other.type,
-		                            "Copying to vector of different type not "
-		                            "supported! Call Cast instead!");
-	}
-	if (other.selection_vector) {
-		throw NotImplementedException("Copy to vector with sel_vector not supported!");
-	}
-	Normalify();
-
-	other.nullmask.reset();
-	if (!TypeIsConstantSize(type)) {
-		switch (type) {
-		case TypeId::VARCHAR: {
-			other.count = count - offset;
-			auto source = (const char **)data;
-			auto target = (const char **)other.data;
-			VectorOperations::Exec(
-			    *this,
-			    [&](uint64_t i, uint64_t k) {
-				    if (nullmask[i]) {
-					    other.nullmask[k - offset] = true;
-					    target[k - offset] = nullptr;
-				    } else {
-					    target[k - offset] = other.AddString(source[i]);
-				    }
-			    },
-			    offset);
-		} break;
-		case TypeId::STRUCT: {
-			// the main vector only has a nullmask, so set that with offset
-			// recursively apply to children
-			assert(offset <= count);
-			other.count = count - offset;
-			other.selection_vector = nullptr;
-			assert(offset == 0);
-			VectorOperations::Exec(
-			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
-			for (auto &child : children) {
-				auto child_copy = make_unique<Vector>();
-				child_copy->Initialize(child.second->type);
-
-				// TODO this needs to be set elsewhere!
-				child.second->selection_vector = selection_vector;
-				child.second->count = count;
-
-				child.second->Copy(*child_copy, offset); // TODO the offset is obvious for struct, not so for list/map
-				other.children.push_back(pair<string, unique_ptr<Vector>>(child.first, move(child_copy)));
-			}
-		} break;
-		case TypeId::LIST: {
-			// copy main vector
-			// FIXME
-			assert(offset == 0);
-			other.Initialize(TypeId::LIST);
-			other.count = count - offset;
-			other.selection_vector = nullptr;
-			VectorOperations::Exec(
-			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
-
-			// FIXME :/
-			memcpy(other.data, data, count * GetTypeIdSize(type));
-
-			// copy child
-			assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
-			auto &child = children[0].second;
-			auto child_copy = make_unique<Vector>();
-			child_copy->Initialize(child->type, true, child->count);
-			child->Copy(*child_copy.get(), offset);
-
-			other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
-		} break;
-		default:
-			throw NotImplementedException("Copy type ");
-		}
-
-	} else {
-		VectorOperations::Copy(*this, other, offset);
-	}
 }
 
 void Vector::Append(Vector &other) {
@@ -473,22 +392,21 @@ void Vector::Normalify() {
 	}
 }
 
-void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
+void Vector::Sequence(int64_t start, int64_t increment) {
 	vector_type = VectorType::SEQUENCE_VECTOR;
-	this->count = count;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
-	auto data = buffer->GetData();
-	memcpy(data, &start, sizeof(int64_t));
-	memcpy(data + sizeof(int64_t), &increment, sizeof(int64_t));
+	auto data = (int64_t*) buffer->GetData();
+	data[0] = start;
+	data[1] = increment;
 	nullmask.reset();
 	auxiliary.reset();
 }
 
 void Vector::GetSequence(int64_t &start, int64_t &increment) const {
 	assert(vector_type == VectorType::SEQUENCE_VECTOR);
-	auto data = buffer->GetData();
-	start = *((int64_t *)data);
-	increment = *((int64_t *)(data + sizeof(int64_t)));
+	auto data = (int64_t*) buffer->GetData();
+	start = data[0];
+	increment = data[1];
 }
 
 void Vector::Verify() {
