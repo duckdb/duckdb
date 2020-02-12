@@ -210,57 +210,9 @@ void Vector::Flatten() {
 		return;
 	}
 	Vector other(type);
-	VectorCardinality cardinality(size(), sel_vector());
-	VectorOperations::Copy(*this, other, cardinality);
+	VectorCardinality source_cardinality(size(), sel_vector());
+	VectorOperations::Copy(*this, other, source_cardinality);
 	this->Reference(other);
-}
-
-void Vector::Append(Vector &other) {
-	if (selection_vector) {
-		throw NotImplementedException("Append to vector with selection vector not supported!");
-	}
-	if (other.type != type) {
-		throw TypeMismatchException(type, other.type, "Can only append vectors of similar types");
-	}
-	if (count + other.count > STANDARD_VECTOR_SIZE) {
-		throw OutOfRangeException("Cannot append to vector: vector is full!");
-	}
-	other.Normalify();
-	assert(vector_type == VectorType::FLAT_VECTOR);
-	uint64_t old_count = count;
-	count += other.count;
-	// merge NULL mask
-	VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) { nullmask[old_count + k] = other.nullmask[i]; });
-	if (!TypeIsConstantSize(type)) {
-		switch (type) {
-		case TypeId::VARCHAR: {
-			auto source = (const char **)other.data;
-			auto target = (const char **)data;
-			VectorOperations::Exec(other, [&](uint64_t i, uint64_t k) {
-				if (other.nullmask[i]) {
-					target[old_count + k] = nullptr;
-				} else {
-					target[old_count + k] = AddString(source[i]);
-				}
-			});
-		} break;
-		case TypeId::STRUCT: {
-			// the main vector only has a nullmask, so set that with offset
-			// recursively apply to children
-			assert(children.size() == other.children.size());
-			for (size_t i = 0; i < children.size(); i++) {
-				assert(children[i].first == other.children[i].first);
-				assert(children[i].second->type == other.children[i].second->type);
-				children[i].second->Append(*other.children[i].second.get());
-			}
-		} break;
-		default:
-			throw NotImplementedException("Append type ");
-		}
-
-	} else {
-		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
-	}
 }
 
 string VectorTypeToString(VectorType type) {
@@ -468,10 +420,12 @@ void Vector::AddHeapReference(Vector &other) {
 }
 
 child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+	assert(type == TypeId::STRUCT);
 	return children;
 }
 
 void Vector::AddChild(unique_ptr<Vector> vector, string name) {
+	assert(type == TypeId::STRUCT);
 	children.push_back(make_pair(name, move(vector)));
 }
 

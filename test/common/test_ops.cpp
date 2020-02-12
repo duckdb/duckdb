@@ -52,9 +52,7 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 
 static void require_compare(DataChunk &chunk, index_t idx) {
 	auto &val = chunk.data[idx];
-	Vector v1(val.type);
-	VectorCardinality cardinality(chunk.size(), chunk.sel_vector);
-	VectorOperations::Copy(val, v1, cardinality);
+	auto &v1 = val;
 
 	Vector res(TypeId::BOOL);
 

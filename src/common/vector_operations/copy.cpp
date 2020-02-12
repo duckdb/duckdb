@@ -106,7 +106,7 @@ void VectorOperations::CopyToStorage(Vector &source, void *target, index_t offse
 	generic_copy_loop<true>(source, target, offset, element_count);
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinality &cardinality, index_t offset) {
+void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinality &source_cardinality, index_t offset) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
@@ -114,10 +114,13 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
 	assert(!target.sel_vector());
-	assert(offset <= cardinality.count);
-	target.SetCount(cardinality.count - offset);
+	assert(offset <= source_cardinality.count);
+	assert(source_cardinality.count - offset <= STANDARD_VECTOR_SIZE);
+	index_t copy_count = source_cardinality.count - offset;
+	target.SetCount(source_cardinality.count - offset);
 
-	VectorOperations::Exec(cardinality, [&](index_t i, index_t k) {
+	// merge null masks
+	VectorOperations::Exec(source_cardinality, [&](index_t i, index_t k) {
 		target.nullmask[k - offset] = source.nullmask[i];
 	}, offset);
 
@@ -127,7 +130,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 			auto source_data = (const char **)source.GetData();
 			auto target_data = (const char **)target.GetData();
 			VectorOperations::Exec(
-			    cardinality,
+			    source_cardinality,
 			    [&](index_t i, index_t k) {
 				    if (!target.nullmask[k - offset]) {
 					    target_data[k - offset] = target.AddString(source_data[i]);
@@ -142,7 +145,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 			for (auto &child : source_children) {
 				auto child_copy = make_unique<Vector>(child.second->type);
 
-				VectorOperations::Copy(*child.second, *child_copy, cardinality, offset);
+				VectorOperations::Copy(*child.second, *child_copy, source_cardinality, offset);
 				target.AddChild(move(child_copy), child.first);
 			}
 		} break;
@@ -172,6 +175,55 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 			throw NotImplementedException("Unimplemented type for copy");
 		}
 	} else {
-		VectorOperations::Copy(source, target.GetData(), offset, target.size());
+		VectorOperations::Copy(source, target.GetData(), offset, copy_count);
+	}
+}
+
+void VectorOperations::Append(Vector &source, Vector &target, const VectorCardinality &source_cardinality, const VectorCardinality &target_cardinality) {
+	if (source.type != target.type) {
+		throw TypeMismatchException(source.type, target.type, "Append types don't match!");
+	}
+	source.Normalify();
+
+	assert(target.vector_type == VectorType::FLAT_VECTOR);
+	assert(!target.sel_vector());
+	index_t copy_count = source_cardinality.count;
+	index_t old_count = target_cardinality.count;
+	assert(old_count + copy_count <= STANDARD_VECTOR_SIZE);
+	target.SetCount(target_cardinality.count + source_cardinality.count);
+
+	// merge null masks
+	VectorOperations::Exec(source_cardinality, [&](index_t i, index_t k) {
+		target.nullmask[old_count + k] = source.nullmask[i];
+	});
+
+	if (!TypeIsConstantSize(source.type)) {
+		switch (source.type) {
+		case TypeId::VARCHAR: {
+			auto source_data = (const char **)source.GetData();
+			auto target_data = (const char **)target.GetData();
+			VectorOperations::Exec(
+			    source_cardinality,
+			    [&](index_t i, index_t k) {
+				    if (!target.nullmask[old_count + k]) {
+					    target_data[old_count + k] = target.AddString(source_data[i]);
+				    }
+			    });
+		} break;
+		case TypeId::STRUCT: {
+			// recursively apply to children
+			auto &source_children = source.GetChildren();
+			auto &target_children = target.GetChildren();
+			assert(source_children.size() == target_children.size());
+			for (size_t i = 0; i < source_children.size(); i++) {
+				assert(target_children[i].first == target_children[i].first);
+				VectorOperations::Append(*source_children[i].second, *target_children[i].second, source_cardinality, target_cardinality);
+			}
+		} break;
+		default:
+			throw NotImplementedException("Unimplemented type for APPEND");
+		}
+	} else {
+		VectorOperations::Copy(source, target.GetData() + old_count * GetTypeIdSize(source.type));
 	}
 }

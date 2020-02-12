@@ -72,12 +72,29 @@ void DataChunk::SetValue(index_t col_idx, index_t index, Value val) {
 
 void DataChunk::Copy(DataChunk &other, index_t offset) {
 	assert(column_count() == other.column_count());
-	other.sel_vector = nullptr;
+	assert(other.size() == 0 && !other.sel_vector);
 
-	// FIXME: use self as cardinality
-	VectorCardinality cardinality(size(), sel_vector);
+	// CARDINALITYFIXME: use self and other as cardinality
+	VectorCardinality source_cardinality(size(), sel_vector);
+	VectorCardinality target_cardinality(0, nullptr);
 	for (index_t i = 0; i < column_count(); i++) {
-		VectorOperations::Copy(data[i], other.data[i], cardinality, offset);
+		VectorOperations::Copy(data[i], other.data[i], source_cardinality, offset);
+	}
+}
+
+void DataChunk::Append(DataChunk &other) {
+	if (other.size() == 0) {
+		return;
+	}
+	if (column_count() != other.column_count()) {
+		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
+	}
+	// CARDINALITYFIXME: use self and other as cardinality
+	assert(!sel_vector);
+	VectorCardinality target_cardinality(size(), sel_vector);
+	VectorCardinality source_cardinality(other.size(), other.sel_vector);
+	for (index_t i = 0; i < column_count(); i++) {
+		VectorOperations::Append(other.data[i], data[i], source_cardinality, target_cardinality);
 	}
 }
 
@@ -109,18 +126,6 @@ void DataChunk::Flatten() {
 void DataChunk::Normalify() {
 	for (index_t i = 0; i < column_count(); i++) {
 		data[i].Normalify();
-	}
-}
-
-void DataChunk::Append(DataChunk &other) {
-	if (other.size() == 0) {
-		return;
-	}
-	if (column_count() != other.column_count()) {
-		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
-	}
-	for (index_t i = 0; i < column_count(); i++) {
-		data[i].Append(other.data[i]);
 	}
 }
 

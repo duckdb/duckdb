@@ -169,8 +169,5 @@ protected:
 	buffer_ptr<VectorBuffer> auxiliary;
 	//! child vectors used for nested data
 	child_list_t<unique_ptr<Vector>> children;
-protected:
-	//! Appends the other vector to this vector.
-	void Append(Vector &other);
 };
 } // namespace duckdb

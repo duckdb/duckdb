@@ -167,7 +167,9 @@ struct VectorOperations {
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, const VectorCardinality &cardinality, index_t offset = 0);
+	static void Copy(Vector &source, Vector &target, const VectorCardinality &source_cardinality, index_t offset = 0);
+	// Append the data of <source> to the target vector
+	static void Append(Vector &source, Vector &target, const VectorCardinality &source_cardinality, const VectorCardinality &target_cardinality);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
 	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
