@@ -111,14 +111,18 @@ void DataChunk::Move(DataChunk &other) {
 	Destroy();
 }
 
-void DataChunk::Flatten() {
+void DataChunk::ClearSelectionVector() {
 	Normalify();
 	if (!sel_vector) {
 		return;
 	}
 
+	// CARDINALITYFIXME: use self as cardinality
+	// VectorCardinality cardinality(size(), sel_vector);
 	for (index_t i = 0; i < column_count(); i++) {
-		data[i].Flatten();
+		assert(size() == data[i].size());
+		assert(sel_vector == data[i].sel_vector());
+		data[i].ClearSelectionVector();
 	}
 	sel_vector = nullptr;
 }

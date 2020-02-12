@@ -204,14 +204,14 @@ void Vector::Reference(Vector &other) {
 	}
 }
 
-void Vector::Flatten() {
+void Vector::ClearSelectionVector() {
 	Normalify();
-	if (!selection_vector) {
+	if (!sel_vector()) {
 		return;
 	}
 	Vector other(type);
-	VectorCardinality source_cardinality(size(), sel_vector());
-	VectorOperations::Copy(*this, other, source_cardinality);
+	VectorCardinality cardinality(size(), sel_vector());
+	VectorOperations::Copy(*this, other, cardinality);
 	this->Reference(other);
 }
 

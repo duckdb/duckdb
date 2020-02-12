@@ -116,7 +116,7 @@ public:
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
 	//! Flattens the vector, removing any selection vector
-	void Flatten();
+	void ClearSelectionVector();
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;

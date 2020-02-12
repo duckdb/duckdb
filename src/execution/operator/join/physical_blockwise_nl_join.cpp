@@ -146,7 +146,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					return;
 				}
 			}
-			state->child_chunk.Flatten();
+			state->child_chunk.ClearSelectionVector();
 			state->left_position = 0;
 			state->right_position = 0;
 			if (state->lhs_found_match) {

@@ -87,7 +87,7 @@ public:
 	void Copy(DataChunk &other, index_t offset = 0);
 
 	//! Removes the selection vector from the chunk
-	void Flatten();
+	void ClearSelectionVector();
 
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();

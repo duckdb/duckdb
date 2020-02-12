@@ -29,7 +29,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		auto &chunk = state->child_chunk;
 
-		chunk.Flatten();
+		chunk.ClearSelectionVector();
 		default_executor.SetChunk(chunk);
 
 		insert_chunk.Reset();

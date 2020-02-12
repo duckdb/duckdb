@@ -172,7 +172,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					if (state->child_chunk.size() == 0) {
 						return;
 					}
-					state->child_chunk.Flatten();
+					state->child_chunk.ClearSelectionVector();
 
 					// resolve the left join condition for the current chunk
 					state->lhs_executor.Execute(state->child_chunk, state->left_join_condition);
@@ -240,21 +240,23 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// we have matching tuples!
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
+			// VectorCardinality lcardinality(match_count, lvector);
 			for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].SetCount(match_count);
 				chunk.data[i].SetSelVector(lvector);
-				chunk.data[i].Flatten();
+				chunk.data[i].ClearSelectionVector();
 			}
 			// now create a reference to the chunk on the right side using the rvector
+			// VectorCardinality rcardinality(match_count, rvector);
 			for (index_t i = 0; i < right_data.column_count(); i++) {
 				index_t chunk_entry = state->child_chunk.column_count() + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].SetCount(match_count);
 				chunk.data[chunk_entry].SetSelVector(rvector);
-				chunk.data[chunk_entry].Flatten();
+				chunk.data[chunk_entry].ClearSelectionVector();
 			}
-			chunk.sel_vector = nullptr;
+			chunk.SetCardinality(match_count);
 			break;
 		}
 		default:

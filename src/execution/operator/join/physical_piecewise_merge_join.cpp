@@ -110,7 +110,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
-			state->child_chunk.Flatten();
+			state->child_chunk.ClearSelectionVector();
 
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
@@ -176,20 +176,23 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->left_position = 0;
 				state->right_position = 0;
 			} else {
+				// VectorCardinality lcardinality(result_count, left_info.result);
 				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 					chunk.data[i].SetCount(result_count);
 					chunk.data[i].SetSelVector(left_info.result);
-					chunk.data[i].Flatten();
+					chunk.data[i].ClearSelectionVector();
 				}
 				// now create a reference to the chunk on the right side
+				// VectorCardinality rcardinality(result_count, right.result);
 				for (index_t i = 0; i < right_chunk.column_count(); i++) {
 					index_t chunk_entry = state->child_chunk.column_count() + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
 					chunk.data[chunk_entry].SetCount(result_count);
 					chunk.data[chunk_entry].SetSelVector(right.result);
-					chunk.data[chunk_entry].Flatten();
+					chunk.data[chunk_entry].ClearSelectionVector();
 				}
+				chunk.SetCardinality(result_count);
 			}
 			break;
 		}
