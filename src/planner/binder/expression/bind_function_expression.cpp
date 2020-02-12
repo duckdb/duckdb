@@ -29,24 +29,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 	}
 }
 
-BindResult ExpressionBinder::BindUnnest(FunctionExpression &function, index_t depth) {
-	// bind the children of the function expression
-	string error;
-	if (function.children.size() != 1) {
-		return BindResult("Unnest() needs exactly one child expressions");
-	}
-	BindChild(function.children[0], depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
-	}
-	auto &child = (BoundExpression &)*function.children[0];
-	auto return_type = child.sql_type;
-
-	auto result = make_unique<BoundUnnestExpression>(return_type);
-	result->child = move(child.expr);
-	return BindResult(move(result), return_type);
-}
-
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
                                           index_t depth) {
 	// bind the children of the function expression
@@ -70,6 +52,14 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
 	auto sql_return_type = result->sql_return_type;
 	return BindResult(move(result), sql_return_type);
+}
+
+BindResult ExpressionBinder::BindUnnest(FunctionExpression &function, index_t depth) {
+	return BindResult(UnsupportedUnnestMessage());
+}
+
+string ExpressionBinder::UnsupportedUnnestMessage() {
+	return "UNNEST is not supported here";
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,

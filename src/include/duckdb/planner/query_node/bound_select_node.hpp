@@ -43,6 +43,7 @@ public:
 	index_t aggregate_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
+
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
 	expression_map_t<index_t> aggregate_map;
 
@@ -50,6 +51,10 @@ public:
 	index_t window_index;
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
+
+	index_t unnest_index;
+	//! Unnest expression
+	vector<unique_ptr<Expression>> unnests;
 
 public:
 	index_t GetRootIndex() override {

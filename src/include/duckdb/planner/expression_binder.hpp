@@ -88,6 +88,7 @@ protected:
 	virtual BindResult BindUnnest(FunctionExpression &expr, index_t depth);
 
 	virtual string UnsupportedAggregateMessage();
+	virtual string UnsupportedUnnestMessage();
 
 	Binder &binder;
 	ClientContext &context;
