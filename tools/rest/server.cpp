@@ -55,6 +55,19 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
+template<class T, class TARGET>
+static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
+	auto data_ptr = (T *)v->GetData();
+	VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+		if (!v->nullmask[i]) {
+			j["data"][col_idx] += (TARGET) data_ptr[i];
+
+		} else {
+			j["data"][col_idx] += nullptr;
+		}
+	});
+}
+
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
 	Vector v2;
@@ -64,7 +77,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
 		case SQLTypeId::TIMESTAMP:
-			v2.Initialize(TypeId::VARCHAR, false);
+			v2.Initialize(TypeId::VARCHAR);
 			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR);
 			v = &v2;
 			break;
@@ -74,50 +87,29 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		assert(v);
 		switch (v->type) {
 		case TypeId::BOOL:
+			assign_json_loop<bool, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT8:
+			assign_json_loop<int8_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT16:
+			assign_json_loop<int16_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT32:
-		case TypeId::INT64: {
-			// int types
-			v->Cast(TypeId::INT64);
-			auto data_ptr = (int64_t *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+			assign_json_loop<int32_t, int64_t>(v, col_idx, j);
 			break;
-		}
+		case TypeId::INT64:
+			assign_json_loop<int64_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::FLOAT:
-		case TypeId::DOUBLE: {
-			v->Cast(TypeId::DOUBLE);
-
-			auto data_ptr = (double *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+			assign_json_loop<float, double>(v, col_idx, j);
 			break;
-		}
-		case TypeId::VARCHAR: {
-			auto data_ptr = (char **)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+		case TypeId::DOUBLE:
+			assign_json_loop<float, double>(v, col_idx, j);
 			break;
-		}
+		case TypeId::VARCHAR:
+			assign_json_loop<char*, char*>(v, col_idx, j);
+			break;
 		default:
 			throw std::runtime_error("Unsupported Type");
 		}

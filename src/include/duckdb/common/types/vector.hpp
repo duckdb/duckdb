@@ -21,6 +21,19 @@ typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
 
+class VectorCardinality {
+public:
+	VectorCardinality() : count(0), sel_vector(nullptr) {}
+	VectorCardinality(index_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {}
+
+	index_t count;
+	sel_t *sel_vector;
+
+	index_t get_index(index_t idx) {
+		return sel_vector ? sel_vector[idx] : idx;
+	}
+};
+
 //!  Vector of values of a specified TypeId.
 /*!
   The vector class is the smallest unit of data used by the execution engine. It
@@ -100,8 +113,6 @@ public:
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
-	//! Casts the vector to the specified type
-	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector.
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.

@@ -15,44 +15,39 @@ using namespace std;
 // TODO add null checks
 
 TEST_CASE("Casting vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOL, true, false);
-	v.SetCount(3);
+	vector<TypeId> types { TypeId::BOOL, TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR };
+	DataChunk chunk;
+	chunk.Initialize(types);
 
-	v.SetValue(0, Value());
-	v.SetValue(1, Value::BOOLEAN(true));
-	v.SetValue(2, Value::BOOLEAN(false));
+	chunk.SetValue(0, 0, Value());
+	chunk.SetValue(0, 1, Value::BOOLEAN(false));
+	chunk.SetValue(0, 2, Value::BOOLEAN(true));
+	chunk.SetCardinality(3);
 
-	v.Cast(TypeId::INT8);
-	v.Cast(TypeId::INT16);
-	v.Cast(TypeId::INT32);
-	v.Cast(TypeId::INT64);
-	v.Cast(TypeId::FLOAT);
-	v.Cast(TypeId::DOUBLE);
-	v.Cast(TypeId::VARCHAR);
+	// cast up the chain of types (bool -> int8 -> int16 -> int32 -> etc)
+	for(index_t i = 0; i < types.size() - 1; i++) {
+		VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
+	}
+	// cast down the chain of types again (str -> double -> float -> int64 -> etc)
+	for(index_t i = types.size(); i > 1; i--) {
+		VectorOperations::Cast(chunk.data[i - 1], chunk.data[i - 2]);
+	}
 
-	v.Cast(TypeId::DOUBLE);
-	v.Cast(TypeId::FLOAT);
-	v.Cast(TypeId::INT64);
-	v.Cast(TypeId::INT32);
-	v.Cast(TypeId::INT16);
-	v.Cast(TypeId::INT8);
-
-	v.Cast(TypeId::BOOL);
-
-	REQUIRE(v.GetValue(0).is_null);
-	REQUIRE(v.GetValue(1) == Value::BOOLEAN(true));
-	REQUIRE(v.GetValue(2) == Value::BOOLEAN(false));
+	REQUIRE(chunk.GetValue(0, 0).is_null);
+	REQUIRE(chunk.GetValue(0, 1) == Value::BOOLEAN(false));
+	REQUIRE(chunk.GetValue(0, 2) == Value::BOOLEAN(true));
 }
 
 TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOL, true, false);
-	v.SetCount(3);
+	vector<TypeId> types { TypeId::BOOL };
+	DataChunk chunk;
+	chunk.Initialize(types);
+	chunk.SetCardinality(3);
+	chunk.SetValue(0, 0, Value());
+	chunk.SetValue(0, 1, Value::BOOLEAN(true));
+	chunk.SetValue(0, 2, Value::BOOLEAN(false));
 
-	v.SetValue(0, Value());
-	v.SetValue(1, Value::BOOLEAN(true));
-	v.SetValue(2, Value::BOOLEAN(false));
-
-	REQUIRE(VectorOperations::HasNull(v));
+	REQUIRE(VectorOperations::HasNull(chunk.data[0]));
 }
 
 static void require_compare(Vector &val) {
@@ -99,25 +94,21 @@ static void require_compare(Vector &val) {
 }
 
 TEST_CASE("Compare vectors", "[vector_ops]") {
-	Vector v(TypeId::BOOL, true, false);
-	v.SetCount(3);
-	v.SetValue(0, Value::BOOLEAN(true));
-	v.SetValue(1, Value::BOOLEAN(false));
-	v.SetValue(2, Value());
+	vector<TypeId> types { TypeId::BOOL, TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR };
+	DataChunk chunk;
+	chunk.Initialize(types);
 
-	require_compare(v);
-	v.Cast(TypeId::INT16);
-	require_compare(v);
-	v.Cast(TypeId::INT32);
-	require_compare(v);
-	v.Cast(TypeId::INT64);
-	require_compare(v);
-	v.Cast(TypeId::FLOAT);
-	require_compare(v);
-	v.Cast(TypeId::DOUBLE);
-	require_compare(v);
-	v.Cast(TypeId::VARCHAR);
-	require_compare(v);
+	chunk.SetCardinality(3);
+	chunk.SetValue(0, 0, Value::BOOLEAN(true));
+	chunk.SetValue(0, 1, Value::BOOLEAN(false));
+	chunk.SetValue(0, 2, Value());
+
+	for(index_t i = 0; i < types.size(); i++) {
+		require_compare(chunk.data[i]);
+		if (i + 1 < types.size()) {
+			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
+		}
+	}
 }
 
 static void require_sg(Vector &v) {
@@ -154,22 +145,20 @@ static void require_sg(Vector &v) {
 }
 
 TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
-	Vector v(TypeId::INT8, true, false);
-	v.SetCount(2);
-	v.SetValue(0, Value::TINYINT(true));
-	v.SetValue(1, Value::TINYINT(false));
+	vector<TypeId> types { TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE };
+	DataChunk chunk;
+	chunk.Initialize(types);
 
-	require_sg(v);
-	v.Cast(TypeId::INT16);
-	require_sg(v);
-	v.Cast(TypeId::INT32);
-	require_sg(v);
-	v.Cast(TypeId::INT64);
-	require_sg(v);
-	v.Cast(TypeId::FLOAT);
-	require_sg(v);
-	v.Cast(TypeId::DOUBLE);
-	require_sg(v);
+	chunk.SetCardinality(2);
+	chunk.SetValue(0, 0, Value::TINYINT(1));
+	chunk.SetValue(0, 1, Value::TINYINT(0));
+
+	for(index_t i = 0; i < types.size(); i++) {
+		require_sg(chunk.data[i]);
+		if (i + 1 < types.size()) {
+			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
+		}
+	}
 }
 
 static void require_generate(TypeId t) {

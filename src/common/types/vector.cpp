@@ -296,18 +296,6 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 	}
 }
 
-void Vector::Cast(TypeId new_type) {
-	if (new_type == TypeId::INVALID) {
-		throw InvalidTypeException(new_type, "Cannot create a vector of type invalid!");
-	}
-	if (type == new_type) {
-		return;
-	}
-	Vector new_vector(new_type, true, false);
-	VectorOperations::Cast(*this, new_vector);
-	this->Reference(new_vector);
-}
-
 void Vector::Append(Vector &other) {
 	if (selection_vector) {
 		throw NotImplementedException("Append to vector with selection vector not supported!");
