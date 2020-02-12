@@ -128,10 +128,14 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::COMMON_SUBEXPRESSION:
 		result = VisitReplace((CommonSubExpression &)expr, expression);
 		break;
-	default:
-		assert(expr.GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+	case ExpressionClass::BOUND_WINDOW:
 		result = VisitReplace((BoundWindowExpression &)expr, expression);
 		break;
+	case ExpressionClass::BOUND_UNNEST:
+		result = VisitReplace((BoundUnnestExpression &)expr, expression);
+		break;
+	default:
+		assert(0);
 	}
 	if (result) {
 		*expression = move(result);
@@ -219,6 +223,11 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundSubqueryExpress
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundUnnestExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

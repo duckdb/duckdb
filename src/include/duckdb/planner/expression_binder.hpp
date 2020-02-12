@@ -85,6 +85,7 @@ protected:
 
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, index_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth);
+	virtual BindResult BindUnnest(FunctionExpression &expr, index_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 

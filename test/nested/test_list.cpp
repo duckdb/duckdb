@@ -26,7 +26,7 @@ static index_t list_payload_size(TypeId return_type) {
 // NB: the result of this is copied around
 static void list_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, sizeof(Vector));
-	auto v = (Vector*) payload;
+	auto v = (Vector *)payload;
 	v->type = TypeId::INVALID;
 }
 
@@ -34,25 +34,23 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	inputs[0].Normalify();
 
-	auto states = (Vector**)state.GetData();
+	auto states = (Vector **)state.GetData();
 
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		auto state = states[i];
 		if (state->type == TypeId::INVALID) {
-			state->Initialize(inputs[0].type, true, 100);  // FIXME size? needs to grow this!
+			state->Initialize(inputs[0].type, true, 100); // FIXME size? needs to grow this!
 			state->count = 0;
 			// TODO need to init child vectors, too
 			// TODO need sqltype for this
 		}
 		state->count++;
-		for (auto& child : state->GetChildren()) {
+		for (auto &child : state->GetChildren()) {
 			child.second->count++;
 		}
-		state->SetValue(state->count-1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
-		// We could alternatively collect all values for the same vector in this input chunk and assign with selection vectors
-		// map<ptr, sel_vec>!
-		// worst case, one entry per input value, but meh
-		// todo: could abort?
+		state->SetValue(state->count - 1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
+		// We could alternatively collect all values for the same vector in this input chunk and assign with selection
+		// vectors map<ptr, sel_vec>! worst case, one entry per input value, but meh todo: could abort?
 	});
 }
 
@@ -62,7 +60,7 @@ static void list_combine(Vector &state, Vector &combined) {
 }
 
 static void list_finalize(Vector &state, Vector &result) {
-	auto states = (Vector**)state.GetData();
+	auto states = (Vector **)state.GetData();
 
 	result.Initialize(TypeId::LIST, false, state.count);
 	auto list_struct_data = (list_entry_t *)result.GetData();
@@ -98,15 +96,12 @@ struct ListBindData : public FunctionData {
 	}
 };
 
-
 unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context) {
 	assert(expr.children.size() == 1);
 	expr.sql_return_type = SQLType::LIST;
 	expr.sql_return_type.child_type.push_back(make_pair("", expr.arguments[0]));
 	return make_unique<ListBindData>(expr.sql_return_type);
 }
-
-
 
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	DuckDB db(nullptr);
@@ -117,8 +112,8 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
 
-	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, list_payload_size, list_initialize,
-			list_update, list_combine, list_finalize, nullptr, list_bind);
+	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, list_payload_size, list_initialize, list_update,
+	                             list_combine, list_finalize, nullptr, list_bind);
 	CreateAggregateFunctionInfo agg_info(agg);
 	con.context->catalog.CreateFunction(trans, &agg_info);
 
@@ -132,8 +127,8 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result->Print();
 
 	// FIXME
-//	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
-//	result->Print();
+	//	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
+	//	result->Print();
 
 	result = con.Query("SELECT g, LIST(CAST(e AS VARCHAR)) from list_data GROUP BY g");
 	result->Print();
@@ -141,26 +136,19 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g");
 	result->Print();
 
-
-
-
-//	result = con.Query("SELECT * FROM UNNEST(SELECT LIST(e) l FROM list_data GROUP BY g, l) u1");
-//	result->Print();
-
-
-
+	result = con.Query("SELECT g, UNNEST(l) FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1");
+	result->Print();
 
 	// TODO nested types LIST
 
 	// TODO ?
-// pass binddata to callbacks, add cleanup function
-//
-//	create table a (i integer, j list<integer>, k list<integer>)
-//	select * from  UNLIST(a, 'j')
-//
-//	i integer, j integer, k list<integer>, OFFSETS
-//
-//	LIST_EXTRACT(a, 42)
-//	a[42]
-
+	// pass binddata to callbacks, add cleanup function
+	//
+	//	create table a (i integer, j list<integer>, k list<integer>)
+	//	select * from  UNLIST(a, 'j')
+	//
+	//	i integer, j integer, k list<integer>, OFFSETS
+	//
+	//	LIST_EXTRACT(a, 42)
+	//	a[42]
 }
