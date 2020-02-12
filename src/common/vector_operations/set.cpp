@@ -69,6 +69,11 @@ void VectorOperations::Set(Vector &result, Value value) {
 			VectorOperations::Exec(result.sel_vector, result.count, [&](index_t i, index_t k) { dataptr[i] = str; });
 			break;
 		}
+		case TypeId::LIST: {
+			// FIXME ignore
+
+			break;
+		}
 		default:
 			throw NotImplementedException("Unimplemented type for Set");
 		}

@@ -21,7 +21,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, index_t depth)
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*function.children[0];
-	auto return_type = child.sql_type;
+	assert(child.sql_type.id == SQLTypeId::LIST);
+	assert(child.sql_type.child_type.size() == 1);
+
+	auto return_type = child.sql_type.child_type[0].second;
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
 	result->child = move(child.expr);
@@ -33,11 +36,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, index_t depth)
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
-			function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias,
+	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias,
 	    node.unnests[unnest_index]->return_type, ColumnBinding(node.unnest_index, unnest_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref), return_type);
-
-
-
 }

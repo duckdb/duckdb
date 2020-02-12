@@ -139,6 +139,9 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result = con.Query("EXPLAIN SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1");
 	result->Print();
 
+	result = con.Query("SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1");
+	result->Print();
+
 	// TODO nested types LIST
 
 	// TODO ?
