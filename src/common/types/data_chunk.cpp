@@ -98,19 +98,6 @@ void DataChunk::Append(DataChunk &other) {
 	}
 }
 
-void DataChunk::Move(DataChunk &other) {
-	other.data = move(data);
-	other.owned_data = move(owned_data);
-	if (sel_vector) {
-		other.sel_vector = sel_vector;
-		if (sel_vector == owned_sel_vector) {
-			// copy the owned selection vector
-			memcpy(other.owned_sel_vector, owned_sel_vector, STANDARD_VECTOR_SIZE * sizeof(sel_t));
-		}
-	}
-	Destroy();
-}
-
 void DataChunk::ClearSelectionVector() {
 	Normalify();
 	if (!sel_vector) {

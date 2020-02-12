@@ -80,9 +80,6 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
 
-	//! Move the data of this chunk to the other chunk
-	void Move(DataChunk &other);
-
 	//! Copies the data from this vector to another vector.
 	void Copy(DataChunk &other, index_t offset = 0);
 

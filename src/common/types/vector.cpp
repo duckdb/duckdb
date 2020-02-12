@@ -233,7 +233,7 @@ string Vector::ToString() const {
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		for (index_t i = 0; i < count; i++) {
-			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+			retval += GetValue(sel_vector() ? sel_vector()[i] : i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	case VectorType::CONSTANT_VECTOR:
