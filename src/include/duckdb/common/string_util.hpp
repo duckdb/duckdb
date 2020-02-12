@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include <stdarg.h> // for va_list
 
 namespace duckdb {
 /**
