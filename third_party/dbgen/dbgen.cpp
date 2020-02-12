@@ -47,7 +47,7 @@ void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value)
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
-	chunk.data[column++].SetValue(index, Value(value));
+	chunk.SetValue(column++, index, Value(value));
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {

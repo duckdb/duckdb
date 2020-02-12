@@ -21,8 +21,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	chunk.Initialize(op.types);
 	chunk.SetCardinality(keys.size());
 	for (index_t i = 0; i < keys.size(); i++) {
-		chunk.data[0].SetValue(i, Value(keys[i]));
-		chunk.data[1].SetValue(i, Value(values[i]));
+		chunk.SetValue(0, i, Value(keys[i]));
+		chunk.SetValue(1, i, Value(values[i]));
 	}
 	collection->Append(chunk);
 

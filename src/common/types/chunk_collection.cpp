@@ -319,7 +319,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 }
 
 Value ChunkCollection::GetValue(index_t column, index_t index) {
-	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
+	return chunks[LocateChunk(index)]->GetValue(column, index % STANDARD_VECTOR_SIZE);
 }
 
 vector<Value> ChunkCollection::GetRow(index_t index) {
@@ -333,7 +333,7 @@ vector<Value> ChunkCollection::GetRow(index_t index) {
 }
 
 void ChunkCollection::SetValue(index_t column, index_t index, Value value) {
-	chunks[LocateChunk(index)]->data[column].SetValue(index % STANDARD_VECTOR_SIZE, value);
+	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
 }
 
 void ChunkCollection::Print() {

@@ -66,7 +66,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	}
 
 	chunk.SetCardinality(1);
-	chunk.data[0].SetValue(0, Value::BIGINT(updated_count));
+	chunk.SetValue(0, 0, Value::BIGINT(updated_count));
 
 	state->finished = true;
 

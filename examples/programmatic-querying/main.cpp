@@ -37,10 +37,9 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
 	}
-	output.data[0].count = this_rows;
-	output.data[1].count = this_rows;
+	output.SetCardinality(this_rows);
 	for (size_t row = 0; row < this_rows; row++) {
-		output.data[1].SetValue(row, Value("hello_" + std::to_string(row)));
+		output.SetValue(1, row, Value("hello_" + std::to_string(row)));
 	}
 }
 

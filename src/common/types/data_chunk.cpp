@@ -61,6 +61,15 @@ void DataChunk::Destroy() {
 	sel_vector = nullptr;
 }
 
+Value DataChunk::GetValue(index_t col_idx, index_t index) const {
+	assert(index < size());
+	return data[col_idx].GetValue(sel_vector ? sel_vector[index] : index);
+}
+
+void DataChunk::SetValue(index_t col_idx, index_t index, Value val) {
+	data[col_idx].SetValue(sel_vector ? sel_vector[index] : index, move(val));
+}
+
 void DataChunk::Copy(DataChunk &other, index_t offset) {
 	assert(column_count() == other.column_count());
 	other.sel_vector = nullptr;

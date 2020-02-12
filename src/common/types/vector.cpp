@@ -65,10 +65,9 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	nullmask.reset();
 }
 
-void Vector::SetValue(index_t index_, Value val) {
+void Vector::SetValue(index_t index, Value val) {
 	Value newVal = val.CastAs(type);
 
-	uint64_t index = selection_vector ? selection_vector[index_] : index_;
 	nullmask[index] = newVal.is_null;
 	if (newVal.is_null) {
 		return;
@@ -130,37 +129,33 @@ void Vector::SetValue(index_t index_, Value val) {
 }
 
 Value Vector::GetValue(index_t index) const {
-	if (index >= count) {
-		throw OutOfRangeException("GetValue() out of range");
-	}
-	index_t entry = selection_vector ? selection_vector[index] : index;
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		entry = 0;
+		index = 0;
 	}
-	if (nullmask[entry]) {
+	if (nullmask[index]) {
 		return Value(type);
 	}
 	switch (type) {
 	case TypeId::BOOL:
-		return Value::BOOLEAN(((int8_t *)data)[entry]);
+		return Value::BOOLEAN(((int8_t *)data)[index]);
 	case TypeId::INT8:
-		return Value::TINYINT(((int8_t *)data)[entry]);
+		return Value::TINYINT(((int8_t *)data)[index]);
 	case TypeId::INT16:
-		return Value::SMALLINT(((int16_t *)data)[entry]);
+		return Value::SMALLINT(((int16_t *)data)[index]);
 	case TypeId::INT32:
-		return Value::INTEGER(((int32_t *)data)[entry]);
+		return Value::INTEGER(((int32_t *)data)[index]);
 	case TypeId::INT64:
-		return Value::BIGINT(((int64_t *)data)[entry]);
+		return Value::BIGINT(((int64_t *)data)[index]);
 	case TypeId::HASH:
-		return Value::HASH(((uint64_t *)data)[entry]);
+		return Value::HASH(((uint64_t *)data)[index]);
 	case TypeId::POINTER:
-		return Value::POINTER(((uintptr_t *)data)[entry]);
+		return Value::POINTER(((uintptr_t *)data)[index]);
 	case TypeId::FLOAT:
-		return Value::FLOAT(((float *)data)[entry]);
+		return Value::FLOAT(((float *)data)[index]);
 	case TypeId::DOUBLE:
-		return Value::DOUBLE(((double *)data)[entry]);
+		return Value::DOUBLE(((double *)data)[index]);
 	case TypeId::VARCHAR: {
-		char *str = ((char **)data)[entry];
+		char *str = ((char **)data)[index];
 		assert(str);
 		return Value(string(str));
 	}
@@ -169,7 +164,7 @@ Value Vector::GetValue(index_t index) const {
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		for (auto &struct_child : children) {
-			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(entry)));
+			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
 	}
@@ -177,7 +172,7 @@ Value Vector::GetValue(index_t index) const {
 		Value ret(TypeId::LIST);
 		ret.is_null = false;
 		// get offset and length
-		auto offlen = ((list_entry_t *)data)[entry];
+		auto offlen = ((list_entry_t *)data)[index];
 		assert(children.size() == 1);
 		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			ret.list_value.push_back(children[0].second->GetValue(i));

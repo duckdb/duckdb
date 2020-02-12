@@ -28,11 +28,11 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	DataChunk chunk;
 	vector<TypeId> types = {TypeId::INT32, TypeId::VARCHAR};
 	chunk.Initialize(types);
-	chunk.data[0].count = chunk.data[1].count = 2;
-	chunk.data[0].SetValue(0, a);
-	chunk.data[0].SetValue(1, b);
-	chunk.data[1].SetValue(0, c);
-	chunk.data[1].SetValue(1, d);
+	chunk.SetCardinality(2);
+	chunk.SetValue(0, 0, a);
+	chunk.SetValue(0, 1, b);
+	chunk.SetValue(1, 0, c);
+	chunk.SetValue(1, 1, d);
 
 	BufferedSerializer serializer;
 	chunk.Serialize(serializer);
@@ -45,11 +45,11 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	REQUIRE(other_chunk.size() == 2);
 	REQUIRE(other_chunk.column_count() == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
-	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(0), a));
-	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(1), b));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(0, 0), a));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(0, 1), b));
 	REQUIRE(other_chunk.data[1].count == 2);
-	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(0), c));
-	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(1), d));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(1, 0), c));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(1, 1), d));
 }
 
 TEST_CASE("Value serialization", "[serializer]") {

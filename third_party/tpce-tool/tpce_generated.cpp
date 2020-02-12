@@ -30,7 +30,7 @@ static void append_bigint(DataChunk & chunk, size_t index,
 
 static void append_string(DataChunk & chunk, size_t index,
                           size_t & column, const char *value) {
-	chunk.data[column++].SetValue(index, Value(value));
+	chunk.SetValue(column++, index, Value(value));
 }
 
 static void append_double(DataChunk & chunk, size_t index,

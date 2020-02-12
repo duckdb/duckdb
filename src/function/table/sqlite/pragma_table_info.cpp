@@ -35,7 +35,7 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		if (input.column_count() != 1 || input.data[0].type != TypeId::VARCHAR) {
 			throw Exception("Expected a single table name as input");
 		}
-		auto table_name = input.data[0].GetValue(0).str_value;
+		auto table_name = input.GetValue(0, 0).str_value;
 		// look up the table name in the catalog
 		auto &catalog = context.catalog;
 		data.entry = catalog.GetTable(context, DEFAULT_SCHEMA, table_name);
@@ -57,20 +57,20 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		// "cid", TypeId::INT32
 		assert(column.oid < (index_t)std::numeric_limits<int32_t>::max());
 
-		output.data[0].SetValue(index, Value::INTEGER((int32_t)column.oid));
+		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
 		// "name", TypeId::VARCHAR
-		output.data[1].SetValue(index, Value(column.name));
+		output.SetValue(1, index, Value(column.name));
 		// "type", TypeId::VARCHAR
-		output.data[2].SetValue(index, Value(SQLTypeToString(column.type)));
+		output.SetValue(2, index, Value(SQLTypeToString(column.type)));
 		// "notnull", TypeId::BOOL
 		// FIXME: look at constraints
-		output.data[3].SetValue(index, Value::BOOLEAN(false));
+		output.SetValue(3, index, Value::BOOLEAN(false));
 		// "dflt_value", TypeId::VARCHAR
 		string def_value = column.default_value ? column.default_value->ToString() : "NULL";
-		output.data[4].SetValue(index, Value(def_value));
+		output.SetValue(4, index, Value(def_value));
 		// "pk", TypeId::BOOL
 		// FIXME: look at constraints
-		output.data[5].SetValue(index, Value::BOOLEAN(false));
+		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;
 }

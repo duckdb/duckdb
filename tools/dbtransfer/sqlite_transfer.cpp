@@ -172,7 +172,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 					break;
 				case SQLTypeId::VARCHAR: {
 					Value result((char *)sqlite3_column_text(stmt, i));
-					result_chunk.data[i].SetValue(result_idx, result);
+					result_chunk.SetValue(i, result_idx, result);
 					break;
 				}
 				case SQLTypeId::DATE: {

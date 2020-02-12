@@ -73,7 +73,7 @@ private:
 		index_t row;
 
 		template <class T> T GetValue(index_t col_idx) const {
-			return iterator.result->iterator_chunk->data[col_idx].GetValue(iterator.row_idx).GetValue<T>();
+			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the

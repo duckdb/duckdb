@@ -97,11 +97,6 @@ public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
-	//! Returns the [index] element of the Vector as a Value.
-	Value GetValue(index_t index) const;
-	//! Sets the [index] element of the Vector to the specified Value
-	void SetValue(index_t index, Value val);
-
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
@@ -149,7 +144,10 @@ public:
 	child_list_t<unique_ptr<Vector>>& GetChildren();
 	void AddChild(unique_ptr<Vector> vector, string name="");
 
-
+	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on the vector, and returns the element that is physically in location [index].
+	Value GetValue(index_t index) const;
+	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection vectors on the vector, and returns the element that is physically in location [index].
+	void SetValue(index_t index, Value val);
 protected:
 	//! The amount of elements in the vector.
 	index_t count;

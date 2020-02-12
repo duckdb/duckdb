@@ -76,7 +76,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(expr);
 
-	Vector result(expr.return_type, true, false);
+	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);

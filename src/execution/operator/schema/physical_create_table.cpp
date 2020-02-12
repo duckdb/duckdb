@@ -32,7 +32,7 @@ void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &ch
 			table->storage->Append(*table, context, state->child_chunk);
 		}
 		chunk.SetCardinality(1);
-		chunk.data[0].SetValue(0, Value::BIGINT(inserted_count));
+		chunk.SetValue(0, 0, Value::BIGINT(inserted_count));
 	}
 
 	state->finished = true;

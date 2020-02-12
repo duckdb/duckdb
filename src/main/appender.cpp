@@ -146,7 +146,7 @@ template <> void Appender::Append(nullptr_t value) {
 }
 
 void Appender::AppendValue(Value value) {
-	chunk.data[column].SetValue(chunk.data[column].size(), value);
+	chunk.SetValue(column, chunk.data[column].size(), value);
 	column++;
 }
 

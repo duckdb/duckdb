@@ -62,6 +62,10 @@ public:
 		}
 		this->sel_vector = sel_vector;
 	}
+
+	Value GetValue(index_t col_idx, index_t index) const;
+	void SetValue(index_t col_idx, index_t index, Value val);
+
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! This will create one vector of the specified type for each TypeId in the
 	//! types list. The vector will be referencing vector to the data owned by
