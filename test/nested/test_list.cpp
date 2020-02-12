@@ -106,16 +106,19 @@ unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
 	auto &trans = con.context->transaction.ActiveTransaction();
 
+	// TODO this should live elsewhere and be more complete
 	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, list_payload_size, list_initialize, list_update,
 	                             list_combine, list_finalize, nullptr, list_bind);
 	CreateAggregateFunctionInfo agg_info(agg);
 	con.context->catalog.CreateFunction(trans, &agg_info);
+
 
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
@@ -136,22 +139,31 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g");
 	result->Print();
 
-	result = con.Query("EXPLAIN SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1");
-	result->Print();
+	result = con.Query("SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 ORDER BY u");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3, 4, 5, 6}));
 
-	result = con.Query("SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1");
-	result->Print();
+	result = con.Query("SELECT g, UNNEST(l)+1 u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 ORDER BY u");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4, 5, 6, 7}));
 
-	// TODO nested types LIST
+
+	// you're holding it wrong
+	REQUIRE_FAIL(con.Query("SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
+	REQUIRE_FAIL(con.Query("SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
+	REQUIRE_FAIL(con.Query("SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
+
+	REQUIRE_FAIL(con.Query("SELECT UNNEST(42)"));
+	REQUIRE_FAIL(con.Query("SELECT UNNEST()"));
+	REQUIRE_FAIL(con.Query("SELECT UNNEST(42) from list_data"));
+	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
+	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
+
+
+	// TODO ordering of chunks with lists
+	// projecting out lists with unnest
 
 	// TODO ?
 	// pass binddata to callbacks, add cleanup function
-	//
-	//	create table a (i integer, j list<integer>, k list<integer>)
-	//	select * from  UNLIST(a, 'j')
-	//
-	//	i integer, j integer, k list<integer>, OFFSETS
-	//
-	//	LIST_EXTRACT(a, 42)
-	//	a[42]
+
 }
