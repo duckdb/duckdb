@@ -123,8 +123,23 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
 
+	result = con.Query("SELECT LIST(e) from list_data");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value()})}));
+
+	result = con.Query("SELECT UNNEST(LIST(e)) ue from list_data ORDER BY ue");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5, 6}));
+
+	result = con.Query("SELECT LIST(e), LIST(g) from list_data");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)})}));
+
+	// FIXME
+//	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
+//	result->Print();
+
 	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
 	result->Print();
+
 
 	result = con.Query("SELECT g, LIST(e) l1, LIST(e) l2 from list_data GROUP BY g");
 	result->Print();
@@ -139,6 +154,34 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g");
 	result->Print();
 
+	result = con.Query("SELECT LIST(42)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(42)})}));
+
+	result = con.Query("SELECT LIST(42) FROM list_data");
+	result->Print();
+
+
+	// FIXME
+	// omg omg
+//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY g2");
+//	result->Print();
+
+	result = con.Query("SELECT UNNEST(LIST(42))");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// unlist is alias of unnest for symmetry reasons
+	result = con.Query("SELECT UNLIST(LIST(42))");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	result = con.Query("SELECT UNNEST(LIST(e)) ue, UNNEST(LIST(g)) ug from list_data ORDER BY ue");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 1, 1, 2, 2, 2, 3}));
+
+	result = con.Query("SELECT g, UNNEST(LIST(e)) ue, UNNEST(LIST(e+1)) ue2 from list_data GROUP BY g ORDER BY ue");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3, 4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 3, 4, 5, 6, 7}));
+
 	result = con.Query("SELECT g, UNNEST(l) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 ORDER BY u");
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2, 3, 4, 5, 6}));
@@ -149,6 +192,11 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 
 
 	// you're holding it wrong
+
+	REQUIRE_FAIL(con.Query("SELECT LIST()"));
+	REQUIRE_FAIL(con.Query("SELECT LIST() FROM list_data"));
+	REQUIRE_FAIL(con.Query("SELECT LIST(e, g) FROM list_data"));
+
 	REQUIRE_FAIL(con.Query("SELECT g, UNNEST(l+1) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
 	REQUIRE_FAIL(con.Query("SELECT g, UNNEST(g) u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
 	REQUIRE_FAIL(con.Query("SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1"));
@@ -159,11 +207,9 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
 
-
+	// TODO scalar list constructor
 	// TODO ordering of chunks with lists
-	// projecting out lists with unnest
-
+	// vector::set with lists!
 	// TODO ?
 	// pass binddata to callbacks, add cleanup function
-
 }

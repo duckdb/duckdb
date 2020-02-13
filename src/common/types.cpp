@@ -224,7 +224,9 @@ string SQLTypeToString(SQLType type) {
 		return ret;
 	}
 	case SQLTypeId::LIST: {
-		assert(type.child_type.size() == 1);
+		if(type.child_type.size() != 1) {
+			throw Exception("List needs a child element");
+		}
 		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
 	}
 	default:

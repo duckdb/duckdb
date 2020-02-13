@@ -13,7 +13,7 @@ using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
 	// lookup the function in the catalog
-	if (function.function_name == "unnest") {
+	if (function.function_name == "unnest" || function.function_name == "unlist") {
 		// special case, not in catalog
 		// TODO make sure someone does not create such a function OR
 		// have unnest live in catalog, too
