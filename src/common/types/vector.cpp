@@ -54,7 +54,9 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
+	buffer.reset();
 	auxiliary.reset();
+	nullmask.reset();
 	if (GetTypeIdSize(type) > 0) {
 		buffer = VectorBuffer::CreateStandardVector(type, count);
 		data = buffer->GetData();
@@ -62,7 +64,6 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 			memset(data, 0, count * GetTypeIdSize(type));
 		}
 	}
-	nullmask.reset();
 }
 
 void Vector::SetValue(index_t index, Value val) {
@@ -131,6 +132,8 @@ void Vector::SetValue(index_t index, Value val) {
 Value Vector::GetValue(index_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
+	} else {
+		assert(vector_type == VectorType::FLAT_VECTOR);
 	}
 	if (nullmask[index]) {
 		return Value(type);

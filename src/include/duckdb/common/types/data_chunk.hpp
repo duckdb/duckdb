@@ -118,10 +118,5 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
-
-private:
-	//! The data owned by this DataChunk. This data is typically referenced by
-	//! the member vectors.
-	unique_ptr<data_t[]> owned_data;
 };
 } // namespace duckdb

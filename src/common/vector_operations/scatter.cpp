@@ -53,6 +53,7 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 }
 
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
+	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
 		scatter_templated_loop<char *, duckdb::PickLeft>(source, dest);
 	} else {
@@ -61,6 +62,7 @@ void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
+	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
 		scatter_templated_loop<char *, duckdb::PickRight>(source, dest);
 	} else {
@@ -69,14 +71,17 @@ void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
+	source.Normalify();
 	numeric_scatter_loop<duckdb::Add>(source, dest);
 }
 
 void VectorOperations::Scatter::Max(Vector &source, Vector &dest) {
+	source.Normalify();
 	generic_scatter_loop<duckdb::Max>(source, dest);
 }
 
 void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
+	source.Normalify();
 	generic_scatter_loop<duckdb::Min>(source, dest);
 }
 

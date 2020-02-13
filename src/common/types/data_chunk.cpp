@@ -25,40 +25,21 @@ void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 void DataChunk::Initialize(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
-	index_t size = 0;
-	for (auto &type : types) {
-		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
-	}
-	if (size > 0) {
-		owned_data = unique_ptr<data_t[]>(new data_t[size]);
-		memset(owned_data.get(), 0, size);
-	}
-
-	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {
-		data[i].data = ptr;
-		ptr += GetTypeIdSize(types[i]) * STANDARD_VECTOR_SIZE;
+		data[i].Initialize();
 	}
 }
 
 void DataChunk::Reset() {
-	auto ptr = owned_data.get();
 	for (index_t i = 0; i < column_count(); i++) {
-		data[i].data = ptr;
-		data[i].count = 0;
-		data[i].selection_vector = nullptr;
-		data[i].buffer.reset();
-		data[i].auxiliary.reset();
-		data[i].nullmask.reset();
-		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
+		data[i].Initialize();
 	}
-	sel_vector = nullptr;
+	SetCardinality(0);
 }
 
 void DataChunk::Destroy() {
 	data.clear();
-	owned_data.reset();
-	sel_vector = nullptr;
+	SetCardinality(0);
 }
 
 Value DataChunk::GetValue(index_t col_idx, index_t index) const {
@@ -159,7 +140,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// we use null-padding to store them
 			auto strings = (const char **)data[i].data;
 			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
-				auto source = strings[j] ? strings[j] : NullValue<const char *>();
+				auto source = !data[i].nullmask[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
 			});
 		}

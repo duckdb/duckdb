@@ -47,6 +47,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 		state->left_position = 0;
 		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		state->child_chunk.Normalify();
 	}
 
 	if (state->left_position >= state->child_chunk.size()) {
@@ -79,6 +80,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 			state->right_position = 0;
 			// move to the next chunk on the left side
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			state->child_chunk.Normalify();
 		}
 	}
 }
