@@ -119,52 +119,101 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	CreateAggregateFunctionInfo agg_info(agg);
 	con.context->catalog.CreateFunction(trans, &agg_info);
 
-
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
 
-	result = con.Query("SELECT LIST(e) from list_data");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value()})}));
+	result = con.Query("SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)})}));
 
-	result = con.Query("SELECT UNNEST(LIST(e)) ue from list_data ORDER BY ue");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5, 6}));
+	result = con.Query("SELECT UNNEST(l1) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
-	result = con.Query("SELECT LIST(e), LIST(g) from list_data");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value()})}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)})}));
+	result = con.Query("SELECT * FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, (SELECT LIST(b) l2 "
+	                   "FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)})}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value::INTEGER(7)})}));
+
+	result = con.Query("SELECT UNNEST(l1) u1, UNNEST(l2) u2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 "
+	                   "(a)) t1, (SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6, 7}));
 
 	// FIXME
-//	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
-//	result->Print();
+	//	result = con.Query("SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1,
+	//(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2"); 	result->Print();
+	//
+	//	result = con.Query("SELECT l1, UNNEST(l2) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1,
+	//(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2"); 	result->Print();
 
-	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g");
-	result->Print();
+	// FIXME
+	//	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
+	//	result->Print();
 
+	// FIXME
+	// omg omg
+	//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY
+	//g2"); 	result->Print();
 
-	result = con.Query("SELECT g, LIST(e) l1, LIST(e) l2 from list_data GROUP BY g");
-	result->Print();
+	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}),
+	                      Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(6)}), Value::LIST({Value()})}));
+
+	result = con.Query("SELECT g, LIST(e) l1, LIST(e) l2 from list_data GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}),
+	                      Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(6)}), Value::LIST({Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 2,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}),
+	                      Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(6)}), Value::LIST({Value()})}));
 
 	// FIXME
 	//	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
 	//	result->Print();
 
-	result = con.Query("SELECT g, LIST(CAST(e AS VARCHAR)) from list_data GROUP BY g");
-	result->Print();
+	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g order by g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::DOUBLE(0.5), Value::DOUBLE(1)}),
+	                      Value::LIST({Value::DOUBLE(1.5), Value::DOUBLE(2), Value::DOUBLE(2.5)}),
+	                      Value::LIST({Value::DOUBLE(3)}), Value::LIST({Value()})}));
 
-	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g");
-	result->Print();
+	// TODO order
+	result = con.Query("SELECT g, LIST(CAST(e AS VARCHAR)) from list_data GROUP BY g order by g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value("1"), Value("2")}), Value::LIST({Value("3"), Value("4"), Value("5")}),
+	                      Value::LIST({Value("6")}), Value::LIST({Value()})}));
+
+	result = con.Query("SELECT LIST(e) from list_data");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4),
+	                                   Value::INTEGER(5), Value::INTEGER(6), Value()})}));
+
+	result = con.Query("SELECT UNNEST(LIST(e)) ue from list_data ORDER BY ue");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4, 5, 6}));
+
+	result = con.Query("SELECT LIST(e), LIST(g) from list_data");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4),
+	                                   Value::INTEGER(5), Value::INTEGER(6), Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)})}));
 
 	result = con.Query("SELECT LIST(42)");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({Value::INTEGER(42)})}));
 
 	result = con.Query("SELECT LIST(42) FROM list_data");
-	result->Print();
-
-
-	// FIXME
-	// omg omg
-//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY g2");
-//	result->Print();
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::LIST({Value::INTEGER(42), Value::INTEGER(42), Value::INTEGER(42), Value::INTEGER(42),
+	                                   Value::INTEGER(42), Value::INTEGER(42), Value::INTEGER(42)})}));
 
 	result = con.Query("SELECT UNNEST(LIST(42))");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
@@ -190,8 +239,9 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4, 5, 6, 7}));
 
-
 	// you're holding it wrong
+	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));
+	REQUIRE_FAIL(con.Query("SELECT UNNEST(UNNEST(LIST(42))"));
 
 	REQUIRE_FAIL(con.Query("SELECT LIST()"));
 	REQUIRE_FAIL(con.Query("SELECT LIST() FROM list_data"));
@@ -212,4 +262,5 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	// vector::set with lists!
 	// TODO ?
 	// pass binddata to callbacks, add cleanup function
+	// TODO group by list/struct
 }

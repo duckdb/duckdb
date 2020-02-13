@@ -299,6 +299,8 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 		case TypeId::VARCHAR:
 			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+
+		case TypeId::LIST:
 		case TypeId::STRUCT: {
 			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				index_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;

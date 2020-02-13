@@ -102,6 +102,9 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (index_t i = 0; i < list_entry.length; i++) {
 			chunk.data[target_col].SetValue(i, child_v->GetValue(list_entry.offset + i));
 		}
+		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
+			chunk.data[target_col].SetValue(i, Value());
+		}
 	}
 
 	state->parent_position++;

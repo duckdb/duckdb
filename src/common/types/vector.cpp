@@ -110,6 +110,7 @@ void Vector::SetValue(uint64_t index_, Value val) {
 				// TODO should this child vector already exist here?
 				auto cv = make_unique<Vector>();
 				cv->Initialize(struct_child.second.type, true);
+				cv->vector_type = VectorType::FLAT_VECTOR;
 				cv->vector_type = vector_type;
 				cv->count = count;
 				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
@@ -121,13 +122,39 @@ void Vector::SetValue(uint64_t index_, Value val) {
 			vec_child.second->SetValue(index, struct_child.second);
 		}
 	} break;
-	case TypeId::LIST: {
-		// TODO hmmm how do we make space for the value?
-	}
 
-	break;
+	case TypeId::LIST: {
+		if (children.size() == 0) {
+			assert(val.list_value.size() > 0);
+			TypeId child_type = val.list_value[0].type;
+			auto cv = make_unique<Vector>();
+			cv->Initialize(child_type, true);
+			cv->vector_type = VectorType::FLAT_VECTOR;
+			cv->vector_type = vector_type;
+			children.push_back(pair<string, unique_ptr<Vector>>("", move(cv)));
+		}
+		assert(children.size() == 1);
+		// append to child
+		// TODO optimization: in-place update if fits
+		auto &child_vec = *children[0].second.get();
+		auto offset = child_vec.count;
+		for (auto &child_val : val.list_value) {
+			assert(child_vec.type == child_val.type);
+			child_vec.count++;
+			child_vec.vector_type = VectorType::FLAT_VECTOR; // TODO ??
+
+			assert(child_vec.count < STANDARD_VECTOR_SIZE); // FIXME this will overflow eventually
+			child_vec.SetValue(child_vec.count - 1, child_val);
+		}
+		// now set the pointer
+		auto &entry = ((list_entry_t *)GetData())[index];
+		entry.length = val.list_value.size();
+		entry.offset = offset;
+	} break;
+
+		break;
 	default:
-		throw NotImplementedException("Unimplemented type for adding");
+		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
 }
 
@@ -357,7 +384,6 @@ void Vector::Append(Vector &other) {
 		default:
 			throw NotImplementedException("Append type ");
 		}
-
 	} else {
 		VectorOperations::Copy(other, data + old_count * GetTypeIdSize(type));
 	}
@@ -462,16 +488,21 @@ void Vector::Normalify() {
 		case TypeId::VARCHAR:
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
 			break;
+		case TypeId::LIST: {
+			assert(children.size() == 1);
+			assert(!children[0].second->sel_vector);
+			flatten_constant_vector_loop<list_entry_t>(data, old_data, count, sel_vector);
+			break;
+		}
 		case TypeId::STRUCT: {
-			for (auto& child : GetChildren()) {
+			for (auto &child : GetChildren()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->count = count;
 				child.second->sel_vector = sel_vector;
 				child.second->Normalify();
 			}
 			sel_vector = nullptr;
-		}
-			break;
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
 		}
@@ -568,7 +599,7 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+child_list_t<unique_ptr<Vector>> &Vector::GetChildren() {
 	return children;
 }
 
