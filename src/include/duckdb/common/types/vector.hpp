@@ -61,8 +61,6 @@ public:
 */
 class Vector {
 	friend class DataChunk;
-	friend class WindowSegmentTree;
-
 public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
@@ -109,6 +107,8 @@ public:
 
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
+	//! Creates a reference to a slice of the other vector
+	void Slice(Vector &other, index_t offset);
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
@@ -170,4 +170,11 @@ protected:
 	//! child vectors used for nested data
 	child_list_t<unique_ptr<Vector>> children;
 };
+
+class FlatVector : public Vector {
+public:
+	FlatVector(TypeId type) : Vector(type) {}
+
+};
+
 } // namespace duckdb

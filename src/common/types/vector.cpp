@@ -50,6 +50,39 @@ void Vector::Reference(Value &value) {
 	SetValue(0, value);
 }
 
+void Vector::Reference(Vector &other) {
+	vector_type = other.vector_type;
+	count = other.count;
+	buffer = other.buffer;
+	auxiliary = other.auxiliary;
+	data = other.data;
+	selection_vector = other.selection_vector;
+	type = other.type;
+	nullmask = other.nullmask;
+	if (type == TypeId::STRUCT || type == TypeId::LIST) {
+		for (size_t i = 0; i < other.children.size(); i++) {
+			auto &other_child_vec = other.children[i].second;
+			auto child_ref = make_unique<Vector>();
+			child_ref->type = other_child_vec->type;
+			child_ref->Reference(*other_child_vec.get());
+			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
+		}
+	}
+}
+
+void Vector::Slice(Vector &other, index_t offset) {
+	assert(!other.sel_vector());
+
+	// create a reference to the other vector
+	index_t count = this->count;
+	Reference(other);
+	if (offset > 0) {
+		data = data + GetTypeIdSize(type) * offset;
+		nullmask <<= offset;
+	}
+	this->count = count;
+}
+
 void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
@@ -184,26 +217,6 @@ Value Vector::GetValue(index_t index) const {
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for value access");
-	}
-}
-
-void Vector::Reference(Vector &other) {
-	vector_type = other.vector_type;
-	count = other.count;
-	buffer = other.buffer;
-	auxiliary = other.auxiliary;
-	data = other.data;
-	selection_vector = other.selection_vector;
-	type = other.type;
-	nullmask = other.nullmask;
-	if (type == TypeId::STRUCT || type == TypeId::LIST) {
-		for (size_t i = 0; i < other.children.size(); i++) {
-			auto &other_child_vec = other.children[i].second;
-			auto child_ref = make_unique<Vector>();
-			child_ref->type = other_child_vec->type;
-			child_ref->Reference(*other_child_vec.get());
-			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
-		}
 	}
 }
 
