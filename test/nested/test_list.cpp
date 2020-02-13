@@ -139,21 +139,46 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6, 7}));
 
-	// FIXME
-	//	result = con.Query("SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1,
-	//(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2"); 	result->Print();
-	//
-	//	result = con.Query("SELECT l1, UNNEST(l2) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1,
-	//(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2"); 	result->Print();
+	result = con.Query("SELECT UNNEST(l1), l2 FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, 	"
+	                   "(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value::INTEGER(7)}),
+	                      Value::LIST({Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value::INTEGER(7)}),
+	                      Value::LIST({Value::INTEGER(4), Value::INTEGER(5), Value::INTEGER(6), Value::INTEGER(7)})}));
 
-	// FIXME
-	//	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
-	//	result->Print();
+	result = con.Query("SELECT l1, UNNEST(l2) FROM (SELECT LIST(a) l1 FROM (VALUES (1), (2), (3)) AS t1 (a)) t1, "
+	                   "(SELECT LIST(b) l2 FROM (VALUES (4), (5), (6), (7)) AS t2 (b)) t2");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)})}));
+	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6, 7}));
 
-	// FIXME
+	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5),
+	                      Value::INTEGER(6), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
+	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
+	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)})}));
+	// FIXME append type
 	// omg omg
-	//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY
-	//g2"); 	result->Print();
+//		result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY 	 g2");
+//		result->Print();
 
 	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g ORDER BY g");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));

@@ -566,6 +566,9 @@ void Vector::Verify() {
 			});
 		}
 	}
+	if (type == TypeId::LIST) {
+		assert(children.size() == 1);
+	}
 #endif
 }
 

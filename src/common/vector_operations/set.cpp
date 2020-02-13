@@ -70,7 +70,10 @@ void VectorOperations::Set(Vector &result, Value value) {
 			break;
 		}
 		case TypeId::LIST: {
-			// FIXME ignore
+			// FIXME can refer to same list all of them?
+			for (index_t i = 0; i < result.count; i++) {
+				result.SetValue(i, value);
+			}
 
 			break;
 		}
