@@ -26,7 +26,7 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		auto state = states[i];
 		if (state->type == TypeId::INVALID) {
-			state->Initialize(inputs[0].type, true, 100); // FIXME size? needs to grow this!
+			state->Initialize(inputs[0].type, true, 150); // FIXME size? needs to grow this!
 			state->count = 0;
 			// TODO need to init child vectors, too
 			// TODO need sqltype for this

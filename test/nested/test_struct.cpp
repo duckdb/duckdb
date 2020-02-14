@@ -109,7 +109,7 @@ TEST_CASE("Test packing and unpacking lineitem into structs", "[nested][.]") {
 	    ", returnflag := l_returnflag , linestatus := l_linestatus , shipdate := l_shipdate , commitdate := "
 	    "l_commitdate , receiptdate := l_receiptdate , shipinstruct := l_shipinstruct , shipmode := l_shipmode , "
 	    "comment := l_comment , orderkey := l_orderkey , partkey := l_partkey , suppkey := l_suppkey , linenumber := "
-	    "l_linenumber) struct FROM lineitem_org) structs LIMIT 10"));
+	    "l_linenumber) struct FROM lineitem_org) structs"));
 
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);

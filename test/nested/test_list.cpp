@@ -229,3 +229,27 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	// pack/unpack lineitem sf1 into scalar
 	// TODO selection vectors
 }
+
+
+TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	// con.EnableQueryVerification(); // FIXME something odd happening here
+
+	auto sf = 0.01;
+
+
+	// TODO this has a small limit in it right now because of performance issues. Fix this.
+	tpch::dbgen(sf, db, DEFAULT_SCHEMA, "_org");
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW lineitem AS SELECT l_orderkey, STRUCT_EXTRACT(struct, 'l_partkey') l_partkey, STRUCT_EXTRACT(struct, 'l_suppkey') l_suppkey, STRUCT_EXTRACT(struct, 'l_linenumber') l_linenumber, STRUCT_EXTRACT(struct, 'l_quantity') l_quantity, STRUCT_EXTRACT(struct, 'l_extendedprice') l_extendedprice, STRUCT_EXTRACT(struct, 'l_discount') l_discount, STRUCT_EXTRACT(struct, 'l_tax') l_tax, STRUCT_EXTRACT(struct, 'l_returnflag') l_returnflag, STRUCT_EXTRACT(struct, 'l_linestatus') l_linestatus, STRUCT_EXTRACT(struct, 'l_shipdate') l_shipdate, STRUCT_EXTRACT(struct, 'l_commitdate') l_commitdate, STRUCT_EXTRACT(struct, 'l_receiptdate') l_receiptdate, STRUCT_EXTRACT(struct, 'l_shipinstruct') l_shipinstruct, STRUCT_EXTRACT(struct, 'l_shipmode') l_shipmode, STRUCT_EXTRACT(struct, 'l_comment') l_comment FROM (SELECT l_orderkey, UNLIST(rest) struct FROM (SELECT l_orderkey, LIST(STRUCT_PACK(l_partkey ,l_suppkey ,l_linenumber ,l_quantity ,l_extendedprice ,l_discount ,l_tax ,l_returnflag ,l_linestatus ,l_shipdate ,l_commitdate ,l_receiptdate ,l_shipinstruct ,l_shipmode ,l_comment)) rest FROM (SELECT * FROM lineitem_org LIMIT 100) lss GROUP BY l_orderkey) s1) s2;"));
+
+	result = con.Query("EXPLAIN SELECT * FROM lineitem");
+	REQUIRE(result->success); // at least we can plan this
+
+	// FIXME this fails right now. Why?
+//	result = con.Query(tpch::get_query(1));
+//	result->Print();
+	//	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
+}
+
