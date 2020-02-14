@@ -63,7 +63,8 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 
 void Vector::SetValue(uint64_t index_, Value val) {
 	if (index_ >= count) {
-		throw OutOfRangeException("SetValue() out of range!");
+	//	throw OutOfRangeException("SetValue() out of range!");
+		count = index_;
 	}
 	Value newVal = val.CastAs(type);
 
@@ -140,7 +141,9 @@ void Vector::SetValue(uint64_t index_, Value val) {
 		auto offset = child_vec.count;
 		for (auto &child_val : val.list_value) {
 			assert(child_vec.type == child_val.type);
+			// FIXME this should really set the count recursively on children
 			child_vec.count++;
+			// aha, if the child is a struct we need to increase its count as well
 			child_vec.vector_type = VectorType::FLAT_VECTOR; // TODO ??
 
 			assert(child_vec.count < STANDARD_VECTOR_SIZE); // FIXME this will overflow eventually
@@ -371,16 +374,44 @@ void Vector::Append(Vector &other) {
 				}
 			});
 		} break;
+		case TypeId::LIST:
 		case TypeId::STRUCT: {
 			// the main vector only has a nullmask, so set that with offset
 			// recursively apply to children
-			assert(children.size() == other.children.size());
+			// if this vector is missing children we will have to create them I guess
+			assert(other.children.size() > 0);
+			index_t child_old_count = 0;
+			if (children.size() == 0) {
+				for (size_t i = 0; i < other.children.size(); i++) {
+					assert(old_count == 0);
+					auto &other_child = other.children[i];
+					auto new_vec = make_unique<Vector>();
+					new_vec->Initialize(other_child.second->type, 1, STANDARD_VECTOR_SIZE);
+					new_vec->vector_type = VectorType::FLAT_VECTOR;
+					new_vec->count = old_count;
+					children.push_back(make_pair(other_child.first, move(new_vec)));
+				}
+			} else {
+				child_old_count = other.children[0].second->count;
+			}
 			for (size_t i = 0; i < children.size(); i++) {
 				assert(children[i].first == other.children[i].first);
 				assert(children[i].second->type == other.children[i].second->type);
 				children[i].second->Append(*other.children[i].second.get());
 			}
+			if (type == TypeId::LIST) {
+				// for lists we also have to rewrite the offsets starting from old_count, all offsets are increased by
+				// old_count of child
+				assert(!sel_vector);
+				auto this_data = (list_entry_t *)GetData();
+				auto other_data = (list_entry_t *)other.GetData();
+				for (index_t i = 0; i < other.count; i++) {
+					this_data[old_count + i].length = other_data[i].length;
+					this_data[old_count + i].offset = other_data[i].offset + child_old_count;
+				}
+			}
 		} break;
+
 		default:
 			throw NotImplementedException("Append type ");
 		}

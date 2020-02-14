@@ -175,18 +175,32 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	     Value::STRUCT({make_pair("a", Value::INTEGER(2)),
 	                    make_pair("b", Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}))})}));
 
-	// FIXME append type
+	result = con.Query("SELECT LIST(STRUCT_PACK(a := g, b := le)) mind_blown FROM (SELECT g, LIST(e) le from list_data "
+	                   " GROUP BY g ORDER BY g) xx");
 
-	//	result = con.Query("SELECT LIST(STRUCT_PACK(a := g2, b := le)) FROM (SELECT g % 2 g2, LIST(e) le from list_data
-	// GROUP BY g) xx"); 	result->Print();
-	//
-	//
-	//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY
-	// g2"); 	result->Print();
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {Value::LIST(
+	        {Value::STRUCT({make_pair("a", Value::INTEGER(1)),
+	                        make_pair("b", Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}))}),
+	         Value::STRUCT({make_pair("a", Value::INTEGER(2)),
+	                        make_pair("b", Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}))}),
+	         Value::STRUCT({make_pair("a", Value::INTEGER(3)), make_pair("b", Value::LIST({Value::INTEGER(6)}))}),
+	         Value::STRUCT({make_pair("a", Value::INTEGER(5)), make_pair("b", Value::LIST({Value()}))})})}));
 
-	// FIXME
-	//		result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
-	//		result->Print();
+	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
+	// TODO check second col
+
+//	// FIXME
+
+//	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data WHERE g > 2GROUP BY g ORDER BY g");
+//	result->Print();
+
+
+//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq 	GROUP BY g2");
+//	result->Print();
+
 
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));
@@ -206,9 +220,12 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
 
+	// TODO lists longer than standard_vector_size
 	// TODO scalar list constructor (how about array[] ?)
-	// TODO ?
 	// pass binddata to callbacks, add cleanup function
 	// TODO group by list/struct
-	// TODO lists longer than standard_vector_size
+	// TODO join by list/struct
+	// TODO append to a list child of structs bigger than svs
+	// pack/unpack lineitem sf1 into scalar
+	// TODO selection vectors
 }
