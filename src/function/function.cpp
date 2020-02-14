@@ -51,6 +51,7 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
+	RegisterNestedAggregates();
 
 	RegisterDateFunctions();
 	RegisterMathFunctions();

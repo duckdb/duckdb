@@ -125,6 +125,7 @@ private:
 	// aggregates
 	void RegisterAlgebraicAggregates();
 	void RegisterDistributiveAggregates();
+	void RegisterNestedAggregates();
 
 	// scalar functions
 	void RegisterDateFunctions();

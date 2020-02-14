@@ -19,105 +19,11 @@
 using namespace duckdb;
 using namespace std;
 
-static index_t list_payload_size(TypeId return_type) {
-	return sizeof(Vector);
-}
-
-// NB: the result of this is copied around
-static void list_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, sizeof(Vector));
-	auto v = (Vector *)payload;
-	v->type = TypeId::INVALID;
-}
-
-static void list_update(Vector inputs[], index_t input_count, Vector &state) {
-	assert(input_count == 1);
-	inputs[0].Normalify();
-
-	auto states = (Vector **)state.GetData();
-
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		auto state = states[i];
-		if (state->type == TypeId::INVALID) {
-			state->Initialize(inputs[0].type, true, 100); // FIXME size? needs to grow this!
-			state->count = 0;
-			// TODO need to init child vectors, too
-			// TODO need sqltype for this
-		}
-		state->count++;
-		for (auto &child : state->GetChildren()) {
-			child.second->count++;
-		}
-		state->SetValue(state->count - 1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
-		// We could alternatively collect all values for the same vector in this input chunk and assign with selection
-		// vectors map<ptr, sel_vec>! worst case, one entry per input value, but meh todo: could abort?
-	});
-}
-
-static void list_combine(Vector &state, Vector &combined) {
-	throw Exception("eek");
-	// TODO should be rather straightforward, copy vectors together
-}
-
-static void list_finalize(Vector &state, Vector &result) {
-	auto states = (Vector **)state.GetData();
-
-	result.Initialize(TypeId::LIST, false, state.count);
-	auto list_struct_data = (list_entry_t *)result.GetData();
-
-	// first get total len of child vec
-	size_t total_len = 0;
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
-		list_struct_data[i].length = state_ptr->count;
-		list_struct_data[i].offset = total_len;
-		total_len += state_ptr->count;
-	});
-
-	auto list_child = make_unique<Vector>();
-	list_child->Initialize(states[0]->type, false, total_len);
-	list_child->count = 0;
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
-		list_child->Append(*state_ptr);
-	});
-	assert(list_child->count == total_len);
-	result.AddChild(move(list_child));
-}
-
-struct ListBindData : public FunctionData {
-	SQLType sql_type;
-
-	ListBindData(SQLType sql_type) : sql_type(sql_type) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<ListBindData>(sql_type);
-	}
-};
-
-unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context) {
-	assert(expr.children.size() == 1);
-	expr.sql_return_type = SQLType::LIST;
-	expr.sql_return_type.child_type.push_back(make_pair("", expr.arguments[0]));
-	return make_unique<ListBindData>(expr.sql_return_type);
-}
-
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
-
-	con.context->transaction.SetAutoCommit(false);
-	con.context->transaction.BeginTransaction();
-	auto &trans = con.context->transaction.ActiveTransaction();
-
-	// TODO this should live elsewhere and be more complete
-	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, list_payload_size, list_initialize, list_update,
-	                             list_combine, list_finalize, nullptr, list_bind);
-	CreateAggregateFunctionInfo agg_info(agg);
-	con.context->catalog.CreateFunction(trans, &agg_info);
 
 	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
 	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
@@ -175,10 +81,6 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)}),
 	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(2),
 	                                   Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(5)})}));
-	// FIXME append type
-	// omg omg
-//		result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY 	 g2");
-//		result->Print();
 
 	result = con.Query("SELECT g, LIST(e) from list_data GROUP BY g ORDER BY g");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
@@ -197,10 +99,6 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                     {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}),
 	                      Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}),
 	                      Value::LIST({Value::INTEGER(6)}), Value::LIST({Value()})}));
-
-	// FIXME
-	//	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
-	//	result->Print();
 
 	result = con.Query("SELECT g, LIST(e/2.0) from list_data GROUP BY g order by g");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
@@ -264,6 +162,32 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 1, 1, 2, 2, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, 3, 4, 5, 6, 7}));
 
+	// omg omg, list of structs, structs of lists
+
+	result =
+	    con.Query("SELECT g, STRUCT_PACK(a := g, b := le) sl FROM (SELECT g, LIST(e) le from list_data GROUP BY g) "
+	              "xx WHERE g < 3 ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(
+	    result, 1,
+	    {Value::STRUCT(
+	         {make_pair("a", Value::INTEGER(1)), make_pair("b", Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}))}),
+	     Value::STRUCT({make_pair("a", Value::INTEGER(2)),
+	                    make_pair("b", Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)}))})}));
+
+	// FIXME append type
+
+	//	result = con.Query("SELECT LIST(STRUCT_PACK(a := g2, b := le)) FROM (SELECT g % 2 g2, LIST(e) le from list_data
+	// GROUP BY g) xx"); 	result->Print();
+	//
+	//
+	//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq GROUP BY
+	// g2"); 	result->Print();
+
+	// FIXME
+	//		result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) from list_data GROUP BY g");
+	//		result->Print();
+
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));
 	REQUIRE_FAIL(con.Query("SELECT UNNEST(UNNEST(LIST(42))"));
@@ -282,10 +206,9 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
 
-	// TODO scalar list constructor
-	// TODO ordering of chunks with lists
-	// vector::set with lists!
+	// TODO scalar list constructor (how about array[] ?)
 	// TODO ?
 	// pass binddata to callbacks, add cleanup function
 	// TODO group by list/struct
+	// TODO lists longer than standard_vector_size
 }
