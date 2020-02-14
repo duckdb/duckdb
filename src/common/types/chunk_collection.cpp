@@ -270,6 +270,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 	index_t remaining_data = min((index_t)STANDARD_VECTOR_SIZE, count - start_offset);
 	assert(target.GetTypes() == types);
 
+	target.SetCardinality(remaining_data);
 	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
 		switch (types[col_idx]) {
 		case TypeId::BOOL:
@@ -314,7 +315,6 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
 		}
 	}
-	target.SetCardinality(remaining_data);
 	target.Verify();
 }
 

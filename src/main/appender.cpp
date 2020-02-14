@@ -51,8 +51,8 @@ void Appender::EndRow() {
 	if (column != chunk.column_count()) {
 		InvalidateException("Call to EndRow before all rows have been appended to!");
 	}
-	chunk.SetCardinality(chunk.size() + 1);
 	column = 0;
+	chunk.SetCardinality(chunk.size() + 1);
 	if (chunk.size() >= STANDARD_VECTOR_SIZE) {
 		Flush();
 	}

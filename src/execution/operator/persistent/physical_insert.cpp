@@ -33,6 +33,7 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		default_executor.SetChunk(chunk);
 
 		insert_chunk.Reset();
+		insert_chunk.SetCardinality(chunk);
 		if (column_index_map.size() > 0) {
 			// columns specified by the user, use column_index_map
 			for (index_t i = 0; i < table->columns.size(); i++) {

@@ -11,58 +11,54 @@ namespace duckdb {
 
 nullmask_t ZERO_MASK = nullmask_t(0);
 
-Vector::Vector(TypeId type, bool create_data, bool zero_data)
-    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), selection_vector(nullptr), data(nullptr) {
+Vector::Vector(const VectorCardinality &vcardinality, TypeId type, bool create_data, bool zero_data)
+    : vector_type(VectorType::FLAT_VECTOR), type(type), vcardinality(vcardinality), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(TypeId type) : Vector(type, true, false) {
+Vector::Vector(const VectorCardinality &vcardinality, TypeId type) : Vector(vcardinality, type, true, false) {
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr)
-    : vector_type(VectorType::FLAT_VECTOR), type(type), count(0), selection_vector(nullptr), data(dataptr) {
+Vector::Vector(const VectorCardinality &vcardinality, TypeId type, data_ptr_t dataptr)
+    : vector_type(VectorType::FLAT_VECTOR), type(type), vcardinality(vcardinality), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR), selection_vector(nullptr) {
+Vector::Vector(const VectorCardinality &vcardinality, Value value) : vector_type(VectorType::CONSTANT_VECTOR), vcardinality(vcardinality) {
 	Reference(value);
 }
 
-Vector::Vector()
-    : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), count(0), selection_vector(nullptr), data(nullptr) {
+Vector::Vector(const VectorCardinality &vcardinality)
+    : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), vcardinality(vcardinality), data(nullptr) {
 }
 
 Vector::Vector(Vector&& other) noexcept :
-	vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), count(other.count), selection_vector(other.selection_vector), data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+	vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), vcardinality(other.vcardinality), data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
-	selection_vector = nullptr;
 	type = value.type;
 	buffer = VectorBuffer::CreateConstantVector(type);
 	data = buffer->GetData();
-	count = 1;
 	SetValue(0, value);
 }
 
 void Vector::Reference(Vector &other) {
 	vector_type = other.vector_type;
-	count = other.count;
 	buffer = other.buffer;
 	auxiliary = other.auxiliary;
 	data = other.data;
-	selection_vector = other.selection_vector;
 	type = other.type;
 	nullmask = other.nullmask;
 	if (type == TypeId::STRUCT || type == TypeId::LIST) {
 		for (size_t i = 0; i < other.children.size(); i++) {
 			auto &other_child_vec = other.children[i].second;
-			auto child_ref = make_unique<Vector>();
+			auto child_ref = make_unique<Vector>(vcardinality);
 			child_ref->type = other_child_vec->type;
 			child_ref->Reference(*other_child_vec.get());
 			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
@@ -74,13 +70,11 @@ void Vector::Slice(Vector &other, index_t offset) {
 	assert(!other.sel_vector());
 
 	// create a reference to the other vector
-	index_t count = this->count;
 	Reference(other);
 	if (offset > 0) {
 		data = data + GetTypeIdSize(type) * offset;
 		nullmask <<= offset;
 	}
-	this->count = count;
 }
 
 void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
@@ -141,10 +135,8 @@ void Vector::SetValue(index_t index, Value val) {
 			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
 			if (i == children.size()) {
 				// TODO should this child vector already exist here?
-				auto cv = make_unique<Vector>();
-				cv->Initialize(struct_child.second.type, true);
+				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
 				cv->vector_type = vector_type;
-				cv->count = count;
 				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
 			}
 			auto &vec_child = children[i];
@@ -225,9 +217,12 @@ void Vector::ClearSelectionVector() {
 	if (!sel_vector()) {
 		return;
 	}
-	Vector other(type);
-	VectorCardinality cardinality(size(), sel_vector());
-	VectorOperations::Copy(*this, other, cardinality);
+	// create a new vector with the same size, but without a selection vector
+	VectorCardinality other_cardinality(size());
+	Vector other(other_cardinality, type);
+	// now copy the data of this vector to the other vector, removing the selection vector in the process
+	VectorOperations::Copy(*this, other);
+	// create a reference to the data in the other vector
 	this->Reference(other);
 }
 
@@ -245,11 +240,14 @@ string VectorTypeToString(VectorType type) {
 }
 
 string Vector::ToString() const {
+	auto count = size();
+	auto sel = sel_vector();
+
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		for (index_t i = 0; i < count; i++) {
-			retval += GetValue(sel_vector() ? sel_vector()[i] : i).ToString() + (i == count - 1 ? "" : ", ");
+			retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	case VectorType::CONSTANT_VECTOR:
@@ -259,7 +257,7 @@ string Vector::ToString() const {
 		int64_t start, increment;
 		GetSequence(start, increment);
 		for (index_t i = 0; i < count; i++) {
-			index_t idx = selection_vector ? selection_vector[i] : i;
+			index_t idx = sel ? sel[i] : i;
 			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
 		}
 		break;
@@ -284,6 +282,9 @@ static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, i
 }
 
 void Vector::Normalify() {
+	auto count = size();
+	auto sel = sel_vector();
+
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
@@ -304,41 +305,37 @@ void Vector::Normalify() {
 		switch (type) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
-			flatten_constant_vector_loop<int8_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel);
 			break;
 		case TypeId::INT16:
-			flatten_constant_vector_loop<int16_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<int16_t>(data, old_data, count, sel);
 			break;
 		case TypeId::INT32:
-			flatten_constant_vector_loop<int32_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<int32_t>(data, old_data, count, sel);
 			break;
 		case TypeId::INT64:
-			flatten_constant_vector_loop<int64_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<int64_t>(data, old_data, count, sel);
 			break;
 		case TypeId::FLOAT:
-			flatten_constant_vector_loop<float>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<float>(data, old_data, count, sel);
 			break;
 		case TypeId::DOUBLE:
-			flatten_constant_vector_loop<double>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<double>(data, old_data, count, sel);
 			break;
 		case TypeId::HASH:
-			flatten_constant_vector_loop<uint64_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count, sel);
 			break;
 		case TypeId::POINTER:
-			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, sel);
 			break;
 		case TypeId::VARCHAR:
-			flatten_constant_vector_loop<const char *>(data, old_data, count, selection_vector);
+			flatten_constant_vector_loop<const char *>(data, old_data, count, sel);
 			break;
-		case TypeId::STRUCT: {
+		case TypeId::STRUCT:
 			for (auto& child : GetChildren()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
-				child.second->count = count;
-				child.second->selection_vector = selection_vector;
 				child.second->Normalify();
 			}
-			selection_vector = nullptr;
-		}
 			break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
@@ -378,7 +375,7 @@ void Vector::GetSequence(int64_t &start, int64_t &increment) const {
 }
 
 void Vector::Verify() {
-	if (count == 0) {
+	if (size() == 0) {
 		return;
 	}
 #ifdef DEBUG

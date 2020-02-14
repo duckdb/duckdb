@@ -104,7 +104,6 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, in
 		}
 	}
 	result.nullmask = base_nullmask;
-	result.SetCount(count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -206,7 +205,7 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 	}
 }
 
-void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
 
 	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;
@@ -233,7 +232,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
 	auto result_data = (char **)result.GetData();
 
-	result_data[result.size()] = nullptr;
+	result_data[result_idx] = nullptr;
 	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
 		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction, [&](UpdateInfo *current) {
@@ -243,8 +242,8 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 				if (current->tuples[i] == row_id) {
 					// found the relevant tuple
 					auto string = FetchString(state.handles, baseptr, info_data[i]);
-					result_data[result.size()] = string.data;
-					result.nullmask[result.size()] = current->nullmask[current->tuples[i]];
+					result_data[result_idx] = string.data;
+					result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
 					break;
 				} else if (current->tuples[i] > row_id) {
 					// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
@@ -253,7 +252,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			}
 		});
 	}
-	if (!result_data[result.size()]) {
+	if (!result_data[result_idx]) {
 		// there was no updated version to be fetched: fetch the base version instead
 		if (string_updates && string_updates[vector_index]) {
 			// there are updates: check if we should use them
@@ -261,7 +260,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			for (index_t i = 0; i < info.count; i++) {
 				if (info.ids[i] == id_in_vector) {
 					// use the update
-					result_data[result.size()] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
+					result_data[result_idx] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
 					break;
 				} else if (info.ids[i] > id_in_vector) {
 					break;
@@ -269,11 +268,10 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			}
 		} else {
 			// no version was found yet: fetch base table version
-			result_data[result.size()] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
+			result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
 		}
 	}
-	result.nullmask[result.size()] = base_nullmask[id_in_vector];
-	result.SetCount(result.size() + 1);
+	result.nullmask[result_idx] = base_nullmask[id_in_vector];
 }
 
 //===--------------------------------------------------------------------===//

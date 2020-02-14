@@ -65,15 +65,15 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 
 void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the children
-	Vector input(expr.input->return_type);
-	Vector lower(expr.lower->return_type);
-	Vector upper(expr.upper->return_type);
+	Vector input(GetCardinality(), expr.input->return_type);
+	Vector lower(GetCardinality(), expr.lower->return_type);
+	Vector upper(GetCardinality(), expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), input);
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);
 
-	Vector intermediate1(TypeId::BOOL, true, false);
-	Vector intermediate2(TypeId::BOOL, true, false);
+	Vector intermediate1(GetCardinality(), TypeId::BOOL);
+	Vector intermediate2(GetCardinality(), TypeId::BOOL);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
@@ -93,9 +93,9 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 
 index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, sel_t result[]) {
 	// resolve the children
-	Vector input(expr.input->return_type);
-	Vector lower(expr.lower->return_type);
-	Vector upper(expr.upper->return_type);
+	Vector input(GetCardinality(), expr.input->return_type);
+	Vector lower(GetCardinality(), expr.lower->return_type);
+	Vector upper(GetCardinality(), expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), input);
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);

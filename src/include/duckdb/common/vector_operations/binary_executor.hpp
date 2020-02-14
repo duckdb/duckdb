@@ -124,9 +124,7 @@ private:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL>
 	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {
-		assert(left.SameCardinality(right));
-		result.SetSelVector(left.sel_vector());
-		result.SetCount(left.size());
+		assert(left.SameCardinality(right) && left.SameCardinality(result));
 		if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteA<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(left, right, result,
 			                                                                                     fun);

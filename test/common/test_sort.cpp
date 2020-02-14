@@ -29,14 +29,14 @@ template <class T> bool IsSorted(Vector &v) {
 
 TEST_CASE("Sorting vectors works", "[sort]") {
 	sel_t sel[STANDARD_VECTOR_SIZE];
-	Vector v(TypeId::INT32, true, false);
-	v.SetCount(STANDARD_VECTOR_SIZE);
+	VectorCardinality cardinality(STANDARD_VECTOR_SIZE);
+	Vector v(cardinality, TypeId::INT32);
 	auto data = (int *)v.GetData();
 	// sort without NULLs
 	VectorOperations::Exec(v, [&](size_t i, size_t k) { data[i] = i % 6; });
 	VectorOperations::Sort(v, sel);
 
-	v.SetSelVector(sel);
+	cardinality.sel_vector = sel;
 	REQUIRE(IsSorted<int>(v));
 
 	// sort with NULLs
@@ -48,6 +48,6 @@ TEST_CASE("Sorting vectors works", "[sort]") {
 	});
 	VectorOperations::Sort(v, sel);
 
-	v.SetSelVector(sel);
+	cardinality.sel_vector = sel;
 	REQUIRE(IsSorted<int>(v));
 }

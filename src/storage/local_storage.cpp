@@ -105,9 +105,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		index_t base_id = MAX_ROW_ID + storage->collection.count;
 
 		// first generate the vector of row identifiers
-		Vector row_identifiers(ROW_TYPE);
-		row_identifiers.SetSelVector(chunk.sel_vector);
-		row_identifiers.SetCount(chunk.size());
+		Vector row_identifiers(chunk, ROW_TYPE);
 		VectorOperations::GenerateSequence(row_identifiers, base_id, 1, true);
 
 		// now append the entries to the indices

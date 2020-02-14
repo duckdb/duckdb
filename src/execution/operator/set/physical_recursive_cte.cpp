@@ -96,11 +96,10 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 index_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
-	Vector dummy_addresses(TypeId::POINTER);
-	Vector probe_result(TypeId::BOOL);
+	Vector dummy_addresses(chunk, TypeId::POINTER);
+	Vector probe_result(chunk, TypeId::BOOL);
 
 	auto probe_data = (bool *)probe_result.GetData();
-	probe_result.SetCount(chunk.size());
 
 	// Use the HT to find duplicate rows
 	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);

@@ -106,7 +106,7 @@ void VectorOperations::CopyToStorage(Vector &source, void *target, index_t offse
 	generic_copy_loop<true>(source, target, offset, element_count);
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinality &source_cardinality, index_t offset) {
+void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
@@ -114,13 +114,12 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
 	assert(!target.sel_vector());
-	assert(offset <= source_cardinality.count);
-	assert(source_cardinality.count - offset <= STANDARD_VECTOR_SIZE);
-	index_t copy_count = source_cardinality.count - offset;
-	target.SetCount(source_cardinality.count - offset);
+	assert(offset <= source.size());
+	assert(source.size() - offset <= STANDARD_VECTOR_SIZE);
+	index_t copy_count = source.size() - offset;
 
 	// merge null masks
-	VectorOperations::Exec(source_cardinality, [&](index_t i, index_t k) {
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
 		target.nullmask[k - offset] = source.nullmask[i];
 	}, offset);
 
@@ -130,7 +129,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 			auto source_data = (const char **)source.GetData();
 			auto target_data = (const char **)target.GetData();
 			VectorOperations::Exec(
-			    source_cardinality,
+			    source,
 			    [&](index_t i, index_t k) {
 				    if (!target.nullmask[k - offset]) {
 					    target_data[k - offset] = target.AddString(source_data[i]);
@@ -143,9 +142,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 			// recursively apply to children
 			auto &source_children = source.GetChildren();
 			for (auto &child : source_children) {
-				auto child_copy = make_unique<Vector>(child.second->type);
+				auto child_copy = make_unique<Vector>(target.cardinality(), child.second->type);
 
-				VectorOperations::Copy(*child.second, *child_copy, source_cardinality, offset);
+				VectorOperations::Copy(*child.second, *child_copy, offset);
 				target.AddChild(move(child_copy), child.first);
 			}
 		} break;
@@ -179,7 +178,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const VectorCardinal
 	}
 }
 
-void VectorOperations::Append(Vector &source, Vector &target, const VectorCardinality &source_cardinality, const VectorCardinality &target_cardinality) {
+void VectorOperations::Append(Vector &source, Vector &target) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Append types don't match!");
 	}
@@ -187,13 +186,12 @@ void VectorOperations::Append(Vector &source, Vector &target, const VectorCardin
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
 	assert(!target.sel_vector());
-	index_t copy_count = source_cardinality.count;
-	index_t old_count = target_cardinality.count;
+	index_t copy_count = source.size();
+	index_t old_count = target.size();
 	assert(old_count + copy_count <= STANDARD_VECTOR_SIZE);
-	target.SetCount(target_cardinality.count + source_cardinality.count);
 
 	// merge null masks
-	VectorOperations::Exec(source_cardinality, [&](index_t i, index_t k) {
+	VectorOperations::Exec(source, [&](index_t i, index_t k) {
 		target.nullmask[old_count + k] = source.nullmask[i];
 	});
 
@@ -203,7 +201,7 @@ void VectorOperations::Append(Vector &source, Vector &target, const VectorCardin
 			auto source_data = (const char **)source.GetData();
 			auto target_data = (const char **)target.GetData();
 			VectorOperations::Exec(
-			    source_cardinality,
+			    source,
 			    [&](index_t i, index_t k) {
 				    if (!target.nullmask[old_count + k]) {
 					    target_data[old_count + k] = target.AddString(source_data[i]);
@@ -217,7 +215,7 @@ void VectorOperations::Append(Vector &source, Vector &target, const VectorCardin
 			assert(source_children.size() == target_children.size());
 			for (size_t i = 0; i < source_children.size(); i++) {
 				assert(target_children[i].first == target_children[i].first);
-				VectorOperations::Append(*source_children[i].second, *target_children[i].second, source_cardinality, target_cardinality);
+				VectorOperations::Append(*source_children[i].second, *target_children[i].second);
 			}
 		} break;
 		default:

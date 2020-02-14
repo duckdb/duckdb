@@ -84,7 +84,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 		DataChunk groups;
 		groups.Initialize(group_types);
 
-		Vector addresses(TypeId::POINTER, true, false);
+		Vector addresses(groups, TypeId::POINTER);
 		auto data_pointers = (data_ptr_t *)addresses.GetData();
 
 		data_ptr_t ptr = data;
@@ -106,7 +106,6 @@ void SuperLargeHashTable::Resize(index_t size) {
 			if (entry == 0) {
 				break;
 			}
-			addresses.SetCount(entry);
 			// fetch the group columns
 			groups.SetCardinality(entry);
 			for (index_t i = 0; i < groups.column_count(); i++) {
@@ -117,8 +116,8 @@ void SuperLargeHashTable::Resize(index_t size) {
 
 			groups.Verify();
 			assert(groups.size() == entry);
-			Vector new_addresses(TypeId::POINTER);
-			Vector new_group_dummy(TypeId::BOOL);
+			Vector new_addresses(groups, TypeId::POINTER);
+			Vector new_group_dummy(groups, TypeId::BOOL);
 			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
 
 			// NB: both address vectors already point to the payload start
@@ -154,8 +153,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		return;
 	}
 
-	Vector addresses(TypeId::POINTER);
-	Vector new_group_dummy(TypeId::BOOL);
+	Vector addresses(groups, TypeId::POINTER);
+	Vector new_group_dummy(groups, TypeId::BOOL);
 
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 
@@ -180,12 +179,11 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
 			probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
-			probe_chunk.sel_vector = groups.sel_vector;
+			probe_chunk.SetCardinality(groups);
 			probe_chunk.Verify();
 
-			Vector dummy_addresses(TypeId::POINTER);
-			Vector probe_result(TypeId::BOOL);
-			probe_result.SetCount(payload.data[payload_idx].size());
+			Vector dummy_addresses(probe_chunk, TypeId::POINTER);
+			Vector probe_result(probe_chunk, TypeId::BOOL);
 			// this is the actual meat, find out which groups plus payload
 			// value have not been seen yet
 			distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, probe_result);
@@ -202,15 +200,14 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 				}
 			}
 
-			Vector distinct_payload, distinct_addresses;
-			distinct_payload.Reference(payload.data[payload_idx]);
-			distinct_payload.SetSelVector(distinct_sel_vector);
-			distinct_payload.SetCount(match_count);
-			distinct_payload.Verify();
+			VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
+			Vector distinct_payload(distinct_cardinality);
+			Vector distinct_addresses(distinct_cardinality);
 
+			distinct_payload.Reference(payload.data[payload_idx]);
 			distinct_addresses.Reference(addresses);
-			distinct_addresses.SetSelVector(distinct_sel_vector);
-			distinct_addresses.SetCount(match_count);
+
+			distinct_payload.Verify();
 			distinct_addresses.Verify();
 
 			aggr->function.update(&distinct_payload, 1, distinct_addresses);
@@ -238,8 +235,8 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	Vector addresses(TypeId::POINTER);
-	Vector new_group_dummy(TypeId::BOOL);
+	Vector addresses(groups, TypeId::POINTER);
+	Vector new_group_dummy(groups, TypeId::BOOL);
 	FindOrCreateGroups(groups, addresses, new_group_dummy);
 	// now fetch the aggregates
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -344,7 +341,7 @@ static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_
 
 void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// create a set of hashes for the groups
-	Vector hashes(TypeId::HASH);
+	Vector hashes(groups, TypeId::HASH);
 	groups.Hash(hashes);
 
 	// now compute the entry in the table based on the hash using a modulo
@@ -358,6 +355,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
 void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {
+	assert(addresses.SameCardinality(groups) && addresses.SameCardinality(groups));
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);
@@ -372,8 +370,6 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
 	assert(new_group.type == TypeId::BOOL);
 	assert(addresses.type == TypeId::POINTER);
-
-	new_group.SetSelVector(groups.sel_vector);
 
 	HashGroups(groups, addresses);
 	// FIXME: optimize for constant group index
@@ -395,7 +391,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	Vector pointers(TypeId::POINTER, (data_ptr_t)group_pointers);
+	FlatVector pointers(TypeId::POINTER, (data_ptr_t)group_pointers);
 
 	while (sel_count > 0) {
 		index_t current_count = 0;
@@ -469,21 +465,23 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 	if (start >= end)
 		return 0;
 
-	Vector addresses(TypeId::POINTER, true, false);
+	Vector addresses(groups, TypeId::POINTER);
 	auto data_pointers = (data_ptr_t *)addresses.GetData();
 
 	// scan the table for full cells starting from the scan position
 	index_t entry = 0;
-	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
+	for (ptr = start; ptr < end; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry
 			data_pointers[entry++] = ptr + FLAG_SIZE;
+			if (entry == STANDARD_VECTOR_SIZE) {
+				break;
+			}
 		}
 	}
 	if (entry == 0) {
 		return 0;
 	}
-	addresses.SetCount(entry);
 	groups.SetCardinality(entry);
 	result.SetCardinality(entry);
 	// fetch the group columns

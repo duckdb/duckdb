@@ -33,34 +33,28 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk {
+class DataChunk : public VectorCardinality {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-	//! The (optional) selection vector of the DataChunk. Each of the member
-	//! vectors reference this selection vector.
-	sel_t *sel_vector;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 public:
 	index_t size() const {
-		if (column_count() == 0) {
-			return 0;
-		}
-		return data[0].size();
+		return count;
 	}
 	index_t column_count() const {
 		return data.size();
 	}
 	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
-		for(index_t i = 0; i < column_count(); i++) {
-			data[i].SetCount(count);
-			data[i].SetSelVector(sel_vector);
-		}
+		this->count = count;
 		this->sel_vector = sel_vector;
+	}
+	void SetCardinality(const VectorCardinality &cardinality) {
+		SetCardinality(cardinality.count, cardinality.sel_vector);
 	}
 
 	Value GetValue(index_t col_idx, index_t index) const;

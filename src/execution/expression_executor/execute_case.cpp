@@ -18,9 +18,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 }
 
 void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result) {
-	Vector check(expr.check->return_type);
-	Vector res_true(expr.result_if_true->return_type);
-	Vector res_false(expr.result_if_false->return_type);
+	Vector check(GetCardinality(), expr.check->return_type);
+	Vector res_true(GetCardinality(), expr.result_if_true->return_type);
+	Vector res_false(GetCardinality(), expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -60,9 +60,6 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 			// have to execute both and mix and match
 			Execute(*expr.result_if_true, res_true_state, res_true);
 			Execute(*expr.result_if_false, res_false_state, res_false);
-
-			result.SetSelVector(check.sel_vector());
-			result.SetCount(check.size());
 
 			Case(res_true, res_false, result, tside, tcount, fside, fcount);
 		}

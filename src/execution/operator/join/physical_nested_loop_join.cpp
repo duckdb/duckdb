@@ -241,19 +241,17 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
 			// VectorCardinality lcardinality(match_count, lvector);
+			chunk.SetCardinality(match_count, lvector);
 			for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
-				chunk.data[i].SetCount(match_count);
-				chunk.data[i].SetSelVector(lvector);
 				chunk.data[i].ClearSelectionVector();
 			}
+			chunk.SetCardinality(match_count, rvector);
 			// now create a reference to the chunk on the right side using the rvector
 			// VectorCardinality rcardinality(match_count, rvector);
 			for (index_t i = 0; i < right_data.column_count(); i++) {
 				index_t chunk_entry = state->child_chunk.column_count() + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
-				chunk.data[chunk_entry].SetCount(match_count);
-				chunk.data[chunk_entry].SetSelVector(rvector);
 				chunk.data[chunk_entry].ClearSelectionVector();
 			}
 			chunk.SetCardinality(match_count);

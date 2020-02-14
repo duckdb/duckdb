@@ -50,13 +50,13 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
 	// execute the children
 	for (index_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(TypeId::BOOL);
+		Vector current_result(GetCardinality(), TypeId::BOOL);
 		Execute(*expr.children[i], state->child_states[i].get(), current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
 		} else {
-			Vector intermediate(TypeId::BOOL);
+			Vector intermediate(GetCardinality(), TypeId::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:

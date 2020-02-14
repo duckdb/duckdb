@@ -34,8 +34,8 @@ void TransientSegment::Fetch(ColumnScanState &state, index_t vector_index, Vecto
 	data->Fetch(state, vector_index, result);
 }
 
-void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
-	data->FetchRow(state, transaction, row_id - this->start, result);
+void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
+	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 
 void TransientSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) {

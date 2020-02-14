@@ -14,10 +14,7 @@ namespace duckdb {
 using ScanStructure = JoinHashTable::ScanStructure;
 
 static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
-	Vector target_vector(TypeId::POINTER, (data_ptr_t)targets);
-	target_vector.SetCount(source.size());
-	target_vector.SetSelVector(source.sel_vector);
-
+	Vector target_vector(source, TypeId::POINTER, (data_ptr_t)targets);
 	index_t offset = 0;
 	for (index_t i = 0; i < source.column_count(); i++) {
 		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
@@ -234,6 +231,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	vector<TypeId> hash_types = {TypeId::HASH};
 	DataChunk hash_chunk;
 	hash_chunk.Initialize(hash_types);
+	hash_chunk.SetCardinality(keys);
 	Hash(keys, hash_chunk.data[0]);
 
 	// serialize the key, payload and hash values to these locations
@@ -290,7 +288,8 @@ void JoinHashTable::Finalize() {
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
-	Vector hashes(TypeId::HASH, true, false);
+	VectorCardinality hash_cardinality;
+	Vector hashes(hash_cardinality, TypeId::HASH);
 	auto hash_data = (uint64_t *)hashes.GetData();
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
@@ -309,7 +308,7 @@ void JoinHashTable::Finalize() {
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
-			hashes.SetCount(next);
+			hash_cardinality.count = next;
 			// now insert into the hash table
 			InsertHashes(hashes, key_locations);
 
@@ -334,7 +333,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	Vector hashes(TypeId::HASH, true, false);
+	Vector hashes(keys, TypeId::HASH);
 	Hash(keys, hashes);
 
 	// use bitmask to get index in array
@@ -392,8 +391,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht), finished(false) {
-	pointers.Initialize(TypeId::POINTER, false);
-	build_pointer_vector.Initialize(TypeId::POINTER, false);
+	pointers.Initialize(TypeId::POINTER);
+	build_pointer_vector.Initialize(TypeId::POINTER);
 	pointers.SetSelVector(this->sel_vector);
 }
 
@@ -428,15 +427,13 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 }
 
 index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[]) {
-	Vector current_pointers;
+	FlatVector current_pointers;
 	current_pointers.Reference(pointers);
 
 	index_t comparison_count;
 	for (index_t i = 0; i < ht.predicates.size(); i++) {
 		// gather the data from the pointers
-		Vector ht_data(keys.data[i].type, true, false);
-		ht_data.SetSelVector(current_pointers.sel_vector());
-		ht_data.SetCount(current_pointers.size());
+		Vector ht_data(current_pointers.cardinality(), keys.data[i].type);
 		// we don't check for NULL values in the keys because either
 		// (1) NULL values will have been filtered out before (null_values_are_equal = false) or
 		// (2) we want NULL=NULL to be true (null_values_are_equal = true)
@@ -446,8 +443,7 @@ index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_resul
 		assert(!keys.data[i].sel_vector());
 		index_t old_count = keys.data[i].size();
 
-		keys.data[i].SetSelVector(ht_data.sel_vector());
-		keys.data[i].SetCount(ht_data.size());
+		keys.SetCardinality(ht_data.cardinality());
 
 		// perform the comparison expression
 		switch (ht.predicates[i]) {
@@ -473,8 +469,7 @@ index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_resul
 			throw NotImplementedException("Unimplemented comparison type for join");
 		}
 		// reset the selection vector
-		keys.data[i].SetSelVector(nullptr);
-		keys.data[i].SetCount(old_count);
+		keys.SetCardinality(old_count);
 
 		if (comparison_count == 0) {
 			// no matches remaining, skip any remaining comparisons
@@ -498,8 +493,7 @@ index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_resul
 
 void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	// initialize result to false
-	final_result.SetSelVector(pointers.sel_vector());
-	final_result.SetCount(pointers.size());
+	assert(final_result.SameCardinality(pointers));
 	auto result_data = (bool *)final_result.GetData();
 	VectorOperations::Exec(final_result, [&](index_t i, index_t k) { result_data[i] = false; });
 
@@ -579,7 +573,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// we handle the entire chunk in one call to Next().
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
-	Vector comparison_result(TypeId::BOOL);
+	Vector comparison_result(pointers.cardinality(), TypeId::BOOL);
 	while (pointers.size() > 0) {
 		// resolve the predicates for the current set of pointers
 		ResolvePredicates(keys, comparison_result);
@@ -771,7 +765,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// this join is similar to the semi join except that
 	// (1) we actually return data from the RHS and
 	// (2) we return NULL for that data if there is no match
-	Vector comparison_result(TypeId::BOOL);
+	Vector comparison_result(pointers.cardinality(), TypeId::BOOL);
 
 	auto build_pointers = (data_ptr_t *)build_pointer_vector.GetData();
 	index_t result_count = 0;
@@ -808,6 +802,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	build_pointer_vector.SetCount(result_count);
 	// reference the columns of the left side from the result
 	assert(input.column_count() > 0);
+	result.SetCardinality(result_count, result_sel_vector);
 	for (index_t i = 0; i < input.column_count(); i++) {
 		result.data[i].Reference(input.data[i]);
 	}
@@ -820,12 +815,9 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 			vector.nullmask[result_sel_vector[j]] = false;
 		}
 		// fetch the data from the HT for tuples that found a match
-		vector.SetSelVector(result_sel_vector);
-		vector.SetCount(result_count);
 		VectorOperations::Gather::Set(build_pointer_vector, vector);
 		VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 	}
-	result.SetCardinality(input.size(), result.sel_vector);
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
 }

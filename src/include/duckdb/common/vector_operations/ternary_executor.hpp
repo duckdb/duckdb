@@ -139,9 +139,7 @@ public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,
 	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
 	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, FUN fun) {
-		assert(a.SameCardinality(b) && a.SameCardinality(c));
-		result.SetSelVector(a.sel_vector());
-		result.SetCount(a.size());
+		assert(a.SameCardinality(b) && a.SameCardinality(c) && a.SameCardinality(result));
 		if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteA<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUN, IGNORE_NULL, true>(a, b, c, result, fun);
 		} else {

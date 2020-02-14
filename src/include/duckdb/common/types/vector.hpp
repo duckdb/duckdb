@@ -62,20 +62,20 @@ public:
 class Vector {
 	friend class DataChunk;
 public:
-	Vector();
+	Vector(const VectorCardinality &cardinality);
 	//! Create a vector of size one holding the passed on value
-	Vector(Value value);
+	Vector(const VectorCardinality &cardinality, Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(TypeId type);
+	Vector(const VectorCardinality &cardinality, TypeId type);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, data_ptr_t dataptr);
+	Vector(const VectorCardinality &cardinality, TypeId type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, bool create_data, bool zero_data);
+	Vector(const VectorCardinality &cardinality, TypeId type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -90,19 +90,19 @@ public:
 	nullmask_t nullmask;
 public:
 	index_t size() const {
-		return count;
+		return vcardinality.count;
 	}
 	sel_t *sel_vector() const {
-		return selection_vector;
+		return vcardinality.sel_vector;
+	}
+	const VectorCardinality &cardinality() const {
+		return vcardinality;
 	}
 	bool SameCardinality(const Vector &other) const {
 		return size() == other.size() && sel_vector() == other.sel_vector();
 	}
-	void SetCount(index_t count) {
-		this->count = count;
-	}
-	void SetSelVector(sel_t *sel) {
-		this->selection_vector = sel;
+	bool SameCardinality(const VectorCardinality &other) const {
+		return size() == other.count && sel_vector() == other.sel_vector;
 	}
 
 	//! Causes this vector to reference the data held by the other vector.
@@ -156,10 +156,8 @@ public:
 	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection vectors on the vector, and returns the element that is physically in location [index].
 	void SetValue(index_t index, Value val);
 protected:
-	//! The amount of elements in the vector.
-	index_t count;
-	//! The selection vector of the vector.
-	sel_t *selection_vector;
+	//! The cardinality of the vector
+	const VectorCardinality &vcardinality;
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The main buffer holding the data of the vector
@@ -173,8 +171,18 @@ protected:
 
 class FlatVector : public Vector {
 public:
-	FlatVector(TypeId type) : Vector(type) {}
-
+	FlatVector() : Vector(owned_cardinality) {}
+	FlatVector(TypeId type) : Vector(owned_cardinality, type) {}
+	FlatVector(TypeId type, data_ptr_t dataptr) : Vector(owned_cardinality, type, dataptr) { }
+public:
+	void SetCount(index_t count) {
+		owned_cardinality.count = count;
+	}
+	void SetSelVector(sel_t *sel) {
+		owned_cardinality.sel_vector = sel;
+	}
+protected:
+	VectorCardinality owned_cardinality;
 };
 
 } // namespace duckdb

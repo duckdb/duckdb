@@ -545,6 +545,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		return;
 	}
 	// convert the columns in the parsed chunk to the types of the table
+	insert_chunk.SetCardinality(parse_chunk);
 	for (index_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 			// target type is varchar: no need to convert

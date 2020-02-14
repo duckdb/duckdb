@@ -167,16 +167,15 @@ struct VectorOperations {
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, const VectorCardinality &source_cardinality, index_t offset = 0);
+	static void Copy(Vector &source, Vector &target, index_t offset = 0);
 	// Append the data of <source> to the target vector
-	static void Append(Vector &source, Vector &target, const VectorCardinality &source_cardinality, const VectorCardinality &target_cardinality);
+	static void Append(Vector &source, Vector &target);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
 	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
-	// Appends the data of <source> to the target vector, setting the nullmask
-	// for any NullValue<T> of source. Used to go back from storage to a
-	// nullmask.
-	static void AppendFromStorage(Vector &source, Vector &target, bool has_null = true);
+	// Reads the data of <source> to the target vector, setting the nullmask
+	// for any NullValue<T> of source. Used to go back from storage to a proper vector
+	static void ReadFromStorage(Vector &source, Vector &target);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
@@ -201,30 +200,21 @@ struct VectorOperations {
 	}
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
-	template <class T> static void Exec(const VectorCardinality &cardinality, T &&fun, index_t offset = 0, index_t count = 0) {
-		if (count == 0) {
-			count = cardinality.count;
-		} else {
-			count += offset;
-		}
-		Exec(cardinality.sel_vector, count, fun, offset);
-	}
-
 	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
-		VectorCardinality cardinality;
+		sel_t *sel_vector;
 		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			cardinality.count = 1;
-			cardinality.sel_vector = nullptr;
+			count = 1;
+			sel_vector = nullptr;
 		} else {
 			assert(vector.vector_type == VectorType::FLAT_VECTOR);
 			if (count == 0) {
-				cardinality.count = vector.size();
+				count = vector.size();
 			} else {
-				cardinality.count = count + offset;
+				count = count + offset;
 			}
-			cardinality.sel_vector = vector.sel_vector();
+			sel_vector = vector.sel_vector();
 		}
-		VectorOperations::Exec(cardinality, fun, offset, count);
+		VectorOperations::Exec(sel_vector, count, fun, offset);
 	}
 
 	//! Exec over a specific type. Note that it is up to the caller to verify

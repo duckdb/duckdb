@@ -2,6 +2,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
 using namespace std;
@@ -40,36 +41,31 @@ static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, s
 	return output.c_str();
 }
 
+
+static void age_function_standard(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 1);
+	auto current_timestamp = Timestamp::GetCurrentTimestamp();
+
+	string output_buffer;
+	UnaryExecutor::Execute<timestamp_t, const char *, true>(
+	    input.data[0], result, [&](timestamp_t input) {
+		    return result.AddString(age_scalar_function(input, current_timestamp, output_buffer));
+	    });
+}
+
 static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	assert(input.column_count() == 2 || input.column_count() == 1);
-
-	auto &input1 = input.data[0];
-	Vector input2;
-
-	if (input.column_count() == 1) {
-		auto current_timestamp = Timestamp::GetCurrentTimestamp();
-		auto value_timestamp = Value::TIMESTAMP(current_timestamp);
-		Vector vector_timestamp(value_timestamp);
-		input2.Reference(vector_timestamp);
-	} else {
-		input2.Reference(input.data[1]);
-	}
-	assert(input1.type == TypeId::INT64);
-	assert(input2.type == TypeId::INT64);
-
-	result.SetCount(input1.size());
-	result.SetSelVector(input1.sel_vector());
+	assert(input.column_count() == 2);
 
 	string output_buffer;
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, const char *, true>(
-	    input1, input2, result, [&](timestamp_t input1, timestamp_t input2) {
+	    input.data[0], input.data[1], result, [&](timestamp_t input1, timestamp_t input2) {
 		    return result.AddString(age_scalar_function(input1, input2, output_buffer));
 	    });
 }
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet age("age");
-	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR, age_function));
+	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR, age_function_standard));
 	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP, SQLType::TIMESTAMP}, SQLType::VARCHAR, age_function));
 	set.AddFunction(age);
 }

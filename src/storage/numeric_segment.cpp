@@ -61,7 +61,6 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index,
 	// fetch the nullmask and copy the data from the base table
 	result.nullmask = *((nullmask_t *)(data + offset));
 	memcpy(result.GetData(), data + offset + sizeof(nullmask_t), count * type_size);
-	result.SetCount(count);
 }
 
 void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
@@ -72,7 +71,7 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
 	auto handle = manager.Pin(block_id);
 
@@ -86,14 +85,13 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	auto &nullmask = *((nullmask_t *)(data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
-	result.nullmask[result.size()] = nullmask[id_in_vector];
-	memcpy(result.GetData() + result.size() * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	result.nullmask[result_idx] = nullmask[id_in_vector];
+	memcpy(result.GetData() + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other
 		// version
 		append_from_update_info(transaction, versions[vector_index], id_in_vector, result);
 	}
-	result.SetCount(result.size() + 1);
 }
 
 //===--------------------------------------------------------------------===//

@@ -48,8 +48,7 @@ template <class T> void templated_loop_hash(Vector &input, Vector &result) {
 void VectorOperations::Hash(Vector &input, Vector &result) {
 	assert(result.type == TypeId::HASH);
 	assert(!result.nullmask.any());
-	result.SetCount(input.size());
-	result.SetSelVector(input.sel_vector());
+	assert(input.SameCardinality(result));
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:

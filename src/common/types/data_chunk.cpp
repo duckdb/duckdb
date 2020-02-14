@@ -10,15 +10,13 @@
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk() : sel_vector(nullptr) {
+DataChunk::DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	for (index_t i = 0; i < types.size(); i++) {
-		data.emplace_back(Vector(types[i], nullptr));
-		data[i].count = 0;
-		data[i].selection_vector = nullptr;
+		data.emplace_back(Vector(*this, types[i], nullptr));
 	}
 }
 
@@ -55,12 +53,10 @@ void DataChunk::Copy(DataChunk &other, index_t offset) {
 	assert(column_count() == other.column_count());
 	assert(other.size() == 0 && !other.sel_vector);
 
-	// CARDINALITYFIXME: use self and other as cardinality
-	VectorCardinality source_cardinality(size(), sel_vector);
-	VectorCardinality target_cardinality(0, nullptr);
 	for (index_t i = 0; i < column_count(); i++) {
-		VectorOperations::Copy(data[i], other.data[i], source_cardinality, offset);
+		VectorOperations::Copy(data[i], other.data[i], offset);
 	}
+	other.SetCardinality(size());
 }
 
 void DataChunk::Append(DataChunk &other) {
@@ -70,13 +66,12 @@ void DataChunk::Append(DataChunk &other) {
 	if (column_count() != other.column_count()) {
 		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
-	// CARDINALITYFIXME: use self and other as cardinality
 	assert(!sel_vector);
-	VectorCardinality target_cardinality(size(), sel_vector);
-	VectorCardinality source_cardinality(other.size(), other.sel_vector);
 	for (index_t i = 0; i < column_count(); i++) {
-		VectorOperations::Append(other.data[i], data[i], source_cardinality, target_cardinality);
+		VectorOperations::Append(other.data[i], data[i]);
 	}
+	SetCardinality(size() + other.size());
+
 }
 
 void DataChunk::ClearSelectionVector() {
@@ -85,11 +80,7 @@ void DataChunk::ClearSelectionVector() {
 		return;
 	}
 
-	// CARDINALITYFIXME: use self as cardinality
-	// VectorCardinality cardinality(size(), sel_vector);
 	for (index_t i = 0; i < column_count(); i++) {
-		assert(size() == data[i].size());
-		assert(sel_vector == data[i].sel_vector());
 		data[i].ClearSelectionVector();
 	}
 	sel_vector = nullptr;
@@ -157,6 +148,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	}
 	Initialize(types);
 	// now load the column data
+	SetCardinality(rows);
 	for (index_t i = 0; i < column_count; i++) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
@@ -164,9 +156,8 @@ void DataChunk::Deserialize(Deserializer &source) {
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 			source.ReadData(ptr.get(), column_size);
-			Vector v(data[i].type, ptr.get());
-			v.count = rows;
-			VectorOperations::AppendFromStorage(v, data[i]);
+			Vector v(*this, data[i].type, ptr.get());
+			VectorOperations::ReadFromStorage(v, data[i]);
 		} else {
 			auto strings = (const char **)data[i].data;
 			for (index_t j = 0; j < rows; j++) {
@@ -182,7 +173,6 @@ void DataChunk::Deserialize(Deserializer &source) {
 				}
 			}
 		}
-		data[i].count = rows;
 	}
 	Verify();
 }
@@ -224,10 +214,11 @@ void DataChunk::Hash(Vector &result) {
 
 void DataChunk::Verify() {
 #ifdef DEBUG
+	assert(size() <= STANDARD_VECTOR_SIZE);
 	// verify that all vectors in this chunk have the chunk selection vector
 	sel_t *v = sel_vector;
 	for (index_t i = 0; i < column_count(); i++) {
-		assert(data[i].selection_vector == v);
+		assert(data[i].sel_vector() == v);
 		data[i].Verify();
 	}
 	// verify that all vectors in the chunk have the same count

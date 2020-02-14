@@ -24,14 +24,6 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 	assert(args.column_count() == 0);
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
-
-	if (state.root.executor->chunk) {
-		result.SetCount(state.root.executor->chunk->size());
-		result.SetSelVector(state.root.executor->chunk->sel_vector);
-	} else {
-		result.SetCount(1);
-	}
-
 	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result,
 	                       [&](index_t i, index_t k) { result_data[i] = info.dist(info.context.random_engine); });

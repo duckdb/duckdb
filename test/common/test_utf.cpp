@@ -11,9 +11,8 @@ static void test_valid_str(Vector &a, const char *str) {
 }
 
 TEST_CASE("UTF8 error checking", "[utf8]") {
-	Vector a;
-	a.Initialize(TypeId::VARCHAR, 0);
-	a.SetCount(1);
+	VectorCardinality cardinality(1);
+	Vector a(cardinality, TypeId::VARCHAR);
 
 	test_valid_str(a, "a");
 	test_valid_str(a, "\xc3\xb1");

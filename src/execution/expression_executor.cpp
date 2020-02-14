@@ -42,6 +42,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	assert(expressions.size() == result.column_count());
 	assert(expressions.size() > 0);
 	result.Reset();
+	result.SetCardinality(GetCardinality());
 	for (index_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
@@ -66,6 +67,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 }
 
 void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
+	assert(result.SameCardinality(GetCardinality()));
 	assert(expr_idx < expressions.size());
 	assert(result.type == expressions[expr_idx]->return_type);
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), result);
@@ -76,7 +78,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(expr);
 
-	Vector result(expr.return_type);
+	Vector result(executor.GetCardinality(), expr.return_type);
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
@@ -177,7 +179,7 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
+	Vector intermediate(GetCardinality(), TypeId::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
 	auto intermediate_result = (bool *)intermediate.GetData();

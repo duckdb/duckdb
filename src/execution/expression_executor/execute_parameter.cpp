@@ -14,8 +14,4 @@ void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState
 	assert(expr.value);
 	assert(expr.value->type == expr.return_type);
 	result.Reference(*expr.value);
-	if (chunk) {
-		result.SetCount(chunk->size());
-		result.SetSelVector(chunk->sel_vector);
-	}
 }

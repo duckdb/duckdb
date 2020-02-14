@@ -59,13 +59,15 @@ public:
 	void SetChunk(DataChunk &chunk) {
 		SetChunk(&chunk);
 	}
+	VectorCardinality &GetCardinality() {
+		return chunk ? *chunk : constant_cardinality;
+	}
 
 	//! The expressions of the executor
 	vector<Expression *> expressions;
 	//! The data chunk of the current physical operator, used to resolve
 	//! column references and determines the output cardinality
 	DataChunk *chunk = nullptr;
-
 protected:
 	void Initialize(Expression &expr, ExpressionExecutorState &state);
 
@@ -109,6 +111,7 @@ protected:
 	void Verify(Expression &expr, Vector &result);
 
 private:
+	VectorCardinality constant_cardinality = VectorCardinality(1);
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
 	//! The cached result of already-computed Common Subexpression results

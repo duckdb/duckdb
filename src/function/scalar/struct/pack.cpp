@@ -20,15 +20,13 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	for (size_t i = 0; i < input.column_count(); i++) {
 		// same holds for this
 		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
-		auto new_child = make_unique<Vector>();
+		auto new_child = make_unique<Vector>(result.cardinality());
 		new_child->Reference(input.data[i]);
 		result.AddChild(move(new_child), info.stype.child_type[i].first);
 		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 	}
-	result.SetSelVector(input.sel_vector);
-	result.SetCount(input.size());
 	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 }
 

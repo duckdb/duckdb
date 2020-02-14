@@ -70,6 +70,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 		payload_chunk.Reset();
 		index_t payload_idx = 0, payload_expr_idx = 0;
+		payload_chunk.SetCardinality(group_chunk);
 		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.children.size()) {
@@ -82,7 +83,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 				payload_idx++;
 			}
 		}
-		payload_chunk.SetCardinality(group_chunk.size(), group_chunk.sel_vector);
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
@@ -112,7 +112,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
 			aggr.function.initialize(aggr_state.get(), aggr.return_type);
 
-			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			Vector state_vector(state->aggregate_chunk, Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
 		}
 		state->finished = true;
@@ -124,6 +124,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// we finished the child chunk
 	// actually compute the final projection list now
 	index_t chunk_index = 0;
+	chunk.SetCardinality(elements_found);
 	if (state->group_chunk.column_count() + state->aggregate_chunk.column_count() == chunk.column_count()) {
 		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);

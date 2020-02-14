@@ -26,10 +26,9 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 Value WindowSegmentTree::AggegateFinal() {
-	Vector statev(Value::POINTER((index_t)state.data()));
-	Vector result(result_type);
-	statev.SetCount(1);
-	result.SetCount(1);
+	VectorCardinality cardinality(1);
+	Vector statev(cardinality, Value::POINTER((index_t)state.data()));
+	Vector result(cardinality, result_type);
 	result.nullmask[0] = false;
 	aggregate.finalize(statev, result);
 
@@ -41,14 +40,14 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 	if (begin == end) {
 		return;
 	}
+	inputs.SetCardinality(end - begin);
+
 	index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
-	Vector s;
-	s.SetCount(end - begin);
+	Vector s(inputs);
 	s.Slice(statep, start_in_vector);
 	if (l_idx == 0) {
 		const auto input_count = input_ref->column_count();
 		auto &chunk = input_ref->GetChunk(begin);
-		inputs.SetCardinality(end - begin);
 		for (index_t i = 0; i < input_count; ++i) {
 			auto &v = inputs.data[i];
 			auto &vec = chunk.data[i];
@@ -59,8 +58,7 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 	} else {
 		assert(end - begin < STANDARD_VECTOR_SIZE);
 		data_ptr_t ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
-		Vector v(result_type, ptr);
-		v.SetCount(end - begin);
+		Vector v(inputs, result_type, ptr);
 		v.Verify();
 		aggregate.combine(v, s);
 	}

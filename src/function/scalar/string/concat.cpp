@@ -14,8 +14,6 @@ namespace duckdb {
 static void concat_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	result.nullmask.reset();
-	result.SetSelVector(args.sel_vector);
-	result.SetCount(args.size());
 	// iterate over the vectors to check if the result is a constant vector or not
 	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
@@ -151,8 +149,6 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 	auto sep_data = (const char **)separator.GetData();
 
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	result.SetSelVector(args.sel_vector);
-	result.SetCount(args.size());
 	// iterate over the vectors to check the result vector type
 	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];

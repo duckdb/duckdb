@@ -70,17 +70,17 @@ static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2;
+	Vector v2(*chunk, TypeId::VARCHAR);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
-		auto *v = &chunk->data[col_idx];
+		Vector *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP:
-			v2.Initialize(TypeId::VARCHAR);
+		case SQLTypeId::TIMESTAMP: {
 			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR);
 			v = &v2;
 			break;
+		}
 		default:
 			break;
 		}

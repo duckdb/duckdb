@@ -14,7 +14,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpress
 
 void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the child
-	Vector child(expr.child->return_type);
+	Vector child(GetCardinality(), expr.child->return_type);
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, child);

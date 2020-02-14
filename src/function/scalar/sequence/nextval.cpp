@@ -84,17 +84,11 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 }
 
 static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(result.SameCardinality(args.data[0]));
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	assert(args.column_count() == 1 && args.data[0].type == TypeId::VARCHAR);
 	auto &input = args.data[0];
-	if (state.root.executor->chunk) {
-		result.SetCount(state.root.executor->chunk->size());
-		result.SetSelVector(state.root.executor->chunk->sel_vector);
-	} else {
-		result.SetCount(input.size());
-		result.SetSelVector(input.sel_vector());
-	}
 	Transaction &transaction = info.context.ActiveTransaction();
 	if (info.sequence) {
 		// sequence to use is hard coded
@@ -106,7 +100,6 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		});
 	} else {
 		// sequence to use comes from the input
-		assert(result.SameCardinality(input));
 		auto result_data = (int64_t *)result.GetData();
 		VectorOperations::ExecType<const char *>(input, [&](const char *value, index_t i, index_t k) {
 			// first get the sequence schema/name

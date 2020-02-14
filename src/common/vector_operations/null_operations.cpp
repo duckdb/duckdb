@@ -11,6 +11,7 @@ using namespace duckdb;
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
+	assert(input.SameCardinality(result));
 	assert(result.type == TypeId::BOOL);
 
 	result.vector_type = input.vector_type;
@@ -20,8 +21,6 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	VectorOperations::Exec(input, [&](index_t i, index_t k) {
 		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
 	});
-	result.SetSelVector(input.sel_vector());
-	result.SetCount(input.size());
 }
 
 void VectorOperations::IsNotNull(Vector &input, Vector &result) {

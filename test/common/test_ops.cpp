@@ -54,7 +54,7 @@ static void require_compare(DataChunk &chunk, index_t idx) {
 	auto &val = chunk.data[idx];
 	auto &v1 = val;
 
-	Vector res(TypeId::BOOL);
+	Vector res(chunk, TypeId::BOOL);
 
 	VectorOperations::Equals(val, v1, res);
 
@@ -114,15 +114,13 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 static void require_sg(Vector &v) {
 	uint64_t ptrs[2];
 
-	Vector p(TypeId::POINTER, true, false);
-	p.SetCount(v.size());
+	Vector p(v.cardinality(), TypeId::POINTER);
 	p.SetValue(0, Value::POINTER((uintptr_t)&ptrs[0]));
 	p.SetValue(1, Value::POINTER((uintptr_t)&ptrs[1]));
 
 	VectorOperations::Scatter::Set(v, p);
 
-	Vector r(v.type, true, false);
-	r.SetCount(p.size());
+	Vector r(v.cardinality(), v.type);
 
 	VectorOperations::Gather::Set(p, r, false);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
@@ -162,14 +160,13 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 }
 
 static void require_generate(TypeId t) {
-	Vector v(t, true, false);
-	v.SetCount(100);
+	VectorCardinality cardinality(100);
+	Vector v(cardinality, t);
 	VectorOperations::GenerateSequence(v, 42, 1);
 	for (size_t i = 0; i < v.size(); i++) {
 		REQUIRE(v.GetValue(i).CastAs(TypeId::INT64) == Value::BIGINT(i + 42));
 	}
-	Vector hash(TypeId::HASH, true, false);
-	hash.SetCount(v.size());
+	Vector hash(cardinality, TypeId::HASH);
 	VectorOperations::Hash(v, hash);
 }
 
