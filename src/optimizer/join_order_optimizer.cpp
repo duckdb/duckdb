@@ -562,9 +562,23 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				if (node->type == LogicalOperatorType::FILTER) {
 					node = node->children[0].get();
 				}
-				assert(node->type == LogicalOperatorType::COMPARISON_JOIN);
-				auto &comp_join = (LogicalComparisonJoin &)*node;
-				comp_join.conditions.push_back(move(cond));
+				if (node->type == LogicalOperatorType::CROSS_PRODUCT) {
+					// turn into comparison join
+					auto comp_join = make_unique<LogicalComparisonJoin>(JoinType::INNER);
+					comp_join->children.push_back(move(node->children[0]));
+					comp_join->children.push_back(move(node->children[1]));
+					comp_join->conditions.push_back(move(cond));
+					if (node == result_operator.get()) {
+						result_operator = move(comp_join);
+					} else {
+						assert(result_operator->type == LogicalOperatorType::FILTER);
+						result_operator->children[0] = move(comp_join);
+					}
+				} else {
+					assert(node->type == LogicalOperatorType::COMPARISON_JOIN);
+					auto &comp_join = (LogicalComparisonJoin &)*node;
+					comp_join.conditions.push_back(move(cond));
+				}
 			}
 		}
 	}
