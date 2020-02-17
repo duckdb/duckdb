@@ -97,14 +97,13 @@ void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
 }
 
 static index_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vector) {
-	sel_t *sel_vector = keys.data[0].sel_vector();
+	sel_t *sel_vector = keys.sel_vector;
 	index_t result_count = keys.size();
 	// first we loop over all the columns and figure out where the
 	for (index_t i = 0; i < keys.column_count(); i++) {
-		keys.SetCardinality(result_count, sel_vector);
 		result_count = VectorOperations::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
+		keys.SetCardinality(result_count, sel_vector);
 	}
-	keys.SetCardinality(result_count, sel_vector);;
 	return result_count;
 }
 
@@ -186,7 +185,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			// this is required for the mark join
 			has_null = true;
 			// now assign the new count and sel_vector to the payload as well
-			payload.SetCardinality(not_null_count, keys.data[0].sel_vector());
+			payload.SetCardinality(not_null_count, keys.sel_vector);
 		}
 		if (not_null_count == 0) {
 			return;
@@ -651,6 +650,7 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],
                              bool right_has_null) {
 	// for the initial set of columns we just reference the left side
+	result.SetCardinality(child);
 	for (index_t i = 0; i < child.column_count(); i++) {
 		result.data[i].Reference(child.data[i]);
 	}
@@ -676,7 +676,6 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 			}
 		}
 	}
-	result.SetCardinality(child.size());
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {

@@ -190,10 +190,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			state->cached_chunk.Append(chunk);
 			if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
 				// chunk cache full: return it
-				for (index_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
-					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
-				}
-				chunk.sel_vector = state->cached_chunk.sel_vector;
+				chunk.Reference(state->cached_chunk);
 				state->cached_chunk.Reset();
 				return;
 			} else {
