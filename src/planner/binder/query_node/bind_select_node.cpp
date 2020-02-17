@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/table_star_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,6 +30,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
 			bind_context.GenerateAllColumnExpressions(new_select_list);
+		} else if (select_element->GetExpressionType() == ExpressionType::TABLE_STAR) {
+			auto table_star =
+			    (TableStarExpression *)select_element.get(); // TODO this cast to explicit class is a bit dirty?
+			bind_context.GenerateAllColumnExpressions(new_select_list, table_star->relation_name);
 		} else {
 			// regular statement, add it to the list
 			new_select_list.push_back(move(select_element));

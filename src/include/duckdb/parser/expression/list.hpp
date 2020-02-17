@@ -11,4 +11,5 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"

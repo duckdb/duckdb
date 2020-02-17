@@ -280,3 +280,17 @@ int32_t Date::ExtractWeekNumber(date_t date) {
 	Date::Convert(date, year, month, day);
 	return GetWeek(year, month - 1, day - 1);
 }
+
+// Returns the date of the monday of the current week.
+date_t Date::GetMondayOfCurrentWeek(date_t date) {
+	int32_t dotw = Date::ExtractISODayOfTheWeek(date);
+
+	int32_t days = date_to_number(Date::ExtractYear(date), Date::ExtractMonth(date), Date::ExtractDay(date));
+
+	days -= dotw - 1;
+
+	int32_t year, month, day;
+	number_to_date(days, year, month, day);
+
+	return (Date::FromDate(year, month, day));
+}

@@ -48,7 +48,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	case DatePartSpecifier::CENTURY:
 		new_function_name = "century";
 		break;
-	case DatePartSpecifier::MILLENIUM:
+	case DatePartSpecifier::MILLENNIUM:
 		new_function_name = "millenium";
 		break;
 	case DatePartSpecifier::QUARTER:

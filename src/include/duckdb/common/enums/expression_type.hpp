@@ -119,10 +119,11 @@ enum class ExpressionType : uint8_t {
 	// Parser
 	// -----------------------------
 	STAR = 200,
-	PLACEHOLDER = 201,
-	COLUMN_REF = 202,
-	FUNCTION_REF = 203,
-	TABLE_REF = 204,
+	TABLE_STAR = 201,
+	PLACEHOLDER = 202,
+	COLUMN_REF = 203,
+	FUNCTION_REF = 204,
+	TABLE_REF = 205,
 
 	// -----------------------------
 	// Miscellaneous
@@ -152,9 +153,10 @@ enum class ExpressionClass : uint8_t {
 	FUNCTION = 9,
 	OPERATOR = 10,
 	STAR = 11,
-	SUBQUERY = 12,
-	WINDOW = 13,
-	PARAMETER = 14,
+	TABLE_STAR = 12,
+	SUBQUERY = 13,
+	WINDOW = 14,
+	PARAMETER = 15,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//

@@ -66,7 +66,7 @@
 #define timeb _timeb
 #define ftime _ftime
 #else
-#include <sys/timeb.h>
+#include <sys/time.h>
 #endif
 
 typedef HUGE_TYPE ds_key_t;
