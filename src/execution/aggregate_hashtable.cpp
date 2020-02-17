@@ -241,8 +241,6 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	// now fetch the aggregates
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(result.column_count() > aggr_idx);
-		// assert(aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT_STAR ||
-		//       aggregates[aggr_idx] == ExpressionType::AGGREGATE_COUNT);
 		assert(payload_types[aggr_idx] == TypeId::INT64);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
@@ -256,33 +254,18 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
                                     sel_t no_match_vector[], index_t &no_match_count) {
 	auto data = (T *)groups.GetData();
 	index_t current_count = 0;
-	if (groups.vector_type == VectorType::CONSTANT_VECTOR) {
-		for (index_t i = 0; i < sel_count; i++) {
-			index_t index = sel_vector[i];
-			auto entry = group_pointers[index];
-			if ((*((T *)entry)) == data[0]) {
-				// match, continue to next group (if any)
-				sel_vector[current_count++] = index;
-			} else {
-				// no match, move to next group
-				no_match_vector[no_match_count++] = index;
-			}
-			group_pointers[index] += sizeof(T);
+	assert(groups.vector_type == VectorType::FLAT_VECTOR);
+	for (index_t i = 0; i < sel_count; i++) {
+		index_t index = sel_vector[i];
+		auto entry = group_pointers[index];
+		if ((*((T *)entry)) == data[index]) {
+			// match, continue to next group (if any)
+			sel_vector[current_count++] = index;
+		} else {
+			// no match, move to next group
+			no_match_vector[no_match_count++] = index;
 		}
-	} else {
-		assert(groups.vector_type == VectorType::FLAT_VECTOR);
-		for (index_t i = 0; i < sel_count; i++) {
-			index_t index = sel_vector[i];
-			auto entry = group_pointers[index];
-			if ((*((T *)entry)) == data[index]) {
-				// match, continue to next group (if any)
-				sel_vector[current_count++] = index;
-			} else {
-				// no match, move to next group
-				no_match_vector[no_match_count++] = index;
-			}
-			group_pointers[index] += sizeof(T);
-		}
+		group_pointers[index] += sizeof(T);
 	}
 	sel_count = current_count;
 }
@@ -391,7 +374,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	FlatVector pointers(TypeId::POINTER, (data_ptr_t)group_pointers);
+	Vector pointers(groups, TypeId::POINTER, (data_ptr_t)group_pointers);
 
 	while (sel_count > 0) {
 		index_t current_count = 0;
@@ -425,8 +408,6 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 			for (index_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 				// set up the new sel vector with the entries we need to write
 				auto &group_column = groups.data[group_idx];
-				pointers.SetSelVector(empty_vector);
-				pointers.SetCount(empty_count);
 
 				VectorOperations::Scatter::SetAll(group_column, pointers);
 				VectorOperations::AddInPlace(pointers, GetTypeIdSize(group_column.type));
@@ -470,13 +451,10 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 
 	// scan the table for full cells starting from the scan position
 	index_t entry = 0;
-	for (ptr = start; ptr < end; ptr += tuple_size) {
+	for (ptr = start; ptr < end && entry < STANDARD_VECTOR_SIZE; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry
 			data_pointers[entry++] = ptr + FLAG_SIZE;
-			if (entry == STANDARD_VECTOR_SIZE) {
-				break;
-			}
 		}
 	}
 	if (entry == 0) {
