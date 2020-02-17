@@ -17,6 +17,10 @@ class RE2;
 
 namespace duckdb {
 
+struct ReverseFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LowerFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -51,7 +55,7 @@ struct SubstringFun {
 
 struct RegexpMatchesBindData : public FunctionData {
 	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
-	                      bool range_success);
+			      bool range_success);
 	~RegexpMatchesBindData();
 
 	std::unique_ptr<re2::RE2> constant_pattern;
