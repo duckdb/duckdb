@@ -25,6 +25,7 @@ struct ExpressionState {
 	Expression &expr;
 	ExpressionExecutorState &root;
 	vector<unique_ptr<ExpressionState>> child_states;
+
 public:
 	void AddChild(Expression *expr);
 };

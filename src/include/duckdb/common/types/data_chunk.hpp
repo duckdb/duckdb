@@ -42,6 +42,7 @@ public:
 	vector<Vector> data;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
+
 public:
 	index_t size() const {
 		return count;

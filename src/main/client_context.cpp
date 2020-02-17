@@ -200,7 +200,8 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	if (db.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
-		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!", StatementTypeToString(statement.statement_type).c_str()));
+		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
+		                                   StatementTypeToString(statement.statement_type).c_str()));
 	}
 
 	// bind the bound values before execution

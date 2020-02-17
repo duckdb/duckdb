@@ -41,16 +41,14 @@ static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, s
 	return output.c_str();
 }
 
-
 static void age_function_standard(DataChunk &input, ExpressionState &state, Vector &result) {
 	assert(input.column_count() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
 	string output_buffer;
-	UnaryExecutor::Execute<timestamp_t, const char *, true>(
-	    input.data[0], result, [&](timestamp_t input) {
-		    return result.AddString(age_scalar_function(input, current_timestamp, output_buffer));
-	    });
+	UnaryExecutor::Execute<timestamp_t, const char *, true>(input.data[0], result, [&](timestamp_t input) {
+		return result.AddString(age_scalar_function(input, current_timestamp, output_buffer));
+	});
 }
 
 static void age_function(DataChunk &input, ExpressionState &state, Vector &result) {

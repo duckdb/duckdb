@@ -205,7 +205,8 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 	}
 }
 
-void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
+void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                             index_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
 
 	index_t vector_index = row_id / STANDARD_VECTOR_SIZE;

@@ -156,7 +156,8 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 
 string show_diff(DataChunk &left, DataChunk &right) {
 	if (left.column_count() != right.column_count()) {
-		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count(), (int)right.column_count());
+		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count(),
+		                          (int)right.column_count());
 	}
 	if (left.size() != right.size()) {
 		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(), right.size());

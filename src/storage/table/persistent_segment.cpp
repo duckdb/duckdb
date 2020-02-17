@@ -41,7 +41,8 @@ void PersistentSegment::Fetch(ColumnScanState &state, index_t vector_index, Vect
 	data->Fetch(state, vector_index, result);
 }
 
-void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
+void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                                 index_t result_idx) {
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 

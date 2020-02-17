@@ -15,7 +15,8 @@ using namespace std;
 // TODO add null checks
 
 TEST_CASE("Casting vectors", "[vector_ops]") {
-	vector<TypeId> types { TypeId::BOOL, TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR };
+	vector<TypeId> types{TypeId::BOOL,  TypeId::INT8,  TypeId::INT16,  TypeId::INT32,
+	                     TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR};
 	DataChunk chunk;
 	chunk.Initialize(types);
 
@@ -25,11 +26,11 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 	chunk.SetCardinality(3);
 
 	// cast up the chain of types (bool -> int8 -> int16 -> int32 -> etc)
-	for(index_t i = 0; i < types.size() - 1; i++) {
+	for (index_t i = 0; i < types.size() - 1; i++) {
 		VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
 	}
 	// cast down the chain of types again (str -> double -> float -> int64 -> etc)
-	for(index_t i = types.size(); i > 1; i--) {
+	for (index_t i = types.size(); i > 1; i--) {
 		VectorOperations::Cast(chunk.data[i - 1], chunk.data[i - 2]);
 	}
 
@@ -39,7 +40,7 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 }
 
 TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
-	vector<TypeId> types { TypeId::BOOL };
+	vector<TypeId> types{TypeId::BOOL};
 	DataChunk chunk;
 	chunk.Initialize(types);
 	chunk.SetCardinality(3);
@@ -94,7 +95,8 @@ static void require_compare(DataChunk &chunk, index_t idx) {
 }
 
 TEST_CASE("Compare vectors", "[vector_ops]") {
-	vector<TypeId> types { TypeId::BOOL, TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR };
+	vector<TypeId> types{TypeId::BOOL,  TypeId::INT8,  TypeId::INT16,  TypeId::INT32,
+	                     TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR};
 	DataChunk chunk;
 	chunk.Initialize(types);
 
@@ -103,7 +105,7 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	chunk.SetValue(0, 1, Value::BOOLEAN(false));
 	chunk.SetValue(0, 2, Value());
 
-	for(index_t i = 0; i < types.size(); i++) {
+	for (index_t i = 0; i < types.size(); i++) {
 		require_compare(chunk, i);
 		if (i + 1 < types.size()) {
 			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
@@ -143,7 +145,7 @@ static void require_sg(Vector &v) {
 }
 
 TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
-	vector<TypeId> types { TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE };
+	vector<TypeId> types{TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE};
 	DataChunk chunk;
 	chunk.Initialize(types);
 
@@ -151,7 +153,7 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 	chunk.SetValue(0, 0, Value::TINYINT(1));
 	chunk.SetValue(0, 1, Value::TINYINT(0));
 
-	for(index_t i = 0; i < types.size(); i++) {
+	for (index_t i = 0; i < types.size(); i++) {
 		require_sg(chunk.data[i]);
 		if (i + 1 < types.size()) {
 			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
@@ -179,7 +181,7 @@ TEST_CASE("Generator sequence vectors", "[vector_ops]") {
 }
 
 static void require_arith(TypeId t) {
-	vector<TypeId> types { t, t, t };
+	vector<TypeId> types{t, t, t};
 	DataChunk chunk;
 	chunk.Initialize(types);
 	chunk.SetCardinality(6);
@@ -254,7 +256,7 @@ static void require_arith(TypeId t) {
 }
 
 static void require_mod(TypeId t) {
-	vector<TypeId> types { t, t, t };
+	vector<TypeId> types{t, t, t};
 	DataChunk chunk;
 	chunk.Initialize(types);
 	chunk.SetCardinality(7);
@@ -290,7 +292,7 @@ static void require_mod(TypeId t) {
 }
 
 static void require_mod_double() {
-	vector<TypeId> types { TypeId::DOUBLE, TypeId::DOUBLE, TypeId::DOUBLE };
+	vector<TypeId> types{TypeId::DOUBLE, TypeId::DOUBLE, TypeId::DOUBLE};
 	DataChunk chunk;
 	chunk.Initialize(types);
 	chunk.SetCardinality(7);

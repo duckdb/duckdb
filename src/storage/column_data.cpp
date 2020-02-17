@@ -126,7 +126,8 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	segment->Fetch(state, vector_index, result);
 }
 
-void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
+void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                          index_t result_idx) {
 	// find the segment the row belongs to
 	auto segment = (TransientSegment *)data.GetSegment(row_id);
 	// now perform the fetch within the segment

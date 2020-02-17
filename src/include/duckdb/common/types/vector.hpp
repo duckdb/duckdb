@@ -23,8 +23,10 @@ extern nullmask_t ZERO_MASK;
 
 class VectorCardinality {
 public:
-	VectorCardinality() : count(0), sel_vector(nullptr) {}
-	VectorCardinality(index_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {}
+	VectorCardinality() : count(0), sel_vector(nullptr) {
+	}
+	VectorCardinality(index_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
+	}
 
 	index_t count;
 	sel_t *sel_vector;
@@ -61,6 +63,7 @@ public:
 */
 class Vector {
 	friend class DataChunk;
+
 public:
 	Vector(const VectorCardinality &cardinality);
 	//! Create a vector of size one holding the passed on value
@@ -79,7 +82,7 @@ public:
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
-    Vector(Vector&& other) noexcept;
+	Vector(Vector &&other) noexcept;
 
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
 	//! constant, if it is compressed)
@@ -88,6 +91,7 @@ public:
 	TypeId type;
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
+
 public:
 	index_t size() const {
 		return vcardinality.count;
@@ -148,13 +152,16 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
-	child_list_t<unique_ptr<Vector>>& GetChildren();
-	void AddChild(unique_ptr<Vector> vector, string name="");
+	child_list_t<unique_ptr<Vector>> &GetChildren();
+	void AddChild(unique_ptr<Vector> vector, string name = "");
 
-	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on the vector, and returns the element that is physically in location [index].
+	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
+	//! the vector, and returns the element that is physically in location [index].
 	Value GetValue(index_t index) const;
-	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection vectors on the vector, and returns the element that is physically in location [index].
+	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection
+	//! vectors on the vector, and returns the element that is physically in location [index].
 	void SetValue(index_t index, Value val);
+
 protected:
 	//! The cardinality of the vector
 	const VectorCardinality &vcardinality;
@@ -171,9 +178,13 @@ protected:
 
 class FlatVector : public Vector {
 public:
-	FlatVector() : Vector(owned_cardinality) {}
-	FlatVector(TypeId type) : Vector(owned_cardinality, type) {}
-	FlatVector(TypeId type, data_ptr_t dataptr) : Vector(owned_cardinality, type, dataptr) { }
+	FlatVector() : Vector(owned_cardinality) {
+	}
+	FlatVector(TypeId type) : Vector(owned_cardinality, type) {
+	}
+	FlatVector(TypeId type, data_ptr_t dataptr) : Vector(owned_cardinality, type, dataptr) {
+	}
+
 public:
 	void SetCount(index_t count) {
 		owned_cardinality.count = count;
@@ -181,6 +192,7 @@ public:
 	void SetSelVector(sel_t *sel) {
 		owned_cardinality.sel_vector = sel;
 	}
+
 protected:
 	VectorCardinality owned_cardinality;
 };

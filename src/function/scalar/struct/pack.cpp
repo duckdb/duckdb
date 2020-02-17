@@ -31,13 +31,13 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	SQLType stype (SQLTypeId::STRUCT);
+	SQLType stype(SQLTypeId::STRUCT);
 	set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
 
-	if (expr.arguments.size()  == 0) {
+	if (expr.arguments.size() == 0) {
 		throw Exception("Can't pack nothing into a struct");
 	}
 	for (index_t i = 0; i < expr.children.size(); i++) {
@@ -56,7 +56,6 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 	expr.sql_return_type = stype;
 	return make_unique<StructPackBindData>(stype);
 }
-
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function

@@ -52,18 +52,21 @@ template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector 
 	} else if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 		// left side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, true, false>(
-		    ldata, rdata, result_data, result.size(), result.sel_vector(), left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, true, false>(ldata, rdata, result_data, result.size(),
+		                                                         result.sel_vector(), left.nullmask, right.nullmask,
+		                                                         result.nullmask);
 	} else if (right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// right side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, true>(
-		    ldata, rdata, result_data, result.size(), result.sel_vector(), left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, true>(ldata, rdata, result_data, result.size(),
+		                                                         result.sel_vector(), left.nullmask, right.nullmask,
+		                                                         result.nullmask);
 	} else {
 		// no constant vectors: perform general loop
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, false>(
-		    ldata, rdata, result_data, result.size(), result.sel_vector(), left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, false>(ldata, rdata, result_data, result.size(),
+		                                                          result.sel_vector(), left.nullmask, right.nullmask,
+		                                                          result.nullmask);
 	}
 }
 

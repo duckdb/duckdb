@@ -18,9 +18,8 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	result.nullmask.reset();
 
 	auto result_data = (bool *)result.GetData();
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
-		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
-	});
+	VectorOperations::Exec(
+	    input, [&](index_t i, index_t k) { result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i]; });
 }
 
 void VectorOperations::IsNotNull(Vector &input, Vector &result) {
@@ -50,7 +49,7 @@ bool VectorOperations::HasNull(Vector &input) {
 }
 
 index_t VectorOperations::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-                                  sel_t *null_vector) {
+                                           sel_t *null_vector) {
 	vector.Normalify();
 	if (vector.nullmask.any()) {
 		uint64_t result_count = 0, null_count = 0;

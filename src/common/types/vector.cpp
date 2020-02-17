@@ -28,7 +28,8 @@ Vector::Vector(const VectorCardinality &vcardinality, TypeId type, data_ptr_t da
 	}
 }
 
-Vector::Vector(const VectorCardinality &vcardinality, Value value) : vector_type(VectorType::CONSTANT_VECTOR), vcardinality(vcardinality) {
+Vector::Vector(const VectorCardinality &vcardinality, Value value)
+    : vector_type(VectorType::CONSTANT_VECTOR), vcardinality(vcardinality) {
 	Reference(value);
 }
 
@@ -36,8 +37,9 @@ Vector::Vector(const VectorCardinality &vcardinality)
     : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), vcardinality(vcardinality), data(nullptr) {
 }
 
-Vector::Vector(Vector&& other) noexcept :
-	vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), vcardinality(other.vcardinality), data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+Vector::Vector(Vector &&other) noexcept
+    : vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), vcardinality(other.vcardinality),
+      data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(Value &value) {
@@ -332,7 +334,7 @@ void Vector::Normalify() {
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel);
 			break;
 		case TypeId::STRUCT:
-			for (auto& child : GetChildren()) {
+			for (auto &child : GetChildren()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->Normalify();
 			}
@@ -360,7 +362,7 @@ void Vector::Normalify() {
 void Vector::Sequence(int64_t start, int64_t increment) {
 	vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
-	auto data = (int64_t*) buffer->GetData();
+	auto data = (int64_t *)buffer->GetData();
 	data[0] = start;
 	data[1] = increment;
 	nullmask.reset();
@@ -369,7 +371,7 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 
 void Vector::GetSequence(int64_t &start, int64_t &increment) const {
 	assert(vector_type == VectorType::SEQUENCE_VECTOR);
-	auto data = (int64_t*) buffer->GetData();
+	auto data = (int64_t *)buffer->GetData();
 	start = data[0];
 	increment = data[1];
 }
@@ -432,7 +434,7 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+child_list_t<unique_ptr<Vector>> &Vector::GetChildren() {
 	assert(type == TypeId::STRUCT);
 	return children;
 }

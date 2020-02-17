@@ -68,6 +68,7 @@ public:
 	//! The data chunk of the current physical operator, used to resolve
 	//! column references and determines the output cardinality
 	DataChunk *chunk = nullptr;
+
 protected:
 	void Initialize(Expression &expr, ExpressionExecutorState &state);
 

@@ -5,10 +5,9 @@ using namespace duckdb;
 using namespace std;
 
 struct FunctionState : public ExpressionState {
-	FunctionState(Expression &expr, ExpressionExecutorState &root)
-	    : ExpressionState(expr, root) {
-		auto &func = (BoundFunctionExpression&) expr;
-		for(auto &child : func.children) {
+	FunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+		auto &func = (BoundFunctionExpression &)expr;
+		for (auto &child : func.children) {
 			child_types.push_back(child->return_type);
 		}
 	}

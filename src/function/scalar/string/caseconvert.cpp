@@ -36,8 +36,7 @@ template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &i
 
 	index_t current_len = 0;
 	unique_ptr<char[]> output;
-	UnaryExecutor::Execute<const char*, const char *, true>(
-	    input, result, [&](const char* input) {
+	UnaryExecutor::Execute<const char *, const char *, true>(input, result, [&](const char *input) {
 		index_t required_len = strlen(input) + 1;
 		if (required_len > current_len) {
 			current_len = required_len + 1;

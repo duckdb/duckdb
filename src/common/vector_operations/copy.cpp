@@ -119,9 +119,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	index_t copy_count = source.size() - offset;
 
 	// merge null masks
-	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		target.nullmask[k - offset] = source.nullmask[i];
-	}, offset);
+	VectorOperations::Exec(
+	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
 
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
@@ -191,22 +190,18 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 	assert(old_count + copy_count <= STANDARD_VECTOR_SIZE);
 
 	// merge null masks
-	VectorOperations::Exec(source, [&](index_t i, index_t k) {
-		target.nullmask[old_count + k] = source.nullmask[i];
-	});
+	VectorOperations::Exec(source, [&](index_t i, index_t k) { target.nullmask[old_count + k] = source.nullmask[i]; });
 
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
 			auto source_data = (const char **)source.GetData();
 			auto target_data = (const char **)target.GetData();
-			VectorOperations::Exec(
-			    source,
-			    [&](index_t i, index_t k) {
-				    if (!target.nullmask[old_count + k]) {
-					    target_data[old_count + k] = target.AddString(source_data[i]);
-				    }
-			    });
+			VectorOperations::Exec(source, [&](index_t i, index_t k) {
+				if (!target.nullmask[old_count + k]) {
+					target_data[old_count + k] = target.AddString(source_data[i]);
+				}
+			});
 		} break;
 		case TypeId::STRUCT: {
 			// recursively apply to children

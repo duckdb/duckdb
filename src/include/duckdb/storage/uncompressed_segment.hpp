@@ -58,7 +58,8 @@ public:
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
-	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) = 0;
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	                      index_t result_idx) = 0;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is

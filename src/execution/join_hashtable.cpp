@@ -165,7 +165,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
 		info.payload_chunk.SetCardinality(keys);
-		for(index_t i = 0; i < 2; i++) {
+		for (index_t i = 0; i < 2; i++) {
 			info.payload_chunk.data[i].Reference(keys.data[info.correlated_types.size()]);
 			info.payload_chunk.data[i].type = TypeId::INT64;
 		}
@@ -798,7 +798,8 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 				}
 			}
 		});
-		pointers.SetCount(new_count);;
+		pointers.SetCount(new_count);
+		;
 	}
 
 	// now we construct the final result
@@ -826,4 +827,4 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	finished = true;
 }
 
-}
+} // namespace duckdb

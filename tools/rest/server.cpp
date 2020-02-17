@@ -55,12 +55,11 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
-template<class T, class TARGET>
-static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
+template <class T, class TARGET> static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
 	auto data_ptr = (T *)v->GetData();
 	VectorOperations::Exec(*v, [&](index_t i, index_t k) {
 		if (!v->nullmask[i]) {
-			j["data"][col_idx] += (TARGET) data_ptr[i];
+			j["data"][col_idx] += (TARGET)data_ptr[i];
 
 		} else {
 			j["data"][col_idx] += nullptr;
@@ -108,7 +107,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			assign_json_loop<float, double>(v, col_idx, j);
 			break;
 		case TypeId::VARCHAR:
-			assign_json_loop<char*, char*>(v, col_idx, j);
+			assign_json_loop<char *, char *>(v, col_idx, j);
 			break;
 		default:
 			throw std::runtime_error("Unsupported Type");

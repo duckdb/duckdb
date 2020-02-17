@@ -118,7 +118,8 @@ private:
 			result.nullmask = left.nullmask | right.nullmask;
 		}
 		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT,
-		            RIGHT_CONSTANT>(ldata, rdata, result_data, result.size(), result.sel_vector(), result.nullmask, fun);
+		            RIGHT_CONSTANT>(ldata, rdata, result_data, result.size(), result.sel_vector(), result.nullmask,
+		                            fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
@@ -210,8 +211,8 @@ public:
 			}
 			left.Normalify();
 			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>((LEFT_TYPE *)left.GetData(),
-			                                                          (RIGHT_TYPE *)right.GetData(), result, left.size(),
-			                                                          left.sel_vector(), left.nullmask);
+			                                                          (RIGHT_TYPE *)right.GetData(), result,
+			                                                          left.size(), left.sel_vector(), left.nullmask);
 		} else {
 			left.Normalify();
 			right.Normalify();

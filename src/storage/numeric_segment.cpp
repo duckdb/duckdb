@@ -71,7 +71,8 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx) {
+void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                              index_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
 	auto handle = manager.Pin(block_id);
 
@@ -409,7 +410,8 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 // Update Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result, index_t result_idx) {
+static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result,
+                               index_t result_idx) {
 	auto result_data = (T *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;

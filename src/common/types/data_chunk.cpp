@@ -79,7 +79,6 @@ void DataChunk::Append(DataChunk &other) {
 		VectorOperations::Append(other.data[i], data[i]);
 	}
 	SetCardinality(size() + other.size());
-
 }
 
 void DataChunk::ClearSelectionVector() {
