@@ -85,6 +85,8 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
 			state->rhs_executor.SetChunk(chunk_to_order);
+
+			state->join_keys.SetCardinality(chunk_to_order);
 			for (index_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
 				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
@@ -115,6 +117,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
 			state->lhs_executor.SetChunk(state->child_chunk);
+			state->join_keys.SetCardinality(state->child_chunk);
 			for (index_t k = 0; k < conditions.size(); k++) {
 				state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				// sort by join key

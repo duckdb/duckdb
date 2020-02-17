@@ -103,19 +103,20 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
-		assert(state->aggregate_chunk.column_count() == aggregates.size());
+		assert(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
-		state->aggregate_chunk.SetCardinality(1);
-		for (index_t i = 0; i < state->aggregate_chunk.column_count(); i++) {
+		chunk.SetCardinality(1);
+		for (index_t i = 0; i < chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
 			aggr.function.initialize(aggr_state.get(), aggr.return_type);
 
-			Vector state_vector(state->aggregate_chunk, Value::POINTER((uintptr_t)aggr_state.get()));
-			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
+			Vector state_vector(chunk, Value::POINTER((uintptr_t)aggr_state.get()));
+			aggr.function.finalize(state_vector, chunk.data[i]);
 		}
 		state->finished = true;
+		return;
 	}
 	if (elements_found == 0 && !state->finished) {
 		state->finished = true;

@@ -49,6 +49,14 @@ void DataChunk::SetValue(index_t col_idx, index_t index, Value val) {
 	data[col_idx].SetValue(sel_vector ? sel_vector[index] : index, move(val));
 }
 
+void DataChunk::Reference(DataChunk &chunk) {
+	assert(chunk.column_count() == column_count());
+	SetCardinality(chunk);
+	for (index_t i = 0; i < column_count(); i++) {
+		data[i].Reference(chunk.data[i]);
+	}
+}
+
 void DataChunk::Copy(DataChunk &other, index_t offset) {
 	assert(column_count() == other.column_count());
 	assert(other.size() == 0 && !other.sel_vector);
@@ -56,7 +64,7 @@ void DataChunk::Copy(DataChunk &other, index_t offset) {
 	for (index_t i = 0; i < column_count(); i++) {
 		VectorOperations::Copy(data[i], other.data[i], offset);
 	}
-	other.SetCardinality(size());
+	other.SetCardinality(size() - offset);
 }
 
 void DataChunk::Append(DataChunk &other) {

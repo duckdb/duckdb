@@ -68,10 +68,10 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		if (right_projection_map.size() > 0) {
 			// there is a projection map: fill the build chunk with the projected columns
 			build_chunk.Reset();
+			build_chunk.SetCardinality(right_chunk);
 			for (index_t i = 0; i < right_projection_map.size(); i++) {
 				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
 			}
-			build_chunk.sel_vector = right_chunk.sel_vector;
 			hash_table->Build(state->join_keys, build_chunk);
 		} else {
 			// there is not a projected map: place the entire right chunk in the HT
@@ -108,9 +108,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// anti join with empty hash table, NOP join
 				// return the input
 				assert(chunk.column_count() == state->child_chunk.column_count());
-				for (index_t i = 0; i < chunk.column_count(); i++) {
-					chunk.data[i].Reference(state->child_chunk.data[i]);
-				}
+				chunk.Reference(state->child_chunk);
 				return;
 			} else if (hash_table->join_type == JoinType::MARK) {
 				// MARK join with empty hash table
@@ -183,10 +181,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		if (chunk.size() == 0) {
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				for (index_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
-					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
-				}
-				chunk.sel_vector = state->cached_chunk.sel_vector;
+				chunk.Reference(state->cached_chunk);
 				state->cached_chunk.Reset();
 			}
 			return;

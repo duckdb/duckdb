@@ -164,6 +164,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			break;
 		}
 		// cast the columns of the chunk to varchar
+		cast_chunk.SetCardinality(state->child_chunk);
 		for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 			if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 				// VARCHAR, just create a reference

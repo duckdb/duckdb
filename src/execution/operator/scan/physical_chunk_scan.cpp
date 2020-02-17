@@ -23,9 +23,7 @@ void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		return;
 	}
 	auto &collection_chunk = *collection->chunks[state->chunk_index];
-	for (index_t i = 0; i < chunk.column_count(); i++) {
-		chunk.data[i].Reference(collection_chunk.data[i]);
-	}
+	chunk.Reference(collection_chunk);
 	state->chunk_index++;
 }
 

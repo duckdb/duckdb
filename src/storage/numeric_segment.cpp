@@ -90,7 +90,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other
 		// version
-		append_from_update_info(transaction, versions[vector_index], id_in_vector, result);
+		append_from_update_info(transaction, versions[vector_index], id_in_vector, result, result_idx);
 	}
 }
 
@@ -409,7 +409,7 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 // Update Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result) {
+static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result, index_t result_idx) {
 	auto result_data = (T *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
@@ -417,8 +417,8 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, index
 		for (index_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_id) {
 				// found the relevant tuple
-				result_data[result.size()] = info_data[i];
-				result.nullmask[result.size()] = current->nullmask[current->tuples[i]];
+				result_data[result_idx] = info_data[i];
+				result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
 				break;
 			} else if (current->tuples[i] > row_id) {
 				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore

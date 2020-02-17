@@ -45,7 +45,7 @@ public:
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
 	typedef void (*update_info_fetch_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result);
 	typedef void (*update_info_append_function_t)(Transaction &transaction, UpdateInfo *info, index_t idx,
-	                                              Vector &result);
+	                                              Vector &result, index_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t target,
 	                                        Vector &update, row_t *ids, index_t vector_offset);

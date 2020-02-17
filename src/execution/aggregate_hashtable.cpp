@@ -229,7 +229,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	for (index_t i = 0; i < result.column_count(); i++) {
 		assert(result.data[i].type == payload_types[i]);
 	}
-	result.SetCardinality(groups.size(), groups.sel_vector);
+	result.SetCardinality(groups);
 	if (groups.size() == 0) {
 		return;
 	}

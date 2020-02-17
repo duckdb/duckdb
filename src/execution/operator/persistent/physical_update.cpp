@@ -39,6 +39,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		// update data in the base table
 		// the row ids are given to us as the last column of the child chunk
 		auto &row_ids = state->child_chunk.data[state->child_chunk.column_count() - 1];
+		update_chunk.SetCardinality(state->child_chunk);
 		for (index_t i = 0; i < expressions.size(); i++) {
 			if (expressions[i]->type == ExpressionType::VALUE_DEFAULT) {
 				// default expression, set to the default value of the column
@@ -50,11 +51,11 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				update_chunk.data[i].Reference(state->child_chunk.data[binding.index]);
 			}
 		}
-		update_chunk.sel_vector = state->child_chunk.sel_vector;
 
 		if (is_index_update) {
 			// index update, perform a delete and an append instead
 			table.Delete(tableref, context, row_ids);
+			mock_chunk.SetCardinality(update_chunk);
 			for (index_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
 			}

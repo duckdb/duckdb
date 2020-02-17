@@ -507,6 +507,8 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	auto &wind_ch = window_results.GetChunk(state->position);
 
 	index_t out_idx = 0;
+	assert(proj_ch.size() == wind_ch.size());
+	chunk.SetCardinality(proj_ch);
 	for (index_t col_idx = 0; col_idx < proj_ch.column_count(); col_idx++) {
 		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);
 	}

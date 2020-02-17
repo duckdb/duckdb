@@ -161,13 +161,15 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
 		assert(info.correlated_counts);
+		info.group_chunk.SetCardinality(keys);
 		for (index_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
-		info.payload_chunk.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.payload_chunk.data[1].Reference(keys.data[info.correlated_types.size()]);
-		info.payload_chunk.data[0].type = info.payload_chunk.data[1].type = TypeId::INT64;
-		info.payload_chunk.sel_vector = info.group_chunk.sel_vector = info.group_chunk.data[0].sel_vector();
+		info.payload_chunk.SetCardinality(keys);
+		for(index_t i = 0; i < 2; i++) {
+			info.payload_chunk.data[i].Reference(keys.data[info.correlated_types.size()]);
+			info.payload_chunk.data[i].type = TypeId::INT64;
+		}
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE];
@@ -428,6 +430,8 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 
 index_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[]) {
 	FlatVector current_pointers;
+	current_pointers.SetCount(pointers.size());
+	current_pointers.SetSelVector(pointers.sel_vector());
 	current_pointers.Reference(pointers);
 
 	index_t comparison_count;
@@ -553,11 +557,11 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		// matches were found
 		// construct the result
 		build_pointer_vector.SetCount(result_count);
+		result.SetCardinality(result_count, result.owned_sel_vector);
 		// reference the columns of the left side from the result
 		for (index_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
-		result.SetCardinality(result_count, result.owned_sel_vector);
 		// now fetch the right side data from the HT
 		for (index_t i = 0; i < ht.build_types.size(); i++) {
 			auto &vector = result.data[left.column_count() + i];
@@ -690,21 +694,22 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
 		assert(keys.column_count() == info.group_chunk.column_count() + 1);
+		info.group_chunk.SetCardinality(keys);
 		for (index_t i = 0; i < info.group_chunk.column_count(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
-		info.group_chunk.sel_vector = keys.sel_vector;
 		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 		assert(!info.result_chunk.sel_vector);
 
 		// for the initial set of columns we just reference the left side
+		result.SetCardinality(input);
 		for (index_t i = 0; i < input.column_count(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
 		// create the result matching vector
 		auto &result_vector = result.data.back();
 		// first set the nullmask based on whether or not there were NULL values in the join key
-		result_vector.nullmask = keys.data[keys.column_count() - 1].nullmask;
+		result_vector.nullmask = keys.data.back().nullmask;
 
 		auto bool_result = (bool *)result_vector.GetData();
 		auto count_star = (int64_t *)info.result_chunk.data[0].GetData();
@@ -722,7 +727,6 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 				result_vector.nullmask[i] = false;
 			}
 		}
-		result.SetCardinality(input.size());
 	}
 	finished = true;
 }
@@ -818,6 +822,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 		VectorOperations::Gather::Set(build_pointer_vector, vector);
 		VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
 	}
+	result.SetCardinality(input);
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
 }
