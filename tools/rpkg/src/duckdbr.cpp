@@ -14,7 +14,7 @@ template <class SRC, class DEST>
 static void vector_to_r(Vector &src_vec, void *dest, uint64_t dest_offset, DEST na_val) {
 	auto src_ptr = (SRC *)src_vec.GetData();
 	auto dest_ptr = ((DEST *)dest) + dest_offset;
-	for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+	for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
 		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : src_ptr[row_idx];
 	}
 }
@@ -210,9 +210,9 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			if (chunk->size() == 0) {
 				break;
 			}
-			assert(chunk->column_count == ncols);
-			assert(chunk->column_count == LENGTH(retlist));
-			for (size_t col_idx = 0; col_idx < chunk->column_count; col_idx++) {
+			assert(chunk->column_count() == ncols);
+			assert(chunk->column_count() == LENGTH(retlist));
+			for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
 				switch (result->sql_types[col_idx].id) {
 				case SQLTypeId::BOOLEAN:
@@ -233,7 +233,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = (int64_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
 						dest_ptr[row_idx] =
 						    src_vec.nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
 					}
@@ -251,7 +251,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = (int32_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
 						dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
 					}
 
@@ -264,7 +264,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = (int32_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
 
 						if (src_vec.nullmask[row_idx]) {
 							dest_ptr[row_idx] = NA_REAL;
@@ -296,7 +296,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 				case SQLTypeId::VARCHAR: {
-					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].count; row_idx++) {
+					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].size(); row_idx++) {
 						auto src_ptr = (char **)chunk->data[col_idx].GetData();
 						if (chunk->data[col_idx].nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
@@ -454,8 +454,9 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (index_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
 			index_t current_count = std::min((index_t)nrows - row_idx, (index_t)STANDARD_VECTOR_SIZE);
+			auto &append_chunk = appender.GetAppendChunk();
 			for (index_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
-				auto &append_data = appender.GetAppendVector(col_idx);
+				auto &append_data = append_chunk.data[col_idx];
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
@@ -488,8 +489,8 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 				} else {
 					throw;
 				}
-				append_data.count = current_count;
 			}
+			append_chunk.SetCardinality(current_count);
 			appender.Flush();
 		}
 		appender.Close();

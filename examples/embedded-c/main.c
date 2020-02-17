@@ -27,13 +27,13 @@ int main() {
 		goto cleanup;
 	}
 	// print the names of the result
-	for (size_t i = 0; i < result.column_count(); i++) {
+	for (size_t i = 0; i < result.column_count; i++) {
 		printf("%s ", result.columns[i].name);
 	}
 	printf("\n");
 	// print the data of the result
 	for (size_t row_idx = 0; row_idx < result.row_count; row_idx++) {
-		for (size_t col_idx = 0; col_idx < result.column_count(); col_idx++) {
+		for (size_t col_idx = 0; col_idx < result.column_count; col_idx++) {
 			char *val = duckdb_value_varchar(&result, col_idx, row_idx);
 			printf("%s ", val);
 			free(val);

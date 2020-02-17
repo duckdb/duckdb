@@ -60,7 +60,9 @@ public:
 	void Close();
 
 	//! Obtain a reference to the internal vector that is used to append to the table
-	Vector &GetAppendVector(index_t col_idx);
+	DataChunk &GetAppendChunk() {
+		return chunk;
+	}
 
 	index_t CurrentColumn() {
 		return column;

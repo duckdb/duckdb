@@ -150,13 +150,6 @@ void Appender::AppendValue(Value value) {
 	column++;
 }
 
-Vector &Appender::GetAppendVector(index_t col_idx) {
-	if (col_idx >= chunk.column_count()) {
-		throw Exception("Column index out of range!");
-	}
-	return chunk.data[col_idx];
-}
-
 void Appender::Flush() {
 	CheckInvalidated();
 	try {
