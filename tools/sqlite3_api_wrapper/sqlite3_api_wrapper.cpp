@@ -68,7 +68,7 @@ void sqlite3_randomness(int N, void *pBuf) {
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
                  sqlite3 **ppDb        /* OUT: SQLite db handle */
 ) {
-	if (strcmp(filename, ":memory:") == 0) {
+	if (filename && strcmp(filename, ":memory:") == 0) {
 		filename = NULL;
 	}
 	*ppDb = nullptr;
