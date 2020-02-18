@@ -41,8 +41,6 @@ template <str_function REVERSE_FUNCTION> static void reverse_function(Vector &in
 	assert(input.type == TypeId::VARCHAR);
 
 	result.nullmask = input.nullmask;
-	result.count = input.count;
-	result.sel_vector = input.sel_vector;
 
 	auto result_data = (const char **)result.GetData();
 	auto input_data = (const char **)input.GetData();
@@ -69,7 +67,7 @@ template <str_function REVERSE_FUNCTION> static void reverse_function(Vector &in
 }
 
 static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 1);
+	assert(args.column_count() == 1);
 	reverse_function<strreverse>(args.data[0], result);
 }
 
