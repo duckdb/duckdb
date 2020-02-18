@@ -12,7 +12,6 @@ namespace duckdb {
 typedef void (*str_function)(const char *input, char *output);
 
 static void strreverse(const char *input, char *output) {
-
 	size_t n = strlen(input); // the size of the string in bytes
 	size_t bytes = 0;
 
