@@ -6,29 +6,37 @@ import os
 if len(sys.argv) < 2:
      raise Exception('need shell binary as parameter')
 
-def test(cmd, out=None, err=None):
-     res = subprocess.run([sys.argv[1], '--batch', '-init', '/dev/null'], capture_output=True, input=bytearray(cmd, 'utf8'))
+def test_exception(command, input, stdout, stderr, errmsg):
+     print('--- COMMAND --')
+     print(' '.join(command))
+     print('--- INPUT --')
+     print(input)
+     print('--- STDOUT --')
+     print(stdout)
+     print('--- STDERR --')
+     print(stderr)
+     raise Exception(errmsg)
+
+def test(cmd, out=None, err=None, extra_commands=None):
+     command = [sys.argv[1], '--batch', '-init', '/dev/null']
+     if extra_commands:
+          command += extra_commands
+     res = subprocess.run(command, capture_output=True, input=bytearray(cmd, 'utf8'))
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
-#     print(stdout)
-#     print(stderr)
-
      if out and out not in stdout:
-          print(stdout)
-          raise Exception('out test failed')
+          test_exception(command, cmd, stdout, stderr, 'out test failed')
 
      if err and err not in stderr:
-          print(stderr)
-          raise Exception('err test failed')
+          test_exception(command, cmd, stdout, stderr, 'err test failed')
 
      if not err and stderr != '':
-          print(stderr)
-          raise Exception('got err test failed')
+          test_exception(command, cmd, stdout, stderr, 'got err test failed')
 
 def tf():
 	return tempfile.mktemp().replace('\\','/')
-		  
+
 # basic test
 test('select \'asdf\' as a;', out='asdf')
 
@@ -284,6 +292,12 @@ INSERT INTO t2 VALUES (43);
 SELECT * FROM t1;
 ''' % (db1, db2, db1), out='42')
 
+# open file that is not a database
+duckdb_nonsense_db = 'duckdbtest_nonsensedb.db'
+with open(duckdb_nonsense_db, 'w+') as f:
+     f.write('blablabla')
+test('', err='unable to open', extra_commands=[duckdb_nonsense_db])
+os.remove(duckdb_nonsense_db)
 
 
 
@@ -316,7 +330,7 @@ SELECT * FROM t1;
 # test('.databases')
 
 
-# fails 
+# fails
 # test('''
 # CREATE TABLE a (I INTEGER);
 # .changes off
