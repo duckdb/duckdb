@@ -4,6 +4,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 #include <iostream>
 #include <utility>
@@ -15,10 +16,14 @@ constexpr index_t TREE_RENDER_WIDTH = 20;
 constexpr index_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
 constexpr index_t MAX_EXTRA_LINES = 10;
 
-void QueryProfiler::StartQuery(string query) {
-	if (!enabled)
+void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
+	if (!enabled) {
 		return;
-
+	}
+	if (statement.type != StatementType::SELECT && statement.type != StatementType::EXECUTE) {
+		return;
+	}
+	this->running = true;
 	this->query = query;
 	tree_map.clear();
 	execution_stack = stack<PhysicalOperator *>();
@@ -27,14 +32,16 @@ void QueryProfiler::StartQuery(string query) {
 	phase_stack.clear();
 
 	main_query.Start();
+	op.Start();
 }
 
 void QueryProfiler::EndQuery() {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	main_query.End();
-
+	this->running = false;
 	// print the query after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
 		string query_info;
@@ -53,8 +60,9 @@ void QueryProfiler::EndQuery() {
 }
 
 void QueryProfiler::StartPhase(string new_phase) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	if (!phase_stack.empty()) {
 		// there are active phases
@@ -76,8 +84,9 @@ void QueryProfiler::StartPhase(string new_phase) {
 }
 
 void QueryProfiler::EndPhase() {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 	assert(phase_stack.size() > 0);
 
 	// end the timer
@@ -95,8 +104,9 @@ void QueryProfiler::EndPhase() {
 }
 
 void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	if (!root) {
 		// start of execution: create operator tree
@@ -125,8 +135,9 @@ void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 }
 
 void QueryProfiler::EndOperator(DataChunk &chunk) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	// finish timing for the current element
 	op.End();
