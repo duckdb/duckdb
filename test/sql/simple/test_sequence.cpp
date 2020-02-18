@@ -31,6 +31,13 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4}));
 
+	// NULL in nextval
+	result = con.Query("SELECT nextval(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT nextval(a) FROM (VALUES ('seq'), (NULL), ('seq')) tbl1(a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {5, Value(), 6}));
+
+
 	// can't create a sequence that already exists
 	REQUIRE_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	// drop the sequence
