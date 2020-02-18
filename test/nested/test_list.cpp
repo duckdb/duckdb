@@ -247,6 +247,10 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 	result = con.Query("EXPLAIN SELECT * FROM lineitem");
 	REQUIRE(result->success); // at least we can plan this
 
+	result->Print();
+
+	result = con.Query("SELECT * FROM lineitem");
+	result->Print();
 	// FIXME this fails right now. Why?
 //	result = con.Query(tpch::get_query(1));
 //	result->Print();
