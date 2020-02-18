@@ -33,28 +33,37 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk {
+class DataChunk : public VectorCardinality {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
 
-	//! The amount of vectors that are part of this DataChunk.
-	index_t column_count;
 	//! The vectors owned by the DataChunk.
-	unique_ptr<Vector[]> data;
-	//! The (optional) selection vector of the DataChunk. Each of the member
-	//! vectors reference this selection vector.
-	sel_t *sel_vector;
+	vector<Vector> data;
 	//! The selection vector of a chunk, if it owns it
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
 public:
-	index_t size() {
-		if (column_count == 0) {
-			return 0;
-		}
-		return data[0].count;
+	index_t size() const {
+		return count;
 	}
+	index_t column_count() const {
+		return data.size();
+	}
+	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
+		this->count = count;
+		this->sel_vector = sel_vector;
+	}
+	void SetCardinality(const VectorCardinality &cardinality) {
+		SetCardinality(cardinality.count, cardinality.sel_vector);
+	}
+
+	Value GetValue(index_t col_idx, index_t index) const;
+	void SetValue(index_t col_idx, index_t index, Value val);
+
+	//! Set the DataChunk to reference another data chunk
+	void Reference(DataChunk &chunk);
+
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! This will create one vector of the specified type for each TypeId in the
 	//! types list. The vector will be referencing vector to the data owned by
@@ -69,14 +78,11 @@ public:
 	//! Destroy all data and columns owned by this DataChunk
 	void Destroy();
 
-	//! Move the data of this chunk to the other chunk
-	void Move(DataChunk &other);
-
 	//! Copies the data from this vector to another vector.
 	void Copy(DataChunk &other, index_t offset = 0);
 
 	//! Removes the selection vector from the chunk
-	void Flatten();
+	void ClearSelectionVector();
 
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();
@@ -105,20 +111,10 @@ public:
 	string ToString() const;
 	void Print();
 
-	Vector &GetVector(index_t index) {
-		assert(index < column_count);
-		return data[index];
-	}
-
 	DataChunk(const DataChunk &) = delete;
 
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
-
-private:
-	//! The data owned by this DataChunk. This data is typically referenced by
-	//! the member vectors.
-	unique_ptr<data_t[]> owned_data;
 };
 } // namespace duckdb

@@ -67,11 +67,8 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		return;
 	}
 	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
+	output.SetCardinality(next - data.offset);
 
-	index_t output_count = next - data.offset;
-	for (index_t j = 0; j < output.column_count; j++) {
-		output.data[j].count = output_count;
-	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	for (index_t i = data.offset; i < next; i++) {
@@ -97,15 +94,15 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		default:
 			type_str = "unknown";
 		}
-		output.data[0].SetValue(index, Value(type_str));
+		output.SetValue(0, index, Value(type_str));
 		// "name", TypeId::VARCHAR
-		output.data[1].SetValue(index, Value(entry->name));
+		output.SetValue(1, index, Value(entry->name));
 		// "tbl_name", TypeId::VARCHAR
-		output.data[2].SetValue(index, Value(entry->name));
+		output.SetValue(2, index, Value(entry->name));
 		// "rootpage", TypeId::INT32
-		output.data[3].SetValue(index, Value::INTEGER(0));
+		output.SetValue(3, index, Value::INTEGER(0));
 		// "sql", TypeId::VARCHAR
-		output.data[4].SetValue(index, Value(GenerateQuery(entry)));
+		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;
 }

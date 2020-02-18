@@ -27,11 +27,11 @@ private:
 
 	AggregateFunction aggregate;
 	vector<data_t> state;
-	Vector statep;
+	DataChunk inputs;
+	FlatVector statep;
 	TypeId result_type;
 	unique_ptr<data_t[]> levels_flat_native;
 	vector<index_t> levels_flat_start;
-	unique_ptr<Vector[]> inputs;
 
 	ChunkCollection *input_ref;
 

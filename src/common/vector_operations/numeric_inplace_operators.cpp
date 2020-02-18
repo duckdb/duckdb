@@ -52,6 +52,6 @@ void VectorOperations::AddInPlace(Vector &result, Vector &input) {
 
 void VectorOperations::AddInPlace(Vector &left, int64_t right) {
 	Value right_value = Value::Numeric(left.type, right);
-	Vector right_vector(right_value);
+	Vector right_vector(left.cardinality(), right_value);
 	VectorOperations::AddInPlace(left, right_vector);
 }

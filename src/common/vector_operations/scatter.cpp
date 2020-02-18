@@ -53,6 +53,7 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 }
 
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
+	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
 		scatter_templated_loop<char *, duckdb::PickLeft>(source, dest);
 	} else {
@@ -61,6 +62,7 @@ void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
+	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
 		scatter_templated_loop<char *, duckdb::PickRight>(source, dest);
 	} else {
@@ -69,14 +71,17 @@ void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
 }
 
 void VectorOperations::Scatter::Add(Vector &source, Vector &dest) {
+	source.Normalify();
 	numeric_scatter_loop<duckdb::Add>(source, dest);
 }
 
 void VectorOperations::Scatter::Max(Vector &source, Vector &dest) {
+	source.Normalify();
 	generic_scatter_loop<duckdb::Max>(source, dest);
 }
 
 void VectorOperations::Scatter::Min(Vector &source, Vector &dest) {
+	source.Normalify();
 	generic_scatter_loop<duckdb::Min>(source, dest);
 }
 
@@ -91,7 +96,7 @@ void VectorOperations::Scatter::AddOne(Vector &source, Vector &dest) {
 		VectorOperations::Exec(dest, [&](index_t i, index_t k) { (*destinations[i])++; });
 
 	} else if (source.vector_type == VectorType::SEQUENCE_VECTOR) {
-		VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(source, [&](index_t i, index_t k) {
 			if (!source.nullmask[i]) {
 				(*destinations[i])++;
 			}
@@ -111,12 +116,12 @@ template <class T, bool IGNORE_NULL> static void scatter_set_loop(Vector &source
 	auto data = (T *)source.GetData();
 	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (!source.nullmask[0]) {
-			VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(source, [&](index_t i, index_t k) {
 				auto destination = (T *)(dest[i] + offset);
 				*destination = data[0];
 			});
 		} else {
-			VectorOperations::Exec(source.sel_vector, source.count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(source, [&](index_t i, index_t k) {
 				auto destination = (T *)(dest[i] + offset);
 				*destination = NullValue<T>();
 			});

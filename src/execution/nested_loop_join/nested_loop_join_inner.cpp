@@ -12,16 +12,18 @@ struct InitialNestedLoopJoin {
 		// fill lvector and rvector with matches from the base vectors
 		auto ldata = (T *)left.GetData();
 		auto rdata = (T *)right.GetData();
+		auto lsel = left.sel_vector();
+		auto rsel = right.sel_vector();
 		index_t result_count = 0;
-		for (; rpos < right.count; rpos++) {
-			index_t right_position = right.sel_vector ? right.sel_vector[rpos] : rpos;
+		for (; rpos < right.size(); rpos++) {
+			index_t right_position = rsel ? rsel[rpos] : rpos;
 			assert(!right.nullmask[right_position]);
-			for (; lpos < left.count; lpos++) {
+			for (; lpos < left.size(); lpos++) {
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					// out of space!
 					return result_count;
 				}
-				index_t left_position = left.sel_vector ? left.sel_vector[lpos] : lpos;
+				index_t left_position = lsel ? lsel[lpos] : lpos;
 				assert(!left.nullmask[left_position]);
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
 					// emit tuple
@@ -116,7 +118,7 @@ index_t nested_loop_join_inner(Vector &left, Vector &right, index_t &lpos, index
 index_t NestedLoopJoinInner::Perform(index_t &lpos, index_t &rpos, DataChunk &left_conditions,
                                      DataChunk &right_conditions, sel_t lvector[], sel_t rvector[],
                                      vector<JoinCondition> &conditions) {
-	assert(left_conditions.column_count == right_conditions.column_count);
+	assert(left_conditions.column_count() == right_conditions.column_count());
 	if (lpos >= left_conditions.size() || rpos >= right_conditions.size()) {
 		return 0;
 	}

@@ -20,25 +20,25 @@ static void list_initialize(data_ptr_t payload, TypeId return_type) {
 static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 	assert(input_count == 1);
 	inputs[0].Normalify();
-
-	auto states = (Vector **)state.GetData();
-
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		auto state = states[i];
-		if (state->type == TypeId::INVALID) {
-			state->Initialize(inputs[0].type, true, 150); // FIXME size? needs to grow this!
-			state->count = 0;
-			// TODO need to init child vectors, too
-			// TODO need sqltype for this
-		}
-		state->count++;
-		for (auto &child : state->GetChildren()) {
-			child.second->count++;
-		}
-		state->SetValue(state->count - 1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
-		// We could alternatively collect all values for the same vector in this input chunk and assign with selection
-		// vectors map<ptr, sel_vec>! worst case, one entry per input value, but meh todo: could abort?
-	});
+//
+//	auto states = (Vector **)state.GetData();
+//
+//	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+//		auto state = states[i];
+//		if (state->type == TypeId::INVALID) {
+//			state->Initialize(inputs[0].type, true, 150); // FIXME size? needs to grow this!
+//			state->count = 0;
+//			// TODO need to init child vectors, too
+//			// TODO need sqltype for this
+//		}
+//		state->count++;
+//		for (auto &child : state->GetChildren()) {
+//			child.second->count++;
+//		}
+//		state->SetValue(state->count - 1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
+//		// We could alternatively collect all values for the same vector in this input chunk and assign with selection
+//		// vectors map<ptr, sel_vec>! worst case, one entry per input value, but meh todo: could abort?
+//	});
 }
 
 static void list_combine(Vector &state, Vector &combined) {
@@ -49,27 +49,27 @@ static void list_combine(Vector &state, Vector &combined) {
 static void list_finalize(Vector &state, Vector &result) {
 	auto states = (Vector **)state.GetData();
 
-	result.Initialize(TypeId::LIST, false, state.count);
-	auto list_struct_data = (list_entry_t *)result.GetData();
-
-	// first get total len of child vec
-	size_t total_len = 0;
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
-		list_struct_data[i].length = state_ptr->count;
-		list_struct_data[i].offset = total_len;
-		total_len += state_ptr->count;
-	});
-
-	auto list_child = make_unique<Vector>();
-	list_child->Initialize(states[0]->type, false, total_len);
-	list_child->count = 0;
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
-		list_child->Append(*state_ptr);
-	});
-	assert(list_child->count == total_len);
-	result.AddChild(move(list_child));
+//	result.Initialize(TypeId::LIST, false, state.count);
+//	auto list_struct_data = (list_entry_t *)result.GetData();
+//
+//	// first get total len of child vec
+//	size_t total_len = 0;
+//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+//		auto state_ptr = states[i];
+//		list_struct_data[i].length = state_ptr->count;
+//		list_struct_data[i].offset = total_len;
+//		total_len += state_ptr->count;
+//	});
+//
+//	auto list_child = make_unique<Vector>();
+//	list_child->Initialize(states[0]->type, false, total_len);
+//	list_child->count = 0;
+//	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
+//		auto state_ptr = states[i];
+//		list_child->Append(*state_ptr);
+//	});
+//	assert(list_child->count == total_len);
+//	result.AddChild(move(list_child));
 }
 
 

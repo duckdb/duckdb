@@ -73,7 +73,7 @@ private:
 		index_t row;
 
 		template <class T> T GetValue(index_t col_idx) const {
-			return iterator.result->iterator_chunk->data[col_idx].GetValue(iterator.row_idx).GetValue<T>();
+			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the
@@ -107,7 +107,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->column_count > 0;
+			return result->iterator_chunk && result->iterator_chunk->column_count() > 0;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;

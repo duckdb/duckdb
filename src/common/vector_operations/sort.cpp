@@ -135,13 +135,13 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 	sel_t not_null_sel_vector[STANDARD_VECTOR_SIZE], null_sel_vector[STANDARD_VECTOR_SIZE];
 	sel_t *sel_vector;
 	index_t count = VectorOperations::NotNullSelVector(vector, not_null_sel_vector, sel_vector, null_sel_vector);
-	if (count == vector.count) {
+	if (count == vector.size()) {
 		// no NULL values
 		// we don't need to use the selection vector at all
-		VectorOperations::Sort(vector, nullptr, vector.count, result);
+		VectorOperations::Sort(vector, nullptr, vector.size(), result);
 	} else {
 		// first fill in the NULL values
-		index_t null_count = vector.count - count;
+		index_t null_count = vector.size() - count;
 		for (index_t i = 0; i < null_count; i++) {
 			result[i] = null_sel_vector[i];
 		}
@@ -154,7 +154,7 @@ void VectorOperations::Sort(Vector &vector, sel_t result[]) {
 
 template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
 	auto data = (T *)vector.GetData();
-	for (index_t i = 1; i < vector.count; i++) {
+	for (index_t i = 1; i < vector.size(); i++) {
 		if (vector.nullmask[sel_vector[i]]) {
 			continue;
 		}
@@ -168,7 +168,7 @@ template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
 bool VectorOperations::Unique(Vector &vector) {
 	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant vector, value is unique if count is 1 OR value is a constant NULL
-		return vector.count == 1 || vector.nullmask[0];
+		return vector.size() == 1 || vector.nullmask[0];
 	}
 	// first we extract NULL values
 	sel_t sort_sel[STANDARD_VECTOR_SIZE];

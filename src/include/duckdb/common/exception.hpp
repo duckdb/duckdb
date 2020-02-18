@@ -15,10 +15,17 @@
 
 namespace duckdb {
 
-inline void ASSERT_RESTRICT(void *left_start, void *left_end, void *right_start, void *right_end) {
+inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
-	assert(left_end < right_start || right_end < left_start);
+#ifdef DEBUG
+	if (!(left_end <= right_start || right_end <= left_start)) {
+		printf("ASSERT RESTRICT FAILED: %s:%d\n", fname, linenr);
+		assert(0);
+	}
+#endif
 }
+
+#define ASSERT_RESTRICT(left_start, left_end, right_start, right_end) assert_restrict_function(left_start, left_end, right_start, right_end, __FILE__, __LINE__)
 
 //===--------------------------------------------------------------------===//
 // Exception Types

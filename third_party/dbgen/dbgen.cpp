@@ -47,7 +47,7 @@ void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value)
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
-	chunk.data[column++].SetValue(index, Value(value));
+	chunk.SetValue(column++, index, Value(value));
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {
@@ -68,7 +68,7 @@ void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
 static void append_to_append_info(tpch_append_information &info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.column_count == 0) {
+	if (chunk.column_count() == 0) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
@@ -78,9 +78,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count++;
-	}
+	chunk.SetCardinality(chunk.size() + 1);
 }
 
 static void append_order(order_t *o, tpch_append_information *info) {

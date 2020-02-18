@@ -55,69 +55,60 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
+template <class T, class TARGET> static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
+	auto data_ptr = (T *)v->GetData();
+	VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+		if (!v->nullmask[i]) {
+			j["data"][col_idx] += (TARGET)data_ptr[i];
+
+		} else {
+			j["data"][col_idx] += nullptr;
+		}
+	});
+}
+
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2;
-	for (size_t col_idx = 0; col_idx < chunk->column_count; col_idx++) {
-		auto *v = &chunk->data[col_idx];
+	Vector v2(*chunk, TypeId::VARCHAR);
+	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
+		Vector *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP:
-			v2.Initialize(TypeId::VARCHAR, false);
+		case SQLTypeId::TIMESTAMP: {
 			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR);
 			v = &v2;
 			break;
+		}
 		default:
 			break;
 		}
 		assert(v);
 		switch (v->type) {
 		case TypeId::BOOL:
+			assign_json_loop<bool, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT8:
+			assign_json_loop<int8_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT16:
+			assign_json_loop<int16_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::INT32:
-		case TypeId::INT64: {
-			// int types
-			v->Cast(TypeId::INT64);
-			auto data_ptr = (int64_t *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+			assign_json_loop<int32_t, int64_t>(v, col_idx, j);
 			break;
-		}
+		case TypeId::INT64:
+			assign_json_loop<int64_t, int64_t>(v, col_idx, j);
+			break;
 		case TypeId::FLOAT:
-		case TypeId::DOUBLE: {
-			v->Cast(TypeId::DOUBLE);
-
-			auto data_ptr = (double *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+			assign_json_loop<float, double>(v, col_idx, j);
 			break;
-		}
-		case TypeId::VARCHAR: {
-			auto data_ptr = (char **)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
-				if (!v->nullmask[i]) {
-					j["data"][col_idx] += data_ptr[i];
-
-				} else {
-					j["data"][col_idx] += nullptr;
-				}
-			});
+		case TypeId::DOUBLE:
+			assign_json_loop<float, double>(v, col_idx, j);
 			break;
-		}
+		case TypeId::VARCHAR:
+			assign_json_loop<char *, char *>(v, col_idx, j);
+			break;
 		default:
 			throw std::runtime_error("Unsupported Type");
 		}
@@ -393,9 +384,9 @@ int main(int argc, char **argv) {
 			is_active = false;
 			interrupt_thread.join();
 
-			j = {{"success", true}, {"ref", ref}, {"count", chunk->data[0].count}, {"data", json::array()}};
+			j = {{"success", true}, {"ref", ref}, {"count", chunk->size()}, {"data", json::array()}};
 			serialize_chunk(state.res.get(), chunk.get(), j);
-			if (chunk->data[0].count != 0) {
+			if (chunk->size() != 0) {
 				std::lock_guard<std::mutex> guard(client_state_map_mutex);
 				state.touched = std::time(nullptr);
 				client_state_map[ref] = move(state);

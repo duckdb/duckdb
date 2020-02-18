@@ -11,17 +11,15 @@ using namespace duckdb;
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
+	assert(input.SameCardinality(result));
 	assert(result.type == TypeId::BOOL);
 
 	result.vector_type = input.vector_type;
 	result.nullmask.reset();
 
 	auto result_data = (bool *)result.GetData();
-	VectorOperations::Exec(input.sel_vector, input.count, [&](index_t i, index_t k) {
-		result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i];
-	});
-	result.sel_vector = input.sel_vector;
-	result.count = input.count;
+	VectorOperations::Exec(
+	    input, [&](index_t i, index_t k) { result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i]; });
 }
 
 void VectorOperations::IsNotNull(Vector &input, Vector &result) {
@@ -51,11 +49,11 @@ bool VectorOperations::HasNull(Vector &input) {
 }
 
 index_t VectorOperations::NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-                                  sel_t *null_vector) {
+                                           sel_t *null_vector) {
 	vector.Normalify();
 	if (vector.nullmask.any()) {
 		uint64_t result_count = 0, null_count = 0;
-		VectorOperations::Exec(vector.sel_vector, vector.count, [&](uint64_t i, uint64_t k) {
+		VectorOperations::Exec(vector, [&](uint64_t i, uint64_t k) {
 			if (!vector.nullmask[i]) {
 				not_null_vector[result_count++] = i;
 			} else if (null_vector) {
@@ -65,7 +63,7 @@ index_t VectorOperations::NotNullSelVector(Vector &vector, sel_t *not_null_vecto
 		result_assignment = not_null_vector;
 		return result_count;
 	} else {
-		result_assignment = vector.sel_vector;
-		return vector.count;
+		result_assignment = vector.sel_vector();
+		return vector.size();
 	}
 }

@@ -132,10 +132,6 @@ struct VectorOperations {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
 		static void Set(Vector &source, Vector &dest, bool set_null = true, index_t offset = 0);
-		//! Append the values from source to the dest vector. If set_null is true, NullValue<T> is checked for and
-		//! converted to the nullmask in dest. If set_null is false, NullValue<T> is ignored. If offset is set, it is
-		//! added to
-		static void Append(Vector &source, Vector &dest, index_t offset = 0, bool set_null = true);
 	};
 
 	//===--------------------------------------------------------------------===//
@@ -172,13 +168,14 @@ struct VectorOperations {
 	static void Copy(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, index_t offset = 0);
+	// Append the data of <source> to the target vector
+	static void Append(Vector &source, Vector &target);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
 	static void CopyToStorage(Vector &source, void *target, index_t offset = 0, index_t element_count = 0);
-	// Appends the data of <source> to the target vector, setting the nullmask
-	// for any NullValue<T> of source. Used to go back from storage to a
-	// nullmask.
-	static void AppendFromStorage(Vector &source, Vector &target, bool has_null = true);
+	// Reads the data of <source> to the target vector, setting the nullmask
+	// for any NullValue<T> of source. Used to go back from storage to a proper vector
+	static void ReadFromStorage(Vector &source, Vector &target);
 
 	// Set all elements of the vector to the given constant value
 	static void Set(Vector &result, Value value);
@@ -204,18 +201,20 @@ struct VectorOperations {
 	//! Exec over the set of indexes, calls the callback function with (i) =
 	//! index, dependent on selection vector and (k) = count
 	template <class T> static void Exec(const Vector &vector, T &&fun, index_t offset = 0, index_t count = 0) {
+		sel_t *sel_vector;
 		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			assert(count == 0 && offset == 0);
-			Exec(nullptr, 1, fun, offset);
+			count = 1;
+			sel_vector = nullptr;
 		} else {
 			assert(vector.vector_type == VectorType::FLAT_VECTOR);
 			if (count == 0) {
-				count = vector.count;
+				count = vector.size();
 			} else {
-				count += offset;
+				count = count + offset;
 			}
-			Exec(vector.sel_vector, count, fun, offset);
+			sel_vector = vector.sel_vector();
 		}
+		VectorOperations::Exec(sel_vector, count, fun, offset);
 	}
 
 	//! Exec over a specific type. Note that it is up to the caller to verify
@@ -233,8 +232,9 @@ struct VectorOperations {
 		if (vector.vector_type == VectorType::SEQUENCE_VECTOR) {
 			int64_t start, increment;
 			vector.GetSequence(start, increment);
-			for (index_t i = 0; i < vector.count; i++) {
-				index_t idx = vector.sel_vector ? vector.sel_vector[i] : i;
+			auto vsel = vector.sel_vector();
+			for (index_t i = 0; i < vector.size(); i++) {
+				index_t idx = vsel ? vsel[i] : i;
 				fun((T)(start + increment * idx), idx, i);
 			}
 		} else if (vector.vector_type == VectorType::CONSTANT_VECTOR) {

@@ -70,25 +70,23 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 		payload_chunk.Reset();
 		index_t payload_idx = 0, payload_expr_idx = 0;
+		payload_chunk.SetCardinality(group_chunk);
 		for (index_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.children.size()) {
 				for (index_t j = 0; j < aggr.children.size(); ++j) {
 					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
-					++payload_idx;
-					++payload_expr_idx;
+					payload_idx++;
+					payload_expr_idx++;
 				}
 			} else {
-				payload_chunk.data[payload_idx].count = group_chunk.size();
-				payload_chunk.data[payload_idx].sel_vector = group_chunk.sel_vector;
-				++payload_idx;
+				payload_idx++;
 			}
 		}
-		payload_chunk.sel_vector = group_chunk.sel_vector;
 
 		group_chunk.Verify();
 		payload_chunk.Verify();
-		assert(payload_chunk.column_count == 0 || group_chunk.size() == payload_chunk.size());
+		assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
 		// move the strings inside the groups to the string heap
 		group_chunk.MoveStringsToHeap(state->ht->string_heap);
@@ -105,19 +103,20 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
-		assert(state->aggregate_chunk.column_count == aggregates.size());
+		assert(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
-		for (index_t i = 0; i < state->aggregate_chunk.column_count; i++) {
+		chunk.SetCardinality(1);
+		for (index_t i = 0; i < chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
 			aggr.function.initialize(aggr_state.get(), aggr.return_type);
 
-			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
-			state->aggregate_chunk.data[i].count = 1;
-			aggr.function.finalize(state_vector, state->aggregate_chunk.data[i]);
+			Vector state_vector(chunk, Value::POINTER((uintptr_t)aggr_state.get()));
+			aggr.function.finalize(state_vector, chunk.data[i]);
 		}
 		state->finished = true;
+		return;
 	}
 	if (elements_found == 0 && !state->finished) {
 		state->finished = true;
@@ -126,15 +125,16 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	// we finished the child chunk
 	// actually compute the final projection list now
 	index_t chunk_index = 0;
-	if (state->group_chunk.column_count + state->aggregate_chunk.column_count == chunk.column_count) {
-		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count; col_idx++) {
+	chunk.SetCardinality(elements_found);
+	if (state->group_chunk.column_count() + state->aggregate_chunk.column_count() == chunk.column_count()) {
+		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
 		}
 	} else {
-		assert(state->aggregate_chunk.column_count == chunk.column_count);
+		assert(state->aggregate_chunk.column_count() == chunk.column_count());
 	}
 
-	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count(); col_idx++) {
 		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
 	}
 }

@@ -53,7 +53,7 @@ private:
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
 		if (!RIGHT_CONSTANT) {
-			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
 		if (IGNORE_NULL && nullmask.any()) {
 			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
@@ -118,15 +118,14 @@ private:
 			result.nullmask = left.nullmask | right.nullmask;
 		}
 		ExecuteLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT,
-		            RIGHT_CONSTANT>(ldata, rdata, result_data, result.count, result.sel_vector, result.nullmask, fun);
+		            RIGHT_CONSTANT>(ldata, rdata, result_data, result.size(), result.sel_vector(), result.nullmask,
+		                            fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL>
 	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {
-		assert(left.count == right.count && left.sel_vector == right.sel_vector);
-		result.sel_vector = left.sel_vector;
-		result.count = left.count;
+		assert(left.SameCardinality(right) && left.SameCardinality(result));
 		if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteA<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(left, right, result,
 			                                                                                     fun);
@@ -183,7 +182,7 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 	static index_t Select(Vector &left, Vector &right, sel_t result[]) {
 
-		assert(left.count == right.count && left.sel_vector == right.sel_vector);
+		assert(left.SameCardinality(right));
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 			auto ldata = (LEFT_TYPE *)left.GetData();
 			auto rdata = (RIGHT_TYPE *)right.GetData();
@@ -193,7 +192,7 @@ public:
 			if (left.nullmask[0] || right.nullmask[0] || !OP::Operation(ldata[0], rdata[0])) {
 				return 0;
 			} else {
-				return left.count;
+				return left.size();
 			}
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (left.nullmask[0]) {
@@ -204,7 +203,7 @@ public:
 			// left side is normal constant, use right nullmask and do computation
 			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, true, false>((LEFT_TYPE *)left.GetData(),
 			                                                          (RIGHT_TYPE *)right.GetData(), result,
-			                                                          right.count, right.sel_vector, right.nullmask);
+			                                                          right.size(), right.sel_vector(), right.nullmask);
 		} else if (right.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (right.nullmask[0]) {
 				// right side is constant NULL, no results
@@ -212,8 +211,8 @@ public:
 			}
 			left.Normalify();
 			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, true>((LEFT_TYPE *)left.GetData(),
-			                                                          (RIGHT_TYPE *)right.GetData(), result, left.count,
-			                                                          left.sel_vector, left.nullmask);
+			                                                          (RIGHT_TYPE *)right.GetData(), result,
+			                                                          left.size(), left.sel_vector(), left.nullmask);
 		} else {
 			left.Normalify();
 			right.Normalify();
@@ -221,7 +220,7 @@ public:
 			auto nullmask = left.nullmask | right.nullmask;
 			return SelectLoop<LEFT_TYPE, RIGHT_TYPE, OP, false, false>((LEFT_TYPE *)left.GetData(),
 			                                                           (RIGHT_TYPE *)right.GetData(), result,
-			                                                           left.count, left.sel_vector, nullmask);
+			                                                           left.size(), left.sel_vector(), nullmask);
 		}
 	}
 };

@@ -38,7 +38,8 @@ public:
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	              index_t result_idx) override;
 
 	//! Perform an update within the segment
 	void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) override;

@@ -61,7 +61,6 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, index_t vector_index,
 	// fetch the nullmask and copy the data from the base table
 	result.nullmask = *((nullmask_t *)(data + offset));
 	memcpy(result.GetData(), data + offset + sizeof(nullmask_t), count * type_size);
-	result.count = count;
 }
 
 void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
@@ -72,7 +71,8 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                              index_t result_idx) {
 	auto read_lock = lock.GetSharedLock();
 	auto handle = manager.Pin(block_id);
 
@@ -86,14 +86,13 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	auto &nullmask = *((nullmask_t *)(data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
-	result.nullmask[result.count] = nullmask[id_in_vector];
-	memcpy(result.GetData() + result.count * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	result.nullmask[result_idx] = nullmask[id_in_vector];
+	memcpy(result.GetData() + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other
 		// version
-		append_from_update_info(transaction, versions[vector_index], id_in_vector, result);
+		append_from_update_info(transaction, versions[vector_index], id_in_vector, result, result_idx);
 	}
-	result.count++;
 }
 
 //===--------------------------------------------------------------------===//
@@ -133,7 +132,7 @@ void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, T
 		auto handle = manager.Pin(block_id);
 
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(column_data, transaction, ids, update.count, vector_index, vector_offset, type_size);
+		node = CreateUpdateInfo(column_data, transaction, ids, update.size(), vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
@@ -202,17 +201,17 @@ static void append_loop_no_null(T *__restrict source, T *__restrict target, inde
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, index_t target_offset, Vector &source,
                         index_t offset, index_t count) {
-	assert(offset + count <= source.count);
+	assert(offset + count <= source.size());
 	auto ldata = (T *)source.GetData();
 	auto result_data = (T *)(target + sizeof(nullmask_t));
 	auto nullmask = (nullmask_t *)target;
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 	if (source.nullmask.any()) {
-		append_loop_null<T>(ldata, *nullmask, result_data, target_offset, offset, count, source.sel_vector,
+		append_loop_null<T>(ldata, *nullmask, result_data, target_offset, offset, count, source.sel_vector(),
 		                    source.nullmask, min, max, stats.has_null);
 	} else {
-		append_loop_no_null<T>(ldata, result_data, target_offset, offset, count, source.sel_vector, min, max);
+		append_loop_no_null<T>(ldata, result_data, target_offset, offset, count, source.sel_vector(), min, max);
 	}
 }
 
@@ -351,7 +350,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 		node->tuples[count] = id;
 	};
 	// perform the merge
-	node->N = merge_loop(ids, old_ids, update.count, node->N, vector_offset, merge, pick_new, pick_old);
+	node->N = merge_loop(ids, old_ids, update.size(), node->N, vector_offset, merge, pick_new, pick_old);
 }
 
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {
@@ -411,7 +410,8 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 // Update Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result) {
+static void update_info_append(Transaction &transaction, UpdateInfo *info, index_t row_id, Vector &result,
+                               index_t result_idx) {
 	auto result_data = (T *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
@@ -419,8 +419,8 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, index
 		for (index_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_id) {
 				// found the relevant tuple
-				result_data[result.count] = info_data[i];
-				result.nullmask[result.count] = current->nullmask[current->tuples[i]];
+				result_data[result_idx] = info_data[i];
+				result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
 				break;
 			} else if (current->tuples[i] > row_id) {
 				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore

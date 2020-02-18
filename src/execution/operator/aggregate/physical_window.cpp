@@ -479,8 +479,8 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		for (index_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk window_chunk;
 			window_chunk.Initialize(window_types);
-			for (index_t col_idx = 0; col_idx < window_chunk.column_count; col_idx++) {
-				window_chunk.data[col_idx].count = big_data.chunks[i]->size();
+			window_chunk.SetCardinality(big_data.chunks[i]->size());
+			for (index_t col_idx = 0; col_idx < window_chunk.column_count(); col_idx++) {
 				VectorOperations::Set(window_chunk.data[col_idx], Value());
 			}
 			window_chunk.Verify();
@@ -507,10 +507,12 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	auto &wind_ch = window_results.GetChunk(state->position);
 
 	index_t out_idx = 0;
-	for (index_t col_idx = 0; col_idx < proj_ch.column_count; col_idx++) {
+	assert(proj_ch.size() == wind_ch.size());
+	chunk.SetCardinality(proj_ch);
+	for (index_t col_idx = 0; col_idx < proj_ch.column_count(); col_idx++) {
 		chunk.data[out_idx++].Reference(proj_ch.data[col_idx]);
 	}
-	for (index_t col_idx = 0; col_idx < wind_ch.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < wind_ch.column_count(); col_idx++) {
 		chunk.data[out_idx++].Reference(wind_ch.data[col_idx]);
 	}
 	state->position += STANDARD_VECTOR_SIZE;

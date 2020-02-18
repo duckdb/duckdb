@@ -58,7 +58,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		state->child_chunk.Verify();
 		state->list_data.Verify();
 		assert(state->child_chunk.size() == state->list_data.size());
-		assert(state->list_data.column_count == select_list.size());
+		assert(state->list_data.column_count() == select_list.size());
 	}
 
 	// FIXME
@@ -66,12 +66,11 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 	// need to figure out how many times we need to repeat for current row
 	if (max_list_length < 0) {
-		for (index_t col_idx = 0; col_idx < state->list_data.column_count; col_idx++) {
+		for (index_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 			auto &v = state->list_data.data[col_idx];
 
 			assert(v.type == TypeId::LIST);
 			assert(v.GetChildren().size() == 1);
-			assert(!v.sel_vector); // TODO safe to assume?
 
 			// TODO deal with NULL values here!
 
@@ -86,14 +85,15 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	assert(max_list_length >= 0);
 
 	// first cols are from child, last n cols from unnest
-	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
-		chunk.data[col_idx].count = max_list_length;
-		VectorOperations::Set(chunk.data[col_idx],
-		                      state->child_chunk.GetVector(col_idx).GetValue(state->parent_position));
+	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
+		// FIXME
+	//	chunk.data[col_idx].count = max_list_length;
+//		VectorOperations::Set(chunk.data[col_idx],
+//		                      state->child_chunk.GetVector(col_idx).GetValue(state->parent_position));
 	}
-	for (index_t col_idx = 0; col_idx < state->list_data.column_count; col_idx++) {
-		auto target_col = col_idx + state->child_chunk.column_count;
-		chunk.data[target_col].count = max_list_length;
+	for (index_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
+		auto target_col = col_idx + state->child_chunk.column_count();
+// FIXME		chunk.data[target_col].count = max_list_length;
 		chunk.data[target_col].nullmask.all();
 		auto &v = state->list_data.data[col_idx];
 		auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];

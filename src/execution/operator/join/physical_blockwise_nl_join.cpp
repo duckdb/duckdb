@@ -83,17 +83,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+		index_t i;
+		for (i = 0; i < state->child_chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
+		chunk.SetCardinality(state->child_chunk.size(), state->child_chunk.sel_vector);
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
-			chunk.sel_vector = chunk.data[0].sel_vector;
-			for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
-				chunk.data[i].count = chunk.size();
-				chunk.data[i].sel_vector = chunk.sel_vector;
-				VectorOperations::Set(chunk.data[i], Value());
+			for (; i < chunk.column_count(); i++) {
+				chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				chunk.data[i].nullmask[0] = true;
 			}
 		}
 		return;
@@ -121,19 +121,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 				}
 				if (result_count > 0) {
 					// have to create the chunk, set the selection vector and count
-					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+					index_t i;
+					for (i = 0; i < state->child_chunk.column_count(); i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
-						chunk.data[i].sel_vector = chunk.sel_vector;
-						chunk.data[i].count = result_count;
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
-						chunk.data[i].nullmask.set();
-						chunk.data[i].sel_vector = chunk.sel_vector;
-						chunk.data[i].count = result_count;
+					for (; i < chunk.column_count(); i++) {
+						chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+						chunk.data[i].nullmask[0] = true;
 					}
+					chunk.SetCardinality(result_count, chunk.owned_sel_vector);
 					state->checked_found_match = true;
 					return;
 				}
@@ -148,7 +146,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					return;
 				}
 			}
-			state->child_chunk.Flatten();
+			state->child_chunk.ClearSelectionVector();
 			state->left_position = 0;
 			state->right_position = 0;
 			if (state->lhs_found_match) {
@@ -160,16 +158,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
 
 		// fill in the current element of the LHS into the chunk
-		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for (index_t i = 0; i < lchunk.column_count; i++) {
-			auto lvalue = lchunk.data[i].GetValue(state->left_position);
+		assert(chunk.column_count() == lchunk.column_count() + rchunk.column_count());
+		for (index_t i = 0; i < lchunk.column_count(); i++) {
+			auto lvalue = lchunk.GetValue(i, state->left_position);
 			chunk.data[i].Reference(lvalue);
-			chunk.data[i].count = rchunk.size();
 		}
 		// for the RHS we just reference the entire vector
-		for (index_t i = 0; i < rchunk.column_count; i++) {
-			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
+		for (index_t i = 0; i < rchunk.column_count(); i++) {
+			chunk.data[lchunk.column_count() + i].Reference(rchunk.data[i]);
 		}
+		chunk.SetCardinality(rchunk.size());
+
 		// now perform the computation
 		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
 		if (result_count > 0) {
@@ -178,17 +177,8 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (state->lhs_found_match) {
 				state->lhs_found_match[state->left_position] = true;
 			}
-			if (result_count == chunk.size()) {
-				// everything was matched, remove selection vector
-				chunk.sel_vector = nullptr;
-			} else {
-				// partial match
-				chunk.sel_vector = chunk.owned_sel_vector;
-			}
-			for (index_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i].sel_vector = chunk.sel_vector;
-				chunk.data[i].count = result_count;
-			}
+			chunk.SetCardinality(result_count, result_count == rchunk.size() ? nullptr : chunk.owned_sel_vector);
+
 			// set the match flags in the RHS
 			if (state->rhs_found_match) {
 				for (index_t i = 0; i < result_count; i++) {

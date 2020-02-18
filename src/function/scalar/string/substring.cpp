@@ -45,7 +45,7 @@ static const char *substring_scalar_function(const char *input_string, int offse
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
+	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
 	       args.data[2].type == TypeId::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];

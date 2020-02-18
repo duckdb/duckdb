@@ -73,7 +73,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
 	index_t offset = 0;
-	index_t count = vector.count;
+	index_t count = vector.size();
 	while (true) {
 		// append the data from the vector
 		index_t copied_elements = state.current->Append(state, vector, offset, count);
@@ -112,7 +112,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 
 void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
 	// first find the segment that the update belongs to
-	index_t first_id = ids[updates.sel_vector ? updates.sel_vector[0] : 0];
+	index_t first_id = ids[updates.sel_vector() ? updates.sel_vector()[0] : 0];
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
 	segment->Update(*this, transaction, updates, ids);
@@ -126,11 +126,12 @@ void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	segment->Fetch(state, vector_index, result);
 }
 
-void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) {
+void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+                          index_t result_idx) {
 	// find the segment the row belongs to
 	auto segment = (TransientSegment *)data.GetSegment(row_id);
 	// now perform the fetch within the segment
-	segment->FetchRow(state, transaction, row_id, result);
+	segment->FetchRow(state, transaction, row_id, result, result_idx);
 }
 
 void ColumnData::AppendTransientSegment(index_t start_row) {

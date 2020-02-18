@@ -29,10 +29,11 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		auto &chunk = state->child_chunk;
 
-		chunk.Flatten();
+		chunk.ClearSelectionVector();
 		default_executor.SetChunk(chunk);
 
 		insert_chunk.Reset();
+		insert_chunk.SetCardinality(chunk);
 		if (column_index_map.size() > 0) {
 			// columns specified by the user, use column_index_map
 			for (index_t i = 0; i < table->columns.size(); i++) {
@@ -41,14 +42,14 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 					default_executor.ExecuteExpression(i, insert_chunk.data[i]);
 				} else {
 					// get value from child chunk
-					assert((index_t)column_index_map[i] < chunk.column_count);
+					assert((index_t)column_index_map[i] < chunk.column_count());
 					assert(insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
 					insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
 				}
 			}
 		} else {
 			// no columns specified, just append directly
-			for (index_t i = 0; i < insert_chunk.column_count; i++) {
+			for (index_t i = 0; i < insert_chunk.column_count(); i++) {
 				assert(insert_chunk.data[i].type == chunk.data[i].type);
 				insert_chunk.data[i].Reference(chunk.data[i]);
 			}
@@ -57,8 +58,8 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		insert_count += chunk.size();
 	}
 
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(insert_count));
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(insert_count));
 
 	state->finished = true;
 }
