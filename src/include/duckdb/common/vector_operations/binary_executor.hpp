@@ -53,7 +53,7 @@ private:
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 		}
 		if (!RIGHT_CONSTANT) {
-			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
 		if (IGNORE_NULL && nullmask.any()) {
 			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
