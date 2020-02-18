@@ -9,20 +9,29 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
+	result.GetChildren().clear(); // FIXME
+
 	// this should be guaranteed by the binder
 	assert(input.column_count == 1);
 	auto& vec = input.data[0];
+
+	vec.Verify();
+
 
 	if (info.index >= vec.GetChildren().size()) {
 		throw Exception("Not enough struct entries for struct_extract");
 	}
 
 	auto& child = vec.GetChildren()[info.index];
+
 	if (child.first != info.key || child.second->type != info.type) {
 		throw Exception("Struct key or type mismatch");
 	}
 	result.Reference(*child.second.get());
-	assert(result.count == vec.count);
+	result.count = vec.count;
+	result.sel_vector = vec.sel_vector;
+	result.Verify();
+
 }
 
 

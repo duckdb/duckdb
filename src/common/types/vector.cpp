@@ -600,6 +600,12 @@ void Vector::Verify() {
 	if (type == TypeId::LIST) {
 		assert(children.size() == 1);
 	}
+	if (type == TypeId::STRUCT) {
+		assert(children.size() > 0);
+		for (auto& child : children) {
+			assert(sel_vector || child.second->count == count);
+		}
+	}
 #endif
 }
 

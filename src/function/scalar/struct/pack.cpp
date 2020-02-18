@@ -16,6 +16,9 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	// this should never happen if the binder below is sane
 	assert(input.column_count == info.stype.child_type.size());
 
+	result.GetChildren().clear(); // FIXME
+	assert(result.GetChildren().size() == 0);
+
 	bool all_const = true;
 	for (size_t i = 0; i < input.column_count; i++) {
 		// same holds for this
@@ -29,7 +32,14 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	}
 	result.sel_vector = input.data[0].sel_vector;
 	result.count = input.data[0].count;
+#ifdef DEBUG
+	for (auto &v : result.GetChildren()) {
+		assert(v.second->count == result.count);
+	}
+#endif
 	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+
+	result.Verify();
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
