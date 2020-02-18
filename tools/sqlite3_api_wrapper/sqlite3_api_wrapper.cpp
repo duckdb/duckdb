@@ -646,6 +646,9 @@ int sqlite3_config(int i, ...) {
 }
 
 int sqlite3_errcode(sqlite3 *db) {
+	if (!db) {
+		return SQLITE_MISUSE;
+	}
 	return db->last_error.empty() ? SQLITE_OK : SQLITE_ERROR;
 }
 
@@ -654,11 +657,16 @@ int sqlite3_extended_errcode(sqlite3 *db) {
 }
 
 const char *sqlite3_errmsg(sqlite3 *db) {
+	if (!db) {
+		return "";
+	}
 	return db->last_error.c_str();
 }
 
 void sqlite3_interrupt(sqlite3 *db) {
-	db->con->Interrupt();
+	if (db) {
+		db->con->Interrupt();
+	}
 }
 
 const char *sqlite3_libversion(void) {
