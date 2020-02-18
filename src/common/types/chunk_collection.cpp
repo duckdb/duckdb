@@ -29,7 +29,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	} else {
 #ifdef DEBUG
 		// the types of the new chunk should match the types of the previous one
-		assert(types.size() == new_chunk.column_count);
+		assert(types.size() == new_chunk.column_count());
 		auto new_types = new_chunk.GetTypes();
 		for (index_t i = 0; i < types.size(); i++) {
 			assert(new_types[i] == types[i]);
@@ -42,15 +42,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			index_t old_count = new_chunk.size();
-			for (index_t c = 0; c < new_chunk.column_count; c++) {
-				new_chunk.data[c].count = added_data;
-			}
+			new_chunk.SetCardinality(added_data, new_chunk.sel_vector);
+
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
-			for (index_t c = 0; c < new_chunk.column_count; c++) {
-				new_chunk.data[c].count = old_count;
-			}
+			new_chunk.SetCardinality(old_count, new_chunk.sel_vector);
 			offset = added_data;
 		}
 	}
@@ -136,8 +133,8 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, inde
 		Vector &left_vec = left_chunk->data[col_idx];
 		Vector &right_vec = right_chunk->data[col_idx];
 
-		assert(!left_vec.sel_vector);
-		assert(!right_vec.sel_vector);
+		assert(!left_vec.sel_vector());
+		assert(!right_vec.sel_vector());
 		assert(left_vec.type == right_vec.type);
 
 		auto comp_res = compare_value(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -273,9 +270,8 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 	index_t remaining_data = min((index_t)STANDARD_VECTOR_SIZE, count - start_offset);
 	assert(target.GetTypes() == types);
 
+	target.SetCardinality(remaining_data);
 	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		target.data[col_idx].count = remaining_data;
-
 		switch (types[col_idx]) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
@@ -323,7 +319,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 }
 
 Value ChunkCollection::GetValue(index_t column, index_t index) {
-	return chunks[LocateChunk(index)]->data[column].GetValue(index % STANDARD_VECTOR_SIZE);
+	return chunks[LocateChunk(index)]->GetValue(column, index % STANDARD_VECTOR_SIZE);
 }
 
 vector<Value> ChunkCollection::GetRow(index_t index) {
@@ -337,7 +333,7 @@ vector<Value> ChunkCollection::GetRow(index_t index) {
 }
 
 void ChunkCollection::SetValue(index_t column, index_t index, Value value) {
-	chunks[LocateChunk(index)]->data[column].SetValue(index % STANDARD_VECTOR_SIZE, value);
+	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
 }
 
 void ChunkCollection::Print() {
@@ -429,9 +425,8 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 	index_t remaining_data = min((index_t)STANDARD_VECTOR_SIZE, heap_size - start_offset);
 	assert(target.GetTypes() == types);
 
+	target.SetCardinality(remaining_data);
 	for (index_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		target.data[col_idx].count = remaining_data;
-
 		switch (types[col_idx]) {
 		case TypeId::BOOL:
 		case TypeId::INT8:

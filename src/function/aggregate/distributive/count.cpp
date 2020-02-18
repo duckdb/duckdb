@@ -22,7 +22,7 @@ static void countstar_update(Vector inputs[], index_t input_count, Vector &addre
 static void countstar_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
 	// count star: just add the count
 	auto state = (int64_t *)state_;
-	*state += inputs[0].count;
+	*state += inputs[0].size();
 }
 
 static void count_update(Vector inputs[], index_t input_count, Vector &addresses) {
@@ -62,7 +62,7 @@ static void count_simple_update(Vector inputs[], index_t input_count, data_ptr_t
 		// constant vector, check if it is a constant NULL
 		// if not, add the results
 		if (!input.nullmask[0]) {
-			*state += input.count;
+			*state += input.size();
 		}
 	} else {
 		// other vector type: normalify first
@@ -76,7 +76,7 @@ static void count_simple_update(Vector inputs[], index_t input_count, data_ptr_t
 			});
 		} else {
 			// no NULL values, return all
-			*state += input.count;
+			*state += input.size();
 		}
 	}
 }

@@ -85,11 +85,13 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			// resolve the join keys for the right chunk
 			state->join_keys.Reset();
 			state->rhs_executor.SetChunk(chunk_to_order);
+
+			state->join_keys.SetCardinality(chunk_to_order);
 			for (index_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
 				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
-				if (state->right_orders[i].count < state->join_keys.data[k].count) {
+				if (state->right_orders[i].count < state->join_keys.data[k].size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
 					// this only happens if there are NULL values in the right-hand side
 					// hence we set the has_null to true (this is required for the MARK join)
@@ -110,11 +112,12 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
-			state->child_chunk.Flatten();
+			state->child_chunk.ClearSelectionVector();
 
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();
 			state->lhs_executor.SetChunk(state->child_chunk);
+			state->join_keys.SetCardinality(state->child_chunk);
 			for (index_t k = 0; k < conditions.size(); k++) {
 				state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				// sort by join key
@@ -148,7 +151,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				bool found_match[STANDARD_VECTOR_SIZE] = {false};
 				ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
 				// RHS empty: result is not NULL but just false
-				chunk.data[chunk.column_count - 1].nullmask.reset();
+				chunk.data[chunk.column_count() - 1].nullmask.reset();
 			}
 			state->right_chunk_index = state->right_orders.size();
 			return;
@@ -176,20 +179,19 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->left_position = 0;
 				state->right_position = 0;
 			} else {
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				chunk.SetCardinality(result_count, left_info.result);
+				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
-					chunk.data[i].count = result_count;
-					chunk.data[i].sel_vector = left_info.result;
-					chunk.data[i].Flatten();
+					chunk.data[i].ClearSelectionVector();
 				}
 				// now create a reference to the chunk on the right side
-				for (index_t i = 0; i < right_chunk.column_count; i++) {
-					index_t chunk_entry = state->child_chunk.column_count + i;
+				chunk.SetCardinality(result_count, right.result);
+				for (index_t i = 0; i < right_chunk.column_count(); i++) {
+					index_t chunk_entry = state->child_chunk.column_count() + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-					chunk.data[chunk_entry].count = result_count;
-					chunk.data[chunk_entry].sel_vector = right.result;
-					chunk.data[chunk_entry].Flatten();
+					chunk.data[chunk_entry].ClearSelectionVector();
 				}
+				chunk.SetCardinality(result_count);
 			}
 			break;
 		}

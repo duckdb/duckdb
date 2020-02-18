@@ -54,7 +54,6 @@ public:
 	index_t start = 0;
 
 	index_t linenr = 0;
-	index_t nr_elements = 0;
 
 	TextSearchShiftArray delimiter_search, escape_search, quote_search;
 

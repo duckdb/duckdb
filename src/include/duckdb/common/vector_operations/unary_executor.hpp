@@ -52,6 +52,7 @@ private:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
 	static inline void ExecuteStandard(Vector &input, Vector &result, FUNC fun) {
+		assert(input.SameCardinality(result));
 		auto result_data = (RESULT_TYPE *)result.GetData();
 
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -71,10 +72,8 @@ private:
 			result.vector_type = VectorType::FLAT_VECTOR;
 			result.nullmask = input.nullmask;
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, input.count, input.sel_vector, input.nullmask, fun);
+			    ldata, result_data, input.size(), input.sel_vector(), input.nullmask, fun);
 		}
-		result.sel_vector = input.sel_vector;
-		result.count = input.count;
 	}
 
 public:

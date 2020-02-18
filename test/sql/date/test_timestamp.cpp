@@ -258,17 +258,17 @@ TEST_CASE("Test more timestamp functions", "[timestamp]") {
 
 	auto ds = result->Fetch();
 	REQUIRE(ds->size() == 1);
-	REQUIRE(ds->column_count == 4);
+	REQUIRE(ds->column_count() == 4);
 
-	auto time = Time::FromString(ds->GetVector(0).GetValue(0).str_value);
+	auto time = Time::FromString(ds->GetValue(0, 0).str_value);
 	REQUIRE(time > 0);
 
-	auto date = Date::FromString(ds->GetVector(1).GetValue(0).str_value);
+	auto date = Date::FromString(ds->GetValue(1, 0).str_value);
 	REQUIRE(date > 0);
 
-	auto ts = Timestamp::FromString(ds->GetVector(2).GetValue(0).str_value);
+	auto ts = Timestamp::FromString(ds->GetValue(2, 0).str_value);
 	REQUIRE(ts > 0);
 
-	auto ts2 = Timestamp::FromString(ds->GetVector(3).GetValue(0).str_value);
+	auto ts2 = Timestamp::FromString(ds->GetValue(3, 0).str_value);
 	REQUIRE(ts2 > 0);
 }

@@ -21,16 +21,9 @@ struct RandomBindData : public FunctionData {
 };
 
 static void random_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 0);
+	assert(args.column_count() == 0);
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
-
-	result.count = 1;
-	if (state.root.executor->chunk) {
-		result.count = state.root.executor->chunk->size();
-		result.sel_vector = state.root.executor->chunk->sel_vector;
-	}
-
 	auto result_data = (double *)result.GetData();
 	VectorOperations::Exec(result,
 	                       [&](index_t i, index_t k) { result_data[i] = info.dist(info.context.random_engine); });

@@ -241,7 +241,7 @@ void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
 Value pi_value = Value::DOUBLE(PI);
 
 static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count == 0);
+	assert(args.column_count() == 0);
 	result.Reference(pi_value);
 }
 

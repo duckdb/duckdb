@@ -41,44 +41,35 @@ struct ConjunctionState : public ExpressionState {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ConjunctionState>(expr, root);
-	vector<Expression *> children;
 	for (auto &child : expr.children) {
-		children.push_back(child.get());
+		result->AddChild(child.get());
 	}
-	result->AddIntermediates(children);
 	return move(result);
 }
 
 void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
 	// execute the children
 	for (index_t i = 0; i < expr.children.size(); i++) {
-		Execute(*expr.children[i], state->child_states[i].get(), state->arguments.data[i]);
+		Vector current_result(GetCardinality(), TypeId::BOOL);
+		Execute(*expr.children[i], state->child_states[i].get(), current_result);
 		if (i == 0) {
 			// move the result
-			result.Reference(state->arguments.data[i]);
+			result.Reference(current_result);
 		} else {
-			Vector intermediate(TypeId::BOOL, true, false);
+			Vector intermediate(GetCardinality(), TypeId::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(state->arguments.data[i], result, intermediate);
+				VectorOperations::And(current_result, result, intermediate);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(state->arguments.data[i], result, intermediate);
+				VectorOperations::Or(current_result, result, intermediate);
 				break;
 			default:
 				throw NotImplementedException("Unknown conjunction type!");
 			}
 			result.Reference(intermediate);
 		}
-	}
-}
-
-static void SetChunkSelectionVector(DataChunk &chunk, sel_t *sel_vector, index_t count) {
-	chunk.sel_vector = sel_vector;
-	for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
-		chunk.data[col_idx].count = count;
-		chunk.data[col_idx].sel_vector = sel_vector;
 	}
 }
 
@@ -222,7 +213,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			}
 			if (new_count != current_count) {
 				// disqualify all non-qualifying tuples by updating the selection vector
-				SetChunkSelectionVector(*chunk, result, new_count);
+				chunk->SetCardinality(new_count, result);
 				current_count = new_count;
 			}
 		}
@@ -233,7 +224,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
 		// restore the initial selection vector and count
-		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
+		chunk->SetCardinality(initial_count, initial_sel);
 		return current_count;
 	} else {
 		sel_t *initial_sel = chunk->sel_vector;
@@ -290,7 +281,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			}
 			current_sel = remaining;
 			current_count = remaining_count;
-			SetChunkSelectionVector(*chunk, remaining, remaining_count);
+			chunk->SetCardinality(remaining_count, remaining);
 		}
 
 		// adapt runtime statistics
@@ -298,7 +289,7 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		AdaptRuntimeStatistics(expr, state,
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
-		SetChunkSelectionVector(*chunk, initial_sel, initial_count);
+		chunk->SetCardinality(initial_count, initial_sel);
 		if (result_vector != result && result_count > 0) {
 			memcpy(result, result_vector, result_count * sizeof(sel_t));
 		}

@@ -152,7 +152,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 	}
 	// create a chunk with VARCHAR columns
 	vector<TypeId> types;
-	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
+	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 		types.push_back(TypeId::VARCHAR);
 	}
 	DataChunk cast_chunk;
@@ -164,7 +164,8 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			break;
 		}
 		// cast the columns of the chunk to varchar
-		for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
+		cast_chunk.SetCardinality(state->child_chunk);
+		for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 			if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 				// VARCHAR, just create a reference
 				cast_chunk.data[col_idx].Reference(state->child_chunk.data[col_idx]);
@@ -177,7 +178,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		// now loop over the vectors and output the values
 		VectorOperations::Exec(cast_chunk.data[0], [&](index_t i, index_t k) {
 			// write values
-			for (index_t col_idx = 0; col_idx < state->child_chunk.column_count; col_idx++) {
+			for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 				if (col_idx != 0) {
 					writer.Write(info.delimiter);
 				}
@@ -199,8 +200,8 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 	}
 	writer.Close();
 
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(total));
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(total));
 
 	state->finished = true;
 }

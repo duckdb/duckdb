@@ -68,20 +68,20 @@ TEST_CASE("Sequential delete", "[transactions]") {
 		// check the current count
 		result = connections[i]->Query("SELECT SUM(i) FROM integers");
 		REQUIRE_NO_FAIL(*result);
-		count = result->collection.chunks[0]->data[0].GetValue(0);
+		count = result->collection.chunks[0]->GetValue(0, 0);
 		REQUIRE(count == sum);
 		// delete the elements for this thread
 		REQUIRE_NO_FAIL(connections[i]->Query("DELETE FROM integers WHERE i=" + to_string(i + 1)));
 		// check the updated count
 		result = connections[i]->Query("SELECT SUM(i) FROM integers");
 		REQUIRE_NO_FAIL(*result);
-		count = result->collection.chunks[0]->data[0].GetValue(0);
+		count = result->collection.chunks[0]->GetValue(0, 0);
 		REQUIRE(count == sum - (i + 1) * INSERT_ELEMENTS);
 	}
 	// check the count on the original connection
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE_NO_FAIL(*result);
-	count = result->collection.chunks[0]->data[0].GetValue(0);
+	count = result->collection.chunks[0]->GetValue(0, 0);
 	REQUIRE(count == sum);
 
 	// commit everything
@@ -92,7 +92,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	// check that the count is 0 now
 	result = con.Query("SELECT COUNT(i) FROM integers");
 	REQUIRE_NO_FAIL(*result);
-	count = result->collection.chunks[0]->data[0].GetValue(0);
+	count = result->collection.chunks[0]->GetValue(0, 0);
 	REQUIRE(count == 0);
 }
 
@@ -143,7 +143,7 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	// initial count
 	con.Query("BEGIN TRANSACTION;");
 	auto result = con.Query("SELECT COUNT(*) FROM integers");
-	Value count = result->collection.chunks[0]->data[0].GetValue(0);
+	Value count = result->collection.chunks[0]->GetValue(0, 0);
 	auto start_count = count.GetValue<int64_t>();
 
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
@@ -156,7 +156,7 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 		if (!result->success) {
 			correct[threadnr] = false;
 		} else {
-			Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
+			Value new_count = result->collection.chunks[0]->GetValue(0, 0);
 			if (new_count != start_count - (i + 1)) {
 				correct[threadnr] = false;
 			}
@@ -199,6 +199,6 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	// check that the count is 0 now
 	result = con.Query("SELECT COUNT(i) FROM integers");
 	REQUIRE_NO_FAIL(*result);
-	auto count = result->collection.chunks[0]->data[0].GetValue(0);
+	auto count = result->collection.chunks[0]->GetValue(0, 0);
 	REQUIRE(count == 0);
 }

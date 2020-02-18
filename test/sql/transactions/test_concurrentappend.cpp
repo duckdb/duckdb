@@ -29,12 +29,12 @@ TEST_CASE("Sequential append", "[transactions][.]") {
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
 		result = connections[i]->Query("SELECT COUNT(*) FROM integers");
 		assert(result->collection.count > 0);
-		Value count = result->collection.chunks[0]->data[0].GetValue(0);
+		Value count = result->collection.chunks[0]->GetValue(0, 0);
 		REQUIRE(count == 0);
 		for (size_t j = 0; j < INSERT_ELEMENTS; j++) {
 			connections[i]->Query("INSERT INTO integers VALUES (3)");
 			result = connections[i]->Query("SELECT COUNT(*) FROM integers");
-			Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
+			Value new_count = result->collection.chunks[0]->GetValue(0, 0);
 			REQUIRE(new_count == j + 1);
 			count = new_count;
 		}
@@ -44,7 +44,7 @@ TEST_CASE("Sequential append", "[transactions][.]") {
 		connections[i]->Query("COMMIT;");
 	}
 	result = con.Query("SELECT COUNT(*) FROM integers");
-	Value count = result->collection.chunks[0]->data[0].GetValue(0);
+	Value count = result->collection.chunks[0]->GetValue(0, 0);
 	REQUIRE(count == THREAD_COUNT * INSERT_ELEMENTS);
 }
 
@@ -56,13 +56,13 @@ static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 	// initial count
 	con.Query("BEGIN TRANSACTION;");
 	auto result = con.Query("SELECT COUNT(*) FROM integers");
-	Value count = result->collection.chunks[0]->data[0].GetValue(0);
+	Value count = result->collection.chunks[0]->GetValue(0, 0);
 	auto start_count = count.GetValue<int64_t>();
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		// count should increase by one for every append we do
 		con.Query("INSERT INTO integers VALUES (3)");
 		result = con.Query("SELECT COUNT(*) FROM integers");
-		Value new_count = result->collection.chunks[0]->data[0].GetValue(0);
+		Value new_count = result->collection.chunks[0]->GetValue(0, 0);
 		if (new_count != start_count + i + 1) {
 			correct[threadnr] = false;
 		}

@@ -26,7 +26,7 @@ template <class T> static void sum_simple_update(Vector inputs[], index_t input_
 		return;
 	}
 	if (inputs[0].vector_type == VectorType::CONSTANT_VECTOR) {
-		result *= inputs[0].count;
+		result *= inputs[0].size();
 	}
 	if (IsNullValue<T>(*state)) {
 		*state = result;

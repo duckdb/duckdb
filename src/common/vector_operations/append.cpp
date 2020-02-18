@@ -10,62 +10,48 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T, bool HAS_NULL>
-static void vector_append_function(T *__restrict source, T *__restrict target, index_t count,
-                                   sel_t *__restrict sel_vector, nullmask_t &nullmask, index_t right_offset) {
-	target += right_offset;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-		target[k] = source[i];
-		if (HAS_NULL && IsNullValue<T>(target[k])) {
-			nullmask[right_offset + k] = true;
+template <class T> static void storage_read_loop(Vector &input, Vector &target) {
+	auto source_data = (T *)input.GetData();
+	auto target_data = (T *)target.GetData();
+	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+		target_data[k] = source_data[i];
+		if (IsNullValue<T>(target_data[k])) {
+			target.nullmask[k] = true;
 		}
 	});
 }
 
-template <class T> static void vector_append_loop(Vector &left, Vector &right, bool has_null) {
-	auto ldata = (T *)left.GetData();
-	auto rdata = (T *)right.GetData();
-	if (has_null) {
-		vector_append_function<T, true>(ldata, rdata, left.count, left.sel_vector, right.nullmask, right.count);
-	} else {
-		vector_append_function<T, false>(ldata, rdata, left.count, left.sel_vector, right.nullmask, right.count);
-	}
-	right.count += left.count;
-}
-
-void VectorOperations::AppendFromStorage(Vector &source, Vector &target, bool has_null) {
-	if (source.count == 0)
+void VectorOperations::ReadFromStorage(Vector &source, Vector &target) {
+	assert(source.SameCardinality(target));
+	if (source.size() == 0) {
 		return;
-
-	if (source.count + target.count > STANDARD_VECTOR_SIZE) {
-		throw Exception("Trying to append past STANDARD_VECTOR_SIZE!");
 	}
 
 	switch (source.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		vector_append_loop<int8_t>(source, target, has_null);
+		storage_read_loop<int8_t>(source, target);
 		break;
 	case TypeId::INT16:
-		vector_append_loop<int16_t>(source, target, has_null);
+		storage_read_loop<int16_t>(source, target);
 		break;
 	case TypeId::INT32:
-		vector_append_loop<int32_t>(source, target, has_null);
+		storage_read_loop<int32_t>(source, target);
 		break;
 	case TypeId::INT64:
-		vector_append_loop<int64_t>(source, target, has_null);
+		storage_read_loop<int64_t>(source, target);
 		break;
 	case TypeId::FLOAT:
-		vector_append_loop<float>(source, target, has_null);
+		storage_read_loop<float>(source, target);
 		break;
 	case TypeId::DOUBLE:
-		vector_append_loop<double>(source, target, has_null);
+		storage_read_loop<double>(source, target);
 		break;
 	case TypeId::POINTER:
-		vector_append_loop<uint64_t>(source, target, has_null);
+		storage_read_loop<uint64_t>(source, target);
 		break;
 	case TypeId::VARCHAR:
-		vector_append_loop<const char *>(source, target, has_null);
+		storage_read_loop<const char *>(source, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

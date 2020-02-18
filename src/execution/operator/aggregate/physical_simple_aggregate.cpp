@@ -39,6 +39,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		DataChunk &payload_chunk = state->payload_chunk;
 		payload_chunk.Reset();
 		state->child_executor.SetChunk(state->child_chunk);
+		payload_chunk.SetCardinality(state->child_chunk);
 		for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 			index_t payload_cnt = 0;
@@ -51,7 +52,6 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 					payload_cnt++;
 				}
 			} else {
-				payload_chunk.data[payload_idx + payload_cnt].count = state->child_chunk.size();
 				payload_cnt++;
 			}
 			// perform the actual aggregation
@@ -61,10 +61,11 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		}
 	}
 	// initialize the result chunk with the aggregate values
+	chunk.SetCardinality(1);
 	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		Vector state_vector(Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
+		Vector state_vector(chunk, Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
 		aggregate.function.finalize(state_vector, chunk.data[aggr_idx]);
 	}
 	state->finished = true;

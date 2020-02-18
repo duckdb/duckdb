@@ -98,7 +98,7 @@ void TableDataWriter::CreateSegment(index_t col_idx) {
 }
 
 void TableDataWriter::AppendData(index_t col_idx, Vector &data) {
-	index_t count = data.count;
+	index_t count = data.size();
 	index_t offset = 0;
 	while (offset < count) {
 		index_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);

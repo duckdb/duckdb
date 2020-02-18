@@ -14,32 +14,30 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	auto &info = (StructPackBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	assert(input.column_count == info.stype.child_type.size());
+	assert(input.column_count() == info.stype.child_type.size());
 
 	bool all_const = true;
-	for (size_t i = 0; i < input.column_count; i++) {
+	for (size_t i = 0; i < input.column_count(); i++) {
 		// same holds for this
 		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
-		auto new_child = make_unique<Vector>();
+		auto new_child = make_unique<Vector>(result.cardinality());
 		new_child->Reference(input.data[i]);
 		result.AddChild(move(new_child), info.stype.child_type[i].first);
 		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 	}
-	result.sel_vector = input.data[0].sel_vector;
-	result.count = input.data[0].count;
 	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	SQLType stype (SQLTypeId::STRUCT);
+	SQLType stype(SQLTypeId::STRUCT);
 	set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
 
-	if (expr.arguments.size()  == 0) {
+	if (expr.arguments.size() == 0) {
 		throw Exception("Can't pack nothing into a struct");
 	}
 	for (index_t i = 0; i < expr.children.size(); i++) {
@@ -58,7 +56,6 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 	expr.sql_return_type = stype;
 	return make_unique<StructPackBindData>(stype);
 }
-
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function

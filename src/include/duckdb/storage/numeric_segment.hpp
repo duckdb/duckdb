@@ -21,7 +21,8 @@ public:
 
 public:
 	//! Fetch a single value and append it to the vector
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) override;
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	              index_t result_idx) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
@@ -45,7 +46,7 @@ public:
 	typedef void (*update_function_t)(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base_data, Vector &update);
 	typedef void (*update_info_fetch_function_t)(Transaction &transaction, UpdateInfo *info, Vector &result);
 	typedef void (*update_info_append_function_t)(Transaction &transaction, UpdateInfo *info, index_t idx,
-	                                              Vector &result);
+	                                              Vector &result, index_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t target,
 	                                        Vector &update, row_t *ids, index_t vector_offset);

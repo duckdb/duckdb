@@ -34,7 +34,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 			} else if (id < info->tuples[j]) {
 				// id < the current tuple in info, move to next id
 				i++;
-				if (i == update.count) {
+				if (i == update.size()) {
 					break;
 				}
 			} else {
@@ -59,10 +59,10 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
-	assert(!update.sel_vector);
+	assert(!update.sel_vector());
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
-	for (index_t i = 1; i < update.count; i++) {
+	for (index_t i = 1; i < update.size(); i++) {
 		assert(ids[i] > ids[i - 1]);
 	}
 #endif
@@ -77,7 +77,8 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
-	auto first_id = update.sel_vector ? ids[update.sel_vector[0]] : ids[0];
+	auto usel = update.sel_vector();
+	auto first_id = usel ? ids[usel[0]] : ids[0];
 	index_t vector_index = (first_id - offset) / STANDARD_VECTOR_SIZE;
 	index_t vector_offset = offset + vector_index * STANDARD_VECTOR_SIZE;
 

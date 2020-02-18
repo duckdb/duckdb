@@ -10,125 +10,106 @@
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk() : column_count(0), data(nullptr), sel_vector(nullptr) {
+DataChunk::DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	assert(types.size() > 0);
-	column_count = types.size();
-	data = unique_ptr<Vector[]>(new Vector[types.size()]);
 	for (index_t i = 0; i < types.size(); i++) {
-		data[i].type = types[i];
-		data[i].data = nullptr;
-		data[i].count = 0;
-		data[i].sel_vector = nullptr;
+		data.emplace_back(Vector(*this, types[i], nullptr));
 	}
 }
 
 void DataChunk::Initialize(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
-	index_t size = 0;
-	for (auto &type : types) {
-		size += GetTypeIdSize(type) * STANDARD_VECTOR_SIZE;
-	}
-	if (size > 0) {
-		owned_data = unique_ptr<data_t[]>(new data_t[size]);
-		memset(owned_data.get(), 0, size);
-	}
-
-	auto ptr = owned_data.get();
 	for (index_t i = 0; i < types.size(); i++) {
-		data[i].data = ptr;
-		ptr += GetTypeIdSize(types[i]) * STANDARD_VECTOR_SIZE;
+		data[i].Initialize();
 	}
 }
 
 void DataChunk::Reset() {
-	auto ptr = owned_data.get();
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].data = ptr;
-		data[i].count = 0;
-		data[i].sel_vector = nullptr;
-		data[i].buffer.reset();
-		data[i].auxiliary.reset();
-		data[i].nullmask.reset();
-		ptr += GetTypeIdSize(data[i].type) * STANDARD_VECTOR_SIZE;
+	for (index_t i = 0; i < column_count(); i++) {
+		data[i].Initialize();
 	}
-	sel_vector = nullptr;
+	SetCardinality(0);
 }
 
 void DataChunk::Destroy() {
-	data = nullptr;
-	owned_data.reset();
-	sel_vector = nullptr;
-	column_count = 0;
+	data.clear();
+	SetCardinality(0);
+}
+
+Value DataChunk::GetValue(index_t col_idx, index_t index) const {
+	assert(index < size());
+	return data[col_idx].GetValue(sel_vector ? sel_vector[index] : index);
+}
+
+void DataChunk::SetValue(index_t col_idx, index_t index, Value val) {
+	data[col_idx].SetValue(sel_vector ? sel_vector[index] : index, move(val));
+}
+
+void DataChunk::Reference(DataChunk &chunk) {
+	assert(chunk.column_count() == column_count());
+	SetCardinality(chunk);
+	for (index_t i = 0; i < column_count(); i++) {
+		data[i].Reference(chunk.data[i]);
+	}
 }
 
 void DataChunk::Copy(DataChunk &other, index_t offset) {
-	assert(column_count == other.column_count);
-	other.sel_vector = nullptr;
+	assert(column_count() == other.column_count());
+	assert(other.size() == 0 && !other.sel_vector);
 
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].Copy(other.data[i], offset);
+	for (index_t i = 0; i < column_count(); i++) {
+		VectorOperations::Copy(data[i], other.data[i], offset);
 	}
-}
-
-void DataChunk::Move(DataChunk &other) {
-	other.column_count = column_count;
-	other.data = move(data);
-	other.owned_data = move(owned_data);
-	if (sel_vector) {
-		other.sel_vector = sel_vector;
-		if (sel_vector == owned_sel_vector) {
-			// copy the owned selection vector
-			memcpy(other.owned_sel_vector, owned_sel_vector, STANDARD_VECTOR_SIZE * sizeof(sel_t));
-		}
-	}
-	Destroy();
-}
-
-void DataChunk::Flatten() {
-	Normalify();
-	if (!sel_vector) {
-		return;
-	}
-
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].Flatten();
-	}
-	sel_vector = nullptr;
-}
-
-void DataChunk::Normalify() {
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].Normalify();
-	}
+	other.SetCardinality(size() - offset);
 }
 
 void DataChunk::Append(DataChunk &other) {
 	if (other.size() == 0) {
 		return;
 	}
-	if (column_count != other.column_count) {
+	if (column_count() != other.column_count()) {
 		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
-	for (index_t i = 0; i < column_count; i++) {
-		data[i].Append(other.data[i]);
+	assert(!sel_vector);
+	for (index_t i = 0; i < column_count(); i++) {
+		VectorOperations::Append(other.data[i], data[i]);
+	}
+	SetCardinality(size() + other.size());
+}
+
+void DataChunk::ClearSelectionVector() {
+	Normalify();
+	if (!sel_vector) {
+		return;
+	}
+
+	for (index_t i = 0; i < column_count(); i++) {
+		data[i].ClearSelectionVector();
+	}
+	sel_vector = nullptr;
+}
+
+void DataChunk::Normalify() {
+	for (index_t i = 0; i < column_count(); i++) {
+		data[i].Normalify();
 	}
 }
 
 vector<TypeId> DataChunk::GetTypes() {
 	vector<TypeId> types;
-	for (index_t i = 0; i < column_count; i++) {
+	for (index_t i = 0; i < column_count(); i++) {
 		types.push_back(data[i].type);
 	}
 	return types;
 }
 
 string DataChunk::ToString() const {
-	string retval = "Chunk - [" + to_string(column_count) + " Columns]\n";
-	for (index_t i = 0; i < column_count; i++) {
+	string retval = "Chunk - [" + to_string(column_count()) + " Columns]\n";
+	for (index_t i = 0; i < column_count(); i++) {
 		retval += "- " + data[i].ToString() + "\n";
 	}
 	return retval;
@@ -137,13 +118,13 @@ string DataChunk::ToString() const {
 void DataChunk::Serialize(Serializer &serializer) {
 	// write the count
 	serializer.Write<sel_t>(size());
-	serializer.Write<index_t>(column_count);
-	for (index_t i = 0; i < column_count; i++) {
+	serializer.Write<index_t>(column_count());
+	for (index_t i = 0; i < column_count(); i++) {
 		// write the types
 		serializer.Write<int>((int)data[i].type);
 	}
 	// write the data
-	for (index_t i = 0; i < column_count; i++) {
+	for (index_t i = 0; i < column_count(); i++) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
 			index_t write_size = GetTypeIdSize(type) * size();
@@ -157,7 +138,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 			// we use null-padding to store them
 			auto strings = (const char **)data[i].data;
 			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
-				auto source = strings[j] ? strings[j] : NullValue<const char *>();
+				auto source = !data[i].nullmask[j] ? strings[j] : NullValue<const char *>();
 				serializer.WriteString(source);
 			});
 		}
@@ -166,7 +147,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 
 void DataChunk::Deserialize(Deserializer &source) {
 	auto rows = source.Read<sel_t>();
-	column_count = source.Read<index_t>();
+	index_t column_count = source.Read<index_t>();
 
 	vector<TypeId> types;
 	for (index_t i = 0; i < column_count; i++) {
@@ -174,6 +155,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	}
 	Initialize(types);
 	// now load the column data
+	SetCardinality(rows);
 	for (index_t i = 0; i < column_count; i++) {
 		auto type = data[i].type;
 		if (TypeIsConstantSize(type)) {
@@ -181,9 +163,8 @@ void DataChunk::Deserialize(Deserializer &source) {
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 			source.ReadData(ptr.get(), column_size);
-			Vector v(data[i].type, ptr.get());
-			v.count = rows;
-			VectorOperations::AppendFromStorage(v, data[i]);
+			Vector v(*this, data[i].type, ptr.get());
+			VectorOperations::ReadFromStorage(v, data[i]);
 		} else {
 			auto strings = (const char **)data[i].data;
 			for (index_t j = 0; j < rows; j++) {
@@ -199,13 +180,12 @@ void DataChunk::Deserialize(Deserializer &source) {
 				}
 			}
 		}
-		data[i].count = rows;
 	}
 	Verify();
 }
 
 void DataChunk::MoveStringsToHeap(StringHeap &heap) {
-	for (index_t c = 0; c < column_count; c++) {
+	for (index_t c = 0; c < column_count(); c++) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
 			auto source_strings = (const char **)data[c].GetData();
@@ -234,22 +214,23 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 void DataChunk::Hash(Vector &result) {
 	assert(result.type == TypeId::HASH);
 	VectorOperations::Hash(data[0], result);
-	for (index_t i = 1; i < column_count; i++) {
+	for (index_t i = 1; i < column_count(); i++) {
 		VectorOperations::CombineHash(result, data[i]);
 	}
 }
 
 void DataChunk::Verify() {
 #ifdef DEBUG
+	assert(size() <= STANDARD_VECTOR_SIZE);
 	// verify that all vectors in this chunk have the chunk selection vector
 	sel_t *v = sel_vector;
-	for (index_t i = 0; i < column_count; i++) {
-		assert(data[i].sel_vector == v);
+	for (index_t i = 0; i < column_count(); i++) {
+		assert(data[i].sel_vector() == v);
 		data[i].Verify();
 	}
 	// verify that all vectors in the chunk have the same count
-	for (index_t i = 0; i < column_count; i++) {
-		assert(size() == data[i].count);
+	for (index_t i = 0; i < column_count(); i++) {
+		assert(size() == data[i].size());
 	}
 #endif
 }

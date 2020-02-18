@@ -38,7 +38,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 		throw NotImplementedException("Unimplemented index type");
 	}
 
-	chunk.data[0].count = 0;
+	chunk.SetCardinality(0);
 
 	state->finished = true;
 }

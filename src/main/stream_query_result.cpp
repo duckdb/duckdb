@@ -32,7 +32,7 @@ unique_ptr<DataChunk> StreamQueryResult::Fetch() {
 		return nullptr;
 	}
 	auto chunk = context.Fetch();
-	if (!chunk || chunk->column_count == 0 || chunk->size() == 0) {
+	if (!chunk || chunk->column_count() == 0 || chunk->size() == 0) {
 		Close();
 	}
 	return chunk;

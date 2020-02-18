@@ -65,11 +65,11 @@ public:
 			return true;
 		} else {
 			input.Normalify();
-			if (input.sel_vector) {
-				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.count, input.sel_vector,
+			if (input.sel_vector()) {
+				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, true>(ldata, result, input.size(), input.sel_vector(),
 				                                                      input.nullmask);
 			} else {
-				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.count, input.sel_vector,
+				return ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OP, false>(ldata, result, input.size(), input.sel_vector(),
 				                                                       input.nullmask);
 			}
 		}

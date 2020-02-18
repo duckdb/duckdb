@@ -38,9 +38,7 @@ static void templated_boolean_function_loop(bool *__restrict ldata, bool *__rest
 
 template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result) {
 	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
-	assert(left.count == right.count && left.sel_vector == right.sel_vector);
-	result.count = left.count;
-	result.sel_vector = left.sel_vector;
+	assert(left.SameCardinality(right));
 
 	auto ldata = (bool *)left.GetData();
 	auto rdata = (bool *)right.GetData();
@@ -54,19 +52,21 @@ template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector 
 	} else if (left.vector_type == VectorType::CONSTANT_VECTOR) {
 		// left side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, true, false>(
-		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, true, false>(ldata, rdata, result_data, result.size(),
+		                                                         result.sel_vector(), left.nullmask, right.nullmask,
+		                                                         result.nullmask);
 	} else if (right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// right side is constant, result is regular vector
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, true>(
-		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, true>(ldata, rdata, result_data, result.size(),
+		                                                         result.sel_vector(), left.nullmask, right.nullmask,
+		                                                         result.nullmask);
 	} else {
 		// no constant vectors: perform general loop
-		assert(left.count == right.count);
 		result.vector_type = VectorType::FLAT_VECTOR;
-		templated_boolean_function_loop<OP, NULLOP, false, false>(
-		    ldata, rdata, result_data, result.count, result.sel_vector, left.nullmask, right.nullmask, result.nullmask);
+		templated_boolean_function_loop<OP, NULLOP, false, false>(ldata, rdata, result_data, result.size(),
+		                                                          result.sel_vector(), left.nullmask, right.nullmask,
+		                                                          result.nullmask);
 	}
 }
 

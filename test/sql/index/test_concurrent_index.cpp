@@ -246,7 +246,7 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 		return "Failed initial query: " + result->error;
 	}
 	auto chunk = result->Fetch();
-	Value initial_count = chunk->data[0].GetValue(0);
+	Value initial_count = chunk->GetValue(0, 0);
 	for (int32_t i = 0; i < 50; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
 		if (!result->success) {

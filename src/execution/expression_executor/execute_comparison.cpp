@@ -8,14 +8,15 @@ using namespace std;
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
-	result->AddIntermediates({expr.left.get(), expr.right.get()});
+	result->AddChild(expr.left.get());
+	result->AddChild(expr.right.get());
 	return result;
 }
 
 void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, Vector &result) {
 	// resolve the children
-	auto &left = state->arguments.data[0];
-	auto &right = state->arguments.data[1];
+	Vector left(GetCardinality(), expr.left->return_type);
+	Vector right(GetCardinality(), expr.right->return_type);
 	Execute(*expr.left, state->child_states[0].get(), left);
 	Execute(*expr.right, state->child_states[1].get(), right);
 
@@ -47,8 +48,8 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 
 index_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]) {
 	// resolve the children
-	auto &left = state->arguments.data[0];
-	auto &right = state->arguments.data[1];
+	Vector left(GetCardinality(), expr.left->return_type);
+	Vector right(GetCardinality(), expr.right->return_type);
 	Execute(*expr.left, state->child_states[0].get(), left);
 	Execute(*expr.right, state->child_states[1].get(), right);
 

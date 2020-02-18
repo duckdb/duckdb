@@ -47,11 +47,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		// nothing was filtered: skip adding any selection vectors
 		return;
 	}
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count = result_count;
-		chunk.data[i].sel_vector = chunk.owned_sel_vector;
-	}
-	chunk.sel_vector = chunk.owned_sel_vector;
+	chunk.SetCardinality(result_count, chunk.owned_sel_vector);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {

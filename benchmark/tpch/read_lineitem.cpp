@@ -17,7 +17,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	// create the CSV file
 	auto result = state->conn.Query("COPY tpch.lineitem TO 'lineitem.csv' DELIMITER '|' HEADER");
 	assert(result->success);
-	count = result->collection.chunks[0]->data[0].GetValue(0).GetValue<int64_t>();
+	count = result->collection.chunks[0]->GetValue(0, 0).GetValue<int64_t>();
 	// delete the database
 	state->conn.Query("DROP SCHEMA tpch CASCADE");
 	// create the empty schema to load into
@@ -35,7 +35,7 @@ string VerifyResult(QueryResult *result) override {
 		return result->error;
 	}
 	auto &materialized = (MaterializedQueryResult &)*result;
-	auto expected_count = materialized.collection.chunks[0]->data[0].GetValue(0).GetValue<int64_t>();
+	auto expected_count = materialized.collection.chunks[0]->GetValue(0, 0).GetValue<int64_t>();
 	if (expected_count != count) {
 		return StringUtil::Format("Count mismatch, expected %lld elements but got %lld", count, expected_count);
 	}
@@ -55,7 +55,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	// create the CSV file
 	auto result = state->conn.Query("COPY tpch.lineitem TO 'lineitem_unicode.csv' DELIMITER '🦆' HEADER");
 	assert(result->success);
-	count = result->collection.chunks[0]->data[0].GetValue(0).GetValue<int64_t>();
+	count = result->collection.chunks[0]->GetValue(0, 0).GetValue<int64_t>();
 	// delete the database
 	state->conn.Query("DROP SCHEMA tpch CASCADE");
 	// create the empty schema to load into
@@ -73,7 +73,7 @@ string VerifyResult(QueryResult *result) override {
 		return result->error;
 	}
 	auto &materialized = (MaterializedQueryResult &)*result;
-	auto expected_count = materialized.collection.chunks[0]->data[0].GetValue(0).GetValue<int64_t>();
+	auto expected_count = materialized.collection.chunks[0]->GetValue(0, 0).GetValue<int64_t>();
 	if (expected_count != count) {
 		return StringUtil::Format("Count mismatch, expected %lld elements but got %lld", count, expected_count);
 	}

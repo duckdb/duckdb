@@ -71,7 +71,8 @@ public:
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, index_t vector_index, Vector &result) = 0;
 	//! Fetch a value of the specific row id and append it to the result
-	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result) = 0;
+	virtual void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
+	                      index_t result_idx) = 0;
 
 	//! Perform an update within the segment
 	virtual void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) = 0;

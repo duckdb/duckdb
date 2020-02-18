@@ -47,6 +47,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 		state->left_position = 0;
 		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		state->child_chunk.Normalify();
 	}
 
 	if (state->left_position >= state->child_chunk.size()) {
@@ -57,15 +58,15 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 	auto &right_chunk = *state->right_data.chunks[state->right_position];
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
-	for (index_t i = 0; i < left_chunk.column_count; i++) {
+	chunk.SetCardinality(right_chunk.size());
+	for (index_t i = 0; i < left_chunk.column_count(); i++) {
 		// first duplicate the values of the left side
-		auto lvalue = left_chunk.data[i].GetValue(state->left_position);
+		auto lvalue = left_chunk.GetValue(i, state->left_position);
 		chunk.data[i].Reference(lvalue);
-		chunk.data[i].count = right_chunk.size();
 	}
-	for (index_t i = 0; i < right_chunk.column_count; i++) {
+	for (index_t i = 0; i < right_chunk.column_count(); i++) {
 		// now create a reference to the vectors of the right chunk
-		chunk.data[left_chunk.column_count + i].Reference(right_chunk.data[i]);
+		chunk.data[left_chunk.column_count() + i].Reference(right_chunk.data[i]);
 	}
 
 	// for the next iteration, move to the next position on the left side
@@ -79,6 +80,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 			state->right_position = 0;
 			// move to the next chunk on the left side
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			state->child_chunk.Normalify();
 		}
 	}
 }

@@ -27,6 +27,7 @@ static inline void templated_inplace_loop_function(LEFT_TYPE *__restrict ldata, 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_loop(Vector &input, Vector &result) {
 	assert(input.type == result.type);
 	assert(result.vector_type == VectorType::FLAT_VECTOR);
+	assert(input.SameCardinality(result));
 
 	auto result_data = (RESULT_TYPE *)result.GetData();
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -35,18 +36,16 @@ template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_l
 		if (input.nullmask[0]) {
 			result.nullmask.set();
 		} else {
-			templated_inplace_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result_data, result.count,
-			                                                                  result.sel_vector);
+			templated_inplace_loop_function<LEFT_TYPE, RESULT_TYPE, OP, true>(ldata, result_data, result.size(),
+			                                                                  result.sel_vector());
 		}
 	} else {
 		input.Normalify();
 		auto ldata = (LEFT_TYPE *)input.GetData();
-		assert(input.count == result.count);
-		assert(result.sel_vector == input.sel_vector);
 		// OR nullmasks together
 		result.nullmask = input.nullmask | result.nullmask;
-		templated_inplace_loop_function<LEFT_TYPE, RESULT_TYPE, OP, false>(ldata, result_data, input.count,
-		                                                                   input.sel_vector);
+		templated_inplace_loop_function<LEFT_TYPE, RESULT_TYPE, OP, false>(ldata, result_data, input.size(),
+		                                                                   input.sel_vector());
 	}
 }
 

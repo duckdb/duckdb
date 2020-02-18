@@ -450,7 +450,8 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	if (source_type == target_type) {
 		return Copy();
 	}
-	Vector input, result;
+	VectorCardinality cardinality(1);
+	Vector input(cardinality), result(cardinality);
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
 	VectorOperations::Cast(input, result, source_type, target_type);

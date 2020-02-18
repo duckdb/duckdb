@@ -56,7 +56,7 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result);
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx);
 
 private:
 	//! Append a transient segment
