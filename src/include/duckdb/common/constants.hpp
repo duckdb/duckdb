@@ -33,8 +33,8 @@ using std::vector;
 #define STANDARD_VECTOR_SIZE 1024
 #endif
 
-#if (STANDARD_VECTOR_SIZE < 16) || ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
-#error Vector size should be a power of two and bigger than or equal to 16
+#if (STANDARD_VECTOR_SIZE < 8) || ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
+#error Vector size should be a power of two and bigger than or equal to 8
 #endif
 
 //! a saner size_t for loop indices etc

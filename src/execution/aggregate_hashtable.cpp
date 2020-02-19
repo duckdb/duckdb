@@ -85,7 +85,7 @@ SuperLargeHashTable::~SuperLargeHashTable() {
 }
 
 void SuperLargeHashTable::CallDestructors(Vector &state_vector) {
-	if (state_vector.size() < 0) {
+	if (state_vector.size() == 0) {
 		return;
 	}
 	for(index_t i = 0; i < aggregates.size(); i++) {

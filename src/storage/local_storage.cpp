@@ -73,6 +73,12 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 				sel_vector[new_count++] = i;
 			}
 		}
+		if (new_count == 0 && count > 0) {
+			// all entries in this chunk were deleted: continue to next chunk
+			state.chunk_index++;
+			Scan(state, column_ids, result);
+			return;
+		}
 		count = new_count;
 	}
 
