@@ -13,31 +13,43 @@
 using namespace duckdb;
 using namespace std;
 
+SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+					vector<BoundAggregateExpression *> bindings, bool parallel) :
+		SuperLargeHashTable(initial_capacity, move(group_types), move(payload_types), AggregateObject::CreateAggregateObjects(move(bindings)), parallel) {
+}
+
+vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
+	vector<AggregateObject> aggregates;
+	for(auto &binding : bindings) {
+		auto payload_size = binding->function.state_size(binding->return_type);
+		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size, binding->distinct, binding->return_type));
+	}
+	return aggregates;
+}
+
 SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
-                                         vector<TypeId> payload_types, vector<BoundAggregateExpression *> bindings,
+                                         vector<TypeId> payload_types, vector<AggregateObject> aggregate_objects,
                                          bool parallel)
-    : aggregates(move(bindings)), group_types(group_types), payload_types(payload_types), group_width(0),
+    : aggregates(move(aggregate_objects)), group_types(group_types), payload_types(payload_types), group_width(0),
       payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
 	// HT tuple layout is as follows:
-	// [FLAG][NULLMASK][GROUPS][PAYLOAD][COUNT]
+	// [FLAG][GROUPS][PAYLOAD]
 	// [FLAG] is the state of the tuple in memory
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregate states)
-	// [COUNT] is an 8-byte count for each element
 	for (index_t i = 0; i < group_types.size(); i++) {
 		group_width += GetTypeIdSize(group_types[i]);
 	}
 	for (index_t i = 0; i < aggregates.size(); i++) {
-		payload_width += aggregates[i]->function.state_size(aggregates[i]->return_type);
+		payload_width += aggregates[i].payload_size;
 	}
 	empty_payload_data = unique_ptr<data_t[]>(new data_t[payload_width]);
 	// initialize the aggregates to the NULL value
 	auto pointer = empty_payload_data.get();
 	for (index_t i = 0; i < aggregates.size(); i++) {
-		auto aggr = aggregates[i];
-		auto return_type = aggregates[i]->return_type;
-		aggr->function.initialize(pointer, return_type);
-		pointer += aggr->function.state_size(return_type);
+		auto &aggr = aggregates[i];
+		aggr.function.initialize(pointer, aggr.return_type);
+		pointer += aggr.payload_size;
 	}
 
 	// FIXME: this always creates this vector, even if no distinct if present.
@@ -47,8 +59,8 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 	// create additional hash tables for distinct aggrs
 	index_t payload_idx = 0;
 	for (index_t i = 0; i < aggregates.size(); i++) {
-		auto aggr = aggregates[i];
-		if (aggr->distinct) {
+		auto &aggr = aggregates[i];
+		if (aggr.distinct) {
 			// group types plus aggr return type
 			vector<TypeId> distinct_group_types(group_types);
 			vector<TypeId> distinct_payload_types;
@@ -57,10 +69,11 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
 			                                                      distinct_payload_types, distinct_aggregates);
 		}
-		if (aggr->children.size())
-			payload_idx += aggr->children.size();
-		else
+		if (aggr.child_count) {
+			payload_idx += aggr.child_count;
+		} else {
 			payload_idx += 1;
+		}
 	}
 
 	tuple_size = FLAG_SIZE + (group_width + payload_width);
@@ -68,6 +81,54 @@ SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId
 }
 
 SuperLargeHashTable::~SuperLargeHashTable() {
+	Destroy();
+}
+
+void SuperLargeHashTable::CallDestructors(Vector &state_vector) {
+	if (state_vector.size() < 0) {
+		return;
+	}
+	for(index_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = aggregates[i];
+		if (aggr.function.destructor) {
+			aggr.function.destructor(state_vector);
+		}
+		// move to the next aggregate state
+		VectorOperations::AddInPlace(state_vector, aggr.payload_size);
+	}
+}
+
+void SuperLargeHashTable::Destroy() {
+	if (!data) {
+		return;
+	}
+	// check if there is a destructor
+	bool has_destructor = false;
+	for(index_t i = 0; i < aggregates.size(); i++) {
+		if (aggregates[i].function.destructor) {
+			has_destructor = true;
+		}
+	}
+	if (!has_destructor) {
+		return;
+	}
+	// there are aggregates with destructors: loop over the hash table
+	// and call the destructor method for each of the aggregates
+	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
+	VectorCardinality state_cardinality(0);
+	Vector state_vector(state_cardinality, TypeId::POINTER, (data_ptr_t) data_pointers);
+	for (data_ptr_t ptr = data, end = data + capacity * tuple_size; ptr < end; ptr += tuple_size) {
+		if (*ptr == FULL_CELL) {
+			// found entry
+			data_pointers[state_cardinality.count++] = ptr + FLAG_SIZE + group_width;
+			if (state_cardinality.count == STANDARD_VECTOR_SIZE) {
+				// vector is full: call the destructors
+				CallDestructors(state_vector);
+				state_cardinality.count = 0;
+			}
+		}
+	}
+	CallDestructors(state_vector);
 }
 
 void SuperLargeHashTable::Resize(index_t size) {
@@ -137,7 +198,7 @@ void SuperLargeHashTable::Resize(index_t size) {
 		this->data = move(new_table->data);
 		this->owned_data = move(new_table->owned_data);
 		this->capacity = new_table->capacity;
-
+		new_table->data = nullptr;
 	} else {
 		data = new data_t[size * tuple_size];
 		owned_data = unique_ptr<data_t[]>(data);
@@ -169,8 +230,8 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		assert(payload.column_count() > payload_idx);
 
 		// for any entries for which a group was found, update the aggregate
-		auto aggr = aggregates[aggr_idx];
-		if (aggr->distinct) {
+		auto &aggr = aggregates[aggr_idx];
+		if (aggr.distinct) {
 			assert(groups.sel_vector == payload.sel_vector);
 
 			// construct chunk for secondary hash table probing
@@ -213,16 +274,16 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			distinct_payload.Verify();
 			distinct_addresses.Verify();
 
-			aggr->function.update(&distinct_payload, 1, distinct_addresses);
+			aggr.function.update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
 		} else {
-			auto input_count = max(size_t(1), aggr->children.size());
-			aggr->function.update(&payload.data[payload_idx], input_count, addresses);
+			auto input_count = max((index_t) 1, (index_t) aggr.child_count);
+			aggr.function.update(&payload.data[payload_idx], input_count, addresses);
 			payload_idx += input_count;
 		}
 
 		// move to the next aggregate
-		VectorOperations::AddInPlace(addresses, aggr->function.state_size(aggr->return_type));
+		VectorOperations::AddInPlace(addresses, aggr.payload_size);
 	}
 }
 
@@ -247,8 +308,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(payload_types[aggr_idx] == TypeId::INT64);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx]);
-		VectorOperations::AddInPlace(addresses,
-		                             aggregates[aggr_idx]->function.state_size(aggregates[aggr_idx]->return_type));
+		VectorOperations::AddInPlace(addresses, aggregates[aggr_idx].payload_size);
 	}
 }
 
@@ -446,8 +506,9 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 	data_ptr_t ptr;
 	data_ptr_t start = data + scan_position;
 	data_ptr_t end = data + capacity * tuple_size;
-	if (start >= end)
+	if (start >= end) {
 		return 0;
+	}
 
 	Vector addresses(groups, TypeId::POINTER);
 	auto data_pointers = (data_ptr_t *)addresses.GetData();
@@ -474,10 +535,10 @@ index_t SuperLargeHashTable::Scan(index_t &scan_position, DataChunk &groups, Dat
 
 	for (index_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[i];
-		auto aggr = aggregates[i];
-		aggr->function.finalize(addresses, target);
+		auto &aggr = aggregates[i];
+		aggr.function.finalize(addresses, target);
 
-		VectorOperations::AddInPlace(addresses, aggr->function.state_size(target.type));
+		VectorOperations::AddInPlace(addresses, aggr.payload_size);
 	}
 	scan_position = ptr - data;
 	return entry;

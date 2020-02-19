@@ -94,4 +94,6 @@ struct Storage {
 	constexpr static int FILE_HEADER_SIZE = 4096;
 };
 
+uint64_t NextPowerOfTwo(uint64_t v);
+
 } // namespace duckdb

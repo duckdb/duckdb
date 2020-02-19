@@ -243,18 +243,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	SerializeChunk(hash_chunk, hash_locations);
 }
 
-uint64_t NextPowerOfTwo(uint64_t v) {
-	v--;
-	v |= v >> 1;
-	v |= v >> 2;
-	v |= v >> 4;
-	v |= v >> 8;
-	v |= v >> 16;
-	v |= v >> 32;
-	v++;
-	return v;
-}
-
 void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
 	assert(hashes.type == TypeId::HASH);
 
