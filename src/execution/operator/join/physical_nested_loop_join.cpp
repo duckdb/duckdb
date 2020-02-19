@@ -126,7 +126,9 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		} else {
 			// disqualify tuples from the RHS that have NULL values
 			for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
-				state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
+				if (RemoveNullValues(*state->right_chunks.chunks[i])) {
+					state->has_null = true;
+				}
 			}
 			// initialize the chunks for the join conditions
 			state->left_join_condition.Initialize(condition_types);
