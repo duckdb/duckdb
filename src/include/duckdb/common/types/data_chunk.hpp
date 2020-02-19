@@ -51,6 +51,7 @@ public:
 		return data.size();
 	}
 	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
+		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
 		this->sel_vector = sel_vector;
 	}

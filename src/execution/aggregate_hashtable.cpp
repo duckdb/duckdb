@@ -74,6 +74,9 @@ void SuperLargeHashTable::Resize(index_t size) {
 	if (size <= capacity) {
 		throw Exception("Cannot downsize a hash table!");
 	}
+	if (size < STANDARD_VECTOR_SIZE) {
+		size = STANDARD_VECTOR_SIZE;
+	}
 	// size needs to be a power of 2
 	assert((size & (size - 1)) == 0);
 	bitmask = size - 1;
