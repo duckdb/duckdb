@@ -6,8 +6,8 @@
 using namespace duckdb;
 using namespace std;
 
-PreparedStatement::PreparedStatement(ClientContext *context, string name, PreparedStatementData &data, index_t n_param)
-    : context(context), name(name), success(true), is_invalidated(false), n_param(n_param) {
+PreparedStatement::PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data, index_t n_param)
+    : context(context), name(name), query(query), success(true), is_invalidated(false), n_param(n_param) {
 	this->type = data.statement_type;
 	this->types = data.sql_types;
 	this->names = data.names;
@@ -33,5 +33,5 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 		    "Cannot execute prepared statement: underlying database or connection has been destroyed");
 	}
 	assert(context);
-	return context->Execute(name, values, allow_stream_result);
+	return context->Execute(name, values, allow_stream_result, query);
 }

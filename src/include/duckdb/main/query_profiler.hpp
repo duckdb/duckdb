@@ -20,6 +20,7 @@
 
 namespace duckdb {
 class PhysicalOperator;
+class SQLStatement;
 
 //! The QueryProfiler can be used to measure timings of queries
 class QueryProfiler {
@@ -49,7 +50,7 @@ private:
 	static string RenderTree(TreeNode &node);
 
 public:
-	QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false) {
+	QueryProfiler() : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), running(false) {
 	}
 
 	void Enable() {
@@ -64,7 +65,7 @@ public:
 		return enabled;
 	}
 
-	void StartQuery(string query);
+	void StartQuery(string query, SQLStatement &statement);
 	void EndQuery();
 
 	void StartPhase(string phase);
@@ -88,6 +89,8 @@ public:
 private:
 	//! Whether or not query profiling is enabled
 	bool enabled;
+	//! Whether or not the query profiler is running
+	bool running;
 
 	//! The root of the query tree
 	unique_ptr<TreeNode> root;
