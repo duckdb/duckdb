@@ -14,10 +14,11 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 	auto &vec = input.data[0];
 
 	vec.Verify();
-	if (info.index >= vec.GetChildren().size()) {
+	auto& children = vec.GetStructEntries();
+	if (info.index >= children.size()) {
 		throw Exception("Not enough struct entries for struct_extract");
 	}
-	auto& child = vec.GetChildren()[info.index];
+	auto& child = children[info.index];
 	if (child.first != info.key || child.second->type != info.type) {
 		throw Exception("Struct key or type mismatch");
 	}

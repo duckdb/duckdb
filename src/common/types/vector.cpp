@@ -57,15 +57,6 @@ void Vector::Reference(Vector &other) {
 	data = other.data;
 	type = other.type;
 	nullmask = other.nullmask;
-	if (type == TypeId::STRUCT || type == TypeId::LIST) {
-		for (size_t i = 0; i < other.children.size(); i++) {
-			auto &other_child_vec = other.children[i].second;
-			auto child_ref = make_unique<Vector>(vcardinality);
-			child_ref->type = other_child_vec->type;
-			child_ref->Reference(*other_child_vec.get());
-			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
-		}
-	}
 }
 
 void Vector::Slice(Vector &other, index_t offset) {
@@ -133,19 +124,23 @@ void Vector::SetValue(index_t index, Value val) {
 		break;
 	}
 	case TypeId::STRUCT: {
+		if (!auxiliary || GetStructEntries().size() == 0) {
+			for (size_t i = 0; i < val.struct_value.size(); i++) {
+				auto &struct_child = val.struct_value[i];
+				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
+				cv->vector_type = vector_type;
+				AddStructEntry(struct_child.first, move(cv));
+			}
+		}
+
+		auto& children = GetStructEntries();
+		assert(children.size() == val.struct_value.size());
+
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
 			auto &struct_child = val.struct_value[i];
 			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
-			if (i == children.size()) {
-				// TODO should this child vector already exist here?
-				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
-				cv->vector_type = vector_type;
-				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
-			}
 			auto &vec_child = children[i];
-			if (vec_child.first != struct_child.first) {
-				throw Exception("Struct child name mismatch");
-			}
+			assert (vec_child.first == struct_child.first);
 			vec_child.second->SetValue(index, struct_child.second);
 		}
 	} break;
@@ -222,21 +217,23 @@ Value Vector::GetValue(index_t index) const {
 		Value ret(TypeId::STRUCT);
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
-		for (auto &struct_child : children) {
+		for (auto &struct_child : GetStructEntries()) {
 			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
 	}
 	case TypeId::LIST: {
-		Value ret(TypeId::LIST);
-		ret.is_null = false;
-		// get offset and length
-		auto offlen = ((list_entry_t *)data)[index];
-		assert(children.size() == 1);
-		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
-			ret.list_value.push_back(children[0].second->GetValue(i));
-		}
-		return ret;
+		assert(0);
+		break;
+//		Value ret(TypeId::LIST);
+//		ret.is_null = false;
+//		// get offset and length
+//		auto offlen = ((list_entry_t *)data)[index];
+//		assert(children.size() == 1);
+//		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+//			ret.list_value.push_back(children[0].second->GetValue(i));
+//		}
+//		return ret;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for value access");
@@ -541,7 +538,7 @@ void Vector::Normalify() {
 			break;
 		}
 		case TypeId::STRUCT: {
-			for (auto &child : GetChildren()) {
+			for (auto &child : GetStructEntries()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->Normalify();
 			}
@@ -609,20 +606,13 @@ void Vector::Verify() {
 			});
 		}
 	}
-	if (type == TypeId::LIST) {
-		assert(children.size() == 1);
-	}
-	if (type == TypeId::STRUCT) {
-		assert(children.size() > 0);
-		for (auto &v : GetChildren()) {
-			assert(SameCardinality(*v.second));
-		}
-// TODO moar
-	}
-#endif
+	// TODO verify list and struct
+	#endif
 }
 
 const char *Vector::AddString(const char *data, index_t len) {
+	assert(type == TypeId::VARCHAR);
+
 	if (!auxiliary) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -640,6 +630,9 @@ const char *Vector::AddString(const string &data) {
 }
 
 void Vector::AddHeapReference(Vector &other) {
+	assert(type == TypeId::VARCHAR);
+	assert(other.type == TypeId::VARCHAR);
+
 	if (!other.auxiliary) {
 		return;
 	}
@@ -652,14 +645,22 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>> &Vector::GetChildren() {
-	assert(type == TypeId::STRUCT || type == TypeId::LIST);
-	return children;
+child_list_t<unique_ptr<Vector>> &Vector::GetStructEntries() const {
+	assert(type == TypeId::STRUCT);
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	return ((VectorStructBuffer*) auxiliary.get())->GetChildren();
 }
 
-void Vector::AddChild(unique_ptr<Vector> vector, string name) {
-	assert(type == TypeId::STRUCT || type == TypeId::LIST);
-	children.push_back(make_pair(name, move(vector)));
+void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
+	// TODO asser that an entry with this name does not already exist
+	assert(type == TypeId::STRUCT);
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStructBuffer>();
+	}
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	((VectorStructBuffer*) auxiliary.get())->AddChild(name, move(vector));
 }
 
 } // namespace duckdb

@@ -7,14 +7,15 @@ namespace duckdb {
 
 
 static index_t list_payload_size(TypeId return_type) {
-	return sizeof(Vector);
+	return sizeof(FlatVector);
 }
 
 // NB: the result of this is copied around
 static void list_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, sizeof(Vector));
-	auto v = (Vector *)payload;
+	memset(payload, 0, sizeof(FlatVector));
+	auto v = (FlatVector *)payload;
 	v->type = TypeId::INVALID;
+	v->SetCount(0);
 }
 
 static void list_update(Vector inputs[], index_t input_count, Vector &state) {
@@ -43,7 +44,7 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 
 static void list_combine(Vector &state, Vector &combined) {
 	throw Exception("eek");
-	// TODO should be rather straightforward, copy vectors together
+	// TODO should be rather straightforward, copy vectors together.
 }
 
 static void list_finalize(Vector &state, Vector &result) {

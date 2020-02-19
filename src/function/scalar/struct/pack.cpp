@@ -16,16 +16,13 @@ static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &re
 	// this should never happen if the binder below is sane
 	assert(input.column_count() == info.stype.child_type.size());
 
-	result.GetChildren().clear(); // FIXME
-	assert(result.GetChildren().size() == 0);
-
 	bool all_const = true;
 	for (size_t i = 0; i < input.column_count(); i++) {
 		// same holds for this
 		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
 		auto new_child = make_unique<Vector>(result.cardinality());
 		new_child->Reference(input.data[i]);
-		result.AddChild(move(new_child), info.stype.child_type[i].first);
+		result.AddStructEntry(info.stype.child_type[i].first, move(new_child));
 		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}

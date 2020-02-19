@@ -139,12 +139,12 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 		case TypeId::STRUCT: {
 			// the main vector only has a nullmask, so set that with offset
 			// recursively apply to children
-			auto &source_children = source.GetChildren();
+			auto &source_children = source.GetStructEntries();
 			for (auto &child : source_children) {
 				auto child_copy = make_unique<Vector>(target.cardinality(), child.second->type);
 
 				VectorOperations::Copy(*child.second, *child_copy, offset);
-				target.AddChild(move(child_copy), child.first);
+				target.AddStructEntry(child.first, move(child_copy));
 			}
 		} break;
 		case TypeId::LIST: {
@@ -205,8 +205,8 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 		} break;
 		case TypeId::STRUCT: {
 			// recursively apply to children
-			auto &source_children = source.GetChildren();
-			auto &target_children = target.GetChildren();
+			auto &source_children = source.GetStructEntries();
+			auto &target_children = target.GetStructEntries();
 			assert(source_children.size() == target_children.size());
 			for (size_t i = 0; i < source_children.size(); i++) {
 				assert(target_children[i].first == target_children[i].first);

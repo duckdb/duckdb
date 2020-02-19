@@ -70,7 +70,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			auto &v = state->list_data.data[col_idx];
 
 			assert(v.type == TypeId::LIST);
-			assert(v.GetChildren().size() == 1);
+			//assert(v.GetChildren().size() == 1);
 
 			// TODO deal with NULL values here!
 
@@ -97,14 +97,15 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		chunk.data[target_col].nullmask.all();
 		auto &v = state->list_data.data[col_idx];
 		auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
-		auto &child_v = v.GetChildren()[0].second;
-
-		for (index_t i = 0; i < list_entry.length; i++) {
-			chunk.data[target_col].SetValue(i, child_v->GetValue(list_entry.offset + i));
-		}
-		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
-			chunk.data[target_col].SetValue(i, Value());
-		}
+		assert(0);
+//		auto &child_v = v.GetChildren()[0].second;
+//
+//		for (index_t i = 0; i < list_entry.length; i++) {
+//			chunk.data[target_col].SetValue(i, child_v->GetValue(list_entry.offset + i));
+//		}
+//		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
+//			chunk.data[target_col].SetValue(i, Value());
+//		}
 	}
 
 	state->parent_position++;

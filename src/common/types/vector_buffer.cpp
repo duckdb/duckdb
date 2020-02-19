@@ -1,3 +1,4 @@
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -21,3 +22,14 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(TypeId type) {
 
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
 }
+
+VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+}
+
+VectorStructBuffer::~VectorStructBuffer() {}
+
+VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
+}
+
+
+VectorListBuffer::~VectorListBuffer() {}

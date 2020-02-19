@@ -36,6 +36,9 @@ public:
 	}
 };
 
+class VectorStructBuffer;
+class VectorListBuffer;
+
 //!  Vector of values of a specified TypeId.
 /*!
   The vector class is the smallest unit of data used by the execution engine. It
@@ -152,8 +155,8 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
-	child_list_t<unique_ptr<Vector>> &GetChildren();
-	void AddChild(unique_ptr<Vector> vector, string name = "");
+	child_list_t<unique_ptr<Vector>> &GetStructEntries() const;
+	void AddStructEntry(string name, unique_ptr<Vector> vector);
 
 	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
 	//! the vector, and returns the element that is physically in location [index].
@@ -172,8 +175,7 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
-	//! child vectors used for nested data
-	child_list_t<unique_ptr<Vector>> children;
+
 };
 
 class FlatVector : public Vector {
@@ -196,5 +198,6 @@ public:
 protected:
 	VectorCardinality owned_cardinality;
 };
+
 
 } // namespace duckdb
