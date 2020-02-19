@@ -14,6 +14,7 @@ using namespace std;
 // TODO add boolean ops
 // TODO add null checks
 
+#if STANDARD_VECTOR_SIZE >= 8
 TEST_CASE("Casting vectors", "[vector_ops]") {
 	vector<TypeId> types{TypeId::BOOL,  TypeId::INT8,  TypeId::INT16,  TypeId::INT32,
 	                     TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE, TypeId::VARCHAR};
@@ -162,7 +163,7 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 }
 
 static void require_generate(TypeId t) {
-	VectorCardinality cardinality(8);
+	VectorCardinality cardinality(7);
 	Vector v(cardinality, t);
 	VectorOperations::GenerateSequence(v, 42, 1);
 	for (size_t i = 0; i < v.size(); i++) {
@@ -324,3 +325,4 @@ TEST_CASE("Arithmetic operations on vectors", "[vector_ops]") {
 	require_mod(TypeId::INT64);
 	require_mod_double();
 }
+#endif
