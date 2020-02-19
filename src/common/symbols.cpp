@@ -182,7 +182,6 @@ template class std::vector<SQLType>;
 
 template struct std::atomic<uint64_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;
-template class std::bitset<STORAGE_CHUNK_SIZE>;
 template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
 template class std::stack<PhysicalOperator *>;
 

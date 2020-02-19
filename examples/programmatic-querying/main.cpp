@@ -30,7 +30,7 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 	}
 
 	// generate data for two output columns
-	size_t this_rows = std::min(data.nrow, (size_t)1024);
+	size_t this_rows = std::min(data.nrow, (size_t)STANDARD_VECTOR_SIZE);
 	data.nrow -= this_rows;
 
 	auto int_data = (int32_t *)output.data[0].GetData();
