@@ -167,6 +167,23 @@ matrix:
 
 
     - os: linux
+      dist: bionic
+      name: GCC 9 (Vector Sizes)
+      python: 3.7
+
+      addons:
+        apt:
+          packages:
+            - g++-9 python3.7
+      env:
+        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+      before_install:
+        - eval "${MATRIX_EVAL}"
+      script:
+        - python3 scripts/test_vector_sizes.py
+
+
+    - os: linux
       dist: xenial
       name: Code Coverage
 

@@ -7,10 +7,6 @@ if(NOT MSVC)
     )
 endif()
 
-if (STANDARD_VECTOR_SIZE)
-  add_definitions("-DSTANDARD_VECTOR_SIZE=${STANDARD_VECTOR_SIZE}")
-endif()
-
 if(AMALGAMATION_BUILD)
 
   if(WIN32)
