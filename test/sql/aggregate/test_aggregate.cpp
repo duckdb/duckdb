@@ -223,6 +223,9 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	result = con.Query("SELECT 1, STRING_AGG(x, ',') FROM strings GROUP BY 1 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(expected_large_value)}));
+
+	// now test exception in the middle of an aggregate
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)"));
 }
 
 TEST_CASE("Test AVG operator", "[aggregate]") {
