@@ -33,7 +33,7 @@ using std::vector;
 #define STANDARD_VECTOR_SIZE 1024
 #endif
 
-#if (STANDARD_VECTOR_SIZE < 128) || ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
+#if (STANDARD_VECTOR_SIZE < 64) || ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
 #error Vector size should be a power of two and bigger than or equal to 128
 #endif
 

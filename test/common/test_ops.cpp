@@ -162,7 +162,7 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 }
 
 static void require_generate(TypeId t) {
-	VectorCardinality cardinality(100);
+	VectorCardinality cardinality(8);
 	Vector v(cardinality, t);
 	VectorOperations::GenerateSequence(v, 42, 1);
 	for (size_t i = 0; i < v.size(); i++) {

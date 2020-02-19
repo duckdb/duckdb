@@ -85,7 +85,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		}
 		result.SetCardinality(result_count, result.owned_sel_vector);
 	} else {
-		assert(result.size() == 0);
+		result.SetCardinality(0);
 	}
 }
 
@@ -147,13 +147,30 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			bool found_match[STANDARD_VECTOR_SIZE] = {false};
 			ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
 			                        state->has_null);
+		} else if (type == JoinType::ANTI) {
+			// ANTI join, just pull chunk from RHS
+			children[0]->GetChunk(context, chunk, state->child_state.get());
+		} else if (type == JoinType::LEFT) {
+			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			if (state->child_chunk.size() == 0) {
+				return;
+			}
+			chunk.SetCardinality(state->child_chunk);
+			index_t idx = 0;
+			for(; idx < state->child_chunk.column_count(); idx++) {
+				chunk.data[idx].Reference(state->child_chunk.data[idx]);
+			}
+			for(; idx < chunk.column_count(); idx++) {
+				chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+				chunk.data[idx].nullmask[0] = true;
+			}
 		} else {
 			throw Exception("Unhandled type for empty NL join");
 		}
 		return;
 	}
 
-	if (state->right_chunk >= state->right_chunks.chunks.size()) {
+	if ((type == JoinType::INNER || type == JoinType::LEFT) && state->right_chunk >= state->right_chunks.chunks.size()) {
 		return;
 	}
 	// now that we have fully materialized the right child
@@ -209,7 +226,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
 			}
 			// move to the next LHS chunk in the next iteration
-			state->right_chunk = state->right_chunks.chunks.size();
+			state->right_tuple = state->right_chunks.chunks[state->right_chunk]->size();
+			state->right_chunk = state->right_chunks.chunks.size() - 1;
 			return;
 		}
 		default:

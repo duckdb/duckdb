@@ -201,6 +201,8 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		} else {
 			return;
 		}
+#else
+		return;
 #endif
 	} while (true);
 }
