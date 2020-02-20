@@ -223,17 +223,14 @@ Value Vector::GetValue(index_t index) const {
 		return ret;
 	}
 	case TypeId::LIST: {
-		assert(0);
-		break;
-//		Value ret(TypeId::LIST);
-//		ret.is_null = false;
-//		// get offset and length
-//		auto offlen = ((list_entry_t *)data)[index];
-//		assert(children.size() == 1);
-//		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
-//			ret.list_value.push_back(children[0].second->GetValue(i));
-//		}
-//		return ret;
+		Value ret(TypeId::LIST);
+		ret.is_null = false;
+		auto offlen = ((list_entry_t *)data)[index];
+		auto& child_vec = GetListEntry();
+		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+			ret.list_value.push_back(child_vec.GetValue(i));
+		}
+		return ret;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for value access");
@@ -662,5 +659,26 @@ void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
 	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	((VectorStructBuffer*) auxiliary.get())->AddChild(name, move(vector));
 }
+
+
+FlatVector &Vector::GetListEntry() const {
+	assert(type == TypeId::LIST);
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
+	return ((VectorListBuffer*) auxiliary.get())->GetChild();
+
+
+}
+void Vector::SetListEntry(unique_ptr<FlatVector> vector) {
+	assert(type == TypeId::LIST);
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorListBuffer>();
+	}
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
+	((VectorListBuffer*) auxiliary.get())->SetChild(move(vector));
+}
+
+
 
 } // namespace duckdb

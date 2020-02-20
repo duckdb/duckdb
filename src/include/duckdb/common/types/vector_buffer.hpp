@@ -99,6 +99,9 @@ public:
 	FlatVector& GetChild() {
 		return *child;
 	}
+	void SetChild(unique_ptr<FlatVector> new_child) {
+		child = move(new_child);
+	}
 
 private:
 	//! child vectors used for nested data

@@ -18,7 +18,7 @@ static sel_t templated_quicksort_initial(T *data, sel_t *sel_vector, sel_t resul
 	if (sel_vector) {
 		// now insert elements
 		for (index_t i = 1; i < count; i++) {
-			if (OP::Operation(data[sel_vector[i]], data[pivot])) {
+			if (OP::Operation(data[sel_vector[i]], data[sel_vector[pivot]])) {
 				result[low++] = sel_vector[i];
 			} else {
 				result[high--] = sel_vector[i];

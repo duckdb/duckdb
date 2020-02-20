@@ -148,26 +148,20 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 			}
 		} break;
 		case TypeId::LIST: {
-			throw NotImplementedException("FIXME: copy list");
-
 			// // copy main vector
-			// // FIXME
-			// assert(offset == 0);
-			// other.Initialize(TypeId::LIST);
-			// other.count = count - offset;
-			// other.selection_vector = nullptr;
+			// // TODO implement non-zero offsets
+			assert(offset == 0);
 
-			// // FIXME :/
-			// memcpy(other.data, data, count * GetTypeIdSize(type));
+			assert(target.type == TypeId::LIST);
 
-			// // copy child
-			// assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
-			// auto &child = children[0].second;
-			// auto child_copy = make_unique<Vector>();
-			// child_copy->Initialize(child->type, true, child->count);
-			// child->Copy(*child_copy.get(), offset);
+			copy_loop<list_entry_t, false>(source, target.GetData(), offset, source.size());
 
-			// other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
+			auto& child = source.GetListEntry();
+			auto child_copy = make_unique<FlatVector>();
+			child_copy->Initialize(child.type, true, child.size());
+			VectorOperations::Copy(child, *child_copy);
+			// TODO if offset != 0 we can skip some of the child list and adjustd offsets accordingly
+			target.SetListEntry(move(child_copy));
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for copy");

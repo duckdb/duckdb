@@ -70,8 +70,6 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			auto &v = state->list_data.data[col_idx];
 
 			assert(v.type == TypeId::LIST);
-			//assert(v.GetChildren().size() == 1);
-
 			// TODO deal with NULL values here!
 
 			auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
@@ -85,27 +83,25 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	assert(max_list_length >= 0);
 
 	// first cols are from child, last n cols from unnest
+	state->child_chunk.SetCardinality(max_list_length);
+
 	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
-		// FIXME
-	//	chunk.data[col_idx].count = max_list_length;
-//		VectorOperations::Set(chunk.data[col_idx],
-//		                      state->child_chunk.GetVector(col_idx).GetValue(state->parent_position));
+		VectorOperations::Set(chunk.data[col_idx],
+		                      state->child_chunk.data[col_idx].GetValue(state->parent_position));
 	}
 	for (index_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 		auto target_col = col_idx + state->child_chunk.column_count();
-// FIXME		chunk.data[target_col].count = max_list_length;
 		chunk.data[target_col].nullmask.all();
 		auto &v = state->list_data.data[col_idx];
 		auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
-		assert(0);
-//		auto &child_v = v.GetChildren()[0].second;
-//
-//		for (index_t i = 0; i < list_entry.length; i++) {
-//			chunk.data[target_col].SetValue(i, child_v->GetValue(list_entry.offset + i));
-//		}
-//		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
-//			chunk.data[target_col].SetValue(i, Value());
-//		}
+		auto &child_v = v.GetListEntry();
+
+		for (index_t i = 0; i < list_entry.length; i++) {
+			chunk.data[target_col].SetValue(i, child_v.GetValue(list_entry.offset + i));
+		}
+		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
+			chunk.data[target_col].SetValue(i, Value());
+		}
 	}
 
 	state->parent_position++;

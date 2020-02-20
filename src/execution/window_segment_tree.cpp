@@ -56,7 +56,7 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 		}
 		aggregate.update(&inputs.data[0], input_count, s);
 	} else {
-		assert(end - begin < STANDARD_VECTOR_SIZE);
+		assert(end - begin <= STANDARD_VECTOR_SIZE);
 		data_ptr_t ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		Vector v(inputs, result_type, ptr);
 		v.Verify();

@@ -182,7 +182,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 
 	// 1024 rows (vector size)
 	ofstream csv_vector_size(fs.JoinPath(csv_path, "vsize.csv"));
-	for (int i = 0; i < 1024; i++) {
+	for (int i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		csv_vector_size << i << "," << i << ", test" << endl;
 	}
 	csv_vector_size.close();
@@ -190,7 +190,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));"));
 	result = con.Query("COPY vsize FROM '" + fs.JoinPath(csv_path, "vsize.csv") + "';");
-	REQUIRE(CHECK_COLUMN(result, 0, {1024}));
+	REQUIRE(CHECK_COLUMN(result, 0, {STANDARD_VECTOR_SIZE}));
 }
 
 TEST_CASE("Test CSV file without trailing newline", "[copy]") {

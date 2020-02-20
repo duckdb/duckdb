@@ -65,6 +65,7 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	if (source.type != TypeId::POINTER) {
 		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
+	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
