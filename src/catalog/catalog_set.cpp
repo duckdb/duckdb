@@ -94,11 +94,10 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 
 	// now transfer all dependencies from the old table to the new table
 	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());
-
-	value->timestamp = transaction.transaction_id;
-	value->child = move(data[name]);
-	value->child->parent = value.get();
-	value->set = this;
+    value->timestamp = transaction.transaction_id;
+    value->child = move(data[name]);
+    value->child->parent = value.get();
+    value->set = this;
 
 	// serialize the AlterInfo into a temporary buffer
 	BufferedSerializer serializer;
@@ -107,7 +106,12 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 
 	// push the old entry in the undo buffer for this transaction
 	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
-	data[name] = move(value);
+    if( ( (AlterTableInfo *) alter_info)->alter_table_type == AlterTableType::RENAME_TABLE ) {
+        data.erase(name);
+        data[value.get()->name] = move(value);
+    } else {
+        data[name] = move(value);
+    }
 
 	return true;
 }
