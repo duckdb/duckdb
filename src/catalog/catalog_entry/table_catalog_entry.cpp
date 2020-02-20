@@ -88,18 +88,18 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto rename_info = (RenameColumnInfo *)table_info;
 		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 		bool found = false;
-		for (index_t i = 0; i < columns.size(); i++) {
-			ColumnDefinition copy(columns[i].name, columns[i].type);
-			copy.oid = columns[i].oid;
-			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+        for (index_t i = 0; i < columns.size(); i++) {
+            ColumnDefinition copy(columns[i].name, columns[i].type);
+            copy.oid = columns[i].oid;
+            copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
 
-			create_info->columns.push_back(move(copy));
-			if (rename_info->name == columns[i].name) {
-				assert(!found);
-				create_info->columns[i].name = rename_info->new_name;
-				found = true;
-			}
-		}
+            create_info->columns.push_back(move(copy));
+            if (rename_info->name == columns[i].name) {
+                assert(!found);
+                create_info->columns[i].name = rename_info->new_name;
+                found = true;
+            }
+        }
 		if (!found) {
 			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
@@ -111,6 +111,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		Binder binder(context);
 		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
+	}
+	case AlterTableType::RENAME_TABLE: {
+        auto rename_info = (RenameTableInfo *)table_info;
+        auto create_info = make_unique<CreateTableInfo>(schema->name, rename_info->new_table_name);
+//        create_info->table = rename_info->new_table_name;
+
+        for (index_t i = 0; i < columns.size(); i++) {
+            ColumnDefinition copy(columns[i].name, columns[i].type);
+            copy.oid = columns[i].oid;
+            copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+            create_info->columns.push_back(move(copy));
+        }
+
+        Binder binder(context);
+        auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+        return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
