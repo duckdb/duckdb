@@ -1,5 +1,5 @@
 import os, sys, re
-vector_sizes = [2, 4, 8, 64, 512]
+vector_sizes = [2, 512]
 
 current_dir = os.getcwd()
 build_dir = os.path.join(os.getcwd(), 'build', 'release')
