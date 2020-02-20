@@ -175,12 +175,6 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-          packages:
-            - g++-9 python3.7
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-      before_install:
-        - eval "${MATRIX_EVAL}"
       script:
         - python3 scripts/test_vector_sizes.py
 

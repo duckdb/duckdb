@@ -1,5 +1,5 @@
 import os, sys, re
-vector_sizes = [2, 4, 8, 16, 32, 64, 512]
+vector_sizes = [2, 4, 8, 64, 512]
 
 current_dir = os.getcwd()
 build_dir = os.path.join(os.getcwd(), 'build', 'release')
@@ -25,6 +25,6 @@ for vector_size in vector_sizes:
 	execute_system_command('mkdir -p build/release')
 	os.chdir(build_dir)
 	execute_system_command('cmake -DCMAKE_BUILD_TYPE=Release ../..')
-	execute_system_command('cmake --build . -j')
+	execute_system_command('cmake --build .')
 	os.chdir(current_dir)
 	execute_system_command('build/release/test/unittest')
