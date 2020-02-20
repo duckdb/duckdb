@@ -151,16 +151,14 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 			// // copy main vector
 			// // TODO implement non-zero offsets
 			assert(offset == 0);
-
 			assert(target.type == TypeId::LIST);
-
 			copy_loop<list_entry_t, false>(source, target.GetData(), offset, source.size());
-
 			auto& child = source.GetListEntry();
 			auto child_copy = make_unique<FlatVector>();
 			child_copy->Initialize(child.type, true, child.size());
+			child_copy->SetCount(child.size());
 			VectorOperations::Copy(child, *child_copy);
-			// TODO if offset != 0 we can skip some of the child list and adjustd offsets accordingly
+			// TODO optimization: if offset != 0 we can skip some of the child list and adjustd offsets accordingly
 			target.SetListEntry(move(child_copy));
 		} break;
 		default:
@@ -175,6 +173,11 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Append types don't match!");
 	}
+	if (target.size() == 0) {
+		VectorOperations::Copy(source, target);
+		return;
+	}
+
 	source.Normalify();
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);

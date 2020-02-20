@@ -83,7 +83,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	assert(max_list_length >= 0);
 
 	// first cols are from child, last n cols from unnest
-	state->child_chunk.SetCardinality(max_list_length);
+	chunk.SetCardinality(max_list_length);
 
 	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 		VectorOperations::Set(chunk.data[col_idx],

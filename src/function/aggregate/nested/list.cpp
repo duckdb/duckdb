@@ -83,11 +83,11 @@ static void list_finalize(Vector &state, Vector &result) {
 }
 
 
-unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context) {
+unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, SQLType& return_type) {
 	assert(expr.children.size() == 1);
-	expr.sql_return_type = SQLType::LIST;
-	expr.sql_return_type.child_type.push_back(make_pair("", expr.arguments[0]));
-	return make_unique<ListBindData>(expr.sql_return_type); // TODO atm this is not used anywhere but it might not be required after all except for sanity checking
+	return_type = SQLType::LIST;
+	return_type.child_type.push_back(make_pair("", expr.arguments[0]));
+	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all except for sanity checking
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {

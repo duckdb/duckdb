@@ -15,13 +15,12 @@ namespace duckdb {
 
 
 struct ListBindData : public FunctionData {
-	SQLType sql_type;
 
-	ListBindData(SQLType sql_type) : sql_type(sql_type) {
+	ListBindData() {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<ListBindData>(sql_type);
+		return make_unique<ListBindData>();
 	}
 };
 

@@ -145,36 +145,28 @@ void Vector::SetValue(index_t index, Value val) {
 		}
 	} break;
 
-//	case TypeId::LIST: {
-//		if (children.size() == 0) {
-//			assert(val.list_value.size() > 0);
-//			TypeId child_type = val.list_value[0].type;
-//			auto cv = make_unique<FlatVector>();
-//			cv->Initialize(child_type, true);
-//			cv->vector_type = vector_type;
-//			children.push_back(pair<string, unique_ptr<Vector>>("", move(cv)));
-//		}
-//		assert(children.size() == 1);
-//		// append to child
-//		// TODO optimization: in-place update if fits
-//		auto &child_vec = *children[0].second.get();
-//		auto offset = child_vec.Size();
-//		for (auto &child_val : val.list_value) {
-//			assert(child_vec.type == child_val.type);
-//			// FIXME this should really set the count recursively on children
-//			child_vec.count++;
-//			// aha, if the child is a struct we need to increase its count as well
-//			child_vec.vector_type = VectorType::FLAT_VECTOR; // TODO ??
-//
-//			assert(child_vec.count < STANDARD_VECTOR_SIZE); // FIXME this will overflow eventually
-//			child_vec.SetValue(child_vec.count - 1, child_val);
-//		}
-//		// now set the pointer
-//		auto &entry = ((list_entry_t *)GetData())[index];
-//		entry.length = val.list_value.size();
-//		entry.offset = offset;
-//	} break;
+	case TypeId::LIST: {
+		if (!auxiliary) {
+			auto cv = make_unique<FlatVector>(val.list_value[0].type);
+			cv->SetCount(0);
+			SetListEntry(move(cv));
+		}
+		auto &child_vec = GetListEntry();
+		// TODO optimization: in-place update if fits
 
+		auto offset = child_vec.size();
+
+		for (auto &child_val : val.list_value) {
+			assert(child_vec.type == child_val.type);
+			child_vec.SetCount(child_vec.size() + 1);
+			assert(child_vec.size() < STANDARD_VECTOR_SIZE); // FIXME this will overflow eventually
+			child_vec.SetValue(child_vec.size() - 1, child_val);
+		}
+		// now set the pointer
+		auto &entry = ((list_entry_t *)GetData())[index];
+		entry.length = val.list_value.size();
+		entry.offset = offset;
+	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
@@ -528,10 +520,8 @@ void Vector::Normalify() {
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel);
 			break;
 		case TypeId::LIST: {
-			assert(0);
-//			assert(children.size() == 1);
-//			assert(!children[0].second->sel_vector);
-//			flatten_constant_vector_loop<list_entry_t>(data, old_data, count, sel_vector);
+			assert(!GetListEntry().sel_vector());
+			flatten_constant_vector_loop<list_entry_t>(data, old_data, count, sel);
 			break;
 		}
 		case TypeId::STRUCT: {

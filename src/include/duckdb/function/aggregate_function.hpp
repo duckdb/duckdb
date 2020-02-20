@@ -25,7 +25,7 @@ typedef void (*aggregate_combine_t)(Vector &state, Vector &combined);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context);
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context, SQLType& return_type);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state);
 

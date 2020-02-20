@@ -60,14 +60,15 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// create the aggregate
 	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(bound_function.return_type), bound_function, aggr.distinct);
 	aggregate->children = move(children);
-	aggregate->sql_return_type = bound_function.return_type;
 	aggregate->arguments = arguments;
 
+	auto return_type = bound_function.return_type;
+
+
 	if (bound_function.bind) {
-		aggregate->bind_info = bound_function.bind(*aggregate, context);
+		aggregate->bind_info = bound_function.bind(*aggregate, context, return_type);
 	}
-	// the bind function might have changed the sql return type (e.g. struct_pack, list)
-	auto return_type = aggregate->sql_return_type;
+
 
 	// check for all the aggregates if this aggregate already exists
 	index_t aggr_index;
