@@ -167,6 +167,19 @@ matrix:
 
 
     - os: linux
+      dist: bionic
+      name: GCC 9 (Vector Sizes)
+      python: 3.7
+
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+      script:
+        - python3 scripts/test_vector_sizes.py
+
+
+    - os: linux
       dist: xenial
       name: Code Coverage
 

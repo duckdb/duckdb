@@ -197,6 +197,71 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
 }
 
+TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR);"));
+	vector<Value> expected_g, expected_h;
+	string expected_large_value;
+	for(index_t i = 0; i < 10000; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int) i, "hello"));
+		expected_g.push_back(Value::INTEGER(i));
+		expected_h.push_back(Value("hello"));
+		expected_large_value += (i > 0 ? "," : "") + string("hello");
+	}
+	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	// many small groups
+	result = con.Query("SELECT g, STRING_AGG(x, ',') FROM strings GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, expected_g));
+	REQUIRE(CHECK_COLUMN(result, 1, expected_h));
+
+	// one begin group
+	result = con.Query("SELECT 1, STRING_AGG(x, ',') FROM strings GROUP BY 1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(expected_large_value)}));
+
+	// now test exception in the middle of an aggregate
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)"));
+}
+
+TEST_CASE("STRING_AGG big", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test string aggregation on a set of values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g VARCHAR, x VARCHAR);"));
+
+	std::stringstream query_string;
+	query_string << "INSERT INTO strings VALUES ";
+	for(int c = 0; c < 100; ++c) {
+		for(int e = 0; e < 100; ++e) {
+			query_string << "(";
+
+			query_string << c;
+
+			query_string << ",";
+
+			query_string << "'";
+			query_string << c * 10 + e;
+			query_string << "'";
+
+			query_string << "),";
+		}
+	}
+	std::string query_string_str = query_string.str();
+	query_string_str.pop_back();
+
+	REQUIRE_NO_FAIL(con.Query(query_string_str));
+
+	result = con.Query("SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g");
+	REQUIRE_NO_FAIL(std::move(result));
+}
+
 TEST_CASE("Test AVG operator", "[aggregate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

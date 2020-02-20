@@ -29,11 +29,13 @@ using std::vector;
 #define INVALID_SCHEMA ""
 
 //! The vector size used in the execution engine
+#ifndef STANDARD_VECTOR_SIZE
 #define STANDARD_VECTOR_SIZE 1024
-//! The amount of vectors per storage chunk
-#define STORAGE_CHUNK_VECTORS 10
-//! The storage chunk size
-#define STORAGE_CHUNK_SIZE (STANDARD_VECTOR_SIZE * STORAGE_CHUNK_VECTORS)
+#endif
+
+#if ((STANDARD_VECTOR_SIZE & (STANDARD_VECTOR_SIZE - 1)) != 0)
+#error Vector size should be a power of two
+#endif
 
 //! a saner size_t for loop indices etc
 typedef uint64_t index_t;
@@ -91,5 +93,7 @@ struct Storage {
 	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static int FILE_HEADER_SIZE = 4096;
 };
+
+uint64_t NextPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

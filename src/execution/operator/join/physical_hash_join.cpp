@@ -178,6 +178,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 	}
 	do {
 		ProbeHashTable(context, chunk, state);
+#if STANDARD_VECTOR_SIZE >= 128
 		if (chunk.size() == 0) {
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
@@ -200,5 +201,8 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		} else {
 			return;
 		}
+#else
+		return;
+#endif
 	} while (true);
 }

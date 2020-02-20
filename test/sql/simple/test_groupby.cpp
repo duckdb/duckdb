@@ -179,13 +179,13 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	// ...BUT the alias in ORDER BY should refer to the alias from the select list
 	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do
 	// too.
-	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));
 
 	// changing the name of the alias makes it more explicit what should happen
-	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k;");
+	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));

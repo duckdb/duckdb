@@ -12,9 +12,23 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 class BoundAggregateExpression;
+
+struct AggregateObject {
+	AggregateObject(AggregateFunction function, index_t child_count, index_t payload_size, bool distinct, TypeId return_type) :
+		function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct), return_type(return_type) {}
+
+	AggregateFunction function;
+	index_t child_count;
+	index_t payload_size;
+	bool distinct;
+	TypeId return_type;
+
+	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
+};
 
 //! SuperLargeHashTable is a linear probing HT that is used for computing
 //! aggregates
@@ -28,6 +42,8 @@ class SuperLargeHashTable {
 public:
 	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
 	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
+	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	                    vector<AggregateObject> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
@@ -54,7 +70,7 @@ private:
 	void HashGroups(DataChunk &groups, Vector &addresses);
 
 	//! The aggregates to be computed
-	vector<BoundAggregateExpression *> aggregates;
+	vector<AggregateObject> aggregates;
 	//! The types of the group columns stored in the hashtable
 	vector<TypeId> group_types;
 	//! The types of the payload columns stored in the hashtable
@@ -94,6 +110,9 @@ private:
 
 	//! unique_ptr to indicate the ownership
 	unique_ptr<data_t[]> owned_data;
+private:
+	void Destroy();
+	void CallDestructors(Vector &state_vector);
 };
 
 } // namespace duckdb

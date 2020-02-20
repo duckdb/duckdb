@@ -35,7 +35,12 @@ private:
 
 	ChunkCollection *input_ref;
 
-	static constexpr index_t TREE_FANOUT = 64; // this should cleanly divide STANDARD_VECTOR_SIZE
+	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
+#if STANDARD_VECTOR_SIZE < 64
+	static constexpr index_t TREE_FANOUT = STANDARD_VECTOR_SIZE;
+#else
+	static constexpr index_t TREE_FANOUT = 64;
+#endif
 };
 
 } // namespace duckdb

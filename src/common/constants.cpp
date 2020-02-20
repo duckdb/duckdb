@@ -17,4 +17,16 @@ const transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;              
 const transaction_t NOT_DELETED_ID = std::numeric_limits<transaction_t>::max() - 1; // 2^64 - 1
 const transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max();   // 2^64
 
+uint64_t NextPowerOfTwo(uint64_t v) {
+	v--;
+	v |= v >> 1;
+	v |= v >> 2;
+	v |= v >> 4;
+	v |= v >> 8;
+	v |= v >> 16;
+	v |= v >> 32;
+	v++;
+	return v;
+}
+
 } // namespace duckdb
