@@ -118,6 +118,20 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	// test upper/lower on scalar values
+	result = con.Query("select UPPER(''), UPPER('hello'), UPPER('MotörHead'), UPPER(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	result = con.Query("select LOWER(''), LOWER('hello'), LOWER('MotörHead'), LOWER(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"motörhead"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	// test on entire tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
@@ -130,6 +144,11 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 
 	result = con.Query("select LOWER(b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "rÄcks"}));
+
+	// test with selection vector
+	result = con.Query("select UPPER(a), LOWER(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "motörhead"}));
 }
 
 TEST_CASE("REVERSE test", "[function]") {
@@ -139,10 +158,11 @@ TEST_CASE("REVERSE test", "[function]") {
 	con.EnableQueryVerification();
 
 	// test reverse on scalars
-	result = con.Query("select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead')");
+	result = con.Query("select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead'), REVERSE(NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"olleH"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"daeHrötoM"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 
 	// test reverse on tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
