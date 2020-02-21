@@ -138,6 +138,13 @@ TEST_CASE("REVERSE test", "[function]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	// test reverse on scalars
+	result = con.Query("select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead')");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"olleH"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"daeHrötoM"}));
+
+	// test reverse on tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)"));
@@ -147,4 +154,13 @@ TEST_CASE("REVERSE test", "[function]") {
 
 	result = con.Query("select REVERSE(b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"dlroW", Value(), "skcÄR", Value()}));
+
+	result = con.Query("select REVERSE(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"olleH", "daeHrötoM"}));
+
+
+	// test incorrect usage of reverse
+	REQUIRE_FAIL(con.Query("select REVERSE()"));
+	REQUIRE_FAIL(con.Query("select REVERSE(1, 2)"));
+	REQUIRE_FAIL(con.Query("select REVERSE('hello', 'world')"));
 }
