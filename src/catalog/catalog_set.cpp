@@ -94,19 +94,31 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 
 	// now transfer all dependencies from the old table to the new table
 	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());
-    value->timestamp = transaction.transaction_id;
-    value->child = move(data[name]);
-    value->child->parent = value.get();
-    value->set = this;
 
-	// serialize the AlterInfo into a temporary buffer
-	BufferedSerializer serializer;
-	alter_info->Serialize(serializer);
-	BinaryData serialized_alter = serializer.GetData();
+	value->timestamp = transaction.transaction_id;
+	value->set = this;
 
-	// push the old entry in the undo buffer for this transaction
-	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
     if( ( (AlterTableInfo *) alter_info)->alter_table_type == AlterTableType::RENAME_TABLE ) {
+		// index_t alloc_size = sizeof(TableCatalogEntry *);
+		// std::copy(current, alloc_size, value->child.get());
+        //TODO Multiple transactions aren't work maybe a copy of the old table is required here instead of a std::move
+        value->child = move(data[name]);
+    }
+    else {
+    	value->child = move(data[name]);
+    }
+    value->child->parent = value.get();
+
+    // serialize the AlterInfo into a temporary buffer
+    BufferedSerializer serializer;
+    alter_info->Serialize(serializer);
+    BinaryData serialized_alter = serializer.GetData();
+
+    // push the old entry in the undo buffer for this transaction
+    transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
+
+    if( ( (AlterTableInfo *) alter_info)->alter_table_type == AlterTableType::RENAME_TABLE ) {
+        // here we remove the old table entry, but it maybe required for other transactions
         data.erase(name);
         data[value.get()->name] = move(value);
     } else {
