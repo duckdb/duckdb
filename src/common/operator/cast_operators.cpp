@@ -138,7 +138,7 @@ template <> int64_t Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to numeric", input);
+		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
 	}
 	return result;
 }

@@ -25,7 +25,7 @@ struct string_agg_state_t {
 			dataptr = new char[alloc_size];
 		} else {
 			// subsequent iteration: first check if we have space to place the string and separator
-			index_t required_size = size + str_len;
+			index_t required_size = size + str_len + 1;
 			if (required_size > alloc_size) {
 				// no space! allocate extra space
 				while(alloc_size < required_size) {
@@ -37,7 +37,7 @@ struct string_agg_state_t {
 				dataptr = new_data;
 			}
 		}
-		memcpy(dataptr, str.GetData(), str_len);
+		memcpy(dataptr + size, str.GetData(), str_len);
 		size += str_len;
 		dataptr[size] = '\0';
 	}
@@ -91,8 +91,8 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 		if (state_ptr->IsEmpty()) {
 			state_ptr->AddString(str);
 		} else {
-			state_ptr->AddString(str);
 			state_ptr->AddString(sep);
+			state_ptr->AddString(str);
 		}
 	});
 }

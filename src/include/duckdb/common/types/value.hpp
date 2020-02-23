@@ -203,6 +203,7 @@ template <> Value Value::CreateValue(int32_t value);
 template <> Value Value::CreateValue(int64_t value);
 template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
+template <> Value Value::CreateValue(string_t value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
 

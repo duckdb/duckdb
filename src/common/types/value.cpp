@@ -214,6 +214,10 @@ template <> Value Value::CreateValue(string value) {
 	return Value(value);
 }
 
+template <> Value Value::CreateValue(string_t value) {
+	return Value(value);
+}
+
 template <> Value Value::CreateValue(float value) {
 	return Value::FLOAT(value);
 }

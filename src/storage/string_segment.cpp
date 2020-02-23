@@ -505,12 +505,12 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
                                                        index_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = update.size();
-	auto strings = (char **)update.GetData();
+	auto strings = (string_t *)update.GetData();
 	for (index_t i = 0; i < update.size(); i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update.nullmask[i]) {
-			WriteString(string_t(strings[i], strlen(strings[i])), info->block_ids[i], info->offsets[i]);
+			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
 			info->offsets[i] = 0;
