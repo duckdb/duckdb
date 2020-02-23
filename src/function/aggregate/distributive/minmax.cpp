@@ -59,7 +59,7 @@ template <class OP> static aggregate_simple_update_t MinMaxFunction(SQLType sql_
 	case TypeId::DOUBLE:
 		return minmax_simple_update<double, OP>;
 	case TypeId::VARCHAR:
-		return minmax_simple_update<const char *, OP>;
+		return minmax_simple_update<string_t, OP>;
 	default:
 		// TODO LIST/STRUCT
 		throw NotImplementedException("FIXME: unimplemented type for MIN/MAX");

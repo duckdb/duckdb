@@ -74,16 +74,17 @@ string AddEscapes(string &to_be_escaped, string escape, string val) {
 	return new_val;
 }
 
-static void WriteQuotedString(BufferedWriter &writer, const char *str_value, string &delimiter, string &quote,
+static void WriteQuotedString(BufferedWriter &writer, string_t str_value, string &delimiter, string &quote,
                               string &escape, string &null_str, bool write_quoted) {
 	// used for adding escapes
 	bool add_escapes = false;
-	string new_val = str_value;
+	auto str_data = str_value.GetData();
+	string new_val(str_data, str_value.GetSize());
 
 	// check for \n, \r, \n\r in string
 	if (!write_quoted) {
-		for (const char *val = str_value; *val; val++) {
-			if (*val == '\n' || *val == '\r') {
+		for(index_t i = 0; i < str_value.GetSize(); i++) {
+			if (str_data[i] == '\n' || str_data[i] == '\r') {
 				// newline, write a quoted string
 				write_quoted = true;
 			}
@@ -189,7 +190,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 				}
 
 				// non-null value, fetch the string value from the cast chunk
-				auto str_data = (const char **)cast_chunk.data[col_idx].GetData();
+				auto str_data = (string_t *)cast_chunk.data[col_idx].GetData();
 				auto str_value = str_data[i];
 				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str,
 				                  info.force_quote[col_idx]);

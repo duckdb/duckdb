@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -73,21 +74,22 @@ template <> int64_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(const char *input, bool &result);
-template <> bool TryCast::Operation(const char *input, int8_t &result);
-template <> bool TryCast::Operation(const char *input, int16_t &result);
-template <> bool TryCast::Operation(const char *input, int32_t &result);
-template <> bool TryCast::Operation(const char *input, int64_t &result);
-template <> bool TryCast::Operation(const char *input, float &result);
-template <> bool TryCast::Operation(const char *input, double &result);
+template <> bool TryCast::Operation(string_t input, bool &result);
+template <> bool TryCast::Operation(string_t input, int8_t &result);
+template <> bool TryCast::Operation(string_t input, int16_t &result);
+template <> bool TryCast::Operation(string_t input, int32_t &result);
+template <> bool TryCast::Operation(string_t input, int64_t &result);
+template <> bool TryCast::Operation(string_t input, float &result);
+template <> bool TryCast::Operation(string_t input, double &result);
 
-template <> bool Cast::Operation(const char *input);
-template <> int8_t Cast::Operation(const char *input);
-template <> int16_t Cast::Operation(const char *input);
-template <> int32_t Cast::Operation(const char *input);
-template <> int64_t Cast::Operation(const char *input);
-template <> float Cast::Operation(const char *input);
-template <> double Cast::Operation(const char *input);
+template <> bool Cast::Operation(string_t input);
+template <> int8_t Cast::Operation(string_t input);
+template <> int16_t Cast::Operation(string_t input);
+template <> int32_t Cast::Operation(string_t input);
+template <> int64_t Cast::Operation(string_t input);
+template <> float Cast::Operation(string_t input);
+template <> double Cast::Operation(string_t input);
+template <> string Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
@@ -118,7 +120,7 @@ struct CastDateToTimestamp {
 	}
 };
 template <> duckdb::string CastFromDate::Operation(duckdb::date_t input);
-template <> duckdb::date_t CastToDate::Operation(const char *input);
+template <> duckdb::date_t CastToDate::Operation(string_t input);
 template <> duckdb::timestamp_t CastDateToTimestamp::Operation(duckdb::date_t input);
 
 struct CastFromTime {
@@ -132,7 +134,7 @@ struct CastToTime {
 	}
 };
 template <> duckdb::string CastFromTime::Operation(duckdb::dtime_t input);
-template <> duckdb::dtime_t CastToTime::Operation(const char *input);
+template <> duckdb::dtime_t CastToTime::Operation(string_t input);
 
 struct CastToTimestamp {
 	template <class SRC, class DST> static inline DST Operation(SRC input) {
@@ -161,6 +163,6 @@ struct CastTimestampToTime {
 template <> duckdb::date_t CastTimestampToDate::Operation(duckdb::timestamp_t input);
 template <> duckdb::dtime_t CastTimestampToTime::Operation(duckdb::timestamp_t input);
 template <> duckdb::string CastFromTimestamp::Operation(duckdb::timestamp_t input);
-template <> duckdb::timestamp_t CastToTimestamp::Operation(const char *input);
+template <> duckdb::timestamp_t CastToTimestamp::Operation(string_t input);
 
 } // namespace duckdb

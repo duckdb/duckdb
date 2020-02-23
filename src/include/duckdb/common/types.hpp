@@ -23,14 +23,7 @@ struct blob_t {
 	index_t size;
 };
 
-struct string_t {
-	string_t() = default;
-	string_t(char *data, uint32_t length) : data(data), length(length) {
-	}
-
-	char *data;
-	uint32_t length;
-};
+struct string_t;
 
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;

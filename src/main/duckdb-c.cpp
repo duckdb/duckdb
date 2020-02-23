@@ -154,10 +154,10 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			index_t row = 0;
 			auto target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (const char **)chunk->data[col].GetData();
+				auto source = (string_t *)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->size(); k++) {
 					if (!chunk->data[col].nullmask[k]) {
-						target[row] = strdup(source[k]);
+						target[row] = strdup(source[k].GetData());
 					}
 					row++;
 				}
@@ -517,7 +517,7 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
 	}
 	case DUCKDB_TYPE_VARCHAR:
-		return Value(string(UnsafeFetch<const char *>(result, col, row)));
+		return Value(UnsafeFetch<string_t>(result, col, row));
 	default:
 		// invalid type for C to C++ conversion
 		assert(0);

@@ -20,6 +20,9 @@
 using namespace duckdb;
 using namespace std;
 
+Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+}
+
 Value Value::MinimumValue(TypeId type) {
 	Value result;
 	result.type = type;
@@ -242,7 +245,7 @@ template <class T> T Value::GetValueInternal() {
 	case TypeId::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
 	case TypeId::VARCHAR:
-		return Cast::Operation<const char *, T>(str_value.c_str());
+		return Cast::Operation<string_t, T>(str_value.c_str());
 	default:
 		throw NotImplementedException("Unimplemented type for GetValue()");
 	}
@@ -573,6 +576,10 @@ bool Value::IsUTF8String(const char *s) {
 		return false;
 	}
 	return true;
+}
+
+bool Value::IsUTF8String(string_t s) {
+	return Value::IsUTF8String(s.GetData());
 }
 
 void Value::Print() {

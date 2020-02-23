@@ -38,19 +38,13 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 	assert(args.column_count() == 1);
 	assert(args.data[0].type == TypeId::VARCHAR);
 
-	index_t current_len = 0;
-	unique_ptr<char[]> output;
-	UnaryExecutor::Execute<const char*, const char*, true>(args.data[0], result, [&](const char *input) {
-		index_t input_length = strlen(input);
-		index_t required_len = input_length + 1;
-		if (required_len > current_len) {
-			current_len = required_len + 1;
-			output = unique_ptr<char[]>{new char[current_len]};
-		}
-		assert(input_length < current_len);
-		strreverse(input, input_length, output.get());
+	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, [&](string_t input) {
+		auto input_data = input.GetData();
+		auto input_length = input.GetSize();
 
-		return result.AddString(output.get());
+		auto target = result.EmptyString(input_length);
+		strreverse(input_data, input_length, target.GetData());
+		return target;
 	});
 }
 

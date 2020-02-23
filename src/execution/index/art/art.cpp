@@ -124,7 +124,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		generate_keys<double>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::VARCHAR:
-		generate_keys<char *>(input.data[0], keys, is_little_endian);
+		generate_keys<string_t>(input.data[0], keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");

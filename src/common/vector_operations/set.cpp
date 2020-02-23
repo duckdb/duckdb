@@ -65,7 +65,7 @@ void VectorOperations::Set(Vector &result, Value value) {
 			break;
 		case TypeId::VARCHAR: {
 			auto str = result.AddString(value.str_value);
-			auto dataptr = (const char **)result.GetData();
+			auto dataptr = (string_t *)result.GetData();
 			VectorOperations::Exec(result, [&](index_t i, index_t k) { dataptr[i] = str; });
 			break;
 		}
@@ -121,7 +121,7 @@ void VectorOperations::FillNullMask(Vector &v) {
 		templated_fill_nullmask<double>(v);
 		break;
 	case TypeId::VARCHAR:
-		templated_fill_nullmask<const char *>(v);
+		templated_fill_nullmask<string_t>(v);
 		break;
 	default:
 		throw NotImplementedException("Type not implemented for null mask");

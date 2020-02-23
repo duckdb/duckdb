@@ -48,7 +48,7 @@ static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &up
 	case TypeId::DOUBLE:
 		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, result);
 	case TypeId::VARCHAR:
-		return TernaryExecutor::Select<const char *, const char *, const char *, OP>(input, lower, upper, result);
+		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, result);
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for BETWEEN");
 	}

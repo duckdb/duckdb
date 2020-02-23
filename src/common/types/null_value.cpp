@@ -1,4 +1,5 @@
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -37,7 +38,7 @@ void SetNullValue(data_ptr_t ptr, TypeId type) {
 		*((double *)ptr) = NullValue<double>();
 		break;
 	case TypeId::VARCHAR:
-		*((const char **)ptr) = NullValue<const char *>();
+		*((string_t*)ptr) = string_t(NullValue<const char *>());
 		break;
 	default:
 		throw InvalidTypeException(type, "Unsupported type for SetNullValue!");

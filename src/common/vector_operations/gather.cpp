@@ -90,7 +90,7 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 		LOOP::template Operation<uint64_t, OP>(source, dest, offset);
 		break;
 	case TypeId::VARCHAR:
-		LOOP::template Operation<char *, OP>(source, dest, offset);
+		LOOP::template Operation<string_t, OP>(source, dest, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for gather");

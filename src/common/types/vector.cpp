@@ -128,7 +128,7 @@ void Vector::SetValue(index_t index, Value val) {
 		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
-		((const char **)data)[index] = AddString(newVal.str_value);
+		((string_t *)data)[index] = AddString(newVal.str_value);
 		break;
 	}
 	case TypeId::STRUCT: {
@@ -185,9 +185,8 @@ Value Vector::GetValue(index_t index) const {
 	case TypeId::DOUBLE:
 		return Value::DOUBLE(((double *)data)[index]);
 	case TypeId::VARCHAR: {
-		char *str = ((char **)data)[index];
-		assert(str);
-		return Value(string(str));
+		auto str = ((string_t *)data)[index];
+		return Value(str.GetString());
 	}
 	case TypeId::STRUCT: {
 		Value ret(TypeId::STRUCT);
@@ -331,7 +330,7 @@ void Vector::Normalify() {
 			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, sel);
 			break;
 		case TypeId::VARCHAR:
-			flatten_constant_vector_loop<const char *>(data, old_data, count, sel);
+			flatten_constant_vector_loop<string_t>(data, old_data, count, sel);
 			break;
 		case TypeId::STRUCT:
 			for (auto &child : GetChildren()) {
@@ -386,16 +385,16 @@ void Vector::Verify() {
 		// of them are deallocated/corrupt
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!nullmask[0]) {
-				auto string = ((const char **)data)[0];
-				assert(string);
-				assert(strlen(string) != (size_t)-1);
+				auto string = ((string_t *)data)[0];
+				assert(string.GetData());
+				assert(strlen(string.GetData()) == string.GetSize());
 				assert(Value::IsUTF8String(string));
 			}
 		} else {
-			VectorOperations::ExecType<const char *>(*this, [&](const char *string, uint64_t i, uint64_t k) {
+			VectorOperations::ExecType<string_t>(*this, [&](string_t string, uint64_t i, uint64_t k) {
 				if (!nullmask[i]) {
-					assert(string);
-					assert(strlen(string) != (size_t)-1);
+					assert(string.GetData());
+					assert(strlen(string.GetData()) == string.GetSize());
 					assert(Value::IsUTF8String(string));
 				}
 			});
@@ -404,21 +403,41 @@ void Vector::Verify() {
 #endif
 }
 
-const char *Vector::AddString(const char *data, index_t len) {
+string_t Vector::AddString(const char *data, index_t len) {
+	return AddString(string_t(data, len));
+}
+
+string_t Vector::AddString(const char *data) {
+	return AddString(string_t(data, strlen(data)));
+}
+
+string_t Vector::AddString(const string &data) {
+	return AddString(string_t(data.c_str(), data.size()));
+}
+
+string_t Vector::AddString(string_t data) {
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
 	if (!auxiliary) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
-	return string_buffer.AddString(data, len);
+	return string_buffer.AddString(data);
 }
 
-const char *Vector::AddString(const char *data) {
-	return AddString(data, strlen(data));
-}
-
-const char *Vector::AddString(const string &data) {
-	return AddString(data.c_str(), data.size());
+string_t Vector::EmptyString(index_t len) {
+	if (len < string_t::INLINE_LENGTH) {
+		return string_t(len);
+	}
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	return string_buffer.EmptyString(len);
 }
 
 void Vector::AddHeapReference(Vector &other) {

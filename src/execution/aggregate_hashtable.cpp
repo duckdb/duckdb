@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <cmath>
 #include <map>
@@ -321,7 +322,7 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
 	for (index_t i = 0; i < sel_count; i++) {
 		index_t index = sel_vector[i];
 		auto entry = group_pointers[index];
-		if ((*((T *)entry)) == data[index]) {
+		if (Equals::Operation<T>(*((T *)entry), data[index])) {
 			// match, continue to next group (if any)
 			sel_vector[current_count++] = index;
 		} else {
@@ -361,25 +362,10 @@ static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_
 		templated_compare_group_vector<double>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                       no_match_count);
 		break;
-	case TypeId::VARCHAR: {
-		// compare group vector for varchar
-		auto data = (const char **)groups.GetData();
-		index_t current_count = 0;
-		for (index_t i = 0; i < sel_count; i++) {
-			index_t index = sel_vector[i];
-			auto entry = group_pointers[index];
-			if (strcmp(data[index], *((const char **)entry)) == 0) {
-				// match, continue to next group (if any)
-				sel_vector[current_count++] = index;
-			} else {
-				// no match, move to next group
-				no_match_vector[no_match_count++] = index;
-			}
-			group_pointers[index] += sizeof(const char *);
-		}
-		sel_count = current_count;
+	case TypeId::VARCHAR:
+		templated_compare_group_vector<string_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                       no_match_count);
 		break;
-	}
 	default:
 		throw Exception("Unsupported type for group vector");
 	}

@@ -81,7 +81,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, in
 
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (char **)result.GetData();
+	auto result_data = (string_t *)result.GetData();
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -90,17 +90,17 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, in
 		for (index_t i = 0; i < count; i++) {
 			if (update_idx < info.count && info.ids[update_idx] == i) {
 				// use update info
-				result_data[i] = ReadString(state.handles, info.block_ids[update_idx], info.offsets[update_idx]).data;
+				result_data[i] = ReadString(state.handles, info.block_ids[update_idx], info.offsets[update_idx]);
 				update_idx++;
 			} else {
 				// use base table info
-				result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]).data;
+				result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]);
 			}
 		}
 	} else {
 		// no updates: fetch only from the string dictionary
 		for (index_t i = 0; i < count; i++) {
-			result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]).data;
+			result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]);
 		}
 	}
 	result.nullmask = base_nullmask;
@@ -114,12 +114,12 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transac
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
-	auto result_data = (char **)result.GetData();
+	auto result_data = (string_t *)result.GetData();
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
 		for (index_t i = 0; i < current->N; i++) {
 			auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
-			result_data[current->tuples[i]] = string.data;
+			result_data[current->tuples[i]] = string;
 			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
 	});
@@ -198,10 +198,8 @@ string_t StringSegment::FetchString(buffer_handle_set_t &handles, data_ptr_t bas
 		auto dict_pos = dict_end - location.offset;
 		auto string_length = *((uint16_t *)dict_pos);
 
-		string_t result;
-		result.length = string_length;
-		result.data = (char *)(dict_pos + sizeof(uint16_t));
-		return result;
+		auto str_ptr = (char *)(dict_pos + sizeof(uint16_t));
+		return string_t(str_ptr, string_length);
 	}
 }
 
@@ -231,9 +229,9 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (char **)result.GetData();
+	auto result_data = (string_t *)result.GetData();
 
-	result_data[result_idx] = nullptr;
+	bool found_data = false;
 	// first see if there is any updated version of this tuple we must fetch
 	if (versions && versions[vector_index]) {
 		UpdateInfo::UpdatesForTransaction(versions[vector_index], transaction, [&](UpdateInfo *current) {
@@ -242,8 +240,8 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			for (index_t i = 0; i < current->N; i++) {
 				if (current->tuples[i] == row_id) {
 					// found the relevant tuple
-					auto string = FetchString(state.handles, baseptr, info_data[i]);
-					result_data[result_idx] = string.data;
+					found_data = true;
+					result_data[result_idx] = FetchString(state.handles, baseptr, info_data[i]);
 					result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
 					break;
 				} else if (current->tuples[i] > row_id) {
@@ -253,7 +251,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			}
 		});
 	}
-	if (!result_data[result_idx]) {
+	if (!found_data) {
 		// there was no updated version to be fetched: fetch the base version instead
 		if (string_updates && string_updates[vector_index]) {
 			// there are updates: check if we should use them
@@ -261,7 +259,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			for (index_t i = 0; i < info.count; i++) {
 				if (info.ids[i] == id_in_vector) {
 					// use the update
-					result_data[result_idx] = ReadString(state.handles, info.block_ids[i], info.offsets[i]).data;
+					result_data[result_idx] = ReadString(state.handles, info.block_ids[i], info.offsets[i]);
 					break;
 				} else if (info.ids[i] > id_in_vector) {
 					break;
@@ -269,7 +267,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			}
 		} else {
 			// no version was found yet: fetch base table version
-			result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]).data;
+			result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]);
 		}
 	}
 	result.nullmask[result_idx] = base_nullmask[id_in_vector];
@@ -314,7 +312,7 @@ index_t StringSegment::Append(SegmentStatistics &stats, Vector &data, index_t of
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset,
                                Vector &source, index_t offset, index_t count) {
 	assert(offset + count <= source.size());
-	auto ldata = (char **)source.GetData();
+	auto ldata = (string_t *)source.GetData();
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
 
@@ -330,7 +328,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 		    } else {
 			    assert(dictionary_offset < Storage::BLOCK_SIZE);
 			    // non-null value, check if we can fit it within the block
-			    index_t string_length = strlen(ldata[i]);
+			    index_t string_length = ldata[i].GetSize();
 			    index_t total_length = string_length + 1 + sizeof(uint16_t);
 
 			    if (string_length > stats.max_string_length) {
@@ -348,7 +346,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				    block_id_t block;
 				    int32_t offset;
 				    // write the string into the current string block
-				    WriteString(string_t(ldata[i], string_length), block, offset);
+				    WriteString(ldata[i], block, offset);
 
 				    dictionary_offset += BIG_STRING_MARKER_SIZE;
 				    auto dict_pos = end - dictionary_offset;
@@ -367,7 +365,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				    uint16_t string_length_u16 = string_length;
 				    memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
 				    // now write the actual string data into the dictionary
-				    memcpy(dict_pos + sizeof(uint16_t), ldata[i], string_length + 1);
+				    memcpy(dict_pos + sizeof(uint16_t), ldata[i].GetData(), string_length + 1);
 			    }
 			    // place the dictionary offset into the set of vectors
 			    result_data[k - offset + target_offset] = dictionary_offset;
@@ -378,7 +376,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	assert(strlen(string.data) == string.length);
+	assert(strlen(string.GetData()) == string.GetSize());
 	if (overflow_writer) {
 		// overflow writer is set: write string there
 		overflow_writer->WriteString(string, result_block, result_offset);
@@ -389,7 +387,7 @@ void StringSegment::WriteString(string_t string, block_id_t &result_block, int32
 }
 
 void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset) {
-	uint32_t total_length = string.length + 1 + sizeof(uint32_t);
+	uint32_t total_length = string.GetSize() + 1 + sizeof(uint32_t);
 	unique_ptr<BufferHandle> handle;
 	// check if the string fits in the current block
 	if (!head || head->offset + total_length >= head->size) {
@@ -416,7 +414,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	auto ptr = handle->node->buffer + head->offset;
 	memcpy(ptr, &string.length, sizeof(uint32_t));
 	ptr += sizeof(uint32_t);
-	memcpy(ptr, string.data, string.length + 1);
+	memcpy(ptr, string.GetData(), string.length + 1);
 	head->offset += total_length;
 }
 
@@ -479,10 +477,9 @@ string_t StringSegment::ReadString(buffer_handle_set_t &handles, block_id_t bloc
 
 string_t StringSegment::ReadString(data_ptr_t target, int32_t offset) {
 	auto ptr = target + offset;
-	string_t result;
-	result.length = *((uint32_t *)ptr);
-	result.data = (char *)(ptr + sizeof(uint32_t));
-	return result;
+	auto str_length = *((uint32_t *)ptr);
+	auto str_ptr = (char *)(ptr + sizeof(uint32_t));
+	return string_t(str_ptr, str_length);
 }
 
 void StringSegment::WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset) {

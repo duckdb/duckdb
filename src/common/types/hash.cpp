@@ -1,4 +1,5 @@
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -33,6 +34,11 @@ template <> uint64_t Hash(const char *str) {
 	}
 
 	return hash;
+}
+
+
+template <> uint64_t Hash(string_t val) {
+	return Hash(val.GetData(), val.GetSize());
 }
 
 template <> uint64_t Hash(char *val) {
