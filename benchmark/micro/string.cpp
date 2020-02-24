@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define STRING_COUNT 1000000
+#define STRING_COUNT 10000000
 #define STRING_LENGTH 4
 
 #define STRING_DATA_GEN_BODY(STRING_LENGTH)                                                                            \
@@ -61,7 +61,17 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(StringConcatLong)
 
-DUCKDB_BENCHMARK(StringEquality, "[string]")
+DUCKDB_BENCHMARK(StringEqualityShort, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT s1=s2 FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING COMPARISON";
+}
+FINISH_BENCHMARK(StringEqualityShort)
+
+DUCKDB_BENCHMARK(StringEqualityLong, "[string]")
 STRING_DATA_GEN_BODY(20)
 string GetQuery() override {
 	return "SELECT s1=s2 FROM strings";
@@ -69,9 +79,19 @@ string GetQuery() override {
 string BenchmarkInfo() override {
 	return "STRING COMPARISON";
 }
-FINISH_BENCHMARK(StringEquality)
+FINISH_BENCHMARK(StringEqualityLong)
 
-DUCKDB_BENCHMARK(StringGreaterThan, "[string]")
+DUCKDB_BENCHMARK(StringGreaterThanShort, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT s1>s2 FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING COMPARISON";
+}
+FINISH_BENCHMARK(StringGreaterThanShort)
+
+DUCKDB_BENCHMARK(StringGreaterThanLong, "[string]")
 STRING_DATA_GEN_BODY(20)
 string GetQuery() override {
 	return "SELECT s1>s2 FROM strings";
@@ -79,7 +99,7 @@ string GetQuery() override {
 string BenchmarkInfo() override {
 	return "STRING COMPARISON";
 }
-FINISH_BENCHMARK(StringGreaterThan)
+FINISH_BENCHMARK(StringGreaterThanLong)
 
 DUCKDB_BENCHMARK(StringLengthShort, "[string]")
 STRING_DATA_GEN_BODY(5)
@@ -101,7 +121,7 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(StringLengthLong)
 
-DUCKDB_BENCHMARK(StringAgg, "[string]")
+DUCKDB_BENCHMARK(StringAggShort, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {
 	return "SELECT STRING_AGG(s1, ' ') FROM strings";
@@ -109,4 +129,14 @@ string GetQuery() override {
 string BenchmarkInfo() override {
 	return "STRING LENGTH";
 }
-FINISH_BENCHMARK(StringAgg)
+FINISH_BENCHMARK(StringAggShort)
+
+DUCKDB_BENCHMARK(StringAggLong, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+	return "SELECT STRING_AGG(s1, ' ') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING LENGTH";
+}
+FINISH_BENCHMARK(StringAggShort)
