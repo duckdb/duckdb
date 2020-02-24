@@ -10,6 +10,7 @@ add_library(duckdb_benchmark_micro OBJECT
             indexcreation.cpp
             rangejoin.cpp
             rangequery.cpp
+            string.cpp
             window.cpp
             storage.cpp)
 set(BENCHMARK_OBJECT_FILES
