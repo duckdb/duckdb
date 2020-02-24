@@ -44,7 +44,6 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		}
 	}
 
-	// now perform the actual concatenation
 	// first we allocate the empty strings for each of the values
 	auto result_data = (string_t *)result.GetData();
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
@@ -54,6 +53,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[k] = 0;
 	});
+
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
@@ -111,127 +111,139 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 		});
 }
 
-static void concat_ws_constant_sep(DataChunk &args, Vector &result, vector<string> &results, string sep) {
+template<bool CONSTANT_SEP>
+static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data) {
+	vector<index_t> result_lengths(args.size(), 0);
+	vector<bool> has_results(args.size(), false);
+	// first figure out the lengths
+	for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
 
-	// // now perform the actual concatenation
-	// vector<bool> has_results(args.size(), false);
-	// for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
-	// 	auto &input = args.data[col_idx];
-	// 	auto input_data = (string_t *)input.GetData();
-	// 	assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
-	// 	// loop over the vector and concat to all results
-	// 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-	// 		// constant vector
-	// 		if (input.nullmask[0]) {
-	// 			// constant null, skip
-	// 			continue;
-	// 		}
-	// 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-	// 			if (has_results[k]) {
-	// 				results[k] += sep;
-	// 			}
-	// 			results[k] += input_data[0];
-	// 			has_results[k] = true;
-	// 		});
-	// 	} else {
-	// 		// standard vector
-	// 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-	// 			// ignore null entries
-	// 			if (input.nullmask[i]) {
-	// 				return;
-	// 			}
-	// 			if (has_results[k]) {
-	// 				results[k] += sep;
-	// 			}
-	// 			results[k] += input_data[i];
-	// 			has_results[k] = true;
-	// 		});
-	// 	}
-	// }
-}
+		// loop over the vector and concat to all results
+		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+			// constant vector
+			if (input.nullmask[0]) {
+				// constant null, skip
+				continue;
+			}
+			auto input_data = (string_t *)input.GetData();
+			index_t constant_size = input_data[0].GetSize();
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				if (has_results[k]) {
+					result_lengths[k] += sep_data[CONSTANT_SEP ? 0 : i].GetSize();
+				}
+				result_lengths[k] += constant_size;
+				has_results[k] = true;
+			});
+		} else {
+			input.Normalify();
+			auto input_data = (string_t *)input.GetData();
+			// standard vector
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				// ignore null entries
+				if (input.nullmask[i]) {
+					return;
+				}
+				if (has_results[k]) {
+					result_lengths[k] += sep_data[CONSTANT_SEP ? 0 : i].GetSize();
+				}
+				result_lengths[k] += input_data[i].GetSize();
+				has_results[k] = true;
+			});
+		}
+	}
 
-static void concat_ws_variable_sep(DataChunk &args, Vector &result, vector<string> &results, Vector &separator) {
-	// auto sep_data = (string_t *)separator.GetData();
-	// // now perform the actual concatenation
-	// vector<bool> has_results(result.size(), false);
-	// for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
-	// 	auto &input = args.data[col_idx];
-	// 	auto input_data = (string_t *)input.GetData();
-	// 	assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
-	// 	// loop over the vector and concat to all results
-	// 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-	// 		// constant vector
-	// 		if (input.nullmask[0]) {
-	// 			// constant null, skip
-	// 			continue;
-	// 		}
-	// 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-	// 			if (separator.nullmask[i]) {
-	// 				return;
-	// 			}
-	// 			if (has_results[k]) {
-	// 				results[k] += sep_data[i];
-	// 			}
-	// 			results[k] += input_data[0];
-	// 			has_results[k] = true;
-	// 		});
-	// 	} else {
-	// 		// standard vector
-	// 		VectorOperations::Exec(result, [&](index_t i, index_t k) {
-	// 			// ignore null entries
-	// 			if (input.nullmask[i] || separator.nullmask[i]) {
-	// 				return;
-	// 			}
-	// 			if (has_results[k]) {
-	// 				results[k] += sep_data[i];
-	// 			}
-	// 			results[k] += input_data[i];
-	// 			has_results[k] = true;
-	// 		});
-	// 	}
-	// }
+	// first we allocate the empty strings for each of the values
+	auto result_data = (string_t *)result.GetData();
+	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		// allocate an empty string of the required size
+		result_data[i] = result.EmptyString(result_lengths[k]);
+		// we reuse the result_lengths vector to store the currently appended size
+		result_lengths[k] = 0;
+		has_results[k] = false;
+	});
+
+	// now that the empty space for the strings has been allocated, perform the concatenation
+	for (index_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
+		auto input_data = (string_t *)input.GetData();
+		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
+		// loop over the vector and concat to all results
+		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+			// constant vector
+			if (input.nullmask[0]) {
+				// constant null, skip
+				continue;
+			}
+			// append the constant vector to each of the strings
+			auto input_ptr = input_data[0].GetData();
+			auto input_len = input_data[0].GetSize();
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				if (has_results[k]) {
+					auto sep_size = sep_data[CONSTANT_SEP ? 0 : i].GetSize();
+					auto sep_ptr = sep_data[CONSTANT_SEP ? 0 : i].GetData();
+					memcpy(result_data[i].GetData() + result_lengths[k], sep_ptr, sep_size);
+					result_lengths[k] += sep_size;
+				}
+				memcpy(result_data[i].GetData() + result_lengths[k], input_ptr, input_len);
+				result_lengths[k] += input_len;
+				has_results[k] = true;
+			});
+		} else {
+			// standard vector
+			VectorOperations::Exec(result, [&](index_t i, index_t k) {
+				// ignore null entries
+				if (input.nullmask[i]) {
+					return;
+				}
+				if (has_results[k]) {
+					auto sep_size = sep_data[CONSTANT_SEP ? 0 : i].GetSize();
+					auto sep_ptr = sep_data[CONSTANT_SEP ? 0 : i].GetData();
+					memcpy(result_data[i].GetData() + result_lengths[k], sep_ptr, sep_size);
+					result_lengths[k] += sep_size;
+				}
+				auto input_ptr = input_data[i].GetData();
+				auto input_len = input_data[i].GetSize();
+				memcpy(result_data[i].GetData() + result_lengths[k], input_ptr, input_len);
+				result_lengths[k] += input_len;
+				has_results[k] = true;
+			});
+		}
+	}
+	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		result_data[i].Finalize();
+	});
 }
 
 static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	throw NotImplementedException("FIXME: concat ws");
-	// auto &separator = args.data[0];
-	// auto sep_data = (string_t *)separator.GetData();
+	auto &separator = args.data[0];
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	for(index_t i = 0; i < args.column_count(); i++) {
+		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			break;
+		}
+	}
 
-	// result.vector_type = VectorType::CONSTANT_VECTOR;
-	// // iterate over the vectors to check the result vector type
-	// for (index_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
-	// 	auto &input = args.data[col_idx];
-	// 	assert(input.type == TypeId::VARCHAR);
-	// 	if (input.vector_type != VectorType::CONSTANT_VECTOR) {
-	// 		// regular vector: set the result type to a flat vector
-	// 		assert(input.vector_type == VectorType::FLAT_VECTOR);
-	// 		assert(input.SameCardinality(result));
-	// 		result.vector_type = VectorType::FLAT_VECTOR;
-	// 	}
-	// }
-
-	// // check if we are dealing with a constant separator or a variable separator
-	// vector<string> results(result.size());
-	// if (args.data[0].vector_type == VectorType::CONSTANT_VECTOR) {
-	// 	if (separator.nullmask[0]) {
-	// 		// constant NULL as separator: return constant NULL vector
-	// 		result.vector_type = VectorType::CONSTANT_VECTOR;
-	// 		result.nullmask[0] = true;
-	// 		return;
-	// 	} else {
-	// 		// constant non-null value as separator: result has no NULL values
-	// 		result.nullmask.reset();
-	// 	}
-	// 	concat_ws_constant_sep(args, result, results, sep_data[0]);
-	// } else {
-	// 	// variable-length separator: copy nullmask
-	// 	result.nullmask = separator.nullmask;
-	// 	concat_ws_variable_sep(args, result, results, separator);
-	// }
-
-	// // now write the final result to the result vector and add the strings to the heap
-	// auto result_data = (string_t *)result.GetData();
-	// VectorOperations::Exec(result, [&](index_t i, index_t k) { result_data[i] = result.AddString(results[k]); });
+	if (separator.vector_type == VectorType::CONSTANT_VECTOR) {
+		// constant separator
+		if (separator.nullmask[0]) {
+			// constant NULL as separator: return constant NULL vector
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = true;
+			return;
+		} else {
+			// constant non-null value as separator: result has no NULL values
+			result.nullmask.reset();
+		}
+		auto sep_data = (string_t *)separator.GetData();
+		templated_concat_ws<true>(args, result, sep_data);
+	} else {
+		// variable separator: copy nullmask from separator
+		separator.Normalify();
+		result.nullmask = separator.nullmask;
+		templated_concat_ws<false>(args, result, (string_t *) separator.GetData());
+	}
 }
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
