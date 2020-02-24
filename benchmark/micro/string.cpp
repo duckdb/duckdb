@@ -139,4 +139,4 @@ string GetQuery() override {
 string BenchmarkInfo() override {
 	return "STRING LENGTH";
 }
-FINISH_BENCHMARK(StringAggShort)
+FINISH_BENCHMARK(StringAggLong)
