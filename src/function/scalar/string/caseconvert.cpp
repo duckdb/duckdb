@@ -16,7 +16,6 @@ static void strcase(const char *input_data, index_t input_length, char *output) 
 	for(index_t i = 0; i < input_length; i++) {
 		output[i] = OP::Operation(input_data[i]);
 	}
-	output[input_length] = '\0';
 }
 
 template <class OP>
@@ -29,6 +28,7 @@ static void caseconvert_function(Vector &input, Vector &result) {
 
 		auto target = result.EmptyString(input_length);
 		strcase<OP>(input_data, input_length, target.GetData());
+		target.Finalize();
 		return target;
 	});
 }

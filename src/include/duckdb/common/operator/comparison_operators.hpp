@@ -63,19 +63,10 @@ struct StringComparisonOperators {
 	template<bool INVERSE>
 	static inline bool EqualsOrNot(const string_t a, const string_t b) {
 		if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
-			// prefix and length are equal
-			if (a.IsInlined()) {
-				// small string: compare entire inlined string
-				if (memcmp(a.prefix, b.prefix, a.length) == 0) {
-					// entire string is equal
-					return INVERSE ? false : true;
-				}
-			} else {
-				// large string: check main data source
-				if (memcmp(a.value_.data, b.value_.data, a.length) == 0) {
-					// entire string is equal
-					return INVERSE ? false : true;
-				}
+			// large string: check main data source
+			if (memcmp(a.dataptr, b.dataptr, a.length) == 0) {
+				// entire string is equal
+				return INVERSE ? false : true;
 			}
 		}
 		// not equal

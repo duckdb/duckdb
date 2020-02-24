@@ -19,44 +19,32 @@ struct string_t {
 	friend class StringSegment;
 public:
 	static constexpr index_t PREFIX_LENGTH = 4 * sizeof(char);
-	static constexpr index_t INLINE_LENGTH = 12;
 
 	string_t() = default;
 	string_t(uint32_t len) : length(len) {
-		memset(prefix, 0, PREFIX_LENGTH);
-		value_.data = nullptr;
+		dataptr = nullptr;
 	}
 	string_t(const char *data, uint32_t len) : length(len) {
 		assert(data || length == 0);
-		if (IsInlined()) {
-			// zero initialize the prefix first
-			// this makes sure that strings with length smaller than 4 still have an equal prefix
+		if (length == 0) {
 			memset(prefix, 0, PREFIX_LENGTH);
-			if (length == 0) {
-				return;
-			}
-			// small string: inlined
+		} else if (length < PREFIX_LENGTH) {
 			memcpy(prefix, data, length);
-			prefix[length] = '\0';
+			memset(prefix + length, 0, PREFIX_LENGTH - length);
 		} else {
-			// large string: store pointer
 			memcpy(prefix, data, PREFIX_LENGTH);
-			value_.data = (char*) data;
 		}
+		dataptr = (char*) data;
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) {}
 	string_t(const string &value) : string_t(value.c_str(), value.size()) {}
 
-	bool IsInlined() const {
-		return length < INLINE_LENGTH;
-	}
-
 	char *GetData() {
-		return IsInlined() ? (char*) prefix : value_.data;
+		return dataptr;
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? (const char*) prefix : value_.data;
+		return dataptr;
 	}
 
 	index_t GetSize() const {
@@ -68,28 +56,22 @@ public:
 	}
 
 	void Finalize() {
-		// set trailing NULL byte
-		auto dataptr = (char *) GetData();
-		dataptr[length] = '\0';
-		if (length < INLINE_LENGTH) {
-			// fill prefix with zeros if the length is smaller than the prefix length
-			for(index_t i = length; i < PREFIX_LENGTH; i++) {
-				prefix[i] = '\0';
-			}
+		if (length < PREFIX_LENGTH) {
+			memcpy(prefix, dataptr, length);
+			memset(prefix + length, 0, PREFIX_LENGTH - length);
 		} else {
 			// copy the data into the prefix
 			memcpy(prefix, dataptr, PREFIX_LENGTH);
 		}
+		// set trailing NULL byte
+		dataptr[length] = '\0';
 	}
 
 	void Verify();
 private:
 	uint32_t length;
 	char prefix[4];
-	union {
-		char inlined[8];
-		char *data;
-	} value_;
+	char *dataptr;
 };
 
 }; // namespace duckdb
