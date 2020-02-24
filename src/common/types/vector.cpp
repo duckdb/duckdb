@@ -412,6 +412,10 @@ string_t Vector::AddString(const string &data) {
 }
 
 string_t Vector::AddString(string_t data) {
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
 	if (!auxiliary) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -421,6 +425,9 @@ string_t Vector::AddString(string_t data) {
 }
 
 string_t Vector::EmptyString(index_t len) {
+	if (len < string_t::INLINE_LENGTH) {
+		return string_t(len);
+	}
 	if (!auxiliary) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}

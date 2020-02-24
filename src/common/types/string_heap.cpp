@@ -38,6 +38,7 @@ string_t StringHeap::AddString(const string_t &data) {
 }
 
 string_t StringHeap::EmptyString(index_t len) {
+	assert(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
 		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (index_t)MINIMUM_HEAP_SIZE));

@@ -193,7 +193,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 				data[c].buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
 				data[c].data = data[c].buffer->GetData();
 				auto target_strings = (string_t *)data[c].GetData();
-				if (!data[c].nullmask[0]) {
+				if (!data[c].nullmask[0] && !source_strings[0].IsInlined()) {
 					target_strings[0] = heap.AddString(source_strings[0]);
 				} else {
 					target_strings[0] = source_strings[0];
@@ -203,7 +203,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 				data[c].data = data[c].buffer->GetData();
 				auto target_strings = (string_t *)data[c].GetData();
 				VectorOperations::Exec(data[c], [&](index_t i, index_t k) {
-					if (!data[c].nullmask[i]) {
+					if (!data[c].nullmask[i] && !source_strings[i].IsInlined()) {
 						target_strings[i] = heap.AddString(source_strings[i]);
 					} else {
 						target_strings[i] = source_strings[i];
