@@ -131,3 +131,20 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	result = con.Query("select LOWER(b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "rÄcks"}));
 }
+
+TEST_CASE("REVERSE test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
+	                          "('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)"));
+
+	result = con.Query("select REVERSE(a) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"olleH", "DlLuH", "daeHrötoM", ""}));
+
+	result = con.Query("select REVERSE(b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"dlroW", Value(), "skcÄR", Value()}));
+}
