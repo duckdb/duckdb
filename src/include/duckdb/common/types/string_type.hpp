@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include <cstring>
+#include <cassert>
 
 namespace duckdb {
 

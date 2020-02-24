@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cmath>
 
