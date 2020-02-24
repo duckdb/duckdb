@@ -85,27 +85,27 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count)
 }
 
 static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
-	auto result_data = (const char **)result.GetData();
+	auto result_data = (string_t*) result.GetData();
 	for (index_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
 			result.nullmask[i] = true;
 		} else {
-			result_data[i] = CHAR(val);
+			result_data[i] = string_t((char*) CHAR(val));
 		}
 	}
 }
 
 static void AppendFactor(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
-	auto result_data = (const char **)result.GetData();
+	auto result_data = (string_t *)result.GetData();
 	SEXP factor_levels = GET_LEVELS(coldata);
 	for (index_t i = 0; i < count; i++) {
 		int val = source_data[i];
 		if (RIntegerType::IsNull(val)) {
 			result.nullmask[i] = true;
 		} else {
-			result_data[i] = CHAR(STRING_ELT(factor_levels, val - 1));
+			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
 		}
 	}
 }
@@ -297,11 +297,11 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					break;
 				case SQLTypeId::VARCHAR: {
 					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].size(); row_idx++) {
-						auto src_ptr = (char **)chunk->data[col_idx].GetData();
+						auto src_ptr = (string_t *)chunk->data[col_idx].GetData();
 						if (chunk->data[col_idx].nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 						} else {
-							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx], CE_UTF8));
+							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx].GetData(), CE_UTF8));
 						}
 					}
 					break;
