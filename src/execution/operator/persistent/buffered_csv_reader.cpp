@@ -550,7 +550,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
-			auto parse_data = (string_t*)parse_chunk.data[col_idx].GetData();
+			auto parse_data = (string_t *)parse_chunk.data[col_idx].GetData();
 			VectorOperations::Exec(parse_chunk.data[col_idx], [&](index_t i, index_t k) {
 				if (!parse_chunk.data[col_idx].nullmask[i]) {
 					if (!Value::IsUTF8String(parse_data[i])) {

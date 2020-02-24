@@ -80,8 +80,7 @@ static index_t nested_loop_join_inner_operator(Vector &left, Vector &right, inde
 	case TypeId::DOUBLE:
 		return NLTYPE::template Operation<double, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	case TypeId::VARCHAR:
-		return NLTYPE::template Operation<string_t, OP>(left, right, lpos, rpos, lvector, rvector,
-		                                                    current_match_count);
+		return NLTYPE::template Operation<string_t, OP>(left, right, lpos, rpos, lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented type for join!");
 	}

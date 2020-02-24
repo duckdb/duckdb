@@ -64,12 +64,10 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
-	set.AddFunction(
-	    ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
+	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
+	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
 }
 
 } // namespace duckdb

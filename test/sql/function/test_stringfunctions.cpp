@@ -187,7 +187,6 @@ TEST_CASE("REVERSE test", "[function]") {
 	result = con.Query("select REVERSE(a) FROM strings WHERE b IS NOT NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {"olleH", "daeHrötoM"}));
 
-
 	// test incorrect usage of reverse
 	REQUIRE_FAIL(con.Query("select REVERSE()"));
 	REQUIRE_FAIL(con.Query("select REVERSE(1, 2)"));

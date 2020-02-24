@@ -401,7 +401,8 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	case TypeId::DOUBLE:
 		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
 	case TypeId::VARCHAR:
-		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()), art.is_little_endian);
+		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
+		                                art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}

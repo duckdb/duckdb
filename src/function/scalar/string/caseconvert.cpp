@@ -11,16 +11,14 @@ using namespace std;
 namespace duckdb {
 
 // TODO: this does not handle UTF characters yet.
-template <class OP>
-static void strcase(const char *input_data, index_t input_length, char *output) {
-	for(index_t i = 0; i < input_length; i++) {
+template <class OP> static void strcase(const char *input_data, index_t input_length, char *output) {
+	for (index_t i = 0; i < input_length; i++) {
 		output[i] = OP::Operation(input_data[i]);
 	}
 	output[input_length] = '\0';
 }
 
-template <class OP>
-static void caseconvert_function(Vector &input, Vector &result) {
+template <class OP> static void caseconvert_function(Vector &input, Vector &result) {
 	assert(input.type == TypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, [&](string_t input) {

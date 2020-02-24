@@ -25,8 +25,7 @@ struct blob_t {
 
 struct string_t;
 
-template <class T>
-using child_list_t = std::vector<std::pair<std::string, T>>;
+template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
 
 struct list_entry_t {
 	list_entry_t() = default;
@@ -233,7 +232,6 @@ public:
 	static const SQLType STRUCT;
 	static const SQLType LIST;
 	static const SQLType ANY;
-
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

@@ -87,32 +87,29 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			});
 		}
 	}
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i].Finalize();
-	});
+	VectorOperations::Exec(result, [&](index_t i, index_t k) { result_data[i].Finalize(); });
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t, true>(args.data[0], args.data[1], result,
-		[&](string_t a, string_t b) {
-			auto a_data = a.GetData();
-			auto b_data = b.GetData();
-			auto a_length = a.GetSize();
-			auto b_length = b.GetSize();
+	                                                            [&](string_t a, string_t b) {
+		                                                            auto a_data = a.GetData();
+		                                                            auto b_data = b.GetData();
+		                                                            auto a_length = a.GetSize();
+		                                                            auto b_length = b.GetSize();
 
-			auto target_length = a_length + b_length;
-			auto target = result.EmptyString(target_length);
-			auto target_data = target.GetData();
+		                                                            auto target_length = a_length + b_length;
+		                                                            auto target = result.EmptyString(target_length);
+		                                                            auto target_data = target.GetData();
 
-			memcpy(target_data, a_data, a_length);
-			memcpy(target_data + a_length, b_data, b_length);
-			target.Finalize();
-			return target;
-		});
+		                                                            memcpy(target_data, a_data, a_length);
+		                                                            memcpy(target_data + a_length, b_data, b_length);
+		                                                            target.Finalize();
+		                                                            return target;
+	                                                            });
 }
 
-template<bool CONSTANT_SEP>
-static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data) {
+template <bool CONSTANT_SEP> static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data) {
 	vector<index_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	// first figure out the lengths
@@ -210,15 +207,13 @@ static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_d
 			});
 		}
 	}
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
-		result_data[i].Finalize();
-	});
+	VectorOperations::Exec(result, [&](index_t i, index_t k) { result_data[i].Finalize(); });
 }
 
 static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &separator = args.data[0];
 	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for(index_t i = 0; i < args.column_count(); i++) {
+	for (index_t i = 0; i < args.column_count(); i++) {
 		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::FLAT_VECTOR;
 			break;
@@ -242,7 +237,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 		// variable separator: copy nullmask from separator
 		separator.Normalify();
 		result.nullmask = separator.nullmask;
-		templated_concat_ws<false>(args, result, (string_t *) separator.GetData());
+		templated_concat_ws<false>(args, result, (string_t *)separator.GetData());
 	}
 }
 

@@ -29,7 +29,7 @@ template <> inline const char *NullValue() {
 }
 
 template <> inline string_t NullValue() {
-	return string_t(NullValue<const char*>());
+	return string_t(NullValue<const char *>());
 }
 
 template <> inline char *NullValue() {

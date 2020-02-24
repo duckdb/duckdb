@@ -63,7 +63,7 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 
 		if (state_ptr->dataptr == nullptr) {
 			// first iteration: allocate space for the string and copy it into the state
-			state_ptr->alloc_size = std::max((index_t) 8, (index_t) NextPowerOfTwo(str_size));
+			state_ptr->alloc_size = std::max((index_t)8, (index_t)NextPowerOfTwo(str_size));
 			state_ptr->dataptr = new char[state_ptr->alloc_size];
 			state_ptr->size = str_size - 1;
 			memcpy(state_ptr->dataptr, str, str_size);
@@ -72,12 +72,12 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 			index_t required_size = state_ptr->size + str_size + sep_size;
 			if (required_size > state_ptr->alloc_size) {
 				// no space! allocate extra space
-				while(state_ptr->alloc_size < required_size) {
+				while (state_ptr->alloc_size < required_size) {
 					state_ptr->alloc_size *= 2;
 				}
 				auto new_data = new char[state_ptr->alloc_size];
 				memcpy(new_data, state_ptr->dataptr, state_ptr->size);
-				delete [] state_ptr->dataptr;
+				delete[] state_ptr->dataptr;
 				state_ptr->dataptr = new_data;
 			}
 			// copy the separator
@@ -95,7 +95,7 @@ static void string_agg_destructor(Vector &state) {
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		auto state_ptr = states[i];
 		if (state_ptr->dataptr) {
-			delete [] state_ptr->dataptr;
+			delete[] state_ptr->dataptr;
 		}
 	});
 }

@@ -83,7 +83,7 @@ static void WriteQuotedString(BufferedWriter &writer, string_t str_value, string
 
 	// check for \n, \r, \n\r in string
 	if (!write_quoted) {
-		for(index_t i = 0; i < str_value.GetSize(); i++) {
+		for (index_t i = 0; i < str_value.GetSize(); i++) {
 			if (str_data[i] == '\n' || str_data[i] == '\r') {
 				// newline, write a quoted string
 				write_quoted = true;

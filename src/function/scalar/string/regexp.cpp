@@ -42,19 +42,18 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 
 	if (info.constant_pattern) {
 		// FIXME: this should be a unary loop
-		UnaryExecutor::Execute<string_t, bool, true>(strings, result,
-		    [&](string_t input) {
-				return RE2::PartialMatch(CreateStringPiece(input), *info.constant_pattern);
-			});
+		UnaryExecutor::Execute<string_t, bool, true>(strings, result, [&](string_t input) {
+			return RE2::PartialMatch(CreateStringPiece(input), *info.constant_pattern);
+		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, bool, true>(strings, patterns, result,
-			[&](string_t input, string_t pattern) {
-				RE2 re(CreateStringPiece(pattern), options);
-				if (!re.ok()) {
-					throw Exception(re.error());
-				}
-				return RE2::PartialMatch(CreateStringPiece(input), re);
-			});
+		BinaryExecutor::Execute<string_t, string_t, bool, true>(
+		    strings, patterns, result, [&](string_t input, string_t pattern) {
+			    RE2 re(CreateStringPiece(pattern), options);
+			    if (!re.ok()) {
+				    throw Exception(re.error());
+			    }
+			    return RE2::PartialMatch(CreateStringPiece(input), re);
+		    });
 	}
 }
 

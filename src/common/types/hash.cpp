@@ -36,7 +36,6 @@ template <> uint64_t Hash(const char *str) {
 	return hash;
 }
 
-
 template <> uint64_t Hash(string_t val) {
 	return Hash(val.GetData(), val.GetSize());
 }

@@ -166,7 +166,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 			Vector v(*this, data[i].type, ptr.get());
 			VectorOperations::ReadFromStorage(v, data[i]);
 		} else {
-			auto strings = (string_t*) data[i].data;
+			auto strings = (string_t *)data[i].data;
 			for (index_t j = 0; j < rows; j++) {
 				// read the strings
 				auto str = source.Read<string>();
@@ -187,7 +187,7 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (index_t c = 0; c < column_count(); c++) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
-			auto source_strings = (string_t*) data[c].GetData();
+			auto source_strings = (string_t *)data[c].GetData();
 			auto old_buffer = move(data[c].buffer);
 			if (data[c].vector_type == VectorType::CONSTANT_VECTOR) {
 				data[c].buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);

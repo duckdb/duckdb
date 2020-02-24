@@ -517,7 +517,7 @@ static Value GetCValue(duckdb_result *result, index_t col, index_t row) {
 		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
 	}
 	case DUCKDB_TYPE_VARCHAR:
-		return Value(string(UnsafeFetch<const char*>(result, col, row)));
+		return Value(string(UnsafeFetch<const char *>(result, col, row)));
 	default:
 		// invalid type for C to C++ conversion
 		assert(0);

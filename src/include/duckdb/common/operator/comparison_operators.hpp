@@ -60,8 +60,7 @@ template <> inline bool LessThan::Operation(bool left, bool right) {
 // Specialized String Comparison Operations
 //===--------------------------------------------------------------------===//
 struct StringComparisonOperators {
-	template<bool INVERSE>
-	static inline bool EqualsOrNot(const string_t a, const string_t b) {
+	template <bool INVERSE> static inline bool EqualsOrNot(const string_t a, const string_t b) {
 		if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
 			// prefix and length are equal
 			if (a.IsInlined()) {

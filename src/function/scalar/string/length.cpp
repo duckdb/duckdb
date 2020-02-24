@@ -12,7 +12,7 @@ struct StringLengthOperator {
 		int64_t length = 0;
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		for(index_t i = 0; i < input_length; i++) {
+		for (index_t i = 0; i < input_length; i++) {
 			length += (input_data[i] & 0xC0) != 0x80;
 		}
 		return length;

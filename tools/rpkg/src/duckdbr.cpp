@@ -85,13 +85,13 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count)
 }
 
 static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
-	auto result_data = (string_t*) result.GetData();
+	auto result_data = (string_t *)result.GetData();
 	for (index_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
 			result.nullmask[i] = true;
 		} else {
-			result_data[i] = string_t((char*) CHAR(val));
+			result_data[i] = string_t((char *)CHAR(val));
 		}
 	}
 }

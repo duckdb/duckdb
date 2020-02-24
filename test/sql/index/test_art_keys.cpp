@@ -124,13 +124,13 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.clear();
 
 	// Test strings
-	keys.push_back(Key::CreateKey<const char*>("abc", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("babababa", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("hello", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("hellow", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("torororororo", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("torororororp", is_little_endian));
-	keys.push_back(Key::CreateKey<const char*>("z", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("abc", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("babababa", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("hello", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("hellow", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("torororororo", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("torororororp", is_little_endian));
+	keys.push_back(Key::CreateKey<const char *>("z", is_little_endian));
 
 	TestKeys(keys);
 

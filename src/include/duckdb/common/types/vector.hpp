@@ -150,7 +150,8 @@ public:
 	string_t AddString(string_t data);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	string_t AddString(const string &data);
-	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the result of an operation
+	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
+	//! result of an operation
 	string_t EmptyString(index_t len);
 
 	//! Add a reference from this vector to the string heap of the provided vector

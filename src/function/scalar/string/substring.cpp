@@ -8,8 +8,8 @@ using namespace std;
 
 namespace duckdb {
 
-static string_t substring_scalar_function(string_t input, int offset, int length,
-                                             unique_ptr<char[]> &output, index_t &current_len) {
+static string_t substring_scalar_function(string_t input, int offset, int length, unique_ptr<char[]> &output,
+                                          index_t &current_len) {
 	// reduce offset by one because SQL starts counting at 1
 	offset--;
 

@@ -93,7 +93,6 @@ public:
 	//! Create a struct value with given list of entries
 	static Value STRUCT(child_list_t<Value> values);
 
-
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}
