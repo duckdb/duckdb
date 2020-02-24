@@ -26,7 +26,7 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 	return make_unique<RegexpMatchesBindData>(move(constant_pattern), range_min, range_max, range_success);
 }
 
-static inline re2::StringPiece CreateStringPiece(string_t input) {
+static inline re2::StringPiece CreateStringPiece(string_t &input) {
 	return re2::StringPiece(input.GetData(), input.GetSize());
 }
 

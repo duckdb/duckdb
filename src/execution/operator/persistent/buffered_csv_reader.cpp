@@ -516,7 +516,7 @@ void BufferedCSVReader::AddValue(char *str_val, index_t length, index_t &column,
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
-			parse_data[row_entry] = v.AddString(new_val.c_str());
+			parse_data[row_entry] = v.AddString(new_val.c_str(), new_val.size());
 		} else {
 			parse_data[row_entry] = string_t(str_val, length);
 		}

@@ -27,13 +27,13 @@ public:
 	string_t(const char *data, uint32_t len) : length(len) {
 		assert(data || length == 0);
 		if (IsInlined()) {
+			// zero initialize the prefix first
+			// this makes sure that strings with length smaller than 4 still have an equal prefix
+			memset(prefix, 0, PREFIX_LENGTH);
 			if (length == 0) {
 				return;
 			}
 			// small string: inlined
-			// zero initialize the prefix first
-			// this makes sure that strings with length smaller than 4 still have an equal prefix
-			memset(prefix, 0, PREFIX_LENGTH);
 			memcpy(prefix, data, length);
 			prefix[length] = '\0';
 		} else {
@@ -64,6 +64,23 @@ public:
 	string GetString() const {
 		return string(GetData(), GetSize());
 	}
+
+	void Finalize() {
+		// set trailing NULL byte
+		auto dataptr = (char *) GetData();
+		dataptr[length] = '\0';
+		if (length < INLINE_LENGTH) {
+			// fill prefix with zeros if the length is smaller than the prefix length
+			for(index_t i = length; i < PREFIX_LENGTH; i++) {
+				prefix[i] = '\0';
+			}
+		} else {
+			// copy the data into the prefix
+			memcpy(prefix, dataptr, PREFIX_LENGTH);
+		}
+	}
+
+	void Verify();
 private:
 	uint32_t length;
 	char prefix[4];

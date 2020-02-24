@@ -21,7 +21,7 @@ string_t StringHeap::AddString(const char *data, index_t len) {
 	auto insert_string = EmptyString(len);
 	auto insert_pos = insert_string.GetData();
 	memcpy(insert_pos, data, len);
-	insert_pos[len] = '\0';
+	insert_string.Finalize();
 	return insert_string;
 }
 

@@ -524,11 +524,11 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	auto info = make_unique<StringUpdateInfo>();
 
 	// perform a merge between the new and old indexes
-	auto strings = (char **)update.GetData();
+	auto strings = (string_t *)update.GetData();
 	auto pick_new = [&](index_t id, index_t idx, index_t count) {
 		info->ids[count] = id;
 		if (!update.nullmask[idx]) {
-			WriteString(string_t(strings[idx], strlen(strings[idx])), info->block_ids[count], info->offsets[count]);
+			WriteString(strings[idx], info->block_ids[count], info->offsets[count]);
 		} else {
 			info->block_ids[count] = INVALID_BLOCK;
 			info->offsets[count] = 0;

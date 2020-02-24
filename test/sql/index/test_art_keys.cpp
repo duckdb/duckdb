@@ -44,7 +44,7 @@ static void TestKeys(vector<unique_ptr<Key>> &keys) {
 }
 
 static unique_ptr<Key> CreateCompoundKey(string str_val, int32_t int_val, bool is_little_endian) {
-	auto key_left = Key::CreateKey<string>(str_val, is_little_endian);
+	auto key_left = Key::CreateKey<string_t>(string_t(str_val.c_str(), str_val.size()), is_little_endian);
 	auto key_right = Key::CreateKey<int32_t>(int_val, is_little_endian);
 	unique_ptr<data_t[]> data = unique_ptr<data_t[]>(new data_t[key_left->len + key_right->len]);
 	memcpy(data.get(), key_left->data.get(), key_left->len);
@@ -124,13 +124,13 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	keys.clear();
 
 	// Test strings
-	keys.push_back(Key::CreateKey<string>("abc", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("babababa", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("hello", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("hellow", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("torororororo", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("torororororp", is_little_endian));
-	keys.push_back(Key::CreateKey<string>("z", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("abc", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("babababa", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("hello", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("hellow", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("torororororo", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("torororororp", is_little_endian));
+	keys.push_back(Key::CreateKey<const char*>("z", is_little_endian));
 
 	TestKeys(keys);
 

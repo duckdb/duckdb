@@ -386,16 +386,12 @@ void Vector::Verify() {
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!nullmask[0]) {
 				auto string = ((string_t *)data)[0];
-				assert(string.GetData());
-				assert(strlen(string.GetData()) == string.GetSize());
-				assert(Value::IsUTF8String(string));
+				string.Verify();
 			}
 		} else {
 			VectorOperations::ExecType<string_t>(*this, [&](string_t string, uint64_t i, uint64_t k) {
 				if (!nullmask[i]) {
-					assert(string.GetData());
-					assert(strlen(string.GetData()) == string.GetSize());
-					assert(Value::IsUTF8String(string));
+					string.Verify();
 				}
 			});
 		}

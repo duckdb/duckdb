@@ -56,7 +56,7 @@ template <> unique_ptr<data_t[]> Key::CreateData(int64_t value, bool is_little_e
 template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_endian);
 template <> unique_ptr<data_t[]> Key::CreateData(float value, bool is_little_endian);
 
-template <> unique_ptr<Key> Key::CreateKey(string element, bool is_little_endian);
 template <> unique_ptr<Key> Key::CreateKey(string_t value, bool is_little_endian);
+template <> unique_ptr<Key> Key::CreateKey(const char *value, bool is_little_endian);
 
 } // namespace duckdb

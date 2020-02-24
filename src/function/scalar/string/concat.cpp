@@ -49,7 +49,8 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	auto result_data = (string_t *)result.GetData();
 	VectorOperations::Exec(result, [&](index_t i, index_t k) {
 		// allocate an empty string of the required size
-		result_data[i] = result.EmptyString(constant_lengths + result_lengths[k]);
+		index_t str_length = constant_lengths + result_lengths[k];
+		result_data[i] = result.EmptyString(str_length);
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[k] = 0;
 	});
@@ -86,6 +87,9 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			});
 		}
 	}
+	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		result_data[i].Finalize();
+	});
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -102,7 +106,7 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 
 			memcpy(target_data, a_data, a_length);
 			memcpy(target_data + a_length, b_data, b_length);
-			target_data[target_length] = '\0';
+			target.Finalize();
 			return target;
 		});
 }

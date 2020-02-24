@@ -31,6 +31,15 @@ TEST_CASE("CONCAT test", "[function]") {
 
 	result = con.Query("select CONCAT('1', '2', '3', '4', '5', '6', '7', '8', '9', '0')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"1234567890"}));
+
+	// concat a long string
+	result = con.Query("select '1234567890' || '1234567890', '1234567890' || NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"12345678901234567890"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	result = con.Query("select CONCAT('1234567890', '1234567890'), CONCAT('1234567890', NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"12345678901234567890"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"1234567890"}));
 }
 
 TEST_CASE("CONCAT_WS test", "[function]") {
