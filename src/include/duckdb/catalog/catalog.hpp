@@ -97,5 +97,8 @@ public:
 
 	//! Drops an index from the catalog.
 	void DropIndex(Transaction &transaction, DropInfo *info);
+
+	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot the schema will be set to DEFAULT_SCHEMA
+	static void ParseRangeVar(string input, string &schema, string &name);
 };
 } // namespace duckdb
