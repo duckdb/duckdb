@@ -159,6 +159,11 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 
+	// with quotes
+	result = con.Query("SELECT nextval('\"a\".\"seq\"'), nextval('\"b\".seq');");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
 	// start exceeds max value
 	REQUIRE_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;"));
 	// start preceeds min value

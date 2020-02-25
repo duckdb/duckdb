@@ -436,13 +436,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
 		Rf_error("duckdb_append_R: Need single string parameter for name");
 	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-
-	// FIXME crude way of stripping quotes, what about escaped quotes?
-	if (name.front() == '"') {
-		name.erase(0, 1);
-		name.erase(name.size() - 1);
-	}
 
 	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
@@ -450,7 +443,14 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
-		Appender appender(*conn, INVALID_SCHEMA, name);
+		auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+		string schema, table;
+		Catalog::ParseRangeVar(name, schema, table);
+		if (schema == DEFAULT_SCHEMA) {
+			schema = INVALID_SCHEMA;
+		}
+
+		Appender appender(*conn, schema, table);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
 		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
 			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
