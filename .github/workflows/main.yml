@@ -1,0 +1,20 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: '3.6.3'
+    - run: |
+        cd tools/rpkg
+        Rscript -e 'install.packages("remotes"); remotes::install_github("r-hub/rhub")'
+        ./configure
+        R CMD BUILD .
+        R -e "rhub::check_on_solaris(Sys.glob("duckdb_*.tar.gz"), show_status=T)"
