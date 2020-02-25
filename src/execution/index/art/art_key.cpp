@@ -1,5 +1,7 @@
 #include <cfloat>
 #include <limits.h>
+#include <cstring> // strlen() on Solaris
+
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 

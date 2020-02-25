@@ -144,7 +144,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		VisitExpression(&expr);
-		return expr;
+		return move(expr);
 	});
 }
 

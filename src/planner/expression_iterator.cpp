@@ -12,14 +12,14 @@ using namespace std;
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
 	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return child;
+		return move(child);
 	});
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
 	EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return child;
+		return move(child);
 	});
 }
 
@@ -134,7 +134,7 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	callback(*expr);
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		EnumerateExpression(child, callback);
-		return child;
+		return move(child);
 	});
 }
 
