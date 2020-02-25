@@ -1,4 +1,4 @@
-name: CI
+name: R Package Solaris Build
 
 on: [push]
 
@@ -17,5 +17,5 @@ jobs:
         cd tools/rpkg
         Rscript -e 'install.packages("remotes"); remotes::install_github("r-hub/rhub")'
         ./configure
-        R CMD BUILD .
+        R CMD build .
         R -e "rhub::check_on_solaris(Sys.glob("duckdb_*.tar.gz"), show_status=T)"
