@@ -15,6 +15,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -47,6 +48,7 @@ void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
 		                       info->name.c_str());
 	}
+
 	if (!schemas.DropEntry(transaction, info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info->name.c_str());
@@ -163,7 +165,7 @@ void Catalog::ParseRangeVar(string input, string &schema, string &name) {
 	string entry;
 normal:
 	// quote
-	for(; idx < input.size(); idx++) {
+	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
 			idx++;
 			goto quoted;
@@ -180,7 +182,7 @@ separator:
 	goto normal;
 quoted:
 	// look for another quote
-	for(; idx < input.size(); idx++) {
+	for (; idx < input.size(); idx++) {
 		if (input[idx] == '"') {
 			// unquote
 			idx++;

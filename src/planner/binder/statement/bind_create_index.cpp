@@ -9,6 +9,8 @@ using namespace std;
 
 unique_ptr<BoundSQLStatement> Binder::Bind(CreateIndexStatement &stmt) {
 	auto result = make_unique<BoundCreateIndexStatement>();
+	// create an index: not read only!
+	this->read_only = false;
 	// visit the table reference
 	result->table = Bind(*stmt.table);
 	if (result->table->type != TableReferenceType::BASE_TABLE) {

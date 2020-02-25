@@ -57,6 +57,8 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	vector<BoundParameterExpression *> *parameters;
+	//! Whether or not the bound statement is read-only
+	bool read_only;
 
 public:
 	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
@@ -118,7 +120,7 @@ private:
 
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
-    unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);

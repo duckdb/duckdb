@@ -24,37 +24,11 @@ using namespace std;
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
-bool Planner::StatementIsReadOnly(BoundSQLStatement &statement) {
-	switch(statement.type) {
-	case StatementType::INSERT:
-	case StatementType::COPY:
-	case StatementType::DELETE:
-	case StatementType::UPDATE:
-	case StatementType::CREATE_INDEX:
-	case StatementType::CREATE_TABLE:
-	case StatementType::CREATE_VIEW:
-	case StatementType::CREATE_SCHEMA:
-	case StatementType::CREATE_SEQUENCE:
-	case StatementType::ALTER:
-		return false;
-	case StatementType::DROP: {
-		// dropping prepared statements is a read-only action
-		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
-		return drop_info.type == CatalogType::PREPARED_STATEMENT;
-	}
-	case StatementType::EXECUTE:
-		// execute statement: look into the to-be-executed statement
-		return ((BoundExecuteStatement&) statement).prepared->read_only;
-	default:
-		return true;
-	}
-}
-
 bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
-	switch(statement.type) {
+	switch (statement.type) {
 	case StatementType::DROP: {
 		// dropping prepared statements also does not require a valid transaction
-		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
+		auto &drop_info = (DropInfo &)(*((BoundSimpleStatement &)statement).info);
 		return drop_info.type == CatalogType::PREPARED_STATEMENT;
 	}
 	case StatementType::PREPARE:
@@ -63,7 +37,7 @@ bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
 		return false;
 	case StatementType::EXECUTE:
 		// execute statement: look into the to-be-executed statement
-		return ((BoundExecuteStatement&) statement).prepared->requires_valid_transaction;
+		return ((BoundExecuteStatement &)statement).prepared->requires_valid_transaction;
 	default:
 		return true;
 	}
@@ -80,7 +54,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	VerifyQuery(*bound_statement);
 
-	this->read_only = StatementIsReadOnly(*bound_statement);
+	this->read_only = binder.read_only;
 	this->requires_valid_transaction = StatementRequiresValidTransaction(*bound_statement);
 	this->names = bound_statement->GetNames();
 	this->sql_types = bound_statement->GetTypes();

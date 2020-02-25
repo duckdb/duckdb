@@ -139,6 +139,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
 		}
 		result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
+		// create a persistent table: not read only!
+		this->read_only = false;
 	}
 	if (stmt.query) {
 		// construct the result object

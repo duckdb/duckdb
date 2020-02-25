@@ -11,7 +11,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateViewStatement &stmt) {
 	// note that we bind a copy and don't actually use the bind result
 	auto copy = stmt.info->query->Copy();
 	auto query_node = Bind(*copy);
-	// verify that the
+	this->read_only = false;
 	if (stmt.info->aliases.size() > query_node->names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}

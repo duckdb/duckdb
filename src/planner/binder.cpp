@@ -12,12 +12,13 @@ using namespace duckdb;
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_)
-    : context(context), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)), bound_tables(0) {
-    if(parent_) {
-        // We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-        bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-        bind_context.cte_references = parent_->bind_context.cte_references;
-    }
+    : context(context), read_only(true), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)),
+      bound_tables(0) {
+	if (parent_) {
+		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
+		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
+		bind_context.cte_references = parent_->bind_context.cte_references;
+	}
 	if (parent) {
 		parameters = parent->parameters;
 		CTE_bindings = parent->CTE_bindings;
@@ -84,9 +85,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 	case QueryNodeType::SELECT_NODE:
 		result = Bind((SelectNode &)node);
 		break;
-    case QueryNodeType::RECURSIVE_CTE_NODE:
-        result = Bind((RecursiveCTENode &)node);
-	    break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = Bind((RecursiveCTENode &)node);
+		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = Bind((SetOperationNode &)node);

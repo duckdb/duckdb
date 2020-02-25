@@ -282,7 +282,8 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 	}
 }
 
-unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result, string query) {
+unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &values, bool allow_stream_result,
+                                               string query) {
 	lock_guard<mutex> client_guard(context_lock);
 	try {
 		InitialCleanup();

@@ -30,6 +30,11 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 
 	result->table = table;
 
+	if (!result->table->temporary) {
+		// inserting into a non-temporary table: alters underlying database
+		this->read_only = false;
+	}
+
 	vector<index_t> named_column_map;
 	if (stmt.columns.size() > 0) {
 		// insertion statement specifies column list
