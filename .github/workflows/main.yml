@@ -18,4 +18,5 @@ jobs:
         Rscript -e 'install.packages("remotes"); remotes::install_github("r-hub/rhub")'
         ./configure
         R CMD build .
+        R -e "rhub::validate_email('hannes@cwi.nl', 'a08ee93f0a26457aada60456c907928c')"
         R -e "rhub::check_on_solaris(Sys.glob('duckdb_*.tar.gz'), show_status=T)"
