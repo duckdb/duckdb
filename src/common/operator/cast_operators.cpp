@@ -135,10 +135,10 @@ template <> int64_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
-template <class T> static T try_cast_string(const char *input) {
+template <class T> static T try_cast_string(string_t input) {
 	T result;
-	if (!TryCast::Operation<const char *, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to numeric", input);
+	if (!TryCast::Operation<string_t, T>(input, result)) {
+		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
 	}
 	return result;
 }
@@ -227,27 +227,28 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 	}
 }
 
-template <> bool TryCast::Operation(const char *input, bool &result) {
-	if (input[0] == 't' || input[0] == 'T') {
+template <> bool TryCast::Operation(string_t input, bool &result) {
+	auto input_data = input.GetData();
+	if (input_data[0] == 't' || input_data[0] == 'T') {
 		result = true;
-	} else if (input[0] == 'f' || input[0] == 'F') {
+	} else if (input_data[0] == 'f' || input_data[0] == 'F') {
 		result = false;
 	} else {
 		return false;
 	}
 	return true;
 }
-template <> bool TryCast::Operation(const char *input, int8_t &result) {
-	return TryIntegerCast<int8_t>(input, result);
+template <> bool TryCast::Operation(string_t input, int8_t &result) {
+	return TryIntegerCast<int8_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *input, int16_t &result) {
-	return TryIntegerCast<int16_t>(input, result);
+template <> bool TryCast::Operation(string_t input, int16_t &result) {
+	return TryIntegerCast<int16_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *input, int32_t &result) {
-	return TryIntegerCast<int32_t>(input, result);
+template <> bool TryCast::Operation(string_t input, int32_t &result) {
+	return TryIntegerCast<int32_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *input, int64_t &result) {
-	return TryIntegerCast<int64_t>(input, result);
+template <> bool TryCast::Operation(string_t input, int64_t &result) {
+	return TryIntegerCast<int64_t>(input.GetData(), result);
 }
 
 template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
@@ -334,32 +335,32 @@ template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	}
 }
 
-template <> bool TryCast::Operation(const char *input, float &result) {
-	return TryDoubleCast<float>(input, result);
+template <> bool TryCast::Operation(string_t input, float &result) {
+	return TryDoubleCast<float>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *input, double &result) {
-	return TryDoubleCast<double>(input, result);
+template <> bool TryCast::Operation(string_t input, double &result) {
+	return TryDoubleCast<double>(input.GetData(), result);
 }
 
-template <> bool Cast::Operation(const char *input) {
+template <> bool Cast::Operation(string_t input) {
 	return try_cast_string<bool>(input);
 }
-template <> int8_t Cast::Operation(const char *input) {
+template <> int8_t Cast::Operation(string_t input) {
 	return try_cast_string<int8_t>(input);
 }
-template <> int16_t Cast::Operation(const char *input) {
+template <> int16_t Cast::Operation(string_t input) {
 	return try_cast_string<int16_t>(input);
 }
-template <> int32_t Cast::Operation(const char *input) {
+template <> int32_t Cast::Operation(string_t input) {
 	return try_cast_string<int32_t>(input);
 }
-template <> int64_t Cast::Operation(const char *input) {
+template <> int64_t Cast::Operation(string_t input) {
 	return try_cast_string<int64_t>(input);
 }
-template <> float Cast::Operation(const char *input) {
+template <> float Cast::Operation(string_t input) {
 	return try_cast_string<float>(input);
 }
-template <> double Cast::Operation(const char *input) {
+template <> double Cast::Operation(string_t input) {
 	return try_cast_string<double>(input);
 }
 
@@ -402,6 +403,10 @@ template <> string Cast::Operation(double input) {
 	return to_string(input);
 }
 
+template <> string Cast::Operation(string_t input) {
+	return string(input.GetData(), input.GetSize());
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
@@ -412,8 +417,8 @@ template <> string CastFromDate::Operation(date_t input) {
 //===--------------------------------------------------------------------===//
 // Cast To Date
 //===--------------------------------------------------------------------===//
-template <> date_t CastToDate::Operation(const char *input) {
-	return Date::FromCString(input);
+template <> date_t CastToDate::Operation(string_t input) {
+	return Date::FromCString(input.GetData());
 }
 
 //===--------------------------------------------------------------------===//
@@ -426,8 +431,8 @@ template <> string CastFromTime::Operation(dtime_t input) {
 //===--------------------------------------------------------------------===//
 // Cast To Time
 //===--------------------------------------------------------------------===//
-template <> dtime_t CastToTime::Operation(const char *input) {
-	return Time::FromCString(input);
+template <> dtime_t CastToTime::Operation(string_t input) {
+	return Time::FromCString(input.GetData());
 }
 
 template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
@@ -452,8 +457,8 @@ template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
-template <> timestamp_t CastToTimestamp::Operation(const char *input) {
-	return Timestamp::FromString(input);
+template <> timestamp_t CastToTimestamp::Operation(string_t input) {
+	return Timestamp::FromString(input.GetData());
 }
 
 } // namespace duckdb

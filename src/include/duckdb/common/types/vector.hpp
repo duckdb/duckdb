@@ -143,11 +143,16 @@ public:
 	}
 
 	//! Add a string to the string heap of the vector (auxiliary data)
-	const char *AddString(const char *data, index_t len);
+	string_t AddString(const char *data, index_t len);
 	//! Add a string to the string heap of the vector (auxiliary data)
-	const char *AddString(const char *data);
+	string_t AddString(const char *data);
 	//! Add a string to the string heap of the vector (auxiliary data)
-	const char *AddString(const string &data);
+	string_t AddString(string_t data);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	string_t AddString(const string &data);
+	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
+	//! result of an operation
+	string_t EmptyString(index_t len);
 
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);

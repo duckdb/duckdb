@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -51,8 +52,14 @@ public:
 	VectorStringBuffer();
 
 public:
-	const char *AddString(const char *data, index_t len) {
+	string_t AddString(const char *data, index_t len) {
 		return heap.AddString(data, len);
+	}
+	string_t AddString(string_t data) {
+		return heap.AddString(data);
+	}
+	string_t EmptyString(index_t len) {
+		return heap.EmptyString(len);
 	}
 
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {

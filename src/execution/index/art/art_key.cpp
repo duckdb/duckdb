@@ -118,18 +118,15 @@ template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_en
 	return data;
 }
 
-template <> unique_ptr<Key> Key::CreateKey(string value, bool is_little_endian) {
-	index_t len = value.size() + 1;
+template <> unique_ptr<Key> Key::CreateKey(string_t value, bool is_little_endian) {
+	index_t len = value.GetSize() + 1;
 	auto data = unique_ptr<data_t[]>(new data_t[len]);
-	memcpy(data.get(), value.c_str(), len);
+	memcpy(data.get(), value.GetData(), len);
 	return make_unique<Key>(move(data), len);
 }
 
-template <> unique_ptr<Key> Key::CreateKey(char *value, bool is_little_endian) {
-	index_t len = strlen(value) + 1;
-	auto data = unique_ptr<data_t[]>(new data_t[len]);
-	memcpy(data.get(), value, len);
-	return make_unique<Key>(move(data), len);
+template <> unique_ptr<Key> Key::CreateKey(const char *value, bool is_little_endian) {
+	return Key::CreateKey(string_t(value, strlen(value)), is_little_endian);
 }
 
 bool Key::operator>(const Key &k) const {

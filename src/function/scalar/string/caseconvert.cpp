@@ -10,53 +10,47 @@ using namespace std;
 
 namespace duckdb {
 
-typedef void (*str_function)(const char *input, char *output);
-
 // TODO: this does not handle UTF characters yet.
-static void strtoupper(const char *input, char *output) {
-	while (*input) {
-		*output = toupper((unsigned char)*input);
-		input++;
-		output++;
+template <class OP> static void strcase(const char *input_data, index_t input_length, char *output) {
+	for (index_t i = 0; i < input_length; i++) {
+		output[i] = OP::Operation(input_data[i]);
 	}
-	*output = '\0';
+	output[input_length] = '\0';
 }
 
-static void strtolower(const char *input, char *output) {
-	while (*input) {
-		*output = tolower((unsigned char)*input);
-		input++;
-		output++;
-	}
-	*output = '\0';
-}
-
-template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &input, Vector &result) {
+template <class OP> static void caseconvert_function(Vector &input, Vector &result) {
 	assert(input.type == TypeId::VARCHAR);
 
-	index_t current_len = 0;
-	unique_ptr<char[]> output;
-	UnaryExecutor::Execute<const char *, const char *, true>(input, result, [&](const char *input) {
-		index_t required_len = strlen(input) + 1;
-		if (required_len > current_len) {
-			current_len = required_len + 1;
-			output = unique_ptr<char[]>{new char[current_len]};
-		}
-		assert(strlen(input) < current_len);
-		CASE_FUNCTION(input, output.get());
+	UnaryExecutor::Execute<string_t, string_t, true>(input, result, [&](string_t input) {
+		auto input_data = input.GetData();
+		auto input_length = input.GetSize();
 
-		return result.AddString(output.get());
+		auto target = result.EmptyString(input_length);
+		strcase<OP>(input_data, input_length, target.GetData());
+		return target;
 	});
 }
 
+struct StringToUpper {
+	static char Operation(char input) {
+		return toupper(input);
+	}
+};
+
+struct StringToLower {
+	static char Operation(char input) {
+		return tolower(input);
+	}
+};
+
 static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<strtoupper>(args.data[0], result);
+	caseconvert_function<StringToUpper>(args.data[0], result);
 }
 
 static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<strtolower>(args.data[0], result);
+	caseconvert_function<StringToLower>(args.data[0], result);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {

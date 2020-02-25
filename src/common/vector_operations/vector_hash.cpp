@@ -70,7 +70,7 @@ void VectorOperations::Hash(Vector &input, Vector &result) {
 		templated_loop_hash<double>(input, result);
 		break;
 	case TypeId::VARCHAR:
-		templated_loop_hash<const char *>(input, result);
+		templated_loop_hash<string_t>(input, result);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for hash");
@@ -138,7 +138,7 @@ void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
 		templated_loop_combine_hash<double>(input, hashes);
 		break;
 	case TypeId::VARCHAR:
-		templated_loop_combine_hash<const char *>(input, hashes);
+		templated_loop_combine_hash<string_t>(input, hashes);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for hash");

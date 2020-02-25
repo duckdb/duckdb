@@ -136,9 +136,9 @@ void DataChunk::Serialize(Serializer &serializer) {
 			assert(type == TypeId::VARCHAR);
 			// strings are inlined into the blob
 			// we use null-padding to store them
-			auto strings = (const char **)data[i].data;
+			auto strings = (string_t *)data[i].data;
 			VectorOperations::Exec(sel_vector, size(), [&](index_t j, index_t k) {
-				auto source = !data[i].nullmask[j] ? strings[j] : NullValue<const char *>();
+				auto source = !data[i].nullmask[j] ? strings[j].GetData() : NullValue<const char *>();
 				serializer.WriteString(source);
 			});
 		}
@@ -166,14 +166,13 @@ void DataChunk::Deserialize(Deserializer &source) {
 			Vector v(*this, data[i].type, ptr.get());
 			VectorOperations::ReadFromStorage(v, data[i]);
 		} else {
-			auto strings = (const char **)data[i].data;
+			auto strings = (string_t *)data[i].data;
 			for (index_t j = 0; j < rows; j++) {
 				// read the strings
 				auto str = source.Read<string>();
 				// now add the string to the StringHeap of the vector
 				// and write the pointer into the vector
 				if (IsNullValue<const char *>((const char *)str.c_str())) {
-					strings[j] = nullptr;
 					data[i].nullmask[j] = true;
 				} else {
 					strings[j] = data[i].AddString(str);
@@ -188,22 +187,26 @@ void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (index_t c = 0; c < column_count(); c++) {
 		if (data[c].type == TypeId::VARCHAR) {
 			// move strings of this chunk to the specified heap
-			auto source_strings = (const char **)data[c].GetData();
+			auto source_strings = (string_t *)data[c].GetData();
 			auto old_buffer = move(data[c].buffer);
 			if (data[c].vector_type == VectorType::CONSTANT_VECTOR) {
 				data[c].buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
 				data[c].data = data[c].buffer->GetData();
-				auto target_strings = (const char **)data[c].GetData();
-				if (!data[c].nullmask[0]) {
+				auto target_strings = (string_t *)data[c].GetData();
+				if (!data[c].nullmask[0] && !source_strings[0].IsInlined()) {
 					target_strings[0] = heap.AddString(source_strings[0]);
+				} else {
+					target_strings[0] = source_strings[0];
 				}
 			} else {
 				data[c].buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
 				data[c].data = data[c].buffer->GetData();
-				auto target_strings = (const char **)data[c].GetData();
-				VectorOperations::ExecType<const char *>(data[c], [&](const char *str, index_t i, index_t k) {
-					if (!data[c].nullmask[i]) {
+				auto target_strings = (string_t *)data[c].GetData();
+				VectorOperations::Exec(data[c], [&](index_t i, index_t k) {
+					if (!data[c].nullmask[i] && !source_strings[i].IsInlined()) {
 						target_strings[i] = heap.AddString(source_strings[i]);
+					} else {
+						target_strings[i] = source_strings[i];
 					}
 				});
 			}

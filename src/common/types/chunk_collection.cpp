@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -69,12 +70,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 template <class TYPE>
 static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, index_t left_idx, index_t right_idx) {
 	assert(left_vec.type == right_vec.type);
-	TYPE left_val = ((TYPE *)left_vec.GetData())[left_idx];
-	TYPE right_val = ((TYPE *)right_vec.GetData())[right_idx];
-	if (left_val == right_val) {
+	auto left_val = ((TYPE *)left_vec.GetData())[left_idx];
+	auto right_val = ((TYPE *)right_vec.GetData())[right_idx];
+	if (Equals::Operation<TYPE>(left_val, right_val)) {
 		return 0;
 	}
-	if (left_val < right_val) {
+	if (LessThan::Operation<TYPE>(left_val, right_val)) {
 		return -1;
 	}
 	return 1;
@@ -109,7 +110,7 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, index_t vector
 	case TypeId::DOUBLE:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::VARCHAR:
-		return strcmp(((char **)left_vec.GetData())[vector_idx_left], ((char **)right_vec.GetData())[vector_idx_right]);
+		return templated_compare_value<string_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -293,7 +294,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, index_t order[],
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::VARCHAR:
-			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::STRUCT: {
 			for (index_t row_idx = 0; row_idx < remaining_data; row_idx++) {
@@ -448,7 +449,7 @@ index_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, index_t order[]
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::VARCHAR:
-			templated_set_values<char *>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 			// TODO this is ugly and sloooow!
 		case TypeId::STRUCT:

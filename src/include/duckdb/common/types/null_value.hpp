@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cstring>
 
@@ -27,6 +28,10 @@ template <> inline const char *NullValue() {
 	return str_nil;
 }
 
+template <> inline string_t NullValue() {
+	return string_t(NullValue<const char *>());
+}
+
 template <> inline char *NullValue() {
 	return (char *)NullValue<const char *>();
 }
@@ -37,7 +42,10 @@ template <class T> inline bool IsNullValue(T value) {
 
 template <> inline bool IsNullValue(const char *value) {
 	return *value == str_nil[0];
-	// return std::strcmp(value, NullValue<const char *>()) == 0;
+}
+
+template <> inline bool IsNullValue(string_t value) {
+	return value.GetData()[0] == str_nil[0];
 }
 
 template <> inline bool IsNullValue(char *value) {

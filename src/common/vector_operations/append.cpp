@@ -51,7 +51,7 @@ void VectorOperations::ReadFromStorage(Vector &source, Vector &target) {
 		storage_read_loop<uint64_t>(source, target);
 		break;
 	case TypeId::VARCHAR:
-		storage_read_loop<const char *>(source, target);
+		storage_read_loop<string_t>(source, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");

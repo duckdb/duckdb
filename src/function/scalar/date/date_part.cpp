@@ -272,7 +272,7 @@ template <class T> static int64_t extract_element(DatePartSpecifier type, T elem
 
 struct DatePartOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
-		return extract_element<TB>(GetDatePartSpecifier(specifier), date);
+		return extract_element<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
 
@@ -309,10 +309,10 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
 	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT,
-	                   ScalarFunction::BinaryFunction<const char *, date_t, int64_t, DatePartOperator, true>));
+	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
 	date_part.AddFunction(
 	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT,
-	                   ScalarFunction::BinaryFunction<const char *, timestamp_t, int64_t, DatePartOperator, true>));
+	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);

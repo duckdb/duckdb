@@ -25,7 +25,7 @@ static void string_agg_initialize(data_ptr_t state, TypeId return_type) {
 static void string_agg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	auto states = (string_agg_state_t **)state.GetData();
-	auto result_data = (const char**)result.GetData();
+	auto result_data = (string_t *)result.GetData();
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		auto state_ptr = states[i];
 
@@ -45,8 +45,8 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 	auto &strs = inputs[0];
 	auto &seps = inputs[1];
 
-	auto str_data = (const char **)strs.GetData();
-	auto sep_data = (const char **)seps.GetData();
+	auto str_data = (string_t *)strs.GetData();
+	auto sep_data = (string_t *)seps.GetData();
 	auto states = (string_agg_state_t **)state.GetData();
 
 	// Share a reusable buffer for the block
@@ -56,14 +56,14 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 		}
 
 		auto state_ptr = states[i];
-		auto str = str_data[i];
-		auto sep = sep_data[i];
-		auto str_size = strlen(str) + 1;
-		auto sep_size = strlen(sep);
+		auto str = str_data[i].GetData();
+		auto sep = sep_data[i].GetData();
+		auto str_size = str_data[i].GetSize() + 1;
+		auto sep_size = sep_data[i].GetSize();
 
 		if (state_ptr->dataptr == nullptr) {
 			// first iteration: allocate space for the string and copy it into the state
-			state_ptr->alloc_size = std::max((index_t) 8, (index_t) NextPowerOfTwo(str_size));
+			state_ptr->alloc_size = std::max((index_t)8, (index_t)NextPowerOfTwo(str_size));
 			state_ptr->dataptr = new char[state_ptr->alloc_size];
 			state_ptr->size = str_size - 1;
 			memcpy(state_ptr->dataptr, str, str_size);
@@ -72,12 +72,12 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 			index_t required_size = state_ptr->size + str_size + sep_size;
 			if (required_size > state_ptr->alloc_size) {
 				// no space! allocate extra space
-				while(state_ptr->alloc_size < required_size) {
+				while (state_ptr->alloc_size < required_size) {
 					state_ptr->alloc_size *= 2;
 				}
 				auto new_data = new char[state_ptr->alloc_size];
 				memcpy(new_data, state_ptr->dataptr, state_ptr->size);
-				delete [] state_ptr->dataptr;
+				delete[] state_ptr->dataptr;
 				state_ptr->dataptr = new_data;
 			}
 			// copy the separator
@@ -95,7 +95,7 @@ static void string_agg_destructor(Vector &state) {
 	VectorOperations::Exec(state, [&](index_t i, index_t k) {
 		auto state_ptr = states[i];
 		if (state_ptr->dataptr) {
-			delete [] state_ptr->dataptr;
+			delete[] state_ptr->dataptr;
 		}
 	});
 }

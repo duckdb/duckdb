@@ -47,7 +47,7 @@ public:
 			TemplatedExecute<double, OP>(left, right, result);
 			break;
 		case TypeId::VARCHAR:
-			TemplatedExecute<const char *, OP, true>(left, right, result);
+			TemplatedExecute<string_t, OP, true>(left, right, result);
 			break;
 		default:
 			throw InvalidTypeException(left.type, "Invalid type for comparison");

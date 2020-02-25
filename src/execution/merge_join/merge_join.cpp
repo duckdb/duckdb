@@ -20,7 +20,7 @@ template <class MJ, class L_ARG, class R_ARG> static index_t merge_join(L_ARG &l
 	case TypeId::DOUBLE:
 		return MJ::template Operation<double>(l, r);
 	case TypeId::VARCHAR:
-		return MJ::template Operation<const char *>(l, r);
+		return MJ::template Operation<string_t>(l, r);
 	default:
 		throw NotImplementedException("Type not implemented for merge join!");
 	}

@@ -10,8 +10,10 @@ namespace duckdb {
 struct StringLengthOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		int64_t length = 0;
-		for (index_t str_idx = 0; input[str_idx]; str_idx++) {
-			length += (input[str_idx] & 0xC0) != 0x80;
+		auto input_data = input.GetData();
+		auto input_length = input.GetSize();
+		for (index_t i = 0; i < input_length; i++) {
+			length += (input_data[i] & 0xC0) != 0x80;
 		}
 		return length;
 	}
@@ -19,7 +21,7 @@ struct StringLengthOperator {
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("length", {SQLType::VARCHAR}, SQLType::BIGINT,
-	                               ScalarFunction::UnaryFunction<const char *, int64_t, StringLengthOperator, true>));
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>));
 }
 
 } // namespace duckdb

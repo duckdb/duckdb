@@ -124,7 +124,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		generate_keys<double>(input.data[0], keys, is_little_endian);
 		break;
 	case TypeId::VARCHAR:
-		generate_keys<char *>(input.data[0], keys, is_little_endian);
+		generate_keys<string_t>(input.data[0], keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -151,7 +151,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 			concatenate_keys<double>(input.data[i], keys, is_little_endian);
 			break;
 		case TypeId::VARCHAR:
-			concatenate_keys<char *>(input.data[i], keys, is_little_endian);
+			concatenate_keys<string_t>(input.data[i], keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -401,7 +401,8 @@ static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	case TypeId::DOUBLE:
 		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
 	case TypeId::VARCHAR:
-		return Key::CreateKey<string>(value.str_value, art.is_little_endian);
+		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
+		                                art.is_little_endian);
 	default:
 		throw InvalidTypeException(type, "Invalid type for index");
 	}

@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 #include <cmath>
 #include <map>
@@ -13,16 +14,19 @@
 using namespace duckdb;
 using namespace std;
 
-SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
-					vector<BoundAggregateExpression *> bindings, bool parallel) :
-		SuperLargeHashTable(initial_capacity, move(group_types), move(payload_types), AggregateObject::CreateAggregateObjects(move(bindings)), parallel) {
+SuperLargeHashTable::SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types,
+                                         vector<TypeId> payload_types, vector<BoundAggregateExpression *> bindings,
+                                         bool parallel)
+    : SuperLargeHashTable(initial_capacity, move(group_types), move(payload_types),
+                          AggregateObject::CreateAggregateObjects(move(bindings)), parallel) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
-	for(auto &binding : bindings) {
+	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size(binding->return_type);
-		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size, binding->distinct, binding->return_type));
+		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
+		                                     binding->distinct, binding->return_type));
 	}
 	return aggregates;
 }
@@ -88,7 +92,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector) {
 	if (state_vector.size() == 0) {
 		return;
 	}
-	for(index_t i = 0; i < aggregates.size(); i++) {
+	for (index_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (aggr.function.destructor) {
 			aggr.function.destructor(state_vector);
@@ -104,7 +108,7 @@ void SuperLargeHashTable::Destroy() {
 	}
 	// check if there is a destructor
 	bool has_destructor = false;
-	for(index_t i = 0; i < aggregates.size(); i++) {
+	for (index_t i = 0; i < aggregates.size(); i++) {
 		if (aggregates[i].function.destructor) {
 			has_destructor = true;
 		}
@@ -116,7 +120,7 @@ void SuperLargeHashTable::Destroy() {
 	// and call the destructor method for each of the aggregates
 	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
 	VectorCardinality state_cardinality(0);
-	Vector state_vector(state_cardinality, TypeId::POINTER, (data_ptr_t) data_pointers);
+	Vector state_vector(state_cardinality, TypeId::POINTER, (data_ptr_t)data_pointers);
 	for (data_ptr_t ptr = data, end = data + capacity * tuple_size; ptr < end; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
 			// found entry
@@ -277,7 +281,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			aggr.function.update(&distinct_payload, 1, distinct_addresses);
 			payload_idx++;
 		} else {
-			auto input_count = max((index_t) 1, (index_t) aggr.child_count);
+			auto input_count = max((index_t)1, (index_t)aggr.child_count);
 			aggr.function.update(&payload.data[payload_idx], input_count, addresses);
 			payload_idx += input_count;
 		}
@@ -321,7 +325,7 @@ void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups,
 	for (index_t i = 0; i < sel_count; i++) {
 		index_t index = sel_vector[i];
 		auto entry = group_pointers[index];
-		if ((*((T *)entry)) == data[index]) {
+		if (Equals::Operation<T>(*((T *)entry), data[index])) {
 			// match, continue to next group (if any)
 			sel_vector[current_count++] = index;
 		} else {
@@ -361,25 +365,10 @@ static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_
 		templated_compare_group_vector<double>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
 		                                       no_match_count);
 		break;
-	case TypeId::VARCHAR: {
-		// compare group vector for varchar
-		auto data = (const char **)groups.GetData();
-		index_t current_count = 0;
-		for (index_t i = 0; i < sel_count; i++) {
-			index_t index = sel_vector[i];
-			auto entry = group_pointers[index];
-			if (strcmp(data[index], *((const char **)entry)) == 0) {
-				// match, continue to next group (if any)
-				sel_vector[current_count++] = index;
-			} else {
-				// no match, move to next group
-				no_match_vector[no_match_count++] = index;
-			}
-			group_pointers[index] += sizeof(const char *);
-		}
-		sel_count = current_count;
+	case TypeId::VARCHAR:
+		templated_compare_group_vector<string_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
+		                                         no_match_count);
 		break;
-	}
 	default:
 		throw Exception("Unsupported type for group vector");
 	}

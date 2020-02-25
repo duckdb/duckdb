@@ -85,7 +85,7 @@ template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, in
 		copy_loop<double, SET_NULL>(source, target, offset, element_count);
 		break;
 	case TypeId::VARCHAR:
-		copy_loop<const char *, SET_NULL>(source, target, offset, element_count);
+		copy_loop<string_t, SET_NULL>(source, target, offset, element_count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for copy");
@@ -125,8 +125,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
-			auto source_data = (const char **)source.GetData();
-			auto target_data = (const char **)target.GetData();
+			auto source_data = (string_t *)source.GetData();
+			auto target_data = (string_t *)target.GetData();
 			VectorOperations::Exec(
 			    source,
 			    [&](index_t i, index_t k) {
@@ -195,8 +195,8 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
-			auto source_data = (const char **)source.GetData();
-			auto target_data = (const char **)target.GetData();
+			auto source_data = (string_t *)source.GetData();
+			auto target_data = (string_t *)target.GetData();
 			VectorOperations::Exec(source, [&](index_t i, index_t k) {
 				if (!target.nullmask[old_count + k]) {
 					target_data[old_count + k] = target.AddString(source_data[i]);

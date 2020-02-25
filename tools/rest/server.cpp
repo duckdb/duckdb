@@ -106,9 +106,18 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		case TypeId::DOUBLE:
 			assign_json_loop<float, double>(v, col_idx, j);
 			break;
-		case TypeId::VARCHAR:
-			assign_json_loop<char *, char *>(v, col_idx, j);
+		case TypeId::VARCHAR: {
+			auto data_ptr = (string_t *)v->GetData();
+			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+				if (!v->nullmask[i]) {
+					j["data"][col_idx] += data_ptr[i].GetData();
+
+				} else {
+					j["data"][col_idx] += nullptr;
+				}
+			});
 			break;
+		}
 		default:
 			throw std::runtime_error("Unsupported Type");
 		}
