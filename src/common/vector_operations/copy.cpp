@@ -210,6 +210,23 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 				VectorOperations::Append(*source_children[i].second, *target_children[i].second);
 			}
 		} break;
+
+		case TypeId::LIST: {
+			// recursively apply to children
+			auto &source_child = source.GetListEntry();
+			auto &target_child = target.GetListEntry();
+			// FIXME this can overflow
+			VectorOperations::Append(source_child, target_child);
+			// append to list index
+			auto old_len = target_child.size();
+			target_child.SetCount(target_child.size() + source_child.size());
+//			VectorOperations::Exec(source, [&](index_t i, index_t k) {
+//				if (!target.nullmask[old_count + k]) {
+//					// FIXME
+//				}
+//			});
+
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for APPEND");
 		}
