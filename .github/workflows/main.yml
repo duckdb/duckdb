@@ -13,6 +13,7 @@ jobs:
       with:
         r-version: '3.5.3' # The R version to download (if necessary) and use.
     - run: |
+        sudo apt install -y libcurl4-openssl-dev
         cd tools/rpkg
         Rscript -e 'install.packages("remotes"); remotes::install_github("r-hub/rhub")'
         ./configure
