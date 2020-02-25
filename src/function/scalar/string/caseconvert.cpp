@@ -40,15 +40,15 @@ template <str_function CASE_FUNCTION> static void caseconvert_function(Vector &i
 	auto result_data = (const char **)result.GetData();
 	auto input_data = (const char **)input.GetData();
 
-	index_t current_len = 0;
+	idx_t current_len = 0;
 	unique_ptr<char[]> output;
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
 		if (input.nullmask[i]) {
 			return;
 		}
 		// if (!has_stats) {
 		// no stats available, might need to reallocate
-		index_t required_len = strlen(input_data[i]) + 1;
+		idx_t required_len = strlen(input_data[i]) + 1;
 		if (required_len > current_len) {
 			current_len = required_len + 1;
 			output = unique_ptr<char[]>{new char[current_len]};

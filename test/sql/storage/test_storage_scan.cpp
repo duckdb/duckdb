@@ -21,7 +21,7 @@ TEST_CASE("Test scanning of persisted storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11), (12), (13), (14), (15), (NULL)"));
 	}
 	// perform read-only scans a few times
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");

@@ -11,7 +11,7 @@ using namespace std;
 StringHeap::StringHeap() : tail(nullptr) {
 }
 
-const char *StringHeap::AddString(const char *data, index_t len) {
+const char *StringHeap::AddString(const char *data, idx_t len) {
 #ifdef DEBUG
 	if (!Value::IsUTF8String(data)) {
 		throw Exception("String value is not valid UTF8");
@@ -19,7 +19,7 @@ const char *StringHeap::AddString(const char *data, index_t len) {
 #endif
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
-		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (index_t)MINIMUM_HEAP_SIZE));
+		auto new_chunk = make_unique<StringChunk>(std::max(len + 1, (idx_t)MINIMUM_HEAP_SIZE));
 		new_chunk->prev = move(chunk);
 		chunk = move(new_chunk);
 		if (!tail) {

@@ -66,7 +66,7 @@ void CleanupState::CleanupDelete(DeleteInfo *info) {
 		Flush();
 		current_table = version_table;
 	}
-	for (index_t i = 0; i < info->count; i++) {
+	for (idx_t i = 0; i < info->count; i++) {
 		if (count == STANDARD_VECTOR_SIZE) {
 			Flush();
 		}

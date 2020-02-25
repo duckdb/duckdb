@@ -39,7 +39,7 @@ public:
 	DataChunk();
 
 	//! The amount of vectors that are part of this DataChunk.
-	index_t column_count;
+	idx_t column_count;
 	//! The vectors owned by the DataChunk.
 	unique_ptr<Vector[]> data;
 	//! The (optional) selection vector of the DataChunk. Each of the member
@@ -49,7 +49,7 @@ public:
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
 public:
-	index_t size() {
+	idx_t size() {
 		if (column_count == 0) {
 			return 0;
 		}
@@ -73,7 +73,7 @@ public:
 	void Move(DataChunk &other);
 
 	//! Copies the data from this vector to another vector.
-	void Copy(DataChunk &other, index_t offset = 0);
+	void Copy(DataChunk &other, idx_t offset = 0);
 
 	//! Removes the selection vector from the chunk
 	void Flatten();
@@ -105,7 +105,7 @@ public:
 	string ToString() const;
 	void Print();
 
-	Vector &GetVector(index_t index) {
+	Vector &GetVector(idx_t index) {
 		assert(index < column_count);
 		return data[index];
 	}

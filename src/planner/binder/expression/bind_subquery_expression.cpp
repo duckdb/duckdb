@@ -28,7 +28,7 @@ public:
 	}
 };
 
-BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t depth) {
+BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (expr.subquery->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		assert(depth == 0);
 		// first bind the actual subquery in a new binder
@@ -37,7 +37,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 		subquery_binder->CTE_bindings = binder.CTE_bindings;
 		auto bound_node = subquery_binder->Bind(*expr.subquery);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
-		for (index_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
+		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
 			if (corr.depth > 1) {
 				// depth > 1, the column references the query ABOVE the current one

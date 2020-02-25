@@ -11,10 +11,10 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, bool HAS_NULL>
-static void vector_append_function(T *__restrict source, T *__restrict target, index_t count,
-                                   sel_t *__restrict sel_vector, nullmask_t &nullmask, index_t right_offset) {
+static void vector_append_function(T *__restrict source, T *__restrict target, idx_t count,
+                                   sel_t *__restrict sel_vector, nullmask_t &nullmask, idx_t right_offset) {
 	target += right_offset;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+	VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 		target[k] = source[i];
 		if (HAS_NULL && IsNullValue<T>(target[k])) {
 			nullmask[right_offset + k] = true;

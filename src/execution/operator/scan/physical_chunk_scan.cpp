@@ -9,7 +9,7 @@ public:
 	}
 
 	//! The current position in the scan
-	index_t chunk_index;
+	idx_t chunk_index;
 };
 
 void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -23,7 +23,7 @@ void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		return;
 	}
 	auto &collection_chunk = *collection->chunks[state->chunk_index];
-	for (index_t i = 0; i < chunk.column_count; i++) {
+	for (idx_t i = 0; i < chunk.column_count; i++) {
 		chunk.data[i].Reference(collection_chunk.data[i]);
 	}
 	state->chunk_index++;

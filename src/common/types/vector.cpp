@@ -46,7 +46,7 @@ void Vector::Reference(Value &value) {
 	SetValue(0, value);
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
+void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
@@ -181,7 +181,7 @@ Value Vector::GetValue(uint64_t index) const {
 		// get offset and length
 		auto offlen = ((list_entry_t *)data)[entry];
 		assert(children.size() == 1);
-		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			ret.list_value.push_back(children[0].second->GetValue(i));
 		}
 		return ret;
@@ -259,7 +259,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			other.sel_vector = nullptr;
 			assert(offset == 0);
 			VectorOperations::Exec(
-			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+			    *this, [&](idx_t i, idx_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
 			for (auto &child : children) {
 				auto child_copy = make_unique<Vector>();
 				child_copy->Initialize(child.second->type);
@@ -280,7 +280,7 @@ void Vector::Copy(Vector &other, uint64_t offset) {
 			other.count = count - offset;
 			other.sel_vector = nullptr;
 			VectorOperations::Exec(
-			    *this, [&](index_t i, index_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
+			    *this, [&](idx_t i, idx_t k) { other.nullmask[k - offset] = nullmask[i]; }, offset);
 
 			// FIXME :/
 			memcpy(other.data, data, count * GetTypeIdSize(type));
@@ -380,7 +380,7 @@ string Vector::ToString() const {
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
-		for (index_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
@@ -390,8 +390,8 @@ string Vector::ToString() const {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		GetSequence(start, increment);
-		for (index_t i = 0; i < count; i++) {
-			index_t idx = sel_vector ? sel_vector[i] : i;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = sel_vector ? sel_vector[i] : i;
 			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
 		}
 		break;
@@ -409,10 +409,10 @@ void Vector::Print() {
 }
 
 template <class T>
-static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count, sel_t *sel_vector) {
 	auto constant = *((T *)old_data);
 	auto output = (T *)data;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { output[i] = constant; });
+	VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) { output[i] = constant; });
 }
 
 void Vector::Normalify() {
@@ -463,15 +463,14 @@ void Vector::Normalify() {
 			flatten_constant_vector_loop<const char *>(data, old_data, count, sel_vector);
 			break;
 		case TypeId::STRUCT: {
-			for (auto& child : GetChildren()) {
+			for (auto &child : GetChildren()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->count = count;
 				child.second->sel_vector = sel_vector;
 				child.second->Normalify();
 			}
 			sel_vector = nullptr;
-		}
-			break;
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
 		}
@@ -492,7 +491,7 @@ void Vector::Normalify() {
 	}
 }
 
-void Vector::Sequence(int64_t start, int64_t increment, index_t count) {
+void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	vector_type = VectorType::SEQUENCE_VECTOR;
 	this->count = count;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
@@ -538,7 +537,7 @@ void Vector::Verify() {
 #endif
 }
 
-const char *Vector::AddString(const char *data, index_t len) {
+const char *Vector::AddString(const char *data, idx_t len) {
 	if (!auxiliary) {
 		auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -568,7 +567,7 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>>& Vector::GetChildren() {
+child_list_t<unique_ptr<Vector>> &Vector::GetChildren() {
 	return children;
 }
 

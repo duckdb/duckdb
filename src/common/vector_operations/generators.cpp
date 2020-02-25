@@ -10,21 +10,21 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-void generate_sequence_function(T *__restrict result_data, T value, T increment, index_t count,
+void generate_sequence_function(T *__restrict result_data, T value, T increment, idx_t count,
                                 sel_t *__restrict sel_vector, bool ignore_sel_vector) {
 	if (ignore_sel_vector) {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 			result_data[i] = value;
 			value += increment;
 		});
 	} else {
 		if (sel_vector) {
-			for (index_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector[i];
 				result_data[idx] = value + increment * idx;
 			}
 		} else {
-			for (index_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				result_data[i] = value;
 				value += increment;
 			}

@@ -17,7 +17,7 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry *entry;
-	index_t offset;
+	idx_t offset;
 };
 
 FunctionData *pragma_table_info_init(ClientContext &context) {
@@ -47,18 +47,18 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entry->columns.size());
-	index_t output_count = next - data.offset;
-	for (index_t j = 0; j < output.column_count; j++) {
+	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entry->columns.size());
+	idx_t output_count = next - data.offset;
+	for (idx_t j = 0; j < output.column_count; j++) {
 		output.data[j].count = output_count;
 	}
 
-	for (index_t i = data.offset; i < next; i++) {
+	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &column = data.entry->columns[i];
 		// return values:
 		// "cid", TypeId::INT32
-		assert(column.oid < (index_t)std::numeric_limits<int32_t>::max());
+		assert(column.oid < (idx_t)std::numeric_limits<int32_t>::max());
 
 		output.data[0].SetValue(index, Value::INTEGER((int32_t)column.oid));
 		// "name", TypeId::VARCHAR

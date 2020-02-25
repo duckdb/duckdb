@@ -13,11 +13,11 @@ bool ExpressionListRef::Equals(const TableRef *other_) const {
 	if (values.size() != other->values.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < values.size(); i++) {
+	for (idx_t i = 0; i < values.size(); i++) {
 		if (values[i].size() != other->values[i].size()) {
 			return false;
 		}
-		for (index_t j = 0; j < values[i].size(); j++) {
+		for (idx_t j = 0; j < values[i].size(); j++) {
 			if (!values[i][j]->Equals(other->values[i][j].get())) {
 				return false;
 			}
@@ -42,8 +42,8 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 
 void ExpressionListRef::Serialize(Serializer &serializer) {
 	TableRef::Serialize(serializer);
-	serializer.Write<index_t>(values.size());
-	for (index_t i = 0; i < values.size(); i++) {
+	serializer.Write<idx_t>(values.size());
+	for (idx_t i = 0; i < values.size(); i++) {
 		serializer.WriteList(values[i]);
 	}
 }
@@ -51,8 +51,8 @@ void ExpressionListRef::Serialize(Serializer &serializer) {
 unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &source) {
 	auto result = make_unique<ExpressionListRef>();
 	// value list
-	index_t value_list_size = source.Read<index_t>();
-	for (index_t i = 0; i < value_list_size; i++) {
+	idx_t value_list_size = source.Read<idx_t>();
+	for (idx_t i = 0; i < value_list_size; i++) {
 		vector<unique_ptr<ParsedExpression>> value_list;
 		source.ReadList<ParsedExpression>(value_list);
 		result->values.push_back(move(value_list));

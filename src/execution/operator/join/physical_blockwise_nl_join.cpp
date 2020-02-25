@@ -19,8 +19,8 @@ public:
 	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
 	unique_ptr<bool[]> rhs_found_match;
 	ChunkCollection right_chunks;
-	index_t left_position;
-	index_t right_position;
+	idx_t left_position;
+	idx_t right_position;
 	bool fill_in_rhs;
 	bool checked_found_match;
 	ExpressionExecutor executor;
@@ -83,14 +83,14 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+		for (idx_t i = 0; i < state->child_chunk.column_count; i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			chunk.sel_vector = chunk.data[0].sel_vector;
-			for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+			for (idx_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 				chunk.data[i].count = chunk.size();
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				VectorOperations::Set(chunk.data[i], Value());
@@ -104,7 +104,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	// every step that we do not have output results we shift the vectors of the RHS one up or down
 	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
 	// while allowing us to use vectorized execution for every step
-	index_t result_count = 0;
+	idx_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
 			throw NotImplementedException("FIXME: full outer join");
@@ -114,7 +114,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (!state->checked_found_match && state->lhs_found_match) {
 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
 				// non-matching tuples
-				for (index_t i = 0; i < state->child_chunk.size(); i++) {
+				for (idx_t i = 0; i < state->child_chunk.size(); i++) {
 					if (!state->lhs_found_match[i]) {
 						chunk.owned_sel_vector[result_count++] = i;
 					}
@@ -123,13 +123,13 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					// have to create the chunk, set the selection vector and count
 					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+					for (idx_t i = 0; i < state->child_chunk.column_count; i++) {
 						chunk.data[i].Reference(state->child_chunk.data[i]);
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
 					}
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
+					for (idx_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
 						chunk.data[i].nullmask.set();
 						chunk.data[i].sel_vector = chunk.sel_vector;
 						chunk.data[i].count = result_count;
@@ -161,13 +161,13 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 
 		// fill in the current element of the LHS into the chunk
 		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for (index_t i = 0; i < lchunk.column_count; i++) {
+		for (idx_t i = 0; i < lchunk.column_count; i++) {
 			auto lvalue = lchunk.data[i].GetValue(state->left_position);
 			chunk.data[i].Reference(lvalue);
 			chunk.data[i].count = rchunk.size();
 		}
 		// for the RHS we just reference the entire vector
-		for (index_t i = 0; i < rchunk.column_count; i++) {
+		for (idx_t i = 0; i < rchunk.column_count; i++) {
 			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
 		}
 		// now perform the computation
@@ -185,13 +185,13 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 				// partial match
 				chunk.sel_vector = chunk.owned_sel_vector;
 			}
-			for (index_t i = 0; i < chunk.column_count; i++) {
+			for (idx_t i = 0; i < chunk.column_count; i++) {
 				chunk.data[i].sel_vector = chunk.sel_vector;
 				chunk.data[i].count = result_count;
 			}
 			// set the match flags in the RHS
 			if (state->rhs_found_match) {
-				for (index_t i = 0; i < result_count; i++) {
+				for (idx_t i = 0; i < result_count; i++) {
 					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE +
 					                       (chunk.sel_vector ? chunk.sel_vector[i] : i)] = true;
 				}

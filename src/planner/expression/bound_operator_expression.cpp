@@ -34,7 +34,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < children.size(); i++) {
+	for (idx_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}

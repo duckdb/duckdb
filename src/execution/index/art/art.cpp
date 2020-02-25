@@ -40,7 +40,7 @@ ART::~ART() {
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	auto leaf = static_cast<Leaf *>(node);
 	Key &leaf_key = *leaf->value;
-	for (index_t i = depth; i < leaf_key.len; i++) {
+	for (idx_t i = depth; i < leaf_key.len; i++) {
 		if (leaf_key[i] != key[i]) {
 			return false;
 		}
@@ -73,7 +73,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
 		if (input.nullmask[i]) {
 			keys.push_back(nullptr);
 		} else {
@@ -84,7 +84,7 @@ template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Ke
 
 template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
 		if (input.nullmask[i] || !keys[k]) {
 			// either this column is NULL, or the previous column is NULL!
 			keys[k] = nullptr;
@@ -129,7 +129,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
-	for (index_t i = 1; i < input.column_count; i++) {
+	for (idx_t i = 1; i < input.column_count; i++) {
 		// for each fo the remaining columns, concatenate
 		switch (input.data[i].type) {
 		case TypeId::INT8:
@@ -171,8 +171,8 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	// now insert the elements into the index
 	row_ids.Normalify();
 	auto row_identifiers = (row_t *)row_ids.GetData();
-	index_t failed_index = INVALID_INDEX;
-	for (index_t i = 0; i < row_ids.count; i++) {
+	idx_t failed_index = INVALID_INDEX;
+	for (idx_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -192,11 +192,11 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		unique_ptr<Key> key;
 
 		// now erase the entries
-		for (index_t i = 0; i < failed_index; i++) {
+		for (idx_t i = 0; i < failed_index; i++) {
 			if (!keys[i]) {
 				continue;
 			}
-			index_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
+			idx_t k = row_ids.sel_vector ? row_ids.sel_vector[i] : i;
 			row_t row_id = row_identifiers[k];
 			Erase(tree, *keys[i], 0, row_id);
 		}
@@ -226,7 +226,7 @@ void ART::VerifyAppend(DataChunk &chunk) {
 	vector<unique_ptr<Key>> keys;
 	GenerateKeys(expression_result, keys);
 
-	for (index_t i = 0; i < chunk.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -303,7 +303,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 	}
 
 	// Recurse
-	index_t pos = node->GetChildPos(key[depth]);
+	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
 		return Insert(*child, move(value), depth + 1, row_id);
@@ -328,7 +328,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	row_ids.Normalify();
 	auto row_identifiers = (int64_t *)row_ids.GetData();
 
-	for (index_t i = 0; i < row_ids.count; i++) {
+	for (idx_t i = 0; i < row_ids.count; i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -358,7 +358,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 		}
 		depth += node->prefix_length;
 	}
-	index_t pos = node->GetChildPos(key[depth]);
+	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != INVALID_INDEX) {
 		auto child = node->GetChild(pos);
 		assert(child);
@@ -412,7 +412,7 @@ void ART::SearchEqual(vector<row_t> &result_ids, ARTIndexScanState *state) {
 	if (!leaf) {
 		return;
 	}
-	for (index_t i = 0; i < leaf->num_elements; i++) {
+	for (idx_t i = 0; i < leaf->num_elements; i++) {
 		row_t row_id = leaf->GetRowId(i);
 		result_ids.push_back(row_id);
 	}
@@ -426,7 +426,7 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			auto leaf = static_cast<Leaf *>(node_val);
 			Key &leafKey = *leaf->value;
 			//! Check leaf
-			for (index_t i = depth; i < leafKey.len; i++) {
+			for (idx_t i = depth; i < leafKey.len; i++) {
 				if (leafKey[i] != key[i]) {
 					return nullptr;
 				}
@@ -434,14 +434,14 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 			return node_val;
 		}
 		if (node_val->prefix_length) {
-			for (index_t pos = 0; pos < node_val->prefix_length; pos++) {
+			for (idx_t pos = 0; pos < node_val->prefix_length; pos++) {
 				if (key[depth + pos] != node_val->prefix[pos]) {
 					return nullptr;
 				}
 			}
 			depth += node_val->prefix_length;
 		}
-		index_t pos = node_val->GetChildPos(key[depth]);
+		idx_t pos = node_val->GetChildPos(key[depth]);
 		if (pos == INVALID_INDEX) {
 			return nullptr;
 		}
@@ -473,7 +473,7 @@ void ART::IteratorScan(ARTIndexScanState *state, Iterator *it, vector<row_t> &re
 				}
 			}
 		}
-		for (index_t i = 0; i < it->node->num_elements; i++) {
+		for (idx_t i = 0; i < it->node->num_elements; i++) {
 			row_t row_id = it->node->GetRowId(i);
 			result_ids.push_back(row_id);
 		}
@@ -525,7 +525,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	}
 	Node *node = n.get();
 
-	index_t depth = 0;
+	idx_t depth = 0;
 	while (true) {
 		auto &top = it.stack[it.depth];
 		top.node = node;
@@ -615,7 +615,7 @@ void ART::SearchGreater(vector<row_t> &result_ids, ARTIndexScanState *state, boo
 //===--------------------------------------------------------------------===//
 static Leaf &FindMinimum(Iterator &it, Node &node) {
 	Node *next = nullptr;
-	index_t pos = 0;
+	idx_t pos = 0;
 	switch (node.type) {
 	case NodeType::NLeaf:
 		it.node = (Leaf *)&node;
@@ -748,7 +748,7 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 		state->result_ids.reserve(result_ids.size());
 
 		state->result_ids.push_back(result_ids[0]);
-		for (index_t i = 1; i < result_ids.size(); i++) {
+		for (idx_t i = 1; i < result_ids.size(); i++) {
 			if (result_ids[i] != result_ids[i - 1]) {
 				state->result_ids.push_back(result_ids[i]);
 			}
@@ -763,7 +763,7 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 	// create a vector pointing to the current set of row ids
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	row_identifiers.count =
-	    std::min((index_t)STANDARD_VECTOR_SIZE, (index_t)state->result_ids.size() - state->result_index);
+	    std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table
 	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);

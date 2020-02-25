@@ -43,7 +43,7 @@ TEST_CASE("Test iterating over results", "[api]") {
 
 	vector<int> i_values = {1, 2};
 	vector<string> j_values = {"hello", "test"};
-	index_t row_count = 0;
+	idx_t row_count = 0;
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
 		REQUIRE(row.GetValue<int>(0) == i_values[row.row]);

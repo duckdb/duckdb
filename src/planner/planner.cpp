@@ -25,7 +25,7 @@ Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
 bool Planner::StatementIsReadOnly(BoundSQLStatement &statement) {
-	switch(statement.type) {
+	switch (statement.type) {
 	case StatementType::INSERT:
 	case StatementType::COPY:
 	case StatementType::DELETE:
@@ -39,22 +39,22 @@ bool Planner::StatementIsReadOnly(BoundSQLStatement &statement) {
 		return false;
 	case StatementType::DROP: {
 		// dropping prepared statements is a read-only action
-		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
+		auto &drop_info = (DropInfo &)(*((BoundSimpleStatement &)statement).info);
 		return drop_info.type == CatalogType::PREPARED_STATEMENT;
 	}
 	case StatementType::EXECUTE:
 		// execute statement: look into the to-be-executed statement
-		return ((BoundExecuteStatement&) statement).prepared->read_only;
+		return ((BoundExecuteStatement &)statement).prepared->read_only;
 	default:
 		return true;
 	}
 }
 
 bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
-	switch(statement.type) {
+	switch (statement.type) {
 	case StatementType::DROP: {
 		// dropping prepared statements also does not require a valid transaction
-		auto &drop_info = (DropInfo&) (*((BoundSimpleStatement&) statement).info);
+		auto &drop_info = (DropInfo &)(*((BoundSimpleStatement &)statement).info);
 		return drop_info.type == CatalogType::PREPARED_STATEMENT;
 	}
 	case StatementType::PREPARE:
@@ -63,7 +63,7 @@ bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
 		return false;
 	case StatementType::EXECUTE:
 		// execute statement: look into the to-be-executed statement
-		return ((BoundExecuteStatement&) statement).prepared->requires_valid_transaction;
+		return ((BoundExecuteStatement &)statement).prepared->requires_valid_transaction;
 	default:
 		return true;
 	}
@@ -206,9 +206,9 @@ void Planner::VerifyNode(BoundQueryNode &node) {
 		}
 
 		// double loop to verify that (in)equality of hashes
-		for (index_t i = 0; i < copies.size(); i++) {
+		for (idx_t i = 0; i < copies.size(); i++) {
 			auto outer_hash = copies[i]->Hash();
-			for (index_t j = 0; j < copies.size(); j++) {
+			for (idx_t j = 0; j < copies.size(); j++) {
 				auto inner_hash = copies[j]->Hash();
 				if (outer_hash != inner_hash) {
 					// if hashes are not equivalent the expressions should not be equivalent

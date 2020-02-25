@@ -30,8 +30,8 @@ static void TestKeyBigger(Key &big, Key &small) {
 }
 
 static void TestKeys(vector<unique_ptr<Key>> &keys) {
-	for (index_t outer = 0; outer < keys.size(); outer++) {
-		for (index_t inner = 0; inner < keys.size(); inner++) {
+	for (idx_t outer = 0; outer < keys.size(); outer++) {
+		for (idx_t inner = 0; inner < keys.size(); inner++) {
 			if (inner == outer) {
 				TestKeyEqual(*keys[inner], *keys[outer]);
 			} else if (inner > outer) {
@@ -170,7 +170,7 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		}
 		std::sort(values.begin(), values.end());
 		uint32_t current_encoded = Key::EncodeFloat(values[0]);
-		for (index_t i = 1; i < values.size(); i++) {
+		for (idx_t i = 1; i < values.size(); i++) {
 			uint32_t next_encoded = Key::EncodeFloat(values[i]);
 			if (!(next_encoded > current_encoded)) {
 				printf("Failure in Key::EncodeFloat!\n");
@@ -199,7 +199,7 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 		}
 		std::sort(values.begin(), values.end());
 		uint64_t current_encoded = Key::EncodeDouble(values[0]);
-		for (index_t i = 1; i < values.size(); i++) {
+		for (idx_t i = 1; i < values.size(); i++) {
 			uint64_t next_encoded = Key::EncodeDouble(values[i]);
 			if (!(next_encoded > current_encoded)) {
 				cout << "Failure in Key::EncodeDouble!" << std::endl;

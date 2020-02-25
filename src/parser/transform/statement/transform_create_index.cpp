@@ -48,7 +48,7 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(PGNode *node)
 		}
 	}
 
-	info.index_type = StringToIndexType(string(stmt->accessMethod));
+	info.idx_type = StringToIndexType(string(stmt->accessMethod));
 	auto tableref = make_unique<BaseTableRef>();
 	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {

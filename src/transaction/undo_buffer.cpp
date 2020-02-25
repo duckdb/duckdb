@@ -23,7 +23,7 @@ UndoBuffer::UndoBuffer() {
 	tail = head.get();
 }
 
-UndoChunk::UndoChunk(index_t size) : current_position(0), maximum_size(size), prev(nullptr) {
+UndoChunk::UndoChunk(idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
 	if (size > 0) {
 		data = unique_ptr<data_t[]>(new data_t[maximum_size]);
 	}
@@ -48,9 +48,9 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 	return result;
 }
 
-data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
+data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	assert(len <= std::numeric_limits<uint32_t>::max());
-	index_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
+	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
 	if (head->current_position + needed_space >= head->maximum_size) {
 		auto new_chunk =
 		    make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
@@ -120,7 +120,7 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 			start += len;
 		}
 		// iterate over it in reverse order
-		for (index_t i = nodes.size(); i > 0; i--) {
+		for (idx_t i = nodes.size(); i > 0; i--) {
 			callback(nodes[i - 1].first, nodes[i - 1].second);
 		}
 		current = current->next.get();

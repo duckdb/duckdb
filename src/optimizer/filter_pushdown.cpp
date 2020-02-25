@@ -44,7 +44,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
 	       op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
-	unordered_set<index_t> left_bindings, right_bindings;
+	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
@@ -98,7 +98,7 @@ void FilterPushdown::GenerateFilters() {
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
-	for (index_t i = 0; i < op->children.size(); i++) {
+	for (idx_t i = 0; i < op->children.size(); i++) {
 		FilterPushdown pushdown(optimizer);
 		op->children[i] = pushdown.Rewrite(move(op->children[i]));
 	}

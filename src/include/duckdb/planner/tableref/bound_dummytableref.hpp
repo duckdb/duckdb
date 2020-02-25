@@ -15,8 +15,8 @@ namespace duckdb {
 //! Represents a cross product
 class BoundEmptyTableRef : public BoundTableRef {
 public:
-	BoundEmptyTableRef(index_t bind_index) : BoundTableRef(TableReferenceType::EMPTY), bind_index(bind_index) {
+	BoundEmptyTableRef(idx_t bind_index) : BoundTableRef(TableReferenceType::EMPTY), bind_index(bind_index) {
 	}
-	index_t bind_index;
+	idx_t bind_index;
 };
 } // namespace duckdb

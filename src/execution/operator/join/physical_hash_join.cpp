@@ -23,7 +23,7 @@ public:
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   vector<index_t> left_projection_map, vector<index_t> right_projection_map)
+                                   vector<idx_t> left_projection_map, vector<idx_t> right_projection_map)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
       right_projection_map(right_projection_map) {
 	children.push_back(move(left));
@@ -68,7 +68,7 @@ void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorSt
 		if (right_projection_map.size() > 0) {
 			// there is a projection map: fill the build chunk with the projected columns
 			build_chunk.Reset();
-			for (index_t i = 0; i < right_projection_map.size(); i++) {
+			for (idx_t i = 0; i < right_projection_map.size(); i++) {
 				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
 			}
 			build_chunk.sel_vector = right_chunk.sel_vector;
@@ -108,7 +108,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// anti join with empty hash table, NOP join
 				// return the input
 				assert(chunk.column_count == state->child_chunk.column_count);
-				for (index_t i = 0; i < chunk.column_count; i++) {
+				for (idx_t i = 0; i < chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				return;
@@ -120,7 +120,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				assert(result_vector.type == TypeId::BOOL);
 				result_vector.count = state->child_chunk.size();
 				// for every data vector, we just reference the child chunk
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (idx_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the MARK vector:
@@ -129,7 +129,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
 					auto bool_result = (bool *)result_vector.GetData();
-					for (index_t i = 0; i < result_vector.count; i++) {
+					for (idx_t i = 0; i < result_vector.count; i++) {
 						bool_result[i] = false;
 					}
 				} else {
@@ -140,11 +140,11 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 			           hash_table->join_type == JoinType::SINGLE) {
 				// LEFT/FULL OUTER/SINGLE join and build side is empty
 				// for the LHS we reference the data
-				for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+				for (idx_t i = 0; i < state->child_chunk.column_count; i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 				}
 				// for the RHS
-				for (index_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
+				for (idx_t k = state->child_chunk.column_count; k < chunk.column_count; k++) {
 					chunk.data[k].count = state->child_chunk.size();
 					chunk.data[k].nullmask.set();
 				}
@@ -182,7 +182,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		if (chunk.size() == 0) {
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (idx_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
 					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;
@@ -194,7 +194,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 			state->cached_chunk.Append(chunk);
 			if (state->cached_chunk.size() >= (1024 - 64)) {
 				// chunk cache full: return it
-				for (index_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
+				for (idx_t col_idx = 0; col_idx < chunk.column_count; col_idx++) {
 					chunk.data[col_idx].Reference(state->cached_chunk.data[col_idx]);
 				}
 				chunk.sel_vector = state->cached_chunk.sel_vector;

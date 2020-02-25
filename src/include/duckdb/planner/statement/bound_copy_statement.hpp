@@ -29,7 +29,7 @@ public:
 	//! The bound SQL statement (only for COPY TO)
 	unique_ptr<BoundQueryNode> select_statement;
 
-	index_t table_index;
+	idx_t table_index;
 	vector<string> names;
 	vector<SQLType> sql_types;
 

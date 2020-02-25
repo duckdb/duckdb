@@ -10,7 +10,7 @@ using namespace std;
 
 namespace duckdb {
 
-static void min_update(Vector inputs[], index_t input_count, Vector &result) {
+static void min_update(Vector inputs[], idx_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Min(inputs[0], result);
 }
@@ -19,7 +19,7 @@ static void min_combine(Vector &state, Vector &combined) {
 	VectorOperations::Scatter::Min(state, combined);
 }
 
-static void max_update(Vector inputs[], index_t input_count, Vector &result) {
+static void max_update(Vector inputs[], idx_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Max(inputs[0], result);
 }
@@ -28,7 +28,7 @@ static void max_combine(Vector &state, Vector &combined) {
 	VectorOperations::Scatter::Max(state, combined);
 }
 
-template <class T, class OP> static void minmax_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
+template <class T, class OP> static void minmax_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
 	auto state = (T *)state_;
 	T result;
 	if (!AggregateExecutor::Execute<T, T, OP>(inputs[0], &result)) {

@@ -75,31 +75,30 @@ public:
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
 	//! The amount of elements in the vector.
-	index_t count;
+	idx_t count;
 	//! The selection vector of the vector.
 	sel_t *sel_vector;
 	//! The null mask of the vector, if the Vector has any NULL values
 	nullmask_t nullmask;
-
 
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
 	//! Returns the [index] element of the Vector as a Value.
-	Value GetValue(index_t index) const;
+	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value
-	void SetValue(index_t index, Value val);
+	void SetValue(idx_t index, Value val);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
+	void Initialize(TypeId new_type, bool zero_data = false, idx_t count = STANDARD_VECTOR_SIZE);
 	//! Casts the vector to the specified type
 	void Cast(TypeId new_type = TypeId::INVALID);
 	//! Appends the other vector to this vector.
 	void Append(Vector &other);
 	//! Copies the data from this vector to another vector.
-	void Copy(Vector &other, index_t offset = 0);
+	void Copy(Vector &other, idx_t offset = 0);
 	//! Flattens the vector, removing any selection vector
 	void Flatten();
 	//! Causes this vector to reference the data held by the other vector.
@@ -113,7 +112,7 @@ public:
 	void Normalify();
 
 	//! Turn the vector into a sequence vector
-	void Sequence(int64_t start, int64_t increment, index_t count);
+	void Sequence(int64_t start, int64_t increment, idx_t count);
 	//! Get the sequence attributes of a sequence vector
 	void GetSequence(int64_t &start, int64_t &increment) const;
 
@@ -126,7 +125,7 @@ public:
 	}
 
 	//! Add a string to the string heap of the vector (auxiliary data)
-	const char *AddString(const char *data, index_t len);
+	const char *AddString(const char *data, idx_t len);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	const char *AddString(const char *data);
 	//! Add a string to the string heap of the vector (auxiliary data)
@@ -135,9 +134,8 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
-	child_list_t<unique_ptr<Vector>>& GetChildren();
-	void AddChild(unique_ptr<Vector> vector, string name="");
-
+	child_list_t<unique_ptr<Vector>> &GetChildren();
+	void AddChild(unique_ptr<Vector> vector, string name = "");
 
 protected:
 	//! A pointer to the data.

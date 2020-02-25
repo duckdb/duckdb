@@ -59,7 +59,7 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		// no rules to apply on this node
 		return;
 	}
-	for (index_t i = 0; i < root.expressions.size(); i++) {
+	for (idx_t i = 0; i < root.expressions.size(); i++) {
 		bool changes_made;
 		do {
 			changes_made = false;

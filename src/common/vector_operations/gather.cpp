@@ -12,11 +12,11 @@ using namespace duckdb;
 using namespace std;
 
 struct GatherLoopSetNull {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
 		auto source = (data_ptr_t *)src.GetData();
 		auto ldata = (T *)result.GetData();
 		if (result.sel_vector) {
-			VectorOperations::Exec(src, [&](index_t i, index_t k) {
+			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
 				data_ptr_t ptr = source[i] + offset;
 				T source_value = *((T *)ptr);
 				if (IsNullValue<T>(source_value)) {
@@ -26,7 +26,7 @@ struct GatherLoopSetNull {
 				}
 			});
 		} else {
-			VectorOperations::Exec(src, [&](index_t i, index_t k) {
+			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
 				data_ptr_t ptr = source[i] + offset;
 				T source_value = *((T *)ptr);
 				if (IsNullValue<T>(source_value)) {
@@ -40,17 +40,17 @@ struct GatherLoopSetNull {
 };
 
 struct GatherLoopIgnoreNull {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
 		auto source = (data_ptr_t *)src.GetData();
 		auto ldata = (T *)result.GetData();
 		if (result.sel_vector) {
-			VectorOperations::Exec(src, [&](index_t i, index_t k) {
+			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
 				data_ptr_t ptr = source[i] + offset;
 				T source_value = *((T *)ptr);
 				ldata[result.sel_vector[k]] = OP::Operation(source_value, ldata[i]);
 			});
 		} else {
-			VectorOperations::Exec(src, [&](index_t i, index_t k) {
+			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
 				data_ptr_t ptr = source[i] + offset;
 				T source_value = *((T *)ptr);
 				ldata[k] = OP::Operation(source_value, ldata[i]);
@@ -59,7 +59,7 @@ struct GatherLoopIgnoreNull {
 	}
 };
 
-template <class LOOP, class OP> static void generic_gather_loop(Vector &source, Vector &dest, index_t offset = 0) {
+template <class LOOP, class OP> static void generic_gather_loop(Vector &source, Vector &dest, idx_t offset = 0) {
 	if (source.type != TypeId::POINTER) {
 		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
 	}
@@ -94,7 +94,7 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	}
 }
 
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, index_t offset) {
+void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, idx_t offset) {
 	if (set_null) {
 		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
 	} else {
@@ -104,10 +104,10 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, 
 }
 
 struct GatherLoopAppendNull {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
 		auto source = (data_ptr_t *)src.GetData();
 		auto ldata = (T *)result.GetData();
-		VectorOperations::Exec(src, [&](index_t i, index_t k) {
+		VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
 			T val = *((T *)(source[i] + offset));
 			result.nullmask[result.count] = IsNullValue<T>(val);
 			ldata[result.count] = *((T *)(source[i] + offset));
@@ -117,15 +117,14 @@ struct GatherLoopAppendNull {
 };
 
 struct GatherLoopAppend {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, index_t offset) {
+	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
 		auto source = (data_t **)src.GetData();
 		auto ldata = (T *)result.GetData();
-		VectorOperations::Exec(src,
-		                       [&](index_t i, index_t k) { ldata[result.count++] = *((T *)(source[i] + offset)); });
+		VectorOperations::Exec(src, [&](idx_t i, idx_t k) { ldata[result.count++] = *((T *)(source[i] + offset)); });
 	}
 };
 
-void VectorOperations::Gather::Append(Vector &source, Vector &dest, index_t offset, bool set_null) {
+void VectorOperations::Gather::Append(Vector &source, Vector &dest, idx_t offset, bool set_null) {
 	// neither source nor dest are allowed to have a selection vector
 	assert(!source.sel_vector && !dest.sel_vector);
 	assert(dest.count + source.count <= STANDARD_VECTOR_SIZE);

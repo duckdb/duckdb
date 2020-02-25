@@ -10,7 +10,7 @@ namespace duckdb {
 
 typedef const char *string_agg_state_t;
 
-void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
+void string_agg_update(Vector inputs[], idx_t input_count, Vector &state) {
 	assert(input_count == 2 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::VARCHAR);
 	inputs[0].Normalify();
 	inputs[1].Normalify();
@@ -25,7 +25,7 @@ void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
 	//  Share a reusable buffer for the block
 	std::string buffer;
 
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if (strs.nullmask[i] || seps.nullmask[i]) {
 			return;
 		}

@@ -16,8 +16,8 @@ class DataTable;
 
 struct DeleteInfo {
 	ChunkInfo *vinfo;
-	index_t count;
-	index_t base_row;
+	idx_t count;
+	idx_t base_row;
 	row_t rows[1];
 
 	DataTable &GetTable();

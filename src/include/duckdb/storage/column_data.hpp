@@ -29,11 +29,11 @@ public:
 	//! The table of the column
 	DataTable *table;
 	//! The column index of the column
-	index_t column_idx;
+	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
 	//! The amount of persistent rows
-	index_t persistent_rows;
+	idx_t persistent_rows;
 
 public:
 	//! Initialize a scan of the column
@@ -60,7 +60,7 @@ public:
 
 private:
 	//! Append a transient segment
-	void AppendTransientSegment(index_t start_row);
+	void AppendTransientSegment(idx_t start_row);
 };
 
 } // namespace duckdb

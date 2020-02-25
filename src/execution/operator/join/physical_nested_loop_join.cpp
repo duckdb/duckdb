@@ -16,15 +16,15 @@ public:
 	      right_tuple(0) {
 	}
 
-	index_t right_chunk;
+	idx_t right_chunk;
 	DataChunk left_join_condition;
 	ChunkCollection right_data;
 	ChunkCollection right_chunks;
 	//! Whether or not the RHS of the nested loop join has NULL values
 	bool has_null;
 
-	index_t left_tuple;
-	index_t right_tuple;
+	idx_t left_tuple;
+	idx_t right_tuple;
 };
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -39,13 +39,13 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 static bool RemoveNullValues(DataChunk &chunk) {
 	// OR all nullmasks together
 	nullmask_t nullmask = chunk.data[0].nullmask;
-	for (index_t i = 1; i < chunk.column_count; i++) {
+	for (idx_t i = 1; i < chunk.column_count; i++) {
 		nullmask |= chunk.data[i].nullmask;
 	}
 	// now create a selection vector
 	sel_t not_null_vector[STANDARD_VECTOR_SIZE];
-	index_t not_null_entries = 0;
-	VectorOperations::Exec(chunk.data[0], [&](index_t i, index_t k) {
+	idx_t not_null_entries = 0;
+	VectorOperations::Exec(chunk.data[0], [&](idx_t i, idx_t k) {
 		if (!nullmask[i]) {
 			not_null_vector[not_null_entries++] = i;
 		}
@@ -56,7 +56,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		assert(sizeof(not_null_vector) == sizeof(chunk.owned_sel_vector));
 		memcpy(chunk.owned_sel_vector, not_null_vector, sizeof(not_null_vector));
 		chunk.sel_vector = chunk.owned_sel_vector;
-		for (index_t i = 0; i < chunk.column_count; i++) {
+		for (idx_t i = 0; i < chunk.column_count; i++) {
 			chunk.data[i].sel_vector = chunk.sel_vector;
 			chunk.data[i].count = not_null_entries;
 		}
@@ -71,8 +71,8 @@ template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count == result.column_count);
 	// create the selection vector from the matches that were found
-	index_t result_count = 0;
-	for (index_t i = 0; i < left.size(); i++) {
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
 			result.owned_sel_vector[result_count++] = i;
@@ -84,7 +84,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// project them using the result selection vector
 		result.sel_vector = result.owned_sel_vector;
 		// reference the columns of the left side from the result
-		for (index_t i = 0; i < left.column_count; i++) {
+		for (idx_t i = 0; i < left.column_count; i++) {
 			result.data[i].Reference(left.data[i]);
 			result.data[i].sel_vector = result.sel_vector;
 			result.data[i].count = result_count;
@@ -130,7 +130,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 		} else {
 			// disqualify tuples from the RHS that have NULL values
-			for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+			for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
 				state->has_null = state->has_null || RemoveNullValues(*state->right_chunks.chunks[i]);
 			}
 			// initialize the chunks for the join conditions
@@ -234,7 +234,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		switch (type) {
 		case JoinType::INNER: {
 			sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
-			index_t match_count =
+			idx_t match_count =
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition,
 			                                 right_chunk, lvector, rvector, conditions);
 			// we have finished resolving the join conditions
@@ -245,15 +245,15 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// we have matching tuples!
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
-			for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+			for (idx_t i = 0; i < state->child_chunk.column_count; i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].count = match_count;
 				chunk.data[i].sel_vector = lvector;
 				chunk.data[i].Flatten();
 			}
 			// now create a reference to the chunk on the right side using the rvector
-			for (index_t i = 0; i < right_data.column_count; i++) {
-				index_t chunk_entry = state->child_chunk.column_count + i;
+			for (idx_t i = 0; i < right_data.column_count; i++) {
+				idx_t chunk_entry = state->child_chunk.column_count + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].count = match_count;
 				chunk.data[chunk_entry].sel_vector = rvector;

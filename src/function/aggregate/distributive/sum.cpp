@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-static void sum_update(Vector inputs[], index_t input_count, Vector &result) {
+static void sum_update(Vector inputs[], idx_t input_count, Vector &result) {
 	assert(input_count == 1);
 	VectorOperations::Scatter::Add(inputs[0], result);
 }
@@ -18,7 +18,7 @@ static void sum_combine(Vector &state, Vector &combined) {
 	VectorOperations::Scatter::Add(state, combined);
 }
 
-template <class T> static void sum_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
+template <class T> static void sum_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
 	auto state = (T *)state_;
 	T result;
 	if (!AggregateExecutor::Execute<T, T, duckdb::Add>(inputs[0], &result)) {

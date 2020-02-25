@@ -46,7 +46,7 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 }
 
 // TODO this is duplicated in date.cpp
-static bool ParseDoubleDigit2(const char *buf, index_t &pos, int32_t &result) {
+static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
 	if (std::isdigit(buf[pos])) {
 		result = buf[pos++] - '0';
 		if (std::isdigit(buf[pos])) {
@@ -59,7 +59,7 @@ static bool ParseDoubleDigit2(const char *buf, index_t &pos, int32_t &result) {
 
 static bool TryConvertTime(const char *buf, dtime_t &result) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
-	index_t pos = 0;
+	idx_t pos = 0;
 	int sep;
 
 	// skip leading spaces

@@ -18,19 +18,19 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class OP, class NULLOP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 static void templated_boolean_function_loop(bool *__restrict ldata, bool *__restrict rdata,
-                                            bool *__restrict result_data, index_t count, sel_t *__restrict sel_vector,
+                                            bool *__restrict result_data, idx_t count, sel_t *__restrict sel_vector,
                                             nullmask_t &left_nullmask, nullmask_t &right_nullmask,
                                             nullmask_t &result_nullmask) {
 	if (left_nullmask.any() || right_nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-			index_t left_idx = LEFT_CONSTANT ? 0 : i;
-			index_t right_idx = RIGHT_CONSTANT ? 0 : i;
+		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
+			idx_t left_idx = LEFT_CONSTANT ? 0 : i;
+			idx_t right_idx = RIGHT_CONSTANT ? 0 : i;
 			result_data[i] = OP::Operation(ldata[left_idx], rdata[right_idx]);
 			result_nullmask[i] = NULLOP::Operation(ldata[left_idx], rdata[right_idx], left_nullmask[left_idx],
 			                                       right_nullmask[right_idx]);
 		});
 	} else {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 			result_data[i] = OP::Operation(ldata[LEFT_CONSTANT ? 0 : i], rdata[RIGHT_CONSTANT ? 0 : i]);
 		});
 	}

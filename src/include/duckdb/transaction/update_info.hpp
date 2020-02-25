@@ -23,7 +23,7 @@ struct UpdateInfo {
 	//! The version number
 	transaction_t version_number;
 	//! The vector index within the uncompressed segment
-	index_t vector_index;
+	idx_t vector_index;
 	//! The amount of updated tuples
 	sel_t N;
 	//! The maximum amount of tuples that can fit into this UpdateInfo

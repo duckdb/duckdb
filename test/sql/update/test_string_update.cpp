@@ -245,7 +245,7 @@ TEST_CASE("Test string updates with many strings", "[update][.]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('a'), ('b'), ('c'), (NULL)"));
 
 	// insert the same strings many times
-	index_t size = 4 * sizeof(int32_t);
+	idx_t size = 4 * sizeof(int32_t);
 	while (size < Storage::BLOCK_SIZE * 2) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 		size *= 4;
@@ -296,7 +296,7 @@ TEST_CASE("Test update of big string", "[update][.]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('abcdefghijklmnopqrstuvwxyz')"));
 
 	// increase the size of the string until it is bigger than a block
-	index_t size = 26;
+	idx_t size = 26;
 	while (size < Storage::BLOCK_SIZE * 2) {
 		// concat the string 10x and insert it
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test"));

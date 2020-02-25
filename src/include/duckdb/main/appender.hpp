@@ -27,7 +27,7 @@ class Appender {
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
-	index_t column = 0;
+	idx_t column = 0;
 	//! Message explaining why the Appender is invalidated (if any)
 	string invalidated_msg;
 
@@ -60,9 +60,9 @@ public:
 	void Close();
 
 	//! Obtain a reference to the internal vector that is used to append to the table
-	Vector &GetAppendVector(index_t col_idx);
+	Vector &GetAppendVector(idx_t col_idx);
 
-	index_t CurrentColumn() {
+	idx_t CurrentColumn() {
 		return column;
 	}
 

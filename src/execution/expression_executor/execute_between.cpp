@@ -31,8 +31,7 @@ struct ExclusiveBetweenOperator {
 	}
 };
 
-template <class OP>
-static index_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, sel_t result[]) {
+template <class OP> static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, sel_t result[]) {
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -89,7 +88,7 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	VectorOperations::And(intermediate1, intermediate2, result);
 }
 
-index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, sel_t result[]) {
 	// resolve the children
 	auto &input = state->arguments.data[0];
 	auto &lower = state->arguments.data[1];
@@ -98,7 +97,7 @@ index_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState
 	Execute(*expr.lower, state->child_states[1].get(), lower);
 	Execute(*expr.upper, state->child_states[2].get(), upper);
 
-	index_t result_count;
+	idx_t result_count;
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		result_count = between_loop_type_switch<BothInclusiveBetweenOperator>(input, lower, upper, result);
 	} else if (expr.lower_inclusive) {

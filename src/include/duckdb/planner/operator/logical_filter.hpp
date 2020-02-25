@@ -18,7 +18,7 @@ public:
 	LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
-	vector<index_t> projection_map;
+	vector<idx_t> projection_map;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

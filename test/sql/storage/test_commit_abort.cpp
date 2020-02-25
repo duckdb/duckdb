@@ -58,7 +58,7 @@ TEST_CASE("Test abort of commit with persistent storage", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 5, {expected_sum_strlen}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");
@@ -97,7 +97,7 @@ TEST_CASE("Test abort of large commit with persistent storage", "[storage][.]") 
 		// insert the value 14 in con
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (14, 10, 'con')"));
 		// now insert many non-conflicting values in con2
-		index_t tpl_count = 2 * Storage::BLOCK_SIZE / sizeof(int);
+		idx_t tpl_count = 2 * Storage::BLOCK_SIZE / sizeof(int);
 		for (int i = 0; i < (int)tpl_count; i++) {
 			REQUIRE_NO_FAIL(con2.Query("INSERT INTO test VALUES (" + to_string(15 + i) + ", 10, 'con2')"));
 		}
@@ -129,7 +129,7 @@ TEST_CASE("Test abort of large commit with persistent storage", "[storage][.]") 
 		REQUIRE(CHECK_COLUMN(result, 5, {expected_sum_strlen}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test");

@@ -43,7 +43,7 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 }
 
 TEST_CASE("Test appender and connection destruction order", "[api]") {
-	for (index_t i = 0; i < 6; i++) {
+	for (idx_t i = 0; i < 6; i++) {
 		auto db = make_unique<DuckDB>(nullptr);
 		auto con = make_unique<Connection>(*db);
 		REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));

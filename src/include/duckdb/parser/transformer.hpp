@@ -30,7 +30,7 @@ public:
 	bool TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
 	string NodetypeToString(PGNodeTag type);
 
-	index_t prepared_statement_parameter_index = 0;
+	idx_t prepared_statement_parameter_index = 0;
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -119,14 +119,14 @@ private:
 	//===--------------------------------------------------------------------===//
 	unique_ptr<Constraint> TransformConstraint(PGListCell *cell);
 
-	unique_ptr<Constraint> TransformConstraint(PGListCell *cell, ColumnDefinition &column, index_t index);
+	unique_ptr<Constraint> TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(PGAlias *root);
 	void TransformCTE(PGWithClause *de_with_clause, SelectStatement &select);
-    unique_ptr<QueryNode> TransformRecursiveCTE(PGCommonTableExpr *node);
+	unique_ptr<QueryNode> TransformRecursiveCTE(PGCommonTableExpr *node);
 	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
 	ExpressionType OperatorToExpressionType(string &op);
 

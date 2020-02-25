@@ -81,7 +81,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			// int types
 			v->Cast(TypeId::INT64);
 			auto data_ptr = (int64_t *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+			VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i];
 
@@ -96,7 +96,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			v->Cast(TypeId::DOUBLE);
 
 			auto data_ptr = (double *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+			VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i];
 
@@ -108,7 +108,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		}
 		case TypeId::VARCHAR: {
 			auto data_ptr = (char **)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+			VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i];
 

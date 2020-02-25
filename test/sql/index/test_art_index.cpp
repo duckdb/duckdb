@@ -439,9 +439,9 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 	                          -598538523852390853,
 	                          4298422,
 	                          -498261};
-	index_t gt_count = 0, lt_count = 0;
-	index_t count = 0;
-	for (index_t val_index = 0; val_index < values.size(); val_index++) {
+	idx_t gt_count = 0, lt_count = 0;
+	idx_t count = 0;
+	for (idx_t val_index = 0; val_index < values.size(); val_index++) {
 		auto &value = values[val_index];
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
 		if (value >= 0) {
@@ -450,7 +450,7 @@ TEST_CASE("Test ART index with prefixes", "[art]") {
 			lt_count++;
 		}
 		count++;
-		for (index_t i = 0; i <= val_index; i++) {
+		for (idx_t i = 0; i <= val_index; i++) {
 			result = con.Query("SELECT COUNT(*) FROM integers WHERE i = " + to_string(values[i]));
 			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
 		}
@@ -470,15 +470,15 @@ TEST_CASE("Test ART index with linear insertions and deletes", "[art][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	vector<index_t> insertion_count = {4, 16, 48, 256, 1024};
+	vector<idx_t> insertion_count = {4, 16, 48, 256, 1024};
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	for (auto &insert_count : insertion_count) {
 		// insert the data
-		vector<index_t> elements;
-		index_t table_count = 0;
-		for (index_t i = 0; i < insert_count; i++) {
-			index_t element = i;
+		vector<idx_t> elements;
+		idx_t table_count = 0;
+		for (idx_t i = 0; i < insert_count; i++) {
+			idx_t element = i;
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)element));
 			elements.push_back(element);
 			table_count++;
@@ -513,15 +513,15 @@ TEST_CASE("Test ART index with random insertions and deletes", "[art][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	vector<index_t> insertion_count = {1024, 2048};
+	vector<idx_t> insertion_count = {1024, 2048};
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
 	for (auto &insert_count : insertion_count) {
 		// insert the data
-		vector<index_t> elements;
-		index_t table_count = 0;
-		for (index_t i = 0; i < insert_count; i++) {
-			index_t element = i * i;
+		vector<idx_t> elements;
+		idx_t table_count = 0;
+		for (idx_t i = 0; i < insert_count; i++) {
+			idx_t element = i * i;
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)element));
 			elements.push_back(element);
 			table_count++;
@@ -554,7 +554,7 @@ TEST_CASE("Test ART index creation with many versions", "[art][.]") {
 
 	// insert the values [0...20000]
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for (index_t i = 0; i < 20000; i++) {
+	for (idx_t i = 0; i < 20000; i++) {
 		int32_t val = i + 1;
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
 		expected_sum_r1 += val;
@@ -606,8 +606,8 @@ TEST_CASE("Test ART index with many matches", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for (index_t i = 0; i < 1024; i++) {
-		for (index_t val = 0; val < 2; val++) {
+	for (idx_t i = 0; i < 1024; i++) {
+		for (idx_t val = 0; val < 2; val++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)val));
 		}
 	}
@@ -632,8 +632,8 @@ TEST_CASE("Test ART index with many matches", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	for (index_t i = 0; i < 2048; i++) {
-		for (index_t val = 0; val < 2; val++) {
+	for (idx_t i = 0; i < 2048; i++) {
+		for (idx_t val = 0; val < 2; val++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", (int32_t)val));
 		}
 	}
@@ -665,7 +665,7 @@ TEST_CASE("Test ART index with non-linear insertion", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	index_t count = 0;
+	idx_t count = 0;
 	for (int32_t it = 0; it < 10; it++) {
 		for (int32_t val = 0; val < 1000; val++) {
 			if (it + val % 2) {
@@ -687,7 +687,7 @@ TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using art(i)"));
-	index_t count = 0;
+	idx_t count = 0;
 	for (int32_t it = 0; it < 10; it++) {
 		for (int32_t val = 0; val < 1000; val++) {
 			REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -850,20 +850,20 @@ TEST_CASE("ART Integer Types", "[art][.]") {
 	Connection con(db);
 
 	string int_types[4] = {"tinyint", "smallint", "integer", "bigint"};
-	index_t n_sizes[4] = {100, 1000, 1000, 1000};
-	for (index_t idx = 0; idx < 4; idx++) {
+	idx_t n_sizes[4] = {100, 1000, 1000, 1000};
+	for (idx_t idx = 0; idx < 4; idx++) {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i " + int_types[idx] + ")"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
-		index_t n = n_sizes[idx];
+		idx_t n = n_sizes[idx];
 		auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
 		auto key_pointer = keys.get();
-		for (index_t i = 0; i < n; i++) {
+		for (idx_t i = 0; i < n; i++) {
 			keys[i] = i + 1;
 		}
 		std::random_shuffle(key_pointer, key_pointer + n);
 
-		for (index_t i = 0; i < n; i++) {
+		for (idx_t i = 0; i < n; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 			result =
 			    con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
@@ -877,7 +877,7 @@ TEST_CASE("ART Integer Types", "[art][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 		//! Checking if all elements are still there
-		for (index_t i = 0; i < n; i++) {
+		for (idx_t i = 0; i < n; i++) {
 			result =
 			    con.Query("SELECT i FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")");
 			REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
@@ -951,7 +951,7 @@ TEST_CASE("ART Integer Types", "[art][.]") {
 		// Delete non-existing element
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=0"));
 		// Now Deleting all elements
-		for (index_t i = 0; i < n; i++) {
+		for (idx_t i = 0; i < n; i++) {
 			REQUIRE_NO_FAIL(
 			    con.Query("DELETE FROM integers WHERE i=CAST(" + to_string(keys[i]) + " AS " + int_types[idx] + ")"));
 			// check the value does not exist
@@ -973,15 +973,15 @@ TEST_CASE("ART Simple Big Range", "[art][.]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	index_t n = 4;
+	idx_t n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
-	for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t i = 0; i < n + 1; i++) {
 		keys[i] = i + 1;
 	}
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
-		for (index_t j = 0; j < 1500; j++) {
+	for (idx_t i = 0; i < n; i++) {
+		for (idx_t j = 0; j < 1500; j++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 		}
 	}
@@ -1007,17 +1007,17 @@ TEST_CASE("ART Big Range with deletions", "[art][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	index_t n = 4;
+	idx_t n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n + 1]);
-	for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t i = 0; i < n + 1; i++) {
 		keys[i] = i + 1;
 	}
 
 	// now perform a an index creation and scan with deletions with a second transaction
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	for (index_t j = 0; j < 1500; j++) {
-		for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t j = 0; j < 1500; j++) {
+		for (idx_t i = 0; i < n + 1; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 		}
 	}
@@ -1026,7 +1026,7 @@ TEST_CASE("ART Big Range with deletions", "[art][.]") {
 	// second transaction: begin and verify counts
 	Connection con2(db);
 	REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -1037,7 +1037,7 @@ TEST_CASE("ART Big Range with deletions", "[art][.]") {
 	// now delete entries in the first transaction
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 5"));
 	// verify that the counts are still correct in the second transaction
-	for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -1048,7 +1048,7 @@ TEST_CASE("ART Big Range with deletions", "[art][.]") {
 	// create an index in the first transaction now
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	// verify that the counts are still correct for con2
-	for (index_t i = 0; i < n + 1; i++) {
+	for (idx_t i = 0; i < n + 1; i++) {
 		result = con2.Query("SELECT FIRST(i), COUNT(i) FROM integers WHERE i=" + to_string(keys[i]));
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(1500)}));
@@ -1082,14 +1082,14 @@ TEST_CASE("ART Negative Range", "[art-neg]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	index_t n = 1000;
+	idx_t n = 1000;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		keys[i] = i - 500;
 	}
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
@@ -1121,9 +1121,9 @@ double generate_double(double min_double, double max_double) {
 	return min_double + static_cast<double>(rand()) / (static_cast<double>(RAND_MAX / (max_double - min_double)));
 }
 
-template <class T> int full_scan(T *keys, index_t size, T low, T high) {
+template <class T> int full_scan(T *keys, idx_t size, T low, T high) {
 	int sum = 0;
-	for (index_t i = 0; i < size; i++) {
+	for (idx_t i = 0; i < size; i++) {
 		if (keys[i] >= low && keys[i] <= high) {
 			sum += 1;
 		}
@@ -1138,51 +1138,51 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
 	//! Will use 100 keys
-	index_t n = 100;
+	idx_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 10 small floats (0.0 - 1.0)
-	for (index_t i = 0; i < n / 10; i++) {
+	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
 	//! Generate 40 floats (-50/50)
-	for (index_t i = n / 10; i < n / 2; i++) {
+	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
 	//! Generate 50 floats (min/max)
-	for (index_t i = n / 2; i < n; i++) {
+	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_small_float());
 		b = Key::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 normal-normal range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_float(-50, 50));
 		b = Key::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 big-big range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	for (index_t i = 0; i < min_values.size(); i++) {
+	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Key::EncodeFloat(min_values[i]);
 		int64_t high = Key::EncodeFloat(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
@@ -1192,7 +1192,7 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 		if (!CHECK_COLUMN(result, 0, {answer})) {
 			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
 			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
-			for (index_t k = 0; k < n; k++) {
+			for (idx_t k = 0; k < n; k++) {
 				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
 			cout << query << std::endl;
@@ -1210,51 +1210,51 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
 	//! Will use 100 keys
-	index_t n = 100;
+	idx_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 10 small floats (0.0 - 1.0)
-	for (index_t i = 0; i < n / 10; i++) {
+	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
 	//! Generate 40 floats (-50/50)
-	for (index_t i = n / 10; i < n / 2; i++) {
+	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
 	//! Generate 50 floats (min/max)
-	for (index_t i = n / 2; i < n; i++) {
+	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_small_double());
 		b = Key::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 normal-normal range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_double(-50, 50));
 		b = Key::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 big-big range queries
-	for (index_t i = 0; i < 5; i++) {
+	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	for (index_t i = 0; i < min_values.size(); i++) {
+	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Key::EncodeDouble(min_values[i]);
 		int64_t high = Key::EncodeDouble(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
@@ -1264,7 +1264,7 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 		if (!CHECK_COLUMN(result, 0, {answer})) {
 			cout << "Wrong answer on double!" << std::endl << "Queries to reproduce:" << std::endl;
 			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
-			for (index_t k = 0; k < n; k++) {
+			for (idx_t k = 0; k < n; k++) {
 				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
 			cout << query << std::endl;
@@ -1327,51 +1327,51 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
 	//! Will use 10k keys
-	index_t n = 10000;
+	idx_t n = 10000;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	//! Generate 1000 small floats (0.0 - 1.0)
-	for (index_t i = 0; i < n / 10; i++) {
+	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
 	//! Generate 4000 floats (-50/50)
-	for (index_t i = n / 10; i < n / 2; i++) {
+	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
 	//! Generate 5000 floats (min/max)
-	for (index_t i = n / 2; i < n; i++) {
+	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_small_float());
 		b = Key::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 normal-normal range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_float(-50, 50));
 		b = Key::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 big-big range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	for (index_t i = 0; i < min_values.size(); i++) {
+	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Key::EncodeFloat(min_values[i]);
 		int64_t high = Key::EncodeFloat(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
@@ -1381,7 +1381,7 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 		if (!CHECK_COLUMN(result, 0, {answer})) {
 			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
 			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
-			for (index_t k = 0; k < n; k++) {
+			for (idx_t k = 0; k < n; k++) {
 				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
 			cout << query << std::endl;
@@ -1399,51 +1399,51 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
 	//! Will use 10000 keys
-	index_t n = 10000;
+	idx_t n = 10000;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	con.Query("CREATE TABLE numbers(i BIGINT)");
 	//! Generate 1000 small floats (0.0 - 1.0)
-	for (index_t i = 0; i < n / 10; i++) {
+	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
 	//! Generate 4000 floats (-50/50)
-	for (index_t i = n / 10; i < n / 2; i++) {
+	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
 	//! Generate 5000 floats (min/max)
-	for (index_t i = n / 2; i < n; i++) {
+	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	//! Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	//! Generate 500 small-small range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_small_double());
 		b = Key::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 normal-normal range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_double(-50, 50));
 		b = Key::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	//! Generate 500 big-big range queries
-	for (index_t i = 0; i < 500; i++) {
+	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	for (index_t i = 0; i < min_values.size(); i++) {
+	for (idx_t i = 0; i < min_values.size(); i++) {
 		int64_t low = Key::EncodeDouble(min_values[i]);
 		int64_t high = Key::EncodeDouble(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
@@ -1453,7 +1453,7 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 		if (!CHECK_COLUMN(result, 0, {answer})) {
 			cout << "Wrong answer on floating point real-small!" << std::endl << "Queries to reproduce:" << std::endl;
 			cout << "CREATE TABLE numbers(i BIGINT);" << std::endl;
-			for (index_t k = 0; k < n; k++) {
+			for (idx_t k = 0; k < n; k++) {
 				cout << "INSERT INTO numbers VALUES (" << keys[k] << ");" << std::endl;
 			}
 			cout << query << std::endl;
@@ -1588,7 +1588,7 @@ TEST_CASE("Test updates resulting from big index scans", "[art][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (index_t i = 0; i < 25000; i++) {
+	for (idx_t i = 0; i < 25000; i++) {
 		int32_t value = i + 1;
 
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", value));
@@ -1627,17 +1627,17 @@ TEST_CASE("ART Node 4", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	index_t n = 4;
+	idx_t n = 4;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
@@ -1647,7 +1647,7 @@ TEST_CASE("ART Node 4", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(2 + 3 + 4)}));
 	// Now Deleting all elements
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i = 0"));
@@ -1662,17 +1662,17 @@ TEST_CASE("ART Node 16", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	index_t n = 6;
+	idx_t n = 6;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
@@ -1681,7 +1681,7 @@ TEST_CASE("ART Node 16", "[art]") {
 	result = con.Query("SELECT sum(i) FROM integers WHERE i > 4");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(5 + 6)}));
 	// Now Deleting all elements
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 	}
 	REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
@@ -1695,18 +1695,18 @@ TEST_CASE("ART Node 48", "[art]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer)"));
-	index_t n = 20;
+	idx_t n = 20;
 	auto keys = unique_ptr<int32_t[]>(new int32_t[n]);
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		keys[i] = i + 1;
 	}
 	int64_t expected_sum = 0;
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", keys[i]));
 		expected_sum += keys[i];
 	}
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		result = con.Query("SELECT i FROM integers WHERE i=$1", keys[i]);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(keys[i])}));
 	}
@@ -1726,7 +1726,7 @@ TEST_CASE("ART Node 48", "[art]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(16 + 17 + 18 + 19 + 20)}));
 
 	// Now delete all elements
-	for (index_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=$1", keys[i]));
 		expected_sum -= keys[i];
 		// verify the sum

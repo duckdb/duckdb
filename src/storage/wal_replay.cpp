@@ -284,7 +284,7 @@ void ReplayState::ReplayDelete() {
 
 	auto source_ids = (row_t *)chunk.data[0].GetData();
 	// delete the tuples from the current table
-	for (index_t i = 0; i < chunk.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
 		current_table->storage->Delete(*current_table, context, row_identifiers);
 	}
@@ -295,7 +295,7 @@ void ReplayState::ReplayUpdate() {
 		throw Exception("Corrupt WAL: update without table");
 	}
 
-	index_t column_index = source.Read<column_t>();
+	idx_t column_index = source.Read<column_t>();
 
 	DataChunk chunk;
 	chunk.Deserialize(source);

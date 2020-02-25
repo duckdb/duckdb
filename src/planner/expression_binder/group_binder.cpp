@@ -8,13 +8,13 @@
 using namespace duckdb;
 using namespace std;
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, index_t group_index,
-                         unordered_map<string, index_t> &alias_map, unordered_map<string, index_t> &group_alias_map)
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, idx_t group_index,
+                         unordered_map<string, idx_t> &alias_map, unordered_map<string, idx_t> &group_alias_map)
     : ExpressionBinder(binder, context), node(node), alias_map(alias_map), group_alias_map(group_alias_map),
       group_index(group_index) {
 }
 
-BindResult GroupBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
+BindResult GroupBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	if (root_expression && depth == 0) {
 		switch (expr.expression_class) {
 		case ExpressionClass::COLUMN_REF:
@@ -39,7 +39,7 @@ string GroupBinder::UnsupportedAggregateMessage() {
 	return "GROUP BY clause cannot contain aggregates!";
 }
 
-BindResult GroupBinder::BindSelectRef(index_t entry) {
+BindResult GroupBinder::BindSelectRef(idx_t entry) {
 	if (used_aliases.find(entry) != used_aliases.end()) {
 		// the alias has already been bound to before!
 		// this happens if we group on the same alias twice
@@ -72,7 +72,7 @@ BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 		return ExpressionBinder::BindExpression(constant, 0);
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
-	auto index = (index_t)constant.value.GetValue<int64_t>();
+	auto index = (idx_t)constant.value.GetValue<int64_t>();
 	return BindSelectRef(index - 1);
 }
 

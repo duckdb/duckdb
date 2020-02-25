@@ -30,8 +30,8 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
-	index_t initial_count;
-	index_t result_count;
+	idx_t initial_count;
+	idx_t result_count;
 	do {
 		// fetch a chunk from the child and run the filter
 		// we repeat this process until either (1) passing tuples are found, or (2) the child is completely exhausted
@@ -47,7 +47,7 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		// nothing was filtered: skip adding any selection vectors
 		return;
 	}
-	for (index_t i = 0; i < chunk.column_count; i++) {
+	for (idx_t i = 0; i < chunk.column_count; i++) {
 		chunk.data[i].count = result_count;
 		chunk.data[i].sel_vector = chunk.owned_sel_vector;
 	}

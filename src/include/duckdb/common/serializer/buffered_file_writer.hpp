@@ -23,7 +23,7 @@ public:
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;
-	index_t offset;
+	idx_t offset;
 	unique_ptr<FileHandle> handle;
 
 public:

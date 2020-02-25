@@ -15,7 +15,7 @@ atomic<bool> is_finished;
 #define THREAD_COUNT 20
 #define INSERT_COUNT 2000
 
-static void read_from_integers(DuckDB *db, bool *correct, index_t threadnr) {
+static void read_from_integers(DuckDB *db, bool *correct, idx_t threadnr) {
 	Connection con(*db);
 	correct[threadnr] = true;
 	while (!is_finished) {
@@ -35,7 +35,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
 	Appender appender(con, "integers");
-	for (index_t i = 0; i < 1000000; i++) {
+	for (idx_t i = 0; i < 1000000; i++) {
 		appender.BeginRow();
 		appender.Append<int32_t>(i);
 		appender.EndRow();
@@ -46,7 +46,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	// now launch a bunch of reading threads
 	bool correct[THREAD_COUNT];
 	thread threads[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(read_from_integers, &db, correct, i);
 	}
 
@@ -54,7 +54,7 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 	is_finished = true;
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
@@ -64,9 +64,9 @@ TEST_CASE("Concurrent reads during index creation", "[index][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
 
-static void append_to_integers(DuckDB *db, index_t threadnr) {
+static void append_to_integers(DuckDB *db, idx_t threadnr) {
 	Connection con(*db);
-	for (index_t i = 0; i < INSERT_COUNT; i++) {
+	for (idx_t i = 0; i < INSERT_COUNT; i++) {
 		auto result = con.Query("INSERT INTO integers VALUES (1)");
 		if (!result->success) {
 			FAIL();
@@ -83,7 +83,7 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// append a bunch of entries
 	Appender appender(con, "integers");
-	for (index_t i = 0; i < 1000000; i++) {
+	for (idx_t i = 0; i < 1000000; i++) {
 		appender.BeginRow();
 		appender.Append<int32_t>(i);
 		appender.EndRow();
@@ -92,14 +92,14 @@ TEST_CASE("Concurrent writes during index creation", "[index][.]") {
 
 	// now launch a bunch of concurrently writing threads (!)
 	thread threads[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(append_to_integers, &db, i);
 	}
 
 	// create the index
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 
@@ -132,11 +132,11 @@ TEST_CASE("Concurrent inserts into PRIMARY KEY column", "[index][.]") {
 	// now launch a bunch of concurrently writing threads (!)
 	// each thread will write the numbers 1...1000
 	thread threads[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(append_to_primary_key, &db);
 	}
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 
@@ -167,11 +167,11 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 	// now launch a bunch of concurrently updating threads
 	// each thread will update individual numbers and set their number one higher
 	thread threads[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(update_to_primary_key, &db);
 	}
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 
@@ -181,7 +181,7 @@ TEST_CASE("Concurrent updates to PRIMARY KEY column", "[index][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1000}));
 }
 
-static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t> *count, index_t thread_nr) {
+static void mix_insert_to_primary_key(DuckDB *db, atomic<idx_t> *count, idx_t thread_nr) {
 	unique_ptr<QueryResult> result;
 	Connection con(*db);
 	for (int32_t i = 0; i < 100; i++) {
@@ -192,7 +192,7 @@ static void mix_insert_to_primary_key(DuckDB *db, atomic<index_t> *count, index_
 	}
 }
 
-static void mix_update_to_primary_key(DuckDB *db, atomic<index_t> *count, index_t thread_nr) {
+static void mix_update_to_primary_key(DuckDB *db, atomic<idx_t> *count, idx_t thread_nr) {
 	unique_ptr<QueryResult> result;
 	Connection con(*db);
 	std::uniform_int_distribution<> distribution(1, 100);
@@ -212,7 +212,7 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	atomic<index_t> atomic_count;
+	atomic<idx_t> atomic_count;
 	atomic_count = 0;
 
 	// create a single table
@@ -221,11 +221,11 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 	// now launch a bunch of concurrently updating threads
 	// each thread will update individual numbers and set their number one higher
 	thread threads[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(i % 2 == 0 ? mix_insert_to_primary_key : mix_update_to_primary_key, &db, &atomic_count, i);
 	}
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 
@@ -235,7 +235,7 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(atomic_count)}));
 }
 
-string append_to_primary_key(Connection &con, index_t thread_nr) {
+string append_to_primary_key(Connection &con, idx_t thread_nr) {
 	unique_ptr<QueryResult> result;
 	if (!con.Query("BEGIN TRANSACTION")->success) {
 		return "Failed BEGIN TRANSACTION";
@@ -265,7 +265,7 @@ string append_to_primary_key(Connection &con, index_t thread_nr) {
 	return "";
 }
 
-static void append_to_primary_key_with_transaction(DuckDB *db, index_t thread_nr, bool success[]) {
+static void append_to_primary_key_with_transaction(DuckDB *db, idx_t thread_nr, bool success[]) {
 	Connection con(*db);
 
 	success[thread_nr] = true;
@@ -287,11 +287,11 @@ TEST_CASE("Parallel appends to table with index with transactions", "[index][.]"
 	// now launch a bunch of concurrently inserting threads
 	thread threads[THREAD_COUNT];
 	bool success[THREAD_COUNT];
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i] = thread(append_to_primary_key_with_transaction, &db, i, success);
 	}
 
-	for (index_t i = 0; i < THREAD_COUNT; i++) {
+	for (idx_t i = 0; i < THREAD_COUNT; i++) {
 		threads[i].join();
 		REQUIRE(success[i]);
 	}

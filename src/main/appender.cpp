@@ -146,7 +146,7 @@ void Appender::AppendValue(Value value) {
 	column++;
 }
 
-Vector &Appender::GetAppendVector(index_t col_idx) {
+Vector &Appender::GetAppendVector(idx_t col_idx) {
 	if (col_idx >= chunk.column_count) {
 		throw Exception("Column index out of range!");
 	}
@@ -160,8 +160,8 @@ void Appender::Flush() {
 	CheckInvalidated();
 	try {
 		// check that all vectors have the same length before appending
-		index_t chunk_size = chunk.size();
-		for (index_t i = 1; i < chunk.column_count; i++) {
+		idx_t chunk_size = chunk.size();
+		for (idx_t i = 1; i < chunk.column_count; i++) {
 			if (chunk.data[i].count != chunk_size) {
 				throw Exception("Failed to Flush appender: vectors have different number of rows");
 			}

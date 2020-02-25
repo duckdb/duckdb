@@ -47,7 +47,7 @@ bool StringUtil::EndsWith(const string &str, const string &suffix) {
 	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-string StringUtil::Repeat(const string &str, index_t n) {
+string StringUtil::Repeat(const string &str, idx_t n) {
 	ostringstream os;
 	if (n == 0 || str.empty()) {
 		return (os.str());
@@ -78,7 +78,7 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 		return ("");
 
 	ostringstream os;
-	for (index_t i = 0, cnt = lines.size(); i < cnt; i++) {
+	for (idx_t i = 0, cnt = lines.size(); i < cnt; i++) {
 		if (i > 0)
 			os << endl;
 		os << prefix << lines[i];
@@ -87,7 +87,7 @@ string StringUtil::Prefix(const string &str, const string &prefix) {
 }
 
 // http://ubuntuforums.org/showpost.php?p=10215516&postcount=5
-string StringUtil::FormatSize(index_t bytes) {
+string StringUtil::FormatSize(idx_t bytes) {
 	double BASE = 1024;
 	double KB = BASE;
 	double MB = KB * BASE;
@@ -161,11 +161,11 @@ string StringUtil::VFormat(const string fmt_str, va_list args) {
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 
-	index_t last = 0;
-	index_t input_len = input.size();
-	index_t split_len = split.size();
+	idx_t last = 0;
+	idx_t input_len = input.size();
+	idx_t split_len = split.size();
 	while (last <= input_len) {
-		index_t next = input.find(split, last);
+		idx_t next = input.find(split, last);
 		if (next == string::npos) {
 			next = input_len;
 		}
@@ -184,7 +184,7 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	if (from.empty())
 		return source;
 	;
-	index_t start_pos = 0;
+	idx_t start_pos = 0;
 	while ((start_pos = source.find(from, start_pos)) != string::npos) {
 		source.replace(start_pos, from.length(), to);
 		start_pos += to.length(); // In case 'to' contains 'from', like

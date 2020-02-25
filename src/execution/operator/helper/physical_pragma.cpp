@@ -11,7 +11,7 @@
 using namespace duckdb;
 using namespace std;
 
-static index_t ParseMemoryLimit(string arg);
+static idx_t ParseMemoryLimit(string arg);
 
 void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &pragma = *info;
@@ -55,7 +55,7 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			throw ParserException("Memory limit must be an assignment (e.g. PRAGMA memory_limit='1GB')");
 		}
 		if (pragma.parameters[0].type == TypeId::VARCHAR) {
-			index_t new_limit = ParseMemoryLimit(pragma.parameters[0].str_value);
+			idx_t new_limit = ParseMemoryLimit(pragma.parameters[0].str_value);
 			// set the new limit in the buffer manager
 			context.db.storage->buffer_manager->SetLimit(new_limit);
 		} else {
@@ -73,13 +73,13 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	}
 }
 
-index_t ParseMemoryLimit(string arg) {
+idx_t ParseMemoryLimit(string arg) {
 	// split based on the number/non-number
-	index_t idx = 0;
+	idx_t idx = 0;
 	while (std::isspace(arg[idx])) {
 		idx++;
 	}
-	index_t num_start = idx;
+	idx_t num_start = idx;
 	while ((arg[idx] >= '0' && arg[idx] <= '9') || arg[idx] == '.' || arg[idx] == 'e' || arg[idx] == 'E' ||
 	       arg[idx] == '-') {
 		idx++;
@@ -96,16 +96,16 @@ index_t ParseMemoryLimit(string arg) {
 	while (std::isspace(arg[idx])) {
 		idx++;
 	}
-	index_t start = idx;
+	idx_t start = idx;
 	while (idx < arg.size() && !std::isspace(arg[idx])) {
 		idx++;
 	}
 	if (limit < 0) {
 		// limit < 0, set limit to infinite
-		return (index_t)-1;
+		return (idx_t)-1;
 	}
 	string unit = StringUtil::Lower(arg.substr(start, idx - start));
-	index_t multiplier;
+	idx_t multiplier;
 	if (unit == "byte" || unit == "bytes" || unit == "b") {
 		multiplier = 1;
 	} else if (unit == "kilobyte" || unit == "kilobytes" || unit == "kb" || unit == "k") {
@@ -119,5 +119,5 @@ index_t ParseMemoryLimit(string arg) {
 	} else {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit.c_str());
 	}
-	return (index_t)multiplier * limit;
+	return (idx_t)multiplier * limit;
 }

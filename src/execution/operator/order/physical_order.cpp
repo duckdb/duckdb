@@ -14,9 +14,9 @@ public:
 	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	index_t position;
+	idx_t position;
 	ChunkCollection sorted_data;
-	unique_ptr<index_t[]> sorted_vector;
+	unique_ptr<idx_t[]> sorted_vector;
 };
 
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -34,7 +34,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		ExpressionExecutor executor;
 		vector<TypeId> sort_types;
 		vector<OrderType> order_types;
-		for (index_t i = 0; i < orders.size(); i++) {
+		for (idx_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
 			order_types.push_back(orders[i].type);
@@ -42,7 +42,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		}
 
 		ChunkCollection sort_collection;
-		for (index_t i = 0; i < big_data.chunks.size(); i++) {
+		for (idx_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 
@@ -53,7 +53,7 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		assert(sort_collection.count == big_data.count);
 
 		// now perform the actual sort
-		state->sorted_vector = unique_ptr<index_t[]>(new index_t[sort_collection.count]);
+		state->sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
 		sort_collection.Sort(order_types, state->sorted_vector.get());
 	}
 

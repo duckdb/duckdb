@@ -17,10 +17,10 @@ public:
 	Leaf(ART &art, unique_ptr<Key> value, row_t row_id);
 
 	unique_ptr<Key> value;
-	index_t capacity;
-	index_t num_elements;
+	idx_t capacity;
+	idx_t num_elements;
 
-	row_t GetRowId(index_t index) {
+	row_t GetRowId(idx_t index) {
 		return row_ids[index];
 	}
 

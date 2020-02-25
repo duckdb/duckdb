@@ -21,7 +21,7 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 	return bound->table->ColumnExists(column_name);
 }
 
-BindResult TableBinding::Bind(ColumnRefExpression &colref, index_t depth) {
+BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = bound->table->name_map.find(colref.column_name);
 	if (entry == bound->table->name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
@@ -42,7 +42,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, index_t depth) {
 	ColumnBinding binding;
 
 	binding.column_index = column_list.size();
-	for (index_t i = 0; i < column_list.size(); i++) {
+	for (idx_t i = 0; i < column_list.size(); i++) {
 		auto &column = column_list[i];
 		if (column == colref.column_name) {
 			binding.column_index = i;
@@ -69,13 +69,13 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, index_t index)
+SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, idx_t index)
     : Binding(BindingType::SUBQUERY, alias, index), subquery(subquery) {
 	if (ref.column_name_alias.size() > subquery.names.size()) {
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(),
 		                      (int64_t)subquery.names.size(), (int64_t)ref.column_name_alias.size());
 	}
-	index_t i;
+	idx_t i;
 	// use any provided aliases from the subquery
 	for (i = 0; i < ref.column_name_alias.size(); i++) {
 		auto &name = ref.column_name_alias[i];
@@ -101,7 +101,7 @@ bool SubqueryBinding::HasMatchingBinding(const string &column_name) {
 	return entry != name_map.end();
 }
 
-BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, index_t depth) {
+BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto column_entry = name_map.find(colref.column_name);
 	if (column_entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", alias.c_str(),
@@ -124,7 +124,7 @@ void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, index_t index)
+TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, idx_t index)
     : Binding(BindingType::TABLE_FUNCTION, alias, index), function(function) {
 }
 
@@ -132,7 +132,7 @@ bool TableFunctionBinding::HasMatchingBinding(const string &column_name) {
 	return function->ColumnExists(column_name);
 }
 
-BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, index_t depth) {
+BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto column_entry = function->name_map.find(colref.column_name);
 	if (column_entry == function->name_map.end()) {
 		return BindResult(StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", alias.c_str(),
@@ -153,10 +153,10 @@ void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, index_t index)
+GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, idx_t index)
     : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
-	for (index_t i = 0; i < names.size(); i++) {
+	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
@@ -170,7 +170,7 @@ bool GenericBinding::HasMatchingBinding(const string &column_name) {
 	return entry != name_map.end();
 }
 
-BindResult GenericBinding::Bind(ColumnRefExpression &colref, index_t depth) {
+BindResult GenericBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto column_entry = name_map.find(colref.column_name);
 	if (column_entry == name_map.end()) {
 		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),

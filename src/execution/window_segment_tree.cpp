@@ -11,7 +11,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result
     : aggregate(aggregate), state(aggregate.state_size(result_type)), statep(TypeId::POINTER, true, false),
       result_type(result_type), input_ref(input) {
 	statep.count = STANDARD_VECTOR_SIZE;
-	VectorOperations::Set(statep, Value::POINTER((index_t)state.data()));
+	VectorOperations::Set(statep, Value::POINTER((idx_t)state.data()));
 
 	if (input_ref && input_ref->column_count() > 0) {
 		inputs = unique_ptr<Vector[]>(new Vector[input_ref->column_count()]);
@@ -27,7 +27,7 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 Value WindowSegmentTree::AggegateFinal() {
-	Vector statev(Value::POINTER((index_t)state.data()));
+	Vector statev(Value::POINTER((idx_t)state.data()));
 
 	Value r(result_type);
 	Vector result(r);
@@ -37,7 +37,7 @@ Value WindowSegmentTree::AggegateFinal() {
 	return result.GetValue(0);
 }
 
-void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t end) {
+void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
 	assert(begin <= end);
 	if (begin == end) {
 		return;
@@ -49,11 +49,11 @@ void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t
 	if (l_idx == 0) {
 		const auto input_count = input_ref->column_count();
 		auto &chunk = input_ref->GetChunk(begin);
-		for (index_t i = 0; i < input_count; ++i) {
+		for (idx_t i = 0; i < input_count; ++i) {
 			auto &v = inputs[i];
 			auto &vec = chunk.data[i];
 			v.Reference(vec);
-			index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+			idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 			v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
 			v.count = end - begin;
 			v.nullmask <<= start_in_vector;
@@ -77,22 +77,22 @@ void WindowSegmentTree::ConstructTree() {
 	assert(inputs);
 
 	// compute space required to store internal nodes of segment tree
-	index_t internal_nodes = 0;
-	index_t level_nodes = input_ref->count;
+	idx_t internal_nodes = 0;
+	idx_t level_nodes = input_ref->count;
 	do {
-		level_nodes = (index_t)ceil((double)level_nodes / TREE_FANOUT);
+		level_nodes = (idx_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
 	levels_flat_native = unique_ptr<data_t[]>(new data_t[internal_nodes * state.size()]);
 	levels_flat_start.push_back(0);
 
-	index_t levels_flat_offset = 0;
-	index_t level_current = 0;
+	idx_t levels_flat_offset = 0;
+	idx_t level_current = 0;
 	// level 0 is data itself
-	index_t level_size;
+	idx_t level_size;
 	while ((level_size = (level_current == 0 ? input_ref->count
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
-		for (index_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
+		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, min(level_size, pos + TREE_FANOUT));
 
@@ -106,7 +106,7 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-Value WindowSegmentTree::Compute(index_t begin, index_t end) {
+Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	assert(input_ref);
 
 	// No arguments, so just count
@@ -122,19 +122,19 @@ Value WindowSegmentTree::Compute(index_t begin, index_t end) {
 		return AggegateFinal();
 	}
 
-	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
-		index_t parent_begin = begin / TREE_FANOUT;
-		index_t parent_end = end / TREE_FANOUT;
+	for (idx_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
+		idx_t parent_begin = begin / TREE_FANOUT;
+		idx_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {
 			WindowSegmentValue(l_idx, begin, end);
 			return AggegateFinal();
 		}
-		index_t group_begin = parent_begin * TREE_FANOUT;
+		idx_t group_begin = parent_begin * TREE_FANOUT;
 		if (begin != group_begin) {
 			WindowSegmentValue(l_idx, begin, group_begin + TREE_FANOUT);
 			parent_begin++;
 		}
-		index_t group_end = parent_end * TREE_FANOUT;
+		idx_t group_end = parent_end * TREE_FANOUT;
 		if (end != group_end) {
 			WindowSegmentValue(l_idx, group_end, end);
 		}

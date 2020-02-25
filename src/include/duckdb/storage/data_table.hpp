@@ -39,7 +39,7 @@ public:
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
-	std::atomic<index_t> cardinality;
+	std::atomic<idx_t> cardinality;
 	// schema of the table
 	string schema;
 	// name of the table
@@ -113,14 +113,14 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
-	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, index_t &current_row,
-	                   index_t max_row, index_t base_row, VersionManager &manager);
-	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, index_t &current_row, index_t max_row,
-	                     index_t base_row);
+	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
+	                   idx_t max_row, idx_t base_row, VersionManager &manager);
+	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
+	                     idx_t base_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
-	index_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);
+	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);

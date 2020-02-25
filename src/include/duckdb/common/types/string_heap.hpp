@@ -32,7 +32,7 @@ public:
 	}
 
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(const char *data, index_t len);
+	const char *AddString(const char *data, idx_t len);
 	//! Add a string to the string heap, returns a pointer to the string
 	const char *AddString(const char *data);
 	//! Add a string to the string heap, returns a pointer to the string
@@ -42,7 +42,7 @@ public:
 
 private:
 	struct StringChunk {
-		StringChunk(index_t size) : current_position(0), maximum_size(size) {
+		StringChunk(idx_t size) : current_position(0), maximum_size(size) {
 			data = unique_ptr<char[]>(new char[maximum_size]);
 		}
 		~StringChunk() {
@@ -55,8 +55,8 @@ private:
 		}
 
 		unique_ptr<char[]> data;
-		index_t current_position;
-		index_t maximum_size;
+		idx_t current_position;
+		idx_t maximum_size;
 		unique_ptr<StringChunk> prev;
 	};
 	StringChunk *tail;

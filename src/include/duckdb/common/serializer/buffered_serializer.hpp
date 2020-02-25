@@ -16,18 +16,18 @@ namespace duckdb {
 
 struct BinaryData {
 	unique_ptr<data_t[]> data;
-	index_t size;
+	idx_t size;
 };
 
 class BufferedSerializer : public Serializer {
 public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	BufferedSerializer(index_t maximum_size = SERIALIZER_DEFAULT_SIZE);
+	BufferedSerializer(idx_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
-	BufferedSerializer(unique_ptr<data_t[]> data, index_t size);
+	BufferedSerializer(unique_ptr<data_t[]> data, idx_t size);
 
-	index_t maximum_size;
+	idx_t maximum_size;
 	data_ptr_t data;
 
 	BinaryData blob;

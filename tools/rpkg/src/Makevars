@@ -1,2 +1,3 @@
+CXX_STD = CXX11
 PKG_CXXFLAGS = -I.
 OBJECTS=duckdbr.o duckdb.o

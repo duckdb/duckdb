@@ -15,9 +15,9 @@ namespace duckdb {
 
 class Key {
 public:
-	Key(unique_ptr<data_t[]> data, index_t len);
+	Key(unique_ptr<data_t[]> data, idx_t len);
 
-	index_t len;
+	idx_t len;
 	unique_ptr<data_t[]> data;
 
 public:

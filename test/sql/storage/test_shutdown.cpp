@@ -24,7 +24,7 @@ TEST_CASE("Shutdown with running transaction", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (22, 23);"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
@@ -49,7 +49,7 @@ TEST_CASE("UNIQUE INDEX after shutdown", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 
@@ -77,7 +77,7 @@ TEST_CASE("CREATE INDEX statement after shutdown", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22);"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 
@@ -104,7 +104,7 @@ TEST_CASE("CREATE INDEX statement after shutdown", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {22, 22}));
 	}
 	// now with updates
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 

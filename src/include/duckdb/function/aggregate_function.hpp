@@ -13,18 +13,18 @@
 namespace duckdb {
 
 //! The type used for sizing hashed aggregate function states
-typedef index_t (*aggregate_size_t)(TypeId return_type);
+typedef idx_t (*aggregate_size_t)(TypeId return_type);
 //! The type used for initializing hashed aggregate function states
 typedef void (*aggregate_initialize_t)(data_ptr_t state, TypeId return_type);
 //! The type used for updating hashed aggregate functions
-typedef void (*aggregate_update_t)(Vector inputs[], index_t input_count, Vector &state);
+typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &state);
 //! The type used for combining hashed aggregate states (optional)
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
 
 //! The type used for updating simple (non-grouped) aggregate functions
-typedef void (*aggregate_simple_update_t)(Vector inputs[], index_t input_count, data_ptr_t state);
+typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state);
 
 class AggregateFunction : public SimpleFunction {
 public:
