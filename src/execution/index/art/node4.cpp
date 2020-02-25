@@ -8,8 +8,8 @@ Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4, compr
 	memset(key, 0, sizeof(key));
 }
 
-index_t Node4::GetChildPos(uint8_t k) {
-	for (index_t pos = 0; pos < count; pos++) {
+idx_t Node4::GetChildPos(uint8_t k) {
+	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] == k) {
 			return pos;
 		}
@@ -17,8 +17,8 @@ index_t Node4::GetChildPos(uint8_t k) {
 	return Node::GetChildPos(k);
 }
 
-index_t Node4::GetChildGreaterEqual(uint8_t k) {
-	for (index_t pos = 0; pos < count; pos++) {
+idx_t Node4::GetChildGreaterEqual(uint8_t k) {
+	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] >= k) {
 			return pos;
 		}
@@ -26,11 +26,11 @@ index_t Node4::GetChildGreaterEqual(uint8_t k) {
 	return Node::GetChildGreaterEqual(k);
 }
 
-index_t Node4::GetMin() {
+idx_t Node4::GetMin() {
 	return 0;
 }
 
-index_t Node4::GetNextPos(index_t pos) {
+idx_t Node4::GetNextPos(idx_t pos) {
 	if (pos == INVALID_INDEX) {
 		return 0;
 	}
@@ -38,7 +38,7 @@ index_t Node4::GetNextPos(index_t pos) {
 	return pos < count ? pos : INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node4::GetChild(index_t pos) {
+unique_ptr<Node> *Node4::GetChild(idx_t pos) {
 	assert(pos < count);
 	return &child[pos];
 }

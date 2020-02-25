@@ -14,7 +14,7 @@ struct covar_state_t {
 	double co_moment;
 };
 
-static index_t covar_state_size(TypeId return_type) {
+static idx_t covar_state_size(TypeId return_type) {
 	return sizeof(covar_state_t);
 }
 
@@ -22,7 +22,7 @@ static void covar_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, covar_state_size(return_type));
 }
 
-static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
+static void covar_update(Vector inputs[], idx_t input_count, Vector &state) {
 	// Streaming approximate covariance
 	assert(input_count == 2);
 	inputs[0].Normalify();
@@ -31,7 +31,7 @@ static void covar_update(Vector inputs[], index_t input_count, Vector &state) {
 	auto states = (covar_state_t **)state.GetData();
 	auto xdata = (double *)inputs[0].GetData();
 	auto ydata = (double *)inputs[1].GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if (inputs[0].nullmask[i] || inputs[1].nullmask[i]) {
 			return;
 		}

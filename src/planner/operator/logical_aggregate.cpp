@@ -4,8 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalAggregate::LogicalAggregate(index_t group_index, index_t aggregate_index,
-                                   vector<unique_ptr<Expression>> select_list)
+LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::AGGREGATE_AND_GROUP_BY, move(select_list)), group_index(group_index),
       aggregate_index(aggregate_index) {
 }
@@ -22,10 +21,10 @@ void LogicalAggregate::ResolveTypes() {
 
 vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	vector<ColumnBinding> result;
-	for (index_t i = 0; i < groups.size(); i++) {
+	for (idx_t i = 0; i < groups.size(); i++) {
 		result.push_back(ColumnBinding(group_index, i));
 	}
-	for (index_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		result.push_back(ColumnBinding(aggregate_index, i));
 	}
 	return result;

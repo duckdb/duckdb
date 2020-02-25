@@ -40,7 +40,7 @@ public:
 
 private:
 	std::mutex exclusive_lock;
-	std::atomic<index_t> read_count;
+	std::atomic<idx_t> read_count;
 
 private:
 	//! Release an exclusive lock

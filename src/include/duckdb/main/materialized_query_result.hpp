@@ -30,9 +30,9 @@ public:
 	string ToString() override;
 
 	//! Gets the (index) value of the (column index) column
-	Value GetValue(index_t column, index_t index);
+	Value GetValue(idx_t column, idx_t index);
 
-	template <class T> T GetValue(index_t column, index_t index) {
+	template <class T> T GetValue(idx_t column, idx_t index) {
 		auto value = GetValue(column, index);
 		return (T)value.GetValue<int64_t>();
 	}

@@ -77,7 +77,7 @@ string TypeIdToString(TypeId type) {
 	}
 }
 
-index_t GetTypeIdSize(TypeId type) {
+idx_t GetTypeIdSize(TypeId type) {
 	switch (type) {
 	case TypeId::BOOL:
 		return sizeof(bool);

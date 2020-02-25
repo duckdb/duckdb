@@ -32,14 +32,14 @@ struct TextSearchShiftArray {
 		return position == length;
 	}
 
-	index_t length;
+	idx_t length;
 	unique_ptr<uint8_t[]> shifts;
 };
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
-	static constexpr index_t INITIAL_BUFFER_SIZE = 16384;
-	static constexpr index_t MAXIMUM_CSV_LINE_SIZE = 1048576;
+	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 
 public:
 	BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, std::istream &source);
@@ -49,11 +49,11 @@ public:
 	std::istream &source;
 
 	unique_ptr<char[]> buffer;
-	index_t buffer_size;
-	index_t position;
-	index_t start = 0;
+	idx_t buffer_size;
+	idx_t position;
+	idx_t start = 0;
 
-	index_t linenr = 0;
+	idx_t linenr = 0;
 
 	TextSearchShiftArray delimiter_search, escape_search, quote_search;
 
@@ -72,13 +72,13 @@ private:
 	void ParseComplexCSV(DataChunk &insert_chunk);
 
 	//! Adds a value to the current row
-	void AddValue(char *str_val, index_t length, index_t &column, vector<index_t> &escape_positions);
+	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
-	bool AddRow(DataChunk &insert_chunk, index_t &column);
+	bool AddRow(DataChunk &insert_chunk, idx_t &column);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
-	bool ReadBuffer(index_t &start);
+	bool ReadBuffer(idx_t &start);
 };
 
 } // namespace duckdb

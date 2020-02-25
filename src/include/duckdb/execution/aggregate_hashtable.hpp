@@ -18,12 +18,15 @@ namespace duckdb {
 class BoundAggregateExpression;
 
 struct AggregateObject {
-	AggregateObject(AggregateFunction function, index_t child_count, index_t payload_size, bool distinct, TypeId return_type) :
-		function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct), return_type(return_type) {}
+	AggregateObject(AggregateFunction function, idx_t child_count, idx_t payload_size, bool distinct,
+	                TypeId return_type)
+	    : function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct),
+	      return_type(return_type) {
+	}
 
 	AggregateFunction function;
-	index_t child_count;
-	index_t payload_size;
+	idx_t child_count;
+	idx_t payload_size;
 	bool distinct;
 	TypeId return_type;
 
@@ -40,15 +43,15 @@ struct AggregateObject {
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
 	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
-	SuperLargeHashTable(index_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
 	                    vector<AggregateObject> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
 	//! Resize the HT to the specified size. Must be larger than the current
 	//! size.
-	void Resize(index_t size);
+	void Resize(idx_t size);
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -56,7 +59,7 @@ public:
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	index_t Scan(index_t &scan_position, DataChunk &group, DataChunk &result);
+	idx_t Scan(idx_t &scan_position, DataChunk &group, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -76,16 +79,16 @@ private:
 	//! The types of the payload columns stored in the hashtable
 	vector<TypeId> payload_types;
 	//! The size of the groups in bytes
-	index_t group_width;
+	idx_t group_width;
 	//! The size of the payload (aggregations) in bytes
-	index_t payload_width;
+	idx_t payload_width;
 	//! The total tuple size
-	index_t tuple_size;
+	idx_t tuple_size;
 	//! The capacity of the HT. This can be increased using
 	//! SuperLargeHashTable::Resize
-	index_t capacity;
+	idx_t capacity;
 	//! The amount of entries stored in the HT currently
-	index_t entries;
+	idx_t entries;
 	//! The data of the HT
 	data_ptr_t data;
 	//! The endptr of the hashtable
@@ -110,6 +113,7 @@ private:
 
 	//! unique_ptr to indicate the ownership
 	unique_ptr<data_t[]> owned_data;
+
 private:
 	void Destroy();
 	void CallDestructors(Vector &state_vector);

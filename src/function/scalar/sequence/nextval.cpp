@@ -30,11 +30,11 @@ struct NextvalBindData : public FunctionData {
 };
 
 static void parse_schema_and_sequence(string input, string &schema, string &name) {
-	index_t start = 0;
+	idx_t start = 0;
 	for (const char *istr = input.c_str(); *istr; istr++) {
 		if (*istr == '.') {
 			// separator
-			index_t len = istr - input.c_str();
+			idx_t len = istr - input.c_str();
 			if (len == 0) {
 				throw ParserException("invalid name syntax");
 			}
@@ -95,7 +95,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		// sequence to use is hard coded
 		// increment the sequence
 		auto result_data = (int64_t *)result.GetData();
-		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
 		});

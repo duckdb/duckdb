@@ -18,7 +18,7 @@ struct CreateIndexInfo : public ParseInfo {
 	}
 
 	////! Index Type (e.g., B+-tree, Skip-List, ...)
-	IndexType index_type;
+	IndexType idx_type;
 	////! Name of the Index
 	string index_name;
 	////! If it is an unique index

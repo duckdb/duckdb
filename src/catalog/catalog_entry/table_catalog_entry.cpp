@@ -37,7 +37,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes(), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for (index_t i = 0; i < bound_constraints.size(); i++) {
+		for (idx_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
@@ -46,7 +46,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<column_t> column_ids;
 				vector<unique_ptr<Expression>> unbound_expressions;
 				vector<unique_ptr<Expression>> bound_expressions;
-				index_t key_nr = 0;
+				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
 					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
@@ -88,7 +88,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto rename_info = (RenameColumnInfo *)table_info;
 		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 		bool found = false;
-		for (index_t i = 0; i < columns.size(); i++) {
+		for (idx_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);
 			copy.oid = columns[i].oid;
 			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
@@ -105,7 +105,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		}
 		assert(constraints.size() == 0);
 		// create_info->constraints.resize(constraints.size());
-		// for (index_t i = 0; i < constraints.size(); i++) {
+		// for (idx_t i = 0; i < constraints.size(); i++) {
 		// 	create_info->constraints[i] = constraints[i]->Copy();
 		// }
 		Binder binder(context);

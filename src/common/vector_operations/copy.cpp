@@ -12,20 +12,20 @@ using namespace duckdb;
 using namespace std;
 
 template <class T>
-static void copy_function(T *__restrict source, T *__restrict target, index_t offset, index_t count,
+static void copy_function(T *__restrict source, T *__restrict target, idx_t offset, idx_t count,
                           sel_t *__restrict sel_vector) {
 	VectorOperations::Exec(
-	    sel_vector, count + offset, [&](index_t i, index_t k) { target[k - offset] = source[i]; }, offset);
+	    sel_vector, count + offset, [&](idx_t i, idx_t k) { target[k - offset] = source[i]; }, offset);
 }
 
 template <class T>
-static void copy_function_set_null(T *__restrict source, T *__restrict target, index_t offset, index_t count,
+static void copy_function_set_null(T *__restrict source, T *__restrict target, idx_t offset, idx_t count,
                                    sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		// null values, have to check the NULL values in the mask
 		VectorOperations::Exec(
 		    sel_vector, count + offset,
-		    [&](index_t i, index_t k) {
+		    [&](idx_t i, idx_t k) {
 			    if (nullmask[i]) {
 				    target[k - offset] = NullValue<T>();
 			    } else {
@@ -40,7 +40,7 @@ static void copy_function_set_null(T *__restrict source, T *__restrict target, i
 }
 
 template <class T, bool SET_NULL>
-static void copy_loop(Vector &input, void *target, index_t offset, index_t element_count) {
+static void copy_loop(Vector &input, void *target, idx_t offset, idx_t element_count) {
 	auto ldata = (T *)input.GetData();
 	auto result_data = (T *)target;
 	if (SET_NULL) {
@@ -50,7 +50,7 @@ static void copy_loop(Vector &input, void *target, index_t offset, index_t eleme
 	}
 }
 
-template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, index_t offset, index_t element_count) {
+template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, idx_t offset, idx_t element_count) {
 	if (source.size() == 0)
 		return;
 	if (element_count == 0) {
@@ -95,18 +95,18 @@ template <bool SET_NULL> void generic_copy_loop(Vector &source, void *target, in
 //===--------------------------------------------------------------------===//
 // Copy data from vector
 //===--------------------------------------------------------------------===//
-void VectorOperations::Copy(Vector &source, void *target, index_t offset, index_t element_count) {
+void VectorOperations::Copy(Vector &source, void *target, idx_t offset, idx_t element_count) {
 	if (!TypeIsConstantSize(source.type)) {
 		throw InvalidTypeException(source.type, "Cannot copy non-constant size types using this method!");
 	}
 	generic_copy_loop<false>(source, target, offset, element_count);
 }
 
-void VectorOperations::CopyToStorage(Vector &source, void *target, index_t offset, index_t element_count) {
+void VectorOperations::CopyToStorage(Vector &source, void *target, idx_t offset, idx_t element_count) {
 	generic_copy_loop<true>(source, target, offset, element_count);
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
+void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Copy types don't match!");
 	}
@@ -116,11 +116,11 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 	assert(!target.sel_vector());
 	assert(offset <= source.size());
 	assert(source.size() - offset <= STANDARD_VECTOR_SIZE);
-	index_t copy_count = source.size() - offset;
+	idx_t copy_count = source.size() - offset;
 
 	// merge null masks
 	VectorOperations::Exec(
-	    source, [&](index_t i, index_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
+	    source, [&](idx_t i, idx_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
 
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
@@ -129,7 +129,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, index_t offset) {
 			auto target_data = (string_t *)target.GetData();
 			VectorOperations::Exec(
 			    source,
-			    [&](index_t i, index_t k) {
+			    [&](idx_t i, idx_t k) {
 				    if (!target.nullmask[k - offset]) {
 					    target_data[k - offset] = target.AddString(source_data[i]);
 				    }
@@ -185,19 +185,19 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
 	assert(!target.sel_vector());
-	index_t copy_count = source.size();
-	index_t old_count = target.size();
+	idx_t copy_count = source.size();
+	idx_t old_count = target.size();
 	assert(old_count + copy_count <= STANDARD_VECTOR_SIZE);
 
 	// merge null masks
-	VectorOperations::Exec(source, [&](index_t i, index_t k) { target.nullmask[old_count + k] = source.nullmask[i]; });
+	VectorOperations::Exec(source, [&](idx_t i, idx_t k) { target.nullmask[old_count + k] = source.nullmask[i]; });
 
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
 			auto source_data = (string_t *)source.GetData();
 			auto target_data = (string_t *)target.GetData();
-			VectorOperations::Exec(source, [&](index_t i, index_t k) {
+			VectorOperations::Exec(source, [&](idx_t i, idx_t k) {
 				if (!target.nullmask[old_count + k]) {
 					target_data[old_count + k] = target.AddString(source_data[i]);
 				}

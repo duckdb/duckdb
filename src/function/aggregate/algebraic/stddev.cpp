@@ -13,7 +13,7 @@ struct stddev_state_t {
 	double dsquared; //  M2
 };
 
-static index_t stddev_state_size(TypeId return_type) {
+static idx_t stddev_state_size(TypeId return_type) {
 	return sizeof(stddev_state_t);
 }
 
@@ -21,14 +21,14 @@ static void stddev_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, stddev_state_size(return_type));
 }
 
-static void stddev_update(Vector inputs[], index_t input_count, Vector &state) {
+static void stddev_update(Vector inputs[], idx_t input_count, Vector &state) {
 	assert(input_count == 1);
 	// Streaming approximate standard deviation using Welford's
 	// method, DOI: 10.2307/1266577
 
 	auto states = (stddev_state_t **)state.GetData();
 	auto input_data = (double *)inputs[0].GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if (inputs[0].nullmask[i]) {
 			return;
 		}

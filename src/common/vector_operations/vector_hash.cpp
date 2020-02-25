@@ -17,16 +17,15 @@ struct HashOp {
 };
 
 template <class T>
-static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data, index_t count,
+static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data, idx_t count,
                                    sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	if (nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
-			result_data[i] = HashOp::Operation(ldata[i], nullmask[i]);
-		});
+		VectorOperations::Exec(sel_vector, count,
+		                       [&](idx_t i, idx_t k) { result_data[i] = HashOp::Operation(ldata[i], nullmask[i]); });
 	} else {
 		VectorOperations::Exec(sel_vector, count,
-		                       [&](index_t i, index_t k) { result_data[i] = HashOp::Operation(ldata[i], false); });
+		                       [&](idx_t i, idx_t k) { result_data[i] = HashOp::Operation(ldata[i], false); });
 	}
 }
 
@@ -82,16 +81,16 @@ static inline uint64_t combine_hash(uint64_t a, uint64_t b) {
 }
 
 template <class T>
-static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data, index_t count,
+static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data, idx_t count,
                                            sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 	ASSERT_RESTRICT(ldata, ldata + count, hash_data, hash_data + count);
 	if (nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 			auto other_hash = HashOp::Operation(ldata[i], nullmask[i]);
 			hash_data[i] = combine_hash(hash_data[i], other_hash);
 		});
 	} else {
-		VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 			auto other_hash = HashOp::Operation(ldata[i], false);
 			hash_data[i] = combine_hash(hash_data[i], other_hash);
 		});

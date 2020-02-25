@@ -18,8 +18,8 @@ public:
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;
-	index_t offset;
-	index_t read_data;
+	idx_t offset;
+	idx_t read_data;
 	unique_ptr<FileHandle> handle;
 
 public:
@@ -27,13 +27,13 @@ public:
 	//! Returns true if the reader has finished reading the entire file
 	bool Finished();
 
-	index_t FileSize() {
+	idx_t FileSize() {
 		return file_size;
 	}
 
 private:
-	index_t file_size;
-	index_t total_read;
+	idx_t file_size;
+	idx_t total_read;
 };
 
 } // namespace duckdb

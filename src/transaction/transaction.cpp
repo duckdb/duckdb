@@ -14,10 +14,10 @@
 using namespace duckdb;
 using namespace std;
 
-void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, index_t extra_data_size) {
-	index_t alloc_size = sizeof(CatalogEntry *);
+void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, idx_t extra_data_size) {
+	idx_t alloc_size = sizeof(CatalogEntry *);
 	if (extra_data_size > 0) {
-		alloc_size += extra_data_size + sizeof(index_t);
+		alloc_size += extra_data_size + sizeof(idx_t);
 	}
 	auto baseptr = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
 	// store the pointer to the catalog entry
@@ -26,14 +26,14 @@ void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, i
 		// copy the extra data behind the catalog entry pointer (if any)
 		baseptr += sizeof(CatalogEntry *);
 		// first store the extra data size
-		*((index_t *)baseptr) = extra_data_size;
-		baseptr += sizeof(index_t);
+		*((idx_t *)baseptr) = extra_data_size;
+		baseptr += sizeof(idx_t);
 		// then copy over the actual data
 		memcpy(baseptr, extra_data, extra_data_size);
 	}
 }
 
-void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, index_t base_row) {
+void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], idx_t count, idx_t base_row) {
 	auto delete_info =
 	    (DeleteInfo *)undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count);
 	delete_info->vinfo = vinfo;
@@ -42,7 +42,7 @@ void Transaction::PushDelete(ChunkInfo *vinfo, row_t rows[], index_t count, inde
 	memcpy(delete_info->rows, rows, sizeof(row_t) * count);
 }
 
-UpdateInfo *Transaction::CreateUpdateInfo(index_t type_size, index_t entries) {
+UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	auto update_info = (UpdateInfo *)undo_buffer.CreateEntry(
 	    UndoFlags::UPDATE_TUPLE, sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * entries);
 	update_info->max = entries;

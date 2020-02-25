@@ -37,7 +37,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 		do {
 			children[0]->GetChunk(context, chunk, state->top_state.get());
 			if (!union_all) {
-				index_t match_count = ProbeHT(chunk, state);
+				idx_t match_count = ProbeHT(chunk, state);
 				if (match_count > 0) {
 					working_table->Append(chunk);
 				}
@@ -79,7 +79,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 		if (!union_all) {
 			// If we evaluate using UNION semantics, we have to eliminate duplicates before appending them to
 			// intermediate tables.
-			index_t match_count = ProbeHT(chunk, state);
+			idx_t match_count = ProbeHT(chunk, state);
 			if (match_count > 0) {
 				intermediate_table.Append(chunk);
 				state->intermediate_empty = false;
@@ -93,7 +93,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 	}
 }
 
-index_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
+idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
 	Vector dummy_addresses(chunk, TypeId::POINTER);
@@ -105,9 +105,9 @@ index_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *s
 	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
 
 	// Update the sel_vector of the DataChunk
-	index_t match_count = 0;
-	for (index_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
-		index_t sel_idx = probe_idx;
+	idx_t match_count = 0;
+	for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
+		idx_t sel_idx = probe_idx;
 		if (probe_data[sel_idx]) {
 			chunk.owned_sel_vector[match_count++] = sel_idx;
 		}

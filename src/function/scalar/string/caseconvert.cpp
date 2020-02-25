@@ -11,8 +11,8 @@ using namespace std;
 namespace duckdb {
 
 // TODO: this does not handle UTF characters yet.
-template <class OP> static void strcase(const char *input_data, index_t input_length, char *output) {
-	for (index_t i = 0; i < input_length; i++) {
+template <class OP> static void strcase(const char *input_data, idx_t input_length, char *output) {
+	for (idx_t i = 0; i < input_length; i++) {
 		output[i] = OP::Operation(input_data[i]);
 	}
 	output[input_length] = '\0';

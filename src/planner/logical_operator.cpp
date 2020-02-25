@@ -32,15 +32,15 @@ void LogicalOperator::ResolveOperatorTypes() {
 	ResolveTypes();
 }
 
-vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(index_t table_idx, index_t column_count) {
+vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
-	for (index_t i = 0; i < column_count; i++) {
+	for (idx_t i = 0; i < column_count; i++) {
 		result.push_back(ColumnBinding(table_idx, i));
 	}
 	return result;
 }
 
-vector<TypeId> LogicalOperator::MapTypes(vector<TypeId> types, vector<index_t> projection_map) {
+vector<TypeId> LogicalOperator::MapTypes(vector<TypeId> types, vector<idx_t> projection_map) {
 	if (projection_map.size() == 0) {
 		return types;
 	} else {
@@ -52,7 +52,7 @@ vector<TypeId> LogicalOperator::MapTypes(vector<TypeId> types, vector<index_t> p
 	}
 }
 
-vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> bindings, vector<index_t> projection_map) {
+vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> bindings, vector<idx_t> projection_map) {
 	if (projection_map.size() == 0) {
 		return bindings;
 	} else {
@@ -64,11 +64,11 @@ vector<ColumnBinding> LogicalOperator::MapBindings(vector<ColumnBinding> binding
 	}
 }
 
-string LogicalOperator::ToString(index_t depth) const {
+string LogicalOperator::ToString(idx_t depth) const {
 	string result = LogicalOperatorToString(type);
 	result += ParamsToString();
 	if (children.size() > 0) {
-		for (index_t i = 0; i < children.size(); i++) {
+		for (idx_t i = 0; i < children.size(); i++) {
 			result += "\n" + string(depth * 4, ' ');
 			auto &child = children[i];
 			result += child->ToString(depth + 1);

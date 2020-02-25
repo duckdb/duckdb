@@ -113,7 +113,7 @@ ValueOutOfRangeException::ValueOutOfRangeException(const double value, const Typ
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const index_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
                                                  std::to_string(length) + ")"){};
 

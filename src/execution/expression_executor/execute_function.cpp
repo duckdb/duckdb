@@ -30,7 +30,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 	if (state->child_types.size() > 0) {
 		arguments.Initialize(state->child_types);
 		arguments.SetCardinality(GetCardinality());
-		for (index_t i = 0; i < expr.children.size(); i++) {
+		for (idx_t i = 0; i < expr.children.size(); i++) {
 			assert(state->child_types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), arguments.data[i]);
 		}

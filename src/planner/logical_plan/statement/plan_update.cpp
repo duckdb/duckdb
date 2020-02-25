@@ -27,7 +27,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundUpdateStatemen
 	// scan the table for the referenced columns in the update clause
 	auto &table = get.table;
 	vector<unique_ptr<Expression>> projection_expressions;
-	for (index_t i = 0; i < stmt.expressions.size(); i++) {
+	for (idx_t i = 0; i < stmt.expressions.size(); i++) {
 		if (stmt.expressions[i]->type != ExpressionType::VALUE_DEFAULT) {
 			// plan subqueries inside the expression
 			PlanSubqueries(&stmt.expressions[i], &root);

@@ -72,9 +72,9 @@ struct RBooleanType {
 };
 
 template <class SRC, class DST, class RTYPE>
-static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count) {
+static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	auto result_data = (DST *)result.GetData();
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
 			result.nullmask[i] = true;
@@ -84,9 +84,9 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, index_t count)
 	}
 }
 
-static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
+static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto result_data = (string_t *)result.GetData();
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
 			result.nullmask[i] = true;
@@ -96,11 +96,11 @@ static void AppendStringSegment(SEXP coldata, Vector &result, index_t row_idx, i
 	}
 }
 
-static void AppendFactor(SEXP coldata, Vector &result, index_t row_idx, index_t count) {
+static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
 	auto result_data = (string_t *)result.GetData();
 	SEXP factor_levels = GET_LEVELS(coldata);
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		int val = source_data[i];
 		if (RIntegerType::IsNull(val)) {
 			result.nullmask[i] = true;
@@ -452,10 +452,10 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	try {
 		Appender appender(*conn, INVALID_SCHEMA, name);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
-		for (index_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
-			index_t current_count = std::min((index_t)nrows - row_idx, (index_t)STANDARD_VECTOR_SIZE);
+		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
+			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
 			auto &append_chunk = appender.GetAppendChunk();
-			for (index_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
 				auto &append_data = append_chunk.data[col_idx];
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&

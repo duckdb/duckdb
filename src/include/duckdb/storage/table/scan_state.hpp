@@ -34,7 +34,7 @@ struct ColumnScanState {
 	//! The column segment that is currently being scanned
 	ColumnSegment *current;
 	//! The vector index of the transient segment
-	index_t vector_index;
+	idx_t vector_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
 	//! The set of pinned block handles for this scan
@@ -57,9 +57,9 @@ struct ColumnFetchState {
 struct LocalScanState {
 	LocalTableStorage *storage = nullptr;
 
-	index_t chunk_index;
-	index_t max_index;
-	index_t last_chunk_count;
+	idx_t chunk_index;
+	idx_t max_index;
+	idx_t last_chunk_count;
 
 	sel_t sel_vector_data[STANDARD_VECTOR_SIZE];
 };
@@ -67,10 +67,10 @@ struct LocalScanState {
 struct TableScanState {
 	virtual ~TableScanState() = default;
 
-	index_t current_persistent_row, max_persistent_row;
-	index_t current_transient_row, max_transient_row;
+	idx_t current_persistent_row, max_persistent_row;
+	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
-	index_t offset;
+	idx_t offset;
 	sel_t sel_vector[STANDARD_VECTOR_SIZE];
 	vector<column_t> column_ids;
 	LocalScanState local_state;

@@ -15,7 +15,8 @@
 
 namespace duckdb {
 
-inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end, const char *fname, int linenr) {
+inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
+                                     const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -25,7 +26,8 @@ inline void assert_restrict_function(void *left_start, void *left_end, void *rig
 #endif
 }
 
-#define ASSERT_RESTRICT(left_start, left_end, right_start, right_end) assert_restrict_function(left_start, left_end, right_start, right_end, __FILE__, __LINE__)
+#define ASSERT_RESTRICT(left_start, left_end, right_start, right_end)                                                  \
+	assert_restrict_function(left_start, left_end, right_start, right_end, __FILE__, __LINE__)
 
 //===--------------------------------------------------------------------===//
 // Exception Types
@@ -121,7 +123,7 @@ class ValueOutOfRangeException : public Exception {
 public:
 	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
 	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const index_t length);
+	ValueOutOfRangeException(const TypeId varType, const idx_t length);
 };
 
 class ConversionException : public Exception {

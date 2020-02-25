@@ -14,7 +14,7 @@ struct ConjunctionState : public ExpressionState {
 	    : ExpressionState(expr, root), iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
 		auto &conj_expr = (BoundConjunctionExpression &)expr;
 		assert(conj_expr.children.size() > 1);
-		for (index_t idx = 0; idx < conj_expr.children.size(); idx++) {
+		for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
 			permutation.push_back(idx);
 			if (idx != conj_expr.children.size() - 1) {
 				swap_likeliness.push_back(100);
@@ -24,17 +24,17 @@ struct ConjunctionState : public ExpressionState {
 	}
 
 	// used for adaptive expression reordering
-	index_t iteration_count;
-	index_t swap_idx;
-	index_t right_random_border;
-	index_t observe_interval;
-	index_t execute_interval;
+	idx_t iteration_count;
+	idx_t swap_idx;
+	idx_t right_random_border;
+	idx_t observe_interval;
+	idx_t execute_interval;
 	double runtime_sum;
 	double prev_mean;
 	bool observe;
 	bool warmup;
-	vector<index_t> permutation;
-	vector<index_t> swap_likeliness;
+	vector<idx_t> permutation;
+	vector<idx_t> swap_likeliness;
 	std::default_random_engine generator;
 };
 
@@ -49,7 +49,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 
 void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
 	// execute the children
-	for (index_t i = 0; i < expr.children.size(); i++) {
+	for (idx_t i = 0; i < expr.children.size(); i++) {
 		Vector current_result(GetCardinality(), TypeId::BOOL);
 		Execute(*expr.children[i], state->child_states[i].get(), current_result);
 		if (i == 0) {
@@ -73,7 +73,7 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count, sel_t *sel, index_t count) {
+static void MergeSelectionVectorIntoResult(sel_t *result, idx_t &result_count, sel_t *sel, idx_t count) {
 	assert(count > 0);
 	if (result_count == 0) {
 		// nothing to merge
@@ -83,8 +83,8 @@ static void MergeSelectionVectorIntoResult(sel_t *result, index_t &result_count,
 	}
 
 	sel_t temp_result[STANDARD_VECTOR_SIZE];
-	index_t res_idx = 0, sel_idx = 0;
-	index_t temp_count = 0;
+	idx_t res_idx = 0, sel_idx = 0;
+	idx_t temp_count = 0;
 	while (true) {
 		// the two sets should be disjunct
 		assert(result[res_idx] != sel[sel_idx]);
@@ -152,10 +152,10 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 
 			// get swap index and swap likeliness
 			uniform_int_distribution<int> distribution(1, state->right_random_border); // a <= i <= b
-			index_t random_number = distribution(state->generator) - 1;
+			idx_t random_number = distribution(state->generator) - 1;
 
-			state->swap_idx = random_number / 100;                      // index to be swapped
-			index_t likeliness = random_number - 100 * state->swap_idx; // random number between [0, 100)
+			state->swap_idx = random_number / 100;                    // index to be swapped
+			idx_t likeliness = random_number - 100 * state->swap_idx; // random number between [0, 100)
 
 			// check if swap is going to happen
 			if (state->swap_likeliness[state->swap_idx] > likeliness) { // always true for the first swap of an index
@@ -183,7 +183,7 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, sel_t result[]) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, sel_t result[]) {
 	auto state = (ConjunctionState *)state_;
 	if (!chunk) {
 		return DefaultSelect(expr, state, result);
@@ -195,16 +195,16 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		// store the initial selection vector and count
 		auto initial_sel = chunk->sel_vector;
-		index_t initial_count = chunk->size();
-		index_t current_count = chunk->size();
+		idx_t initial_count = chunk->size();
+		idx_t current_count = chunk->size();
 
 		// get runtime statistics
 		start_time = chrono::high_resolution_clock::now();
 
-		for (index_t i = 0; i < expr.children.size(); i++) {
+		for (idx_t i = 0; i < expr.children.size(); i++) {
 
 			// first resolve the current expression and get its execution time
-			index_t new_count =
+			idx_t new_count =
 			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), result);
 
 			if (new_count == 0) {
@@ -228,24 +228,24 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 		return current_count;
 	} else {
 		sel_t *initial_sel = chunk->sel_vector;
-		index_t initial_count = chunk->size();
-		index_t current_count = chunk->size();
+		idx_t initial_count = chunk->size();
+		idx_t current_count = chunk->size();
 		sel_t *current_sel = initial_sel;
 
 		sel_t intermediate_result[STANDARD_VECTOR_SIZE];
 		sel_t expression_result[STANDARD_VECTOR_SIZE];
 		sel_t remaining[STANDARD_VECTOR_SIZE];
-		index_t result_count = 0;
-		index_t remaining_count = 0;
+		idx_t result_count = 0;
+		idx_t remaining_count = 0;
 		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
 
 		// get runtime statistics
 		start_time = chrono::high_resolution_clock::now();
 
-		for (index_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
+		for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
 			// first resolve the current expression
-			index_t new_count = Select(*expr.children[state->permutation[expr_idx]],
-			                           state->child_states[state->permutation[expr_idx]].get(), expression_result);
+			idx_t new_count = Select(*expr.children[state->permutation[expr_idx]],
+			                         state->child_states[state->permutation[expr_idx]].get(), expression_result);
 			if (new_count == 0) {
 				// no new qualifying entries: continue
 				continue;
@@ -269,9 +269,9 @@ index_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionS
 			}
 			// now we only need to continue executing tuples that were not qualified
 			// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
-			index_t new_idx = 0;
+			idx_t new_idx = 0;
 			remaining_count = 0;
-			for (index_t i = 0; i < current_count; i++) {
+			for (idx_t i = 0; i < current_count; i++) {
 				auto entry = current_sel ? current_sel[i] : i;
 				if (new_idx >= new_count || expression_result[new_idx] != entry) {
 					remaining[remaining_count++] = entry;

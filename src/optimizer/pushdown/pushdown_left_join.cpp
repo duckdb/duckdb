@@ -13,8 +13,7 @@ using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
-static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
-                                                    unordered_set<index_t> &right_bindings) {
+static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = (BoundColumnRefExpression &)*expr;
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
@@ -30,7 +29,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr,
 	return expr;
 }
 
-static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, unordered_set<index_t> &right_bindings) {
+static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, unordered_set<idx_t> &right_bindings) {
 	// make a copy of the expression
 	auto copy = expr->Copy();
 	// replace all BoundColumnRef expressions frmo the RHS with NULL constants in the copied expression
@@ -56,8 +55,8 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<index_t> &left_bindings,
-                                                             unordered_set<index_t> &right_bindings) {
+                                                             unordered_set<idx_t> &left_bindings,
+                                                             unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	assert(join.join_type == JoinType::LEFT);
 	assert(op->type != LogicalOperatorType::DELIM_JOIN);
@@ -74,7 +73,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		}
 	}
 	// now check the set of filters
-	for (index_t i = 0; i < filters.size(); i++) {
+	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side

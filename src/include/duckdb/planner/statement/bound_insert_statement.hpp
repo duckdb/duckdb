@@ -25,7 +25,7 @@ public:
 	//! The bound select statement (if any)
 	unique_ptr<BoundSelectStatement> select_statement;
 	//! The insertion map ([table_index -> index in result, or INVALID_INDEX if not specified])
-	vector<index_t> column_index_map;
+	vector<idx_t> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
 	vector<SQLType> expected_types;
 	//! The default statements used by the table

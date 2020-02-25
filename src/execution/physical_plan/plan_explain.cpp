@@ -20,7 +20,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	DataChunk chunk;
 	chunk.Initialize(op.types);
-	for (index_t i = 0; i < keys.size(); i++) {
+	for (idx_t i = 0; i < keys.size(); i++) {
 		chunk.SetValue(0, chunk.size(), Value(keys[i]));
 		chunk.SetValue(1, chunk.size(), Value(values[i]));
 		chunk.SetCardinality(chunk.size() + 1);

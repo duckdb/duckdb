@@ -74,7 +74,7 @@ uint64_t Key::EncodeDouble(double x) {
 	return buff;
 }
 
-Key::Key(unique_ptr<data_t[]> data, index_t len) : len(len), data(move(data)) {
+Key::Key(unique_ptr<data_t[]> data, idx_t len) : len(len), data(move(data)) {
 }
 
 template <> unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian) {
@@ -119,7 +119,7 @@ template <> unique_ptr<data_t[]> Key::CreateData(double value, bool is_little_en
 }
 
 template <> unique_ptr<Key> Key::CreateKey(string_t value, bool is_little_endian) {
-	index_t len = value.GetSize() + 1;
+	idx_t len = value.GetSize() + 1;
 	auto data = unique_ptr<data_t[]>(new data_t[len]);
 	memcpy(data.get(), value.GetData(), len);
 	return make_unique<Key>(move(data), len);
@@ -130,7 +130,7 @@ template <> unique_ptr<Key> Key::CreateKey(const char *value, bool is_little_end
 }
 
 bool Key::operator>(const Key &k) const {
-	for (index_t i = 0; i < std::min(len, k.len); i++) {
+	for (idx_t i = 0; i < std::min(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
@@ -141,7 +141,7 @@ bool Key::operator>(const Key &k) const {
 }
 
 bool Key::operator<(const Key &k) const {
-	for (index_t i = 0; i < std::min(len, k.len); i++) {
+	for (idx_t i = 0; i < std::min(len, k.len); i++) {
 		if (data[i] < k.data[i]) {
 			return true;
 		} else if (data[i] > k.data[i]) {
@@ -152,7 +152,7 @@ bool Key::operator<(const Key &k) const {
 }
 
 bool Key::operator>=(const Key &k) const {
-	for (index_t i = 0; i < std::min(len, k.len); i++) {
+	for (idx_t i = 0; i < std::min(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
 			return true;
 		} else if (data[i] < k.data[i]) {
@@ -166,7 +166,7 @@ bool Key::operator==(const Key &k) const {
 	if (len != k.len) {
 		return false;
 	}
-	for (index_t i = 0; i < len; i++) {
+	for (idx_t i = 0; i < len; i++) {
 		if (data[i] != k.data[i]) {
 			return false;
 		}

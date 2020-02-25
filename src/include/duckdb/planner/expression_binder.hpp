@@ -52,7 +52,7 @@ public:
 		return bound_columns;
 	}
 
-	string Bind(unique_ptr<ParsedExpression> *expr, index_t depth, bool root_expression = false);
+	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
 	void BindTableNames(ParsedExpression &expr);
@@ -64,27 +64,27 @@ public:
 	SQLType target_type;
 
 protected:
-	virtual BindResult BindExpression(ParsedExpression &expr, index_t depth, bool root_expression = false);
+	virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
-	BindResult BindExpression(CaseExpression &expr, index_t depth);
-	BindResult BindExpression(CastExpression &expr, index_t depth);
-	BindResult BindExpression(ColumnRefExpression &expr, index_t depth);
-	BindResult BindExpression(ComparisonExpression &expr, index_t depth);
-	BindResult BindExpression(ConjunctionExpression &expr, index_t depth);
-	BindResult BindExpression(ConstantExpression &expr, index_t depth);
-	BindResult BindExpression(FunctionExpression &expr, index_t depth);
-	BindResult BindExpression(OperatorExpression &expr, index_t depth);
-	BindResult BindExpression(ParameterExpression &expr, index_t depth);
-	BindResult BindExpression(StarExpression &expr, index_t depth);
-	BindResult BindExpression(SubqueryExpression &expr, index_t depth);
+	BindResult BindExpression(CaseExpression &expr, idx_t depth);
+	BindResult BindExpression(CastExpression &expr, idx_t depth);
+	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
+	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
+	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
+	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
+	BindResult BindExpression(FunctionExpression &expr, idx_t depth);
+	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
+	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
+	BindResult BindExpression(StarExpression &expr, idx_t depth);
+	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
-	void BindChild(unique_ptr<ParsedExpression> &expr, index_t depth, string &error);
+	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 
 protected:
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
-	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, index_t depth);
-	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, index_t depth);
+	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
 

@@ -18,8 +18,8 @@ public:
 	//! Materialized aggregates
 	DataChunk aggregate_chunk;
 	//! The current position to scan the HT for output tuples
-	index_t ht_scan_position;
-	index_t tuples_scanned;
+	idx_t ht_scan_position;
+	idx_t tuples_scanned;
 	//! The HT
 	unique_ptr<SuperLargeHashTable> ht;
 	//! The payload chunk, only used while filling the HT
@@ -69,12 +69,12 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		state->payload_executor.SetChunk(state->child_chunk);
 
 		payload_chunk.Reset();
-		index_t payload_idx = 0, payload_expr_idx = 0;
+		idx_t payload_idx = 0, payload_expr_idx = 0;
 		payload_chunk.SetCardinality(group_chunk);
-		for (index_t i = 0; i < aggregates.size(); i++) {
+		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			if (aggr.children.size()) {
-				for (index_t j = 0; j < aggr.children.size(); ++j) {
+				for (idx_t j = 0; j < aggr.children.size(); ++j) {
 					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
 					payload_idx++;
 					payload_expr_idx++;
@@ -98,7 +98,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 
 	state->group_chunk.Reset();
 	state->aggregate_chunk.Reset();
-	index_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+	idx_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
@@ -106,7 +106,7 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		assert(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
-		for (index_t i = 0; i < chunk.column_count(); i++) {
+		for (idx_t i = 0; i < chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
@@ -124,17 +124,17 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 	}
 	// we finished the child chunk
 	// actually compute the final projection list now
-	index_t chunk_index = 0;
+	idx_t chunk_index = 0;
 	chunk.SetCardinality(elements_found);
 	if (state->group_chunk.column_count() + state->aggregate_chunk.column_count() == chunk.column_count()) {
-		for (index_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
 			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
 		}
 	} else {
 		assert(state->aggregate_chunk.column_count() == chunk.column_count());
 	}
 
-	for (index_t col_idx = 0; col_idx < state->aggregate_chunk.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < state->aggregate_chunk.column_count(); col_idx++) {
 		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
 	}
 }
@@ -153,7 +153,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		aggregate_kind.push_back(&aggr);
 		if (aggr.children.size()) {
-			for (index_t i = 0; i < aggr.children.size(); ++i) {
+			for (idx_t i = 0; i < aggr.children.size(); ++i) {
 				payload_types.push_back(aggr.children[i]->return_type);
 				state->payload_executor.AddExpression(*aggr.children[i]);
 			}

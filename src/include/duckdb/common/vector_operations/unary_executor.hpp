@@ -33,18 +33,18 @@ struct UnaryLambdaWrapper {
 struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, index_t count,
+	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               sel_t *__restrict sel_vector, nullmask_t nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (IGNORE_NULL && nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (!nullmask[i]) {
 					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
 				}
 			});
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
 			});
 		}

@@ -28,7 +28,7 @@ class VectorBuffer {
 public:
 	VectorBuffer(VectorBufferType type) : type(type) {
 	}
-	VectorBuffer(index_t data_size);
+	VectorBuffer(idx_t data_size);
 	virtual ~VectorBuffer() {
 	}
 
@@ -39,7 +39,7 @@ public:
 		return data.get();
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type, index_t count = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type, idx_t count = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(TypeId type);
 
 private:
@@ -52,13 +52,13 @@ public:
 	VectorStringBuffer();
 
 public:
-	string_t AddString(const char *data, index_t len) {
+	string_t AddString(const char *data, idx_t len) {
 		return heap.AddString(data, len);
 	}
 	string_t AddString(string_t data) {
 		return heap.AddString(data);
 	}
-	string_t EmptyString(index_t len) {
+	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);
 	}
 

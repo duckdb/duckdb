@@ -106,7 +106,7 @@ void SingleFileBlockManager::LoadFreeList(BufferManager &manager) {
 	MetaBlockReader reader(manager, free_list_id);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.reserve(free_list_count);
-	for (index_t i = 0; i < free_list_count; i++) {
+	for (idx_t i = 0; i < free_list_count; i++) {
 		free_list.push_back(reader.Read<block_id_t>());
 	}
 }

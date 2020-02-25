@@ -6,10 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalGet::LogicalGet(index_t table_index)
+LogicalGet::LogicalGet(idx_t table_index)
     : LogicalOperator(LogicalOperatorType::GET), table(nullptr), table_index(table_index) {
 }
-LogicalGet::LogicalGet(TableCatalogEntry *table, index_t table_index, vector<column_t> column_ids)
+LogicalGet::LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids)
     : LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index), column_ids(column_ids) {
 }
 
@@ -25,7 +25,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 		return {ColumnBinding(INVALID_INDEX, 0)};
 	}
 	vector<ColumnBinding> result;
-	for (index_t i = 0; i < column_ids.size(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		result.push_back(ColumnBinding(table_index, i));
 	}
 	return result;
@@ -39,7 +39,7 @@ void LogicalGet::ResolveTypes() {
 	}
 }
 
-index_t LogicalGet::EstimateCardinality() {
+idx_t LogicalGet::EstimateCardinality() {
 	if (table) {
 		return table->storage->cardinality;
 	} else {

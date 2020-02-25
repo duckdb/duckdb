@@ -25,6 +25,6 @@ public:
 	//! The types of the values list
 	vector<SQLType> types;
 	//! The index in the bind context
-	index_t bind_index;
+	idx_t bind_index;
 };
 } // namespace duckdb

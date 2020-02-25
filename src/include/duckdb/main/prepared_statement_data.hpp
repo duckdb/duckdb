@@ -31,7 +31,7 @@ public:
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
-	unordered_map<index_t, PreparedValueEntry> value_map;
+	unordered_map<idx_t, PreparedValueEntry> value_map;
 	//! Any internal catalog dependencies of the prepared statement
 	unordered_set<CatalogEntry *> dependencies;
 
@@ -44,13 +44,15 @@ public:
 
 	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
 	bool read_only;
-	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the exception of
+	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
+	//! exception of
 	bool requires_valid_transaction;
+
 public:
 	//! Bind a set of values to the prepared statement data
 	void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter
-	SQLType GetType(index_t param_index);
+	SQLType GetType(idx_t param_index);
 };
 
 } // namespace duckdb

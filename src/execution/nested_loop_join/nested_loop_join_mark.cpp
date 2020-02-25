@@ -8,8 +8,8 @@ using namespace std;
 template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
 	auto ldata = (T *)left.GetData();
 	auto rdata = (T *)right.GetData();
-	VectorOperations::Exec(left, [&](index_t left_position, index_t k) {
-		VectorOperations::Exec(right, [&](index_t right_position, index_t k) {
+	VectorOperations::Exec(left, [&](idx_t left_position, idx_t k) {
+		VectorOperations::Exec(right, [&](idx_t right_position, idx_t k) {
 			if (OP::Operation(ldata[left_position], rdata[right_position])) {
 				found_match[left_position] = true;
 			}
@@ -63,9 +63,9 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
                                  vector<JoinCondition> &conditions) {
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
-	for (index_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
+	for (idx_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
 		DataChunk &right_chunk = *right.chunks[chunk_idx];
-		for (index_t i = 0; i < conditions.size(); i++) {
+		for (idx_t i = 0; i < conditions.size(); i++) {
 			mark_join(left.data[i], right_chunk.data[i], found_match, conditions[i].comparison);
 		}
 	}

@@ -39,7 +39,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 	}
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
@@ -100,7 +100,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	{
 		// reloading with a bigger limit again makes it work
-		config->maximum_memory = (index_t)-1;
+		config->maximum_memory = (idx_t)-1;
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
@@ -147,7 +147,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(sum_a)}));
 		REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(sum_b)}));
 	}
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		// reload the table and checkpoint, still with a 10MB limit
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
@@ -173,9 +173,9 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1), (2), (3), (NULL)"));
 
-	index_t not_null_size = 3;
-	index_t size = 4;
-	index_t sum = 6;
+	idx_t not_null_size = 3;
+	idx_t size = 4;
+	idx_t sum = 6;
 	for (; size < table_size; size *= 2) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT * FROM test"));
 		not_null_size *= 2;

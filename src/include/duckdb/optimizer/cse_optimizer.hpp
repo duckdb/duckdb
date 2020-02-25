@@ -18,10 +18,10 @@ namespace duckdb {
 class CommonSubExpressionOptimizer : public LogicalOperatorVisitor {
 private:
 	struct CSENode {
-		index_t count;
+		idx_t count;
 		Expression *expr;
 
-		CSENode(index_t count = 1, Expression *expr = nullptr) : count(count), expr(expr) {
+		CSENode(idx_t count = 1, Expression *expr = nullptr) : count(count), expr(expr) {
 		}
 	};
 

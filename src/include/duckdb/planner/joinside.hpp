@@ -52,12 +52,12 @@ public:
 	}
 
 	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
-	static JoinSide GetJoinSide(index_t table_binding, unordered_set<index_t> &left_bindings,
+	static JoinSide GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_bindings,
 	                            unordered_set<uint64_t> &right_bindings);
-	static JoinSide GetJoinSide(Expression &expression, unordered_set<index_t> &left_bindings,
-	                            unordered_set<index_t> &right_bindings);
-	static JoinSide GetJoinSide(unordered_set<index_t> bindings, unordered_set<index_t> &left_bindings,
-	                            unordered_set<index_t> &right_bindings);
+	static JoinSide GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
+	                            unordered_set<idx_t> &right_bindings);
+	static JoinSide GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_t> &left_bindings,
+	                            unordered_set<idx_t> &right_bindings);
 
 private:
 	join_value value;

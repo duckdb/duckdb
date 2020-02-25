@@ -21,12 +21,12 @@ void MetaBlockWriter::Flush() {
 	}
 }
 
-void MetaBlockWriter::WriteData(const_data_ptr_t buffer, index_t write_size) {
+void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	while (offset + write_size > block->size) {
 		// we need to make a new block
 		// first copy what we can
 		assert(offset <= block->size);
-		index_t copy_amount = block->size - offset;
+		idx_t copy_amount = block->size - offset;
 		if (copy_amount > 0) {
 			memcpy(block->buffer + offset, buffer, copy_amount);
 			buffer += copy_amount;

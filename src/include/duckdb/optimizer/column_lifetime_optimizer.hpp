@@ -39,6 +39,6 @@ private:
 
 	void ExtractUnusedColumnBindings(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings);
 	void GenerateProjectionMap(vector<ColumnBinding> bindings, column_binding_set_t &unused_bindings,
-	                           vector<index_t> &map);
+	                           vector<idx_t> &map);
 };
 } // namespace duckdb

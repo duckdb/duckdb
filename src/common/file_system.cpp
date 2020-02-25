@@ -106,7 +106,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
-void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
@@ -190,7 +190,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	index_t path_len = (index_t)strlen(path);
+	idx_t path_len = (idx_t)strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -199,12 +199,12 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			index_t len;
+			idx_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
 			}
-			len = path_len + (index_t)strlen(p->d_name) + 2;
+			len = path_len + (idx_t)strlen(p->d_name) + 2;
 			buf = new char[len];
 			if (buf) {
 				struct stat statbuf;
@@ -297,7 +297,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	index_t size =
+	idx_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -364,7 +364,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return move(handle);
 }
 
-void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	LARGE_INTEGER loc;
 	loc.QuadPart = location;
@@ -535,7 +535,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 }
 #endif
 
-void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
 	// now read from the location
@@ -545,7 +545,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
 	// now write to the location
@@ -560,11 +560,11 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
+void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
-void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
+void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
 }
 

@@ -17,12 +17,12 @@ namespace duckdb {
 //! operator.
 class LogicalAggregate : public LogicalOperator {
 public:
-	LogicalAggregate(index_t group_index, index_t aggregate_index, vector<unique_ptr<Expression>> select_list);
+	LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list);
 
 	//! The table index for the groups of the LogicalAggregate
-	index_t group_index;
+	idx_t group_index;
 	//! The table index for the aggregates of the LogicalAggregate
-	index_t aggregate_index;
+	idx_t aggregate_index;
 	//! The set of groups (optional).
 	vector<unique_ptr<Expression>> groups;
 
