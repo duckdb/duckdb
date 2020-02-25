@@ -51,7 +51,7 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq INCREMENT BY 2;"));
 	result = con.Query("SELECT nextval('seq')");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	result = con.Query("SELECT nextval('seq')");
+	result = con.Query("SELECT nextval('\"seq\"')");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 
@@ -163,6 +163,11 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	result = con.Query("SELECT nextval('\"a\".\"seq\"'), nextval('\"b\".seq');");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+	// unterminated quotes
+	REQUIRE_FAIL(con.Query("SELECT nextval('\"a\".\"seq');"));
+	// too many separators
+	REQUIRE_FAIL(con.Query("SELECT nextval('a.b.c.d');"));
 
 	// start exceeds max value
 	REQUIRE_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;"));

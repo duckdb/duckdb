@@ -192,7 +192,7 @@ quoted:
 end:
 	if (entries.size() == 0) {
 		schema = DEFAULT_SCHEMA;
-		name = input;
+		name = entry;
 	} else if (entries.size() == 1) {
 		schema = entries[0];
 		name = entry;
