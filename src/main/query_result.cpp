@@ -46,8 +46,8 @@ bool QueryResult::Equals(QueryResult &other) {
 			return false;
 		}
 		assert(lchunk->column_count() == rchunk->column_count());
-		for (index_t col = 0; col < rchunk->column_count(); col++) {
-			for (index_t row = 0; row < rchunk->size(); row++) {
+		for (idx_t col = 0; col < rchunk->column_count(); col++) {
+			for (idx_t row = 0; row < rchunk->size(); row++) {
 				auto lvalue = lchunk->GetValue(col, row);
 				auto rvalue = rchunk->GetValue(col, row);
 				if (lvalue != rvalue) {

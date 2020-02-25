@@ -7,7 +7,7 @@ WhereBinder::WhereBinder(Binder &binder, ClientContext &context) : ExpressionBin
 	target_type = SQLType(SQLTypeId::BOOLEAN);
 }
 
-BindResult WhereBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
+BindResult WhereBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::DEFAULT:
 		return BindResult("WHERE clause cannot contain DEFAULT clause");

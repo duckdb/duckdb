@@ -11,7 +11,7 @@ public:
 	}
 
 	//! The current position in the scan
-	index_t expression_index;
+	idx_t expression_index;
 
 	unique_ptr<ExpressionExecutor> executor;
 };

@@ -13,12 +13,12 @@
 namespace duckdb {
 
 struct ColumnBinding {
-	index_t table_index;
-	index_t column_index;
+	idx_t table_index;
+	idx_t column_index;
 
 	ColumnBinding() : table_index(INVALID_INDEX), column_index(INVALID_INDEX) {
 	}
-	ColumnBinding(index_t table, index_t column) : table_index(table), column_index(column) {
+	ColumnBinding(idx_t table, idx_t column) : table_index(table), column_index(column) {
 	}
 
 	bool operator==(const ColumnBinding &rhs) const {

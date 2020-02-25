@@ -85,7 +85,7 @@ TEST_CASE("Test multiple versions of the same data with a data set that exceeds 
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(expected_sum)}));
 
-	for (index_t i = 1; i <= 4; i++) {
+	for (idx_t i = 1; i <= 4; i++) {
 		// now delete some tuples
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM integers WHERE i=" + to_string(i)));

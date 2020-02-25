@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, TypeId type, index_t start)
+TransientSegment::TransientSegment(BufferManager &manager, TypeId type, idx_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
 	if (type == TypeId::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start);
@@ -22,7 +22,7 @@ void TransientSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) {
+void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Scan(transaction, state, vector_index, result);
 }
 
@@ -30,12 +30,12 @@ void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
 	data->IndexScan(state, state.vector_index, result);
 }
 
-void TransientSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
+void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }
 
 void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-                                index_t result_idx) {
+                                idx_t result_idx) {
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 
@@ -47,13 +47,13 @@ void TransientSegment::InitializeAppend(ColumnAppendState &state) {
 	state.lock = data->lock.GetExclusiveLock();
 }
 
-index_t TransientSegment::Append(ColumnAppendState &state, Vector &append_data, index_t offset, index_t count) {
-	index_t appended = data->Append(stats, append_data, offset, count);
+idx_t TransientSegment::Append(ColumnAppendState &state, Vector &append_data, idx_t offset, idx_t count) {
+	idx_t appended = data->Append(stats, append_data, offset, count);
 	this->count += appended;
 	return appended;
 }
 
-void TransientSegment::RevertAppend(index_t start_row) {
+void TransientSegment::RevertAppend(idx_t start_row) {
 	data->tuple_count = start_row - this->start;
 	this->count = start_row - this->start;
 }

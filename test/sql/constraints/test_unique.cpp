@@ -38,7 +38,7 @@ TEST_CASE("Single UNIQUE constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 77}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7, 5, 4, 6}));
 
-	for (index_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
 	}
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (3, 7)"));
@@ -81,7 +81,7 @@ TEST_CASE("UNIQUE constraint on temporary tables", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 3, 77}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7, 5, 4, 6}));
 
-	for (index_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
 	}
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, 4)"));
@@ -124,7 +124,7 @@ TEST_CASE("NULL values and a multi-column UNIQUE constraint", "[constraints]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), 2, 3, 77}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6, 6, 5, 4, 7}));
 
-	for (index_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (NULL, 6), (NULL, 7)"));
 	}
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, 4)"));
@@ -160,7 +160,7 @@ TEST_CASE("UNIQUE constraint on temporary tables with Strings", "[constraints]")
 
 	// we can replace them like this though
 	REQUIRE_NO_FAIL(con.Query("UPDATE integers SET j='7777777777777777777777777777' WHERE j IS NULL AND i=6"));
-	for (index_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (6,NULL), (7,NULL)"));
 	}
 	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES  (3, '4')"));

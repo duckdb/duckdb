@@ -24,8 +24,8 @@ public:
 	virtual ~FileHandle() {
 	}
 
-	void Read(void *buffer, index_t nr_bytes, index_t location);
-	void Write(void *buffer, index_t nr_bytes, index_t location);
+	void Read(void *buffer, idx_t nr_bytes, idx_t location);
+	void Write(void *buffer, idx_t nr_bytes, idx_t location);
 	void Sync();
 	void Truncate(int64_t new_size);
 
@@ -65,10 +65,10 @@ public:
 	}
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
-	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location);
+	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
 	//! Write exactly nr_bytes to the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Write().
-	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location);
+	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location);
 	//! Read nr_bytes from the specified file into the buffer, moving the file pointer forward by nr_bytes. Returns the
 	//! amount of bytes read.
 	virtual int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes);
@@ -105,7 +105,7 @@ public:
 
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
-	void SetFilePointer(FileHandle &handle, index_t location);
+	void SetFilePointer(FileHandle &handle, idx_t location);
 };
 
 } // namespace duckdb

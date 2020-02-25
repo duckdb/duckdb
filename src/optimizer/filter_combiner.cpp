@@ -27,13 +27,13 @@ Expression *FilterCombiner::GetNode(Expression *expr) {
 	return pointer_copy;
 }
 
-index_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
+idx_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 	assert(stored_expressions.find(expr) != stored_expressions.end());
 	assert(stored_expressions.find(expr)->second.get() == expr);
 
 	auto entry = equivalence_set_map.find(expr);
 	if (entry == equivalence_set_map.end()) {
-		index_t index = set_index++;
+		idx_t index = set_index++;
 		equivalence_set_map[expr] = index;
 		equivalence_map[index].push_back(expr);
 		constant_values.insert(make_pair(index, vector<ExpressionValueInformation>()));
@@ -45,7 +45,7 @@ index_t FilterCombiner::GetEquivalenceSet(Expression *expr) {
 
 FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInformation> &info_list,
                                                    ExpressionValueInformation info) {
-	for (index_t i = 0; i < info_list.size(); i++) {
+	for (idx_t i = 0; i < info_list.size(); i++) {
 		auto comparison = CompareValueInformation(info_list[i], info);
 		switch (comparison) {
 		case ValueComparisonResult::PRUNE_LEFT:
@@ -92,8 +92,8 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 		auto &entries = entry.second;
 		auto &constant_list = constant_values.find(equivalence_set)->second;
 		// for each entry generate an equality expression comparing to each other
-		for (index_t i = 0; i < entries.size(); i++) {
-			for (index_t k = i + 1; k < entries.size(); k++) {
+		for (idx_t i = 0; i < entries.size(); i++) {
+			for (idx_t k = i + 1; k < entries.size(); k++) {
 				auto comparison = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL,
 				                                                         entries[i]->Copy(), entries[k]->Copy());
 				callback(move(comparison));
@@ -101,7 +101,7 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 			// for each entry also create a comparison with each constant
 			int lower_index = -1, upper_index = -1;
 			bool lower_inclusive, upper_inclusive;
-			for (index_t k = 0; k < constant_list.size(); k++) {
+			for (idx_t k = 0; k < constant_list.size(); k++) {
 				auto &info = constant_list[k];
 				if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 				    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
@@ -188,7 +188,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (left_is_scalar || right_is_scalar) {
 		// comparison with scalar
 		auto node = GetNode(left_is_scalar ? comparison.right.get() : comparison.left.get());
-		index_t equivalence_set = GetEquivalenceSet(node);
+		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
 
@@ -224,7 +224,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 
 		auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
 		auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
-		for (index_t i = 0; i < right_bucket.size(); i++) {
+		for (idx_t i = 0; i < right_bucket.size(); i++) {
 			// rewrite the equivalence set mapping for this node
 			equivalence_set_map[right_bucket[i]] = left_equivalence_set;
 			// add the node to the left bucket
@@ -235,7 +235,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		assert(constant_values.find(right_equivalence_set) != constant_values.end());
 		auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
 		auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
-		for (index_t i = 0; i < right_constant_bucket.size(); i++) {
+		for (idx_t i = 0; i < right_constant_bucket.size(); i++) {
 			if (AddConstantComparison(left_constant_bucket, right_constant_bucket[i]) == FilterResult::UNSATISFIABLE) {
 				return FilterResult::UNSATISFIABLE;
 			}

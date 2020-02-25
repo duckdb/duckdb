@@ -4,12 +4,12 @@
 using namespace duckdb;
 using namespace std;
 
-ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, index_t start, index_t count)
+ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count)
     : SegmentBase(start, count), type(type), type_size(GetTypeIdSize(type)), segment_type(segment_type),
       stats(type, type_size) {
 }
 
-SegmentStatistics::SegmentStatistics(TypeId type, index_t type_size) : type(type), type_size(type_size) {
+SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size) : type(type), type_size(type_size) {
 	Reset();
 }
 

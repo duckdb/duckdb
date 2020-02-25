@@ -16,8 +16,8 @@ using namespace duckdb;
 using namespace std;
 
 //! Create a JoinCondition from a comparison
-static bool CreateJoinCondition(Expression &expr, unordered_set<index_t> &left_bindings,
-                                unordered_set<index_t> &right_bindings, vector<JoinCondition> &conditions) {
+static bool CreateJoinCondition(Expression &expr, unordered_set<idx_t> &left_bindings,
+                                unordered_set<idx_t> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
 	auto &comparison = (BoundComparisonExpression &)expr;
 	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
@@ -43,13 +43,13 @@ static bool CreateJoinCondition(Expression &expr, unordered_set<index_t> &left_b
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,
                                                               unique_ptr<LogicalOperator> right_child,
-                                                              unordered_set<index_t> &left_bindings,
-                                                              unordered_set<index_t> &right_bindings,
+                                                              unordered_set<idx_t> &left_bindings,
+                                                              unordered_set<idx_t> &right_bindings,
                                                               vector<unique_ptr<Expression>> &expressions) {
 	vector<JoinCondition> conditions;
 	vector<unique_ptr<Expression>> arbitrary_expressions;
 	// first check if we can create
-	for (index_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		auto &expr = expressions[i];
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
@@ -132,7 +132,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 		// AND all the arbitrary expressions together
 		// do the same with any remaining conditions
 		any_join->condition = move(arbitrary_expressions[0]);
-		for (index_t i = 1; i < arbitrary_expressions.size(); i++) {
+		for (idx_t i = 1; i < arbitrary_expressions.size(); i++) {
 			any_join->condition = make_unique<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, move(any_join->condition), move(arbitrary_expressions[i]));
 		}
@@ -156,7 +156,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 
 		auto filter = make_unique<LogicalFilter>(move(ref.condition));
 		// visit the expressions in the filter
-		for (index_t i = 0; i < filter->expressions.size(); i++) {
+		for (idx_t i = 0; i < filter->expressions.size(); i++) {
 			PlanSubqueries(&filter->expressions[i], &root);
 		}
 		filter->AddChild(move(root));
@@ -169,7 +169,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 	LogicalFilter::SplitPredicates(expressions);
 
 	// find the table bindings on the LHS and RHS of the join
-	unordered_set<index_t> left_bindings, right_bindings;
+	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*left, left_bindings);
 	LogicalJoin::GetTableReferences(*right, right_bindings);
 	// now create the join operator from the set of join conditions
@@ -189,7 +189,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) 
 		// in this join we visit the expressions on the LHS with the LHS as root node
 		// and the expressions on the RHS with the RHS as root node
 		auto &comp_join = (LogicalComparisonJoin &)*join;
-		for (index_t i = 0; i < comp_join.conditions.size(); i++) {
+		for (idx_t i = 0; i < comp_join.conditions.size(); i++) {
 			PlanSubqueries(&comp_join.conditions[i].left, &comp_join.children[0]);
 			PlanSubqueries(&comp_join.conditions[i].right, &comp_join.children[1]);
 		}

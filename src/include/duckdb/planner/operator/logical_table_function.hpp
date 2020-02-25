@@ -15,7 +15,7 @@ namespace duckdb {
 //! LogicalTableFunction represents a call to a table-producing function
 class LogicalTableFunction : public LogicalOperator {
 public:
-	LogicalTableFunction(TableFunctionCatalogEntry *function, index_t table_index,
+	LogicalTableFunction(TableFunctionCatalogEntry *function, idx_t table_index,
 	                     vector<unique_ptr<Expression>> parameters)
 	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function), table_index(table_index) {
 		expressions = move(parameters);
@@ -24,7 +24,7 @@ public:
 	//! The function
 	TableFunctionCatalogEntry *function;
 	//! The table index of the table-producing function
-	index_t table_index;
+	idx_t table_index;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

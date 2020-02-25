@@ -19,7 +19,7 @@ struct SQLiteMasterData : public TableFunctionData {
 
 	bool initialized;
 	vector<CatalogEntry *> entries;
-	index_t offset;
+	idx_t offset;
 };
 
 FunctionData *sqlite_master_init(ClientContext &context) {
@@ -35,7 +35,7 @@ string GenerateQuery(CatalogEntry *entry) {
 		auto table = (TableCatalogEntry *)entry;
 		ss << "CREATE TABLE " << table->name << "(";
 
-		for (index_t i = 0; i < table->columns.size(); i++) {
+		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
 			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
@@ -66,12 +66,12 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		// finished returning values
 		return;
 	}
-	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
+	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
 	output.SetCardinality(next - data.offset);
 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (index_t i = data.offset; i < next; i++) {
+	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &entry = data.entries[i];
 

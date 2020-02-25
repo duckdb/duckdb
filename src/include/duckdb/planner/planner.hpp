@@ -27,13 +27,14 @@ public:
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<SQLType> sql_types;
-	unordered_map<index_t, PreparedValueEntry> value_map;
+	unordered_map<idx_t, PreparedValueEntry> value_map;
 
 	Binder binder;
 	ClientContext &context;
 
 	bool read_only;
 	bool requires_valid_transaction;
+
 private:
 	void CreatePlan(SQLStatement &statement);
 

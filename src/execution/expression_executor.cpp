@@ -43,7 +43,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	assert(expressions.size() > 0);
 	result.Reset();
 	result.SetCardinality(GetCardinality());
-	for (index_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
 	result.sel_vector = result.data[0].sel_vector();
@@ -55,7 +55,7 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
-index_t ExpressionExecutor::SelectExpression(DataChunk &input, sel_t result[]) {
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, sel_t result[]) {
 	assert(expressions.size() == 1);
 	SetChunk(&input);
 	return Select(*expressions[0], states[0]->root_state.get(), result);
@@ -66,7 +66,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 	ExecuteExpression(0, result);
 }
 
-void ExpressionExecutor::ExecuteExpression(index_t expr_idx, Vector &result) {
+void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	assert(result.SameCardinality(GetCardinality()));
 	assert(expr_idx < expressions.size());
 	assert(result.type == expressions[expr_idx]->return_type);
@@ -160,7 +160,7 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 	Verify(expr, result);
 }
 
-index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
 	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
@@ -174,7 +174,7 @@ index_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel
 	}
 }
 
-index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
@@ -194,8 +194,8 @@ index_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *sta
 		}
 	} else {
 		// not a constant value
-		index_t result_count = 0;
-		VectorOperations::Exec(intermediate, [&](index_t i, index_t k) {
+		idx_t result_count = 0;
+		VectorOperations::Exec(intermediate, [&](idx_t i, idx_t k) {
 			if (intermediate_result[i] && !intermediate.nullmask[i]) {
 				result[result_count++] = i;
 			}

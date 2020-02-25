@@ -27,14 +27,14 @@ public:
 	}
 
 	//! The total amount of elements in the collection
-	index_t count;
+	idx_t count;
 	//! The set of data chunks in the collection
 	vector<unique_ptr<DataChunk>> chunks;
 	//! The types of the ChunkCollection
 	vector<TypeId> types;
 
 	//! The amount of columns in the ChunkCollection
-	index_t column_count() {
+	idx_t column_count() {
 		return types.size();
 	}
 
@@ -42,11 +42,11 @@ public:
 	void Append(DataChunk &new_chunk);
 
 	//! Gets the value of the column at the specified index
-	Value GetValue(index_t column, index_t index);
+	Value GetValue(idx_t column, idx_t index);
 	//! Sets the value of the column at the specified index
-	void SetValue(index_t column, index_t index, Value value);
+	void SetValue(idx_t column, idx_t index, Value value);
 
-	vector<Value> GetRow(index_t index);
+	vector<Value> GetRow(idx_t index);
 
 	string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
@@ -55,27 +55,27 @@ public:
 	void Print();
 
 	//! Gets a reference to the chunk at the given index
-	DataChunk &GetChunk(index_t index) {
+	DataChunk &GetChunk(idx_t index) {
 		return *chunks[LocateChunk(index)];
 	}
 
-	void Sort(vector<OrderType> &desc, index_t result[]);
+	void Sort(vector<OrderType> &desc, idx_t result[]);
 	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
-	void Reorder(index_t order[]);
+	void Reorder(idx_t order[]);
 
-	void MaterializeSortedChunk(DataChunk &target, index_t order[], index_t start_offset);
+	void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);
 
 	//! Returns true if the ChunkCollections are equivalent
 	bool Equals(ChunkCollection &other);
 
 	//! Locates the chunk that belongs to the specific index
-	index_t LocateChunk(index_t index) {
-		index_t result = index / STANDARD_VECTOR_SIZE;
+	idx_t LocateChunk(idx_t index) {
+		idx_t result = index / STANDARD_VECTOR_SIZE;
 		assert(result < chunks.size());
 		return result;
 	}
 
-	void Heap(vector<OrderType> &desc, index_t heap[], index_t heap_size);
-	index_t MaterializeHeapChunk(DataChunk &target, index_t order[], index_t start_offset, index_t heap_size);
+	void Heap(vector<OrderType> &desc, idx_t heap[], idx_t heap_size);
+	idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
 };
 } // namespace duckdb

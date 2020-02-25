@@ -21,12 +21,12 @@ public:
 
 	BufferManager &manager;
 	unique_ptr<BufferHandle> handle;
-	index_t offset;
+	idx_t offset;
 	block_id_t next_block;
 
 public:
 	//! Read content of size read_size into the buffer
-	void ReadData(data_ptr_t buffer, index_t read_size) override;
+	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
 private:
 	void ReadNewBlock(block_id_t id);

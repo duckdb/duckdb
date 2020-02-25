@@ -25,7 +25,7 @@ class BufferManager {
 	friend class BufferHandle;
 
 public:
-	BufferManager(FileSystem &fs, BlockManager &manager, string temp_directory, index_t maximum_memory);
+	BufferManager(FileSystem &fs, BlockManager &manager, string temp_directory, idx_t maximum_memory);
 	~BufferManager();
 
 	//! Pin a block id, returning a block handle holding a pointer to the block
@@ -34,13 +34,13 @@ public:
 	//! Allocate a buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or not the
 	//! buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so it can be
 	//! reloaded.
-	unique_ptr<BufferHandle> Allocate(index_t alloc_size, bool can_destroy = false);
+	unique_ptr<BufferHandle> Allocate(idx_t alloc_size, bool can_destroy = false);
 	//! Destroy the managed buffer with the specified buffer_id, freeing its memory
 	void DestroyBuffer(block_id_t buffer_id, bool can_destroy = false);
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
-	void SetLimit(index_t limit = (index_t)-1);
+	void SetLimit(idx_t limit = (idx_t)-1);
 
 private:
 	unique_ptr<BufferHandle> PinBlock(block_id_t block_id);
@@ -70,9 +70,9 @@ private:
 	//! The block manager
 	BlockManager &manager;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
-	index_t current_memory;
+	idx_t current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
-	index_t maximum_memory;
+	idx_t maximum_memory;
 	//! The directory name where temporary files are stored
 	string temp_directory;
 	//! The lock for the set of blocks

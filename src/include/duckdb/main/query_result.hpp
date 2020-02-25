@@ -70,9 +70,9 @@ private:
 		}
 
 		QueryResultIterator &iterator;
-		index_t row;
+		idx_t row;
 
-		template <class T> T GetValue(index_t col_idx) const {
+		template <class T> T GetValue(idx_t col_idx) const {
 			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
 		}
 	};
@@ -87,7 +87,7 @@ private:
 
 		QueryResultRow current_row;
 		QueryResult *result;
-		index_t row_idx;
+		idx_t row_idx;
 
 	public:
 		void Next() {

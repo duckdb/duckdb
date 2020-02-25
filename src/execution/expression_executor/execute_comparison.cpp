@@ -46,14 +46,14 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 	}
 }
 
-index_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]) {
 	// resolve the children
 	Vector left(GetCardinality(), expr.left->return_type);
 	Vector right(GetCardinality(), expr.right->return_type);
 	Execute(*expr.left, state->child_states[0].get(), left);
 	Execute(*expr.right, state->child_states[1].get(), right);
 
-	index_t result_count;
+	idx_t result_count;
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
 		result_count = VectorOperations::SelectEquals(left, right, result);

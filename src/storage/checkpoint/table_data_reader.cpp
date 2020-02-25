@@ -23,16 +23,16 @@ void TableDataReader::ReadTableData() {
 	assert(columns.size() > 0);
 
 	// load the data pointers for the table
-	for (index_t col = 0; col < columns.size(); col++) {
+	for (idx_t col = 0; col < columns.size(); col++) {
 		auto &column = columns[col];
-		index_t data_pointer_count = reader.Read<index_t>();
-		for (index_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
+		idx_t data_pointer_count = reader.Read<idx_t>();
+		for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 			// read the data pointer
 			DataPointer data_pointer;
 			data_pointer.min = reader.Read<double>();
 			data_pointer.max = reader.Read<double>();
-			data_pointer.row_start = reader.Read<index_t>();
-			data_pointer.tuple_count = reader.Read<index_t>();
+			data_pointer.row_start = reader.Read<idx_t>();
+			data_pointer.tuple_count = reader.Read<idx_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
 			// create a persistent segment

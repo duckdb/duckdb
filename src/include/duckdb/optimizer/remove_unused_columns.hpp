@@ -34,7 +34,7 @@ private:
 	column_binding_map_t<vector<BoundColumnRefExpression *>> column_references;
 
 private:
-	template <class T> void ClearUnusedExpressions(vector<T> &list, index_t table_idx);
+	template <class T> void ClearUnusedExpressions(vector<T> &list, idx_t table_idx);
 
 	//! Perform a replacement of the ColumnBinding, iterating over all the currently found column references and
 	//! replacing the bindings

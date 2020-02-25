@@ -55,9 +55,9 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
-template <class T, class TARGET> static void assign_json_loop(Vector *v, index_t col_idx, json &j) {
+template <class T, class TARGET> static void assign_json_loop(Vector *v, idx_t col_idx, json &j) {
 	auto data_ptr = (T *)v->GetData();
-	VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+	VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
 		if (!v->nullmask[i]) {
 			j["data"][col_idx] += (TARGET)data_ptr[i];
 
@@ -108,7 +108,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			break;
 		case TypeId::VARCHAR: {
 			auto data_ptr = (string_t *)v->GetData();
-			VectorOperations::Exec(*v, [&](index_t i, index_t k) {
+			VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
 				if (!v->nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i].GetData();
 

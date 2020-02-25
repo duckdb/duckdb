@@ -27,7 +27,7 @@ public:
 	//! The set of unique indexes
 	vector<unique_ptr<Index>> indexes;
 	//! The set of deleted entries
-	unordered_map<index_t, unique_ptr<bool[]>> deleted_entries;
+	unordered_map<idx_t, unique_ptr<bool[]>> deleted_entries;
 	//! The max row
 	row_t max_row;
 

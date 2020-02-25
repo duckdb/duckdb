@@ -54,8 +54,8 @@ using namespace duckdb;
 
  */
 
-static index_t consume_string(fstream &input) {
-	index_t size = 1; // terminator
+static idx_t consume_string(fstream &input) {
+	idx_t size = 1; // terminator
 	while (input.get() != '\0') {
 		size++;
 	}

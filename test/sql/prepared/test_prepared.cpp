@@ -325,7 +325,7 @@ TEST_CASE("PREPARE and WAL", "[prepared][.]") {
 		result = con.Query("SELECT a FROM t");
 		REQUIRE(CHECK_COLUMN(result, 0, {43}));
 	}
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(prepare_database);
 		Connection con(db);
 

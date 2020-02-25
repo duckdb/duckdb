@@ -23,21 +23,21 @@ struct DefaultNullCheckOperator {
 
 struct BinaryStandardOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
 	}
 };
 
 struct BinarySingleArgumentOperatorWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
 		return OP::template Operation<LEFT_TYPE>(left, right);
 	}
 };
 
 struct BinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
 		return fun(left, right);
 	}
 };
@@ -47,7 +47,7 @@ private:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
 	static void ExecuteLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-	                        RESULT_TYPE *__restrict result_data, index_t count, sel_t *__restrict sel_vector,
+	                        RESULT_TYPE *__restrict result_data, idx_t count, sel_t *__restrict sel_vector,
 	                        nullmask_t &nullmask, FUNC fun) {
 		if (!LEFT_CONSTANT) {
 			ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
@@ -56,7 +56,7 @@ private:
 			ASSERT_RESTRICT(rdata, rdata + count, result_data, result_data + count);
 		}
 		if (IGNORE_NULL && nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
 				if (!nullmask[i]) {
@@ -65,7 +65,7 @@ private:
 				}
 			});
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				auto lentry = ldata[LEFT_CONSTANT ? 0 : i];
 				auto rentry = rdata[RIGHT_CONSTANT ? 0 : i];
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
@@ -158,18 +158,17 @@ public:
 
 private:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static inline index_t SelectLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-	                                 sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
-	                                 nullmask_t &nullmask) {
-		index_t result_count = 0;
+	static inline idx_t SelectLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, sel_t *__restrict result,
+	                               idx_t count, sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+		idx_t result_count = 0;
 		if (nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (!nullmask[i] && OP::Operation(ldata[LEFT_CONSTANT ? 0 : i], rdata[RIGHT_CONSTANT ? 0 : i])) {
 					result[result_count++] = i;
 				}
 			});
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (OP::Operation(ldata[LEFT_CONSTANT ? 0 : i], rdata[RIGHT_CONSTANT ? 0 : i])) {
 					result[result_count++] = i;
 				}
@@ -180,7 +179,7 @@ private:
 
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static index_t Select(Vector &left, Vector &right, sel_t result[]) {
+	static idx_t Select(Vector &left, Vector &right, sel_t result[]) {
 
 		assert(left.SameCardinality(right));
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {

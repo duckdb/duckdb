@@ -29,7 +29,7 @@ void SelectStatement::Serialize(Serializer &serializer) {
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectStatement>();
 	auto cte_count = source.Read<uint32_t>();
-	for (index_t i = 0; i < cte_count; i++) {
+	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto statement = QueryNode::Deserialize(source);
 		result->cte_map[name] = move(statement);

@@ -14,10 +14,10 @@ public:
 	PhysicalTopNOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
 	}
 
-	index_t position;
-	index_t current_offset;
+	idx_t position;
+	idx_t current_offset;
 	ChunkCollection sorted_data;
-	unique_ptr<index_t[]> heap;
+	unique_ptr<idx_t[]> heap;
 };
 
 void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
@@ -36,7 +36,7 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		ExpressionExecutor executor;
 		vector<TypeId> sort_types;
 		vector<OrderType> order_types;
-		for (index_t i = 0; i < orders.size(); i++) {
+		for (idx_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
 			order_types.push_back(orders[i].type);
@@ -49,7 +49,7 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 
 		ChunkCollection heap_collection;
-		for (index_t i = 0; i < big_data.chunks.size(); i++) {
+		for (idx_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk heap_chunk;
 			heap_chunk.Initialize(sort_types);
 
@@ -60,7 +60,7 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		assert(heap_collection.count == big_data.count);
 
 		// create and use the heap
-		state->heap = unique_ptr<index_t[]>(new index_t[heap_size]);
+		state->heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);
 		heap_collection.Heap(order_types, state->heap.get(), heap_size);
 	}
 
@@ -77,6 +77,6 @@ unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 	return make_unique<PhysicalTopNOperatorState>(children[0].get());
 }
 
-void PhysicalTopN::CalculateHeapSize(index_t rows) {
+void PhysicalTopN::CalculateHeapSize(idx_t rows) {
 	heap_size = (rows > offset) ? min(limit + offset, rows) : 0;
 }

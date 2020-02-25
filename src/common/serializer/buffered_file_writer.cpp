@@ -23,7 +23,7 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size)
 	// first copy anything we can from the buffer
 	const_data_ptr_t end_ptr = buffer + write_size;
 	while (buffer < end_ptr) {
-		index_t to_write = std::min((index_t)(end_ptr - buffer), FILE_BUFFER_SIZE - offset);
+		idx_t to_write = std::min((idx_t)(end_ptr - buffer), FILE_BUFFER_SIZE - offset);
 		assert(to_write > 0);
 		memcpy(data.get() + offset, buffer, to_write);
 		offset += to_write;

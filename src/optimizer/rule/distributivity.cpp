@@ -26,14 +26,14 @@ void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &se
 	}
 }
 
-unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, index_t idx,
+unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, idx_t idx,
                                                              Expression &expr) {
 	auto &child = conj.children[idx];
 	unique_ptr<Expression> result;
 	if (child->type == ExpressionType::CONJUNCTION_AND) {
 		// AND, remove expression from the list
 		auto &and_expr = (BoundConjunctionExpression &)*child;
-		for (index_t i = 0; i < and_expr.children.size(); i++) {
+		for (idx_t i = 0; i < and_expr.children.size(); i++) {
 			if (Expression::Equals(and_expr.children[i].get(), &expr)) {
 				result = move(and_expr.children[i]);
 				and_expr.children.erase(and_expr.children.begin() + i);
@@ -67,7 +67,7 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 	// now for each of the remaining children, we create a set again and intersect them
 	// in our example: the second set would be [X, B]
 	// the intersection would leave [X]
-	for (index_t i = 1; i < initial_or->children.size(); i++) {
+	for (idx_t i = 1; i < initial_or->children.size(); i++) {
 		expression_set_t next_set;
 		AddExpressionSet(*initial_or->children[i], next_set);
 		expression_set_t intersect_result;
@@ -91,13 +91,13 @@ unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Exp
 		// extract the expression from the first child of the OR
 		auto result = ExtractExpression(*initial_or, 0, (Expression &)*expr);
 		// now for the subsequent expressions, simply remove the expression
-		for (index_t i = 1; i < initial_or->children.size(); i++) {
+		for (idx_t i = 1; i < initial_or->children.size(); i++) {
 			ExtractExpression(*initial_or, i, *result);
 		}
 		// now we add the expression to the new root
 		new_root->children.push_back(move(result));
 		// remove any expressions that were set to nullptr
-		for (index_t i = 0; i < initial_or->children.size(); i++) {
+		for (idx_t i = 0; i < initial_or->children.size(); i++) {
 			if (!initial_or->children[i]) {
 				initial_or->children.erase(initial_or->children.begin() + i);
 				i--;

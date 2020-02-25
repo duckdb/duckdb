@@ -27,7 +27,7 @@ static void CreateColumnMap(BoundCreateTableInfo &info) {
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	bool has_primary_key = false;
-	for (index_t i = 0; i < info.base->constraints.size(); i++) {
+	for (idx_t i = 0; i < info.base->constraints.size(); i++) {
 		auto &cond = info.base->constraints[i];
 		switch (cond->type) {
 		case ConstraintType::CHECK: {
@@ -53,7 +53,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::UNIQUE: {
 			auto &unique = (UniqueConstraint &)*cond;
 			// have to resolve columns of the unique constraint
-			unordered_set<index_t> keys;
+			unordered_set<idx_t> keys;
 			if (unique.index != INVALID_INDEX) {
 				assert(unique.index < info.base->columns.size());
 				// unique constraint is given by single index
@@ -93,7 +93,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 }
 
 void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
-	for (index_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
 		if (columns[i].default_value) {
 			// we bind a copy of the DEFAULT value because binding is destructive
@@ -148,7 +148,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
 		auto &names = result->query->node->names;
 		auto &sql_types = result->query->node->types;
 		assert(names.size() == sql_types.size());
-		for (index_t i = 0; i < names.size(); i++) {
+		for (idx_t i = 0; i < names.size(); i++) {
 			result->info->base->columns.push_back(ColumnDefinition(names[i], sql_types[i]));
 		}
 		// create the name map for the statement

@@ -25,9 +25,9 @@ public:
 	//! The current block we are writing to
 	block_id_t block_id;
 	//! The offset within the current block
-	index_t offset;
+	idx_t offset;
 
-	static constexpr index_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
+	static constexpr idx_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
 
 public:
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) override;
@@ -47,7 +47,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	// allocate segments to write the table to
 	segments.resize(table.columns.size());
 	data_pointers.resize(table.columns.size());
-	for (index_t i = 0; i < table.columns.size(); i++) {
+	for (idx_t i = 0; i < table.columns.size(); i++) {
 		auto type_id = GetInternalType(table.columns[i].type);
 		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
 		CreateSegment(i);
@@ -74,19 +74,19 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
-		for (index_t i = 0; i < table.columns.size(); i++) {
+		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
 			AppendData(i, chunk.data[i]);
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
-	for (index_t i = 0; i < table.columns.size(); i++) {
+	for (idx_t i = 0; i < table.columns.size(); i++) {
 		FlushSegment(i);
 	}
 	WriteDataPointers();
 }
 
-void TableDataWriter::CreateSegment(index_t col_idx) {
+void TableDataWriter::CreateSegment(idx_t col_idx) {
 	auto type_id = GetInternalType(table.columns[col_idx].type);
 	if (type_id == TypeId::VARCHAR) {
 		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
@@ -97,11 +97,11 @@ void TableDataWriter::CreateSegment(index_t col_idx) {
 	}
 }
 
-void TableDataWriter::AppendData(index_t col_idx, Vector &data) {
-	index_t count = data.size();
-	index_t offset = 0;
+void TableDataWriter::AppendData(idx_t col_idx, Vector &data) {
+	idx_t count = data.size();
+	idx_t offset = 0;
 	while (offset < count) {
-		index_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
+		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;
@@ -116,7 +116,7 @@ void TableDataWriter::AppendData(index_t col_idx, Vector &data) {
 	}
 }
 
-void TableDataWriter::FlushSegment(index_t col_idx) {
+void TableDataWriter::FlushSegment(idx_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;
@@ -144,17 +144,17 @@ void TableDataWriter::FlushSegment(index_t col_idx) {
 }
 
 void TableDataWriter::WriteDataPointers() {
-	for (index_t i = 0; i < data_pointers.size(); i++) {
+	for (idx_t i = 0; i < data_pointers.size(); i++) {
 		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
-		manager.tabledata_writer->Write<index_t>(data_pointer_list.size());
+		manager.tabledata_writer->Write<idx_t>(data_pointer_list.size());
 		// then write the data pointers themselves
-		for (index_t k = 0; k < data_pointer_list.size(); k++) {
+		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
 			manager.tabledata_writer->Write<double>(data_pointer.min);
 			manager.tabledata_writer->Write<double>(data_pointer.max);
-			manager.tabledata_writer->Write<index_t>(data_pointer.row_start);
-			manager.tabledata_writer->Write<index_t>(data_pointer.tuple_count);
+			manager.tabledata_writer->Write<idx_t>(data_pointer.row_start);
+			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
 		}

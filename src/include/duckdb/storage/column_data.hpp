@@ -29,11 +29,11 @@ public:
 	//! The table of the column
 	DataTable *table;
 	//! The column index of the column
-	index_t column_idx;
+	idx_t column_idx;
 	//! The segments holding the data of the column
 	SegmentTree data;
 	//! The amount of persistent rows
-	index_t persistent_rows;
+	idx_t persistent_rows;
 
 public:
 	//! Initialize a scan of the column
@@ -56,11 +56,11 @@ public:
 	//! Fetch the vector from the column data that belongs to this specific row
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
-	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, index_t result_idx);
+	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result, idx_t result_idx);
 
 private:
 	//! Append a transient segment
-	void AppendTransientSegment(index_t start_row);
+	void AppendTransientSegment(idx_t start_row);
 };
 
 } // namespace duckdb

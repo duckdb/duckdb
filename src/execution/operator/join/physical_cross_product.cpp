@@ -12,8 +12,8 @@ public:
 		assert(left && right);
 	}
 
-	index_t left_position;
-	index_t right_position;
+	idx_t left_position;
+	idx_t right_position;
 	ChunkCollection right_data;
 };
 
@@ -59,12 +59,12 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
 	chunk.SetCardinality(right_chunk.size());
-	for (index_t i = 0; i < left_chunk.column_count(); i++) {
+	for (idx_t i = 0; i < left_chunk.column_count(); i++) {
 		// first duplicate the values of the left side
 		auto lvalue = left_chunk.GetValue(i, state->left_position);
 		chunk.data[i].Reference(lvalue);
 	}
-	for (index_t i = 0; i < right_chunk.column_count(); i++) {
+	for (idx_t i = 0; i < right_chunk.column_count(); i++) {
 		// now create a reference to the vectors of the right chunk
 		chunk.data[left_chunk.column_count() + i].Reference(right_chunk.data[i]);
 	}

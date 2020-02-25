@@ -23,7 +23,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
 	}
 }
 
-unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, ColumnDefinition &column, index_t index) {
+unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index) {
 	auto constraint = reinterpret_cast<PGConstraint *>(cell->data.ptr_value);
 	assert(constraint);
 	switch (constraint->contype) {

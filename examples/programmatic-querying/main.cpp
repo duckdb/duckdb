@@ -57,7 +57,7 @@ unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string nam
 	assert(catalog_entry->type == CatalogType::SCALAR_FUNCTION);
 	auto scalar_fun = (ScalarFunctionCatalogEntry *)catalog_entry;
 
-	index_t best_function = Function::BindFunction(scalar_fun->name, scalar_fun->functions, function_args);
+	idx_t best_function = Function::BindFunction(scalar_fun->name, scalar_fun->functions, function_args);
 	auto fun = scalar_fun->functions[best_function];
 
 	return make_unique<BoundFunctionExpression>(GetInternalType(fun.return_type), fun, is_operator);
@@ -69,7 +69,7 @@ unique_ptr<BoundAggregateExpression> resolve_aggregate(Connection &con, string n
 	assert(catalog_entry->type == CatalogType::AGGREGATE_FUNCTION);
 	auto aggr_fun = (AggregateFunctionCatalogEntry *)catalog_entry;
 
-	index_t best_function = Function::BindFunction(aggr_fun->name, aggr_fun->functions, function_args);
+	idx_t best_function = Function::BindFunction(aggr_fun->name, aggr_fun->functions, function_args);
 	auto fun = aggr_fun->functions[best_function];
 	return make_unique<BoundAggregateExpression>(GetInternalType(fun.return_type), fun, false);
 }

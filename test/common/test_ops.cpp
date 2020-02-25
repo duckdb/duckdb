@@ -27,11 +27,11 @@ TEST_CASE("Casting vectors", "[vector_ops]") {
 	chunk.SetCardinality(3);
 
 	// cast up the chain of types (bool -> int8 -> int16 -> int32 -> etc)
-	for (index_t i = 0; i < types.size() - 1; i++) {
+	for (idx_t i = 0; i < types.size() - 1; i++) {
 		VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
 	}
 	// cast down the chain of types again (str -> double -> float -> int64 -> etc)
-	for (index_t i = types.size(); i > 1; i--) {
+	for (idx_t i = types.size(); i > 1; i--) {
 		VectorOperations::Cast(chunk.data[i - 1], chunk.data[i - 2]);
 	}
 
@@ -52,7 +52,7 @@ TEST_CASE("Aggregating boolean vectors", "[vector_ops]") {
 	REQUIRE(VectorOperations::HasNull(chunk.data[0]));
 }
 
-static void require_compare(DataChunk &chunk, index_t idx) {
+static void require_compare(DataChunk &chunk, idx_t idx) {
 	auto &val = chunk.data[idx];
 	auto &v1 = val;
 
@@ -106,7 +106,7 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	chunk.SetValue(0, 1, Value::BOOLEAN(false));
 	chunk.SetValue(0, 2, Value());
 
-	for (index_t i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		require_compare(chunk, i);
 		if (i + 1 < types.size()) {
 			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
@@ -154,7 +154,7 @@ TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
 	chunk.SetValue(0, 0, Value::TINYINT(1));
 	chunk.SetValue(0, 1, Value::TINYINT(0));
 
-	for (index_t i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		require_sg(chunk.data[i]);
 		if (i + 1 < types.size()) {
 			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);

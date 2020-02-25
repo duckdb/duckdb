@@ -31,7 +31,7 @@ public:
 	//! The default statements used by the table
 	vector<unique_ptr<Expression>> bound_defaults;
 	//! The projection index
-	index_t proj_index;
+	idx_t proj_index;
 	//! Whether or not the update is an index update. Index updates are translated into insert + deletes, instead of
 	//! performing an in-place update.
 	bool is_index_update;

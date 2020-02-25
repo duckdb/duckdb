@@ -13,7 +13,7 @@ TEST_CASE("Insert big varchar strings", "[varchar]") {
 	// insert a big varchar
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('aaaaaaaaaa')"));
 	// sizes: 10, 100, 1000, 10000
-	for (index_t i = 0; i < 3; i++) {
+	for (idx_t i = 0; i < 3; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE "
 		                          "LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 	}
@@ -37,7 +37,7 @@ TEST_CASE("Test scanning many big varchar strings with limited memory", "[varcha
 	// create a big varchar (10K characters)
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('aaaaaaaaaa')"));
 	// sizes: 10, 100, 1000, 10000
-	for (index_t i = 0; i < 3; i++) {
+	for (idx_t i = 0; i < 3; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE "
 		                          "LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 	}
@@ -46,7 +46,7 @@ TEST_CASE("Test scanning many big varchar strings with limited memory", "[varcha
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO bigtable SELECT a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)"));
 
-	index_t entries = 1;
+	idx_t entries = 1;
 
 	// verify that the append worked
 	result = con.Query("SELECT COUNT(*), COUNT(a), MAX(LENGTH(a)), SUM(LENGTH(a)) FROM bigtable");

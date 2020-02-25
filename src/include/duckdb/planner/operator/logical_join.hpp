@@ -20,17 +20,17 @@ public:
 	LogicalJoin(JoinType type, LogicalOperatorType logical_type = LogicalOperatorType::JOIN);
 
 	// Gets the set of table references that are reachable from this node
-	static void GetTableReferences(LogicalOperator &op, unordered_set<index_t> &bindings);
-	static void GetExpressionBindings(Expression &expr, unordered_set<index_t> &bindings);
+	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);
+	static void GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings);
 
 	//! The type of the join (INNER, OUTER, etc...)
 	JoinType join_type;
 	//! Table index used to refer to the MARK column (in case of a MARK join)
-	index_t mark_index;
+	idx_t mark_index;
 	//! The columns of the LHS that are output by the join
-	vector<index_t> left_projection_map;
+	vector<idx_t> left_projection_map;
 	//! The columns of the RHS that are output by the join
-	vector<index_t> right_projection_map;
+	vector<idx_t> right_projection_map;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

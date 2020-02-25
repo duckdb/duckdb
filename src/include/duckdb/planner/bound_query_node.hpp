@@ -51,7 +51,7 @@ public:
 	vector<SQLType> types;
 
 public:
-	virtual index_t GetRootIndex() = 0;
+	virtual idx_t GetRootIndex() = 0;
 };
 
 }; // namespace duckdb

@@ -90,7 +90,8 @@ public:
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
 	//! Execute a prepared statement with the given name and set of parameters
-	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true, string query = string());
+	unique_ptr<QueryResult> Execute(string name, vector<Value> &values, bool allow_stream_result = true,
+	                                string query = string());
 	//! Removes a prepared statement from the set of prepared statements in the client context
 	void RemovePreparedStatement(PreparedStatement *statement);
 
@@ -125,7 +126,7 @@ private:
 	                                             bool allow_stream_result);
 
 private:
-	index_t prepare_count = 0;
+	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 	//! Prepared statement objects that were created using the ClientContext::Prepare method

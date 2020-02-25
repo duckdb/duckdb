@@ -15,9 +15,9 @@ public:
 	}
 
 	bool initialized;
-	index_t left_position;
-	index_t right_position;
-	index_t right_chunk_index;
+	idx_t left_position;
+	idx_t right_position;
+	idx_t right_chunk_index;
 	DataChunk left_chunk;
 	DataChunk join_keys;
 	MergeOrder left_orders;
@@ -79,7 +79,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		}
 		// now order all the chunks
 		state->right_orders.resize(state->right_chunks.chunks.size());
-		for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+		for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
 			auto &chunk_to_order = *state->right_chunks.chunks[i];
 			// create a new selection vector
 			// resolve the join keys for the right chunk
@@ -87,7 +87,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			state->rhs_executor.SetChunk(chunk_to_order);
 
 			state->join_keys.SetCardinality(chunk_to_order);
-			for (index_t k = 0; k < conditions.size(); k++) {
+			for (idx_t k = 0; k < conditions.size(); k++) {
 				// resolve the join key
 				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				OrderVector(state->join_keys.data[k], state->right_orders[i]);
@@ -118,7 +118,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			state->join_keys.Reset();
 			state->lhs_executor.SetChunk(state->child_chunk);
 			state->join_keys.SetCardinality(state->child_chunk);
-			for (index_t k = 0; k < conditions.size(); k++) {
+			for (idx_t k = 0; k < conditions.size(); k++) {
 				state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->left_orders);
@@ -171,7 +171,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		// perform the merge join
 		switch (type) {
 		case JoinType::INNER: {
-			index_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
+			idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {
 				// exhausted this chunk on the right side
 				// move to the next
@@ -180,14 +180,14 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->right_position = 0;
 			} else {
 				chunk.SetCardinality(result_count, left_info.result);
-				for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
+				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
 					chunk.data[i].Reference(state->child_chunk.data[i]);
 					chunk.data[i].ClearSelectionVector();
 				}
 				// now create a reference to the chunk on the right side
 				chunk.SetCardinality(result_count, right.result);
-				for (index_t i = 0; i < right_chunk.column_count(); i++) {
-					index_t chunk_entry = state->child_chunk.column_count() + i;
+				for (idx_t i = 0; i < right_chunk.column_count(); i++) {
+					idx_t chunk_entry = state->child_chunk.column_count() + i;
 					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
 					chunk.data[chunk_entry].ClearSelectionVector();
 				}

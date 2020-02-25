@@ -25,8 +25,7 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (RandomBindData &)*func_expr.bind_info;
 	auto result_data = (double *)result.GetData();
-	VectorOperations::Exec(result,
-	                       [&](index_t i, index_t k) { result_data[i] = info.dist(info.context.random_engine); });
+	VectorOperations::Exec(result, [&](idx_t i, idx_t k) { result_data[i] = info.dist(info.context.random_engine); });
 }
 
 unique_ptr<FunctionData> random_bind(BoundFunctionExpression &expr, ClientContext &context) {

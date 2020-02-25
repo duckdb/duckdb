@@ -16,7 +16,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
-		for (index_t i = 0; i < op.expressions.size(); i++) {
+		for (idx_t i = 0; i < op.expressions.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
 			if (!aggregate.function.simple_update || aggregate.distinct) {
 				// unsupported aggregate for simple aggregation: use hash aggregation

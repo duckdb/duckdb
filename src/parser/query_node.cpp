@@ -29,7 +29,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		if (orders[i].type != other->orders[i].type ||
 		    !orders[i].expression->Equals(other->orders[i].expression.get())) {
 			return false;
@@ -54,8 +54,8 @@ void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(select_distinct);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);
-	serializer.Write<index_t>(orders.size());
-	for (index_t i = 0; i < orders.size(); i++) {
+	serializer.Write<idx_t>(orders.size());
+	for (idx_t i = 0; i < orders.size(); i++) {
 		serializer.Write<OrderType>(orders[i].type);
 		orders[i].expression->Serialize(serializer);
 	}
@@ -67,9 +67,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto select_distinct = source.Read<bool>();
 	auto limit = source.ReadOptional<ParsedExpression>();
 	auto offset = source.ReadOptional<ParsedExpression>();
-	index_t order_count = source.Read<index_t>();
+	idx_t order_count = source.Read<idx_t>();
 	vector<OrderByNode> orders;
-	for (index_t i = 0; i < order_count; i++) {
+	for (idx_t i = 0; i < order_count; i++) {
 		OrderByNode node;
 		node.type = source.Read<OrderType>();
 		node.expression = ParsedExpression::Deserialize(source);
@@ -82,9 +82,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	case QueryNodeType::SET_OPERATION_NODE:
 		result = SetOperationNode::Deserialize(source);
 		break;
-    case QueryNodeType::RECURSIVE_CTE_NODE:
-	    result = RecursiveCTENode::Deserialize(source);
-	    break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = RecursiveCTENode::Deserialize(source);
+		break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}

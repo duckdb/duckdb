@@ -13,7 +13,6 @@
 
 namespace duckdb {
 
-
 struct StructPackBindData : public FunctionData {
 	SQLType stype;
 
@@ -25,24 +24,22 @@ struct StructPackBindData : public FunctionData {
 	}
 };
 
-
 struct StructPackFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct StructExtractBindData : public FunctionData {
 	string key;
-	index_t index;
+	idx_t index;
 	TypeId type;
 
-	StructExtractBindData(string key, index_t index, TypeId type) : key(key), index(index), type(type) {
+	StructExtractBindData(string key, idx_t index, TypeId type) : key(key), index(index), type(type) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
 };
-
 
 struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);

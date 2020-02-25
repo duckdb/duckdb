@@ -10,11 +10,11 @@ namespace duckdb {
 
 struct string_agg_state_t {
 	char *dataptr;
-	index_t size;
-	index_t alloc_size;
+	idx_t size;
+	idx_t alloc_size;
 };
 
-static index_t string_agg_size(TypeId return_type) {
+static idx_t string_agg_size(TypeId return_type) {
 	return sizeof(string_agg_state_t);
 }
 
@@ -26,7 +26,7 @@ static void string_agg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	auto states = (string_agg_state_t **)state.GetData();
 	auto result_data = (string_t *)result.GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		auto state_ptr = states[i];
 
 		if (state_ptr->dataptr == nullptr) {
@@ -37,7 +37,7 @@ static void string_agg_finalize(Vector &state, Vector &result) {
 	});
 }
 
-static void string_agg_update(Vector inputs[], index_t input_count, Vector &state) {
+static void string_agg_update(Vector inputs[], idx_t input_count, Vector &state) {
 	assert(input_count == 2 && inputs[0].type == TypeId::VARCHAR && inputs[1].type == TypeId::VARCHAR);
 	inputs[0].Normalify();
 	inputs[1].Normalify();
@@ -50,7 +50,7 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 	auto states = (string_agg_state_t **)state.GetData();
 
 	// Share a reusable buffer for the block
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if (strs.nullmask[i] || seps.nullmask[i]) {
 			return;
 		}
@@ -63,13 +63,13 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 
 		if (state_ptr->dataptr == nullptr) {
 			// first iteration: allocate space for the string and copy it into the state
-			state_ptr->alloc_size = std::max((index_t)8, (index_t)NextPowerOfTwo(str_size));
+			state_ptr->alloc_size = std::max((idx_t)8, (idx_t)NextPowerOfTwo(str_size));
 			state_ptr->dataptr = new char[state_ptr->alloc_size];
 			state_ptr->size = str_size - 1;
 			memcpy(state_ptr->dataptr, str, str_size);
 		} else {
 			// subsequent iteration: first check if we have space to place the string and separator
-			index_t required_size = state_ptr->size + str_size + sep_size;
+			idx_t required_size = state_ptr->size + str_size + sep_size;
 			if (required_size > state_ptr->alloc_size) {
 				// no space! allocate extra space
 				while (state_ptr->alloc_size < required_size) {
@@ -92,7 +92,7 @@ static void string_agg_update(Vector inputs[], index_t input_count, Vector &stat
 
 static void string_agg_destructor(Vector &state) {
 	auto states = (string_agg_state_t **)state.GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		auto state_ptr = states[i];
 		if (state_ptr->dataptr) {
 			delete[] state_ptr->dataptr;
