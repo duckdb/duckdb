@@ -11,13 +11,13 @@ static bool like_operator(const char *s, const char *pattern, const char *escape
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return like_operator(left, right, nullptr);
+		return like_operator(left.GetData(), right.GetData(), nullptr);
 	}
 };
 
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return !like_operator(left, right, nullptr);
+		return !like_operator(left.GetData(), right.GetData(), nullptr);
 	}
 };
 
@@ -64,12 +64,10 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<const char *, const char *, bool, LikeOperator, true>));
-	set.AddFunction(
-	    ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<const char *, const char *, bool, NotLikeOperator, true>));
+	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
+	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
 }
 
 } // namespace duckdb

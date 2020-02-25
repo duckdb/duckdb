@@ -154,10 +154,10 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			index_t row = 0;
 			auto target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (const char **)chunk->data[col].GetData();
+				auto source = (string_t *)chunk->data[col].GetData();
 				for (index_t k = 0; k < chunk->size(); k++) {
 					if (!chunk->data[col].nullmask[k]) {
-						target[row] = strdup(source[k]);
+						target[row] = strdup(source[k].GetData());
 					}
 					row++;
 				}

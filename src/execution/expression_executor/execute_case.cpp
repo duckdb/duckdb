@@ -119,7 +119,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], in
 		case_loop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
 	case TypeId::VARCHAR:
-		case_loop<const char *>(res_true, res_false, result, tside, tcount, fside, fcount);
+		case_loop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		result.AddHeapReference(res_true);
 		result.AddHeapReference(res_false);
 		break;

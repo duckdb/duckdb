@@ -101,9 +101,9 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		});
 	} else {
 		// sequence to use comes from the input
-		UnaryExecutor::Execute<const char*, int64_t, true>(input, result, [&](const char *value) {
+		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, [&](string_t value) {
 			string schema, seq;
-			string seqname = string(value);
+			string seqname = value.GetString();
 			parse_schema_and_sequence(seqname, schema, seq);
 			// fetch the sequence from the catalog
 			auto sequence = info.context.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);

@@ -787,7 +787,6 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 			}
 		});
 		pointers.SetCount(new_count);
-		;
 	}
 
 	// now we construct the final result

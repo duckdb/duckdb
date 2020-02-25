@@ -6,6 +6,7 @@ add_library(duckdb_common_types OBJECT
             hyperloglog.cpp
             null_value.cpp
             string_heap.cpp
+            string_type.cpp
             timestamp.cpp
             time.cpp
             value.cpp

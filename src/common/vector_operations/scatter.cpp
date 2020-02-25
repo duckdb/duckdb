@@ -44,7 +44,7 @@ template <class OP> static void numeric_scatter_loop(Vector &source, Vector &des
 template <class OP> static void generic_scatter_loop(Vector &source, Vector &dest) {
 	switch (source.type) {
 	case TypeId::VARCHAR:
-		scatter_templated_loop<const char *, OP>(source, dest);
+		scatter_templated_loop<string_t, OP>(source, dest);
 		break;
 	default:
 		numeric_scatter_loop<OP>(source, dest);
@@ -55,7 +55,7 @@ template <class OP> static void generic_scatter_loop(Vector &source, Vector &des
 void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
-		scatter_templated_loop<char *, duckdb::PickLeft>(source, dest);
+		scatter_templated_loop<string_t, duckdb::PickLeft>(source, dest);
 	} else {
 		generic_scatter_loop<duckdb::PickLeft>(source, dest);
 	}
@@ -64,7 +64,7 @@ void VectorOperations::Scatter::Set(Vector &source, Vector &dest) {
 void VectorOperations::Scatter::SetFirst(Vector &source, Vector &dest) {
 	source.Normalify();
 	if (source.type == TypeId::VARCHAR) {
-		scatter_templated_loop<char *, duckdb::PickRight>(source, dest);
+		scatter_templated_loop<string_t, duckdb::PickRight>(source, dest);
 	} else {
 		generic_scatter_loop<duckdb::PickRight>(source, dest);
 	}
@@ -172,7 +172,7 @@ static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], index_t offs
 		scatter_set_loop<double, IGNORE_NULL>(source, dest, offset);
 		break;
 	case TypeId::VARCHAR:
-		scatter_set_loop<const char *, IGNORE_NULL>(source, dest, offset);
+		scatter_set_loop<string_t, IGNORE_NULL>(source, dest, offset);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for scatter");

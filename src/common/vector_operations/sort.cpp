@@ -119,7 +119,7 @@ void VectorOperations::Sort(Vector &vector, sel_t *sel_vector, index_t count, se
 		templated_quicksort<double>(vector, sel_vector, count, result);
 		break;
 	case TypeId::VARCHAR:
-		templated_quicksort<const char *>(vector, sel_vector, count, result);
+		templated_quicksort<string_t>(vector, sel_vector, count, result);
 		break;
 	case TypeId::POINTER:
 		templated_quicksort<uint64_t>(vector, sel_vector, count, result);
@@ -189,7 +189,7 @@ bool VectorOperations::Unique(Vector &vector) {
 	case TypeId::DOUBLE:
 		return is_unique<double>(vector, sort_sel);
 	case TypeId::VARCHAR:
-		return is_unique<const char *>(vector, sort_sel);
+		return is_unique<string_t>(vector, sort_sel);
 	default:
 		throw NotImplementedException("Unimplemented type for unique");
 	}

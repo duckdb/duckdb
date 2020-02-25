@@ -32,11 +32,15 @@ public:
 	}
 
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(const char *data, index_t len);
+	string_t AddString(const char *data, index_t len);
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(const char *data);
+	string_t AddString(const char *data);
 	//! Add a string to the string heap, returns a pointer to the string
-	const char *AddString(const string &data);
+	string_t AddString(const string &data);
+	//! Add a string to the string heap, returns a pointer to the string
+	string_t AddString(const string_t &data);
+	//! Allocates space for an empty string of size "len" on the heap
+	string_t EmptyString(index_t len);
 	//! Add all strings from a different string heap to this string heap
 	void MergeHeap(StringHeap &heap);
 

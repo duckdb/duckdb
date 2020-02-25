@@ -123,7 +123,7 @@ template <> void Appender::Append(int64_t value) {
 }
 
 template <> void Appender::Append(const char *value) {
-	AppendValueInternal<const char *>(value);
+	AppendValueInternal<string_t>(string_t(value));
 }
 
 template <> void Appender::Append(double value) {

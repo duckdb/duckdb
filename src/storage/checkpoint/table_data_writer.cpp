@@ -183,11 +183,12 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	result_offset = offset;
 
 	// write the length field
-	*((uint32_t *)(handle->node->buffer + offset)) = string.length;
+	auto string_length = string.GetSize();
+	*((uint32_t *)(handle->node->buffer + offset)) = string_length;
 	offset += sizeof(uint32_t);
 	// now write the remainder of the string
-	auto strptr = string.data;
-	uint32_t remaining = string.length + 1;
+	auto strptr = string.GetData();
+	uint32_t remaining = string_length + 1;
 	while (remaining > 0) {
 		uint32_t to_write = std::min((uint32_t)remaining, (uint32_t)(STRING_SPACE - offset));
 		if (to_write > 0) {

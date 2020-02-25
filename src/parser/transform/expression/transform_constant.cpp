@@ -23,12 +23,12 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(PGValue val) {
 			}
 		}
 		int64_t value;
-		if (!cast_as_double && TryCast::Operation<const char *, int64_t>(val.val.str, value)) {
+		if (!cast_as_double && TryCast::Operation<string_t, int64_t>(string_t(val.val.str), value)) {
 			// successfully cast to bigint: bigint value
 			return make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(value));
 		} else {
 			// could not cast to bigint: cast to double
-			double dbl_value = Cast::Operation<const char *, double>(val.val.str);
+			double dbl_value = Cast::Operation<string_t, double>(string_t(val.val.str));
 			return make_unique<ConstantExpression>(SQLType::DOUBLE, Value::DOUBLE(dbl_value));
 		}
 	}

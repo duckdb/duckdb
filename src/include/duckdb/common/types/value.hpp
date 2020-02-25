@@ -43,6 +43,7 @@ public:
 	//! Create a VARCHAR value
 	Value(const char *val) : Value(val ? string(val) : string()) {
 	}
+	Value(string_t val);
 	//! Create a VARCHAR value
 	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 		if (IsUTF8String(val.c_str())) {
@@ -93,7 +94,6 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
-
 
 
 	template <class T> T GetValue() {
@@ -174,6 +174,7 @@ public:
 	bool operator>=(const int64_t &rhs) const;
 
 	static bool IsUTF8String(const char *s);
+	static bool IsUTF8String(string_t s);
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	static bool ValuesAreEqual(Value result_value, Value value);
@@ -204,6 +205,7 @@ template <> Value Value::CreateValue(int32_t value);
 template <> Value Value::CreateValue(int64_t value);
 template <> Value Value::CreateValue(const char *value);
 template <> Value Value::CreateValue(string value);
+template <> Value Value::CreateValue(string_t value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cmath>
 
@@ -97,7 +98,7 @@ index_t GetTypeIdSize(TypeId type) {
 	case TypeId::POINTER:
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
-		return sizeof(void *);
+		return sizeof(string_t);
 	case TypeId::STRUCT:
 		return 0; // no own payload
 	case TypeId::LIST:
