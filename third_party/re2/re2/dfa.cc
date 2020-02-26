@@ -47,7 +47,7 @@
 
 // Silence "zero-sized array in struct/union" warning for DFA::State::next_.
 #ifdef _MSC_VER
-#pragma warning(disable: 4200)
+//#pragma warning(disable: 4200)
 #endif
 
 namespace re2 {

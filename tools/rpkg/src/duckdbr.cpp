@@ -1,4 +1,4 @@
-#include "duckdb.hpp"
+#include "duckdb.h"
 
 #include <Rdefines.h>
 #include <algorithm>
