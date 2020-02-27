@@ -181,7 +181,7 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 	auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 	if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
-		if (!info->or_replace) {
+		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Table function with name \"%s\" already exists!", info->name.c_str());
 		} else {
 			auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
@@ -199,24 +199,25 @@ void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTab
 
 void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
 	unique_ptr<CatalogEntry> function;
-	if (info->type == FunctionType::SCALAR) {
+	if (info->type == CatalogType::SCALAR_FUNCTION) {
 		// create a scalar function
 		function =
 		    make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
 	} else {
+		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
 		// create an aggregate function
 		function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                         (CreateAggregateFunctionInfo *)info);
 	}
 	unordered_set<CatalogEntry *> dependencies{this};
 
-	if (info->or_replace) {
+	if (info->on_conflict == OnCreateConflict::REPLACE) {
 		// replace is set: drop the function if it exists
 		functions.DropEntry(transaction, info->name, false);
 	}
 
 	if (!functions.CreateEntry(transaction, info->name, move(function), dependencies)) {
-		if (!info->or_replace) {
+		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Function with name \"%s\" already exists!", info->name.c_str());
 		} else {
 			throw CatalogException("Error in creating function in CREATE OR REPLACE");
