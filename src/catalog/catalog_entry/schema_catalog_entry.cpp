@@ -31,16 +31,17 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
 }
 
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-
 	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
 	if (!info->base->temporary) {
 		info->dependencies.insert(this);
 	} else {
 		table->temporary = true;
 	}
-	if (!tables.CreateEntry(transaction, info->base->table, move(table), info->dependencies)) {
-		if (!info->base->if_not_exists) {
-			throw CatalogException("Table or view with name \"%s\" already exists!", info->base->table.c_str());
+	if (!tables.CreateEntry(transaction, info->Base().table, move(table), info->dependencies)) {
+		if (info->Base().on_conflict == OnCreateConflict::ERROR) {
+			throw CatalogException("Table or view with name \"%s\" already exists!", info->Base().table.c_str());
+		} else {
+			assert(info->Base().on_conflict == OnCreateConflict::IGNORE);
 		}
 	}
 }
@@ -48,7 +49,7 @@ void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableI
 void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInfo *info) {
 	auto view = make_unique_base<CatalogEntry, ViewCatalogEntry>(catalog, this, info);
 	auto old_view = tables.GetEntry(transaction, info->view_name);
-	if (info->replace && old_view) {
+	if (info->on_conflict == OnCreateConflict::REPLACE && old_view) {
 		if (old_view->type != CatalogType::VIEW) {
 			throw CatalogException("Existing object %s is not a view", info->view_name.c_str());
 		}
@@ -77,7 +78,7 @@ void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequence
 	auto sequence = make_unique_base<CatalogEntry, SequenceCatalogEntry>(catalog, this, info);
 	unordered_set<CatalogEntry *> dependencies{this};
 	if (!sequences.CreateEntry(transaction, info->name, move(sequence), dependencies)) {
-		if (!info->if_not_exists) {
+		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Sequence with name \"%s\" already exists!", info->name.c_str());
 		}
 	}
@@ -98,7 +99,7 @@ bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInfo *
 		dependencies.insert(this);
 	}
 	if (!indexes.CreateEntry(transaction, info->index_name, move(index), dependencies)) {
-		if (!info->if_not_exists) {
+		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Index with name \"%s\" already exists!", info->index_name.c_str());
 		}
 		return false;

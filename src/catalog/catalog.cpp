@@ -34,8 +34,10 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
 	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
-		if (!info->if_not_exists) {
+		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Schema with name %s already exists!", info->schema.c_str());
+		} else {
+			assert(info->on_conflict == OnCreateConflict::IGNORE);
 		}
 	}
 }

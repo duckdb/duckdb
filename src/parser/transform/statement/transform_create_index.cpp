@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/statement/create_index_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -19,14 +20,14 @@ static IndexType StringToIndexType(const string &str) {
 	return IndexType::INVALID;
 }
 
-unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(PGNode *node) {
+unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 	auto stmt = reinterpret_cast<PGIndexStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<CreateIndexStatement>();
-	auto &info = *result->info.get();
+	auto result = make_unique<CreateStatement>();
+	auto info = make_unique<CreateIndexInfo>();
 
-	info.unique = stmt->unique;
-	info.if_not_exists = stmt->if_not_exists;
+	info->unique = stmt->unique;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (PGIndexElem *)cell->data.ptr_value;
@@ -39,26 +40,27 @@ unique_ptr<CreateIndexStatement> Transformer::TransformCreateIndex(PGNode *node)
 
 		if (index_element->name) {
 			// create a column reference expression
-			result->expressions.push_back(
+			info->expressions.push_back(
 			    make_unique<ColumnRefExpression>(index_element->name, stmt->relation->relname));
 		} else {
 			// parse the index expression
 			assert(index_element->expr);
-			result->expressions.push_back(TransformExpression(index_element->expr));
+			info->expressions.push_back(TransformExpression(index_element->expr));
 		}
 	}
 
-	info.index_type = StringToIndexType(string(stmt->accessMethod));
+	info->index_type = StringToIndexType(string(stmt->accessMethod));
 	auto tableref = make_unique<BaseTableRef>();
 	tableref->table_name = stmt->relation->relname;
 	if (stmt->relation->schemaname) {
 		tableref->schema_name = stmt->relation->schemaname;
 	}
-	result->table = move(tableref);
+	info->table = move(tableref);
 	if (stmt->idxname) {
-		info.index_name = stmt->idxname;
+		info->index_name = stmt->idxname;
 	} else {
 		throw NotImplementedException("Index wout a name not supported yet!");
 	}
+	result->info = move(info);
 	return result;
 }

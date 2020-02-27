@@ -24,7 +24,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	CreateViewInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.view_name = "sqlite_master";
-	info.replace = true;
+	info.on_conflict = OnCreateConflict::REPLACE;
 
 	auto select = make_unique<SelectNode>();
 	select->select_list.push_back(make_unique<StarExpression>());

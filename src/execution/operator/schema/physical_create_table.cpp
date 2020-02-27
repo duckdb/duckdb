@@ -18,7 +18,7 @@ void PhysicalCreateTable::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	schema->CreateTable(context.ActiveTransaction(), info.get());
-	auto table = schema->GetTable(context.ActiveTransaction(), info->base->table);
+	auto table = schema->GetTable(context.ActiveTransaction(), info->Base().table);
 
 	assert(table);
 

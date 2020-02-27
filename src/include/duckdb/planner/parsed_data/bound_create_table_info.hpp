@@ -8,16 +8,18 @@
 
 #pragma once
 
+#include "duckdb/planner/parsed_data/bound_create_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/planner/statement/bound_select_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 
 namespace duckdb {
 class CatalogEntry;
 
-struct BoundCreateTableInfo {
-	BoundCreateTableInfo(unique_ptr<CreateTableInfo> base) : base(move(base)) {
+struct BoundCreateTableInfo : public BoundCreateInfo {
+	BoundCreateTableInfo(unique_ptr<CreateInfo> base) : BoundCreateInfo(move(base)) {
 	}
 	//! The map of column names -> column index, used during binding
 	unordered_map<string, column_t> name_map;
@@ -31,8 +33,10 @@ struct BoundCreateTableInfo {
 	unordered_set<CatalogEntry *> dependencies;
 	//! The existing table data on disk (if any)
 	unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data;
-	//! The base create table info
-	unique_ptr<CreateTableInfo> base;
+	//! CREATE TABLE from QUERY
+	unique_ptr<BoundSelectStatement> query;
+
+	CreateTableInfo &Base() { return (CreateTableInfo&) *base; }
 };
 
 } // namespace duckdb

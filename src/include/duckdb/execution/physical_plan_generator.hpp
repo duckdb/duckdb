@@ -41,6 +41,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalChunkGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateIndex &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCrossProduct &op);

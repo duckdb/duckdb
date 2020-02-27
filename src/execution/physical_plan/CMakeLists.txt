@@ -6,6 +6,7 @@ add_library_unity(duckdb_physical_plan
                   plan_comparison_join.cpp
                   plan_copy_from_file.cpp
                   plan_copy_to_file.cpp
+                  plan_create.cpp
                   plan_create_index.cpp
                   plan_create_table.cpp
                   plan_cross_product.cpp

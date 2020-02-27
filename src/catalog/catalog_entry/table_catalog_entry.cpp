@@ -25,8 +25,8 @@ using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage),
-      columns(move(info->base->columns)), constraints(move(info->base->constraints)),
+    : CatalogEntry(CatalogType::TABLE, catalog, info->Base().table), schema(schema), storage(inherited_storage),
+      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
@@ -109,8 +109,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		// 	create_info->constraints[i] = constraints[i]->Copy();
 		// }
 		Binder binder(context);
-		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
+		auto bound_create_info = binder.BindCreateInfo(move(create_info));
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *) bound_create_info.get(), storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");

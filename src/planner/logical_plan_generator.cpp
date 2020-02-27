@@ -23,13 +23,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 		return CreatePlan((BoundDeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return CreatePlan((BoundUpdateStatement &)statement);
-	case StatementType::CREATE_TABLE:
-		return CreatePlan((BoundCreateTableStatement &)statement);
-	case StatementType::CREATE_INDEX:
-		return CreatePlan((BoundCreateIndexStatement &)statement);
-	case StatementType::CREATE_VIEW:
-	case StatementType::CREATE_SCHEMA:
-	case StatementType::CREATE_SEQUENCE:
+	case StatementType::CREATE:
+		return CreatePlan((BoundCreateStatement &)statement);
 	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:

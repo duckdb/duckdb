@@ -129,8 +129,8 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
-	// we set if_not_exists to true to ignore the failure of recreating the main schema
-	info->if_not_exists = true;
+	// we set create conflict to ignore to ignore the failure of recreating the main schema
+	info->on_conflict = OnCreateConflict::IGNORE;
 	database.catalog->CreateSchema(context.ActiveTransaction(), info.get());
 
 	// read the sequences
@@ -196,7 +196,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	auto info = TableCatalogEntry::Deserialize(reader);
 	// bind the info
 	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
 
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();

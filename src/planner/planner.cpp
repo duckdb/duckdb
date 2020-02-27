@@ -92,12 +92,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::COPY:
 	case StatementType::DELETE:
 	case StatementType::UPDATE:
-	case StatementType::CREATE_INDEX:
-	case StatementType::CREATE_TABLE:
+	case StatementType::CREATE:
 	case StatementType::EXECUTE:
-	case StatementType::CREATE_VIEW:
-	case StatementType::CREATE_SCHEMA:
-	case StatementType::CREATE_SEQUENCE:
 	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
