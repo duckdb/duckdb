@@ -30,36 +30,48 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
       functions(*catalog), sequences(*catalog) {
 }
 
-void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-	auto table = make_unique_base<CatalogEntry, TableCatalogEntry>(catalog, this, info);
-	if (!info->base->temporary) {
-		info->dependencies.insert(this);
+bool SchemaCatalogEntry::AddEntry(Transaction &transaction, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies) {
+	auto entry_name = entry->name;
+	auto entry_type = entry->type;
+
+	// first find the set for this entry
+	auto &set = GetCatalogSet(entry_type);
+
+	if (name != TEMP_SCHEMA) {
+		dependencies.insert(this);
 	} else {
-		table->temporary = true;
+		entry->temporary = true;
 	}
-	if (!tables.CreateEntry(transaction, info->Base().table, move(table), info->dependencies)) {
-		if (info->Base().on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("Table or view with name \"%s\" already exists!", info->Base().table.c_str());
-		} else {
-			assert(info->Base().on_conflict == OnCreateConflict::IGNORE);
+	if (on_conflict == OnCreateConflict::REPLACE) {
+		// CREATE OR REPLACE: first check if the entry exists
+		auto old_entry = set.GetEntry(transaction, entry_name);
+		if (old_entry) {
+			if (old_entry->type != entry_type) {
+				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name.c_str(), CatalogTypeToString(old_entry->type).c_str(), CatalogTypeToString(entry_type).c_str());
+			}
+			(void) set.DropEntry(transaction, entry_name, false);
 		}
 	}
+	// now try to add the entry
+	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
+		// entry already exists!
+		if (on_conflict == OnCreateConflict::ERROR) {
+			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type).c_str(), entry_name.c_str());
+		} else {
+			return false;
+		}
+	}
+	return true;
+}
+
+void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
+	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(table), info->Base().on_conflict, info->dependencies);
 }
 
 void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInfo *info) {
-	auto view = make_unique_base<CatalogEntry, ViewCatalogEntry>(catalog, this, info);
-	auto old_view = tables.GetEntry(transaction, info->view_name);
-	if (info->on_conflict == OnCreateConflict::REPLACE && old_view) {
-		if (old_view->type != CatalogType::VIEW) {
-			throw CatalogException("Existing object %s is not a view", info->view_name.c_str());
-		}
-		tables.DropEntry(transaction, info->view_name, false);
-	}
-
-	unordered_set<CatalogEntry *> dependencies{this};
-	if (!tables.CreateEntry(transaction, info->view_name, move(view), dependencies)) {
-		throw CatalogException("T with name \"%s\" already exists!", info->view_name.c_str());
-	}
+	auto view = make_unique<ViewCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(view), info->on_conflict);
 }
 
 void SchemaCatalogEntry::DropView(Transaction &transaction, DropInfo *info) {
@@ -75,13 +87,8 @@ void SchemaCatalogEntry::DropView(Transaction &transaction, DropInfo *info) {
 }
 
 void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
-	auto sequence = make_unique_base<CatalogEntry, SequenceCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies{this};
-	if (!sequences.CreateEntry(transaction, info->name, move(sequence), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("Sequence with name \"%s\" already exists!", info->name.c_str());
-		}
-	}
+	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(sequence), info->on_conflict);
 }
 
 void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInfo *info) {
@@ -93,18 +100,8 @@ void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInfo *info) 
 }
 
 bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInfo *info) {
-	auto index = make_unique_base<CatalogEntry, IndexCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies;
-	if (name != TEMP_SCHEMA) {
-		dependencies.insert(this);
-	}
-	if (!indexes.CreateEntry(transaction, info->index_name, move(index), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("Index with name \"%s\" already exists!", info->index_name.c_str());
-		}
-		return false;
-	}
-	return true;
+	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
+	return AddEntry(transaction, move(index), info->on_conflict);
 }
 
 void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInfo *info) {
@@ -178,51 +175,22 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 }
 
 void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
-	auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
-	unordered_set<CatalogEntry *> dependencies{this};
-	if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("Table function with name \"%s\" already exists!", info->name.c_str());
-		} else {
-			auto table_function = make_unique_base<CatalogEntry, TableFunctionCatalogEntry>(catalog, this, info);
-			// function already exists: replace it
-			if (!table_functions.DropEntry(transaction, info->name, false)) {
-				throw CatalogException("CREATE OR REPLACE was specified, but "
-				                       "function could not be dropped!");
-			}
-			if (!table_functions.CreateEntry(transaction, info->name, move(table_function), dependencies)) {
-				throw CatalogException("Error in recreating function in CREATE OR REPLACE");
-			}
-		}
-	}
+	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(table_function), info->on_conflict);
 }
 
 void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
-	unique_ptr<CatalogEntry> function;
+	unique_ptr<StandardEntry> function;
 	if (info->type == CatalogType::SCALAR_FUNCTION) {
 		// create a scalar function
-		function =
-		    make_unique_base<CatalogEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
+		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
 	} else {
 		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
 		// create an aggregate function
-		function = make_unique_base<CatalogEntry, AggregateFunctionCatalogEntry>(catalog, this,
+		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                         (CreateAggregateFunctionInfo *)info);
 	}
-	unordered_set<CatalogEntry *> dependencies{this};
-
-	if (info->on_conflict == OnCreateConflict::REPLACE) {
-		// replace is set: drop the function if it exists
-		functions.DropEntry(transaction, info->name, false);
-	}
-
-	if (!functions.CreateEntry(transaction, info->name, move(function), dependencies)) {
-		if (info->on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("Function with name \"%s\" already exists!", info->name.c_str());
-		} else {
-			throw CatalogException("Error in creating function in CREATE OR REPLACE");
-		}
-	}
+	AddEntry(transaction, move(function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {
@@ -249,4 +217,23 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	auto info = make_unique<CreateSchemaInfo>();
 	info->schema = source.Read<string>();
 	return info;
+}
+
+CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
+	switch(type) {
+	case CatalogType::VIEW:
+	case CatalogType::TABLE:
+		return tables;
+	case CatalogType::INDEX:
+		return indexes;
+	case CatalogType::TABLE_FUNCTION:
+		return table_functions;
+	case CatalogType::AGGREGATE_FUNCTION:
+	case CatalogType::SCALAR_FUNCTION:
+		return functions;
+	case CatalogType::SEQUENCE:
+		return sequences;
+	default:
+		throw CatalogException("Unsupported catalog type in schema");
+ 	}
 }

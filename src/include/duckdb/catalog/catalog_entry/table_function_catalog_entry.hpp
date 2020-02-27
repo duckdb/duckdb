@@ -29,6 +29,7 @@ public:
 	//! A map of return-column name to column index
 	unordered_map<string, column_t> name_map;
 
+public:
 	//! Returns whether or not a column with the given name is returned by the
 	//! function
 	bool ColumnExists(const string &name);

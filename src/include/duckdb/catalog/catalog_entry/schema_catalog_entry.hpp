@@ -14,9 +14,12 @@
 namespace duckdb {
 class FunctionExpression;
 
+class StandardEntry;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class SequenceCatalogEntry;
+
+enum class OnCreateConflict : uint8_t;
 
 struct AlterTableInfo;
 class ClientContext;
@@ -47,7 +50,6 @@ public:
 	CatalogSet functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
-
 public:
 	//! Returns a pointer to a table of the given name. Throws an exception if
 	//! the table does not exist.
@@ -94,5 +96,11 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateSchemaInfo
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
+private:
+	//! Add a catalog entry to this schema
+	bool AddEntry(Transaction &transaction, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies = {});
+
+	//! Get the catalog set for the specified type
+	CatalogSet &GetCatalogSet(CatalogType type);
 };
 } // namespace duckdb

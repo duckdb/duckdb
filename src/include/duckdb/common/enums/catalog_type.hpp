@@ -31,4 +31,7 @@ enum class CatalogType : uint8_t {
 	DELETED_ENTRY = 51,
 };
 
+
+string CatalogTypeToString(CatalogType type);
+
 } // namespace duckdb
