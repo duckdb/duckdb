@@ -25,7 +25,7 @@ using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->Base().table), schema(schema), storage(inherited_storage),
+    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	// add the "rowid" alias, if there is no rowid column specified in the table

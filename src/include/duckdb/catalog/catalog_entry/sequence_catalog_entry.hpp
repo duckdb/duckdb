@@ -8,15 +8,13 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 #include <atomic>
 #include <mutex>
 
 namespace duckdb {
-
-class SchemaCatalogEntry;
 
 struct SequenceValue {
 	SequenceValue() : usage_count(0), counter(-1) {
@@ -29,13 +27,11 @@ struct SequenceValue {
 };
 
 //! A sequence catalog entry
-class SequenceCatalogEntry : public CatalogEntry {
+class SequenceCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
 
-	//! The schema the table belongs to
-	SchemaCatalogEntry *schema;
 	//! Lock for getting a value on the sequence
 	std::mutex lock;
 	//! The amount of times the sequence has been used
