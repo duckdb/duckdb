@@ -51,30 +51,22 @@ public:
 public:
 	//! Creates a schema in the catalog.
 	void CreateSchema(Transaction &transaction, CreateSchemaInfo *info);
-	//! Drops a schema in the catalog.
-	void DropSchema(Transaction &transaction, DropInfo *info);
-
 	//! Creates a table in the catalog.
 	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
-	//! Drops a table from the catalog.
-	void DropTable(Transaction &transaction, DropInfo *info);
-
-	//! Alter an existing table in the catalog.
-	void AlterTable(ClientContext &context, AlterTableInfo *info);
 	//! Create a table function in the catalog
 	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
 	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
-
 	//! Creates a table in the catalog.
 	void CreateView(Transaction &transaction, CreateViewInfo *info);
-	//! Drops a view in the catalog.
-	void DropView(Transaction &transaction, DropInfo *info);
-
 	//! Creates a table in the catalog.
 	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
-	//! Drops a view in the catalog.
-	void DropSequence(Transaction &transaction, DropInfo *info);
+
+	//! Drops an entry from the catalog
+	void DropEntry(Transaction &transaction, DropInfo *info);
+
+	//! Alter an existing table in the catalog.
+	void AlterTable(ClientContext &context, AlterTableInfo *info);
 
 	//! Returns a pointer to the schema of the specified name. Throws an
 	//! exception if it does not exist.
@@ -100,5 +92,7 @@ public:
 
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot the schema will be set to DEFAULT_SCHEMA
 	static void ParseRangeVar(string input, string &schema, string &name);
+private:
+	void DropSchema(Transaction &transaction, DropInfo *info);
 };
 } // namespace duckdb

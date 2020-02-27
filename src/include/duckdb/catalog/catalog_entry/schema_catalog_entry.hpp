@@ -59,33 +59,25 @@ public:
 
 	//! Creates a table with the given name in the schema
 	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
-
 	//! Creates a view with the given name in the schema
 	void CreateView(Transaction &transaction, CreateViewInfo *info);
-	//! Drops a view with the given name in the schema
-	void DropView(Transaction &transaction, DropInfo *info);
-
 	//! Creates a sequence with the given name in the schema
 	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
-	//! Drops a sequence with the given name in the schema
-	void DropSequence(Transaction &transaction, DropInfo *info);
-
 	//! Creates an index with the given name in the schema
 	bool CreateIndex(Transaction &transaction, CreateIndexInfo *info);
-	//! Drops a index with the given name
-	void DropIndex(Transaction &transaction, DropInfo *info);
-	//! Drops a table with the given name
-	void DropTable(Transaction &transaction, DropInfo *info);
+	//! Create a table function within the given schema
+	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
+	//! Create a scalar or aggregate function within the given schema
+	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
+
+	//! Drops an entry from the schema
+	void DropEntry(Transaction &transaction, DropInfo *info);
 
 	//! Alters a table
 	void AlterTable(ClientContext &context, AlterTableInfo *info);
 
 	//! Gets a table function matching the given function expression
 	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
-	//! Create a table function within the given schema
-	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
-	//! Create a scalar or aggregate function within the given schema
-	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
 
 	//! Gets a scalar function with the given name
 	CatalogEntry *GetFunction(Transaction &transaction, const string &name, bool if_exists = false);

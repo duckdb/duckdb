@@ -170,7 +170,7 @@ void ReplayState::ReplayDropTable() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropTable(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context.ActiveTransaction(), &info);
 }
 
 void ReplayState::ReplayAlter() {
@@ -196,7 +196,7 @@ void ReplayState::ReplayDropView() {
 	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	db.catalog->DropView(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context.ActiveTransaction(), &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -215,7 +215,7 @@ void ReplayState::ReplayDropSchema() {
 	info.type = CatalogType::SCHEMA;
 	info.name = source.Read<string>();
 
-	db.catalog->DropSchema(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context.ActiveTransaction(), &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -233,7 +233,7 @@ void ReplayState::ReplayDropSequence() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropSequence(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context.ActiveTransaction(), &info);
 }
 
 void ReplayState::ReplaySequenceValue() {

@@ -43,7 +43,7 @@ bool SchemaCatalogEntry::AddEntry(Transaction &transaction, unique_ptr<StandardE
 		entry->temporary = true;
 	}
 	if (on_conflict == OnCreateConflict::REPLACE) {
-		// CREATE OR REPLACE: first check if the entry exists
+		// CREATE OR REPLACE: first try to drop the entry
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
 			if (old_entry->type != entry_type) {
@@ -64,6 +64,11 @@ bool SchemaCatalogEntry::AddEntry(Transaction &transaction, unique_ptr<StandardE
 	return true;
 }
 
+void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
+	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(sequence), info->on_conflict);
+}
+
 void SchemaCatalogEntry::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	AddEntry(transaction, move(table), info->Base().on_conflict, info->dependencies);
@@ -74,53 +79,45 @@ void SchemaCatalogEntry::CreateView(Transaction &transaction, CreateViewInfo *in
 	AddEntry(transaction, move(view), info->on_conflict);
 }
 
-void SchemaCatalogEntry::DropView(Transaction &transaction, DropInfo *info) {
-	auto existing_view = tables.GetEntry(transaction, info->name);
-	if (existing_view && existing_view->type != CatalogType::VIEW) {
-		throw CatalogException("Existing object %s is not a view", info->name.c_str());
-	}
-	if (!tables.DropEntry(transaction, info->name, false)) {
-		if (!info->if_exists) {
-			throw CatalogException("View with name \"%s\" does not exist!", info->name.c_str());
-		}
-	}
-}
-
-void SchemaCatalogEntry::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
-	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
-	AddEntry(transaction, move(sequence), info->on_conflict);
-}
-
-void SchemaCatalogEntry::DropSequence(Transaction &transaction, DropInfo *info) {
-	if (!sequences.DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Sequence with name \"%s\" does not exist!", info->name.c_str());
-		}
-	}
-}
-
 bool SchemaCatalogEntry::CreateIndex(Transaction &transaction, CreateIndexInfo *info) {
 	auto index = make_unique<IndexCatalogEntry>(catalog, this, info);
 	return AddEntry(transaction, move(index), info->on_conflict);
 }
 
-void SchemaCatalogEntry::DropIndex(Transaction &transaction, DropInfo *info) {
-	if (!indexes.DropEntry(transaction, info->name, false)) {
-		if (!info->if_exists) {
-			throw CatalogException("Index with name \"%s\" does not exist!", info->name.c_str());
-		}
-	}
+void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
+	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
+	AddEntry(transaction, move(table_function), info->on_conflict);
 }
 
-void SchemaCatalogEntry::DropTable(Transaction &transaction, DropInfo *info) {
-	auto old_table = tables.GetEntry(transaction, info->name);
-	if (old_table && old_table->type != CatalogType::TABLE) {
-		throw CatalogException("Existing object %s is not a table", info->name.c_str());
+void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
+	unique_ptr<StandardEntry> function;
+	if (info->type == CatalogType::SCALAR_FUNCTION) {
+		// create a scalar function
+		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
+	} else {
+		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
+		// create an aggregate function
+		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
+		                                                                         (CreateAggregateFunctionInfo *)info);
 	}
-	if (!tables.DropEntry(transaction, info->name, info->cascade)) {
-		if (!info->if_exists) {
-			throw CatalogException("Table with name \"%s\" does not exist!", info->name.c_str());
+	AddEntry(transaction, move(function), info->on_conflict);
+}
+
+void SchemaCatalogEntry::DropEntry(Transaction &transaction, DropInfo *info) {
+	auto &set = GetCatalogSet(info->type);
+	// first find the entry
+	auto existing_entry = set.GetEntry(transaction, info->name);
+	if (!existing_entry) {
+		if (info->if_exists) {
+			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type).c_str(), info->name.c_str());
 		}
+		return;
+	}
+	if (existing_entry->type != info->type) {
+		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name.c_str(), CatalogTypeToString(existing_entry->type).c_str(), CatalogTypeToString(info->type).c_str());
+	}
+	if (!set.DropEntry(transaction, info->name, info->cascade)) {
+		throw InternalException("Could not drop element because of an internal error");
 	}
 }
 
@@ -172,25 +169,6 @@ TableFunctionCatalogEntry *SchemaCatalogEntry::GetTableFunction(Transaction &tra
 		                       (int)expression->children.size());
 	}
 	return function_entry;
-}
-
-void SchemaCatalogEntry::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
-	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
-	AddEntry(transaction, move(table_function), info->on_conflict);
-}
-
-void SchemaCatalogEntry::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
-	unique_ptr<StandardEntry> function;
-	if (info->type == CatalogType::SCALAR_FUNCTION) {
-		// create a scalar function
-		function = make_unique_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, this, (CreateScalarFunctionInfo *)info);
-	} else {
-		assert(info->type == CatalogType::AGGREGATE_FUNCTION);
-		// create an aggregate function
-		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
-		                                                                         (CreateAggregateFunctionInfo *)info);
-	}
-	AddEntry(transaction, move(function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::GetFunction(Transaction &transaction, const string &name, bool if_exists) {

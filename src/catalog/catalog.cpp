@@ -23,6 +23,26 @@ using namespace std;
 Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
 }
 
+void Catalog::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
+	auto schema = GetSchema(transaction, info->base->schema);
+	schema->CreateTable(transaction, info);
+}
+
+void Catalog::CreateView(Transaction &transaction, CreateViewInfo *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateView(transaction, info);
+}
+
+void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateSequence(transaction, info);
+}
+
+void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
+	auto schema = GetSchema(transaction, info->schema);
+	schema->CreateTableFunction(transaction, info);
+}
+
 void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 	if (info->schema == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
@@ -58,6 +78,16 @@ void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 	}
 }
 
+void Catalog::DropEntry(Transaction &transaction, DropInfo *info) {
+	if (info->type == CatalogType::SCHEMA) {
+		// DROP SCHEMA
+		DropSchema(transaction, info);
+	} else {
+		auto schema = GetSchema(transaction, info->schema);
+		schema->DropEntry(transaction, info);
+	}
+}
+
 SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
 	if (schema_name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
@@ -67,36 +97,6 @@ SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &s
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
 	}
 	return (SchemaCatalogEntry *)entry;
-}
-
-void Catalog::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-	auto schema = GetSchema(transaction, info->base->schema);
-	schema->CreateTable(transaction, info);
-}
-
-void Catalog::CreateView(Transaction &transaction, CreateViewInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateView(transaction, info);
-}
-
-void Catalog::DropView(Transaction &transaction, DropInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->DropView(transaction, info);
-}
-
-void Catalog::DropTable(Transaction &transaction, DropInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->DropTable(transaction, info);
-}
-
-void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateSequence(transaction, info);
-}
-
-void Catalog::DropSequence(Transaction &transaction, DropInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->DropSequence(transaction, info);
 }
 
 void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
@@ -135,11 +135,6 @@ SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const strin
 	return schema->GetSequence(transaction, sequence);
 }
 
-void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateTableFunction(transaction, info);
-}
-
 TableFunctionCatalogEntry *Catalog::GetTableFunction(Transaction &transaction, FunctionExpression *expression) {
 	auto schema = GetSchema(transaction, expression->schema);
 	return schema->GetTableFunction(transaction, expression);
@@ -154,11 +149,6 @@ CatalogEntry *Catalog::GetFunction(Transaction &transaction, const string &schem
                                    bool if_exists) {
 	auto schema = GetSchema(transaction, schema_name);
 	return schema->GetFunction(transaction, name, if_exists);
-}
-
-void Catalog::DropIndex(Transaction &transaction, DropInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->DropIndex(transaction, info);
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {
