@@ -14,21 +14,7 @@
 
 #include <math.h>
 #include <stdio.h>
-#if (defined(LINUX) || defined(_POSIX_SOURCE))
 #include <stdint.h>
-#endif
-#ifdef IBM
-#include <inttypes.h>
-#endif
-#ifdef SUN
-#include <inttypes.h>
-#endif
-#ifdef ATT
-#include <sys/bitypes.h>
-#endif
-#ifdef WIN32
-#define int32_t __int32
-#endif
 #include "dss.h"
 #include "rnd.h"
 
