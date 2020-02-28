@@ -177,8 +177,6 @@ TEST_CASE("Test Sequences", "[sequence]") {
 	REQUIRE_FAIL(con.Query("CREATE SEQUENCE seq MINVALUE 7 MAXVALUE 5;"));
 	// increment must not be 0
 	REQUIRE_FAIL(con.Query("CREATE SEQUENCE seq INCREMENT 0;"));
-	// temporary sequences not supported yet
-	REQUIRE_FAIL(con.Query("CREATE TEMPORARY SEQUENCE seq"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq2;"));

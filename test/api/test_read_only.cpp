@@ -62,13 +62,24 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE_NO_FAIL(con->Query("INSERT INTO integers2 VALUES (1), (2), (3), (4), (5)"));
 	REQUIRE_NO_FAIL(con->Query("UPDATE integers2 SET i=i+1"));
 	REQUIRE_NO_FAIL(con->Query("DELETE FROM integers2 WHERE i=3"));
-	// FIXME: cannot alter temporary tables right now!
-	// REQUIRE_NO_FAIL(con->Query("ALTER TABLE integers2 RENAME COLUMN i TO k"));
-
-	result = con->Query("SELECT * FROM integers2 ORDER BY 1");
+	REQUIRE_NO_FAIL(con->Query("ALTER TABLE integers2 RENAME COLUMN i TO k"));
+	result = con->Query("SELECT k FROM integers2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 5, 6}));
-
 	REQUIRE_NO_FAIL(con->Query("DROP TABLE integers2"));
+
+	// also temporary views and sequences
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY SEQUENCE seq"));
+	result = con->Query("SELECT nextval('seq')");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE_NO_FAIL(con->Query("DROP SEQUENCE seq"));
+
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY VIEW v1 AS SELECT 42"));
+	result = con->Query("SELECT * FROM v1");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_NO_FAIL(con->Query("DROP VIEW v1"));
+
+
+
 
 	con.reset();
 	db.reset();

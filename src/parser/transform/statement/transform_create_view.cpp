@@ -20,6 +20,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(PGNode *node) {
 		info->schema = stmt->view->schemaname;
 	}
 	info->view_name = stmt->view->relname;
+	info->temporary = !stmt->view->relpersistence;
+	if (info->temporary) {
+		info->schema = TEMP_SCHEMA;
+	}
 	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE : OnCreateConflict::ERROR;
 
 	info->query = TransformSelectNode((PGSelectStmt *)stmt->query);

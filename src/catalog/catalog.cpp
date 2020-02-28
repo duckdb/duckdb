@@ -136,6 +136,9 @@ CatalogEntry* Catalog::GetEntry(ClientContext &context, CatalogType type, string
 template<>
 TableCatalogEntry* Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
 	auto entry = GetEntry(context, CatalogType::TABLE, move(schema_name), name, if_exists);
+	if (!entry) {
+		return nullptr;
+	}
 	if (entry->type != CatalogType::TABLE) {
 		throw CatalogException("%s is not a table", name.c_str());
 	}
@@ -162,6 +165,11 @@ AggregateFunctionCatalogEntry* Catalog::GetEntry(ClientContext &context, string 
 }
 
 void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
+	if (info->schema == INVALID_SCHEMA) {
+		// invalid schema, look for table in temp schema
+		auto entry = GetEntry(context, CatalogType::TABLE, TEMP_SCHEMA, info->table, true);
+		info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+	}
 	auto schema = GetSchema(context, info->schema);
 	schema->AlterTable(context, info);
 }
@@ -200,7 +208,7 @@ quoted:
 	throw ParserException("Unterminated quote in range var!");
 end:
 	if (entries.size() == 0) {
-		schema = DEFAULT_SCHEMA;
+		schema = INVALID_SCHEMA;
 		name = entry;
 	} else if (entries.size() == 1) {
 		schema = entries[0];

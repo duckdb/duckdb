@@ -28,6 +28,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
     : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
+	this->temporary = info->Base().temporary;
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -87,6 +88,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_COLUMN: {
 		auto rename_info = (RenameColumnInfo *)table_info;
 		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+		create_info->temporary = temporary;
 		bool found = false;
 		for (index_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);

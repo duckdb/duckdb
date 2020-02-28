@@ -65,9 +65,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 			}
 		}
 	}
-	if (!stmt->sequence->relpersistence) {
-		throw ParserException("Temporary sequences are not supported yet");
-	}
+	info->temporary = !stmt->sequence->relpersistence;
 	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
 	if (info->max_value <= info->min_value) {
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info->min_value, info->max_value);

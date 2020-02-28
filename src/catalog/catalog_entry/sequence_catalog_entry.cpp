@@ -14,6 +14,7 @@ SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry 
     : StandardEntry(CatalogType::SEQUENCE, schema, catalog, info->name), usage_count(info->usage_count),
       counter(info->start_value), increment(info->increment), start_value(info->start_value),
       min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
+	this->temporary = info->temporary;
 }
 
 void SequenceCatalogEntry::Serialize(Serializer &serializer) {
