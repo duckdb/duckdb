@@ -14,6 +14,7 @@ jobs:
         sudo apt-get install -y virtualbox
         VBoxManage --version
         uname -a
+        cat /proc/cpuinfo
         wget -q https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova
         VBoxManage import Solaris10_1-13-2.ova
         rm Solaris10_1-13-2.ova
