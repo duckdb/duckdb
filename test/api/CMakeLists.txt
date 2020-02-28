@@ -7,7 +7,8 @@ if(NOT WIN32)
                     test_prepared_api.cpp
                     test_table_info.cpp
                     test_appender_api.cpp
-                    test_query_profiler.cpp)
+                    test_query_profiler.cpp
+                    test_dbdir.cpp)
 else()
   add_library_unity(test_api
                     OBJECT
@@ -16,7 +17,8 @@ else()
                     test_prepared_api.cpp
                     test_table_info.cpp
                     test_appender_api.cpp
-                    test_query_profiler.cpp)
+                    test_query_profiler.cpp
+                    test_dbdir.cpp)
 endif()
 
 set(ALL_OBJECT_FILES
