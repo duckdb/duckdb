@@ -11,9 +11,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: testing
       run: |
-        uname -a
         sudo apt-get install -y virtualbox
         VBoxManage --version
+        uname -a
         wget -q https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova
         VBoxManage import Solaris10_1-13-2.ova
         rm Solaris10_1-13-2.ova
