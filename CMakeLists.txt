@@ -79,9 +79,11 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
+SET(BUILD_SUN FALSE)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(CXX_EXTRA "${CXX_EXTRA} -mimpure-text")
   add_definitions(-DSUN=1)
+  SET(BUILD_SUN TRUE)
 endif()
 
 execute_process(COMMAND git
