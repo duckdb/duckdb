@@ -5,6 +5,6 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalCreateSchema::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	context.catalog.CreateSchema(context.ActiveTransaction(), info.get());
+	context.catalog.CreateSchema(context, info.get());
 	state->finished = true;
 }

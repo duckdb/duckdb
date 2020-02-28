@@ -12,7 +12,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
 namespace duckdb {
-class FunctionExpression;
+class ClientContext;
 
 class StandardEntry;
 class TableCatalogEntry;
@@ -22,7 +22,6 @@ class SequenceCatalogEntry;
 enum class OnCreateConflict : uint8_t;
 
 struct AlterTableInfo;
-class ClientContext;
 struct CreateIndexInfo;
 struct CreateTableFunctionInfo;
 struct CreateFunctionInfo;
@@ -33,7 +32,6 @@ struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct DropInfo;
 
-class Transaction;
 
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
@@ -51,38 +49,27 @@ public:
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
 public:
-	//! Returns a pointer to a table of the given name. Throws an exception if
-	//! the table does not exist.
-	TableCatalogEntry *GetTable(Transaction &transaction, const string &table);
-	TableCatalogEntry *GetTableOrNull(Transaction &transaction, const string &table);
-	CatalogEntry *GetTableOrView(Transaction &transaction, const string &table);
-
 	//! Creates a table with the given name in the schema
-	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
+	CatalogEntry* CreateTable(ClientContext &context, BoundCreateTableInfo *info);
 	//! Creates a view with the given name in the schema
-	void CreateView(Transaction &transaction, CreateViewInfo *info);
+	CatalogEntry* CreateView(ClientContext &context, CreateViewInfo *info);
 	//! Creates a sequence with the given name in the schema
-	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
+	CatalogEntry* CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates an index with the given name in the schema
-	bool CreateIndex(Transaction &transaction, CreateIndexInfo *info);
+	CatalogEntry* CreateIndex(ClientContext &context, CreateIndexInfo *info);
 	//! Create a table function within the given schema
-	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
+	CatalogEntry* CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a scalar or aggregate function within the given schema
-	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
+	CatalogEntry* CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 
 	//! Drops an entry from the schema
-	void DropEntry(Transaction &transaction, DropInfo *info);
+	void DropEntry(ClientContext &context, DropInfo *info);
 
 	//! Alters a table
 	void AlterTable(ClientContext &context, AlterTableInfo *info);
 
-	//! Gets a table function matching the given function expression
-	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
-
-	//! Gets a scalar function with the given name
-	CatalogEntry *GetFunction(Transaction &transaction, const string &name, bool if_exists = false);
-	//! Gets the sequence with the given name
-	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &name);
+	//! Gets a catalog entry from the given catalog set matching the given name
+	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists);
 
 	//! Serialize the meta information of the SchemaCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
@@ -90,7 +77,7 @@ public:
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 private:
 	//! Add a catalog entry to this schema
-	bool AddEntry(Transaction &transaction, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies = {});
+	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies = {});
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

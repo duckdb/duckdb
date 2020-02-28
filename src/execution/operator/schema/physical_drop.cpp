@@ -12,7 +12,7 @@ void PhysicalDrop::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		}
 		break;
 	default:
-		context.catalog.DropEntry(context.ActiveTransaction(), info.get());
+		Catalog::GetCatalog(context).DropEntry(context, info.get());
 		break;
 	}
 	state->finished = true;

@@ -3,8 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include <algorithm>
 
@@ -37,8 +36,8 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		}
 		auto table_name = input.GetValue(0, 0).str_value;
 		// look up the table name in the catalog
-		auto &catalog = context.catalog;
-		data.entry = catalog.GetTable(context, DEFAULT_SCHEMA, table_name);
+		auto &catalog = Catalog::GetCatalog(context);
+		data.entry = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, table_name);
 	}
 
 	if (data.offset >= data.entry->columns.size()) {

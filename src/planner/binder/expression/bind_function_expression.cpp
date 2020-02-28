@@ -1,6 +1,4 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -12,7 +10,7 @@ using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
 	// lookup the function in the catalog
-	auto func = context.catalog.GetFunction(context.ActiveTransaction(), function.schema, function.function_name);
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema, function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);

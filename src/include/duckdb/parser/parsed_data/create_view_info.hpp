@@ -19,8 +19,6 @@ struct CreateViewInfo : public CreateInfo {
 	CreateViewInfo(string schema, string view_name) : CreateInfo(CatalogType::VIEW, schema), view_name(view_name) {
 	}
 
-	//! Schema name to insert to
-	string schema;
 	//! Table name to insert to
 	string view_name;
 	//! Aliases of the

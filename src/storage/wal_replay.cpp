@@ -160,7 +160,7 @@ void ReplayState::ReplayCreateTable() {
 	Binder binder(context);
 	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
 
-	db.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
+	db.catalog->CreateTable(context, bound_info.get());
 }
 
 void ReplayState::ReplayDropTable() {
@@ -170,7 +170,7 @@ void ReplayState::ReplayDropTable() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 void ReplayState::ReplayAlter() {
@@ -188,7 +188,7 @@ void ReplayState::ReplayAlter() {
 void ReplayState::ReplayCreateView() {
 	auto entry = ViewCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateView(context.ActiveTransaction(), entry.get());
+	db.catalog->CreateView(context, entry.get());
 }
 
 void ReplayState::ReplayDropView() {
@@ -196,7 +196,7 @@ void ReplayState::ReplayDropView() {
 	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	db.catalog->DropEntry(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -206,7 +206,7 @@ void ReplayState::ReplayCreateSchema() {
 	CreateSchemaInfo info;
 	info.schema = source.Read<string>();
 
-	db.catalog->CreateSchema(context.ActiveTransaction(), &info);
+	db.catalog->CreateSchema(context, &info);
 }
 
 void ReplayState::ReplayDropSchema() {
@@ -215,7 +215,7 @@ void ReplayState::ReplayDropSchema() {
 	info.type = CatalogType::SCHEMA;
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -224,7 +224,7 @@ void ReplayState::ReplayDropSchema() {
 void ReplayState::ReplayCreateSequence() {
 	auto entry = SequenceCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateSequence(context.ActiveTransaction(), entry.get());
+	db.catalog->CreateSequence(context, entry.get());
 }
 
 void ReplayState::ReplayDropSequence() {
@@ -233,7 +233,7 @@ void ReplayState::ReplayDropSequence() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropEntry(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 void ReplayState::ReplaySequenceValue() {
@@ -243,7 +243,7 @@ void ReplayState::ReplaySequenceValue() {
 	auto counter = source.Read<int64_t>();
 
 	// fetch the sequence from the catalog
-	auto seq = db.catalog->GetSequence(context.ActiveTransaction(), schema, name);
+	auto seq = db.catalog->GetEntry<SequenceCatalogEntry>(context, schema, name);
 	if (usage_count > seq->usage_count) {
 		seq->usage_count = usage_count;
 		seq->counter = counter;
@@ -256,7 +256,7 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetTable(context, schema_name, table_name);
+	current_table = db.catalog->GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {

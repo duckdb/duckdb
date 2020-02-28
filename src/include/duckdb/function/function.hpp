@@ -98,7 +98,7 @@ public:
 
 class BuiltinFunctions {
 public:
-	BuiltinFunctions(Transaction &transaction, Catalog &catalog);
+	BuiltinFunctions(ClientContext &transaction, Catalog &catalog);
 
 	//! Initialize a catalog with all built-in functions
 	void Initialize();
@@ -111,7 +111,7 @@ public:
 	void AddFunction(TableFunction function);
 
 private:
-	Transaction &transaction;
+	ClientContext &context;
 	Catalog &catalog;
 
 private:

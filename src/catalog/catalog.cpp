@@ -23,27 +23,36 @@ using namespace std;
 Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
 }
 
-void Catalog::CreateTable(Transaction &transaction, BoundCreateTableInfo *info) {
-	auto schema = GetSchema(transaction, info->base->schema);
-	schema->CreateTable(transaction, info);
+Catalog &Catalog::GetCatalog(ClientContext &context) {
+	return context.catalog;
 }
 
-void Catalog::CreateView(Transaction &transaction, CreateViewInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateView(transaction, info);
+CatalogEntry* Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
+	auto schema = GetSchema(context, info->base->schema);
+	return schema->CreateTable(context, info);
 }
 
-void Catalog::CreateSequence(Transaction &transaction, CreateSequenceInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateSequence(transaction, info);
+CatalogEntry* Catalog::CreateView(ClientContext &context, CreateViewInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateView(context, info);
 }
 
-void Catalog::CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateTableFunction(transaction, info);
+CatalogEntry* Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateSequence(context, info);
 }
 
-void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
+CatalogEntry* Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateTableFunction(context, info);
+}
+
+CatalogEntry* Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateFunction(context, info);
+}
+
+CatalogEntry* Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
 	if (info->schema == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
@@ -52,17 +61,20 @@ void Catalog::CreateSchema(Transaction &transaction, CreateSchemaInfo *info) {
 	}
 
 	unordered_set<CatalogEntry *> dependencies;
-	auto entry = make_unique_base<CatalogEntry, SchemaCatalogEntry>(this, info->schema);
-	if (!schemas.CreateEntry(transaction, info->schema, move(entry), dependencies)) {
+	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
+	auto result = entry.get();
+	if (!schemas.CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Schema with name %s already exists!", info->schema.c_str());
 		} else {
 			assert(info->on_conflict == OnCreateConflict::IGNORE);
 		}
+		return nullptr;
 	}
+	return result;
 }
 
-void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
+void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 	if (info->name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
@@ -71,84 +83,87 @@ void Catalog::DropSchema(Transaction &transaction, DropInfo *info) {
 		                       info->name.c_str());
 	}
 
-	if (!schemas.DropEntry(transaction, info->name, info->cascade)) {
+	if (!schemas.DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info->name.c_str());
 		}
 	}
 }
 
-void Catalog::DropEntry(Transaction &transaction, DropInfo *info) {
+void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	if (info->type == CatalogType::SCHEMA) {
 		// DROP SCHEMA
-		DropSchema(transaction, info);
+		DropSchema(context, info);
 	} else {
-		auto schema = GetSchema(transaction, info->schema);
-		schema->DropEntry(transaction, info);
+		if (info->schema == INVALID_SCHEMA) {
+			// invalid schema: check if the entry is in the temp schema
+			auto entry = GetEntry(context, info->type, TEMP_SCHEMA, info->name, true);
+			info->schema = entry ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+		}
+		auto schema = GetSchema(context, info->schema);
+		schema->DropEntry(context, info);
 	}
 }
 
-SchemaCatalogEntry *Catalog::GetSchema(Transaction &transaction, const string &schema_name) {
+SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name) {
 	if (schema_name == INVALID_SCHEMA) {
 		throw CatalogException("Schema not specified");
 	}
-	auto entry = schemas.GetEntry(transaction, schema_name);
+	if (schema_name == TEMP_SCHEMA) {
+		return context.temporary_objects.get();
+	}
+	auto entry = schemas.GetEntry(context.ActiveTransaction(), schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
 	}
 	return (SchemaCatalogEntry *)entry;
 }
 
-void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
-	auto schema = GetSchema(context.ActiveTransaction(), info->schema);
-	schema->AlterTable(context, info);
-}
-
-TableCatalogEntry *Catalog::GetTable(ClientContext &context, const string &schema_name, const string &table_name) {
-	auto table = GetTableOrView(context, schema_name, table_name);
-	if (table->type != CatalogType::TABLE) {
-		throw CatalogException("%s is not a table", table_name.c_str());
-	}
-	return (TableCatalogEntry *)table;
-}
-
-CatalogEntry *Catalog::GetTableOrView(ClientContext &context, string schema_name, const string &table_name) {
+CatalogEntry* Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name, bool if_exists) {
 	if (schema_name == INVALID_SCHEMA) {
-		// invalid schema: search both the temporary objects and the normal catalog
-		auto temp_result = context.temporary_objects->GetTableOrNull(context.ActiveTransaction(), table_name);
-		if (temp_result) {
-			return temp_result;
+		// invalid schema: first search the temporary schema
+		auto entry = GetEntry(context, type, TEMP_SCHEMA, name, true);
+		if (entry) {
+			return entry;
 		}
+		// if the entry does not exist in the temp schema, search in the default schema
 		schema_name = DEFAULT_SCHEMA;
-	} else if (schema_name == TEMP_SCHEMA) {
-		// temp_schema: search only the temporary objects
-		return context.temporary_objects->GetTable(context.ActiveTransaction(), table_name);
 	}
-	// default case: first search the schema and then find the table in the schema
-	auto schema = GetSchema(context.ActiveTransaction(), schema_name);
-	return schema->GetTableOrView(context.ActiveTransaction(), table_name);
+	auto schema = GetSchema(context, schema_name);
+	return schema->GetEntry(context, type, name, if_exists);
 }
 
-SequenceCatalogEntry *Catalog::GetSequence(Transaction &transaction, const string &schema_name,
-                                           const string &sequence) {
-	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetSequence(transaction, sequence);
+template<>
+TableCatalogEntry* Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	auto entry = GetEntry(context, CatalogType::TABLE, move(schema_name), name, if_exists);
+	if (entry->type != CatalogType::TABLE) {
+		throw CatalogException("%s is not a table", name.c_str());
+	}
+	return (TableCatalogEntry*) entry;
 }
 
-TableFunctionCatalogEntry *Catalog::GetTableFunction(Transaction &transaction, FunctionExpression *expression) {
-	auto schema = GetSchema(transaction, expression->schema);
-	return schema->GetTableFunction(transaction, expression);
+template<>
+SequenceCatalogEntry* Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	return (SequenceCatalogEntry*) GetEntry(context, CatalogType::SEQUENCE, move(schema_name), name, if_exists);
 }
 
-void Catalog::CreateFunction(Transaction &transaction, CreateFunctionInfo *info) {
-	auto schema = GetSchema(transaction, info->schema);
-	schema->CreateFunction(transaction, info);
+template<>
+TableFunctionCatalogEntry* Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	return (TableFunctionCatalogEntry*) GetEntry(context, CatalogType::TABLE_FUNCTION, move(schema_name), name, if_exists);
 }
 
-CatalogEntry *Catalog::GetFunction(Transaction &transaction, const string &schema_name, const string &name,
-                                   bool if_exists) {
-	auto schema = GetSchema(transaction, schema_name);
-	return schema->GetFunction(transaction, name, if_exists);
+template<>
+AggregateFunctionCatalogEntry* Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	auto entry = GetEntry(context, CatalogType::AGGREGATE_FUNCTION, move(schema_name), name, if_exists);
+	if (entry->type != CatalogType::AGGREGATE_FUNCTION) {
+		throw CatalogException("%s is not an aggregate function", name.c_str());
+	}
+	return (AggregateFunctionCatalogEntry*) entry;
+}
+
+void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	schema->AlterTable(context, info);
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {

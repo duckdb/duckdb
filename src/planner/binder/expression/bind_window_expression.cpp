@@ -4,8 +4,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
-#include "duckdb/main/client_context.hpp"
-
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
@@ -86,7 +85,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = (AggregateFunctionCatalogEntry *)context.catalog.GetFunction(context.ActiveTransaction(),
+		auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context,
 		                                                                         window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
 			throw BinderException("Unknown windowed aggregate");

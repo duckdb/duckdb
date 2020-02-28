@@ -3,7 +3,7 @@
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/planner/statement/bound_simple_statement.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,7 +12,7 @@ using namespace std;
 //! straightforward conversion
 
 unique_ptr<BoundSQLStatement> Binder::Bind(AlterTableStatement &stmt) {
-	auto table = context.catalog.GetTable(context, stmt.info->schema, stmt.info->table);
+	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
 	if (!table->temporary) {
 		// we can only alter temporary tables in read-only mode
 		this->read_only = false;

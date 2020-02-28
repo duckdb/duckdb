@@ -1,4 +1,4 @@
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
@@ -52,7 +52,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(CopyStatement &stmt) {
 		// get the set of expected columns from the insert statement; these types will be parsed from the CSV
 		result->sql_types = bound_insert.expected_types;
 
-		auto table = context.catalog.GetTable(context, stmt.info->schema, stmt.info->table);
+		auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
 		// set all columns to false
 		index_t column_count = stmt.info->select_list.empty() ? table->columns.size() : stmt.info->select_list.size();
 		stmt.info->force_not_null.resize(column_count, false);

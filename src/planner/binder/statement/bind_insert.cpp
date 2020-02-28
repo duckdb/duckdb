@@ -1,5 +1,4 @@
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -25,7 +24,8 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 
 unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	auto result = make_unique<BoundInsertStatement>();
-	auto table = context.catalog.GetTable(context, stmt.schema, stmt.table);
+
+	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	assert(table);
 
 	result->table = table;

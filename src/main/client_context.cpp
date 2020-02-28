@@ -615,7 +615,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 	unique_ptr<TableDescription> result;
 	try {
 		// obtain the table info
-		auto table = db.catalog->GetTable(*this, schema_name, table_name);
+		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name);
 		// write the table info to the result
 		result = make_unique<TableDescription>();
 		result->schema = schema_name;
@@ -647,7 +647,7 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 		transaction.BeginTransaction();
 	}
 	try {
-		auto table_entry = db.catalog->GetTable(*this, description.schema, description.table);
+		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
 		// verify that the table columns and types match up
 		if (description.columns.size() != table_entry->columns.size()) {
 			throw Exception("Failed to append: table entry has different number of columns!");

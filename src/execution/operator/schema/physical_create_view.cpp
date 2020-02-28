@@ -5,6 +5,6 @@ using namespace duckdb;
 using namespace std;
 
 void PhysicalCreateView::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	context.catalog.CreateView(context.ActiveTransaction(), info.get());
+	context.catalog.CreateView(context, info.get());
 	state->finished = true;
 }

@@ -20,7 +20,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	auto &schema = *table.schema;
-	if (!schema.CreateIndex(context.ActiveTransaction(), info.get())) {
+	if (!schema.CreateIndex(context, info.get())) {
 		// index already exists, but error ignored because of CREATE ... IF NOT
 		// EXISTS
 		return;

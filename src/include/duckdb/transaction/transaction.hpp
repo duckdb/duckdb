@@ -17,6 +17,7 @@
 namespace duckdb {
 class SequenceCatalogEntry;
 
+class ClientContext;
 class CatalogEntry;
 class DataTable;
 class WriteAheadLog;
@@ -57,6 +58,8 @@ public:
 	bool is_invalidated;
 
 public:
+	static Transaction &GetTransaction(ClientContext &context);
+
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, index_t extra_data_size = 0);
 
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction commit failed, or an empty string if the commit was sucessful

@@ -1,5 +1,6 @@
 #include "duckdb/transaction/transaction.hpp"
 
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/column_definition.hpp"
@@ -13,6 +14,10 @@
 
 using namespace duckdb;
 using namespace std;
+
+Transaction &Transaction::GetTransaction(ClientContext &context) {
+	return context.ActiveTransaction();
+}
 
 void Transaction::PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data, index_t extra_data_size) {
 	index_t alloc_size = sizeof(CatalogEntry *);

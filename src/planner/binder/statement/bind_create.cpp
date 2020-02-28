@@ -21,14 +21,19 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateInfo(unique_ptr<CreateInfo> info) 
 	SchemaCatalogEntry *bound_schema = nullptr;
 	if (!info->temporary) {
 		// non-temporary create: not read only
-		assert(info->schema != TEMP_SCHEMA);
+		if (info->schema == TEMP_SCHEMA) {
+			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
+		}
 		this->read_only = false;
 	} else {
-		assert(info->schema == TEMP_SCHEMA);
+		if (info->schema != TEMP_SCHEMA) {
+			throw ParserException("TEMPORARY table names can *only* use the \"%s\" schema", TEMP_SCHEMA);
+		}
 	}
 	if (info->type != CatalogType::SCHEMA) {
 		// fetch the schema in which we want to create the object
-		bound_schema = context.catalog.GetSchema(context.ActiveTransaction(), info->schema);
+		bound_schema = context.catalog.GetSchema(context, info->schema);
+		info->schema = bound_schema->name;
 	}
 	switch(info->type) {
 	case CatalogType::INDEX:

@@ -1,6 +1,4 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -42,7 +40,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	auto table_or_view = context.catalog.GetTableOrView(context, expr.schema_name, expr.table_name);
+	auto table_or_view = Catalog::GetCatalog(context).GetEntry(context, CatalogType::TABLE, expr.schema_name, expr.table_name);
 	switch (table_or_view->type) {
 	case CatalogType::TABLE: {
 		// base table: create the BoundBaseTableRef node

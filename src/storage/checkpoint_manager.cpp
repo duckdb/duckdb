@@ -131,7 +131,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	auto info = SchemaCatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE;
-	database.catalog->CreateSchema(context.ActiveTransaction(), info.get());
+	database.catalog->CreateSchema(context, info.get());
 
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
@@ -160,7 +160,7 @@ void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateView(context.ActiveTransaction(), info.get());
+	database.catalog->CreateView(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -173,7 +173,7 @@ void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateSequence(context.ActiveTransaction(), info.get());
+	database.catalog->CreateSequence(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -207,5 +207,5 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	data_reader.ReadTableData();
 
 	// finally create the table in the catalog
-	database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
+	database.catalog->CreateTable(context, bound_info.get());
 }
