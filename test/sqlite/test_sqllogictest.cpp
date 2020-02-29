@@ -41,7 +41,6 @@
 #include <string.h>
 #include <string>
 #include <vector>
-#include <stdexcept>
 
 using namespace std;
 
@@ -672,8 +671,6 @@ static void listFiles(const string &path, std::function<void(const string &)> cb
 		}
 		closedir(dir);
 	}
-#else
-	throw std::runtime_error("Solaris borked");
 #endif
 }
 
