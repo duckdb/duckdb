@@ -4,7 +4,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "dbgen_gunk.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "tpch_constants.hpp"
@@ -544,7 +543,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].table = db.catalog->GetTable(*con.context, schema, tname + suffix);
+			append_info[i].table = db.catalog->GetEntry<TableCatalogEntry>(*con.context, schema, tname + suffix);
 		}
 		append_info[i].context = con.context.get();
 	}

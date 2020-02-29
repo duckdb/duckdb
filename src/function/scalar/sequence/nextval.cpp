@@ -5,8 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -67,7 +66,8 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	assert(args.column_count() == 1 && args.data[0].type == TypeId::VARCHAR);
 	auto &input = args.data[0];
-	Transaction &transaction = info.context.ActiveTransaction();
+
+	auto &transaction = Transaction::GetTransaction(info.context);
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
@@ -83,7 +83,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 			string seqname = value.GetString();
 			Catalog::ParseRangeVar(seqname, schema, seq);
 			// fetch the sequence from the catalog
-			auto sequence = info.context.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);
+			auto sequence = Catalog::GetCatalog(info.context).GetEntry<SequenceCatalogEntry>(info.context, schema, seq);
 			// finally get the next value from the sequence
 			return next_sequence_value(transaction, sequence);
 		});
@@ -100,7 +100,7 @@ static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, Clie
 		if (!seqname.is_null) {
 			assert(seqname.type == TypeId::VARCHAR);
 			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
-			sequence = context.catalog.GetSequence(context.ActiveTransaction(), schema, seq);
+			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
 		}
 	}
 	return make_unique<NextvalBindData>(context, sequence);

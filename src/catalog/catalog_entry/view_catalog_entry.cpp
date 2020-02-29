@@ -13,10 +13,11 @@ using namespace std;
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);
 	aliases = info->aliases;
+	this->temporary = info->temporary;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info)
-    : CatalogEntry(CatalogType::VIEW, catalog, info->view_name), schema(schema) {
+    : StandardEntry(CatalogType::VIEW, schema, catalog, info->view_name) {
 	Initialize(info);
 }
 

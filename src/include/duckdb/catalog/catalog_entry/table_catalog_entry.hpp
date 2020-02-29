@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -19,19 +19,16 @@ namespace duckdb {
 
 class ColumnStatistics;
 class DataTable;
-class SchemaCatalogEntry;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
 
 //! A table catalog entry
-class TableCatalogEntry : public CatalogEntry {
+class TableCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
 	                  std::shared_ptr<DataTable> inherited_storage = nullptr);
 
-	//! The schema the table belongs to
-	SchemaCatalogEntry *schema;
 	//! A reference to the underlying storage unit used for this table
 	std::shared_ptr<DataTable> storage;
 	//! A list of columns that are part of this table

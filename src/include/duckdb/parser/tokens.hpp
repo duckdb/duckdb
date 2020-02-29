@@ -17,10 +17,7 @@ class SQLStatement;
 
 class AlterTableStatement;
 class CopyStatement;
-class CreateIndexStatement;
-class CreateSchemaStatement;
-class CreateTableStatement;
-class CreateViewStatement;
+class CreateStatement;
 class DeleteStatement;
 class DropStatement;
 class InsertStatement;
@@ -29,7 +26,6 @@ class TransactionStatement;
 class UpdateStatement;
 class PrepareStatement;
 class ExecuteStatement;
-class CreateSequenceStatement;
 class PragmaStatement;
 class ExplainStatement;
 

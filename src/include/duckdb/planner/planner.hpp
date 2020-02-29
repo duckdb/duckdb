@@ -42,7 +42,6 @@ private:
 	void VerifyNode(BoundQueryNode &statement);
 	void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
 
-	bool StatementIsReadOnly(BoundSQLStatement &statement);
 	bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
 };
 } // namespace duckdb

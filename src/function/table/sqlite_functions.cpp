@@ -24,7 +24,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	CreateViewInfo info;
 	info.schema = DEFAULT_SCHEMA;
 	info.view_name = "sqlite_master";
-	info.replace = true;
+	info.on_conflict = OnCreateConflict::REPLACE;
 
 	auto select = make_unique<SelectNode>();
 	select->select_list.push_back(make_unique<StarExpression>());
@@ -35,7 +35,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	function_expr->function = move(function);
 	select->from_table = move(function_expr);
 	info.query = move(select);
-//	catalog.CreateView(transaction, &info);
+	//	catalog.CreateView(transaction, &info);
 }
 
 } // namespace duckdb

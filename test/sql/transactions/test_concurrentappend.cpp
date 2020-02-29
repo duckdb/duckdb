@@ -9,8 +9,10 @@
 using namespace duckdb;
 using namespace std;
 
-#define THREAD_COUNT 100
-#define INSERT_ELEMENTS 1000
+namespace test_concurrent_append {
+
+static constexpr int THREAD_COUNT = 100;
+static constexpr int INSERT_ELEMENTS = 1000;
 
 TEST_CASE("Sequential append", "[transactions][.]") {
 	unique_ptr<MaterializedQueryResult> result;
@@ -99,3 +101,5 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(THREAD_COUNT * INSERT_ELEMENTS)}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(3 * THREAD_COUNT * INSERT_ELEMENTS)}));
 }
+
+} // namespace test_concurrent_append

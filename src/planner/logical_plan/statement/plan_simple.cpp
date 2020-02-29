@@ -11,15 +11,6 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSimpleStatemen
 	case StatementType::ALTER:
 		type = LogicalOperatorType::ALTER;
 		break;
-	case StatementType::CREATE_SEQUENCE:
-		type = LogicalOperatorType::CREATE_SEQUENCE;
-		break;
-	case StatementType::CREATE_VIEW:
-		type = LogicalOperatorType::CREATE_VIEW;
-		break;
-	case StatementType::CREATE_SCHEMA:
-		type = LogicalOperatorType::CREATE_SCHEMA;
-		break;
 	case StatementType::DROP:
 		type = LogicalOperatorType::DROP;
 		break;

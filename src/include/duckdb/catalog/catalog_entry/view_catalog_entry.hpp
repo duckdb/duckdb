@@ -8,24 +8,21 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
 class ColumnStatistics;
 class DataTable;
-class SchemaCatalogEntry;
 struct CreateViewInfo;
 
 //! A view catalog entry
-class ViewCatalogEntry : public CatalogEntry {
+class ViewCatalogEntry : public StandardEntry {
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
 	ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info);
 
-	//! The schema the table belongs to
-	SchemaCatalogEntry *schema;
 	//! The query of the view
 	unique_ptr<QueryNode> query;
 	//! The set of aliases associated with the view

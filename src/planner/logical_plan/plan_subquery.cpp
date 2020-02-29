@@ -10,7 +10,6 @@
 #include "duckdb/planner/logical_plan_generator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
 using namespace duckdb;

@@ -4,8 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
 
@@ -54,8 +53,8 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 	auto &data = *((SQLiteMasterData *)dataptr);
 	if (!data.initialized) {
 		// scan all the schemas
-		auto &transaction = context.ActiveTransaction();
-		context.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		auto &transaction = Transaction::GetTransaction(context);
+		Catalog::GetCatalog(context).schemas.Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});

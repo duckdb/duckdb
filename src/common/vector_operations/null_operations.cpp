@@ -14,12 +14,20 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
 	assert(input.SameCardinality(result));
 	assert(result.type == TypeId::BOOL);
 
-	result.vector_type = input.vector_type;
-	result.nullmask.reset();
+	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		result.vector_type = VectorType::CONSTANT_VECTOR;
+		result.nullmask[0] = false;
+		auto result_data = (bool *)result.GetData();
+		result_data[0] = INVERSE ? !input.nullmask[0] : input.nullmask[0];
+	} else {
+		input.Normalify();
 
-	auto result_data = (bool *)result.GetData();
-	VectorOperations::Exec(
-	    input, [&](idx_t i, idx_t k) { result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i]; });
+		result.vector_type = VectorType::FLAT_VECTOR;
+		result.nullmask.reset();
+		auto result_data = (bool *)result.GetData();
+		VectorOperations::Exec(
+		    input, [&](idx_t i, idx_t k) { result_data[i] = INVERSE ? !input.nullmask[i] : input.nullmask[i]; });
+	}
 }
 
 void VectorOperations::IsNotNull(Vector &input, Vector &result) {

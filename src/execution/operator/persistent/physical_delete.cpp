@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;

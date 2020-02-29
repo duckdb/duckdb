@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -22,7 +22,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	if (column_ids.size() == 0) {
 		return;
 	}
-	auto &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 	if (!state->initialized) {
 		table.InitializeScan(transaction, state->scan_offset, column_ids);
 		state->initialized = true;

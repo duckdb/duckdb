@@ -1,7 +1,6 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/main/client_context.hpp"
 #include <algorithm>
 #include <ctgmath>
 

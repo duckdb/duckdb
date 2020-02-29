@@ -8,25 +8,21 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 
 namespace duckdb {
 
-class SchemaCatalogEntry;
-
 //! An aggregate function in the catalog
-class AggregateFunctionCatalogEntry : public CatalogEntry {
+class AggregateFunctionCatalogEntry : public StandardEntry {
 public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
-	    : CatalogEntry(CatalogType::AGGREGATE_FUNCTION, catalog, info->name), schema(schema),
+	    : StandardEntry(CatalogType::AGGREGATE_FUNCTION, schema, catalog, info->name),
 	      functions(info->functions.functions) {
 	}
 
-	//! The schema the table belongs to
-	SchemaCatalogEntry *schema;
 	//! The aggregate functions
 	vector<AggregateFunction> functions;
 };

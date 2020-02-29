@@ -15,11 +15,11 @@ using namespace std;
 TableDataReader::TableDataReader(CheckpointManager &manager, MetaBlockReader &reader, BoundCreateTableInfo &info)
     : manager(manager), reader(reader), info(info) {
 	info.data = unique_ptr<vector<unique_ptr<PersistentSegment>>[]>(
-	    new vector<unique_ptr<PersistentSegment>>[info.base->columns.size()]);
+	    new vector<unique_ptr<PersistentSegment>>[info.Base().columns.size()]);
 }
 
 void TableDataReader::ReadTableData() {
-	auto &columns = info.base->columns;
+	auto &columns = info.Base().columns;
 	assert(columns.size() > 0);
 
 	// load the data pointers for the table

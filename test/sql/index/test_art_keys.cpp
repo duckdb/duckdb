@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-
+#include "duckdb/common/types/string_type.hpp"
 #include <iostream>
 #include <cstring>
 

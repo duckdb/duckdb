@@ -446,9 +446,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 		string schema, table;
 		Catalog::ParseRangeVar(name, schema, table);
-		if (schema == DEFAULT_SCHEMA) {
-			schema = INVALID_SCHEMA;
-		}
 
 		Appender appender(*conn, schema, table);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));

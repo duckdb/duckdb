@@ -4,11 +4,17 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 #include <cstdio>
+
+FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
+	return *context.db.file_system;
+}
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
