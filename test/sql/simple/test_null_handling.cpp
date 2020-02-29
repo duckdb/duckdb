@@ -91,7 +91,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), 13}));
 
 	// GROUP BY null value
-	result = con.Query("INSERT INTO test VALUES (12, NULL), (16, NULL)");
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, NULL), (16, NULL)"));
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");
@@ -102,7 +102,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {16, Value(), 13}));
 
 	// NULL values should be ignored entirely in the aggregation
-	result = con.Query("INSERT INTO test VALUES (NULL, NULL), (NULL, 22)");
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, NULL), (NULL, 22)"));
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");

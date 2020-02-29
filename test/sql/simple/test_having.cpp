@@ -8,8 +8,9 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 
 	// HAVING with condition on group
 	result = con.Query("SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING "

@@ -10,8 +10,8 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE exprtest (a INTEGER, b INTEGER)");
-	con.Query("INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE exprtest (a INTEGER, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)"));
 
 	result = con.Query("SELECT * FROM exprtest");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43, Value(), 45}));

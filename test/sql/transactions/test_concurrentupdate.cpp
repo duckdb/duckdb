@@ -9,9 +9,11 @@
 using namespace duckdb;
 using namespace std;
 
-#define TRANSACTION_UPDATE_COUNT 1000
-#define TOTAL_ACCOUNTS 20
-#define MONEY_PER_ACCOUNT 10
+namespace test_concurrent_update {
+
+static constexpr int TRANSACTION_UPDATE_COUNT = 1000;
+static constexpr int TOTAL_ACCOUNTS = 20;
+static constexpr int MONEY_PER_ACCOUNT = 10;
 
 TEST_CASE("Single thread update", "[transactions]") {
 	unique_ptr<MaterializedQueryResult> result;
@@ -186,4 +188,6 @@ TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 		write_threads[i].join();
 		REQUIRE(correct[i]);
 	}
+}
+
 }

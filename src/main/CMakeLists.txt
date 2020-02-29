@@ -1,4 +1,4 @@
-add_library(duckdb_main OBJECT
+add_library_unity(duckdb_main OBJECT
             appender.cpp
             client_context.cpp
             connection.cpp

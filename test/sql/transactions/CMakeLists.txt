@@ -1,4 +1,4 @@
-add_library(test_sql_transaction OBJECT
+add_library_unity(test_sql_transaction OBJECT
             test_concurrentappend.cpp
             test_big_transaction_abort.cpp
             test_multiple_versions.cpp

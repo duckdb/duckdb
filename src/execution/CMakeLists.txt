@@ -5,7 +5,7 @@ add_subdirectory(operator)
 add_subdirectory(physical_plan)
 add_subdirectory(index/art)
 
-add_library(duckdb_execution OBJECT
+add_library_unity(duckdb_execution OBJECT
             aggregate_hashtable.cpp
             column_binding_resolver.cpp
             expression_executor.cpp
