@@ -29,7 +29,6 @@ for fp in [header, source]:
 
 header.write("""
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
