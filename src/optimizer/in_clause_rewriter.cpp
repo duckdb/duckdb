@@ -33,7 +33,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
-	for (index_t i = 1; i < expr.children.size(); i++) {
+	for (idx_t i = 1; i < expr.children.size(); i++) {
 		assert(expr.children[i]->return_type == in_type);
 		if (!expr.children[i]->IsFoldable()) {
 			// non-scalar expression
@@ -54,7 +54,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
 		auto conjunction = make_unique<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
 		                                                                         : ExpressionType::CONJUNCTION_AND);
-		for (index_t i = 1; i < expr.children.size(); i++) {
+		for (idx_t i = 1; i < expr.children.size(); i++) {
 			conjunction->children.push_back(make_unique<BoundComparisonExpression>(
 			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
 			    expr.children[0]->Copy(), move(expr.children[i])));
@@ -68,10 +68,10 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(types);
-	for (index_t i = 1; i < expr.children.size(); i++) {
+	for (idx_t i = 1; i < expr.children.size(); i++) {
 		// reoslve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);
-		index_t index = chunk.size();
+		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);
 		chunk.SetValue(0, index, value);
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
