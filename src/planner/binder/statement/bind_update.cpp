@@ -89,6 +89,10 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		throw BinderException("Can only update base table!");
 	}
 	auto table = ((BoundBaseTableRef &)*result->table).table;
+	if (!table->temporary) {
+		// update of persistent table: not read only!
+		this->read_only = false;
+	}
 	result->proj_index = GenerateTableIndex();
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {

@@ -5,7 +5,6 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -3,7 +3,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -17,33 +16,32 @@
 using namespace duckdb;
 using namespace std;
 
-BuiltinFunctions::BuiltinFunctions(Transaction &transaction, Catalog &catalog)
-    : transaction(transaction), catalog(catalog) {
+BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
 	CreateAggregateFunctionInfo info(set);
-	catalog.CreateFunction(transaction, &info);
+	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunction function) {
 	CreateAggregateFunctionInfo info(function);
-	catalog.CreateFunction(transaction, &info);
+	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	CreateScalarFunctionInfo info(function);
-	catalog.CreateFunction(transaction, &info);
+	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 	CreateScalarFunctionInfo info(set);
-	catalog.CreateFunction(transaction, &info);
+	catalog.CreateFunction(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(TableFunction function) {
 	CreateTableFunctionInfo info(function);
-	catalog.CreateTableFunction(transaction, &info);
+	catalog.CreateTableFunction(context, &info);
 }
 
 void BuiltinFunctions::Initialize() {
@@ -200,7 +198,7 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
                                                                        vector<unique_ptr<Expression>> children,
                                                                        bool is_operator) {
 	// bind the function
-	auto function = context.catalog.GetFunction(context.ActiveTransaction(), schema, name);
+	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, schema, name);
 	assert(function && function->type == CatalogType::SCALAR_FUNCTION);
 	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, arguments,
 	                                          move(children), is_operator);

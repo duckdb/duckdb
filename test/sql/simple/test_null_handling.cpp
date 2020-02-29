@@ -37,9 +37,8 @@ TEST_CASE("Test simple NULL handling", "[nullhandling]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// multiple insertions
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)"));
 
 	// NULL selection
 	result = con.Query("SELECT a FROM test");
@@ -67,9 +66,8 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// multiple insertions
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)"));
 
 	// aggregations should ignore NULLs
 	result = con.Query("SELECT SUM(a), MIN(a), MAX(a) FROM test");
@@ -93,7 +91,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), 13}));
 
 	// GROUP BY null value
-	result = con.Query("INSERT INTO test VALUES (12, NULL), (16, NULL)");
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (12, NULL), (16, NULL)"));
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");
@@ -104,7 +102,7 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {16, Value(), 13}));
 
 	// NULL values should be ignored entirely in the aggregation
-	result = con.Query("INSERT INTO test VALUES (NULL, NULL), (NULL, 22)");
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (NULL, NULL), (NULL, 22)"));
 
 	result = con.Query("SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test "
 	                   "GROUP BY b ORDER BY b");
@@ -113,4 +111,27 @@ TEST_CASE("Test NULL handling in aggregations", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {28, Value(), 24}));
 	REQUIRE(CHECK_COLUMN(result, 3, {12, Value(), 11}));
 	REQUIRE(CHECK_COLUMN(result, 4, {16, Value(), 13}));
+}
+
+TEST_CASE("Test IS NULL", "[nullhandling]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 1), (NULL, 2), (13, 3)"));
+
+	// IS NULL/IS NOT NULL
+	result = con.Query("SELECT a IS NULL, a IS NOT NULL, rowid IS NULL, (a = NULL) IS NULL FROM test ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, true, false}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true, false, true}));
+	REQUIRE(CHECK_COLUMN(result, 2, {false, false, false}));
+	REQUIRE(CHECK_COLUMN(result, 3, {true, true, true}));
+
+	result = con.Query(
+	    "SELECT a IS NULL, a IS NOT NULL, rowid IS NULL, (a = NULL) IS NULL FROM test WHERE b != 1 ORDER BY b");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, true}));
+	REQUIRE(CHECK_COLUMN(result, 2, {false, false}));
+	REQUIRE(CHECK_COLUMN(result, 3, {true, true}));
 }

@@ -44,22 +44,22 @@ private:
 	unique_ptr<AlterTableStatement> TransformAlter(PGNode *node);
 	//! Transform a Postgres T_PGRenameStmt node into a RenameStatement
 	unique_ptr<AlterTableStatement> TransformRename(PGNode *node);
-	//! Transform a Postgres T_PGCreateStmt node into a CreateTableStatement
-	unique_ptr<CreateTableStatement> TransformCreateTable(PGNode *node);
-	//! Transform a Postgres T_PGCreateStmt node into a CreateTableStatement
-	unique_ptr<CreateTableStatement> TransformCreateTableAs(PGNode *node);
-	//! Transform a Postgres node into a CreateSchemaStatement
-	unique_ptr<CreateSchemaStatement> TransformCreateSchema(PGNode *node);
-	//! Transform a Postgres T_PGCreateSeqStmt node into a CreateSequenceStatement
-	unique_ptr<CreateSequenceStatement> TransformCreateSequence(PGNode *node);
-	//! Transform a Postgres T_PGViewStmt node into a CreateViewStatement
-	unique_ptr<CreateViewStatement> TransformCreateView(PGNode *node);
+	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
+	unique_ptr<CreateStatement> TransformCreateTable(PGNode *node);
+	//! Transform a Postgres T_PGCreateStmt node into a CreateStatement
+	unique_ptr<CreateStatement> TransformCreateTableAs(PGNode *node);
+	//! Transform a Postgres node into a CreateStatement
+	unique_ptr<CreateStatement> TransformCreateSchema(PGNode *node);
+	//! Transform a Postgres T_PGCreateSeqStmt node into a CreateStatement
+	unique_ptr<CreateStatement> TransformCreateSequence(PGNode *node);
+	//! Transform a Postgres T_PGViewStmt node into a CreateStatement
+	unique_ptr<CreateStatement> TransformCreateView(PGNode *node);
+	//! Transform a Postgres T_PGIndexStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateIndex(PGNode *node);
 	//! Transform a Postgres T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(PGNode *node);
 	//! Transform a Postgres T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(PGNode *node);
-	//! Transform a Postgres T_PGIndexStmt node into CreateIndexStatement
-	unique_ptr<CreateIndexStatement> TransformCreateIndex(PGNode *node);
 	//! Transform a Postgres T_PGCopyStmt node into a CopyStatement
 	unique_ptr<CopyStatement> TransformCopy(PGNode *node);
 	//! Transform a Postgres T_PGTransactionStmt node into a TransactionStatement

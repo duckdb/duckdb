@@ -16,6 +16,7 @@ class LogicalAggregate;
 class LogicalAnyJoin;
 class LogicalChunkGet;
 class LogicalComparisonJoin;
+class LogicalCreate;
 class LogicalCreateTable;
 class LogicalCreateIndex;
 class LogicalCrossProduct;

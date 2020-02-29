@@ -12,7 +12,7 @@ using namespace std;
 
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                      CreateTableFunctionInfo *info)
-    : CatalogEntry(CatalogType::TABLE_FUNCTION, catalog, info->name), schema(schema), function(info->function) {
+    : StandardEntry(CatalogType::TABLE_FUNCTION, schema, catalog, info->name), function(info->function) {
 	column_t oid = 0;
 	for (auto &name : function.names) {
 		if (name_map.find(name) != name_map.end()) {

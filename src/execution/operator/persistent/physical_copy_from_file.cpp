@@ -4,8 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/gzip_stream.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -32,7 +31,7 @@ void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &c
 		// initialize CSV reader
 		// open the file
 		assert(info.is_from);
-		if (!context.db.file_system->FileExists(info.file_path)) {
+		if (!FileSystem::GetFileSystem(context).FileExists(info.file_path)) {
 			throw IOException("File \"%s\" not found", info.file_path.c_str());
 		}
 

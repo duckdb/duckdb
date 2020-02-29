@@ -27,7 +27,7 @@ struct CreateSequenceInfo;
 class ClientContext;
 class Transaction;
 
-class FunctionExpression;
+class AggregateFunctionCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
@@ -49,56 +49,54 @@ public:
 	std::mutex write_lock;
 
 public:
-	//! Creates a schema in the catalog.
-	void CreateSchema(Transaction &transaction, CreateSchemaInfo *info);
-	//! Drops a schema in the catalog.
-	void DropSchema(Transaction &transaction, DropInfo *info);
+	//! Get the ClientContext from the Catalog
+	static Catalog &GetCatalog(ClientContext &context);
 
+	//! Creates a schema in the catalog.
+	CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
-	void CreateTable(Transaction &transaction, BoundCreateTableInfo *info);
-	//! Drops a table from the catalog.
-	void DropTable(Transaction &transaction, DropInfo *info);
+	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
+	//! Create a table function in the catalog
+	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	//! Create a scalar or aggregate function in the catalog
+	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
+	//! Creates a table in the catalog.
+	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
+
+	//! Drops an entry from the catalog
+	void DropEntry(ClientContext &context, DropInfo *info);
+
+	//! Returns the schema object with the specified name, or throws an exception if it does not exist
+	SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA);
+	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not exist,
+	//! otherwise an exception is thrown
+	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, string schema, const string &name,
+	                       bool if_exists = false);
+	template <class T>
+	T *GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists = false);
 
 	//! Alter an existing table in the catalog.
 	void AlterTable(ClientContext &context, AlterTableInfo *info);
-	//! Create a table function in the catalog
-	void CreateTableFunction(Transaction &transaction, CreateTableFunctionInfo *info);
-	//! Create a scalar or aggregate function in the catalog
-	void CreateFunction(Transaction &transaction, CreateFunctionInfo *info);
 
-	//! Creates a table in the catalog.
-	void CreateView(Transaction &transaction, CreateViewInfo *info);
-	//! Drops a view in the catalog.
-	void DropView(Transaction &transaction, DropInfo *info);
-
-	//! Creates a table in the catalog.
-	void CreateSequence(Transaction &transaction, CreateSequenceInfo *info);
-	//! Drops a view in the catalog.
-	void DropSequence(Transaction &transaction, DropInfo *info);
-
-	//! Returns a pointer to the schema of the specified name. Throws an
-	//! exception if it does not exist.
-	SchemaCatalogEntry *GetSchema(Transaction &transaction, const string &name = DEFAULT_SCHEMA);
-	//! Returns a pointer to the table in the specified schema. Throws an
-	//! exception if the schema or the table does not exist.
-	TableCatalogEntry *GetTable(ClientContext &context, const string &schema, const string &table);
-	//! Gets the sequence, if it exists
-	SequenceCatalogEntry *GetSequence(Transaction &transaction, const string &schema, const string &sequence);
-
-	CatalogEntry *GetTableOrView(ClientContext &context, string schema, const string &table);
-
-	//! Returns a pointer to the table function if it exists, or throws an
-	//! exception otherwise
-	TableFunctionCatalogEntry *GetTableFunction(Transaction &transaction, FunctionExpression *expression);
-
-	//! Returns a pointer to the scalar or aggregate function if it exists, or throws an exception otherwise
-	CatalogEntry *GetFunction(Transaction &transaction, const string &schema, const string &name,
-	                          bool if_exists = false);
-
-	//! Drops an index from the catalog.
-	void DropIndex(Transaction &transaction, DropInfo *info);
-
-	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot the schema will be set to DEFAULT_SCHEMA
+	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
+	//! the schema will be set to DEFAULT_SCHEMA
 	static void ParseRangeVar(string input, string &schema, string &name);
+
+private:
+	void DropSchema(ClientContext &context, DropInfo *info);
 };
+
+template <>
+TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
+template <>
+SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
+template <>
+TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                             bool if_exists);
+template <>
+AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                                 bool if_exists);
+
 } // namespace duckdb

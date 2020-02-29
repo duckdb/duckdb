@@ -1,18 +1,19 @@
-#include "duckdb/parser/statement/create_schema_statement.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<CreateSchemaStatement> Transformer::TransformCreateSchema(PGNode *node) {
+unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateSchemaStmt *>(node);
 	assert(stmt);
-	auto result = make_unique<CreateSchemaStatement>();
-	auto &info = *result->info.get();
+	auto result = make_unique<CreateStatement>();
+	auto info = make_unique<CreateSchemaInfo>();
 
 	assert(stmt->schemaname);
-	info.schema = stmt->schemaname;
-	info.if_not_exists = stmt->if_not_exists;
+	info->schema = stmt->schemaname;
+	info->on_conflict = stmt->if_not_exists ? OnCreateConflict::IGNORE : OnCreateConflict::ERROR;
 
 	if (stmt->schemaElts) {
 		// schema elements
@@ -26,6 +27,6 @@ unique_ptr<CreateSchemaStatement> Transformer::TransformCreateSchema(PGNode *nod
 			}
 		}
 	}
-
+	result->info = move(info);
 	return result;
 }

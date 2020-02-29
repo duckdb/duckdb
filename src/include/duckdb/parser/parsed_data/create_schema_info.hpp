@@ -8,18 +8,13 @@
 
 #pragma once
 
-#include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
 
-struct CreateSchemaInfo : public ParseInfo {
-	CreateSchemaInfo() : if_not_exists(false) {
+struct CreateSchemaInfo : public CreateInfo {
+	CreateSchemaInfo() : CreateInfo(CatalogType::SCHEMA) {
 	}
-
-	//! Schema name to create
-	string schema;
-	//! Ignore if the entry already exists, instead of failing
-	bool if_not_exists = false;
 };
 
 } // namespace duckdb

@@ -23,13 +23,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 		return CreatePlan((BoundDeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return CreatePlan((BoundUpdateStatement &)statement);
-	case StatementType::CREATE_TABLE:
-		return CreatePlan((BoundCreateTableStatement &)statement);
-	case StatementType::CREATE_INDEX:
-		return CreatePlan((BoundCreateIndexStatement &)statement);
-	case StatementType::CREATE_VIEW:
-	case StatementType::CREATE_SCHEMA:
-	case StatementType::CREATE_SEQUENCE:
+	case StatementType::CREATE:
+		return CreatePlan((BoundCreateStatement &)statement);
 	case StatementType::DROP:
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
@@ -50,8 +45,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundQueryNode &nod
 		return CreatePlan((BoundSelectNode &)node);
 	case QueryNodeType::SET_OPERATION_NODE:
 		return CreatePlan((BoundSetOperationNode &)node);
-    case QueryNodeType::RECURSIVE_CTE_NODE:
-        return CreatePlan((BoundRecursiveCTENode &)node);
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return CreatePlan((BoundRecursiveCTENode &)node);
 	default:
 		throw Exception("Unsupported bound query node type");
 	}
@@ -73,8 +68,8 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundTableRef &ref)
 		return CreatePlan((BoundEmptyTableRef &)ref);
 	case TableReferenceType::EXPRESSION_LIST:
 		return CreatePlan((BoundExpressionListRef &)ref);
-    case TableReferenceType::CTE:
-        return CreatePlan((BoundCTERef &)ref);
+	case TableReferenceType::CTE:
+		return CreatePlan((BoundCTERef &)ref);
 	default:
 		throw Exception("Unsupported bound table ref type type");
 	}

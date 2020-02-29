@@ -9,8 +9,10 @@
 using namespace duckdb;
 using namespace std;
 
-#define THREAD_COUNT 10
-#define INSERT_ELEMENTS 100
+namespace test_concurrent_delete {
+
+static constexpr int THREAD_COUNT = 10;
+static constexpr int INSERT_ELEMENTS = 100;
 
 TEST_CASE("Single thread delete", "[transactions]") {
 	unique_ptr<QueryResult> result;
@@ -202,3 +204,5 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	auto count = result->collection.chunks[0]->GetValue(0, 0);
 	REQUIRE(count == 0);
 }
+
+} // namespace test_concurrent_delete

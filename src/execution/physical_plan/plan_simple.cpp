@@ -17,12 +17,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	switch (op.type) {
 	case LogicalOperatorType::ALTER:
 		return make_unique<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(move(op.info)));
-	case LogicalOperatorType::CREATE_SEQUENCE:
-		return make_unique<PhysicalCreateSequence>(unique_ptr_cast<ParseInfo, CreateSequenceInfo>(move(op.info)));
-	case LogicalOperatorType::CREATE_VIEW:
-		return make_unique<PhysicalCreateView>(unique_ptr_cast<ParseInfo, CreateViewInfo>(move(op.info)));
-	case LogicalOperatorType::CREATE_SCHEMA:
-		return make_unique<PhysicalCreateSchema>(unique_ptr_cast<ParseInfo, CreateSchemaInfo>(move(op.info)));
 	case LogicalOperatorType::DROP:
 		return make_unique<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(move(op.info)));
 	case LogicalOperatorType::PRAGMA:

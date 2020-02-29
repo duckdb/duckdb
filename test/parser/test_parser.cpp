@@ -18,7 +18,7 @@ TEST_CASE("Test parser", "[parser]") {
 		                  "COMMIT;");
 
 		REQUIRE(parser.statements.size() == 7);
-		REQUIRE(parser.statements[0]->type == StatementType::CREATE_TABLE);
+		REQUIRE(parser.statements[0]->type == StatementType::CREATE);
 		REQUIRE(parser.statements[1]->type == StatementType::TRANSACTION);
 		REQUIRE(parser.statements[2]->type == StatementType::INSERT);
 		REQUIRE(parser.statements[3]->type == StatementType::INSERT);

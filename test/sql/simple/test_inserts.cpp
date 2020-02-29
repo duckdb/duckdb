@@ -31,7 +31,7 @@ TEST_CASE("Test insert into statements", "[simpleinserts]") {
 	Connection con(db);
 
 	// big insert
-	con.Query("CREATE TABLE integers(i INTEGER)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	result = con.Query("INSERT INTO integers VALUES (0), (1), (2), (3), (4), (5), (6), (7), "
 	                   "(8), (9), (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (0), (1), "
 	                   "(2), (3), (4), (5), (6), (7), (8), (9), (0), (1), (2), (3), (4), (5), "

@@ -1,11 +1,9 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/alter_table_statement.hpp"
-#include "duckdb/parser/statement/create_schema_statement.hpp"
-#include "duckdb/parser/statement/create_sequence_statement.hpp"
-#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/planner/statement/bound_simple_statement.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -14,21 +12,12 @@ using namespace std;
 //! straightforward conversion
 
 unique_ptr<BoundSQLStatement> Binder::Bind(AlterTableStatement &stmt) {
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
-}
-
-unique_ptr<BoundSQLStatement> Binder::Bind(CreateSchemaStatement &stmt) {
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
-}
-
-unique_ptr<BoundSQLStatement> Binder::Bind(CreateSequenceStatement &stmt) {
-	if (stmt.info->schema == INVALID_SCHEMA) {
-		stmt.info->schema = DEFAULT_SCHEMA;
+	auto table =
+	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
+	if (table && !table->temporary) {
+		// we can only alter temporary tables in read-only mode
+		this->read_only = false;
 	}
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
-}
-
-unique_ptr<BoundSQLStatement> Binder::Bind(DropStatement &stmt) {
 	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
 }
 

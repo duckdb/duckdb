@@ -24,7 +24,6 @@ public:
 	CatalogEntry(CatalogType type, Catalog *catalog, string name)
 	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), parent(nullptr) {
 	}
-
 	virtual ~CatalogEntry();
 
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) {

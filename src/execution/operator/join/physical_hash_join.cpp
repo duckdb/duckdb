@@ -1,10 +1,9 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,7 +31,7 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	assert(left_projection_map.size() == 0);
 
 	hash_table =
-	    make_unique<JoinHashTable>(*context.db.storage->buffer_manager, conditions,
+	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions,
 	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
 }
 

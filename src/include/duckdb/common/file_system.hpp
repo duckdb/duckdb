@@ -14,6 +14,7 @@
 #include <functional>
 
 namespace duckdb {
+class ClientContext;
 class FileSystem;
 
 struct FileHandle {
@@ -59,6 +60,8 @@ public:
 	}
 
 public:
+	static FileSystem &GetFileSystem(ClientContext &context);
+
 	virtual unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK);
 	unique_ptr<FileHandle> OpenFile(string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK) {
 		return OpenFile(path.c_str(), flags, lock);

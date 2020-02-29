@@ -2,6 +2,7 @@ include_directories(../../third_party/sqlite/include)
 add_library(duckdb_benchmark_micro OBJECT
             append.cpp
             bulkupdate.cpp
+            cast.cpp
             groupby.cpp
             in.cpp
             multiplications.cpp

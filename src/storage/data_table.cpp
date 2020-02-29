@@ -5,7 +5,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -297,7 +296,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	VerifyAppendConstraints(table, chunk);
 
 	// append to the transaction local data
-	auto &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 	transaction.storage.Append(this, chunk);
 }
 
@@ -429,7 +428,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		return;
 	}
 
-	Transaction &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 
 	row_identifiers.Normalify();
 	auto ids = (row_t *)row_identifiers.GetData();
@@ -541,7 +540,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	VerifyUpdateConstraints(table, updates, column_ids);
 
 	// now perform the actual update
-	Transaction &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 
 	auto ids = (row_t *)row_identifiers.GetData();
 	auto sel_vector = row_identifiers.sel_vector();

@@ -1,6 +1,5 @@
 #include "dsdgen.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "tpcds_constants.hpp"

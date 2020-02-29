@@ -17,6 +17,7 @@
 namespace duckdb {
 class SequenceCatalogEntry;
 
+class ClientContext;
 class CatalogEntry;
 class DataTable;
 class WriteAheadLog;
@@ -57,6 +58,8 @@ public:
 	bool is_invalidated;
 
 public:
+	static Transaction &GetTransaction(ClientContext &context);
+
 	void PushCatalogEntry(CatalogEntry *entry, data_ptr_t extra_data = nullptr, idx_t extra_data_size = 0);
 
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
@@ -78,7 +81,6 @@ public:
 	void PushDelete(ChunkInfo *vinfo, row_t rows[], idx_t count, idx_t base_row);
 
 	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
-
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted

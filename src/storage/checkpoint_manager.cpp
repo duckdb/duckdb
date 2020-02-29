@@ -129,9 +129,9 @@ void CheckpointManager::WriteSchema(Transaction &transaction, SchemaCatalogEntry
 void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
 	// read the schema and create it in the catalog
 	auto info = SchemaCatalogEntry::Deserialize(reader);
-	// we set if_not_exists to true to ignore the failure of recreating the main schema
-	info->if_not_exists = true;
-	database.catalog->CreateSchema(context.ActiveTransaction(), info.get());
+	// we set create conflict to ignore to ignore the failure of recreating the main schema
+	info->on_conflict = OnCreateConflict::IGNORE;
+	database.catalog->CreateSchema(context, info.get());
 
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
@@ -160,7 +160,7 @@ void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
 	auto info = ViewCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateView(context.ActiveTransaction(), info.get());
+	database.catalog->CreateView(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -173,7 +173,7 @@ void CheckpointManager::WriteSequence(SequenceCatalogEntry &seq) {
 void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
 
-	database.catalog->CreateSequence(context.ActiveTransaction(), info.get());
+	database.catalog->CreateSequence(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -196,7 +196,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	auto info = TableCatalogEntry::Deserialize(reader);
 	// bind the info
 	Binder binder(context);
-	auto bound_info = binder.BindCreateTableInfo(move(info));
+	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
 
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();
@@ -207,5 +207,5 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	data_reader.ReadTableData();
 
 	// finally create the table in the catalog
-	database.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
+	database.catalog->CreateTable(context, bound_info.get());
 }
