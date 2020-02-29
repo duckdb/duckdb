@@ -8,7 +8,7 @@ add_subdirectory(re2)
 add_subdirectory(miniz)
 endif()
 
-if(NOT WIN32 AND NOT LEAN)
+if(NOT WIN32 AND NOT SUN)
   add_subdirectory(imdb)
   add_subdirectory(dbgen)
   add_subdirectory(dsdgen)

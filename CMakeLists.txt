@@ -79,11 +79,11 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
-SET(BUILD_SUN FALSE)
+SET(SUN FALSE)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(CXX_EXTRA "${CXX_EXTRA} -mimpure-text")
   add_definitions(-DSUN=1)
-  SET(BUILD_SUN TRUE)
+  SET(SUN TRUE)
 endif()
 
 execute_process(COMMAND git
@@ -220,13 +220,10 @@ endfunction()
 
 add_subdirectory(src)
 add_subdirectory(third_party)
-
-if(NOT LEAN)
-  add_subdirectory(test)
-  add_subdirectory(tools)
-  if(NOT WIN32)
-    add_subdirectory(benchmark)
-  endif()
+add_subdirectory(test)
+add_subdirectory(tools)
+if(NOT WIN32 AND NOT SUN)
+  add_subdirectory(benchmark)
 endif()
 
 # Write the export set for build and install tree
