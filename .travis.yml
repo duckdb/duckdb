@@ -15,7 +15,7 @@ matrix:
       sudo: true
 
       script:
-        - sudo apt-get install -y virtualbox > /dev/null
+        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp
         - VBoxManage --version
         - uname -a
         - cat /proc/cpuinfo
@@ -34,5 +34,5 @@ matrix:
         - $SCMD 'bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"'
         - $SCMD dig www.google.com
         - scp -q $SSHFLAGS -P 2222 -r . root@localhost:/duckdb
-        - $SCMD "rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug .. && gmake"
+        - $SCMD "rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug .. && gmake -j4"
         - $SCMD /duckdb/build/test/unittest
