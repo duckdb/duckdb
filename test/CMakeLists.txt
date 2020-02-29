@@ -28,7 +28,7 @@ endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT SUN)
   target_link_libraries(unittest
                         duckdb
                         dbgen
