@@ -35,6 +35,7 @@ matrix:
 
       script:
         - rm -rf .git
+        - python scripts/amalgamation.py
         - scp -q $SSHFLAGS -P 2222 -r . root@localhost:/duckdb
-        - $SCMD "rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug .. && gmake -j2"
+        - $SCMD "rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2"
         - $SCMD /duckdb/build/test/unittest
