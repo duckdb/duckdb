@@ -16,9 +16,6 @@ matrix:
 
       install:
         - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp > /dev/null
-#        - VBoxManage --version
-#        - uname -a
-#        - cat /proc/cpuinfo
         - wget -q https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova
         - VBoxManage import Solaris10_1-13-2.ova
         - rm Solaris10_1-13-2.ova
@@ -31,7 +28,6 @@ matrix:
         - sleep 60
         - while ! $SCMD ls ; do sleep 30 ; done
         - $SCMD 'bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"'
-#        - $SCMD dig www.google.com
 
       script:
         - rm -rf .git
@@ -39,3 +35,31 @@ matrix:
         - scp -q $SSHFLAGS -P 2222 -r . root@localhost:/duckdb
         - $SCMD "rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2"
         - $SCMD /duckdb/build/test/unittest
+
+
+    - os: linux
+      dist: bionic
+      name: OpenBSD
+      sudo: true
+
+      install:
+        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp > /dev/null
+        - wget -q https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/OpenBSD.ova
+        - VBoxManage import OpenBSD.ova
+        - rm OpenBSD.ova
+        - VBoxManage modifyvm "OpenBSD" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
+        - VBoxManage startvm "OpenBSD" --type headless
+        - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEA0I/POwsFY/l5DGvybl1amd9pqzP5ADPQGWupcNuKbSYq+sD4g5Jr\nqZ0vG9sULeYlZZFHzdbUqzdbK9rMZZOUwUwHbxViS2UlhCo0onB9bbzm6kQ2gSBaXxa8SC\nwllEdHq6c/kK50MZKVwqpBrxIJtGN08pNauhMPNMdniQZD5slkKrneTgGYnm30xNtkHStB\nY/btURWNlVd8Qedx8gSEV5628cAeKJAPOn4nrCYvy7uMWBOYqrqZii38uxdrhnZKKKENcA\ndUuFRdmFDK/0d+/0PeUYUacZm3HRU5F21440u51OdBMzBYe9AaQXQGrwKwY+YxlczlVh8g\n9XMWYBzJ3wAAA9B959FqfefRagAAAAdzc2gtcnNhAAABAQDQj887CwVj+XkMa/JuXVqZ32\nmrM/kAM9AZa6lw24ptJir6wPiDkmupnS8b2xQt5iVlkUfN1tSrN1sr2sxlk5TBTAdvFWJL\nZSWEKjSicH1tvObqRDaBIFpfFrxILCWUR0erpz+QrnQxkpXCqkGvEgm0Y3Tyk1q6Ew80x2\neJBkPmyWQqud5OAZiebfTE22QdK0Fj9u1RFY2VV3xB53HyBIRXnrbxwB4okA86fiesJi/L\nu4xYE5iqupmKLfy7F2uGdkoooQ1wB1S4VF2YUMr/R37/Q95RhRpxmbcdFTkXbXjjS7nU50\nEzMFh70BpBdAavArBj5jGVzOVWHyD1cxZgHMnfAAAAAwEAAQAAAQB6iVPfQ81p/MRDKRUq\nBM1bhKkH/qQ4mziUBu5psYN2N6ue4kvgueFpqUFpY2FKymKEd0QxyxvucLqvXIEk2P3YR/\nxCJtU2qPnO2iFMozz+gbNGRsejPEf8gFYlLVLy+KJCVySAtA7upUo6MmAfJUDwbFLkxvDS\nTKptfw70seqpJ/CdUXqrd/YAfwqGO0ZgQC59MDTGS1rXViRbTEMOxbWg9TMmvWb36vJG8i\nvSGimXL0gvhB7himZzK0z9tl8r3gHIHpiKy+67tzXyDdzXxpTJ7krBIwVgMgHwZpSy++c6\n9e6ag9LH217gWSDX4C0tAnHhjc5QqlCBwZVe/n2Kyg3pAAAAgQC1zeKHT3XLt9NfBVjhfq\nS3lMByGNCR90RS1vZe+wYVuChFCs7ztraWgMX9n7m3HvaGj+lqDPBD6mkoaYFCqKVr5GcH\nq1fij2sZeEpymhOUjX/aWGr9kdnxkvpSzYt33OU7hQIv34ViSXuyiEVb/SYXxqmwaYhCbW\noAlXqS57U3ZAAAAIEA58ImmEbbHDbA+mUZ1xugtb2heIQyVm+B1FtWtOY3B7LKgfgP5kaw\nhhVAlOfpxSyn/aNWdokE6JsFU/Vs/eiEXmn253ofF0J2kQuVD8+0m+yUMkbDYbfyc9FPsR\n1OS4cqjM8ET77EvLiqIHXO8aWr4eCOJxjDJLC0xVKOicgk/JUAAACBAOZghEZOuUgLjB1K\nQ0kMX+CTNvyKB44eY24kbp22KI4hsEw4BwyqPvCyRZsx7EBGXdGO0giVc41T6WJxwLVCbW\nmG1AC03KQ/lPXf/lzuwT4/N52hw+s4EmHlcPfoPyRFtbZuUyJqlhL4txWZdI31Ot0jxiQK\nxePoxUuMva2261ujAAAAFWhhbm5lc0BoZXJiZXJ0Mi5sb2NhbAECAwQF\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_openbsd
+        - chmod 400 id_rsa_openbsd
+        - export SSHFLAGS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_openbsd"
+        - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
+        - sleep 60
+        - while ! $SCMD ls ; do sleep 30 ; done
+        - $SCMD pkg_add gmake
+
+      script:
+        - rm -rf .git
+        - python scripts/amalgamation.py
+        - scp -q $SSHFLAGS -P 2222 -r `pwd` root@localhost:/home/duckdb
+        - $SCMD "rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2"
+        - $SCMD /home/duckdb/build/test/unittest
