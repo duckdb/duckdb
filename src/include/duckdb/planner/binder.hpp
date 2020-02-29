@@ -25,7 +25,7 @@ struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
 	string name;
-	index_t depth;
+	idx_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
@@ -67,7 +67,7 @@ public:
 	unique_ptr<BoundCreateInfo> BindCreateInfo(unique_ptr<CreateInfo> info);
 
 	//! Generates an unused index for a table
-	index_t GenerateTableIndex();
+	idx_t GenerateTableIndex();
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, QueryNode *cte);
@@ -92,7 +92,7 @@ private:
 	//! The vector of active binders
 	vector<ExpressionBinder *> active_binders;
 	//! The count of bound_tables
-	index_t bound_tables;
+	idx_t bound_tables;
 
 private:
 	//! Bind the default values of the columns of a table

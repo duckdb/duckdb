@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 	if (expr.arguments.size() == 0) {
 		throw Exception("Can't pack nothing into a struct");
 	}
-	for (index_t i = 0; i < expr.children.size(); i++) {
+	for (idx_t i = 0; i < expr.children.size(); i++) {
 		auto &child = expr.children[i];
 		if (child->alias.size() == 0) {
 			throw Exception("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");

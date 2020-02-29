@@ -16,7 +16,7 @@ using namespace std;
 
 unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator> op) {
 
-	for (index_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
+	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++) {
 		op->children[child_idx] = Rewrite(move(op->children[child_idx]));
 	}
 

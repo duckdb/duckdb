@@ -30,19 +30,18 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 	assert(table);
 
 	result->table = table;
-
 	if (!result->table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
 		this->read_only = false;
 	}
 
-	vector<index_t> named_column_map;
+	vector<idx_t> named_column_map;
 	if (stmt.columns.size() > 0) {
 		// insertion statement specifies column list
 
 		// create a mapping of (list index) -> (column index)
-		unordered_map<string, index_t> column_name_map;
-		for (index_t i = 0; i < stmt.columns.size(); i++) {
+		unordered_map<string, idx_t> column_name_map;
+		for (idx_t i = 0; i < stmt.columns.size(); i++) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
@@ -54,7 +53,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			result->expected_types.push_back(table->columns[entry->second].type);
 			named_column_map.push_back(entry->second);
 		}
-		for (index_t i = 0; i < result->table->columns.size(); i++) {
+		for (idx_t i = 0; i < result->table->columns.size(); i++) {
 			auto &col = result->table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
@@ -66,7 +65,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		for (index_t i = 0; i < result->table->columns.size(); i++) {
+		for (idx_t i = 0; i < result->table->columns.size(); i++) {
 			result->expected_types.push_back(table->columns[i].type);
 		}
 	}
@@ -77,7 +76,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 		return move(result);
 	}
 
-	index_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
+	idx_t expected_columns = stmt.columns.size() == 0 ? result->table->columns.size() : stmt.columns.size();
 	// special case: check if we are inserting from a VALUES statement
 	if (stmt.select_statement->node->type == QueryNodeType::SELECT_NODE) {
 		auto &node = (SelectNode &)*stmt.select_statement->node;
@@ -88,8 +87,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 			                               result->table->name.c_str());
 
 			// VALUES list!
-			for (index_t col_idx = 0; col_idx < expected_columns; col_idx++) {
-				index_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
+			for (idx_t col_idx = 0; col_idx < expected_columns; col_idx++) {
+				idx_t table_col_idx = stmt.columns.size() == 0 ? col_idx : named_column_map[col_idx];
 				assert(table_col_idx < table->columns.size());
 
 				// set the expected types as the types for the INSERT statement
@@ -98,7 +97,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(InsertStatement &stmt) {
 				expr_list.expected_names.push_back(column.name);
 
 				// now replace any DEFAULT values with the corresponding default expression
-				for (index_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
+				for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
 					if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
 						// DEFAULT value! replace the entry
 						if (column.default_value) {

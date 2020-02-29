@@ -27,7 +27,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
-		for (index_t i = 0; i < types.size(); i++) {
+		for (idx_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.left = make_unique<BoundReferenceExpression>(types[i], i);

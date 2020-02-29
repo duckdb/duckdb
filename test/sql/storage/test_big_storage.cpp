@@ -82,7 +82,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 		sum = result->GetValue(0, 0);
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
@@ -122,7 +122,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
@@ -137,7 +137,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aaa' WHERE a='a'"));
 	}
 	// reload the database from disk again
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
@@ -178,7 +178,7 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");

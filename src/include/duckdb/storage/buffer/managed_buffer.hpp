@@ -18,7 +18,7 @@ class BufferManager;
 //! Managed buffer is an arbitrarily-sized buffer that is at least of size >= BLOCK_SIZE
 class ManagedBuffer : public FileBuffer {
 public:
-	ManagedBuffer(BufferManager &manager, index_t size, bool can_destroy, block_id_t id);
+	ManagedBuffer(BufferManager &manager, idx_t size, bool can_destroy, block_id_t id);
 
 	//! The buffer manager this buffer belongs to
 	BufferManager &manager;

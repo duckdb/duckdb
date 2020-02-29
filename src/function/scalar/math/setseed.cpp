@@ -27,7 +27,7 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	result.nullmask.set();
 	auto input_seeds = (double *)input.GetData();
 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
-	VectorOperations::Exec(result, [&](index_t i, index_t k) {
+	VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
 			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}

@@ -144,7 +144,7 @@ template <class T> static T try_cast_string(string_t input) {
 }
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLoop(const char *buf, T &result) {
-	index_t pos = NEGATIVE ? 1 : 0;
+	idx_t pos = NEGATIVE ? 1 : 0;
 	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
@@ -251,7 +251,7 @@ template <> bool TryCast::Operation(string_t input, int64_t &result) {
 	return TryIntegerCast<int64_t>(input.GetData(), result);
 }
 
-template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
+template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
 	if (decimal_factor > 1) {
 		if (NEGATIVE) {
 			result -= (T)decimal / (T)decimal_factor;
@@ -262,9 +262,9 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, ind
 }
 
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result) {
-	index_t pos = NEGATIVE ? 1 : 0;
-	index_t decimal = 0;
-	index_t decimal_factor = 0;
+	idx_t pos = NEGATIVE ? 1 : 0;
+	idx_t decimal = 0;
+	idx_t decimal_factor = 0;
 	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!

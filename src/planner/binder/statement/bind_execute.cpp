@@ -21,7 +21,7 @@ unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
 	read_only = result->prepared->read_only;
 
 	vector<Value> bind_values;
-	for (index_t i = 0; i < stmt.values.size(); i++) {
+	for (idx_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder binder(*this, context, "EXECUTE statement");
 		binder.target_type = result->prepared->GetType(i + 1);
 		auto bound_expr = binder.Bind(stmt.values[i]);

@@ -17,15 +17,15 @@ namespace duckdb {
 class AggregateExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool HAS_SEL_VECTOR>
-	static inline bool ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, index_t count,
+	static inline bool ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result, idx_t count,
 	                               sel_t *__restrict sel_vector, nullmask_t &nullmask) {
 		ASSERT_RESTRICT(ldata, ldata + count, result, result + 1);
 		if (nullmask.any()) {
 			// skip null values in the operation
-			index_t i = 0;
+			idx_t i = 0;
 			// find the first null value
 			for (; i < count; i++) {
-				index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
+				idx_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
 				if (!nullmask[index]) {
 					*result = ldata[index];
 					break;
@@ -36,7 +36,7 @@ private:
 			}
 			// now perform the rest of the iteration
 			for (i++; i < count; i++) {
-				index_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
+				idx_t index = HAS_SEL_VECTOR ? sel_vector[i] : i;
 				if (!nullmask[index]) {
 					*result = OP::Operation(ldata[index], *result);
 				}
@@ -47,7 +47,7 @@ private:
 				return false;
 			}
 			*result = ldata[HAS_SEL_VECTOR ? sel_vector[0] : 0];
-			for (index_t i = 1; i < count; i++) {
+			for (idx_t i = 1; i < count; i++) {
 				*result = OP::Operation(ldata[HAS_SEL_VECTOR ? sel_vector[i] : i], *result);
 			}
 		}

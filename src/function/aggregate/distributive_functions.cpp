@@ -16,7 +16,7 @@ void null_state_initialize(data_ptr_t state, TypeId return_type) {
 	SetNullValue(state, return_type);
 }
 
-index_t get_bigint_type_size(TypeId return_type) {
+idx_t get_bigint_type_size(TypeId return_type) {
 	return GetTypeIdSize(TypeId::INT64);
 }
 
@@ -27,7 +27,7 @@ void bigint_payload_initialize(data_ptr_t payload, TypeId return_type) {
 Value bigint_simple_initialize() {
 	return Value::BIGINT(0);
 }
-index_t get_return_type_size(TypeId return_type) {
+idx_t get_return_type_size(TypeId return_type) {
 	return GetTypeIdSize(return_type);
 }
 

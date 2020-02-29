@@ -24,7 +24,7 @@ public:
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
 	struct Filter {
-		unordered_set<index_t> bindings;
+		unordered_set<idx_t> bindings;
 		unique_ptr<Expression> filter;
 
 		Filter() {
@@ -53,18 +53,17 @@ private:
 	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
 
 	// Pushdown an inner join
-	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op, unordered_set<index_t> &left_bindings,
-	                                              unordered_set<index_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                              unordered_set<idx_t> &right_bindings);
 	// Pushdown a left join
-	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<index_t> &left_bindings,
-	                                             unordered_set<index_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                             unordered_set<idx_t> &right_bindings);
 	// Pushdown a mark join
-	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<index_t> &left_bindings,
-	                                             unordered_set<index_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                             unordered_set<idx_t> &right_bindings);
 	// Pushdown a single join
-	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op,
-	                                               unordered_set<index_t> &left_bindings,
-	                                               unordered_set<index_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
+	                                               unordered_set<idx_t> &right_bindings);
 
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively
 	// pushing down into its children (if any)

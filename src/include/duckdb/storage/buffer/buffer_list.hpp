@@ -24,7 +24,7 @@ struct BufferEntry {
 	//! The actual buffer
 	unique_ptr<FileBuffer> buffer;
 	//! The amount of references to this entry
-	index_t ref_count;
+	idx_t ref_count;
 	//! Next node
 	unique_ptr<BufferEntry> next;
 	//! Prev entry
@@ -50,7 +50,7 @@ private:
 	//! Pointer to last element in list
 	BufferEntry *last;
 	//! The amount of entries in the list
-	index_t count;
+	idx_t count;
 };
 
 } // namespace duckdb

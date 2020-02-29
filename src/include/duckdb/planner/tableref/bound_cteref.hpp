@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BoundCTERef : public BoundTableRef {
 public:
-	BoundCTERef(index_t bind_index, index_t cte_index)
+	BoundCTERef(idx_t bind_index, idx_t cte_index)
 	    : BoundTableRef(TableReferenceType::CTE), bind_index(bind_index), cte_index(cte_index) {
 	}
 
@@ -23,8 +23,8 @@ public:
 	//! The types of the values list
 	vector<SQLType> types;
 	//! The index in the bind context
-	index_t bind_index;
+	idx_t bind_index;
 	//! The index of the cte
-	index_t cte_index;
+	idx_t cte_index;
 };
 } // namespace duckdb

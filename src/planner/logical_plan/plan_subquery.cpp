@@ -29,7 +29,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star = make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false);
-		auto index_type = count_star->return_type;
+		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
 		auto aggregate_index = binder.GenerateTableIndex();
@@ -39,8 +39,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(aggregate);
 
 		// now we push a projection with a comparison to 1
-		auto left_child = make_unique<BoundColumnRefExpression>(index_type, ColumnBinding(aggregate_index, 0));
-		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(index_type, 1));
+		auto left_child = make_unique<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, 0));
+		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(idx_type, 1));
 		auto comparison =
 		    make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
@@ -67,7 +67,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		assert(bindings.size() == 1);
-		index_t table_idx = bindings[0].table_index;
+		idx_t table_idx = bindings[0].table_index;
 
 		// in the uncorrelated case we are only interested in the first result of the query
 		// hence we simply push a LIMIT 1 to get the first row of the subquery
@@ -109,7 +109,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto plan_columns = plan->GetColumnBindings();
 
 		// then we generate the MARK join with the subquery
-		index_t mark_index = binder.GenerateTableIndex();
+		idx_t mark_index = binder.GenerateTableIndex();
 		auto join = make_unique<LogicalComparisonJoin>(JoinType::MARK);
 		join->mark_index = mark_index;
 		join->AddChild(move(root));
@@ -133,7 +133,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<CorrelatedColumnInfo> &correlated_columns,
                                                                   JoinType join_type) {
 	auto delim_join = make_unique<LogicalDelimJoin>(join_type);
-	for (index_t i = 0; i < correlated_columns.size(); i++) {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
 		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
@@ -142,8 +142,8 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 }
 
 static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<CorrelatedColumnInfo> &correlated_columns,
-                                      vector<ColumnBinding> bindings, index_t base_offset) {
-	for (index_t i = 0; i < correlated_columns.size(); i++) {
+                                      vector<ColumnBinding> bindings, idx_t base_offset) {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		JoinCondition cond;
 		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
@@ -205,7 +205,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
 		// this query is similar to the correlated SCALAR query, except we use a MARK join here
-		index_t mark_index = binder.GenerateTableIndex();
+		idx_t mark_index = binder.GenerateTableIndex();
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		delim_join->mark_index = mark_index;
 		// LHS
@@ -234,7 +234,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		// the correlated mark join handles this case by itself
 		// as the MARK join has one extra join condition (the original condition, of the ANY expression, e.g.
 		// [i=ANY(...)])
-		index_t mark_index = binder.GenerateTableIndex();
+		idx_t mark_index = binder.GenerateTableIndex();
 		auto delim_join = CreateDuplicateEliminatedJoin(correlated_columns, JoinType::MARK);
 		delim_join->mark_index = mark_index;
 		// LHS
@@ -280,7 +280,7 @@ public:
 			root = move(op.children[0]);
 			VisitOperatorExpressions(op);
 			op.children[0] = move(root);
-			for (index_t i = 0; i < op.children.size(); i++) {
+			for (idx_t i = 0; i < op.children.size(); i++) {
 				VisitOperator(*op.children[i]);
 			}
 		}

@@ -35,17 +35,17 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 		}
 
 		// now resolve the aggregates for each of the children
-		index_t payload_idx = 0, payload_expr_idx = 0;
+		idx_t payload_idx = 0, payload_expr_idx = 0;
 		DataChunk &payload_chunk = state->payload_chunk;
 		payload_chunk.Reset();
 		state->child_executor.SetChunk(state->child_chunk);
 		payload_chunk.SetCardinality(state->child_chunk);
-		for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
-			index_t payload_cnt = 0;
+			idx_t payload_cnt = 0;
 			// resolve the child expression of the aggregate (if any)
 			if (aggregate.children.size() > 0) {
-				for (index_t i = 0; i < aggregate.children.size(); ++i) {
+				for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 					state->child_executor.ExecuteExpression(payload_expr_idx,
 					                                        payload_chunk.data[payload_idx + payload_cnt]);
 					payload_expr_idx++;
@@ -62,7 +62,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 	}
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
-	for (index_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(chunk, Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
@@ -84,7 +84,7 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		// initialize the payload chunk
 		if (aggr.children.size()) {
-			for (index_t i = 0; i < aggr.children.size(); ++i) {
+			for (idx_t i = 0; i < aggr.children.size(); ++i) {
 				payload_types.push_back(aggr.children[i]->return_type);
 				child_executor.AddExpression(*aggr.children[i]);
 			}

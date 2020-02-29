@@ -51,7 +51,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 	case TypeId::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
 	case TypeId::STRUCT: {
-		for (index_t i = 0; i < left.struct_value.size(); i++) {
+		for (idx_t i = 0; i < left.struct_value.size(); i++) {
 			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
 			    left.struct_value[i].second != left.struct_value[i].second) {
 				return false;

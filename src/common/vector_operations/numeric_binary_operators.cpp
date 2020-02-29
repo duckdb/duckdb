@@ -77,7 +77,7 @@ void VectorOperations::Multiply(Vector &left, Vector &right, Vector &result) {
 //===--------------------------------------------------------------------===//
 struct BinaryZeroIsNullWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, index_t idx) {
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
 		if (right == 0) {
 			nullmask[idx] = true;
 			return 0;

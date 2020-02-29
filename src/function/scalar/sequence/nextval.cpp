@@ -28,6 +28,7 @@ struct NextvalBindData : public FunctionData {
 	}
 };
 
+
 static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntry *seq) {
 	lock_guard<mutex> seqlock(seq->lock);
 	int64_t result;
@@ -71,7 +72,7 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		// sequence to use is hard coded
 		// increment the sequence
 		auto result_data = (int64_t *)result.GetData();
-		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
 		});

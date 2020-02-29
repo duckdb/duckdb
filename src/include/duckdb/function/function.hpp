@@ -58,10 +58,10 @@ public:
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
-	static index_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
-	static index_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
 };
 
 class SimpleFunction : public Function {

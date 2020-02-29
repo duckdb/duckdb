@@ -12,17 +12,17 @@ SegmentBase *SegmentTree::GetLastSegment() {
 	return nodes.back().node;
 }
 
-SegmentBase *SegmentTree::GetSegment(index_t row_number) {
+SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
 	lock_guard<mutex> tree_lock(node_lock);
 	return nodes[GetSegmentIndex(row_number)].node;
 }
 
-index_t SegmentTree::GetSegmentIndex(index_t row_number) {
-	index_t lower = 0;
-	index_t upper = nodes.size() - 1;
+idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
+	idx_t lower = 0;
+	idx_t upper = nodes.size() - 1;
 	// binary search to find the node
 	while (lower <= upper) {
-		index_t index = (lower + upper) / 2;
+		idx_t index = (lower + upper) / 2;
 		auto &entry = nodes[index];
 		if (row_number < entry.row_start) {
 			upper = index - 1;

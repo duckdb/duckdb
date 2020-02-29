@@ -19,7 +19,7 @@ public:
 	virtual ~Serializer() {
 	}
 
-	virtual void WriteData(const_data_ptr_t buffer, index_t write_size) = 0;
+	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
 
 	template <class T> void Write(T element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
@@ -57,7 +57,7 @@ public:
 	}
 
 	//! Reads [read_size] bytes into the buffer
-	virtual void ReadData(data_ptr_t buffer, index_t read_size) = 0;
+	virtual void ReadData(data_ptr_t buffer, idx_t read_size) = 0;
 
 	template <class T> T Read() {
 		T value;

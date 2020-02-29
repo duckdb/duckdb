@@ -31,14 +31,14 @@ public:
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	// Checkpoint when WAL reaches this size
-	index_t checkpoint_wal_size = 1 << 20;
+	idx_t checkpoint_wal_size = 1 << 20;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
 	//! The maximum memory used by the database system (in bytes). Default: Infinite
-	index_t maximum_memory = (index_t)-1;
+	idx_t maximum_memory = (idx_t)-1;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
@@ -68,8 +68,8 @@ public:
 	AccessMode access_mode;
 	bool use_direct_io;
 	bool checkpoint_only;
-	index_t checkpoint_wal_size;
-	index_t maximum_memory;
+	idx_t checkpoint_wal_size;
+	idx_t maximum_memory;
 	string temporary_directory;
 
 private:

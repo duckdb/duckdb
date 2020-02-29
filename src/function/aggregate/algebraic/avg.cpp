@@ -11,7 +11,7 @@ struct avg_state_t {
 	double sum;
 };
 
-static index_t avg_payload_size(TypeId return_type) {
+static idx_t avg_payload_size(TypeId return_type) {
 	return sizeof(avg_state_t);
 }
 
@@ -19,13 +19,13 @@ static void avg_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, avg_payload_size(return_type));
 }
 
-static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
+static void avg_update(Vector inputs[], idx_t input_count, Vector &state) {
 	assert(input_count == 1);
 	inputs[0].Normalify();
 
 	auto states = (avg_state_t **)state.GetData();
 	auto input_data = (double *)inputs[0].GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if (inputs[0].nullmask[i]) {
 			return;
 		}
@@ -45,7 +45,7 @@ static void avg_combine(Vector &state, Vector &combined) {
 	auto combined_data = (avg_state_t **)combined.GetData();
 	auto state_data = (avg_state_t *)state.GetData();
 
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		auto combined_ptr = combined_data[i];
 		auto state_ptr = state_data + i;
 
@@ -62,7 +62,7 @@ static void avg_finalize(Vector &state, Vector &result) {
 	// compute finalization of streaming avg
 	auto states = (avg_state_t **)state.GetData();
 	auto result_data = (double *)result.GetData();
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		auto state_ptr = states[i];
 
 		if (state_ptr->count == 0) {

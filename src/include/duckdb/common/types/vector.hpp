@@ -25,13 +25,13 @@ class VectorCardinality {
 public:
 	VectorCardinality() : count(0), sel_vector(nullptr) {
 	}
-	VectorCardinality(index_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
+	VectorCardinality(idx_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
 	}
 
-	index_t count;
+	idx_t count;
 	sel_t *sel_vector;
 
-	index_t get_index(index_t idx) {
+	idx_t get_index(idx_t idx) {
 		return sel_vector ? sel_vector[idx] : idx;
 	}
 };
@@ -93,7 +93,7 @@ public:
 	nullmask_t nullmask;
 
 public:
-	index_t size() const {
+	idx_t size() const {
 		return vcardinality.count;
 	}
 	sel_t *sel_vector() const {
@@ -112,13 +112,13 @@ public:
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 	//! Creates a reference to a slice of the other vector
-	void Slice(Vector &other, index_t offset);
+	void Slice(Vector &other, idx_t offset);
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false, index_t count = STANDARD_VECTOR_SIZE);
+	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false, idx_t count = STANDARD_VECTOR_SIZE);
 	//! Flattens the vector, removing any selection vector
 	void ClearSelectionVector();
 
@@ -143,7 +143,7 @@ public:
 	}
 
 	//! Add a string to the string heap of the vector (auxiliary data)
-	string_t AddString(const char *data, index_t len);
+	string_t AddString(const char *data, idx_t len);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	string_t AddString(const char *data);
 	//! Add a string to the string heap of the vector (auxiliary data)
@@ -152,7 +152,7 @@ public:
 	string_t AddString(const string &data);
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
-	string_t EmptyString(index_t len);
+	string_t EmptyString(idx_t len);
 
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
@@ -162,10 +162,10 @@ public:
 
 	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
 	//! the vector, and returns the element that is physically in location [index].
-	Value GetValue(index_t index) const;
+	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection
 	//! vectors on the vector, and returns the element that is physically in location [index].
-	void SetValue(index_t index, Value val);
+	void SetValue(idx_t index, Value val);
 
 protected:
 	//! The cardinality of the vector
@@ -191,7 +191,7 @@ public:
 	}
 
 public:
-	void SetCount(index_t count) {
+	void SetCount(idx_t count) {
 		owned_cardinality.count = count;
 	}
 	void SetSelVector(sel_t *sel) {

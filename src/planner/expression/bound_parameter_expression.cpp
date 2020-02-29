@@ -4,7 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
-BoundParameterExpression::BoundParameterExpression(index_t parameter_nr)
+BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
       sql_type(SQLType(SQLTypeId::UNKNOWN)), parameter_nr(parameter_nr), value(nullptr) {
 }

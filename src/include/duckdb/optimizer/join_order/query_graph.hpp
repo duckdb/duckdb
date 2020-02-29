@@ -20,7 +20,7 @@ class Expression;
 class LogicalOperator;
 
 struct FilterInfo {
-	index_t filter_index;
+	idx_t filter_index;
 	RelationSet *left_set = nullptr;
 	RelationSet *right_set = nullptr;
 	RelationSet *set = nullptr;
@@ -28,7 +28,7 @@ struct FilterInfo {
 
 struct FilterNode {
 	vector<FilterInfo *> filters;
-	unordered_map<index_t, unique_ptr<FilterNode>> children;
+	unordered_map<idx_t, unique_ptr<FilterNode>> children;
 };
 
 struct NeighborInfo {
@@ -42,7 +42,7 @@ public:
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct QueryEdge {
 		vector<unique_ptr<NeighborInfo>> neighbors;
-		unordered_map<index_t, unique_ptr<QueryEdge>> children;
+		unordered_map<idx_t, unique_ptr<QueryEdge>> children;
 	};
 
 public:
@@ -55,7 +55,7 @@ public:
 	NeighborInfo *GetConnection(RelationSet *node, RelationSet *other);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
-	vector<index_t> GetNeighbors(RelationSet *node, unordered_set<index_t> &exclusion_set);
+	vector<idx_t> GetNeighbors(RelationSet *node, unordered_set<idx_t> &exclusion_set);
 	//! Enumerate all neighbors of a given RelationSet node
 	void EnumerateNeighbors(RelationSet *node, std::function<bool(NeighborInfo *)> callback);
 

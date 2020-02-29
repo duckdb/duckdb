@@ -148,7 +148,7 @@ TEST_CASE("Test operations on transaction local data with unique indices", "[tra
 	con.EnableQueryVerification();
 
 	// perform different operations on the same data within one transaction
-	for (index_t i = 0; i < 3; i++) {
+	for (idx_t i = 0; i < 3; i++) {
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 3), (2, 3)"));

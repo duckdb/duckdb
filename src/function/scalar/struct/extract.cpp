@@ -54,7 +54,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	string key = StringUtil::Lower(key_val.str_value);
 
 	SQLType return_type;
-	index_t key_index = 0;
+	idx_t key_index = 0;
 	bool found_key = false;
 
 	for (size_t i = 0; i < expr.arguments[0].child_type.size(); i++) {

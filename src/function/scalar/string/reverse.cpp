@@ -10,8 +10,8 @@ using namespace std;
 
 namespace duckdb {
 
-static void strreverse(const char *input, index_t n, char *output) {
-	index_t bytes = 0;
+static void strreverse(const char *input, idx_t n, char *output) {
+	idx_t bytes = 0;
 
 	output[n] = 0;
 

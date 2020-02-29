@@ -15,7 +15,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinct(unique_ptr<Ph
 	// create a PhysicalHashAggregate that groups by the input columns
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
-	for (index_t i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		groups.push_back(make_unique<BoundReferenceExpression>(types[i], i));
 	}
 
@@ -39,7 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	// we need the projection to fetch the select_list
 	auto &child_projection = (PhysicalProjection &)*child;
 	// we need to create one aggregate per column in the select_list
-	for (index_t i = 0; i < child_projection.select_list.size(); ++i) {
+	for (idx_t i = 0; i < child_projection.select_list.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
 		auto first_aggregate = make_unique<BoundAggregateExpression>(

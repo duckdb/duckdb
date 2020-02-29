@@ -126,7 +126,7 @@ private:
 	                                             bool allow_stream_result);
 
 private:
-	index_t prepare_count = 0;
+	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
 	StreamQueryResult *open_result = nullptr;
 	//! Prepared statement objects that were created using the ClientContext::Prepare method

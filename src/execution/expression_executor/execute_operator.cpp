@@ -32,7 +32,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparision with the left
 		// to get the overall result.
-		for (index_t child = 1; child < expr.children.size(); child++) {
+		for (idx_t child = 1; child < expr.children.size(); child++) {
 			Vector vector_to_check(GetCardinality(), expr.children[child]->return_type);
 			Vector comp_res(GetCardinality(), TypeId::BOOL);
 

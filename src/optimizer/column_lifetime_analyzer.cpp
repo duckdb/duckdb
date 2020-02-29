@@ -11,7 +11,7 @@ using namespace std;
 
 void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> bindings,
                                                          column_binding_set_t &unused_bindings) {
-	for (index_t i = 0; i < bindings.size(); i++) {
+	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (column_references.find(bindings[i]) == column_references.end()) {
 			unused_bindings.insert(bindings[i]);
 		}
@@ -20,12 +20,12 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> b
 
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
-                                                   vector<index_t> &projection_map) {
+                                                   vector<idx_t> &projection_map) {
 	if (unused_bindings.size() == 0) {
 		return;
 	}
 	// now iterate over the result bindings of the child
-	for (index_t i = 0; i < bindings.size(); i++) {
+	for (idx_t i = 0; i < bindings.size(); i++) {
 		// if this binding does not belong to the unused bindings, add it to the projection map
 		if (unused_bindings.find(bindings[i]) == unused_bindings.end()) {
 			projection_map.push_back(i);

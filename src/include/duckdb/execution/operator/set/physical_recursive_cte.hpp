@@ -27,7 +27,7 @@ public:
 
 private:
 	//! Probe Hash Table and eliminate duplicate rows
-	index_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
+	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
 };
 
 }; // namespace duckdb

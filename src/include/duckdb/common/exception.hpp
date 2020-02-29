@@ -123,7 +123,7 @@ class ValueOutOfRangeException : public Exception {
 public:
 	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
 	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const index_t length);
+	ValueOutOfRangeException(const TypeId varType, const idx_t length);
 };
 
 class ConversionException : public Exception {

@@ -21,8 +21,8 @@ public:
 
 struct StringBlock {
 	block_id_t block_id;
-	index_t offset;
-	index_t size;
+	idx_t offset;
+	idx_t size;
 	unique_ptr<StringBlock> next;
 };
 
@@ -49,11 +49,11 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 
 class StringSegment : public UncompressedSegment {
 public:
-	StringSegment(BufferManager &manager, index_t row_start, block_id_t block_id = INVALID_BLOCK);
+	StringSegment(BufferManager &manager, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 	~StringSegment() override;
 
 	//! The current dictionary offset
-	index_t dictionary_offset;
+	idx_t dictionary_offset;
 	//! The string block holding strings that do not fit in the main block
 	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings
 	unique_ptr<StringBlock> head;
@@ -67,31 +67,30 @@ public:
 
 	//! Fetch a single value and append it to the vector
 	void FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-	              index_t result_idx) override;
+	              idx_t result_idx) override;
 
 	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
 	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
 	//! full.
-	index_t Append(SegmentStatistics &stats, Vector &data, index_t offset, index_t count) override;
+	idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) override;
 
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
 
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
-	            index_t vector_index, index_t vector_offset, UpdateInfo *node) override;
+	            idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
 
-	void FetchBaseData(ColumnScanState &state, index_t vector_index, Vector &result) override;
+	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions,
 	                     Vector &result) override;
 
 private:
-	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, index_t target_offset, Vector &source,
-	                index_t offset, index_t count);
+	void AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset, Vector &source,
+	                idx_t offset, idx_t count);
 
 	//! Fetch all the strings of a vector from the base table and place their locations in the result vector
-	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, index_t vector_index, Vector &result,
-	                   index_t count);
+	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
 
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
 	string_t FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location);
@@ -100,8 +99,8 @@ private:
 	string_t FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset);
 
 	//! Fetch string locations for a subset of the strings
-	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, index_t vector_index, index_t vector_offset,
-	                          index_t count, string_location_t result[]);
+	void FetchStringLocations(data_ptr_t baseptr, row_t *ids, idx_t vector_index, idx_t vector_offset, idx_t count,
+	                          string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
 	string_t ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset);
@@ -115,16 +114,15 @@ private:
 	//! Expand the string segment, adding an additional maximum vector to the segment
 	void ExpandStringSegment(data_ptr_t baseptr);
 
-	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
-	                                        index_t vector_offset);
-	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, index_t vector_offset,
+	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t vector_offset);
+	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t vector_offset,
 	                                       StringUpdateInfo &update_info);
 
-	void MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, index_t vector_offset,
+	void MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, idx_t vector_offset,
 	                     string_location_t string_locations[], nullmask_t original_nullmask);
 
 	//! The amount of bytes remaining to store in the block
-	index_t RemainingSpace() {
+	idx_t RemainingSpace() {
 		return Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
 	}
 
@@ -135,9 +133,9 @@ private:
 	//! Marker used in length field to indicate the presence of a big string
 	static constexpr uint16_t BIG_STRING_MARKER = (uint16_t)-1;
 	//! Base size of big string marker (block id + offset)
-	static constexpr index_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
+	static constexpr idx_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
-	static constexpr index_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE + sizeof(uint16_t);
+	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE + sizeof(uint16_t);
 };
 
 } // namespace duckdb

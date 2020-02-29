@@ -143,7 +143,7 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 	return entry->second->Copy();
 }
 
-index_t Binder::GenerateTableIndex() {
+idx_t Binder::GenerateTableIndex() {
 	if (parent) {
 		return parent->GenerateTableIndex();
 	}
@@ -185,7 +185,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 }
 
 void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
-	for (index_t i = 0; i < other.size(); i++) {
+	for (idx_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
 }

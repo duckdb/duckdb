@@ -19,14 +19,14 @@ namespace duckdb {
 class WriteAheadLog;
 
 struct UndoChunk {
-	UndoChunk(index_t size);
+	UndoChunk(idx_t size);
 	~UndoChunk();
 
 	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
 
 	unique_ptr<data_t[]> data;
-	index_t current_position;
-	index_t maximum_size;
+	idx_t current_position;
+	idx_t maximum_size;
 	unique_ptr<UndoChunk> next;
 	UndoChunk *prev;
 };
@@ -47,7 +47,7 @@ public:
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
-	data_ptr_t CreateEntry(UndoFlags type, index_t len);
+	data_ptr_t CreateEntry(UndoFlags type, idx_t len);
 
 	bool ChangesMade();
 

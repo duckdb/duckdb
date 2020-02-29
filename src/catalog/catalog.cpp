@@ -180,7 +180,7 @@ void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {
 }
 
 void Catalog::ParseRangeVar(string input, string &schema, string &name) {
-	index_t idx = 0;
+	idx_t idx = 0;
 	vector<string> entries;
 	string entry;
 normal:

@@ -44,24 +44,24 @@ public:
 	virtual vector<ColumnBinding> GetColumnBindings() {
 		return {};
 	}
-	static vector<ColumnBinding> GenerateColumnBindings(index_t table_idx, index_t column_count);
-	static vector<TypeId> MapTypes(vector<TypeId> types, vector<index_t> projection_map);
-	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<index_t> projection_map);
+	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
+	static vector<TypeId> MapTypes(vector<TypeId> types, vector<idx_t> projection_map);
+	static vector<ColumnBinding> MapBindings(vector<ColumnBinding> types, vector<idx_t> projection_map);
 
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
 	virtual string ParamsToString() const;
-	virtual string ToString(index_t depth = 0) const;
+	virtual string ToString(idx_t depth = 0) const;
 	void Print();
 
 	void AddChild(unique_ptr<LogicalOperator> child) {
 		children.push_back(move(child));
 	}
 
-	virtual index_t EstimateCardinality() {
+	virtual idx_t EstimateCardinality() {
 		// simple estimator, just take the max of the children
-		index_t max_cardinality = 0;
+		idx_t max_cardinality = 0;
 		for (auto &child : children) {
 			max_cardinality = std::max(child->EstimateCardinality(), max_cardinality);
 		}

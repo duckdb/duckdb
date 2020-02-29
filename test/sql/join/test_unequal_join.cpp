@@ -41,7 +41,7 @@ TEST_CASE("Test less than join", "[join][.]") {
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("create table a (i integer)"));
-	for (index_t i = 0; i < 2000; i++) {
+	for (idx_t i = 0; i < 2000; i++) {
 		REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
 	}
 
@@ -69,7 +69,7 @@ TEST_CASE("Test joins with different types", "[join]") {
 	for (auto &type : numeric_types) {
 		REQUIRE_NO_FAIL(con.Query("begin transaction"));
 		REQUIRE_NO_FAIL(con.Query("create table a (i " + type + ")"));
-		for (index_t i = 0; i < 100; i++) {
+		for (idx_t i = 0; i < 100; i++) {
 			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
 		}
 		// range joins
@@ -130,7 +130,7 @@ TEST_CASE("Test mark join with different types", "[join]") {
 	for (auto &type : numeric_types) {
 		REQUIRE_NO_FAIL(con.Query("begin transaction"));
 		REQUIRE_NO_FAIL(con.Query("create table a (i " + type + ")"));
-		for (index_t i = 0; i < 100; i++) {
+		for (idx_t i = 0; i < 100; i++) {
 			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
 		}
 		// range joins

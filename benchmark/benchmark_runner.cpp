@@ -285,7 +285,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 		// passed name pattern.
 		std::vector<int> benchmark_indices{};
 		benchmark_indices.reserve(benchmarks.size());
-		for (index_t index = 0; index < benchmarks.size(); ++index) {
+		for (idx_t index = 0; index < benchmarks.size(); ++index) {
 			if (RE2::FullMatch(benchmarks[index]->name, configuration.name_pattern)) {
 				benchmark_indices.emplace_back(index);
 			}

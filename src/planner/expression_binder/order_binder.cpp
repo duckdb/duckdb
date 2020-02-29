@@ -7,19 +7,19 @@
 using namespace duckdb;
 using namespace std;
 
-OrderBinder::OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
-                         expression_map_t<index_t> &projection_map,
+OrderBinder::OrderBinder(idx_t projection_index, SelectNode &node, unordered_map<string, idx_t> &alias_map,
+                         expression_map_t<idx_t> &projection_map,
                          vector<unique_ptr<ParsedExpression>> &extra_select_list)
     : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map),
       extra_select_list(extra_select_list) {
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, index_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
 	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
 
-void OrderBinder::RemapIndex(BoundColumnRefExpression &expr, index_t index) {
+void OrderBinder::RemapIndex(BoundColumnRefExpression &expr, idx_t index) {
 	expr.binding.column_index = index;
 }
 
@@ -42,10 +42,10 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 			return nullptr;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-		auto index = (index_t)constant.value.GetValue<int64_t>();
+		auto index = (idx_t)constant.value.GetValue<int64_t>();
 		if (index < 1 || index > node.select_list.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld",
-			                      (index_t)node.select_list.size());
+			                      (idx_t)node.select_list.size());
 		}
 		return CreateProjectionReference(*expr, index - 1);
 	}

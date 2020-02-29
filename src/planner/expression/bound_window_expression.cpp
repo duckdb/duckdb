@@ -26,7 +26,7 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 	if (other->children.size() != children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < children.size(); i++) {
+	for (idx_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}
@@ -43,7 +43,7 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 	if (partitions.size() != other->partitions.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < partitions.size(); i++) {
+	for (idx_t i = 0; i < partitions.size(); i++) {
 		if (!Expression::Equals(partitions[i].get(), other->partitions[i].get())) {
 			return false;
 		}
@@ -52,7 +52,7 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 	if (orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		if (orders[i].type != other->orders[i].type) {
 			return false;
 		}

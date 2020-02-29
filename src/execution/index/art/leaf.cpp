@@ -27,15 +27,15 @@ void Leaf::Insert(row_t row_id) {
 
 //! TODO: Maybe shrink array dynamically?
 void Leaf::Remove(row_t row_id) {
-	index_t entry_offset = -1;
-	for (index_t i = 0; i < num_elements; i++) {
+	idx_t entry_offset = -1;
+	for (idx_t i = 0; i < num_elements; i++) {
 		if (row_ids[i] == row_id) {
 			entry_offset = i;
 			break;
 		}
 	}
 	num_elements--;
-	for (index_t j = entry_offset; j < num_elements; j++) {
+	for (idx_t j = entry_offset; j < num_elements; j++) {
 		row_ids[j] = row_ids[j + 1];
 	}
 }

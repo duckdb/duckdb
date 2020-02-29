@@ -13,12 +13,12 @@ void Node::CopyPrefix(ART &art, Node *src, Node *dst) {
 	memcpy(dst->prefix.get(), src->prefix.get(), src->prefix_length);
 }
 
-unique_ptr<Node> *Node::GetChild(index_t pos) {
+unique_ptr<Node> *Node::GetChild(idx_t pos) {
 	assert(0);
 	return nullptr;
 }
 
-index_t Node::GetMin() {
+idx_t Node::GetMin() {
 	assert(0);
 	return 0;
 }
@@ -52,7 +52,7 @@ void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<
 	}
 }
 
-void Node::Erase(ART &art, unique_ptr<Node> &node, index_t pos) {
+void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
 	switch (node->type) {
 	case NodeType::N4: {
 		Node4::erase(art, node, pos);

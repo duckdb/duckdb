@@ -68,7 +68,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
                                                            unique_ptr<Expression> *expr_ptr) {
 	assert(expr.depth == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
-	for (index_t i = 0; i < bindings.size(); i++) {
+	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
 			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
@@ -76,7 +76,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
 	string bound_columns = "[";
-	for (index_t i = 0; i < bindings.size(); i++) {
+	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (i != 0) {
 			bound_columns += " ";
 		}

@@ -30,10 +30,10 @@ struct StructPackFun {
 
 struct StructExtractBindData : public FunctionData {
 	string key;
-	index_t index;
+	idx_t index;
 	TypeId type;
 
-	StructExtractBindData(string key, index_t index, TypeId type) : key(key), index(index), type(type) {
+	StructExtractBindData(string key, idx_t index, TypeId type) : key(key), index(index), type(type) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

@@ -27,7 +27,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 
 	// create the chunk to hold intermediate expression results
 
-	switch (info->index_type) {
+	switch (info->idx_type) {
 	case IndexType::ART: {
 		CreateARTIndex();
 		break;

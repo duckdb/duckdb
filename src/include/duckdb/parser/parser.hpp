@@ -30,7 +30,7 @@ public:
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;
 
-	index_t n_prepared_parameters = 0;
+	idx_t n_prepared_parameters = 0;
 
 private:
 	//! Transform a Postgres parse tree into a set of SQL Statements

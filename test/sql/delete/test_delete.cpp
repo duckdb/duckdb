@@ -50,7 +50,7 @@ TEST_CASE("Test scan with large deletions", "[delete][.]") {
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	for (index_t i = 0; i < 10000; i++) {
+	for (idx_t i = 0; i < 10000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (" + to_string(i) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
@@ -67,21 +67,21 @@ TEST_CASE("Test scan with many segmented deletions", "[delete][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	index_t n = 20;
-	index_t val_count = 1024;
-	vector<index_t> tested_values = {0, 1, val_count - 2, val_count - 1};
+	idx_t n = 20;
+	idx_t val_count = 1024;
+	vector<idx_t> tested_values = {0, 1, val_count - 2, val_count - 1};
 
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	for (index_t k = 0; k < n; k++) {
-		for (index_t i = 0; i < val_count; i++) {
+	for (idx_t k = 0; k < n; k++) {
+		for (idx_t i = 0; i < val_count; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (" + to_string(i) + ")"));
 		}
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// verify the initial count
-	for (index_t j = 0; j < 2; j++) {
+	for (idx_t j = 0; j < 2; j++) {
 		// verify the initial count again twice
 		result = con.Query("SELECT COUNT(*) FROM a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * val_count)}));
@@ -98,7 +98,7 @@ TEST_CASE("Test scan with many segmented deletions", "[delete][.]") {
 		// rollback
 		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-		for (index_t j = 0; j < 2; j++) {
+		for (idx_t j = 0; j < 2; j++) {
 			// verify the initial count again twice
 			result = con.Query("SELECT COUNT(*) FROM a");
 			REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(n * val_count)}));

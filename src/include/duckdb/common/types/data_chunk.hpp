@@ -44,13 +44,13 @@ public:
 	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
 public:
-	index_t size() const {
+	idx_t size() const {
 		return count;
 	}
-	index_t column_count() const {
+	idx_t column_count() const {
 		return data.size();
 	}
-	void SetCardinality(index_t count, sel_t *sel_vector = nullptr) {
+	void SetCardinality(idx_t count, sel_t *sel_vector = nullptr) {
 		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
 		this->sel_vector = sel_vector;
@@ -59,8 +59,8 @@ public:
 		SetCardinality(cardinality.count, cardinality.sel_vector);
 	}
 
-	Value GetValue(index_t col_idx, index_t index) const;
-	void SetValue(index_t col_idx, index_t index, Value val);
+	Value GetValue(idx_t col_idx, idx_t index) const;
+	void SetValue(idx_t col_idx, idx_t index, Value val);
 
 	//! Set the DataChunk to reference another data chunk
 	void Reference(DataChunk &chunk);
@@ -80,7 +80,7 @@ public:
 	void Destroy();
 
 	//! Copies the data from this vector to another vector.
-	void Copy(DataChunk &other, index_t offset = 0);
+	void Copy(DataChunk &other, idx_t offset = 0);
 
 	//! Removes the selection vector from the chunk
 	void ClearSelectionVector();

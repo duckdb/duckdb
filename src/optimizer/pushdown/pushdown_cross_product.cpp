@@ -11,7 +11,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 	assert(op->type == LogicalOperatorType::CROSS_PRODUCT);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	vector<unique_ptr<Expression>> join_conditions;
-	unordered_set<index_t> left_bindings, right_bindings;
+	unordered_set<idx_t> left_bindings, right_bindings;
 	if (filters.size() > 0) {
 		// check to see into which side we should push the filters
 		// first get the LHS and RHS bindings

@@ -20,7 +20,7 @@ private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUN, bool IGNORE_NULL, bool A_CONSTANT,
 	          bool B_CONSTANT, bool C_CONSTANT>
 	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                               RESULT_TYPE *__restrict result_data, index_t count, sel_t *__restrict sel_vector,
+	                               RESULT_TYPE *__restrict result_data, idx_t count, sel_t *__restrict sel_vector,
 	                               nullmask_t &nullmask, FUN fun) {
 		if (!A_CONSTANT) {
 			ASSERT_RESTRICT(adata, adata + count, result_data, result_data + count);
@@ -32,14 +32,14 @@ private:
 			ASSERT_RESTRICT(cdata, cdata + count, result_data, result_data + count);
 		}
 		if (IGNORE_NULL && nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (!nullmask[i]) {
 					result_data[i] =
 					    fun(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i]);
 				}
 			});
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				result_data[i] = fun(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i]);
 			});
 		}
@@ -150,19 +150,19 @@ public:
 
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool A_CONSTANT, bool B_CONSTANT, bool C_CONSTANT>
-	static inline index_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
-	                                 sel_t *__restrict result, index_t count, sel_t *__restrict sel_vector,
-	                                 nullmask_t &nullmask) {
-		index_t result_count = 0;
+	static inline idx_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
+	                               sel_t *__restrict result, idx_t count, sel_t *__restrict sel_vector,
+	                               nullmask_t &nullmask) {
+		idx_t result_count = 0;
 		if (nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (!nullmask[i] &&
 				    OP::Operation(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i])) {
 					result[result_count++] = i;
 				}
 			});
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) {
+			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
 				if (OP::Operation(adata[A_CONSTANT ? 0 : i], bdata[B_CONSTANT ? 0 : i], cdata[C_CONSTANT ? 0 : i])) {
 					result[result_count++] = i;
 				}
@@ -172,7 +172,7 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool A_CONSTANT>
-	static inline index_t SelectA(Vector &a, Vector &b, Vector &c, sel_t result[]) {
+	static inline idx_t SelectA(Vector &a, Vector &b, Vector &c, sel_t result[]) {
 		if (b.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (b.nullmask[0]) {
 				return 0;
@@ -185,7 +185,7 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool A_CONSTANT, bool B_CONSTANT>
-	static inline index_t SelectAB(Vector &a, Vector &b, Vector &c, sel_t result[]) {
+	static inline idx_t SelectAB(Vector &a, Vector &b, Vector &c, sel_t result[]) {
 		if (c.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (c.nullmask[0]) {
 				return 0;
@@ -198,7 +198,7 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool A_CONSTANT, bool B_CONSTANT, bool C_CONSTANT>
-	static inline index_t SelectABC(Vector &a, Vector &b, Vector &c, sel_t result[]) {
+	static inline idx_t SelectABC(Vector &a, Vector &b, Vector &c, sel_t result[]) {
 		auto adata = (A_TYPE *)a.GetData();
 		auto bdata = (B_TYPE *)b.GetData();
 		auto cdata = (C_TYPE *)c.GetData();
@@ -225,7 +225,7 @@ private:
 
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
-	static index_t Select(Vector &a, Vector &b, Vector &c, sel_t result[]) {
+	static idx_t Select(Vector &a, Vector &b, Vector &c, sel_t result[]) {
 		assert(a.SameCardinality(b) && a.SameCardinality(c));
 		if (a.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (a.nullmask[0]) {

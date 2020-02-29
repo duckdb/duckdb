@@ -393,7 +393,7 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 	// iterate over them and execute them one by one
 	unique_ptr<QueryResult> result;
 	QueryResult *last_result = nullptr;
-	for (index_t i = 0; i < statements.size(); i++) {
+	for (idx_t i = 0; i < statements.size(); i++) {
 		auto &statement = statements[i];
 		bool is_last_statement = i + 1 == statements.size();
 		auto current_result = RunStatement(query, move(statement), allow_stream_result && is_last_statement);
@@ -496,7 +496,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto &de_expr_list = deserialized_stmt->node->GetSelectList();
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
-	for (index_t i = 0; i < orig_expr_list.size(); i++) {
+	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
 		// check that the expressions are equivalent
 		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
@@ -506,9 +506,9 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		assert(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
 	}
 	// now perform additional checking within the expressions
-	for (index_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
+	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {
 		auto hash = orig_expr_list[outer_idx]->Hash();
-		for (index_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
+		for (idx_t inner_idx = 0; inner_idx < orig_expr_list.size(); inner_idx++) {
 			auto hash2 = orig_expr_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent
@@ -652,7 +652,7 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 		if (description.columns.size() != table_entry->columns.size()) {
 			throw Exception("Failed to append: table entry has different number of columns!");
 		}
-		for (index_t i = 0; i < description.columns.size(); i++) {
+		for (idx_t i = 0; i < description.columns.size(); i++) {
 			if (description.columns[i].type != table_entry->columns[i].type) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}

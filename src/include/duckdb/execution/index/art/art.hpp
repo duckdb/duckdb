@@ -26,7 +26,7 @@
 namespace duckdb {
 struct IteratorEntry {
 	Node *node = nullptr;
-	index_t pos = 0;
+	idx_t pos = 0;
 };
 
 struct Iterator {
@@ -47,7 +47,7 @@ struct ARTIndexScanState : public IndexScanState {
 	Value values[2];
 	ExpressionType expressions[2];
 	bool checked;
-	index_t result_index = 0;
+	idx_t result_index = 0;
 	vector<row_t> result_ids;
 	Iterator iterator;
 };

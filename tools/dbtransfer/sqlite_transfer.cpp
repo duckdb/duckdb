@@ -138,7 +138,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 	int rc = SQLITE_ERROR;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && interrupt == 0) {
 		// get the value for each of the columns
-		index_t result_idx = result_chunk.size();
+		idx_t result_idx = result_chunk.size();
 		for (int i = 0; i < col_count; i++) {
 			if (sqlite3_column_type(stmt, i) == SQLITE_NULL) {
 				// NULL value

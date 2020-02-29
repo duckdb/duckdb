@@ -32,7 +32,7 @@ unique_ptr<Expression> HasCorrelatedExpressions::VisitReplace(BoundSubqueryExpre
 		return nullptr;
 	}
 	// check if the subquery contains any of the correlated expressions that we are concerned about in this node
-	for (index_t i = 0; i < correlated_columns.size(); i++) {
+	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		if (std::find(expr.binder->correlated_columns.begin(), expr.binder->correlated_columns.end(),
 		              correlated_columns[i]) != expr.binder->correlated_columns.end()) {
 			has_correlated_expressions = true;

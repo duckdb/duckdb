@@ -54,9 +54,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	unordered_map<string, index_t> alias_map;
-	expression_map_t<index_t> projection_map;
-	for (index_t i = 0; i < statement.select_list.size(); i++) {
+	unordered_map<string, idx_t> alias_map;
+	expression_map_t<idx_t> projection_map;
+	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
@@ -67,7 +67,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	// we bind the DISTINCT ON before we bind any order, aggregations or window functions
 	vector<unique_ptr<ParsedExpression>> extra_select_list;
 	OrderBinder order_binder(result->projection_index, statement, alias_map, projection_map, extra_select_list);
-	for (index_t i = 0; i < statement.distinct_on_targets.size(); i++) {
+	for (idx_t i = 0; i < statement.distinct_on_targets.size(); i++) {
 		// we treat the Distinct list as a order by
 		auto bound_expr = order_binder.Bind(move(statement.distinct_on_targets[i]));
 		if (!bound_expr) {
@@ -80,7 +80,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// we bind the ORDER BY before we bind any aggregations or window functions
-	for (index_t i = 0; i < statement.orders.size(); i++) {
+	for (idx_t i = 0; i < statement.orders.size(); i++) {
 		auto bound_expr = order_binder.Bind(move(statement.orders[i].expression));
 		if (!bound_expr) {
 			// ORDER BY non-integer constant
@@ -100,7 +100,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		// the statement has a GROUP BY clause, bind it
 		unbound_groups.resize(statement.groups.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
-		for (index_t i = 0; i < statement.groups.size(); i++) {
+		for (idx_t i = 0; i < statement.groups.size(); i++) {
 
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
@@ -135,17 +135,17 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
-	for (index_t i = 0; i < statement.select_list.size(); i++) {
+	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		select_binder.BindTableNames(*statement.select_list[i]);
 	}
 	// including the extra SELECT list from DISTINCT ON & ORDER BY
-	unordered_map<index_t, index_t> projection_remap;
-	for (index_t i = 0; i < extra_select_list.size(); i++) {
+	unordered_map<idx_t, idx_t> projection_remap;
+	for (idx_t i = 0; i < extra_select_list.size(); i++) {
 		auto &expr = extra_select_list[i];
 		select_binder.BindTableNames(*expr);
 		// See if it matches an entry already in the SELECT list
 		auto post_bind_index = projection_map.find(expr.get());
-		index_t newindex;
+		idx_t newindex;
 		if (post_bind_index != projection_map.end()) {
 			newindex = post_bind_index->second;
 		} else {
@@ -154,7 +154,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 		}
 		projection_remap[result->column_count + i] = newindex;
 	}
-	for (index_t i = 0; i < statement.select_list.size(); i++) {
+	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		SQLType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		result->select_list.push_back(move(expr));
@@ -173,7 +173,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// resolve the types of the ORDER BY clause
-	for (index_t i = 0; i < result->orders.size(); i++) {
+	for (idx_t i = 0; i < result->orders.size(); i++) {
 		assert(result->orders[i].expression->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &order = (BoundColumnRefExpression &)*result->orders[i].expression;
 		// See if the column index has been remapped in the projection
@@ -186,7 +186,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	}
 
 	// resolve the types of the DISTINCT ON clause
-	for (index_t i = 0; i < result->target_distincts.size(); i++) {
+	for (idx_t i = 0; i < result->target_distincts.size(); i++) {
 		assert(result->target_distincts[i]->type == ExpressionType::BOUND_COLUMN_REF);
 		auto &distinct = (BoundColumnRefExpression &)*result->target_distincts[i];
 		// See if the column index has been remapped in the projection

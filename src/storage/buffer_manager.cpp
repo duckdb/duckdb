@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, index_t maximum_memory)
+BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, idx_t maximum_memory)
     : fs(fs), manager(manager), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
       temporary_id(MAXIMUM_BLOCK) {
 	if (!temp_directory.empty()) {
@@ -143,7 +143,7 @@ unique_ptr<Block> BufferManager::EvictBlock() {
 	}
 }
 
-unique_ptr<BufferHandle> BufferManager::Allocate(index_t alloc_size, bool can_destroy) {
+unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size, bool can_destroy) {
 	assert(alloc_size >= Storage::BLOCK_ALLOC_SIZE);
 
 	lock_guard<mutex> lock(block_lock);
@@ -189,7 +189,7 @@ void BufferManager::DestroyBuffer(block_id_t buffer_id, bool can_destroy) {
 	lru.Erase(handle);
 }
 
-void BufferManager::SetLimit(index_t limit) {
+void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> lock(block_lock);
 
 	while (current_memory > limit) {
@@ -231,8 +231,8 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
 	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE);
-	handle->Write(&buffer.size, sizeof(index_t), 0);
-	buffer.Write(*handle, sizeof(index_t));
+	handle->Write(&buffer.size, sizeof(idx_t), 0);
+	buffer.Write(*handle, sizeof(idx_t));
 }
 
 unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
@@ -240,18 +240,18 @@ unique_ptr<BufferHandle> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 		throw Exception("Out-of-memory: cannot read buffer because no temporary directory is specified!\nTo enable "
 		                "temporary buffer eviction set a temporary directory in the configuration");
 	}
-	index_t alloc_size;
+	idx_t alloc_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
 	auto handle = fs.OpenFile(path, FileFlags::READ);
-	handle->Read(&alloc_size, sizeof(index_t), 0);
+	handle->Read(&alloc_size, sizeof(idx_t), 0);
 	// first evict blocks until we can handle the size
 	while (current_memory + alloc_size > maximum_memory) {
 		EvictBlock();
 	}
 	// now allocate a buffer of this size and read the data into that buffer
 	auto buffer = make_unique<ManagedBuffer>(*this, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
-	buffer->Read(*handle, sizeof(index_t));
+	buffer->Read(*handle, sizeof(idx_t));
 
 	auto managed_buffer = buffer.get();
 	current_memory += buffer->AllocSize();

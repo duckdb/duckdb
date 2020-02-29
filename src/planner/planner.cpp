@@ -176,9 +176,9 @@ void Planner::VerifyNode(BoundQueryNode &node) {
 		}
 
 		// double loop to verify that (in)equality of hashes
-		for (index_t i = 0; i < copies.size(); i++) {
+		for (idx_t i = 0; i < copies.size(); i++) {
 			auto outer_hash = copies[i]->Hash();
-			for (index_t j = 0; j < copies.size(); j++) {
+			for (idx_t j = 0; j < copies.size(); j++) {
 				auto inner_hash = copies[j]->Hash();
 				if (outer_hash != inner_hash) {
 					// if hashes are not equivalent the expressions should not be equivalent

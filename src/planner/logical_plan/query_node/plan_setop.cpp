@@ -24,7 +24,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 		// "node" is a projection; we can just do the casts in there
 		assert(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
-		for (index_t i = 0; i < target_types.size(); i++) {
+		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
@@ -44,7 +44,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CastLogicalOperatorToTypes(vec
 
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
-		for (index_t i = 0; i < target_types.size(); i++) {
+		for (idx_t i = 0; i < target_types.size(); i++) {
 			unique_ptr<Expression> result =
 			    make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]), setop_columns[i]);
 			if (source_types[i] != target_types[i]) {
