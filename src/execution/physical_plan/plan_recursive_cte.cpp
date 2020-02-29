@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"

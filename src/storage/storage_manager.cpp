@@ -23,6 +23,10 @@ StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
 StorageManager::~StorageManager() {
 }
 
+BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
+	return *context.db.storage->buffer_manager;
+}
+
 void StorageManager::Initialize() {
 	bool in_memory = path.empty() || path == ":memory:";
 

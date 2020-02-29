@@ -1,7 +1,5 @@
 #include "duckdb/main/query_result.hpp"
 
-#include "duckdb/main/client_context.hpp"
-
 using namespace duckdb;
 using namespace std;
 

@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/parsed_data/bound_create_info.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

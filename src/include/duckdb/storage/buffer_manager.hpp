@@ -42,6 +42,7 @@ public:
 	//! blocks can be evicted
 	void SetLimit(index_t limit = (index_t)-1);
 
+	static BufferManager &GetBufferManager(ClientContext &context);
 private:
 	unique_ptr<BufferHandle> PinBlock(block_id_t block_id);
 	unique_ptr<BufferHandle> PinBuffer(block_id_t block_id, bool can_destroy = false);

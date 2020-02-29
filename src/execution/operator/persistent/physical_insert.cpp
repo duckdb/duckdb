@@ -4,7 +4,6 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;

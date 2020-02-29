@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

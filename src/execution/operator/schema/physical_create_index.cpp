@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;

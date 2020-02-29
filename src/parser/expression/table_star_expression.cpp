@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/table_star_expression.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,7 +14,6 @@ string TableStarExpression::ToString() const {
 bool TableStarExpression::Equals(const TableStarExpression *a, const TableStarExpression *b) {
 	return a->relation_name == b->relation_name;
 }
-
 
 unique_ptr<ParsedExpression> TableStarExpression::Copy() const {
 	auto copy = make_unique<TableStarExpression>(relation_name);

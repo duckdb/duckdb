@@ -1,5 +1,3 @@
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"

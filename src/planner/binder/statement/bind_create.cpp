@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/statement/bound_create_statement.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 
 using namespace duckdb;
@@ -32,7 +33,7 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateInfo(unique_ptr<CreateInfo> info) 
 	}
 	if (info->type != CatalogType::SCHEMA) {
 		// fetch the schema in which we want to create the object
-		bound_schema = context.catalog.GetSchema(context, info->schema);
+		bound_schema = Catalog::GetCatalog(context).GetSchema(context, info->schema);
 		info->schema = bound_schema->name;
 	}
 	switch(info->type) {

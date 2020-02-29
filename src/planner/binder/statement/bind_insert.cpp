@@ -6,6 +6,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 #include "duckdb/planner/statement/bound_insert_statement.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace std;
 

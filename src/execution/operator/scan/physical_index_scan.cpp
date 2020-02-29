@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_index_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -21,7 +21,7 @@ void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		return;
 	}
 
-	auto &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 	if (!state->initialized) {
 		// initialize the scan state of the index
 		if (low_index && high_index) {
