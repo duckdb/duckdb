@@ -12,7 +12,8 @@ using namespace std;
 //! straightforward conversion
 
 unique_ptr<BoundSQLStatement> Binder::Bind(AlterTableStatement &stmt) {
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
+	auto table =
+	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
 	if (table && !table->temporary) {
 		// we can only alter temporary tables in read-only mode
 		this->read_only = false;

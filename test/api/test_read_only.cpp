@@ -78,9 +78,6 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	REQUIRE_NO_FAIL(con->Query("DROP VIEW v1"));
 
-
-
-
 	con.reset();
 	db.reset();
 	// FIXME: these tests currently don't work as we don't do any locking of the database directory

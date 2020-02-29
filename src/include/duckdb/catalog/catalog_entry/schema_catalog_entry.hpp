@@ -32,7 +32,6 @@ struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct DropInfo;
 
-
 //! A schema in the catalog
 class SchemaCatalogEntry : public CatalogEntry {
 public:
@@ -48,19 +47,20 @@ public:
 	CatalogSet functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
+
 public:
 	//! Creates a table with the given name in the schema
-	CatalogEntry* CreateTable(ClientContext &context, BoundCreateTableInfo *info);
+	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
 	//! Creates a view with the given name in the schema
-	CatalogEntry* CreateView(ClientContext &context, CreateViewInfo *info);
+	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
 	//! Creates a sequence with the given name in the schema
-	CatalogEntry* CreateSequence(ClientContext &context, CreateSequenceInfo *info);
+	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates an index with the given name in the schema
-	CatalogEntry* CreateIndex(ClientContext &context, CreateIndexInfo *info);
+	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 	//! Create a table function within the given schema
-	CatalogEntry* CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a scalar or aggregate function within the given schema
-	CatalogEntry* CreateFunction(ClientContext &context, CreateFunctionInfo *info);
+	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);
@@ -75,11 +75,13 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateSchemaInfo
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
+
 private:
 	//! Add a catalog entry to this schema
-	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);
+	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);
 	//! Add a catalog entry to this schema
-	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies);
+	CatalogEntry *AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict,
+	                       unordered_set<CatalogEntry *> dependencies);
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

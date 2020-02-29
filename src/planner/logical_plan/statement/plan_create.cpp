@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateStatement &stmt) {
-	switch(stmt.info->base->type) {
+	switch (stmt.info->base->type) {
 	case CatalogType::SCHEMA:
 		return make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(stmt.info));
 	case CatalogType::VIEW:
@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateStatemen
 	case CatalogType::SEQUENCE:
 		return make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info));
 	case CatalogType::INDEX: {
-		auto &info = (BoundCreateIndexInfo&) *stmt.info;
+		auto &info = (BoundCreateIndexInfo &)*stmt.info;
 		// first we visit the base table to create the root expression
 		auto root = CreatePlan(*info.table);
 		// this gives us a logical table scan
@@ -28,17 +28,19 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCreateStatemen
 		assert(root->type == LogicalOperatorType::GET);
 		auto &get = (LogicalGet &)*root;
 		// create the logical operator
-		return make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(info.expressions), unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(info.base)));
+		return make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(info.expressions),
+		                                       unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(info.base)));
 	}
 	case CatalogType::TABLE: {
-		auto &info = (BoundCreateTableInfo&) *stmt.info;
+		auto &info = (BoundCreateTableInfo &)*stmt.info;
 		unique_ptr<LogicalOperator> root;
 		if (info.query) {
 			// create table from query
 			root = CreatePlan(*info.query);
 		}
 		// create the logical operator
-		auto create_table = make_unique<LogicalCreateTable>(info.schema, unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(move(stmt.info)));
+		auto create_table = make_unique<LogicalCreateTable>(
+		    info.schema, unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(move(stmt.info)));
 		if (root) {
 			create_table->children.push_back(move(root));
 		}

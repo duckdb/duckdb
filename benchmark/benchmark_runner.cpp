@@ -307,7 +307,7 @@ ConfigurationError run_benchmarks(const BenchmarkConfiguration &configuration) {
 			}
 		} else if (configuration.meta == BenchmarkMetaType::QUERY) {
 			for (const auto &benchmark_index : benchmark_indices) {
-				auto duckdb_benchmark = dynamic_cast<DuckDBBenchmark*>(benchmarks[benchmark_index]);
+				auto duckdb_benchmark = dynamic_cast<DuckDBBenchmark *>(benchmarks[benchmark_index]);
 				if (!duckdb_benchmark) {
 					continue;
 				}

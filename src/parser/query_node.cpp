@@ -82,9 +82,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	case QueryNodeType::SET_OPERATION_NODE:
 		result = SetOperationNode::Deserialize(source);
 		break;
-    case QueryNodeType::RECURSIVE_CTE_NODE:
-	    result = RecursiveCTENode::Deserialize(source);
-	    break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = RecursiveCTENode::Deserialize(source);
+		break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}

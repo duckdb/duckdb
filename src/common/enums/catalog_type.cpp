@@ -7,7 +7,7 @@ using namespace std;
 namespace duckdb {
 
 string CatalogTypeToString(CatalogType type) {
-	switch(type) {
+	switch (type) {
 	case CatalogType::TABLE:
 		return "Table";
 	case CatalogType::SCHEMA:
@@ -31,4 +31,4 @@ string CatalogTypeToString(CatalogType type) {
 	}
 }
 
-}
+} // namespace duckdb

@@ -53,9 +53,9 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 	case TypeId::STRUCT: {
 		for (index_t i = 0; i < left.struct_value.size(); i++) {
 			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
-				left.struct_value[i].second != left.struct_value[i].second) {
-					return false;
-				}
+			    left.struct_value[i].second != left.struct_value[i].second) {
+				return false;
+			}
 		}
 		return true;
 		break;

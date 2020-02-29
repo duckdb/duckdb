@@ -21,7 +21,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(DropStatement &stmt) {
 	case CatalogType::SEQUENCE:
 	case CatalogType::INDEX:
 	case CatalogType::TABLE: {
-		auto entry = (StandardEntry*) Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema, stmt.info->name, true);
+		auto entry = (StandardEntry *)Catalog::GetCatalog(context).GetEntry(context, stmt.info->type, stmt.info->schema,
+		                                                                    stmt.info->name, true);
 		if (!entry) {
 			break;
 		}

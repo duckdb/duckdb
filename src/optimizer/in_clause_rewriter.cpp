@@ -110,4 +110,4 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	return result;
 }
 
-}
+} // namespace duckdb

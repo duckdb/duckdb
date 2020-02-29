@@ -190,4 +190,4 @@ TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 	}
 }
 
-}
+} // namespace test_concurrent_update

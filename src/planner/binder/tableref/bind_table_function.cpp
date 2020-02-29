@@ -14,7 +14,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	assert(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
 	// parse the parameters of the function
-	auto function = Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
+	auto function =
+	    Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
 
 	// check if the argument lengths match
 	if (fexpr->children.size() != function->function.arguments.size()) {
@@ -28,7 +29,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		result->parameters.push_back(binder.Bind(child));
 	}
-	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias,
-	                              function);
+	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, function);
 	return move(result);
 }

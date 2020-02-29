@@ -153,7 +153,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth,
 	} else {
 		// successfully bound: replace the node with a BoundExpression
 		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr), result.sql_type);
-		auto be = (BoundExpression*) expr->get();
+		auto be = (BoundExpression *)expr->get();
 		assert(be);
 		be->alias = alias;
 		if (!alias.empty()) {

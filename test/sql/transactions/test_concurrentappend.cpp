@@ -102,4 +102,4 @@ TEST_CASE("Concurrent append", "[transactions][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(3 * THREAD_COUNT * INSERT_ELEMENTS)}));
 }
 
-}
+} // namespace test_concurrent_append

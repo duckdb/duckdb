@@ -206,8 +206,8 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR);"));
 	vector<Value> expected_g, expected_h;
 	string expected_large_value;
-	for(index_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int) i, "hello"));
+	for (index_t i = 0; i < 10000; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int)i, "hello"));
 		expected_g.push_back(Value::INTEGER(i));
 		expected_h.push_back(Value("hello"));
 		expected_large_value += (i > 0 ? "," : "") + string("hello");
@@ -225,7 +225,8 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(expected_large_value)}));
 
 	// now test exception in the middle of an aggregate
-	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)"));
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM "
+	                       "strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)"));
 }
 
 TEST_CASE("STRING_AGG big", "[aggregate]") {
@@ -238,8 +239,8 @@ TEST_CASE("STRING_AGG big", "[aggregate]") {
 
 	std::stringstream query_string;
 	query_string << "INSERT INTO strings VALUES ";
-	for(int c = 0; c < 100; ++c) {
-		for(int e = 0; e < 100; ++e) {
+	for (int c = 0; c < 100; ++c) {
+		for (int e = 0; e < 100; ++e) {
 			query_string << "(";
 
 			query_string << c;

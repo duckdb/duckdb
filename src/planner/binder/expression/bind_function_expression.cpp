@@ -11,7 +11,8 @@ using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
 	// lookup the function in the catalog
-	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema, function.function_name);
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
+	                                                  function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
@@ -20,7 +21,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 		return BindAggregate(function, (AggregateFunctionCatalogEntry *)func, depth);
 	}
 }
-
 
 BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
                                           index_t depth) {

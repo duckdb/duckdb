@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 static void CreateColumnMap(BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo&) *info.base;
+	auto &base = (CreateTableInfo &)*info.base;
 
 	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
 		auto &col = base.columns[oid];
@@ -26,7 +26,7 @@ static void CreateColumnMap(BoundCreateTableInfo &info) {
 }
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo&) *info.base;
+	auto &base = (CreateTableInfo &)*info.base;
 
 	bool has_primary_key = false;
 	for (index_t i = 0; i < base.constraints.size(); i++) {
@@ -35,8 +35,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::CHECK: {
 			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, base.table, base.columns,
-			                         bound_constraint->bound_columns);
+			CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
 			auto &check = (CheckConstraint &)*cond;
 			// create a copy of the unbound expression because the binding destroys the constraint
 			auto unbound_expression = check.expression->Copy();
@@ -113,7 +112,7 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 }
 
 unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateTableInfo&) *info;
+	auto &base = (CreateTableInfo &)*info;
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
 	if (base.query) {

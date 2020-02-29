@@ -85,8 +85,9 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context,
-		                                                                         window.schema, window.function_name);
+		auto func =
+		    (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+		        context, window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
 			throw BinderException("Unknown windowed aggregate");
 		}

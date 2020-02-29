@@ -36,7 +36,7 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateInfo(unique_ptr<CreateInfo> info) 
 		bound_schema = Catalog::GetCatalog(context).GetSchema(context, info->schema);
 		info->schema = bound_schema->name;
 	}
-	switch(info->type) {
+	switch (info->type) {
 	case CatalogType::INDEX:
 		result = BindCreateIndexInfo(move(info));
 		break;

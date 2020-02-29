@@ -20,6 +20,7 @@ public:
 
 	// Info for element creation
 	unique_ptr<BoundCreateInfo> info;
+
 public:
 	vector<string> GetNames() override {
 		return {"Count"};

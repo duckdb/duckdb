@@ -18,8 +18,11 @@ namespace duckdb {
 class BoundAggregateExpression;
 
 struct AggregateObject {
-	AggregateObject(AggregateFunction function, index_t child_count, index_t payload_size, bool distinct, TypeId return_type) :
-		function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct), return_type(return_type) {}
+	AggregateObject(AggregateFunction function, index_t child_count, index_t payload_size, bool distinct,
+	                TypeId return_type)
+	    : function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct),
+	      return_type(return_type) {
+	}
 
 	AggregateFunction function;
 	index_t child_count;
@@ -110,6 +113,7 @@ private:
 
 	//! unique_ptr to indicate the ownership
 	unique_ptr<data_t[]> owned_data;
+
 private:
 	void Destroy();
 	void CallDestructors(Vector &state_vector);

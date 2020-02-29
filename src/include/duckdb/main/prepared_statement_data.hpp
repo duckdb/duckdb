@@ -44,8 +44,10 @@ public:
 
 	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
 	bool read_only;
-	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the exception of
+	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
+	//! exception of
 	bool requires_valid_transaction;
+
 public:
 	//! Bind a set of values to the prepared statement data
 	void Bind(vector<Value> values);

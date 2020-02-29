@@ -13,7 +13,6 @@
 
 namespace duckdb {
 
-
 struct StructPackBindData : public FunctionData {
 	SQLType stype;
 
@@ -24,7 +23,6 @@ struct StructPackBindData : public FunctionData {
 		return make_unique<StructPackBindData>(stype);
 	}
 };
-
 
 struct StructPackFun {
 	static void RegisterFunction(BuiltinFunctions &set);
@@ -42,7 +40,6 @@ struct StructExtractBindData : public FunctionData {
 		return make_unique<StructExtractBindData>(key, index, type);
 	}
 };
-
 
 struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);

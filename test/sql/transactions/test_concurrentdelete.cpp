@@ -205,4 +205,4 @@ TEST_CASE("Concurrent delete", "[transactions][.]") {
 	REQUIRE(count == 0);
 }
 
-}
+} // namespace test_concurrent_delete

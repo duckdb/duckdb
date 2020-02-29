@@ -128,7 +128,8 @@ TEST_CASE("Test IS NULL", "[nullhandling]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {false, false, false}));
 	REQUIRE(CHECK_COLUMN(result, 3, {true, true, true}));
 
-	result = con.Query("SELECT a IS NULL, a IS NOT NULL, rowid IS NULL, (a = NULL) IS NULL FROM test WHERE b != 1 ORDER BY b");
+	result = con.Query(
+	    "SELECT a IS NULL, a IS NOT NULL, rowid IS NULL, (a = NULL) IS NULL FROM test WHERE b != 1 ORDER BY b");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, false}));
 	REQUIRE(CHECK_COLUMN(result, 1, {false, true}));
 	REQUIRE(CHECK_COLUMN(result, 2, {false, false}));

@@ -20,6 +20,7 @@ public:
 
 	Optimizer &optimizer;
 	unique_ptr<LogicalOperator> root;
+
 public:
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 

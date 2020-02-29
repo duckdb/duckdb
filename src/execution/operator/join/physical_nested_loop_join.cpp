@@ -159,10 +159,10 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 			chunk.SetCardinality(state->child_chunk);
 			index_t idx = 0;
-			for(; idx < state->child_chunk.column_count(); idx++) {
+			for (; idx < state->child_chunk.column_count(); idx++) {
 				chunk.data[idx].Reference(state->child_chunk.data[idx]);
 			}
-			for(; idx < chunk.column_count(); idx++) {
+			for (; idx < chunk.column_count(); idx++) {
 				chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
 				chunk.data[idx].nullmask[0] = true;
 			}
@@ -172,7 +172,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		return;
 	}
 
-	if ((type == JoinType::INNER || type == JoinType::LEFT) && state->right_chunk >= state->right_chunks.chunks.size()) {
+	if ((type == JoinType::INNER || type == JoinType::LEFT) &&
+	    state->right_chunk >= state->right_chunks.chunks.size()) {
 		return;
 	}
 	// now that we have fully materialized the right child

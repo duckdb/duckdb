@@ -16,8 +16,7 @@
 using namespace duckdb;
 using namespace std;
 
-BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog)
-    : context(context), catalog(catalog) {
+BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {

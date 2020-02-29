@@ -112,7 +112,8 @@ int main() {
 
 	// TABLE_FUNCTION my_scan
 	vector<unique_ptr<ParsedExpression>> children; // empty
-	auto scan_function_catalog_entry = con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
+	auto scan_function_catalog_entry =
+	    con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
 	vector<unique_ptr<Expression>> parameters; // empty
 	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(parameters));
 

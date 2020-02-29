@@ -7,7 +7,7 @@
 namespace duckdb {
 
 unique_ptr<BoundCreateInfo> Binder::BindCreateIndexInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateIndexInfo&) *info;
+	auto &base = (CreateIndexInfo &)*info;
 	auto result = make_unique<BoundCreateIndexInfo>(move(info));
 
 	// visit the table reference
@@ -22,4 +22,4 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateIndexInfo(unique_ptr<CreateInfo> i
 	return move(result);
 }
 
-}
+} // namespace duckdb

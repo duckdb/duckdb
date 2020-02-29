@@ -36,7 +36,9 @@ struct BoundCreateTableInfo : public BoundCreateInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<BoundSelectStatement> query;
 
-	CreateTableInfo &Base() { return (CreateTableInfo&) *base; }
+	CreateTableInfo &Base() {
+		return (CreateTableInfo &)*base;
+	}
 };
 
 } // namespace duckdb

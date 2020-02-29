@@ -4,7 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-TableStarExpression::TableStarExpression(string relation_name) : ParsedExpression(ExpressionType::TABLE_STAR, ExpressionClass::TABLE_STAR), relation_name(relation_name) {
+TableStarExpression::TableStarExpression(string relation_name)
+    : ParsedExpression(ExpressionType::TABLE_STAR, ExpressionClass::TABLE_STAR), relation_name(relation_name) {
 }
 
 string TableStarExpression::ToString() const {

@@ -9,7 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	AggregateBinder aggregate_binder(binder, context);

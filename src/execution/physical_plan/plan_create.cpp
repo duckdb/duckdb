@@ -21,4 +21,4 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 	}
 }
 
-}
+} // namespace duckdb

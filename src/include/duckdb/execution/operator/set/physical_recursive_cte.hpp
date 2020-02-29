@@ -12,20 +12,22 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
-    class PhysicalRecursiveCTE : public PhysicalOperator {
-    public:
-        PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom);
+class PhysicalRecursiveCTE : public PhysicalOperator {
+public:
+	PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top,
+	                     unique_ptr<PhysicalOperator> bottom);
 
-        bool union_all;
-        std::shared_ptr<ChunkCollection> working_table;
-        ChunkCollection intermediate_table;
-    public:
-        void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-        unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	bool union_all;
+	std::shared_ptr<ChunkCollection> working_table;
+	ChunkCollection intermediate_table;
 
-    private:
-        //! Probe Hash Table and eliminate duplicate rows
-        index_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
-    };
+public:
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
+private:
+	//! Probe Hash Table and eliminate duplicate rows
+	index_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state);
+};
 
 }; // namespace duckdb

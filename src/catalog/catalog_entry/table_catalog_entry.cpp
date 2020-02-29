@@ -112,7 +112,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		// }
 		Binder binder(context);
 		auto bound_create_info = binder.BindCreateInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *) bound_create_info.get(), storage);
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");

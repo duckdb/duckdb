@@ -19,7 +19,8 @@ public:
 	StandardEntry(CatalogType type, SchemaCatalogEntry *schema, Catalog *catalog, string name)
 	    : CatalogEntry(type, catalog, name), schema(schema) {
 	}
-	virtual ~StandardEntry(){}
+	virtual ~StandardEntry() {
+	}
 
 	//! The schema the entry belongs to
 	SchemaCatalogEntry *schema;

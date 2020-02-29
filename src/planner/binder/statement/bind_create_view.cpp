@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<BoundCreateInfo> Binder::BindCreateViewInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateViewInfo&) *info;
+	auto &base = (CreateViewInfo &)*info;
 	auto result = make_unique<BoundCreateInfo>(move(info));
 
 	// bind the view as if it were a query so we can catch errors

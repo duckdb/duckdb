@@ -18,7 +18,8 @@ class PreparedStatementData;
 class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
-	PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data, index_t n_param = 0);
+	PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data,
+	                  index_t n_param = 0);
 	//! Create a prepared statement that was not successfully prepared
 	PreparedStatement(string error);
 
