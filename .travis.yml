@@ -18,11 +18,14 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 Debug
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       osx_image: xcode11
 
 
     - os: osx
       name: Xcode 11.0
+
       osx_image: xcode11
 
       before_install:
@@ -245,6 +248,8 @@ matrix:
 
     - os: windows
       name: VS 2017 32 Bit
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       filter_secrets: false
 
       language: c
@@ -373,6 +378,7 @@ matrix:
 
     - os: linux
       name: Python 2 Package
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       dist: xenial
       language: python
@@ -413,6 +419,8 @@ matrix:
 
     - os: windows
       name: Python Package
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       language: cpp
       filter_secrets: false
       # no python 27 because no C++11 support in its windows toolchain
