@@ -1,6 +1,6 @@
 set(DUCKDB_TEST_HELPERS_UNITS expression_helper.cpp test_helpers.cpp)
 
-add_library_unity(test_helpers STATIC ${DUCKDB_TEST_HELPERS_UNITS})
+add_library(test_helpers STATIC ${DUCKDB_TEST_HELPERS_UNITS})
 
 if(NOT WIN32)
   target_link_libraries(test_helpers duckdb)
