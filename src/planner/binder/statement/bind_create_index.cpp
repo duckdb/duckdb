@@ -19,7 +19,7 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateIndexInfo(unique_ptr<CreateInfo> i
 	for (auto &expr : base.expressions) {
 		result->expressions.push_back(binder.Bind(expr));
 	}
-	return result;
+	return move(result);
 }
 
 }

@@ -77,7 +77,9 @@ public:
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 private:
 	//! Add a catalog entry to this schema
-	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies = {});
+	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict);
+	//! Add a catalog entry to this schema
+	CatalogEntry* AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict, unordered_set<CatalogEntry *> dependencies);
 
 	//! Get the catalog set for the specified type
 	CatalogSet &GetCatalogSet(CatalogType type);

@@ -138,5 +138,5 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> i
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
-	return result;
+	return move(result);
 }

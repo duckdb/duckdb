@@ -66,6 +66,11 @@ CatalogEntry* SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	return result;
 }
 
+CatalogEntry* SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry, OnCreateConflict on_conflict) {
+	unordered_set<CatalogEntry *> dependencies;
+	return AddEntry(context, move(entry), on_conflict, dependencies);
+}
+
 CatalogEntry* SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
 	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
 	return AddEntry(context, move(sequence), info->on_conflict);

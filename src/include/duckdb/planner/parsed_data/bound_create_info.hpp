@@ -18,6 +18,7 @@ struct BoundCreateInfo {
 	BoundCreateInfo() {}
 	BoundCreateInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
 	}
+	virtual ~BoundCreateInfo(){}
 
 	//! The schema to create the table in
 	SchemaCatalogEntry *schema;
