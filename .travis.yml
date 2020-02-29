@@ -38,6 +38,7 @@ matrix:
 
     - os: linux
       name: Clang 6
+      if: (type = push AND branch = master) OR (type = pull_request)
       dist: xenial
       addons:
         apt:
@@ -53,6 +54,7 @@ matrix:
 
     - os: linux
       name: GCC 4.9
+      if: (type = push AND branch = master) OR (type = pull_request)
       addons:
          apt:
           sources:
@@ -81,6 +83,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Valgrind
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       addons:
         apt:
@@ -98,6 +101,7 @@ matrix:
     - os: linux
       dist: xenial
       name: REST Server
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       before_install:
         - pip install --user boto3
@@ -145,6 +149,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 32 Bit
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       addons:
         apt:
@@ -170,6 +175,8 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 9 (Vector Sizes)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       python: 3.7
 
       addons:
@@ -204,6 +211,8 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 5 (ARM64)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       arch: arm64
 
       script:
@@ -287,6 +296,7 @@ matrix:
     - os: osx
       osx_image: xcode11
       name: R Package
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       language: r
       #r: devel
@@ -314,6 +324,7 @@ matrix:
     - os: windows
       name: R Package
       filter_secrets: false
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       language: cpp
 
@@ -383,6 +394,8 @@ matrix:
 
     - os: osx
       name: Python Package
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       language: generic
       osx_image: xcode11
 
@@ -430,6 +443,8 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       osx_image: xcode11
       script:
         - python scripts/amalgamation.py
@@ -439,6 +454,8 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       addons:
         apt:
           sources:
@@ -462,6 +479,8 @@ matrix:
 
     - os: windows
       name: VS 2017 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       filter_secrets: false
       language: c
       before_script:
@@ -477,6 +496,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Solaris VM
+      if: (type = push AND branch = master) OR (type = pull_request)
       sudo: true
 
       install:
@@ -505,6 +525,7 @@ matrix:
     - os: linux
       dist: bionic
       name: OpenBSD VM
+      if: (type = push AND branch = master) OR (type = pull_request)
       sudo: true
 
       install:
