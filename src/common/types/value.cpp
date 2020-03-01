@@ -271,7 +271,8 @@ template <> int64_t Value::GetValue() {
 	return GetValueInternal<int64_t>();
 }
 template <> string Value::GetValue() {
-	return GetValueInternal<string>();
+	throw NotImplementedException("FIXME string cast in value");
+	// return GetValueInternal<string>();
 }
 template <> float Value::GetValue() {
 	return GetValueInternal<float>();

@@ -12,8 +12,9 @@ using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result) {
 	assert(result.type == TypeId::VARCHAR);
-	UnaryExecutor::Execute<SRC, string_t, true>(
-	    source, result, [&](SRC input) { return result.AddString(OP::template Operation<SRC, string>(input)); });
+	UnaryExecutor::Execute<SRC, string_t, true>(source, result, [&](SRC input) {
+		return OP::template Operation<SRC>(input, result);
+	});
 }
 
 static NotImplementedException UnimplementedCast(SQLType source_type, SQLType target_type) {
@@ -71,7 +72,7 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		UnaryExecutor::Execute<SRC, double, duckdb::Cast, true>(source, result);
 		break;
 	case SQLTypeId::VARCHAR: {
-		string_cast<SRC, duckdb::Cast>(source, result);
+		string_cast<SRC, duckdb::StringCast>(source, result);
 		break;
 	}
 	default:

@@ -93,17 +93,24 @@ template <> string Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
-template <> duckdb::string Cast::Operation(bool input);
-template <> duckdb::string Cast::Operation(int8_t input);
-template <> duckdb::string Cast::Operation(int16_t input);
-template <> duckdb::string Cast::Operation(int32_t input);
-template <> duckdb::string Cast::Operation(int64_t input);
-template <> duckdb::string Cast::Operation(uint64_t input);
-template <> duckdb::string Cast::Operation(float input);
-template <> duckdb::string Cast::Operation(double input);
+class Vector;
+struct StringCast {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
+		throw NotImplementedException("Unimplemented type for string cast!");
+	}
+};
+
+template <> duckdb::string_t StringCast::Operation(bool input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(int8_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(int16_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(int32_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(int64_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
 
 struct CastFromDate {
-	template <class SRC, class DST> static inline DST Operation(SRC input) {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from date could not be performed!");
 	}
 };
@@ -119,12 +126,12 @@ struct CastDateToTimestamp {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
 	}
 };
-template <> duckdb::string CastFromDate::Operation(duckdb::date_t input);
+template <> duckdb::string_t CastFromDate::Operation(duckdb::date_t input, Vector &result);
 template <> duckdb::date_t CastToDate::Operation(string_t input);
 template <> duckdb::timestamp_t CastDateToTimestamp::Operation(duckdb::date_t input);
 
 struct CastFromTime {
-	template <class SRC, class DST> static inline DST Operation(SRC input) {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from time could not be performed!");
 	}
 };
@@ -133,7 +140,7 @@ struct CastToTime {
 		throw duckdb::NotImplementedException("Cast to time could not be performed!");
 	}
 };
-template <> duckdb::string CastFromTime::Operation(duckdb::dtime_t input);
+template <> duckdb::string_t CastFromTime::Operation(duckdb::dtime_t input, Vector &result);
 template <> duckdb::dtime_t CastToTime::Operation(string_t input);
 
 struct CastToTimestamp {
@@ -143,7 +150,7 @@ struct CastToTimestamp {
 };
 
 struct CastFromTimestamp {
-	template <class SRC, class DST> static inline DST Operation(SRC input) {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
 	}
 };
@@ -162,7 +169,7 @@ struct CastTimestampToTime {
 
 template <> duckdb::date_t CastTimestampToDate::Operation(duckdb::timestamp_t input);
 template <> duckdb::dtime_t CastTimestampToTime::Operation(duckdb::timestamp_t input);
-template <> duckdb::string CastFromTimestamp::Operation(duckdb::timestamp_t input);
+template <> duckdb::string_t CastFromTimestamp::Operation(duckdb::timestamp_t input, Vector &result);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(string_t input);
 
 } // namespace duckdb

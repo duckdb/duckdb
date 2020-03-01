@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include <vector>
 
 using namespace duckdb;
@@ -25,6 +26,7 @@ template <class DST>
 static void TestStringCast(vector<string> &working_values, vector<DST> &expected_values,
                            vector<string> &broken_values) {
 	DST result;
+	FlatVector v;
 	for (idx_t i = 0; i < working_values.size(); i++) {
 		auto &value = working_values[i];
 		auto expected_value = expected_values[i];
@@ -39,7 +41,7 @@ static void TestStringCast(vector<string> &working_values, vector<DST> &expected
 			continue;
 		}
 		splits = StringUtil::Split(value, '.');
-		REQUIRE(Cast::Operation<DST, string>(result) == splits[0]);
+		REQUIRE(StringCast::Operation<DST>(result, v).GetData() == splits[0]);
 	}
 	for (auto &value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<string_t, DST>(string_t(value)));
