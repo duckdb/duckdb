@@ -18,14 +18,14 @@
 namespace duckdb {
 class ClientContext;
 class ExpressionBinder;
-struct BoundCreateTableInfo;
-struct CreateTableInfo;
+struct CreateInfo;
+struct BoundCreateInfo;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
 	string name;
-	index_t depth;
+	idx_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
 	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
@@ -57,15 +57,17 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	vector<BoundParameterExpression *> *parameters;
+	//! Whether or not the bound statement is read-only
+	bool read_only;
 
 public:
 	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
 	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
 
-	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateTableInfo> info);
+	unique_ptr<BoundCreateInfo> BindCreateInfo(unique_ptr<CreateInfo> info);
 
 	//! Generates an unused index for a table
-	index_t GenerateTableIndex();
+	idx_t GenerateTableIndex();
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, QueryNode *cte);
@@ -90,7 +92,7 @@ private:
 	//! The vector of active binders
 	vector<ExpressionBinder *> active_binders;
 	//! The count of bound_tables
-	index_t bound_tables;
+	idx_t bound_tables;
 
 private:
 	//! Bind the default values of the columns of a table
@@ -104,12 +106,8 @@ private:
 	unique_ptr<BoundSQLStatement> Bind(CopyStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(DeleteStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(UpdateStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateTableStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateIndexStatement &stmt);
+	unique_ptr<BoundSQLStatement> Bind(CreateStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(ExecuteStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateViewStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateSchemaStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateSequenceStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(DropStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(AlterTableStatement &stmt);
 	unique_ptr<BoundSQLStatement> Bind(TransactionStatement &stmt);
@@ -118,7 +116,7 @@ private:
 
 	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
 	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
-    unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
@@ -128,6 +126,10 @@ private:
 	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+
+	unique_ptr<BoundCreateInfo> BindCreateIndexInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateInfo> BindCreateViewInfo(unique_ptr<CreateInfo> info);
 };
 
 } // namespace duckdb

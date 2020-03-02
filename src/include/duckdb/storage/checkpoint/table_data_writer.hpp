@@ -24,10 +24,10 @@ public:
 	void WriteTableData(Transaction &transaction);
 
 private:
-	void AppendData(index_t col_idx, Vector &data);
+	void AppendData(idx_t col_idx, Vector &data);
 
-	void CreateSegment(index_t col_idx);
-	void FlushSegment(index_t col_idx);
+	void CreateSegment(idx_t col_idx);
+	void FlushSegment(idx_t col_idx);
 
 	void WriteDataPointers();
 

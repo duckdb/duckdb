@@ -12,12 +12,13 @@ using namespace duckdb;
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_)
-    : context(context), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)), bound_tables(0) {
-    if(parent_) {
-        // We have to inherit CTE bindings from the parent bind_context, if there is a parent.
-        bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
-        bind_context.cte_references = parent_->bind_context.cte_references;
-    }
+    : context(context), read_only(true), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)),
+      bound_tables(0) {
+	if (parent_) {
+		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
+		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
+		bind_context.cte_references = parent_->bind_context.cte_references;
+	}
 	if (parent) {
 		parameters = parent->parameters;
 		CTE_bindings = parent->CTE_bindings;
@@ -36,14 +37,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return Bind((UpdateStatement &)statement);
-	case StatementType::CREATE_TABLE:
-		return Bind((CreateTableStatement &)statement);
-	case StatementType::CREATE_VIEW:
-		return Bind((CreateViewStatement &)statement);
-	case StatementType::CREATE_SCHEMA:
-		return Bind((CreateSchemaStatement &)statement);
-	case StatementType::CREATE_SEQUENCE:
-		return Bind((CreateSequenceStatement &)statement);
+	case StatementType::CREATE:
+		return Bind((CreateStatement &)statement);
 	case StatementType::DROP:
 		return Bind((DropStatement &)statement);
 	case StatementType::ALTER:
@@ -54,8 +49,6 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((PragmaStatement &)statement);
 	case StatementType::EXECUTE:
 		return Bind((ExecuteStatement &)statement);
-	case StatementType::CREATE_INDEX:
-		return Bind((CreateIndexStatement &)statement);
 	case StatementType::EXPLAIN:
 		return Bind((ExplainStatement &)statement);
 	default:
@@ -84,9 +77,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 	case QueryNodeType::SELECT_NODE:
 		result = Bind((SelectNode &)node);
 		break;
-    case QueryNodeType::RECURSIVE_CTE_NODE:
-        result = Bind((RecursiveCTENode &)node);
-	    break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = Bind((RecursiveCTENode &)node);
+		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = Bind((SetOperationNode &)node);
@@ -150,7 +143,7 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 	return entry->second->Copy();
 }
 
-index_t Binder::GenerateTableIndex() {
+idx_t Binder::GenerateTableIndex() {
 	if (parent) {
 		return parent->GenerateTableIndex();
 	}
@@ -192,7 +185,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 }
 
 void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
-	for (index_t i = 0; i < other.size(); i++) {
+	for (idx_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
 }

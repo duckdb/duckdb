@@ -47,7 +47,7 @@ unique_ptr<TableRef> JoinRef::Deserialize(Deserializer &source) {
 	result->condition = ParsedExpression::Deserialize(source);
 	result->type = source.Read<JoinType>();
 	auto count = source.Read<uint32_t>();
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		result->hidden_columns.insert(source.Read<string>());
 	}
 	return move(result);

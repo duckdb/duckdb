@@ -17,7 +17,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 		// change column name
 
 		// get the table and schema
-		string schema = DEFAULT_SCHEMA;
+		string schema = INVALID_SCHEMA;
 		string table;
 		assert(stmt->relation->relname);
 		if (stmt->relation->relname) {

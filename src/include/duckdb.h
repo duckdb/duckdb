@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-typedef uint64_t index_t;
+typedef uint64_t idx_t;
 
 typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INVALID = 0,
@@ -72,8 +72,8 @@ typedef struct {
 } duckdb_column;
 
 typedef struct {
-	index_t column_count;
-	index_t row_count;
+	idx_t column_count;
+	idx_t row_count;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
@@ -116,21 +116,21 @@ void duckdb_destroy_result(duckdb_result *result);
 // value is returned.
 
 //! Converts the specified value to a bool. Returns false on failure or NULL.
-bool duckdb_value_boolean(duckdb_result *result, index_t col, index_t row);
+bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int8_t. Returns 0 on failure or NULL.
-int8_t duckdb_value_int8(duckdb_result *result, index_t col, index_t row);
+int8_t duckdb_value_int8(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int16_t. Returns 0 on failure or NULL.
-int16_t duckdb_value_int16(duckdb_result *result, index_t col, index_t row);
+int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
-int32_t duckdb_value_int32(duckdb_result *result, index_t col, index_t row);
+int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
-int64_t duckdb_value_int64(duckdb_result *result, index_t col, index_t row);
+int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a float. Returns 0.0 on failure or NULL.
-float duckdb_value_float(duckdb_result *result, index_t col, index_t row);
+float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a double. Returns 0.0 on failure or NULL.
-double duckdb_value_double(duckdb_result *result, index_t col, index_t row);
+double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
-char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
+char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 
 // Prepared Statements
 
@@ -138,18 +138,18 @@ char *duckdb_value_varchar(duckdb_result *result, index_t col, index_t row);
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement);
 
-duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, index_t *nparams_out);
+duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out);
 
 //! binds parameters to prepared statement
-duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, index_t param_idx, bool val);
-duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, index_t param_idx, int8_t val);
-duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, index_t param_idx, int16_t val);
-duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, index_t param_idx, int32_t val);
-duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, index_t param_idx, int64_t val);
-duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, index_t param_idx, float val);
-duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, index_t param_idx, double val);
-duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, index_t param_idx, const char *val);
-duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, index_t param_idx);
+duckdb_state duckdb_bind_boolean(duckdb_prepared_statement prepared_statement, idx_t param_idx, bool val);
+duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_statement, idx_t param_idx, int8_t val);
+duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
+duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
+duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
+duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
+duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
+duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val);
+duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 
 //! Executes the prepared statements with currently bound parameters
 duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement, duckdb_result *out_result);

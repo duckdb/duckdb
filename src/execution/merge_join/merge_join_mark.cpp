@@ -6,15 +6,15 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> index_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> idx_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	throw NotImplementedException("Merge Join with Equality not implemented");
 }
 
-template <class T, class OP> static index_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP> static idx_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.GetData();
 	l.pos = l.count;
-	for (index_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the SMALLEST value in each of the RHS
 		// because we want to figure out if they are greater than [or equal] to ANY value
 		// get the smallest value from the RHS
@@ -41,19 +41,19 @@ template <class T, class OP> static index_t merge_join_mark_gt(ScalarMergeInfo &
 	}
 	return 0;
 }
-template <class T> index_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> idx_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_gt<T, duckdb::GreaterThan>(l, r);
 }
 
-template <class T> index_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> idx_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_gt<T, duckdb::GreaterThanEquals>(l, r);
 }
 
-template <class T, class OP> static index_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T, class OP> static idx_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	assert(l.sel_vector);
 	auto ldata = (T *)l.v.GetData();
 	l.pos = 0;
-	for (index_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the BIGGEST value in each of the RHS
 		// because we want to figure out if they are less than [or equal] to ANY value
 		// get the biggest value from the RHS
@@ -81,11 +81,11 @@ template <class T, class OP> static index_t merge_join_mark_lt(ScalarMergeInfo &
 	return 0;
 }
 
-template <class T> index_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> idx_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThan>(l, r);
 }
 
-template <class T> index_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
+template <class T> idx_t MergeJoinMark::LessThanEquals::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_lt<T, duckdb::LessThanEquals>(l, r);
 }
 

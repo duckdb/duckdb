@@ -28,13 +28,13 @@ struct Relation {
 
 //! Set of relations, used in the join graph.
 struct RelationSet {
-	RelationSet(unique_ptr<index_t[]> relations, index_t count) : relations(move(relations)), count(count) {
+	RelationSet(unique_ptr<idx_t[]> relations, idx_t count) : relations(move(relations)), count(count) {
 	}
 
 	string ToString() const;
 
-	unique_ptr<index_t[]> relations;
-	index_t count;
+	unique_ptr<idx_t[]> relations;
+	idx_t count;
 
 	static bool IsSubset(RelationSet *super, RelationSet *sub);
 };
@@ -46,16 +46,16 @@ public:
 	// FIXME: this structure is inefficient, could use a bitmap for lookup instead (todo: profile)
 	struct RelationTreeNode {
 		unique_ptr<RelationSet> relation;
-		unordered_map<index_t, unique_ptr<RelationTreeNode>> children;
+		unordered_map<idx_t, unique_ptr<RelationTreeNode>> children;
 	};
 
 public:
 	//! Create or get a RelationSet from a single node with the given index
-	RelationSet *GetRelation(index_t index);
+	RelationSet *GetRelation(idx_t index);
 	//! Create or get a RelationSet from a set of relation bindings
-	RelationSet *GetRelation(unordered_set<index_t> &bindings);
+	RelationSet *GetRelation(unordered_set<idx_t> &bindings);
 	//! Create or get a RelationSet from a (sorted, duplicate-free!) list of relations
-	RelationSet *GetRelation(unique_ptr<index_t[]> relations, index_t count);
+	RelationSet *GetRelation(unique_ptr<idx_t[]> relations, idx_t count);
 	//! Union two sets of relations together and create a new relation set
 	RelationSet *Union(RelationSet *left, RelationSet *right);
 	//! Create the set difference of left \ right (i.e. all elements in left that are not in right)

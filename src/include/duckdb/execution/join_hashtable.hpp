@@ -72,22 +72,22 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		index_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
-		index_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
+		idx_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
 	};
 
 private:
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct HTDataBlock {
-		index_t count;
-		index_t capacity;
+		idx_t count;
+		idx_t capacity;
 		block_id_t block_id;
 	};
 
-	index_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
-	                      data_ptr_t tuple_locations[], data_ptr_t hash_locations[], index_t remaining);
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
+	                    data_ptr_t tuple_locations[], data_ptr_t hash_locations[], idx_t remaining);
 
 	void Hash(DataChunk &keys, Vector &hashes);
 
@@ -107,7 +107,7 @@ public:
 	//! The stringheap of the JoinHashTable
 	StringHeap string_heap;
 
-	index_t size() {
+	idx_t size() {
 		return count;
 	}
 
@@ -121,15 +121,15 @@ public:
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
 	//! Size of condition keys
-	index_t equality_size;
+	idx_t equality_size;
 	//! Size of condition keys
-	index_t condition_size;
+	idx_t condition_size;
 	//! Size of build tuple
-	index_t build_size;
+	idx_t build_size;
 	//! The size of an entry as stored in the HashTable
-	index_t entry_size;
+	idx_t entry_size;
 	//! The total tuple size
-	index_t tuple_size;
+	idx_t tuple_size;
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized
@@ -139,7 +139,7 @@ public:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 	//! The amount of entries stored per block
-	index_t block_capacity;
+	idx_t block_capacity;
 
 	struct {
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
@@ -165,7 +165,7 @@ private:
 	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
 
 	//! The amount of entries stored in the HT currently
-	index_t count;
+	idx_t count;
 	//! The blocks holding the main data of the hash table
 	vector<HTDataBlock> blocks;
 	//! Pinned handles, these are pinned during finalization only

@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-index_t VersionManager::GetSelVector(Transaction &transaction, index_t index, sel_t sel_vector[], index_t max_count) {
+idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, sel_t sel_vector[], idx_t max_count) {
 	// obtain a read lock
 	auto read_lock = lock.GetSharedLock();
 
@@ -19,9 +19,9 @@ index_t VersionManager::GetSelVector(Transaction &transaction, index_t index, se
 	}
 }
 
-bool VersionManager::Fetch(Transaction &transaction, index_t row) {
+bool VersionManager::Fetch(Transaction &transaction, idx_t row) {
 	row -= base_row;
-	index_t vector_index = row / STANDARD_VECTOR_SIZE;
+	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
 
 	auto entry = info.find(vector_index);
 	if (entry == info.end()) {
@@ -35,19 +35,19 @@ bool VersionManager::Fetch(Transaction &transaction, index_t row) {
 
 class VersionDeleteState {
 public:
-	VersionDeleteState(VersionManager &manager, Transaction &transaction, index_t base_row)
-	    : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((index_t)-1), count(0),
+	VersionDeleteState(VersionManager &manager, Transaction &transaction, idx_t base_row)
+	    : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((idx_t)-1), count(0),
 	      base_row(base_row) {
 	}
 
 	VersionManager &manager;
 	Transaction &transaction;
 	ChunkInfo *current_info;
-	index_t current_chunk;
+	idx_t current_chunk;
 	row_t rows[STANDARD_VECTOR_SIZE];
-	index_t count;
-	index_t base_row;
-	index_t chunk_row;
+	idx_t count;
+	idx_t base_row;
+	idx_t chunk_row;
 
 public:
 	void Delete(row_t row_id);
@@ -60,13 +60,13 @@ void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
 	VectorOperations::ExecNumeric<row_t>(row_ids,
-	                                     [&](row_t idx, index_t i, index_t k) { del_state.Delete(idx - base_row); });
+	                                     [&](row_t idx, idx_t i, idx_t k) { del_state.Delete(idx - base_row); });
 	del_state.Flush();
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
-	index_t chunk_idx = row_id / STANDARD_VECTOR_SIZE;
-	index_t idx_in_chunk = row_id - chunk_idx * STANDARD_VECTOR_SIZE;
+	idx_t chunk_idx = row_id / STANDARD_VECTOR_SIZE;
+	idx_t idx_in_chunk = row_id - chunk_idx * STANDARD_VECTOR_SIZE;
 
 	// check if we are targetting a different chunk than the current chunk
 	if (chunk_idx != current_chunk) {
@@ -103,14 +103,14 @@ void VersionDeleteState::Flush() {
 	count = 0;
 }
 
-void VersionManager::Append(Transaction &transaction, row_t row_start, index_t count, transaction_t commit_id) {
-	index_t chunk_idx = row_start / STANDARD_VECTOR_SIZE;
-	index_t idx_in_chunk = row_start - chunk_idx * STANDARD_VECTOR_SIZE;
+void VersionManager::Append(Transaction &transaction, row_t row_start, idx_t count, transaction_t commit_id) {
+	idx_t chunk_idx = row_start / STANDARD_VECTOR_SIZE;
+	idx_t idx_in_chunk = row_start - chunk_idx * STANDARD_VECTOR_SIZE;
 
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
 	auto current_info = GetInsertInfo(chunk_idx);
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		current_info->inserted[idx_in_chunk] = commit_id;
 		idx_in_chunk++;
 		if (idx_in_chunk == STANDARD_VECTOR_SIZE) {
@@ -122,7 +122,7 @@ void VersionManager::Append(Transaction &transaction, row_t row_start, index_t c
 	max_row += count;
 }
 
-ChunkInsertInfo *VersionManager::GetInsertInfo(index_t chunk_idx) {
+ChunkInsertInfo *VersionManager::GetInsertInfo(idx_t chunk_idx) {
 	auto entry = info.find(chunk_idx);
 	if (entry == info.end()) {
 		// no version info yet: have to create one
@@ -149,8 +149,8 @@ ChunkInsertInfo *VersionManager::GetInsertInfo(index_t chunk_idx) {
 void VersionManager::RevertAppend(row_t row_start, row_t row_end) {
 	auto write_lock = lock.GetExclusiveLock();
 
-	index_t chunk_start = row_start / STANDARD_VECTOR_SIZE + (row_start % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
-	index_t chunk_end = row_end / STANDARD_VECTOR_SIZE;
+	idx_t chunk_start = row_start / STANDARD_VECTOR_SIZE + (row_start % STANDARD_VECTOR_SIZE == 0 ? 0 : 1);
+	idx_t chunk_end = row_end / STANDARD_VECTOR_SIZE;
 	for (; chunk_start <= chunk_end; chunk_start++) {
 		info.erase(chunk_start);
 	}

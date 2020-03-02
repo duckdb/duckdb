@@ -1,8 +1,10 @@
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
@@ -21,7 +23,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 		if (op.projection_map.size() > 0) {
 			// there is a projection map, generate a physical projection
 			vector<unique_ptr<Expression>> select_list;
-			for (index_t i = 0; i < op.projection_map.size(); i++) {
+			for (idx_t i = 0; i < op.projection_map.size(); i++) {
 				select_list.push_back(make_unique<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
 			}
 			auto proj = make_unique<PhysicalProjection>(op.types, move(select_list));

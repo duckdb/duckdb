@@ -18,6 +18,8 @@ class LogicalChunkGet;
 class LogicalComparisonJoin;
 class LogicalCopyFromFile;
 class LogicalCopyToFile;
+class LogicalCreate;
+class LogicalCreateTable;
 class LogicalCreateIndex;
 class LogicalCreateTable;
 class LogicalCrossProduct;

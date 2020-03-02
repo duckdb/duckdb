@@ -14,8 +14,6 @@ struct PGNode;
 struct PGList;
 
 namespace duckdb {
-class ClientContext;
-
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
 //! plan and executed.
@@ -32,7 +30,7 @@ public:
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;
 
-	index_t n_prepared_parameters = 0;
+	idx_t n_prepared_parameters = 0;
 
 private:
 	//! Transform a Postgres parse tree into a set of SQL Statements

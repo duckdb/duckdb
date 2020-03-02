@@ -29,7 +29,6 @@ for fp in [header, source]:
 
 header.write("""
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -150,7 +149,7 @@ void append_char(DataChunk & chunk, size_t index, size_t & column,
 static void append_to_append_info(tpce_append_information & info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.column_count == 0) {
+	if (chunk.column_count() == 0) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
@@ -274,15 +273,14 @@ public:
 	source.write("""
 	}
 
-};
-	""")
+};""")
 
 
 for table in tables.keys():
 	source.write("""
 CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
-	auto table = context->db.catalog->GetTable(*context,
+	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
 	                                          schema, "${TABLEINDB}" + suffix);
 	return new DuckDB${TABLENAME}Load(table, context);
 }

@@ -5,7 +5,7 @@ using namespace std;
 
 vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	for (index_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		child_bindings.push_back(ColumnBinding(window_index, i));
 	}
 	return child_bindings;

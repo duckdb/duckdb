@@ -19,8 +19,8 @@ struct string_t {
 	friend class StringSegment;
 
 public:
-	static constexpr index_t PREFIX_LENGTH = 4 * sizeof(char);
-	static constexpr index_t INLINE_LENGTH = 12;
+	static constexpr idx_t PREFIX_LENGTH = 4 * sizeof(char);
+	static constexpr idx_t INLINE_LENGTH = 12;
 
 	string_t() = default;
 	string_t(uint32_t len) : length(len) {
@@ -62,7 +62,7 @@ public:
 		return IsInlined() ? (const char *)prefix : value_.data;
 	}
 
-	index_t GetSize() const {
+	idx_t GetSize() const {
 		return length;
 	}
 
@@ -76,7 +76,7 @@ public:
 		dataptr[length] = '\0';
 		if (length < INLINE_LENGTH) {
 			// fill prefix with zeros if the length is smaller than the prefix length
-			for (index_t i = length; i < PREFIX_LENGTH; i++) {
+			for (idx_t i = length; i < PREFIX_LENGTH; i++) {
 				prefix[i] = '\0';
 			}
 		} else {

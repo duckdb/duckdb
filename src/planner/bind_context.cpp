@@ -37,7 +37,7 @@ Binding *BindContext::GetCTEBinding(const string &ctename) {
 	return match->second.get();
 }
 
-BindResult BindContext::BindColumn(ColumnRefExpression &colref, index_t depth) {
+BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.table_name.empty()) {
 		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
 	}
@@ -85,24 +85,24 @@ void BindContext::AddBaseTable(BoundBaseTableRef *bound, const string &alias) {
 	AddBinding(alias, make_unique<TableBinding>(alias, bound));
 }
 
-void BindContext::AddSubquery(index_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
+void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
 }
 
-void BindContext::AddTableFunction(index_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
+void BindContext::AddTableFunction(idx_t index, const string &alias, TableFunctionCatalogEntry *function_entry) {
 	AddBinding(alias, make_unique<TableFunctionBinding>(alias, function_entry, index));
 }
 
-void BindContext::AddGenericBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
 
-void BindContext::AddCTEBinding(index_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
 	auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
 	}
 	cte_bindings[alias] = move(binding);
-	cte_references[alias] = std::make_shared<index_t>(0);
+	cte_references[alias] = std::make_shared<idx_t>(0);
 }

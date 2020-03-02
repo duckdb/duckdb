@@ -28,17 +28,17 @@ enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index. Used
 //! in the binder.
 struct Binding {
-	Binding(BindingType type, const string &alias, index_t index) : type(type), alias(alias), index(index) {
+	Binding(BindingType type, const string &alias, idx_t index) : type(type), alias(alias), index(index) {
 	}
 	virtual ~Binding() = default;
 
 	BindingType type;
 	string alias;
-	index_t index;
+	idx_t index;
 
 public:
 	virtual bool HasMatchingBinding(const string &column_name) = 0;
-	virtual BindResult Bind(ColumnRefExpression &colref, index_t depth) = 0;
+	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth) = 0;
 	virtual void GenerateAllColumnExpressions(BindContext &context,
 	                                          vector<unique_ptr<ParsedExpression>> &select_list) = 0;
 };
@@ -51,13 +51,13 @@ struct TableBinding : public Binding {
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 };
 
 //! Represents a binding to a subquery
 struct SubqueryBinding : public Binding {
-	SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, index_t index);
+	SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, idx_t index);
 
 	BoundQueryNode &subquery;
 	//! Column names of the subquery
@@ -67,7 +67,7 @@ struct SubqueryBinding : public Binding {
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 private:
@@ -76,10 +76,10 @@ private:
 
 //! Represents a binding to a table-producing function
 struct TableFunctionBinding : public Binding {
-	TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, index_t index);
+	TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, idx_t index);
 
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 
 	TableFunctionCatalogEntry *function;
@@ -87,7 +87,7 @@ struct TableFunctionBinding : public Binding {
 
 //! Represents a generic binding with types and names
 struct GenericBinding : public Binding {
-	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, index_t index);
+	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, idx_t index);
 
 	vector<SQLType> types;
 	//! Column names of the subquery
@@ -97,7 +97,7 @@ struct GenericBinding : public Binding {
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, index_t depth) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 };
 

@@ -32,12 +32,12 @@ public:
 private:
 	void initialize();
 	std::fstream input;
-	index_t data_start = 0;
+	idx_t data_start = 0;
 	void *mz_stream_ptr = nullptr; // void* so we don't have to include the header
 	data_ptr_t in_buff = nullptr, in_buff_start, in_buff_end, out_buff = nullptr; // various buffers & pointers
 	bool is_initialized = false;
 	std::string filename;
-	index_t BUFFER_SIZE = 1024;
+	idx_t BUFFER_SIZE = 1024;
 };
 
 class GzipStream : public std::istream {

@@ -4,8 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
@@ -84,11 +83,11 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 
 void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// remove the transaction from the list of active transactions
-	index_t t_index = active_transactions.size();
+	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
-	for (index_t i = 0; i < active_transactions.size(); i++) {
+	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
@@ -112,7 +111,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// traverse the recently_committed transactions to see if we can remove any
-	index_t i = 0;
+	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
 		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
@@ -178,7 +177,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 
 void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
 	// remove the dependencies from all entries of the CatalogSet
-	context.catalog.dependency_manager.ClearDependencies(*catalog_set);
+	Catalog::GetCatalog(context).dependency_manager.ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
 	if (active_transactions.size() > 0) {

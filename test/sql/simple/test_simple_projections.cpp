@@ -22,8 +22,8 @@ TEST_CASE("Test simple projection statements", "[simpleprojection]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {84}));
 
 	// multiple insertions
-	result = con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	result = con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)"));
 
 	// multiple projections
 	result = con.Query("SELECT a, b FROM test;");

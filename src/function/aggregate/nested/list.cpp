@@ -11,7 +11,7 @@ struct list_agg_state_t {
 	ChunkCollection* cc;
 };
 
-static index_t list_payload_size(TypeId return_type) {
+static idx_t list_payload_size(TypeId return_type) {
 	return sizeof(list_agg_state_t);
 }
 
@@ -20,7 +20,7 @@ static void list_initialize(data_ptr_t payload, TypeId return_type) {
 	memset(payload, 0, sizeof(list_agg_state_t));
 }
 
-static void list_update(Vector inputs[], index_t input_count, Vector &state) {
+static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
 	assert(input_count == 1);
 	inputs[0].Normalify();
 	auto states = (list_agg_state_t **)state.GetData();
@@ -33,7 +33,7 @@ static void list_update(Vector inputs[], index_t input_count, Vector &state) {
 	insert_chunk.data[0].Reference(inputs[0]);
 	insert_chunk.SetCardinality(1, insert_chunk.owned_sel_vector);
 
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
+	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
 		if(!states[i]->vec) {
 			states[i]->cc = new ChunkCollection();
 			states[i]->vec = new FlatVector();

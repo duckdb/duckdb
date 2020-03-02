@@ -124,7 +124,7 @@ TEST_CASE("Test storage for timestamp type", "[timestamp]") {
 		    "('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database);
 		Connection con(db);
 		result = con.Query("SELECT t FROM timestamp ORDER BY t;");

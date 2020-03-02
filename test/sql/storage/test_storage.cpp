@@ -72,7 +72,7 @@ TEST_CASE("Test simple storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (13), (12), (11)"));
 	}
 	// reload the database from disk a few times
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT * FROM test ORDER BY a");
@@ -100,7 +100,7 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		                          "(13, 'abcdefgh'), (12, NULL)"));
 	}
 	// reload the database from disk a few times
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -131,7 +131,7 @@ TEST_CASE("Test updates/deletes and strings", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a=a+1"));
 	}
 	// reload the database from disk a few times
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -162,7 +162,7 @@ TEST_CASE("Test deletes with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -191,7 +191,7 @@ TEST_CASE("Test updates with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -222,7 +222,7 @@ TEST_CASE("Test mix of updates and deletes with storage", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
@@ -246,7 +246,7 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
-		for (index_t i = 0; i < 1000; i++) {
+		for (idx_t i = 0; i < 1000; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 			expected_sum_a += 11 + 13;
 			expected_sum_b += 22 + 22;
@@ -261,7 +261,7 @@ TEST_CASE("Test large inserts in a single transaction", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(expected_count)}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a), SUM(b), COUNT(*) FROM test");
@@ -286,9 +286,9 @@ TEST_CASE("Test interleaving of insertions/updates/deletes on multiple tables", 
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (a INTEGER, b INTEGER);"));
-		index_t test_insert = 0, test_insert2 = 0;
-		for (index_t i = 0; i < 1000; i++) {
-			index_t stage = i % 7;
+		idx_t test_insert = 0, test_insert2 = 0;
+		for (idx_t i = 0; i < 1000; i++) {
+			idx_t stage = i % 7;
 			switch (stage) {
 			case 0:
 				for (; test_insert < i; test_insert++) {
@@ -328,7 +328,7 @@ TEST_CASE("Test interleaving of insertions/updates/deletes on multiple tables", 
 		REQUIRE(CHECK_COLUMN(result, 1, {405513}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) FROM test ORDER BY 1");
@@ -377,7 +377,7 @@ TEST_CASE("Test update/deletes on big table", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
 	// reload the database from disk
-	for (index_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a), COUNT(a) FROM test");

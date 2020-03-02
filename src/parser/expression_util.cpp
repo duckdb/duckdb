@@ -11,7 +11,7 @@ bool ExpressionUtil::ExpressionListEquals(const vector<unique_ptr<T>> &a, const 
 	if (a.size() != b.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a.size(); i++) {
+	for (idx_t i = 0; i < a.size(); i++) {
 		if (!(*a[i] == *b[i])) {
 			return false;
 		}
@@ -27,8 +27,8 @@ bool ExpressionUtil::ExpressionSetEquals(const vector<unique_ptr<T>> &a, const v
 	// we create a map of expression -> count for the left side
 	// we keep the count because the same expression can occur multiple times (e.g. "1 AND 1" is legal)
 	// in this case we track the following value: map["Constant(1)"] = 2
-	expression_map_t<index_t> map;
-	for (index_t i = 0; i < a.size(); i++) {
+	expression_map_t<idx_t> map;
+	for (idx_t i = 0; i < a.size(); i++) {
 		map[a[i].get()]++;
 	}
 	// now on the right side we reduce the counts again

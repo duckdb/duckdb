@@ -10,8 +10,8 @@ TEST_CASE("Check if column names are correctly set in the result", "[sql]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE test (a INTEGER, b INTEGER)");
-	con.Query("INSERT INTO test VALUES (42, 10), (43, 100);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (42, 10), (43, 100);"));
 
 	// check column names for simple projections and aliases
 	result = con.Query("SELECT a, b, a * 2 AS c, b * (a * 2) AS d FROM test ORDER BY a");

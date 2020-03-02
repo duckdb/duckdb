@@ -1,3 +1,5 @@
+#include <cstring> // strlen() on Solaris
+
 #include "duckdb/common/types/vector.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -59,7 +61,7 @@ void Vector::Reference(Vector &other) {
 	nullmask = other.nullmask;
 }
 
-void Vector::Slice(Vector &other, index_t offset) {
+void Vector::Slice(Vector &other, idx_t offset) {
 	assert(!other.sel_vector());
 
 	// create a reference to the other vector
@@ -70,7 +72,7 @@ void Vector::Slice(Vector &other, index_t offset) {
 	}
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
+void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
@@ -86,8 +88,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data, index_t count) {
 	}
 }
 
-
-void Vector::SetValue(index_t index, Value val) {
+void Vector::SetValue(idx_t index, Value val) {
 	Value newVal = val.CastAs(type);
 
 	nullmask[index] = newVal.is_null;
@@ -172,7 +173,7 @@ void Vector::SetValue(index_t index, Value val) {
 	}
 }
 
-Value Vector::GetValue(index_t index) const {
+Value Vector::GetValue(idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
 	} else {
@@ -218,7 +219,7 @@ Value Vector::GetValue(index_t index) const {
 		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
 		auto& child_vec = GetListEntry();
-		for (index_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
+		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			ret.list_value.push_back(child_vec.GetValue(i));
 		}
 		return ret;
@@ -433,7 +434,7 @@ string Vector::ToString() const {
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
-		for (index_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
@@ -443,8 +444,8 @@ string Vector::ToString() const {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		GetSequence(start, increment);
-		for (index_t i = 0; i < count; i++) {
-			index_t idx = sel ? sel[i] : i;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t idx = sel ? sel[i] : i;
 			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
 		}
 		break;
@@ -462,10 +463,10 @@ void Vector::Print() {
 }
 
 template <class T>
-static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, index_t count, sel_t *sel_vector) {
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count, sel_t *sel_vector) {
 	auto constant = *((T *)old_data);
 	auto output = (T *)data;
-	VectorOperations::Exec(sel_vector, count, [&](index_t i, index_t k) { output[i] = constant; });
+	VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) { output[i] = constant; });
 }
 
 void Vector::Normalify() {
@@ -593,7 +594,7 @@ void Vector::Verify() {
 }
 
 
-string_t Vector::AddString(const char *data, index_t len) {
+string_t Vector::AddString(const char *data, idx_t len) {
 	return AddString(string_t(data, len));
 }
 
@@ -618,7 +619,7 @@ string_t Vector::AddString(string_t data) {
 	return string_buffer.AddString(data);
 }
 
-string_t Vector::EmptyString(index_t len) {
+string_t Vector::EmptyString(idx_t len) {
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}

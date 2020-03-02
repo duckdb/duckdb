@@ -5,7 +5,7 @@ using namespace std;
 
 vector<ColumnBinding> LogicalUnnest::GetColumnBindings() {
 	auto child_bindings = children[0]->GetColumnBindings();
-	for (index_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		child_bindings.push_back(ColumnBinding(unnest_index, i));
 	}
 	return child_bindings;

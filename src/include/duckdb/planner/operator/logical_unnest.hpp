@@ -16,10 +16,10 @@ namespace duckdb {
 //! operator.
 class LogicalUnnest : public LogicalOperator {
 public:
-	LogicalUnnest(index_t unnest_index) : LogicalOperator(LogicalOperatorType::UNNEST), unnest_index(unnest_index) {
+	LogicalUnnest(idx_t unnest_index) : LogicalOperator(LogicalOperatorType::UNNEST), unnest_index(unnest_index) {
 	}
 
-	index_t unnest_index;
+	idx_t unnest_index;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

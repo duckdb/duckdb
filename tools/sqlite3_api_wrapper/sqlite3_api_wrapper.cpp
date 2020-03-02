@@ -2,9 +2,6 @@
 
 #include <ctype.h>
 #include <duckdb.hpp>
-#ifndef _WIN32
-#include <err.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -153,7 +150,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		stmt->query_string = query;
 		stmt->prepared = move(prepared);
 		stmt->current_row = -1;
-		for (index_t i = 0; i < stmt->prepared->n_param; i++) {
+		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
 			stmt->bound_values.push_back(Value());
 		}
@@ -477,7 +474,7 @@ int sqlite3_bind_parameter_index(sqlite3_stmt *stmt, const char *zName) {
 	if (!stmt || !zName) {
 		return 0;
 	}
-	for (index_t i = 0; i < stmt->bound_names.size(); i++) {
+	for (idx_t i = 0; i < stmt->bound_names.size(); i++) {
 		if (stmt->bound_names[i] == string(zName)) {
 			return i + 1;
 		}

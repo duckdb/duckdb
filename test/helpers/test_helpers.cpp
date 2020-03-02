@@ -243,8 +243,8 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	istringstream csv_stream(csv);
 
 	BufferedCSVReader reader(info, sql_types, csv_stream);
-	index_t collection_index = 0;
-	index_t tuple_count = 0;
+	idx_t collection_index = 0;
+	idx_t tuple_count = 0;
 	while (true) {
 		// parse a chunk from the CSV file
 		try {

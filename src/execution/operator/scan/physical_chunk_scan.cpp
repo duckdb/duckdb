@@ -9,7 +9,7 @@ public:
 	}
 
 	//! The current position in the scan
-	index_t chunk_index;
+	idx_t chunk_index;
 };
 
 void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {

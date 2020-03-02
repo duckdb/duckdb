@@ -6,10 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, index_t depth) {
+BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	string error;
-	for (index_t i = 0; i < expr.children.size(); i++) {
+	for (idx_t i = 0; i < expr.children.size(); i++) {
 		BindChild(expr.children[i], depth, error);
 	}
 	if (!error.empty()) {

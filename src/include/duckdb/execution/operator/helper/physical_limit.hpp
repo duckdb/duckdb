@@ -15,12 +15,12 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
 public:
-	PhysicalLimit(LogicalOperator &op, index_t limit, index_t offset)
+	PhysicalLimit(LogicalOperator &op, idx_t limit, idx_t offset)
 	    : PhysicalOperator(PhysicalOperatorType::LIMIT, op.types), limit(limit), offset(offset) {
 	}
 
-	index_t limit;
-	index_t offset;
+	idx_t limit;
+	idx_t offset;
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

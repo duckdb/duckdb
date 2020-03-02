@@ -10,11 +10,11 @@ MetaBlockReader::MetaBlockReader(BufferManager &manager, block_id_t block_id)
 	ReadNewBlock(block_id);
 }
 
-void MetaBlockReader::ReadData(data_ptr_t buffer, index_t read_size) {
+void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	while (offset + read_size > handle->node->size) {
 		// cannot read entire entry from block
 		// first read what we can from this block
-		index_t to_read = handle->node->size - offset;
+		idx_t to_read = handle->node->size - offset;
 		if (to_read > 0) {
 			memcpy(buffer, handle->node->buffer + offset, to_read);
 			read_size -= to_read;

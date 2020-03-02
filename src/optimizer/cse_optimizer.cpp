@@ -90,7 +90,7 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 		CountExpressions(*expr, expression_count);
 	}
 	// now we iterate over all the expressions and perform the actual CSE elimination
-	for (index_t i = 0; i < op.expressions.size(); i++) {
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		PerformCSEReplacement(&op.expressions[i], expression_count);
 	}
 }

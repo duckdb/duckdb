@@ -17,7 +17,7 @@ BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, uniq
 
 string BoundConjunctionExpression::ToString() const {
 	string result = "(" + children[0]->ToString();
-	for (index_t i = 1; i < children.size(); i++) {
+	for (idx_t i = 1; i < children.size(); i++) {
 		result += " " + ExpressionTypeToOperator(type) + " " + children[i]->ToString();
 	}
 	return result + ")";

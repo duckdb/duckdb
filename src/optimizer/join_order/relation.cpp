@@ -11,7 +11,7 @@ using RelationTreeNode = RelationSetManager::RelationTreeNode;
 
 string RelationSet::ToString() const {
 	string result = "[";
-	result += StringUtil::Join(relations, count, ", ", [](const index_t &relation) { return to_string(relation); });
+	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
 	result += "]";
 	return result;
 }
@@ -24,8 +24,8 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 	if (sub->count > super->count) {
 		return false;
 	}
-	index_t j = 0;
-	for (index_t i = 0; i < super->count; i++) {
+	idx_t j = 0;
+	for (idx_t i = 0; i < super->count; i++) {
 		if (sub->relations[j] == super->relations[i]) {
 			j++;
 			if (j == sub->count) {
@@ -36,10 +36,10 @@ bool RelationSet::IsSubset(RelationSet *super, RelationSet *sub) {
 	return false;
 }
 
-RelationSet *RelationSetManager::GetRelation(unique_ptr<index_t[]> relations, index_t count) {
+RelationSet *RelationSetManager::GetRelation(unique_ptr<idx_t[]> relations, idx_t count) {
 	// now look it up in the tree
 	RelationTreeNode *info = &root;
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto entry = info->children.find(relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
@@ -58,19 +58,18 @@ RelationSet *RelationSetManager::GetRelation(unique_ptr<index_t[]> relations, in
 }
 
 //! Create or get a RelationSet from a single node with the given index
-RelationSet *RelationSetManager::GetRelation(index_t index) {
+RelationSet *RelationSetManager::GetRelation(idx_t index) {
 	// create a sorted vector of the relations
-	auto relations = unique_ptr<index_t[]>(new index_t[1]);
+	auto relations = unique_ptr<idx_t[]>(new idx_t[1]);
 	relations[0] = index;
-	index_t count = 1;
+	idx_t count = 1;
 	return GetRelation(move(relations), count);
 }
 
-RelationSet *RelationSetManager::GetRelation(unordered_set<index_t> &bindings) {
+RelationSet *RelationSetManager::GetRelation(unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
-	unique_ptr<index_t[]> relations =
-	    bindings.size() == 0 ? nullptr : unique_ptr<index_t[]>(new index_t[bindings.size()]);
-	index_t count = 0;
+	unique_ptr<idx_t[]> relations = bindings.size() == 0 ? nullptr : unique_ptr<idx_t[]>(new idx_t[bindings.size()]);
+	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
 	}
@@ -79,10 +78,10 @@ RelationSet *RelationSetManager::GetRelation(unordered_set<index_t> &bindings) {
 }
 
 RelationSet *RelationSetManager::Union(RelationSet *left, RelationSet *right) {
-	auto relations = unique_ptr<index_t[]>(new index_t[left->count + right->count]);
-	index_t count = 0;
+	auto relations = unique_ptr<idx_t[]>(new idx_t[left->count + right->count]);
+	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
-	index_t i = 0, j = 0;
+	idx_t i = 0, j = 0;
 	while (true) {
 		if (i == left->count) {
 			// exhausted left relation, add remaining of right relation
@@ -115,10 +114,10 @@ RelationSet *RelationSetManager::Union(RelationSet *left, RelationSet *right) {
 }
 
 RelationSet *RelationSetManager::Difference(RelationSet *left, RelationSet *right) {
-	auto relations = unique_ptr<index_t[]>(new index_t[left->count]);
-	index_t count = 0;
+	auto relations = unique_ptr<idx_t[]>(new idx_t[left->count]);
+	idx_t count = 0;
 	// move through the left and right relations
-	index_t i = 0, j = 0;
+	idx_t i = 0, j = 0;
 	while (true) {
 		if (i == left->count) {
 			// exhausted left relation, we are done

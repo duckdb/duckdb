@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,7 +19,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	auto &schema = *table.schema;
-	if (!schema.CreateIndex(context.ActiveTransaction(), info.get())) {
+	if (!schema.CreateIndex(context, info.get())) {
 		// index already exists, but error ignored because of CREATE ... IF NOT
 		// EXISTS
 		return;

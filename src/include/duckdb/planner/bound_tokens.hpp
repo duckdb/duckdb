@@ -16,8 +16,7 @@ namespace duckdb {
 class BoundSQLStatement;
 
 class BoundCopyStatement;
-class BoundCreateIndexStatement;
-class BoundCreateTableStatement;
+class BoundCreateStatement;
 class BoundDeleteStatement;
 class BoundExecuteStatement;
 class BoundExplainStatement;

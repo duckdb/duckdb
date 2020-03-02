@@ -53,11 +53,11 @@ public:
 unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string name, vector<SQLType> function_args,
                                                      bool is_operator = true) {
 	auto catalog_entry =
-	    con.context->catalog.GetFunction(con.context->transaction.ActiveTransaction(), DEFAULT_SCHEMA, name, false);
+	    con.context->catalog.GetEntry(*con.context, CatalogType::SCALAR_FUNCTION, DEFAULT_SCHEMA, name, false);
 	assert(catalog_entry->type == CatalogType::SCALAR_FUNCTION);
 	auto scalar_fun = (ScalarFunctionCatalogEntry *)catalog_entry;
 
-	index_t best_function = Function::BindFunction(scalar_fun->name, scalar_fun->functions, function_args);
+	idx_t best_function = Function::BindFunction(scalar_fun->name, scalar_fun->functions, function_args);
 	auto fun = scalar_fun->functions[best_function];
 
 	return make_unique<BoundFunctionExpression>(GetInternalType(fun.return_type), fun, is_operator);
@@ -65,11 +65,11 @@ unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string nam
 
 unique_ptr<BoundAggregateExpression> resolve_aggregate(Connection &con, string name, vector<SQLType> function_args) {
 	auto catalog_entry =
-	    con.context->catalog.GetFunction(con.context->transaction.ActiveTransaction(), DEFAULT_SCHEMA, name, false);
+	    con.context->catalog.GetEntry(*con.context, CatalogType::AGGREGATE_FUNCTION, DEFAULT_SCHEMA, name, false);
 	assert(catalog_entry->type == CatalogType::AGGREGATE_FUNCTION);
 	auto aggr_fun = (AggregateFunctionCatalogEntry *)catalog_entry;
 
-	index_t best_function = Function::BindFunction(aggr_fun->name, aggr_fun->functions, function_args);
+	idx_t best_function = Function::BindFunction(aggr_fun->name, aggr_fun->functions, function_args);
 	auto fun = aggr_fun->functions[best_function];
 	return make_unique<BoundAggregateExpression>(GetInternalType(fun.return_type), fun, false);
 }
@@ -85,9 +85,9 @@ int main() {
 	con.context->transaction.SetAutoCommit(false);
 	con.context->transaction.BeginTransaction();
 
-	auto &trans = con.context->transaction.ActiveTransaction();
+	auto &context = *con.context;
 
-	con.context->catalog.CreateTableFunction(trans, &info);
+	con.context->catalog.CreateTableFunction(*con.context, &info);
 
 	// use sql for everything
 	auto result = con.Query("SELECT (some_int + 42) % 2, count(*) FROM my_scan() WHERE some_int BETWEEN 3 AND 7 group "
@@ -112,8 +112,8 @@ int main() {
 
 	// TABLE_FUNCTION my_scan
 	vector<unique_ptr<ParsedExpression>> children; // empty
-	FunctionExpression fun_expr(DEFAULT_SCHEMA, "my_scan", children);
-	auto scan_function_catalog_entry = con.context->catalog.GetTableFunction(trans, &fun_expr);
+	auto scan_function_catalog_entry =
+	    con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
 	vector<unique_ptr<Expression>> parameters; // empty
 	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(parameters));
 

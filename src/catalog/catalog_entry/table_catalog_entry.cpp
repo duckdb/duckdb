@@ -25,9 +25,10 @@ using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage),
-      columns(move(info->base->columns)), constraints(move(info->base->constraints)),
+    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
+      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
+	this->temporary = info->Base().temporary;
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -37,7 +38,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes(), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for (index_t i = 0; i < bound_constraints.size(); i++) {
+		for (idx_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
@@ -46,7 +47,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<column_t> column_ids;
 				vector<unique_ptr<Expression>> unbound_expressions;
 				vector<unique_ptr<Expression>> bound_expressions;
-				index_t key_nr = 0;
+				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
 					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
@@ -87,8 +88,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_COLUMN: {
 		auto rename_info = (RenameColumnInfo *)table_info;
 		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+		create_info->temporary = temporary;
 		bool found = false;
-		for (index_t i = 0; i < columns.size(); i++) {
+		for (idx_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);
 			copy.oid = columns[i].oid;
 			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
@@ -105,12 +107,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		}
 		assert(constraints.size() == 0);
 		// create_info->constraints.resize(constraints.size());
-		// for (index_t i = 0; i < constraints.size(); i++) {
+		// for (idx_t i = 0; i < constraints.size(); i++) {
 		// 	create_info->constraints[i] = constraints[i]->Copy();
 		// }
 		Binder binder(context);
-		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
+		auto bound_create_info = binder.BindCreateInfo(move(create_info));
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");

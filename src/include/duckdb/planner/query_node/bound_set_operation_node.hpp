@@ -28,14 +28,14 @@ public:
 	unique_ptr<BoundQueryNode> right;
 
 	//! Index used by the set operation
-	index_t setop_index;
+	idx_t setop_index;
 	//! The binder used by the left side of the set operation
 	unique_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
 	unique_ptr<Binder> right_binder;
 
 public:
-	index_t GetRootIndex() override {
+	idx_t GetRootIndex() override {
 		return setop_index;
 	}
 };

@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, index_t row_start)
+UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, idx_t row_start)
     : manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start),
       versions(nullptr) {
 }
@@ -26,7 +26,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 	} else if (info->version_number > transaction.start_time) {
 		// potential conflict, check that tuple ids do not conflict
 		// as both ids and info->tuples are sorted, this is similar to a merge join
-		index_t i = 0, j = 0;
+		idx_t i = 0, j = 0;
 		while (true) {
 			auto id = ids[i] - offset;
 			if (id == info->tuples[j]) {
@@ -62,7 +62,7 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	assert(!update.sel_vector());
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
-	for (index_t i = 1; i < update.size(); i++) {
+	for (idx_t i = 1; i < update.size(); i++) {
 		assert(ids[i] > ids[i - 1]);
 	}
 #endif
@@ -70,7 +70,7 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	// create the versions for this segment, if there are none yet
 	if (!versions) {
 		this->versions = unique_ptr<UpdateInfo *[]>(new UpdateInfo *[max_vector_count]);
-		for (index_t i = 0; i < max_vector_count; i++) {
+		for (idx_t i = 0; i < max_vector_count; i++) {
 			this->versions[i] = nullptr;
 		}
 	}
@@ -79,8 +79,8 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	// we assert that all updates must be part of the same vector
 	auto usel = update.sel_vector();
 	auto first_id = usel ? ids[usel[0]] : ids[0];
-	index_t vector_index = (first_id - offset) / STANDARD_VECTOR_SIZE;
-	index_t vector_offset = offset + vector_index * STANDARD_VECTOR_SIZE;
+	idx_t vector_index = (first_id - offset) / STANDARD_VECTOR_SIZE;
+	idx_t vector_offset = offset + vector_index * STANDARD_VECTOR_SIZE;
 
 	assert(first_id >= offset);
 	assert(vector_index < max_vector_count);
@@ -96,8 +96,8 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 }
 
 UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Transaction &transaction, row_t *ids,
-                                                  index_t count, index_t vector_index, index_t vector_offset,
-                                                  index_t type_size) {
+                                                  idx_t count, idx_t vector_index, idx_t vector_offset,
+                                                  idx_t type_size) {
 	auto node = transaction.CreateUpdateInfo(type_size, STANDARD_VECTOR_SIZE);
 	node->column_data = &column_data;
 	node->segment = this;
@@ -111,14 +111,14 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Trans
 
 	// set up the tuple ids
 	node->N = count;
-	for (index_t i = 0; i < count; i++) {
-		assert((index_t)ids[i] >= vector_offset && (index_t)ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < count; i++) {
+		assert((idx_t)ids[i] >= vector_offset && (idx_t)ids[i] < vector_offset + STANDARD_VECTOR_SIZE);
 		node->tuples[i] = ids[i] - vector_offset;
 	};
 	return node;
 }
 
-void UncompressedSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
 	InitializeScan(state);
@@ -128,7 +128,7 @@ void UncompressedSegment::Fetch(ColumnScanState &state, index_t vector_index, Ve
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
@@ -139,7 +139,7 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 	}
 }
 
-void UncompressedSegment::IndexScan(ColumnScanState &state, index_t vector_index, Vector &result) {
+void UncompressedSegment::IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	if (vector_index == 0) {
 		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
 		state.locks.push_back(lock.GetSharedLock());

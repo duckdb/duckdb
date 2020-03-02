@@ -7,7 +7,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,7 +58,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
-			for (index_t i = 0; i < aggregate_functions.size(); ++i) {
+			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));

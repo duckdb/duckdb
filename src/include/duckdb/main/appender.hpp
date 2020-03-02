@@ -27,7 +27,7 @@ class Appender {
 	//! Internal chunk used for appends
 	DataChunk chunk;
 	//! The current column to append to
-	index_t column = 0;
+	idx_t column = 0;
 	//! Message explaining why the Appender is invalidated (if any)
 	string invalidated_msg;
 
@@ -64,7 +64,7 @@ public:
 		return chunk;
 	}
 
-	index_t CurrentColumn() {
+	idx_t CurrentColumn() {
 		return column;
 	}
 

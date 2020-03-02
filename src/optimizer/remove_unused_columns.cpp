@@ -28,9 +28,9 @@ void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBi
 	}
 }
 
-template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, index_t table_idx) {
-	index_t offset = 0;
-	for (index_t col_idx = 0; col_idx < list.size(); col_idx++) {
+template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &list, idx_t table_idx) {
+	idx_t offset = 0;
+	for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {

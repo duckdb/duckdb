@@ -13,19 +13,19 @@ struct CountOperator {
 	}
 };
 
-static void countstar_update(Vector inputs[], index_t input_count, Vector &addresses) {
+static void countstar_update(Vector inputs[], idx_t input_count, Vector &addresses) {
 	// add one to each address
 	auto states = (int64_t **)addresses.GetData();
-	VectorOperations::Exec(addresses, [&](index_t i, index_t k) { states[i][0]++; });
+	VectorOperations::Exec(addresses, [&](idx_t i, idx_t k) { states[i][0]++; });
 }
 
-static void countstar_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
+static void countstar_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
 	// count star: just add the count
 	auto state = (int64_t *)state_;
 	*state += inputs[0].size();
 }
 
-static void count_update(Vector inputs[], index_t input_count, Vector &addresses) {
+static void count_update(Vector inputs[], idx_t input_count, Vector &addresses) {
 	auto &input = inputs[0];
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant input
@@ -44,7 +44,7 @@ static void count_update(Vector inputs[], index_t input_count, Vector &addresses
 		return;
 	}
 	auto states = (int64_t **)addresses.GetData();
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
+	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
 		if (!input.nullmask[i]) {
 			states[i][0]++;
 		}
@@ -55,7 +55,7 @@ static void count_combine(Vector &state, Vector &combined) {
 	VectorOperations::Scatter::Add(state, combined);
 }
 
-static void count_simple_update(Vector inputs[], index_t input_count, data_ptr_t state_) {
+static void count_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
 	auto state = (int64_t *)state_;
 	auto &input = inputs[0];
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -69,7 +69,7 @@ static void count_simple_update(Vector inputs[], index_t input_count, data_ptr_t
 		input.Normalify();
 		if (input.nullmask.any()) {
 			// NULL values, count the amount of NULL entries
-			VectorOperations::Exec(input, [&](index_t i, index_t k) {
+			VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
 				if (!input.nullmask[i]) {
 					(*state)++;
 				}

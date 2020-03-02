@@ -32,7 +32,7 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 
 	struct ExpressionCosts {
 		unique_ptr<Expression> expr;
-		index_t cost;
+		idx_t cost;
 
 		bool operator==(const ExpressionCosts &p) const {
 			return cost == p.cost;
@@ -44,31 +44,31 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 
 	vector<ExpressionCosts> expression_costs;
 	// iterate expressions, get cost for each one
-	for (index_t i = 0; i < expressions.size(); i++) {
-		index_t cost = Cost(*expressions[i]);
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		idx_t cost = Cost(*expressions[i]);
 		expression_costs.push_back({move(expressions[i]), cost});
 	}
 
 	// sort by cost and put back in place
 	sort(expression_costs.begin(), expression_costs.end());
-	for (index_t i = 0; i < expression_costs.size(); i++) {
+	for (idx_t i = 0; i < expression_costs.size(); i++) {
 		expressions[i] = move(expression_costs[i].expr);
 	}
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundBetweenExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundBetweenExpression &expr) {
 	return Cost(*expr.input) + Cost(*expr.lower) + Cost(*expr.upper) + 10;
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
 	return Cost(*expr.check) + Cost(*expr.result_if_true) + Cost(*expr.result_if_false) + 5;
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
-	index_t cast_cost = 0;
+	idx_t cast_cost = 0;
 	if (expr.target_type != expr.source_type) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
@@ -81,23 +81,23 @@ index_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	return Cost(*expr.child) + cast_cost;
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundComparisonExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundComparisonExpression &expr) {
 	// COMPARE_EQUAL, COMPARE_NOTEQUAL, COMPARE_GREATERTHAN, COMPARE_GREATERTHANOREQUALTO, COMPARE_LESSTHAN,
 	// COMPARE_LESSTHANOREQUALTO
 	return Cost(*expr.left) + 5 + Cost(*expr.right);
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
 	// CONJUNCTION_AND, CONJUNCTION_OR
-	index_t cost = 5;
+	idx_t cost = 5;
 	for (auto &child : expr.children) {
 		cost += Cost(*child);
 	}
 	return cost;
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
-	index_t cost_children = 0;
+idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
+	idx_t cost_children = 0;
 	for (auto &child : expr.children) {
 		cost_children += Cost(*child);
 	}
@@ -110,8 +110,8 @@ index_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 	}
 }
 
-index_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, ExpressionType &expr_type) {
-	index_t sum = 0;
+idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, ExpressionType &expr_type) {
+	idx_t sum = 0;
 	for (auto &child : expr.children) {
 		sum += Cost(*child);
 	}
@@ -130,7 +130,7 @@ index_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, Expr
 	}
 }
 
-index_t ExpressionHeuristics::ExpressionCost(TypeId &return_type, index_t multiplier) {
+idx_t ExpressionHeuristics::ExpressionCost(TypeId &return_type, idx_t multiplier) {
 	// TODO: ajust values according to benchmark results
 	switch (return_type) {
 	case TypeId::VARCHAR:
@@ -144,7 +144,7 @@ index_t ExpressionHeuristics::ExpressionCost(TypeId &return_type, index_t multip
 	}
 }
 
-index_t ExpressionHeuristics::Cost(Expression &expr) {
+idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;

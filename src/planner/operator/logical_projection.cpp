@@ -3,7 +3,7 @@
 using namespace duckdb;
 using namespace std;
 
-LogicalProjection::LogicalProjection(index_t table_index, vector<unique_ptr<Expression>> select_list)
+LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::PROJECTION, move(select_list)), table_index(table_index) {
 }
 

@@ -25,7 +25,7 @@ template <class DST>
 static void TestStringCast(vector<string> &working_values, vector<DST> &expected_values,
                            vector<string> &broken_values) {
 	DST result;
-	for (index_t i = 0; i < working_values.size(); i++) {
+	for (idx_t i = 0; i < working_values.size(); i++) {
 		auto &value = working_values[i];
 		auto expected_value = expected_values[i];
 		REQUIRE_NOTHROW(Cast::Operation<string_t, DST>(string_t(value)) == expected_value);
@@ -52,7 +52,7 @@ template <class T> static void TestExponent() {
 	string str;
 	double value = 1;
 	T expected_value = 1;
-	for (index_t exponent = 0; exponent < 100; exponent++) {
+	for (idx_t exponent = 0; exponent < 100; exponent++) {
 		if (value < MaximumValue<T>()) {
 			// expect success
 			str = "1e" + to_string(exponent);
@@ -79,7 +79,7 @@ TEST_CASE("Test casting to boolean", "[cast]") {
 	vector<string> broken_values = {"1", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
 
 	bool result;
-	for (index_t i = 0; i < working_values.size(); i++) {
+	for (idx_t i = 0; i < working_values.size(); i++) {
 		auto &value = working_values[i];
 		auto expected_value = expected_values[i];
 		REQUIRE_NOTHROW(Cast::Operation<string_t, bool>(value) == expected_value);
@@ -221,7 +221,7 @@ template <class DST>
 static void TestStringCastDouble(vector<string> &working_values, vector<DST> &expected_values,
                                  vector<string> &broken_values) {
 	DST result;
-	for (index_t i = 0; i < working_values.size(); i++) {
+	for (idx_t i = 0; i < working_values.size(); i++) {
 		auto &value = working_values[i];
 		auto expected_value = expected_values[i];
 		REQUIRE_NOTHROW(Cast::Operation<string_t, DST>(string_t(value)) == expected_value);

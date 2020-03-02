@@ -14,8 +14,9 @@ TEST_CASE("Test filter and projection of nested struct", "[nested]") {
 	unique_ptr<QueryResult> result;
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE struct_data (g INTEGER, e INTEGER)");
-	con.Query("INSERT INTO struct_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE struct_data (g INTEGER, e INTEGER)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO struct_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)"));
 
 	// all the wrong ways of holding this
 	REQUIRE_FAIL(con.Query("SELECT STRUCT_PACK() FROM struct_data"));
@@ -114,3 +115,4 @@ TEST_CASE("Test packing and unpacking lineitem into structs", "[nested][.]") {
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 }
+

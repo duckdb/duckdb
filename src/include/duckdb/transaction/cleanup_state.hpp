@@ -30,7 +30,7 @@ private:
 	DataTable *current_table;
 	DataChunk chunk;
 	row_t row_numbers[STANDARD_VECTOR_SIZE];
-	index_t count;
+	idx_t count;
 
 private:
 	void CleanupDelete(DeleteInfo *info);

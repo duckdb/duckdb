@@ -14,7 +14,7 @@ public:
 	PhysicalUnnestOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), parent_position(0) {
 	}
 
-	index_t parent_position;
+	idx_t parent_position;
 	//	index_t list_position;
 	//	int64_t list_length = -1;
 
@@ -66,7 +66,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 	// need to figure out how many times we need to repeat for current row
 	if (max_list_length < 0) {
-		for (index_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 			auto &v = state->list_data.data[col_idx];
 
 			assert(v.type == TypeId::LIST);
@@ -85,21 +85,21 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	// first cols are from child, last n cols from unnest
 	chunk.SetCardinality(max_list_length);
 
-	for (index_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 		VectorOperations::Set(chunk.data[col_idx],
 		                      state->child_chunk.data[col_idx].GetValue(state->parent_position));
 	}
-	for (index_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 		auto target_col = col_idx + state->child_chunk.column_count();
 		chunk.data[target_col].nullmask.all();
 		auto &v = state->list_data.data[col_idx];
 		auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
 		auto &child_v = v.GetListEntry();
 
-		for (index_t i = 0; i < list_entry.length; i++) {
+		for (idx_t i = 0; i < list_entry.length; i++) {
 			chunk.data[target_col].SetValue(i, child_v.GetValue(list_entry.offset + i));
 		}
-		for (index_t i = list_entry.length; i < (index_t)max_list_length; i++) {
+		for (idx_t i = list_entry.length; i < (idx_t)max_list_length; i++) {
 			chunk.data[target_col].SetValue(i, Value());
 		}
 	}

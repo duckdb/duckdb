@@ -44,7 +44,7 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a->children.size(); i++) {
+	for (idx_t i = 0; i < a->children.size(); i++) {
 		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}

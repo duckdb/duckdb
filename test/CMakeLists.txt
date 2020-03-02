@@ -16,7 +16,7 @@ add_subdirectory(planner)
 add_subdirectory(optimizer)
 add_subdirectory(parser)
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT SUN)
   add_subdirectory(sqlserver)
   add_subdirectory(sakila)
   add_subdirectory(sqlite)
@@ -28,7 +28,7 @@ endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT SUN)
   target_link_libraries(unittest
                         duckdb
                         dbgen

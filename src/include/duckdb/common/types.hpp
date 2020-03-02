@@ -20,7 +20,7 @@ class Deserializer;
 
 struct blob_t {
 	data_ptr_t data;
-	index_t size;
+	idx_t size;
 };
 
 struct string_t;
@@ -284,7 +284,7 @@ template <class T> bool IsValidType() {
 extern const TypeId ROW_TYPE;
 
 string TypeIdToString(TypeId type);
-index_t GetTypeIdSize(TypeId type);
+idx_t GetTypeIdSize(TypeId type);
 bool TypeIsConstantSize(TypeId type);
 bool TypeIsIntegral(TypeId type);
 bool TypeIsNumeric(TypeId type);

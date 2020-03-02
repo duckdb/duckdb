@@ -23,6 +23,10 @@ StorageManager::StorageManager(DuckDB &db, string path, bool read_only)
 StorageManager::~StorageManager() {
 }
 
+BufferManager &BufferManager::GetBufferManager(ClientContext &context) {
+	return *context.db.storage->buffer_manager;
+}
+
 void StorageManager::Initialize() {
 	bool in_memory = path.empty() || path == ":memory:";
 
@@ -32,19 +36,20 @@ void StorageManager::Initialize() {
 
 	// first initialize the base system catalogs
 	// these are never written to the WAL
-	auto transaction = database.transaction_manager->StartTransaction();
+	ClientContext context(database);
+	context.transaction.BeginTransaction();
 
 	// create the default schema
 	CreateSchemaInfo info;
 	info.schema = DEFAULT_SCHEMA;
-	database.catalog->CreateSchema(*transaction, &info);
+	database.catalog->CreateSchema(context, &info);
 
 	// initialize default functions
-	BuiltinFunctions builtin(*transaction, *database.catalog);
+	BuiltinFunctions builtin(context, *database.catalog);
 	builtin.Initialize();
 
 	// commit transactions
-	database.transaction_manager->CommitTransaction(transaction);
+	context.transaction.Commit();
 
 	if (!in_memory) {
 		// create or load the database from disk, if not in-memory mode

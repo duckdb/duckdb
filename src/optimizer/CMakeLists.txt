@@ -10,6 +10,7 @@ add_library_unity(duckdb_optimizer
                   expression_heuristics.cpp
                   filter_combiner.cpp
                   filter_pushdown.cpp
+                  in_clause_rewriter.cpp
                   join_order_optimizer.cpp
                   optimizer.cpp
                   expression_rewriter.cpp

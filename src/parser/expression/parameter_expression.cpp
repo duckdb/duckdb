@@ -28,11 +28,11 @@ uint64_t ParameterExpression::Hash() const {
 
 void ParameterExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
-	serializer.Write<index_t>(parameter_nr);
+	serializer.Write<idx_t>(parameter_nr);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto expression = make_unique<ParameterExpression>();
-	expression->parameter_nr = source.Read<index_t>();
+	expression->parameter_nr = source.Read<idx_t>();
 	return move(expression);
 }

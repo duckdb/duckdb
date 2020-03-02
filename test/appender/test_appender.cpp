@@ -223,3 +223,21 @@ TEST_CASE("Test incorrect usage of appender", "[appender]") {
 		REQUIRE_NOTHROW(appender.Flush());
 	}
 }
+
+TEST_CASE("Test appender with quotes", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA \"my_schema\""));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"my_schema\".\"my_table\"(\"i\" INTEGER)"));
+
+	// append a bunch of values
+	{
+		Appender appender(con, "my_schema", "my_table");
+		appender.AppendRow(1);
+		appender.Close();
+	}
+	result = con.Query("SELECT * FROM my_schema.my_table");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+}

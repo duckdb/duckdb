@@ -66,7 +66,7 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
-		for (index_t i = 0; i < aggr.groups.size(); i++) {
+		for (idx_t i = 0; i < aggr.groups.size(); i++) {
 			VisitExpression(&aggr.groups[i]);
 		}
 		break;
@@ -74,7 +74,7 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	default:
 		break;
 	}
-	for (index_t i = 0; i < op.expressions.size(); i++) {
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		VisitExpression(&op.expressions[i]);
 	}
 }
@@ -148,7 +148,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		VisitExpression(&expr);
-		return expr;
+		return move(expr);
 	});
 }
 

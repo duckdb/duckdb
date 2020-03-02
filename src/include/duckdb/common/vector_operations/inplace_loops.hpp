@@ -16,12 +16,12 @@ namespace duckdb {
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP, bool INPUT_CONSTANT>
 static inline void templated_inplace_loop_function(LEFT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data,
-                                                   index_t count, sel_t *__restrict sel_vector) {
+                                                   idx_t count, sel_t *__restrict sel_vector) {
 	if (!INPUT_CONSTANT) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 	}
 	VectorOperations::Exec(sel_vector, count,
-	                       [&](index_t i, index_t k) { OP::Operation(result_data[i], ldata[INPUT_CONSTANT ? 0 : i]); });
+	                       [&](idx_t i, idx_t k) { OP::Operation(result_data[i], ldata[INPUT_CONSTANT ? 0 : i]); });
 }
 
 template <class LEFT_TYPE, class RESULT_TYPE, class OP> void templated_inplace_loop(Vector &input, Vector &result) {

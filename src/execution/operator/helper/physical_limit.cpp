@@ -5,17 +5,17 @@ using namespace std;
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalOperator *child, index_t current_offset = 0)
+	PhysicalLimitOperatorState(PhysicalOperator *child, idx_t current_offset = 0)
 	    : PhysicalOperatorState(child), current_offset(current_offset) {
 	}
 
-	index_t current_offset;
+	idx_t current_offset;
 };
 
 void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
-	index_t max_element = limit + offset;
+	idx_t max_element = limit + offset;
 	if (state->current_offset >= max_element) {
 		return;
 	}
@@ -31,18 +31,18 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		if (state->current_offset + state->child_chunk.size() >= offset) {
 			// however we will reach it in this chunk
 			// we have to copy part of the chunk with an offset
-			index_t start_position = offset - state->current_offset;
-			index_t chunk_count = min(limit, state->child_chunk.size() - start_position);
+			idx_t start_position = offset - state->current_offset;
+			idx_t chunk_count = min(limit, state->child_chunk.size() - start_position);
 
 			// set up a slice of the input chunks
 			chunk.SetCardinality(chunk_count, state->child_chunk.sel_vector);
-			for (index_t i = 0; i < chunk.column_count(); i++) {
+			for (idx_t i = 0; i < chunk.column_count(); i++) {
 				chunk.data[i].Slice(state->child_chunk.data[i], start_position);
 			}
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		index_t chunk_count;
+		idx_t chunk_count;
 		if (state->current_offset + state->child_chunk.size() >= max_element) {
 			// have to limit the count of the chunk
 			chunk_count = max_element - state->current_offset;

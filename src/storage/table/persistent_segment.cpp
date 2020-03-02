@@ -12,8 +12,8 @@
 using namespace duckdb;
 using namespace std;
 
-PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, index_t offset, TypeId type, index_t start,
-                                     index_t count)
+PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, TypeId type, idx_t start,
+                                     idx_t count)
     : ColumnSegment(type, ColumnSegmentType::PERSISTENT, start, count), manager(manager), block_id(id), offset(offset) {
 	assert(offset == 0);
 	if (type == TypeId::VARCHAR) {
@@ -29,7 +29,7 @@ void PersistentSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void PersistentSegment::Scan(Transaction &transaction, ColumnScanState &state, index_t vector_index, Vector &result) {
+void PersistentSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Scan(transaction, state, vector_index, result);
 }
 
@@ -37,12 +37,12 @@ void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {
 	data->IndexScan(state, state.vector_index, result);
 }
 
-void PersistentSegment::Fetch(ColumnScanState &state, index_t vector_index, Vector &result) {
+void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	data->Fetch(state, vector_index, result);
 }
 
 void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, row_t row_id, Vector &result,
-                                 index_t result_idx) {
+                                 idx_t result_idx) {
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 

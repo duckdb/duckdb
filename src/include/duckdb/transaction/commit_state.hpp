@@ -28,7 +28,7 @@ public:
 	UndoFlags current_op;
 
 	DataTable *current_table;
-	index_t row_identifiers[STANDARD_VECTOR_SIZE];
+	idx_t row_identifiers[STANDARD_VECTOR_SIZE];
 
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;

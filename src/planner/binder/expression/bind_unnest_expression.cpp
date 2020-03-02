@@ -6,11 +6,12 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BindResult SelectBinder::BindUnnest(FunctionExpression &function, index_t depth) {
+BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// bind the children of the function expression
 	string error;
 	if (function.children.size() != 1) {

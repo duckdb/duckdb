@@ -1,5 +1,4 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -10,18 +9,17 @@
 using namespace duckdb;
 using namespace std;
 
-
-BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, index_t depth) {
+BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	AggregateBinder aggregate_binder(binder, context);
 	string error;
-	for (index_t i = 0; i < aggr.children.size(); i++) {
+	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		aggregate_binder.BindChild(aggr.children[i], 0, error);
 	}
 	if (!error.empty()) {
 		// failed to bind child
 		if (aggregate_binder.BoundColumns()) {
-			for (index_t i = 0; i < aggr.children.size(); i++) {
+			for (idx_t i = 0; i < aggr.children.size(); i++) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
@@ -43,7 +41,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	vector<SQLType> types;
 	vector<SQLType> arguments;
 	vector<unique_ptr<Expression>> children;
-	for (index_t i = 0; i < aggr.children.size(); i++) {
+	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = (BoundExpression &)*aggr.children[i];
 		types.push_back(child.sql_type);
 		arguments.push_back(child.sql_type);
@@ -51,7 +49,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	index_t best_function = Function::BindFunction(func->name, func->functions, types);
+	idx_t best_function = Function::BindFunction(func->name, func->functions, types);
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 	// check if we need to add casts to the children
@@ -71,7 +69,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 
 	// check for all the aggregates if this aggregate already exists
-	index_t aggr_index;
+	idx_t aggr_index;
 	auto entry = node.aggregate_map.find(aggregate.get());
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list

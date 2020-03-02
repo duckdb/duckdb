@@ -18,7 +18,8 @@ class PreparedStatementData;
 class PreparedStatement {
 public:
 	//! Create a successfully prepared prepared statement object with the given name
-	PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data, index_t n_param = 0);
+	PreparedStatement(ClientContext *context, string name, string query, PreparedStatementData &data,
+	                  idx_t n_param = 0);
 	//! Create a prepared statement that was not successfully prepared
 	PreparedStatement(string error);
 
@@ -39,7 +40,7 @@ public:
 	//! Whether or not the prepared statement has been invalidated because the underlying connection has been destroyed
 	bool is_invalidated;
 	//! The amount of bound parameters
-	index_t n_param;
+	idx_t n_param;
 	//! The result SQL types of the prepared statement
 	vector<SQLType> types;
 	//! The result names of the prepared statement

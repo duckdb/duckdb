@@ -24,6 +24,11 @@ DuckDB::DuckDB(const char *path, DBConfig *config) {
 	if (temporary_directory.empty() && path) {
 		// no directory specified: use default temp path
 		temporary_directory = string(path) + ".tmp";
+
+		// special treatment for in-memory mode
+		if (strcmp(path, ":memory:") == 0) {
+			temporary_directory = ".tmp";
+		}
 	}
 	if (config && !config->use_temporary_directory) {
 		// temporary directories explicitly disabled

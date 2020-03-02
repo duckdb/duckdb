@@ -16,15 +16,15 @@ namespace duckdb {
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
-	LogicalGet(index_t table_index);
-	LogicalGet(TableCatalogEntry *table, index_t table_index, vector<column_t> column_ids);
+	LogicalGet(idx_t table_index);
+	LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids);
 
-	index_t EstimateCardinality() override;
+	idx_t EstimateCardinality() override;
 
 	//! The base table to retrieve data from
 	TableCatalogEntry *table;
 	//! The table index in the current bind context
-	index_t table_index;
+	idx_t table_index;
 	//! Bound column IDs
 	vector<column_t> column_ids;
 

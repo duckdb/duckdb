@@ -20,19 +20,19 @@ class SelectNode;
 //! The ORDER binder is responsible for binding an expression within the ORDER BY clause of a SQL statement
 class OrderBinder {
 public:
-	OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
-	            expression_map_t<index_t> &projection_map, vector<unique_ptr<ParsedExpression>> &extra_select_list);
+	OrderBinder(idx_t projection_index, SelectNode &node, unordered_map<string, idx_t> &alias_map,
+	            expression_map_t<idx_t> &projection_map, vector<unique_ptr<ParsedExpression>> &extra_select_list);
 
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> expr);
-	void RemapIndex(BoundColumnRefExpression &expr, index_t index);
+	void RemapIndex(BoundColumnRefExpression &expr, idx_t index);
 
 private:
-	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, index_t index);
+	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
 
-	index_t projection_index;
+	idx_t projection_index;
 	SelectNode &node;
-	unordered_map<string, index_t> &alias_map;
-	expression_map_t<index_t> &projection_map;
+	unordered_map<string, idx_t> &alias_map;
+	expression_map_t<idx_t> &projection_map;
 	vector<unique_ptr<ParsedExpression>> &extra_select_list;
 };
 

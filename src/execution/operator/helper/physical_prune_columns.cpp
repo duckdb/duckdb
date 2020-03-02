@@ -14,7 +14,7 @@ void PhysicalPruneColumns::GetChunkInternal(ClientContext &context, DataChunk &c
 	}
 	assert(column_limit <= state->child_chunk.column_count());
 	chunk.SetCardinality(state->child_chunk);
-	for (index_t i = 0; i < column_limit; i++) {
+	for (idx_t i = 0; i < column_limit; i++) {
 		chunk.data[i].Reference(state->child_chunk.data[i]);
 	}
 }

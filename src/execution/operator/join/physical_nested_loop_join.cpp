@@ -16,15 +16,15 @@ public:
 	      right_tuple(0) {
 	}
 
-	index_t right_chunk;
+	idx_t right_chunk;
 	DataChunk left_join_condition;
 	ChunkCollection right_data;
 	ChunkCollection right_chunks;
 	//! Whether or not the RHS of the nested loop join has NULL values
 	bool has_null;
 
-	index_t left_tuple;
-	index_t right_tuple;
+	idx_t left_tuple;
+	idx_t right_tuple;
 };
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -39,13 +39,13 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 static bool RemoveNullValues(DataChunk &chunk) {
 	// OR all nullmasks together
 	nullmask_t nullmask = chunk.data[0].nullmask;
-	for (index_t i = 1; i < chunk.column_count(); i++) {
+	for (idx_t i = 1; i < chunk.column_count(); i++) {
 		nullmask |= chunk.data[i].nullmask;
 	}
 	// now create a selection vector
 	sel_t not_null_vector[STANDARD_VECTOR_SIZE];
-	index_t not_null_entries = 0;
-	VectorOperations::Exec(chunk.data[0], [&](index_t i, index_t k) {
+	idx_t not_null_entries = 0;
+	VectorOperations::Exec(chunk.data[0], [&](idx_t i, idx_t k) {
 		if (!nullmask[i]) {
 			not_null_vector[not_null_entries++] = i;
 		}
@@ -68,8 +68,8 @@ template <bool MATCH>
 static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
-	index_t result_count = 0;
-	for (index_t i = 0; i < left.size(); i++) {
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < left.size(); i++) {
 		if (found_match[i] == MATCH) {
 			// part of the result
 			result.owned_sel_vector[result_count++] = i;
@@ -80,7 +80,7 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// we only return the columns on the left side
 		// project them using the result selection vector
 		// reference the columns of the left side from the result
-		for (index_t i = 0; i < left.column_count(); i++) {
+		for (idx_t i = 0; i < left.column_count(); i++) {
 			result.data[i].Reference(left.data[i]);
 		}
 		result.SetCardinality(result_count, result.owned_sel_vector);
@@ -125,7 +125,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 		} else {
 			// disqualify tuples from the RHS that have NULL values
-			for (index_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+			for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
 				if (RemoveNullValues(*state->right_chunks.chunks[i])) {
 					state->has_null = true;
 				}
@@ -158,11 +158,11 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				return;
 			}
 			chunk.SetCardinality(state->child_chunk);
-			index_t idx = 0;
-			for(; idx < state->child_chunk.column_count(); idx++) {
+			idx_t idx = 0;
+			for (; idx < state->child_chunk.column_count(); idx++) {
 				chunk.data[idx].Reference(state->child_chunk.data[idx]);
 			}
-			for(; idx < chunk.column_count(); idx++) {
+			for (; idx < chunk.column_count(); idx++) {
 				chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
 				chunk.data[idx].nullmask[0] = true;
 			}
@@ -172,7 +172,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		return;
 	}
 
-	if ((type == JoinType::INNER || type == JoinType::LEFT) && state->right_chunk >= state->right_chunks.chunks.size()) {
+	if ((type == JoinType::INNER || type == JoinType::LEFT) &&
+	    state->right_chunk >= state->right_chunks.chunks.size()) {
 		return;
 	}
 	// now that we have fully materialized the right child
@@ -249,7 +250,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		switch (type) {
 		case JoinType::INNER: {
 			sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
-			index_t match_count =
+			idx_t match_count =
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition,
 			                                 right_chunk, lvector, rvector, conditions);
 			// we have finished resolving the join conditions
@@ -262,15 +263,15 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// create a reference to the chunk on the left side using the lvector
 			// VectorCardinality lcardinality(match_count, lvector);
 			chunk.SetCardinality(match_count, lvector);
-			for (index_t i = 0; i < state->child_chunk.column_count(); i++) {
+			for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
 				chunk.data[i].Reference(state->child_chunk.data[i]);
 				chunk.data[i].ClearSelectionVector();
 			}
 			chunk.SetCardinality(match_count, rvector);
 			// now create a reference to the chunk on the right side using the rvector
 			// VectorCardinality rcardinality(match_count, rvector);
-			for (index_t i = 0; i < right_data.column_count(); i++) {
-				index_t chunk_entry = state->child_chunk.column_count() + i;
+			for (idx_t i = 0; i < right_data.column_count(); i++) {
+				idx_t chunk_entry = state->child_chunk.column_count() + i;
 				chunk.data[chunk_entry].Reference(right_data.data[i]);
 				chunk.data[chunk_entry].ClearSelectionVector();
 			}

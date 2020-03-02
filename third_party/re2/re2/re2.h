@@ -901,7 +901,7 @@ MAKE_INTEGER_PARSER(unsigned long long, ulonglong)
 // Note that we test for Clang first because it defines __GNUC__ as well.
 #if defined(__clang__)
 #elif defined(__GNUC__) && __GNUC__ >= 6
-#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+//#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #endif
 
 // Helper for writing global or static RE2s safely.

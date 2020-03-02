@@ -38,7 +38,7 @@ void ConjunctionExpression::AddExpression(unique_ptr<ParsedExpression> expr) {
 
 string ConjunctionExpression::ToString() const {
 	string result = children[0]->ToString();
-	for (index_t i = 1; i < children.size(); i++) {
+	for (idx_t i = 1; i < children.size(); i++) {
 		result += " " + ExpressionTypeToOperator(type) + " " + children[i]->ToString();
 	}
 	return result;
