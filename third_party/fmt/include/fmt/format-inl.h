@@ -8,7 +8,7 @@
 #ifndef FMT_FORMAT_INL_H_
 #define FMT_FORMAT_INL_H_
 
-#include "format.h"
+#include "fmt/format.h"
 
 #include <cassert>
 #include <cctype>
@@ -19,19 +19,6 @@
 #include <cwchar>
 #if !defined(FMT_STATIC_THOUSANDS_SEPARATOR)
 #  include <locale>
-#endif
-
-#if FMT_USE_WINDOWS_H
-#  if !defined(FMT_HEADER_ONLY) && !defined(WIN32_LEAN_AND_MEAN)
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-#  if defined(NOMINMAX) || defined(FMT_WIN_MINMAX)
-#    include <windows.h>
-#  else
-#    define NOMINMAX
-#    include <windows.h>
-#    undef NOMINMAX
-#  endif
 #endif
 
 #if FMT_EXCEPTIONS
@@ -1240,101 +1227,6 @@ template <> struct formatter<internal::bigint> {
   }
 };
 
-#if FMT_USE_WINDOWS_H
-
-FMT_FUNC internal::utf8_to_utf16::utf8_to_utf16(string_view s) {
-  static const char ERROR_MSG[] = "cannot convert string from UTF-8 to UTF-16";
-  if (s.size() > INT_MAX)
-    FMT_THROW(windows_error(ERROR_INVALID_PARAMETER, ERROR_MSG));
-  int s_size = static_cast<int>(s.size());
-  if (s_size == 0) {
-    // MultiByteToWideChar does not support zero length, handle separately.
-    buffer_.resize(1);
-    buffer_[0] = 0;
-    return;
-  }
-
-  int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(),
-                                   s_size, nullptr, 0);
-  if (length == 0) FMT_THROW(windows_error(GetLastError(), ERROR_MSG));
-  buffer_.resize(length + 1);
-  length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), s_size,
-                               &buffer_[0], length);
-  if (length == 0) FMT_THROW(windows_error(GetLastError(), ERROR_MSG));
-  buffer_[length] = 0;
-}
-
-FMT_FUNC internal::utf16_to_utf8::utf16_to_utf8(wstring_view s) {
-  if (int error_code = convert(s)) {
-    FMT_THROW(windows_error(error_code,
-                            "cannot convert string from UTF-16 to UTF-8"));
-  }
-}
-
-FMT_FUNC int internal::utf16_to_utf8::convert(wstring_view s) {
-  if (s.size() > INT_MAX) return ERROR_INVALID_PARAMETER;
-  int s_size = static_cast<int>(s.size());
-  if (s_size == 0) {
-    // WideCharToMultiByte does not support zero length, handle separately.
-    buffer_.resize(1);
-    buffer_[0] = 0;
-    return 0;
-  }
-
-  int length = WideCharToMultiByte(CP_UTF8, 0, s.data(), s_size, nullptr, 0,
-                                   nullptr, nullptr);
-  if (length == 0) return GetLastError();
-  buffer_.resize(length + 1);
-  length = WideCharToMultiByte(CP_UTF8, 0, s.data(), s_size, &buffer_[0],
-                               length, nullptr, nullptr);
-  if (length == 0) return GetLastError();
-  buffer_[length] = 0;
-  return 0;
-}
-
-FMT_FUNC void windows_error::init(int err_code, string_view format_str,
-                                  format_args args) {
-  error_code_ = err_code;
-  memory_buffer buffer;
-  internal::format_windows_error(buffer, err_code, vformat(format_str, args));
-  std::runtime_error& base = *this;
-  base = std::runtime_error(to_string(buffer));
-}
-
-FMT_FUNC void internal::format_windows_error(internal::buffer<char>& out,
-                                             int error_code,
-                                             string_view message) FMT_NOEXCEPT {
-  FMT_TRY {
-    wmemory_buffer buf;
-    buf.resize(inline_buffer_size);
-    for (;;) {
-      wchar_t* system_message = &buf[0];
-      int result = FormatMessageW(
-          FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr,
-          error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), system_message,
-          static_cast<uint32_t>(buf.size()), nullptr);
-      if (result != 0) {
-        utf16_to_utf8 utf8_message;
-        if (utf8_message.convert(system_message) == ERROR_SUCCESS) {
-          internal::writer w(out);
-          w.write(message);
-          w.write(": ");
-          w.write(utf8_message);
-          return;
-        }
-        break;
-      }
-      if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-        break;  // Can't get error message, report error code instead.
-      buf.resize(buf.size() * 2);
-    }
-  }
-  FMT_CATCH(...) {}
-  format_error_code(out, error_code, message);
-}
-
-#endif  // FMT_USE_WINDOWS_H
-
 FMT_FUNC void format_system_error(internal::buffer<char>& out, int error_code,
                                   string_view message) FMT_NOEXCEPT {
   FMT_TRY {
@@ -1368,13 +1260,6 @@ FMT_FUNC void report_system_error(int error_code,
                                   fmt::string_view message) FMT_NOEXCEPT {
   report_error(format_system_error, error_code, message);
 }
-
-#if FMT_USE_WINDOWS_H
-FMT_FUNC void report_windows_error(int error_code,
-                                   fmt::string_view message) FMT_NOEXCEPT {
-  report_error(internal::format_windows_error, error_code, message);
-}
-#endif
 
 FMT_FUNC void vprint(std::FILE* f, string_view format_str, format_args args) {
   memory_buffer buffer;

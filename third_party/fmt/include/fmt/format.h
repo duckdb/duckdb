@@ -33,7 +33,7 @@
 #ifndef FMT_FORMAT_H_
 #define FMT_FORMAT_H_
 
-#include "core.h"
+#include "fmt/core.h"
 
 #include <algorithm>
 #include <cerrno>
