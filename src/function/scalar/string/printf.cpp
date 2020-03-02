@@ -20,7 +20,6 @@ struct FMTFormat {
 	}
 };
 
-
 template<class FORMAT_FUN, class ctx>
 static void printf_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
@@ -50,7 +49,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		count = args.size();
 		sel_vector = args.sel_vector;
 	}
-	for(idx_t i = 0; i < args.size(); i++) {
+	for(idx_t i = 0; i < count; i++) {
 		idx_t current_idx = sel_vector ? sel_vector[i] : i;
 		if (result.nullmask[current_idx]) {
 			// this entry is NULL: skip it
@@ -122,7 +121,7 @@ void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	printf_fun.varargs = SQLType::ANY;
 	set.AddFunction(printf_fun);
 
-	// // fmt::format_context, fmt::vformat
+	// fmt::format_context, fmt::vformat
 	ScalarFunction format_fun = ScalarFunction("format", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTFormat, fmt::format_context>);
 	format_fun.varargs = SQLType::ANY;
 	set.AddFunction(format_fun);
