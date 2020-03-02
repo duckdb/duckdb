@@ -658,6 +658,7 @@ static void execute_file(string script) {
 // code below traverses the test directory and makes individual test cases out
 // of each script
 static void listFiles(const string &path, std::function<void(const string &)> cb) {
+#ifndef SUN
 	if (auto dir = opendir(path.c_str())) {
 		while (auto f = readdir(dir)) {
 			if (f->d_name[0] == '.')
@@ -670,6 +671,7 @@ static void listFiles(const string &path, std::function<void(const string &)> cb
 		}
 		closedir(dir);
 	}
+#endif
 }
 
 static bool endsWith(const string &mainStr, const string &toMatch) {

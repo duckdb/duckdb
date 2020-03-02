@@ -18,11 +18,14 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 Debug
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       osx_image: xcode11
 
 
     - os: osx
       name: Xcode 11.0
+
       osx_image: xcode11
 
       before_install:
@@ -38,6 +41,7 @@ matrix:
 
     - os: linux
       name: Clang 6
+      if: (type = push AND branch = master) OR (type = pull_request)
       dist: xenial
       addons:
         apt:
@@ -53,6 +57,7 @@ matrix:
 
     - os: linux
       name: GCC 4.9
+      if: (type = push AND branch = master) OR (type = pull_request)
       addons:
          apt:
           sources:
@@ -81,6 +86,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Valgrind
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       addons:
         apt:
@@ -98,6 +104,7 @@ matrix:
     - os: linux
       dist: xenial
       name: REST Server
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       before_install:
         - pip install --user boto3
@@ -145,6 +152,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 32 Bit
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       addons:
         apt:
@@ -170,6 +178,8 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 9 (Vector Sizes)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       python: 3.7
 
       addons:
@@ -204,6 +214,8 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 5 (ARM64)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       arch: arm64
 
       script:
@@ -236,6 +248,8 @@ matrix:
 
     - os: windows
       name: VS 2017 32 Bit
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       filter_secrets: false
 
       language: c
@@ -287,6 +301,7 @@ matrix:
     - os: osx
       osx_image: xcode11
       name: R Package
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       language: r
       #r: devel
@@ -314,6 +329,7 @@ matrix:
     - os: windows
       name: R Package
       filter_secrets: false
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       language: cpp
 
@@ -362,6 +378,7 @@ matrix:
 
     - os: linux
       name: Python 2 Package
+      if: (type = push AND branch = master) OR (type = pull_request)
 
       dist: xenial
       language: python
@@ -383,6 +400,8 @@ matrix:
 
     - os: osx
       name: Python Package
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       language: generic
       osx_image: xcode11
 
@@ -400,6 +419,8 @@ matrix:
 
     - os: windows
       name: Python Package
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       language: cpp
       filter_secrets: false
       # no python 27 because no C++11 support in its windows toolchain
@@ -430,6 +451,8 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       osx_image: xcode11
       script:
         - python scripts/amalgamation.py
@@ -439,6 +462,8 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       addons:
         apt:
           sources:
@@ -462,6 +487,8 @@ matrix:
 
     - os: windows
       name: VS 2017 (Amalgamation)
+      if: (type = push AND branch = master) OR (type = pull_request)
+
       filter_secrets: false
       language: c
       before_script:
@@ -472,3 +499,59 @@ matrix:
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - test/Release/unittest.exe
+
+
+    - os: linux
+      dist: bionic
+      name: Solaris VM
+      if: (type = push AND branch = master) OR (type = pull_request)
+      sudo: true
+
+      install:
+        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp rsync > /dev/null
+        - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova"
+        - VBoxManage import Solaris10_1-13-2.ova
+        - rm Solaris10_1-13-2.ova
+        - VBoxManage modifyvm "Solaris10_1-13" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
+        - VBoxManage startvm "Solaris10_1-13" --type headless
+        - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEArPN99L/D9jXUwtFjoAzhnzA5a7t/YJiSrcTm+hKSxPp/nklfu1Km\ntDbMBOrXsAqLRcMz5JZoF8G1jebXOO3u2LRB+INFsxqDV76TZjUC1y4SAX17h5UvstT3sn\naPPt+TzwX3PmF8ooN+L8hDIZpvty6m+7b09QRFx4l7+j30MgO+kjwNHUyocn7qokoyH2p4\nfzvtoWePNyL191O9GNg6LmjneG25nN/NBoFYc/Zu+XfDY3gMECNurGHVV3W4ZNpoqjpZWU\nFx4eG0tShBZ+pvuFPy669+H8b5laNEjPGYclInW8unW6T9nuaoQjc/metBwaODgkOsAR0u\nddRxR8nIUwAAA9C2NMXdtjTF3QAAAAdzc2gtcnNhAAABAQCs8330v8P2NdTC0WOgDOGfMD\nlru39gmJKtxOb6EpLE+n+eSV+7Uqa0NswE6tewCotFwzPklmgXwbWN5tc47e7YtEH4g0Wz\nGoNXvpNmNQLXLhIBfXuHlS+y1Peydo8+35PPBfc+YXyig34vyEMhmm+3Lqb7tvT1BEXHiX\nv6PfQyA76SPA0dTKhyfuqiSjIfanh/O+2hZ483IvX3U70Y2DouaOd4bbmc380GgVhz9m75\nd8NjeAwQI26sYdVXdbhk2miqOllZQXHh4bS1KEFn6m+4U/Lrr34fxvmVo0SM8ZhyUidby6\ndbpP2e5qhCNz+Z60HBo4OCQ6wBHS511HFHychTAAAAAwEAAQAAAQEAl3IwnZ0+z96bjG0m\nvAQLngXwgjIRfFieOKPvTpPtCagBEG5X8gSSDcTeKoAqlvDkvBYO3uAGDqeFf9jgJe3T9N\ncD3cW1xvw0fyVWlW1eK2cgRUXIYhV1SzfKHvBKx1eoauRieLGNHhHe8aB/iHFf2hx0BH9V\nSSiQogX2Fk8iAphr9qLuR+M0eMtsZmq9nNpk0iXiohw7b3xNb1QrewoeiXiSI4xANdbkmx\n7R2Jnm132toa+ofPZWbpRptYyzv5TWRhEob4GQSknEvS7NEep3cxnv71d1wQvCfhkMKLXH\nKrIck4X46fLa+65OV8Bq37x91kRagOl4VFBZBT61Y9+DoQAAAIEAltUA8Zx5ETlUOXdGCQ\n+ftbCLZlmlPGGabFdg/EKM+M96Q3sj7L2lIP0Htt5w/HmM3Hz9uLk/d/m20zPq8xkltwCo\nF4R80K5HA38Q26fPRpJzDhch+k7AYuQwjziPSH1uzP3BdQo74KVuyvaTk+9VoeeFslF13P\njflhvUmCyquNkAAACBANtkmGdXwaMHrFKAibQreQuQD9CBRFRDRYNWOP4nPOp7YyCY4xbf\n02kHfFUmf7UqvY36v+jTC4RJ1mJH9KVlqJOB/JLhb6Wrv3xuddcxbwaMwb6dGgsZM+iB7G\nqBlcHlrxnWi6bXXK9WpQWaLNYdE4MKgRvKTSq20glezRWDijznAAAAgQDJzyCedgs5ibpb\nhvtNy5TGXPyX2lI9qoMDV2LSJZhp5TPL/mZqITUrehs0siM9IQ4DqhL4DgKBkYOLI/W6mW\nCXkQVFkGGLovzFUMM/wpK1Ua20k+0XakblI11yK3fjd0XJ0K5FyQ1YzG9XXZ8EuZo/2p2A\n8Y/K54JYuMflOJVftQAAABZoYW5uZXNAZGFrYXIuZGEuY3dpLm5sAQID\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_solaris
+        - chmod 400 id_rsa_solaris
+        - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_solaris"
+        - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
+        - sleep 60
+        - while ! $SCMD ls ; do sleep 30 ; done
+        - $SCMD 'bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"'
+
+      script:
+        - python scripts/amalgamation.py > /dev/null
+        - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest --exclude=third_party/imdb .  root@localhost:/duckdb
+        - $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+        - $SCMD /duckdb/build/test/unittest "~[copy]~[file_system]~[.]"
+
+
+    - os: linux
+      dist: bionic
+      name: OpenBSD VM
+      if: (type = push AND branch = master) OR (type = pull_request)
+      sudo: true
+
+      install:
+        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp rsync > /dev/null
+        - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/OpenBSD.ova"
+        - VBoxManage import OpenBSD.ova
+        - rm OpenBSD.ova
+        - VBoxManage modifyvm "OpenBSD" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
+        - VBoxManage startvm "OpenBSD" --type headless
+        - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEA0I/POwsFY/l5DGvybl1amd9pqzP5ADPQGWupcNuKbSYq+sD4g5Jr\nqZ0vG9sULeYlZZFHzdbUqzdbK9rMZZOUwUwHbxViS2UlhCo0onB9bbzm6kQ2gSBaXxa8SC\nwllEdHq6c/kK50MZKVwqpBrxIJtGN08pNauhMPNMdniQZD5slkKrneTgGYnm30xNtkHStB\nY/btURWNlVd8Qedx8gSEV5628cAeKJAPOn4nrCYvy7uMWBOYqrqZii38uxdrhnZKKKENcA\ndUuFRdmFDK/0d+/0PeUYUacZm3HRU5F21440u51OdBMzBYe9AaQXQGrwKwY+YxlczlVh8g\n9XMWYBzJ3wAAA9B959FqfefRagAAAAdzc2gtcnNhAAABAQDQj887CwVj+XkMa/JuXVqZ32\nmrM/kAM9AZa6lw24ptJir6wPiDkmupnS8b2xQt5iVlkUfN1tSrN1sr2sxlk5TBTAdvFWJL\nZSWEKjSicH1tvObqRDaBIFpfFrxILCWUR0erpz+QrnQxkpXCqkGvEgm0Y3Tyk1q6Ew80x2\neJBkPmyWQqud5OAZiebfTE22QdK0Fj9u1RFY2VV3xB53HyBIRXnrbxwB4okA86fiesJi/L\nu4xYE5iqupmKLfy7F2uGdkoooQ1wB1S4VF2YUMr/R37/Q95RhRpxmbcdFTkXbXjjS7nU50\nEzMFh70BpBdAavArBj5jGVzOVWHyD1cxZgHMnfAAAAAwEAAQAAAQB6iVPfQ81p/MRDKRUq\nBM1bhKkH/qQ4mziUBu5psYN2N6ue4kvgueFpqUFpY2FKymKEd0QxyxvucLqvXIEk2P3YR/\nxCJtU2qPnO2iFMozz+gbNGRsejPEf8gFYlLVLy+KJCVySAtA7upUo6MmAfJUDwbFLkxvDS\nTKptfw70seqpJ/CdUXqrd/YAfwqGO0ZgQC59MDTGS1rXViRbTEMOxbWg9TMmvWb36vJG8i\nvSGimXL0gvhB7himZzK0z9tl8r3gHIHpiKy+67tzXyDdzXxpTJ7krBIwVgMgHwZpSy++c6\n9e6ag9LH217gWSDX4C0tAnHhjc5QqlCBwZVe/n2Kyg3pAAAAgQC1zeKHT3XLt9NfBVjhfq\nS3lMByGNCR90RS1vZe+wYVuChFCs7ztraWgMX9n7m3HvaGj+lqDPBD6mkoaYFCqKVr5GcH\nq1fij2sZeEpymhOUjX/aWGr9kdnxkvpSzYt33OU7hQIv34ViSXuyiEVb/SYXxqmwaYhCbW\noAlXqS57U3ZAAAAIEA58ImmEbbHDbA+mUZ1xugtb2heIQyVm+B1FtWtOY3B7LKgfgP5kaw\nhhVAlOfpxSyn/aNWdokE6JsFU/Vs/eiEXmn253ofF0J2kQuVD8+0m+yUMkbDYbfyc9FPsR\n1OS4cqjM8ET77EvLiqIHXO8aWr4eCOJxjDJLC0xVKOicgk/JUAAACBAOZghEZOuUgLjB1K\nQ0kMX+CTNvyKB44eY24kbp22KI4hsEw4BwyqPvCyRZsx7EBGXdGO0giVc41T6WJxwLVCbW\nmG1AC03KQ/lPXf/lzuwT4/N52hw+s4EmHlcPfoPyRFtbZuUyJqlhL4txWZdI31Ot0jxiQK\nxePoxUuMva2261ujAAAAFWhhbm5lc0BoZXJiZXJ0Mi5sb2NhbAECAwQF\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_openbsd
+        - chmod 400 id_rsa_openbsd
+        - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_openbsd"
+        - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
+        - sleep 60
+        - while ! $SCMD ls ; do sleep 30 ; done
+        - $SCMD pkg_add gmake rsync-3.1.3
+
+      script:
+        - python scripts/amalgamation.py > /dev/null
+        - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest .  root@localhost:/home/duckdb
+        - $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+        - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[.]"

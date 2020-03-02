@@ -85,8 +85,8 @@ class LogMessage {
 // Silence "destructor never returns" warning for ~LogMessageFatal().
 // Since this is a header file, push and then pop to limit the scope.
 #ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4722)
+//#pragma warning(push)
+//#pragma warning(disable: 4722)
 #endif
 
 class LogMessageFatal : public LogMessage {
@@ -103,7 +103,7 @@ class LogMessageFatal : public LogMessage {
 };
 
 #ifdef _MSC_VER
-#pragma warning(pop)
+//#pragma warning(pop)
 #endif
 
 #endif  // UTIL_LOGGING_H_

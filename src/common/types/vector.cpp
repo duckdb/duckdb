@@ -1,3 +1,5 @@
+#include <cstring> // strlen() on Solaris
+
 #include "duckdb/common/types/vector.hpp"
 
 #include "duckdb/common/assert.hpp"
