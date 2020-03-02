@@ -130,7 +130,7 @@ FINISH_BENCHMARK(CastDateToString)
 
 DUCKDB_BENCHMARK(CastTimeToString, "[cast]")
 void Load(DuckDBBenchmarkState *state) override {
-	std::uniform_int_distribution<> hour_dist(1, 24), min_dist(1, 60);
+	std::uniform_int_distribution<> hour_dist(0, 23), min_dist(0, 59);
 	std::mt19937 gen;
 	gen.seed(42);
 
@@ -158,7 +158,7 @@ FINISH_BENCHMARK(CastTimeToString)
 DUCKDB_BENCHMARK(CastTimestampToString, "[cast]")
 void Load(DuckDBBenchmarkState *state) override {
 	std::uniform_int_distribution<> year_dist(1990, 2010), day_dist(1, 28), month_dist(1, 12);
-	std::uniform_int_distribution<> hour_dist(1, 24), min_dist(1, 60);
+	std::uniform_int_distribution<> hour_dist(0, 23), min_dist(0, 59);
 	std::mt19937 gen;
 	gen.seed(42);
 
