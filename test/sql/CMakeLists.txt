@@ -28,7 +28,7 @@ add_subdirectory(views)
 add_subdirectory(storage)
 add_subdirectory(update)
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT SUN)
   add_subdirectory(tpch)
   add_subdirectory(tpcds)
 endif()
