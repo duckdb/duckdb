@@ -525,8 +525,54 @@ template <> string_t StringCast::Operation(double input, Vector &vector) {
 // Cast From Date
 //===--------------------------------------------------------------------===//
 template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
-	string str = Date::ToString(input);
-	return vector.AddString(str);
+	int32_t year;
+	int32_t month_day[2];
+	Date::Convert(input, year, month_day[0], month_day[1]);
+	// format is YYYY-MM-DD (BC)
+	// regular length is 10
+	idx_t length = 6;
+	idx_t year_length = 4;
+	bool add_bc = false;
+	if (year <= 0) {
+		// add (BC) suffix
+		length += 5;
+		year = -year;
+		add_bc = true;
+	} else {
+		// potentially add extra characters depending on length of year
+		year_length += year >= 10000;
+		year_length += year >= 100000;
+		year_length += year >= 1000000;
+		year_length += year >= 10000000;
+	}
+	length += year_length;
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	// now we write the string, first write the year
+	auto endptr = data + year_length;
+	endptr = StringToIntegerCast::FormatUnsigned(year, endptr);
+	while(endptr > data) {
+		*--endptr = '0';
+	}
+	auto ptr = data + year_length;
+	for(int i = 0; i < 2; i++) {
+		ptr[0] = '-';
+		if (month_day[i] < 10) {
+			ptr[1] = '0';
+			ptr[2] = '0' + month_day[i];
+		} else {
+			auto index = static_cast<unsigned>(month_day[i] * 2);
+			ptr[1] = StringToIntegerCast::string_digits[index];
+			ptr[2] = StringToIntegerCast::string_digits[index + 1];
+		}
+		ptr += 3;
+	}
+	if (add_bc) {
+		memcpy(ptr, " (BC)", 5);
+	}
+	result.Finalize();
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
