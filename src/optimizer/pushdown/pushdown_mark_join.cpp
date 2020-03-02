@@ -1,6 +1,6 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
-#include "planner/operator/logical_comparison_join.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -8,17 +8,18 @@ using namespace std;
 using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalOperator> op,
-                                                             unordered_set<index_t> &left_bindings,
-                                                             unordered_set<index_t> &right_bindings) {
+                                                             unordered_set<idx_t> &left_bindings,
+                                                             unordered_set<idx_t> &right_bindings) {
 	auto &join = (LogicalJoin &)*op;
 	auto &comp_join = (LogicalComparisonJoin &)*op;
-	assert(join.type == JoinType::MARK);
+	assert(join.join_type == JoinType::MARK);
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::DELIM_JOIN);
 
+	right_bindings.insert(comp_join.mark_index);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	bool found_mark_reference = false;
 	// now check the set of filters
-	for (index_t i = 0; i < filters.size(); i++) {
+	for (idx_t i = 0; i < filters.size(); i++) {
 		auto side = JoinSide::GetJoinSide(filters[i]->bindings, left_bindings, right_bindings);
 		if (side == JoinSide::LEFT) {
 			// bindings match left side: push into left
@@ -34,7 +35,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 			// we can turn this into a SEMI join if the filter is on only the marker
 			if (filters[i]->filter->type == ExpressionType::BOUND_COLUMN_REF) {
 				// filter just references the marker: turn into semi join
-				join.type = JoinType::SEMI;
+				join.join_type = JoinType::SEMI;
 				filters.erase(filters.begin() + i);
 				i--;
 				continue;
@@ -56,7 +57,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 					}
 					if (all_null_values_are_equal) {
 						// all null values are equal, convert to ANTI join
-						join.type = JoinType::ANTI;
+						join.join_type = JoinType::ANTI;
 						filters.erase(filters.begin() + i);
 						i--;
 						continue;

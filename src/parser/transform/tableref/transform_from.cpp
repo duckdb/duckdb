@@ -1,13 +1,13 @@
-#include "parser/tableref/crossproductref.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<TableRef> Transformer::TransformFrom(List *root) {
+unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 	if (!root) {
-		return nullptr;
+		return make_unique<EmptyTableRef>();
 	}
 
 	if (root->length > 1) {
@@ -15,7 +15,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(List *root) {
 		auto result = make_unique<CrossProductRef>();
 		CrossProductRef *cur_root = result.get();
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			Node *n = reinterpret_cast<Node *>(node->data.ptr_value);
+			auto n = reinterpret_cast<PGNode *>(node->data.ptr_value);
 			unique_ptr<TableRef> next = TransformTableRefNode(n);
 			if (!cur_root->left) {
 				cur_root->left = move(next);
@@ -32,6 +32,6 @@ unique_ptr<TableRef> Transformer::TransformFrom(List *root) {
 		return move(result);
 	}
 
-	Node *n = reinterpret_cast<Node *>(root->head->data.ptr_value);
+	auto n = reinterpret_cast<PGNode *>(root->head->data.ptr_value);
 	return TransformTableRefNode(n);
 }

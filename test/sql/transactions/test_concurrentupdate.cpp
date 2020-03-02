@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -9,9 +9,11 @@
 using namespace duckdb;
 using namespace std;
 
-#define TRANSACTION_UPDATE_COUNT 1000
-#define TOTAL_ACCOUNTS 20
-#define MONEY_PER_ACCOUNT 10
+namespace test_concurrent_update {
+
+static constexpr int TRANSACTION_UPDATE_COUNT = 1000;
+static constexpr int TOTAL_ACCOUNTS = 20;
+static constexpr int MONEY_PER_ACCOUNT = 10;
 
 TEST_CASE("Single thread update", "[transactions]") {
 	unique_ptr<MaterializedQueryResult> result;
@@ -187,3 +189,5 @@ TEST_CASE("Multiple concurrent updaters", "[updates][.]") {
 		REQUIRE(correct[i]);
 	}
 }
+
+} // namespace test_concurrent_update

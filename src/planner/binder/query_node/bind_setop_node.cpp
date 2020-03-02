@@ -1,17 +1,17 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/expression_map.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "parser/query_node/set_operation_node.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-static void GatherAliases(QueryNode &node, unordered_map<string, index_t> &aliases,
-                          expression_map_t<index_t> &expressions) {
+static void GatherAliases(QueryNode &node, unordered_map<string, idx_t> &aliases,
+                          expression_map_t<idx_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = (SetOperationNode &)node;
@@ -22,7 +22,7 @@ static void GatherAliases(QueryNode &node, unordered_map<string, index_t> &alias
 		assert(node.type == QueryNodeType::SELECT_NODE);
 		auto &select = (SelectNode &)node;
 		// fill the alias lists
-		for (index_t i = 0; i < select.select_list.size(); i++) {
+		for (idx_t i = 0; i < select.select_list.size(); i++) {
 			auto &expr = select.select_list[i];
 			auto name = expr->GetName();
 			// first check if the alias is already in there
@@ -67,7 +67,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 
 	result->setop_index = GenerateTableIndex();
 
-	vector<index_t> order_references;
+	vector<idx_t> order_references;
 	if (statement.orders.size() > 0) {
 		// handle the ORDER BY
 		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
@@ -75,18 +75,18 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
 		// the ORDER BY
-		unordered_map<string, index_t> alias_map;
-		expression_map_t<index_t> expression_map;
+		unordered_map<string, idx_t> alias_map;
+		expression_map_t<idx_t> expression_map;
 		GatherAliases(statement, alias_map, expression_map);
 		// now we perform the actual resolution of the ORDER BY expressions
-		for (index_t i = 0; i < statement.orders.size(); i++) {
+		for (idx_t i = 0; i < statement.orders.size(); i++) {
 			auto &order = statement.orders[i].expression;
 			if (order->type == ExpressionType::VALUE_CONSTANT) {
 				// ORDER BY a constant
 				auto &constant = (ConstantExpression &)*order;
 				if (TypeIsIntegral(constant.value.type)) {
 					// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-					order_references.push_back(constant.value.GetNumericValue() - 1);
+					order_references.push_back(constant.value.GetValue<int64_t>() - 1);
 					continue;
 				}
 			}
@@ -140,14 +140,14 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	}
 
 	// figure out the types of the setop result by picking the max of both
-	for (index_t i = 0; i < result->left->types.size(); i++) {
+	for (idx_t i = 0; i < result->left->types.size(); i++) {
 		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
 
 	// if there are ORDER BY entries we create the BoundColumnRefExpressions
 	assert(order_references.size() == statement.orders.size());
-	for (index_t i = 0; i < statement.orders.size(); i++) {
+	for (idx_t i = 0; i < statement.orders.size(); i++) {
 		auto entry = order_references[i];
 		if (entry >= result->types.size()) {
 			throw BinderException("ORDER term out of range - should be between 1 and %d", (int)result->types.size());

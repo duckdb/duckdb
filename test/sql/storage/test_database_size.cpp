@@ -1,13 +1,13 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test that database size does not grow after many checkpoints", "[storage][.]") {
-	constexpr index_t VALUE_COUNT = 10000;
-	index_t expected_sum = 0;
+	constexpr idx_t VALUE_COUNT = 10000;
+	idx_t expected_sum = 0;
 
 	FileSystem fs;
 	auto config = GetTestConfig();
@@ -23,7 +23,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(a INTEGER);"));
-		for (index_t i = 0; i < VALUE_COUNT; i++) {
+		for (idx_t i = 0; i < VALUE_COUNT; i++) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (" + to_string(i) + ");"));
 			expected_sum += i;
 		}
@@ -45,7 +45,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 		REQUIRE(size >= 0);
 	}
 	// now reload the database a bunch of times, and everytime we reload update all the values
-	for (index_t i = 0; i < 20; i++) {
+	for (idx_t i = 0; i < 20; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// verify the current count

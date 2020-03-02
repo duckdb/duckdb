@@ -253,6 +253,7 @@ io_file
 # Eclipse Project settings
 *.*project
 .settings
+.csettings
 
 # Visual Studio
 .vs
@@ -302,3 +303,5 @@ third_party/imdb/data
 .last_benchmarked_commit
 benchmark_results/
 duckdb_unittest_tempdir/
+grammar.y.tmp
+src/amalgamation/

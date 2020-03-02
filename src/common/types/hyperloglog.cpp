@@ -1,7 +1,7 @@
-#include "common/types/hyperloglog.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
-#include "common/exception.hpp"
-#include "hyperloglog.h"
+#include "duckdb/common/exception.hpp"
+#include "hyperloglog.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,13 +17,13 @@ HyperLogLog::~HyperLogLog() {
 	hll_destroy((robj *)hll);
 }
 
-void HyperLogLog::Add(data_ptr_t element, index_t size) {
+void HyperLogLog::Add(data_ptr_t element, idx_t size) {
 	if (hll_add((robj *)hll, element, size) == C_ERR) {
 		throw Exception("Could not add to HLL?");
 	}
 }
 
-index_t HyperLogLog::Count() {
+idx_t HyperLogLog::Count() {
 	size_t result; // exception from size_t ban
 	if (hll_count((robj *)hll, &result) != C_OK) {
 		throw Exception("Could not count HLL?");
@@ -42,10 +42,10 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], index_t count) {
+unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
 	auto hlls_uptr = unique_ptr<robj *[]> { new robj *[count] };
 	auto hlls = hlls_uptr.get();
-	for (index_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		hlls[i] = (robj *)logs[i].hll;
 	}
 	auto new_hll = hll_merge(hlls, count);

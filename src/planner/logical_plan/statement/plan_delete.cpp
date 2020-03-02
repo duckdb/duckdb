@@ -1,9 +1,9 @@
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_delete.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_get.hpp"
-#include "planner/statement/bound_delete_statement.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_delete.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/statement/bound_delete_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,6 +28,6 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundDeleteStatemen
 	del->AddChild(move(root));
 	// we push an BoundColumnRef binding to the row_id index
 	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    TypeId::BIGINT, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
+	    TypeId::INT64, ColumnBinding(get.table_index, get.column_ids.size() - 1)));
 	return move(del);
 }

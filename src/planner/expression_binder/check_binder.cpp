@@ -1,7 +1,7 @@
-#include "planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,7 +12,7 @@ CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, v
 	target_type = SQLType::INTEGER;
 }
 
-BindResult CheckBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
+BindResult CheckBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::WINDOW:
 		return BindResult("window functions are not allowed in check constraints");
@@ -34,7 +34,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		throw BinderException("Cannot reference table %s from within check constraint for table %s!",
 		                      colref.table_name.c_str(), table.c_str());
 	}
-	for (index_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
 			bound_columns.insert(i);
 			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i),

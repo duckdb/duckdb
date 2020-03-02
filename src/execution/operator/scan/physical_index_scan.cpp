@@ -1,40 +1,57 @@
-#include "execution/operator/scan/physical_index_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_index_scan.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
-	if (column_ids.size() == 0)
-		return;
-
-	if (!state->scan_state) {
-		// initialize the scan state of the index
-		// We have a query with two predicates
-		if (low_index && high_index) {
-			state->scan_state =
-			    index.InitializeScanTwoPredicates(context.ActiveTransaction(), column_ids, low_value,
-			                                      low_expression_type, high_value, high_expression_type);
-		}
-		// Our query has only one predicate
-		else {
-			if (low_index)
-				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
-				                                                        low_value, low_expression_type);
-			else if (high_index)
-				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
-				                                                        high_value, high_expression_type);
-			else if (equal_index)
-				state->scan_state = index.InitializeScanSinglePredicate(context.ActiveTransaction(), column_ids,
-				                                                        equal_value, ExpressionType::COMPARE_EQUAL);
-		}
+class PhysicalIndexScanOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalIndexScanOperatorState() : PhysicalOperatorState(nullptr), initialized(false) {
 	}
 
-	//! Continue the scan of the index
-	index.Scan(context.ActiveTransaction(), state->scan_state.get(), chunk);
+	bool initialized;
+	TableIndexScanState scan_state;
+};
+
+void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
+	if (column_ids.size() == 0) {
+		return;
+	}
+
+	auto &transaction = Transaction::GetTransaction(context);
+	if (!state->initialized) {
+		// initialize the scan state of the index
+		if (low_index && high_index) {
+			// two predicates
+			table.InitializeIndexScan(transaction, state->scan_state, index, low_value, low_expression_type, high_value,
+			                          high_expression_type, column_ids);
+		} else {
+			// single predicate
+			Value value;
+			ExpressionType type;
+			if (low_index) {
+				// > or >=
+				value = low_value;
+				type = low_expression_type;
+			} else if (high_index) {
+				// < or <=
+				value = high_value;
+				type = high_expression_type;
+			} else {
+				// equality
+				assert(equal_index);
+				value = equal_value;
+				type = ExpressionType::COMPARE_EQUAL;
+			}
+			table.InitializeIndexScan(transaction, state->scan_state, index, value, type, column_ids);
+		}
+		state->initialized = true;
+	}
+	// scan the index
+	table.IndexScan(transaction, chunk, state->scan_state);
 }
 
 string PhysicalIndexScan::ExtraRenderInformation() const {

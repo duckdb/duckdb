@@ -1,13 +1,13 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "execution/operator/persistent/buffered_csv_reader.hpp"
-#include "common/file_system.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
-#include "main/query_result.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "test_helpers.hpp"
-#include "parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 #include <cmath>
 
@@ -54,6 +54,9 @@ void TestCreateDirectory(string path) {
 
 string TestCreatePath(string suffix) {
 	FileSystem fs;
+	if (!fs.DirectoryExists(TESTING_DIRECTORY_NAME)) {
+		fs.CreateDirectory(TESTING_DIRECTORY_NAME);
+	}
 	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
 }
 
@@ -103,12 +106,12 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		}
 		// check this vector
 		auto &vector = result.collection.chunks[chunk_index]->data[column_number];
-		if (i + vector.count > values.size()) {
+		if (i + vector.size() > values.size()) {
 			// too many values in this vector
 			result.Print();
 			return false;
 		}
-		for (size_t j = 0; j < vector.count; j++) {
+		for (size_t j = 0; j < vector.size(); j++) {
 			// NULL <> NULL, hence special handling
 			if (vector.GetValue(j).is_null && values[i + j].is_null) {
 				continue;
@@ -123,7 +126,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 			}
 		}
 		chunk_index++;
-		i += vector.count;
+		i += vector.size();
 	}
 	return true;
 }
@@ -152,21 +155,22 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 }
 
 string show_diff(DataChunk &left, DataChunk &right) {
-	if (left.column_count != right.column_count) {
-		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count, (int)right.column_count);
+	if (left.column_count() != right.column_count()) {
+		return StringUtil::Format("Different column counts: %d vs %d", (int)left.column_count(),
+		                          (int)right.column_count());
 	}
 	if (left.size() != right.size()) {
 		return StringUtil::Format("Different sizes: %zu vs %zu", left.size(), right.size());
 	}
 	string difference;
-	for (size_t i = 0; i < left.column_count; i++) {
+	for (size_t i = 0; i < left.column_count(); i++) {
 		bool has_differences = false;
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
 		string left_column = StringUtil::Format("Result\n------\n%s [", TypeIdToString(left_vector.type).c_str());
 		string right_column = StringUtil::Format("Expect\n------\n%s [", TypeIdToString(right_vector.type).c_str());
 		if (left_vector.type == right_vector.type) {
-			for (size_t j = 0; j < left_vector.count; j++) {
+			for (size_t j = 0; j < left_vector.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
 				if (!Value::ValuesAreEqual(left_value, right_value)) {
@@ -193,17 +197,17 @@ string show_diff(DataChunk &left, DataChunk &right) {
 }
 
 bool compare_chunk(DataChunk &left, DataChunk &right) {
-	if (left.column_count != right.column_count) {
+	if (left.column_count() != right.column_count()) {
 		return false;
 	}
 	if (left.size() != right.size()) {
 		return false;
 	}
-	for (size_t i = 0; i < left.column_count; i++) {
+	for (size_t i = 0; i < left.column_count(); i++) {
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
 		if (left_vector.type == right_vector.type) {
-			for (size_t j = 0; j < left_vector.count; j++) {
+			for (size_t j = 0; j < left_vector.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
 				auto right_value = right_vector.GetValue(j);
 				if (!Value::ValuesAreEqual(left_value, right_value)) {
@@ -221,6 +225,12 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
                     string &error_message) {
 	assert(collection.types.size() == sql_types.size());
 
+	// set up the CSV reader
+	CopyInfo info;
+	info.delimiter = "|";
+	info.header = true;
+	info.quote = "\"";
+	info.escape = "\"";
 	// set up the intermediate result chunk
 	vector<TypeId> internal_types;
 	for (auto &type : sql_types) {
@@ -229,18 +239,12 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	DataChunk parsed_result;
 	parsed_result.Initialize(internal_types);
 
-	// set up the CSV reader
-	CopyInfo info;
-	info.delimiter = '|';
-	info.header = true;
-	info.quote = '"';
-
 	// convert the CSV string into a stringstream
 	istringstream csv_stream(csv);
 
 	BufferedCSVReader reader(info, sql_types, csv_stream);
-	index_t collection_index = 0;
-	index_t tuple_count = 0;
+	idx_t collection_index = 0;
+	idx_t tuple_count = 0;
 	while (true) {
 		// parse a chunk from the CSV file
 		try {

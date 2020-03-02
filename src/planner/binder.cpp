@@ -1,20 +1,27 @@
-#include "planner/binder.hpp"
+#include "duckdb/planner/binder.hpp"
 
-#include "execution/expression_executor.hpp"
-#include "parser/statement/list.hpp"
-#include "planner/bound_query_node.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/bound_tableref.hpp"
-#include "planner/expression.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/bound_sql_statement.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Binder::Binder(ClientContext &context, Binder *parent)
-    : context(context), parent(!parent ? nullptr : (parent->parent ? parent->parent : parent)), bound_tables(0) {
+Binder::Binder(ClientContext &context, Binder *parent_)
+    : context(context), read_only(true), parent(!parent_ ? nullptr : (parent_->parent ? parent_->parent : parent_)),
+      bound_tables(0) {
+	if (parent_) {
+		// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
+		bind_context.SetCTEBindings(parent_->bind_context.GetCTEBindings());
+		bind_context.cte_references = parent_->bind_context.cte_references;
+	}
 	if (parent) {
 		parameters = parent->parameters;
+		CTE_bindings = parent->CTE_bindings;
 	}
 }
 
@@ -30,17 +37,23 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return Bind((UpdateStatement &)statement);
+	case StatementType::CREATE:
+		return Bind((CreateStatement &)statement);
+	case StatementType::DROP:
+		return Bind((DropStatement &)statement);
 	case StatementType::ALTER:
 		return Bind((AlterTableStatement &)statement);
-	case StatementType::CREATE_TABLE:
-		return Bind((CreateTableStatement &)statement);
-	case StatementType::CREATE_VIEW:
-		return Bind((CreateViewStatement &)statement);
+	case StatementType::TRANSACTION:
+		return Bind((TransactionStatement &)statement);
+	case StatementType::PRAGMA:
+		return Bind((PragmaStatement &)statement);
 	case StatementType::EXECUTE:
 		return Bind((ExecuteStatement &)statement);
+	case StatementType::EXPLAIN:
+		return Bind((ExplainStatement &)statement);
 	default:
-		assert(statement.type == StatementType::CREATE_INDEX);
-		return Bind((CreateIndexStatement &)statement);
+		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
+		                              StatementTypeToString(statement.type).c_str());
 	}
 }
 
@@ -51,7 +64,7 @@ static int64_t BindConstant(Binder &binder, ClientContext &context, string claus
 	if (!TypeIsNumeric(value.type)) {
 		throw BinderException("LIMIT clause can only contain numeric constants!");
 	}
-	int64_t limit_value = value.GetNumericValue();
+	int64_t limit_value = value.GetValue<int64_t>();
 	if (limit_value < 0) {
 		throw BinderException("LIMIT must not be negative");
 	}
@@ -63,6 +76,9 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		result = Bind((SelectNode &)node);
+		break;
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		result = Bind((RecursiveCTENode &)node);
 		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
@@ -95,9 +111,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((JoinRef &)ref);
 	case TableReferenceType::SUBQUERY:
 		return Bind((SubqueryRef &)ref);
-	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
+	case TableReferenceType::EMPTY:
+		return Bind((EmptyTableRef &)ref);
+	case TableReferenceType::TABLE_FUNCTION:
 		return Bind((TableFunctionRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return Bind((ExpressionListRef &)ref);
+	default:
+		throw Exception("Unknown table ref type");
 	}
 }
 
@@ -122,7 +143,7 @@ unique_ptr<QueryNode> Binder::FindCTE(const string &name) {
 	return entry->second->Copy();
 }
 
-index_t Binder::GenerateTableIndex() {
+idx_t Binder::GenerateTableIndex() {
 	if (parent) {
 		return parent->GenerateTableIndex();
 	}
@@ -164,7 +185,7 @@ void Binder::MoveCorrelatedExpressions(Binder &other) {
 }
 
 void Binder::MergeCorrelatedColumns(vector<CorrelatedColumnInfo> &other) {
-	for (index_t i = 0; i < other.size(); i++) {
+	for (idx_t i = 0; i < other.size(); i++) {
 		AddCorrelatedColumn(other[i]);
 	}
 }

@@ -1,6 +1,6 @@
-#include "catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
 
-#include "catalog/catalog.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -1,8 +1,8 @@
-#include "execution/operator/join/physical_hash_join.hpp"
-#include "execution/operator/set/physical_union.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
-#include "planner/operator/logical_set_operation.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/set/physical_union.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -27,7 +27,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		auto &types = left->GetTypes();
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
-		for (index_t i = 0; i < types.size(); i++) {
+		for (idx_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
 			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
@@ -38,7 +38,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// EXCEPT is ANTI join
 		// INTERSECT is SEMI join
 		JoinType join_type = op.type == LogicalOperatorType::EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		return make_unique<PhysicalHashJoin>(op, move(left), move(right), move(conditions), join_type);
+		return make_unique<PhysicalHashJoin>(context, op, move(left), move(right), move(conditions), join_type);
 	}
 	}
 }

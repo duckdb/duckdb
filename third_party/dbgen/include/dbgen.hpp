@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "catalog/catalog.hpp"
-#include "common/types/data_chunk.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb.hpp"
 
 namespace tpch {

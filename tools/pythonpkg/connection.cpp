@@ -6,14 +6,14 @@
 #include "pythread.h"
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
-	static char *kwlist[] = {"database", NULL, NULL};
+	static const char *kwlist[] = {"database", NULL, NULL};
 
 	char *database;
 	PyObject *database_obj;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", kwlist, PyUnicode_FSConverter, &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", (char **)kwlist, PyUnicode_FSConverter, &database_obj)) {
 #else
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", kwlist, &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", (char **)kwlist, &database_obj)) {
 #endif
 
 		return -1;
@@ -27,7 +27,7 @@ int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kw
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
 		self->conn->EnableProfiling();
 		// pandas compatibility, bit ugly
-		self->conn->Query("CREATE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+		self->conn->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
 
 	} catch (...) {
 		return -1;

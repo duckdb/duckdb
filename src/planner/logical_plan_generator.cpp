@@ -1,8 +1,8 @@
-#include "planner/logical_plan_generator.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
 
-#include "planner/bound_query_node.hpp"
-#include "planner/bound_sql_statement.hpp"
-#include "planner/bound_tableref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/bound_sql_statement.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,13 +23,19 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 		return CreatePlan((BoundDeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return CreatePlan((BoundUpdateStatement &)statement);
-	case StatementType::CREATE_TABLE:
-		return CreatePlan((BoundCreateTableStatement &)statement);
-	case StatementType::CREATE_INDEX:
-		return CreatePlan((BoundCreateIndexStatement &)statement);
-	default:
-		assert(statement.type == StatementType::EXECUTE);
+	case StatementType::CREATE:
+		return CreatePlan((BoundCreateStatement &)statement);
+	case StatementType::DROP:
+	case StatementType::ALTER:
+	case StatementType::TRANSACTION:
+	case StatementType::PRAGMA:
+		return CreatePlan((BoundSimpleStatement &)statement);
+	case StatementType::EXECUTE:
 		return CreatePlan((BoundExecuteStatement &)statement);
+	case StatementType::EXPLAIN:
+		return CreatePlan((BoundExplainStatement &)statement);
+	default:
+		throw Exception("Unsupported bound statement type");
 	}
 }
 
@@ -37,9 +43,12 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundQueryNode &nod
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		return CreatePlan((BoundSelectNode &)node);
-	default:
-		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+	case QueryNodeType::SET_OPERATION_NODE:
 		return CreatePlan((BoundSetOperationNode &)node);
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return CreatePlan((BoundRecursiveCTENode &)node);
+	default:
+		throw Exception("Unsupported bound query node type");
 	}
 }
 
@@ -53,8 +62,15 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundTableRef &ref)
 		return CreatePlan((BoundJoinRef &)ref);
 	case TableReferenceType::CROSS_PRODUCT:
 		return CreatePlan((BoundCrossProductRef &)ref);
-	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION);
+	case TableReferenceType::TABLE_FUNCTION:
 		return CreatePlan((BoundTableFunction &)ref);
+	case TableReferenceType::EMPTY:
+		return CreatePlan((BoundEmptyTableRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return CreatePlan((BoundExpressionListRef &)ref);
+	case TableReferenceType::CTE:
+		return CreatePlan((BoundCTERef &)ref);
+	default:
+		throw Exception("Unsupported bound table ref type type");
 	}
 }

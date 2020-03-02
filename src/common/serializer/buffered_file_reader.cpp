@@ -1,6 +1,8 @@
-#include "common/serializer/buffered_file_reader.hpp"
-#include "common/serializer/buffered_file_writer.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/exception.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
@@ -15,7 +17,7 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 	// first copy anything we can from the buffer
 	data_ptr_t end_ptr = target_buffer + read_size;
 	while (true) {
-		index_t to_read = std::min((index_t)(end_ptr - target_buffer), read_data - offset);
+		idx_t to_read = std::min((idx_t)(end_ptr - target_buffer), read_data - offset);
 		if (to_read > 0) {
 			memcpy(target_buffer, data.get() + offset, to_read);
 			offset += to_read;

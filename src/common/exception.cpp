@@ -1,5 +1,5 @@
-#include "common/exception.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -84,6 +84,10 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "IO";
 	case ExceptionType::INTERRUPT:
 		return "INTERRUPT";
+	case ExceptionType::FATAL:
+		return "FATAL";
+	case ExceptionType::INTERNAL:
+		return "INTERNAL";
 	default:
 		return "Unknown";
 	}
@@ -109,7 +113,7 @@ ValueOutOfRangeException::ValueOutOfRangeException(const double value, const Typ
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const index_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
                                                  std::to_string(length) + ")"){};
 
@@ -138,11 +142,11 @@ OutOfRangeException::OutOfRangeException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-CatalogException::CatalogException(string msg, ...) : Exception(ExceptionType::CATALOG, msg) {
+CatalogException::CatalogException(string msg, ...) : StandardException(ExceptionType::CATALOG, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-ParserException::ParserException(string msg, ...) : Exception(ExceptionType::PARSER, msg) {
+ParserException::ParserException(string msg, ...) : StandardException(ExceptionType::PARSER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
@@ -154,7 +158,7 @@ ConstraintException::ConstraintException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-BinderException::BinderException(string msg, ...) : Exception(ExceptionType::BINDER, msg) {
+BinderException::BinderException(string msg, ...) : StandardException(ExceptionType::BINDER, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
 
@@ -171,4 +175,12 @@ SequenceException::SequenceException(string msg, ...) : Exception(ExceptionType:
 }
 
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
+}
+
+FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL, msg) {
+	FORMAT_CONSTRUCTOR(msg);
+}
+
+InternalException::InternalException(string msg, ...) : Exception(ExceptionType::INTERNAL, msg) {
+	FORMAT_CONSTRUCTOR(msg);
 }

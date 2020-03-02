@@ -1,21 +1,9 @@
 add_library_unity(duckdb_func_math
-				OBJECT
-				abs.cpp
-				cbrt.cpp
-				ceil.cpp
-				degrees.cpp
-				exp.cpp
-				floor.cpp
-				ln.cpp
-				log10.cpp
-				log2.cpp
-				pi.cpp
-				pow.cpp
-				radians.cpp
-				random.cpp
-				round.cpp
-				setseed.cpp
-				sign.cpp
-				sqrt.cpp)
-set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
-                     $<TARGET_OBJECTS:duckdb_func_math> PARENT_SCOPE)
+                  OBJECT
+                  numeric.cpp
+                  random.cpp
+                  setseed.cpp
+                  trigonometrics.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_math>
+    PARENT_SCOPE)

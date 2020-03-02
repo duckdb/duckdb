@@ -17,6 +17,4 @@ add_library(tpce STATIC
             tpce.cpp
             tpce_generated.cpp)
 
-set_target_properties(tpce
-                      PROPERTIES COMPILE_FLAGS
-                                 "-Wno-unused-private-field -Wno-exceptions")
+disable_target_warnings(tpce)

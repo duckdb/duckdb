@@ -1,9 +1,18 @@
-#include "execution/operator/set/physical_union.hpp"
+#include "duckdb/execution/operator/set/physical_union.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalUnionOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalUnionOperatorState() : PhysicalOperatorState(nullptr), top_done(false) {
+	}
+	unique_ptr<PhysicalOperatorState> top_state;
+	unique_ptr<PhysicalOperatorState> bottom_state;
+	bool top_done = false;
+};
 
 PhysicalUnion::PhysicalUnion(LogicalOperator &op, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
     : PhysicalOperator(PhysicalOperatorType::UNION, op.types) {

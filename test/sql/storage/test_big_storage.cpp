@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
-#include "storage/storage_info.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -11,7 +11,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	uint64_t expected_sum;
 	Value sum;
 
@@ -59,7 +59,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t integer_count = 3 * (BLOCK_SIZE / sizeof(int32_t));
+	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	Value sum;
 
 	// make sure the database does not exist
@@ -82,15 +82,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 		sum = result->GetValue(0, 0);
 	}
 	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {sum}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT SUM(a) + SUM(b) FROM test");
@@ -104,7 +96,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	uint64_t string_count = 3 * (BLOCK_SIZE / (sizeof(char) * 15));
+	uint64_t string_count = 3 * (Storage::BLOCK_SIZE / (sizeof(char) * 15));
 	Value sum;
 
 	Value count_per_group;
@@ -130,7 +122,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
 	// reload the database from disk
-	{
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
@@ -138,16 +130,22 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 1,
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
+	// now perform an update of the database
 	{
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aaa' WHERE a='a'"));
+	}
+	// reload the database from disk again
+	for (idx_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
-		REQUIRE(CHECK_COLUMN(result, 0, {"a", "bb", "ccc", "dddd", "eeeee"}));
+		REQUIRE(CHECK_COLUMN(result, 0, {"aaa", "bb", "ccc", "dddd", "eeeee"}));
 		REQUIRE(CHECK_COLUMN(result, 1,
 		                     {count_per_group, count_per_group, count_per_group, count_per_group, count_per_group}));
 	}
+
 	DeleteDatabase(storage_database);
 }
 
@@ -167,7 +165,7 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		uint64_t iteration = 2;
-		while (string_length < BLOCK_SIZE * 2) {
+		while (string_length < Storage::BLOCK_SIZE * 2) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
 			                          " FROM test"));
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
@@ -180,17 +178,13 @@ TEST_CASE("Test storing big strings", "[storage][.]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 	}
 	// reload the database from disk
-	{
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
-	}
-	// reload the database from disk, we do this again because checkpointing at startup causes this to follow a
-	// different code path
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
+		result = con.Query("SELECT LENGTH(a) FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 		result = con.Query("SELECT LENGTH(a) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(string_length)}));
 	}

@@ -14,11 +14,11 @@ add_library_unity(duckdb_planner
                   joinside.cpp
                   logical_operator.cpp
                   logical_plan_generator.cpp
+                  pragma_handler.cpp
                   binder.cpp
                   bind_context.cpp
                   planner.cpp
-                  logical_operator_visitor.cpp
-                  table_binding_resolver.cpp)
+                  logical_operator_visitor.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>
     PARENT_SCOPE)

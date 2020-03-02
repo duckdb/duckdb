@@ -1,6 +1,6 @@
-#include "execution/operator/join/physical_cross_product.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_cross_product.hpp"
+#include "duckdb/execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 
 using namespace duckdb;
 using namespace std;

@@ -7,9 +7,17 @@ imdb: third_party/imdb/data
 
 GENERATOR=
 FORCE_COLOR=
+WARNINGS_AS_ERRORS=
+DISABLE_UNITY_FLAG=
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
+endif
+ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
+	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
+endif
+ifeq (${DISABLE_UNITY}, 1)
+	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
 endif
 
 clean:
@@ -18,17 +26,18 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 unittest: debug
 	build/debug/test/unittest
+	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release # uses release build because otherwise allunit takes forever
 	build/release/test/unittest "*"
@@ -40,8 +49,18 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
+amalgamation:
+	mkdir -p build/amalgamation && \
+	python scripts/amalgamation.py && \
+	cd build/amalgamation && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build .
+
+test_compile: # test compilation of individual cpp files
+	python scripts/amalgamation.py --compile
+
 format:
-	python format.py
+	python3 scripts/format.py
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

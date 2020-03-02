@@ -1,9 +1,11 @@
+#pragma once
+
 #include "catch.hpp"
 #include "duckdb.hpp"
-#include "optimizer/expression_rewriter.hpp"
-#include "parser/parsed_expression.hpp"
-#include "planner/expression.hpp"
-#include "planner/planner.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/planner.hpp"
 
 namespace duckdb {
 

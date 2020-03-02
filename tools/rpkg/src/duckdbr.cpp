@@ -1,10 +1,8 @@
-#include "duckdb.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/types/date.hpp"
-
-#include "main/appender.hpp"
+#include "duckdb.h"
 
 #include <Rdefines.h>
+#include <algorithm>
+
 // motherfucker
 #undef error
 
@@ -14,9 +12,101 @@ using namespace std;
 // converter for primitive types
 template <class SRC, class DEST>
 static void vector_to_r(Vector &src_vec, void *dest, uint64_t dest_offset, DEST na_val) {
-	DEST *dest_ptr = ((DEST *)dest) + dest_offset;
-	for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
-		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : ((SRC *)src_vec.data)[row_idx];
+	auto src_ptr = (SRC *)src_vec.GetData();
+	auto dest_ptr = ((DEST *)dest) + dest_offset;
+	for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
+		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : src_ptr[row_idx];
+	}
+}
+
+struct RDoubleType {
+	static bool IsNull(double val) {
+		return ISNA(val);
+	}
+
+	static double Convert(double val) {
+		return val;
+	}
+};
+
+struct RDateType {
+	static bool IsNull(double val) {
+		return RDoubleType::IsNull(val);
+	}
+
+	static double Convert(double val) {
+		return (date_t)val + 719528; // MAGIC!
+	}
+};
+
+struct RTimestampType {
+	static bool IsNull(double val) {
+		return RDoubleType::IsNull(val);
+	}
+
+	static timestamp_t Convert(double val) {
+		date_t date = Date::EpochToDate((int64_t)val);
+		dtime_t time = (dtime_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
+		return Timestamp::FromDatetime(date, time);
+	}
+};
+
+struct RIntegerType {
+	static bool IsNull(int val) {
+		return val == NA_INTEGER;
+	}
+
+	static int Convert(int val) {
+		return val;
+	}
+};
+
+struct RBooleanType {
+	static bool IsNull(int val) {
+		return RIntegerType::IsNull(val);
+	}
+
+	static bool Convert(int val) {
+		return val;
+	}
+};
+
+template <class SRC, class DST, class RTYPE>
+static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
+	auto result_data = (DST *)result.GetData();
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source_data[i];
+		if (RTYPE::IsNull(val)) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = RTYPE::Convert(val);
+		}
+	}
+}
+
+static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
+	auto result_data = (string_t *)result.GetData();
+	for (idx_t i = 0; i < count; i++) {
+		SEXP val = STRING_ELT(coldata, row_idx + i);
+		if (val == NA_STRING) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = string_t((char *)CHAR(val));
+		}
+	}
+}
+
+static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
+	auto source_data = INTEGER_POINTER(coldata) + row_idx;
+	auto result_data = (string_t *)result.GetData();
+	SEXP factor_levels = GET_LEVELS(coldata);
+	for (idx_t i = 0; i < count; i++) {
+		int val = source_data[i];
+		if (RIntegerType::IsNull(val)) {
+			result.nullmask[i] = true;
+		} else {
+			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
+		}
 	}
 }
 
@@ -45,7 +135,7 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 	auto result = conn->Query(query);
 
 	if (!result->success) {
-		Rf_error("duckdb_query_R: Error: %s", result->error.c_str());
+		Rf_error("duckdb_query_R: Failed to run query %s\nError: %s", query, result->error.c_str());
 	}
 
 	// step 2: create result data frame and allocate columns
@@ -120,9 +210,9 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 			if (chunk->size() == 0) {
 				break;
 			}
-			assert(chunk->column_count == ncols);
-			assert(chunk->column_count == LENGTH(retlist));
-			for (size_t col_idx = 0; col_idx < chunk->column_count; col_idx++) {
+			assert(chunk->column_count() == ncols);
+			assert(chunk->column_count() == LENGTH(retlist));
+			for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
 				switch (result->sql_types[col_idx].id) {
 				case SQLTypeId::BOOLEAN:
@@ -141,11 +231,11 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 					break;
 				case SQLTypeId::TIMESTAMP: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int64_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
-						dest_ptr[row_idx] = src_vec.nullmask[row_idx]
-						                        ? NA_REAL
-						                        : (double)Timestamp::GetEpoch(((int64_t *)src_vec.data)[row_idx]);
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
+						dest_ptr[row_idx] =
+						    src_vec.nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
 					}
 
 					// some dresssup for R
@@ -159,10 +249,10 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				}
 				case SQLTypeId::DATE: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int32_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
-						dest_ptr[row_idx] =
-						    src_vec.nullmask[row_idx] ? NA_REAL : (double)(((int32_t *)src_vec.data)[row_idx]) - 719528;
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
+						dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
 					}
 
 					// some dresssup for R
@@ -172,13 +262,14 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				}
 				case SQLTypeId::TIME: {
 					auto &src_vec = chunk->data[col_idx];
+					auto src_data = (int32_t *)src_vec.GetData();
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.count; row_idx++) {
+					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
 
 						if (src_vec.nullmask[row_idx]) {
 							dest_ptr[row_idx] = NA_REAL;
 						} else {
-							time_t n = ((int32_t *)src_vec.data)[row_idx];
+							time_t n = src_data[row_idx];
 							int h;
 							double frac;
 							h = n / 3600000;
@@ -204,16 +295,17 @@ SEXP duckdb_query_R(SEXP connsexp, SEXP querysexp) {
 				case SQLTypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
-				case SQLTypeId::VARCHAR:
-					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].count; row_idx++) {
-						char **src_ptr = ((char **)chunk->data[col_idx].data);
+				case SQLTypeId::VARCHAR: {
+					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].size(); row_idx++) {
+						auto src_ptr = (string_t *)chunk->data[col_idx].GetData();
 						if (chunk->data[col_idx].nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 						} else {
-							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx], CE_UTF8));
+							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx].GetData(), CE_UTF8));
 						}
 					}
 					break;
+				}
 				default:
 					Rf_error("duckdb_query_R: Unknown column type %s",
 					         TypeIdToString(chunk->GetTypes()[col_idx]).c_str());
@@ -236,25 +328,37 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	}
 	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
 	if (dbaddr) {
-		warning("duckdb_finalize_database_R: Database is garbage-collected, use xxx to avoid this.");
+		warning("duckdb_finalize_database_R: Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
+		        "duckdb::duckdb_shutdown(drv) to avoid this.");
 		R_ClearExternalPtr(dbsexp);
 		delete dbaddr;
 	}
 	return R_NilValue;
 }
 
-SEXP duckdb_startup_R(SEXP dbdirsexp) {
+SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || LENGTH(dbdirsexp) != 1) {
-		Rf_error("duckdb_startup_R: Need single string parameter");
+		Rf_error("duckdb_startup_R: Need string parameter for dbdir");
 	}
 	char *dbdir = (char *)CHAR(STRING_ELT(dbdirsexp, 0));
+
+	if (TYPEOF(readonlysexp) != LGLSXP || LENGTH(readonlysexp) != 1) {
+		Rf_error("duckdb_startup_R: Need string parameter for read_only");
+	}
+	bool read_only = (bool)LOGICAL_ELT(readonlysexp, 0);
+
 	if (strlen(dbdir) == 0 || strcmp(dbdir, ":memory:") == 0) {
 		dbdir = NULL;
 	}
 
+	DBConfig config;
+	config.access_mode = AccessMode::READ_WRITE;
+	if (read_only) {
+		config.access_mode = AccessMode::READ_ONLY;
+	}
 	DuckDB *dbaddr;
 	try {
-		dbaddr = new DuckDB(dbdir);
+		dbaddr = new DuckDB(dbdir, &config);
 	} catch (...) {
 		Rf_error("duckdb_startup_R: Failed to open database");
 	}
@@ -332,13 +436,6 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
 		Rf_error("duckdb_append_R: Need single string parameter for name");
 	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-
-	// FIXME crude way of stripping quotes, what about escaped quotes?
-	if (name.front() == '"') {
-		name.erase(0, 1);
-		name.erase(name.size() - 1);
-	}
 
 	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
@@ -346,87 +443,58 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	}
 
 	try {
-		auto appender = conn->OpenAppender(DEFAULT_SCHEMA, name);
+		auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+		string schema, table;
+		Catalog::ParseRangeVar(name, schema, table);
+
+		Appender appender(*conn, schema, table);
 		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
-		for (uint64_t row_idx = 0; row_idx < nrows; row_idx++) {
-			appender->BeginRow();
-			for (uint32_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
+			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
+			auto &append_chunk = appender.GetAppendChunk();
+			for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+				auto &append_data = append_chunk.data[col_idx];
 				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
-
-				// TODO date time etc. types, 64 bit ints, ...
-
-				// timestamp
 				if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
 				    strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (ISNA(val)) {
-						appender->AppendValue(Value());
-					} else {
-						auto date = Date::EpochToDate((int64_t)val);
-						auto time = (int32_t)(((int64_t)val % (60 * 60 * 24)) * 1000);
-						appender->AppendBigInt(Timestamp::FromDatetime(date, time));
-					}
-				}
-
-				// date
-				else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
-				         strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
-					// TODO some say there are dates that are stored as integers
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (ISNA(val)) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendInteger((int32_t)val + 719528); // MAGIC!
-					}
-				}
-
-				else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
-					} else {
-						SEXP factor_levels = GET_LEVELS(coldata);
-						appender->AppendString(CHAR(STRING_ELT(factor_levels, val - 1)));
-					}
+					// Timestamp
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, append_data, current_count);
+				} else if (TYPEOF(coldata) == REALSXP && TYPEOF(GET_CLASS(coldata)) == STRSXP &&
+				           strcmp("Date", CHAR(STRING_ELT(GET_CLASS(coldata), 0))) == 0) {
+					// Date
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, date_t, RDateType>(data_ptr, append_data, current_count);
+				} else if (isFactor(coldata) && TYPEOF(coldata) == INTSXP) {
+					// Factor
+					AppendFactor(coldata, append_data, row_idx, current_count);
 				} else if (TYPEOF(coldata) == LGLSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendBoolean(val);
-					}
+					// Boolean
+					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+					AppendColumnSegment<int, bool, RBooleanType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == INTSXP) {
-					int val = INTEGER_POINTER(coldata)[row_idx];
-					if (val == NA_INTEGER) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendInteger(val);
-					}
+					// Integer
+					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+					AppendColumnSegment<int, int, RIntegerType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == REALSXP) {
-					double val = NUMERIC_POINTER(coldata)[row_idx];
-					if (val == NA_REAL) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendDouble(val);
-					}
+					// Double
+					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+					AppendColumnSegment<double, double, RDoubleType>(data_ptr, append_data, current_count);
 				} else if (TYPEOF(coldata) == STRSXP) {
-					SEXP val = STRING_ELT(coldata, row_idx);
-					if (val == NA_STRING) {
-						appender->AppendValue(Value());
-					} else {
-						appender->AppendString(CHAR(val));
-					}
+					// String
+					AppendStringSegment(coldata, append_data, row_idx, current_count);
 				} else {
 					throw;
 				}
 			}
-			appender->EndRow();
+			append_chunk.SetCardinality(current_count);
+			appender.Flush();
 		}
-
-		conn->CloseAppender();
+		appender.Close();
+	} catch (std::exception &ex) {
+		Rf_error("duckdb_append_R failed: %s", ex.what());
 	} catch (...) {
-		Rf_error("duckdb_append_R: Failed to append data");
+		Rf_error("duckdb_append_R failed: unknown error");
 	}
 
 	return R_NilValue;
@@ -451,7 +519,7 @@ SEXP duckdb_ptr_to_str(SEXP extptr) {
 // R native routine registration
 #define CALLDEF(name, n)                                                                                               \
 	{ #name, (DL_FUNC)&name, n }
-static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 1),
+static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_connect_R, 1),
                                             CALLDEF(duckdb_query_R, 2),
                                             CALLDEF(duckdb_append_R, 3),

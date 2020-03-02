@@ -1,22 +1,29 @@
-#include "main/query_profiler.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
-#include "common/fstream.hpp"
-#include "common/printer.hpp"
-#include "execution/physical_operator.hpp"
+#include "duckdb/common/fstream.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/parser/sql_statement.hpp"
 
 #include <iostream>
+#include <utility>
 
 using namespace duckdb;
 using namespace std;
 
-constexpr index_t TREE_RENDER_WIDTH = 20;
-constexpr index_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
-constexpr index_t MAX_EXTRA_LINES = 10;
+constexpr idx_t TREE_RENDER_WIDTH = 20;
+constexpr idx_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
+constexpr idx_t MAX_EXTRA_LINES = 10;
 
-void QueryProfiler::StartQuery(string query) {
-	if (!enabled)
+void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
+	if (!enabled) {
 		return;
-
+	}
+	if (statement.type != StatementType::SELECT && statement.type != StatementType::EXECUTE) {
+		return;
+	}
+	this->running = true;
 	this->query = query;
 	tree_map.clear();
 	execution_stack = stack<PhysicalOperator *>();
@@ -25,14 +32,16 @@ void QueryProfiler::StartQuery(string query) {
 	phase_stack.clear();
 
 	main_query.Start();
+	op.Start();
 }
 
 void QueryProfiler::EndQuery() {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	main_query.End();
-
+	this->running = false;
 	// print the query after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
 		string query_info;
@@ -51,8 +60,9 @@ void QueryProfiler::EndQuery() {
 }
 
 void QueryProfiler::StartPhase(string new_phase) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	if (!phase_stack.empty()) {
 		// there are active phases
@@ -74,8 +84,9 @@ void QueryProfiler::StartPhase(string new_phase) {
 }
 
 void QueryProfiler::EndPhase() {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 	assert(phase_stack.size() > 0);
 
 	// end the timer
@@ -93,8 +104,9 @@ void QueryProfiler::EndPhase() {
 }
 
 void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	if (!root) {
 		// start of execution: create operator tree
@@ -123,8 +135,9 @@ void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 }
 
 void QueryProfiler::EndOperator(DataChunk &chunk) {
-	if (!enabled)
+	if (!enabled || !running) {
 		return;
+	}
 
 	// finish timing for the current element
 	op.End();
@@ -155,16 +168,8 @@ string QueryProfiler::ToString() const {
 	result += "<<Timing>>\n";
 	result += "Total Time: " + to_string(main_query.Elapsed()) + "s\n";
 	// print phase timings
-	// first sort the phases alphabetically
-	vector<string> phases;
-	for (auto &entry : phase_timings) {
-		phases.push_back(entry.first);
-	}
-	std::sort(phases.begin(), phases.end());
-	for (auto &phase : phases) {
-		auto entry = phase_timings.find(phase);
-		assert(entry != phase_timings.end());
-		result += phase + ": " + to_string(entry->second) + "s\n";
+	for (const auto &entry : GetOrderedPhaseTimings()) {
+		result += entry.first + ": " + to_string(entry.second) + "s\n";
 	}
 	// render the main operator tree
 	result += "<<Operator Tree>>\n";
@@ -182,12 +187,9 @@ static string ToJSONRecursive(QueryProfiler::TreeNode &node) {
 	result += "\"cardinality\":" + to_string(node.info.elements) + ",\n";
 	result += "\"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
 	result += "\"children\": [";
-	for (index_t i = 0; i < node.children.size(); i++) {
-		result += ToJSONRecursive(*node.children[i]);
-		if (i + 1 < node.children.size()) {
-			result += ",\n";
-		}
-	}
+	result +=
+	    StringUtil::Join(node.children, node.children.size(), ",\n",
+	                     [](const unique_ptr<QueryProfiler::TreeNode> &child) { return ToJSONRecursive(*child); });
 	result += "]\n}\n";
 	return result;
 }
@@ -205,15 +207,11 @@ string QueryProfiler::ToJSON() const {
 	string result = "{ \"result\": " + to_string(main_query.Elapsed()) + ",\n";
 	// print the phase timings
 	result += "\"timings\": {\n";
-	bool needs_separator = false;
-	for (auto &entry : phase_timings) {
-		if (needs_separator) {
-			// not the first entry, add a separator
-			result += ",\n";
-		}
-		result += "\"" + entry.first + "\": " + to_string(entry.second);
-		needs_separator = true;
-	}
+	const auto &ordered_phase_timings = GetOrderedPhaseTimings();
+	result +=
+	    StringUtil::Join(ordered_phase_timings, ordered_phase_timings.size(), ",\n", [](const PhaseTimingItem &entry) {
+		    return "\"" + entry.first + "\": " + to_string(entry.second);
+	    });
 	result += "},\n";
 	// recursively print the physical operator tree
 	result += "\"tree\": ";
@@ -236,7 +234,7 @@ static bool is_padding(char l) {
 }
 
 static string remove_padding(string l) {
-	index_t start = 0, end = l.size();
+	idx_t start = 0, end = l.size();
 	while (start < l.size() && is_padding(l[start])) {
 		start++;
 	}
@@ -246,7 +244,7 @@ static string remove_padding(string l) {
 	return l.substr(start, end - start);
 }
 
-unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, index_t depth) {
+unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
 	node->extra_info = root->ExtraRenderInformation();
@@ -254,13 +252,13 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		auto splits = StringUtil::Split(node->extra_info, '\n');
 		for (auto &split : splits) {
 			string str = remove_padding(split);
-			constexpr index_t max_segment_size = REMAINING_RENDER_WIDTH - 2;
-			index_t location = 0;
+			constexpr idx_t max_segment_size = REMAINING_RENDER_WIDTH - 2;
+			idx_t location = 0;
 			while (location < str.size() && node->split_extra_info.size() < MAX_EXTRA_LINES) {
 				bool has_to_split = (str.size() - location) > max_segment_size;
 				if (has_to_split) {
 					// look for a split character
-					index_t i;
+					idx_t i;
 					for (i = 8; i < max_segment_size; i++) {
 						if (!is_non_split_char(str[location + i])) {
 							// split here
@@ -290,22 +288,22 @@ static string DrawPadded(string text, char padding_character = ' ') {
 	if (text.size() > remaining_width) {
 		text = text.substr(0, remaining_width);
 	}
-	assert(text.size() <= numeric_limits<int32_t>::max());
+	assert(text.size() <= (idx_t)numeric_limits<int32_t>::max());
 
 	auto right_padding = (remaining_width - text.size()) / 2;
 	auto left_padding = remaining_width - text.size() - right_padding;
 	return "|" + string(left_padding, padding_character) + text + string(right_padding, padding_character) + "|";
 }
 
-index_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<string> &render,
-                                           vector<index_t> &render_heights, index_t base_render_x, index_t start_depth,
-                                           index_t depth) {
+idx_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector<string> &render,
+                                         vector<idx_t> &render_heights, idx_t base_render_x, idx_t start_depth,
+                                         idx_t depth) {
 	auto render_height = render_heights[depth];
 	auto width = base_render_x;
 	// render this node
 	// first add any padding to render at this location
 	auto start_position = width * TREE_RENDER_WIDTH;
-	for (index_t i = 0; i < render_height; i++) {
+	for (idx_t i = 0; i < render_height; i++) {
 		if (render[start_depth + i].size() > start_position) {
 			// something has already been rendered here!
 			throw Exception("Tree rendering error, overlapping nodes!");
@@ -323,7 +321,7 @@ index_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector
 	string name = node.name;
 	render[start_depth + 1] += DrawPadded(name);
 	// draw extra information
-	for (index_t i = 2; i < render_height - 3; i++) {
+	for (idx_t i = 2; i < render_height - 3; i++) {
 		auto split_index = i - 2;
 		string string = split_index < node.split_extra_info.size() ? node.split_extra_info[split_index] : "";
 		render[start_depth + i] += DrawPadded(string);
@@ -346,23 +344,23 @@ index_t QueryProfiler::RenderTreeRecursive(QueryProfiler::TreeNode &node, vector
 	return width;
 }
 
-index_t QueryProfiler::GetDepth(QueryProfiler::TreeNode &node) {
-	index_t depth = 0;
+idx_t QueryProfiler::GetDepth(QueryProfiler::TreeNode &node) {
+	idx_t depth = 0;
 	for (auto &child : node.children) {
 		depth = max(depth, GetDepth(*child));
 	}
 	return depth + 1;
 }
 
-static void GetRenderHeight(QueryProfiler::TreeNode &node, vector<index_t> &render_heights, int depth = 0) {
-	render_heights[depth] = max(render_heights[depth], (5 + (index_t)node.split_extra_info.size()));
+static void GetRenderHeight(QueryProfiler::TreeNode &node, vector<idx_t> &render_heights, int depth = 0) {
+	render_heights[depth] = max(render_heights[depth], (5 + (idx_t)node.split_extra_info.size()));
 	for (auto &child : node.children) {
 		GetRenderHeight(*child, render_heights, depth + 1);
 	}
 }
 
 string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
-	vector<index_t> render_heights;
+	vector<idx_t> render_heights;
 	// compute the height of each level
 	auto depth = GetDepth(node);
 
@@ -388,4 +386,20 @@ string QueryProfiler::RenderTree(QueryProfiler::TreeNode &node) {
 
 void QueryProfiler::Print() {
 	Printer::Print(ToString());
+}
+
+vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
+	vector<PhaseTimingItem> result;
+	// first sort the phases alphabetically
+	vector<string> phases;
+	for (auto &entry : phase_timings) {
+		phases.push_back(entry.first);
+	}
+	std::sort(phases.begin(), phases.end());
+	for (const auto &phase : phases) {
+		auto entry = phase_timings.find(phase);
+		assert(entry != phase_timings.end());
+		result.emplace_back(entry->first, entry->second);
+	}
+	return result;
 }

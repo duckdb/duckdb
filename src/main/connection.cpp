@@ -1,9 +1,10 @@
-#include "main/connection.hpp"
+#include "duckdb/main/connection.hpp"
 
-#include "main/client_context.hpp"
-#include "main/connection_manager.hpp"
-#include "main/database.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/appender.hpp"
+#include "duckdb/parser/parser.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -18,7 +19,6 @@ Connection::Connection(DuckDB &database) : db(database), context(make_unique<Cli
 Connection::~Connection() {
 	if (!context->is_invalidated) {
 		context->Cleanup();
-		CloseAppender();
 		db.connection_manager->RemoveConnection(this);
 	}
 }
@@ -74,27 +74,20 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(string query, vector<Va
 	return statement->Execute(values);
 }
 
-Appender *Connection::OpenAppender(string schema_name, string table_name) {
-	if (context->is_invalidated) {
-		throw Exception("Database that this connection belongs to has been closed!");
-	}
-	if (appender) {
-		throw Exception("Active appender already exists for this connection");
-	}
-	context->context_lock.lock();
-	if (!context->transaction.HasActiveTransaction()) {
-		context->transaction.BeginTransaction();
-	}
-	appender = make_unique<Appender>(*this, schema_name, table_name);
-	return appender.get();
+unique_ptr<TableDescription> Connection::TableInfo(string table_name) {
+	return TableInfo(DEFAULT_SCHEMA, table_name);
 }
-void Connection::CloseAppender() {
-	if (appender) {
-		appender->Flush();
-		if (context->transaction.IsAutoCommit()) {
-			context->transaction.Commit();
-		}
-		appender = nullptr;
-		this->context->context_lock.unlock(); // TODO what about exceptions in appender?
-	}
+
+unique_ptr<TableDescription> Connection::TableInfo(string schema_name, string table_name) {
+	return context->TableInfo(schema_name, table_name);
+}
+
+vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
+	Parser parser;
+	parser.ParseQuery(query);
+	return move(parser.statements);
+}
+
+void Connection::Append(TableDescription &description, DataChunk &chunk) {
+	context->Append(description, chunk);
 }

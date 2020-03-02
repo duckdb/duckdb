@@ -71,3 +71,15 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->types.size() == 1);
 }
+
+TEST_CASE("Test union with nulls", "[setops]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST('2015-10-11 00:00:00' AS TIMESTAMP) as "
+	                   "a, CAST('2015-10-11 12:34:56' AS TIMESTAMP) as b, 2 as id ORDER BY 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value::TIMESTAMP(2015, 10, 11, 0, 0, 0, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value::TIMESTAMP(2015, 10, 11, 12, 34, 56, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2}));
+}

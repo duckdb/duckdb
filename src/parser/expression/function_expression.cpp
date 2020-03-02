@@ -1,8 +1,8 @@
-#include "parser/expression/function_expression.hpp"
-#include "common/string_util.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,7 +10,7 @@ using namespace std;
 FunctionExpression::FunctionExpression(string schema, string function_name,
                                        vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct){
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
@@ -32,12 +32,8 @@ string FunctionExpression::ToString() const {
 	}
 	// standard function call
 	string result = function_name + "(";
-	for (index_t i = 0; i < children.size(); i++) {
-		if (i != 0) {
-			result += ", ";
-		}
-		result += children[i]->ToString();
-	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
 	return result + ")";
 }
 
@@ -48,7 +44,7 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a->children.size(); i++) {
+	for (idx_t i = 0; i < a->children.size(); i++) {
 		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}

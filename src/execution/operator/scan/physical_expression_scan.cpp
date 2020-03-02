@@ -1,9 +1,20 @@
-#include "execution/operator/scan/physical_expression_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
 
-#include "execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalExpressionScanState : public PhysicalOperatorState {
+public:
+	PhysicalExpressionScanState(PhysicalOperator *child) : PhysicalOperatorState(child), expression_index(0) {
+	}
+
+	//! The current position in the scan
+	idx_t expression_index;
+
+	unique_ptr<ExpressionExecutor> executor;
+};
 
 void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalExpressionScanState *)state_;
@@ -21,8 +32,8 @@ void PhysicalExpressionScan::GetChunkInternal(ClientContext &context, DataChunk 
 		}
 	}
 	// now execute the expressions of the nth expression list for the child chunk list
-	ExpressionExecutor executor(state->child_chunk);
-	executor.Execute(expressions[state->expression_index], chunk);
+	state->executor = make_unique<ExpressionExecutor>(expressions[state->expression_index]);
+	state->executor->Execute(state->child_chunk, chunk);
 
 	state->expression_index++;
 }

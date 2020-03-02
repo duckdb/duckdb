@@ -1,14 +1,13 @@
-#include "parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
-#include "common/serializer.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
-    : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema),
-      function_name(StringUtil::Lower(function_name)) {
+    : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema), function_name(StringUtil::Lower(function_name)) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -36,7 +35,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a->children.size(); i++) {
+	for (idx_t i = 0; i < a->children.size(); i++) {
 		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
@@ -56,7 +55,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (a->partitions.size() != b->partitions.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a->partitions.size(); i++) {
+	for (idx_t i = 0; i < a->partitions.size(); i++) {
 		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
 			return false;
 		}
@@ -65,7 +64,7 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (a->orders.size() != b->orders.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < a->orders.size(); i++) {
+	for (idx_t i = 0; i < a->orders.size(); i++) {
 		if (a->orders[i].type != b->orders[i].type) {
 			return false;
 		}
@@ -134,7 +133,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	source.ReadList<ParsedExpression>(expr->partitions);
 
 	auto order_count = source.Read<uint32_t>();
-	for (index_t i = 0; i < order_count; i++) {
+	for (idx_t i = 0; i < order_count; i++) {
 		auto order_type = source.Read<OrderType>();
 		auto expression = ParsedExpression::Deserialize(source);
 		expr->orders.push_back(OrderByNode(order_type, move(expression)));

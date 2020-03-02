@@ -1,4 +1,3 @@
-recursive-include src/duckdb CMakeLists.txt *.c *.h *.hpp *.cpp *.cc
 recursive-include tests *.py
 recursive-include duckdb_query_graph *.js
-include *.h
+include *.h *.hpp *.cpp 

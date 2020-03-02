@@ -14,9 +14,6 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 include(CTest)
 
-option(BUILD_SHARED_LIBS "build shared libraries" OFF)
-option(USEPCRE "use PCRE in tests and benchmarks" OFF)
-
 # CMake seems to have no way to enable/disable testing per subproject, so we
 # provide an option similar to BUILD_TESTING, but just for RE2.
 option(RE2_BUILD_TESTING "enable testing for RE2" OFF)
@@ -57,16 +54,9 @@ if(WIN32)
                   -DNOMINMAX)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
 elseif(UNIX)
-  add_compile_options(-pthread)
-  list(APPEND EXTRA_TARGET_LINK_LIBRARIES -pthread)
+  # add_compile_options(-pthread) list(APPEND EXTRA_TARGET_LINK_LIBRARIES
+  # -pthread)
 endif()
-
-if(USEPCRE)
-  add_definitions(-DUSEPCRE)
-  list(APPEND EXTRA_TARGET_LINK_LIBRARIES pcre)
-endif()
-
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(RE2_SOURCES
     re2/bitstate.cc
@@ -95,35 +85,14 @@ set(RE2_SOURCES
 add_library(re2 STATIC ${RE2_SOURCES})
 add_library(re2::re2 ALIAS re2)
 
-# if(RE2_BUILD_TESTING) set(TESTING_SOURCES re2/testing/backtrack.cc
-# re2/testing/dump.cc re2/testing/exhaustive_tester.cc
-# re2/testing/null_walker.cc re2/testing/regexp_generator.cc
-# re2/testing/string_generator.cc re2/testing/tester.cc util/pcre.cc )
-#
-# add_library(testing STATIC ${TESTING_SOURCES})
-#
-# set(TEST_TARGETS charclass_test compile_test filtered_re2_test
-# mimics_pcre_test parse_test possible_match_test re2_test re2_arg_test
-# regexp_test required_prefix_test search_test set_test simplify_test
-# string_generator_test
-#
-# dfa_test exhaustive1_test exhaustive2_test exhaustive3_test exhaustive_test
-# random_test )
-#
-# set(BENCHMARK_TARGETS regexp_benchmark )
-#
-# foreach(target ${TEST_TARGETS}) add_executable(${target}
-# re2/testing/${target}.cc util/test.cc) target_link_libraries(${target} testing
-# re2 ${EXTRA_TARGET_LINK_LIBRARIES}) add_test(NAME ${target} COMMAND ${target})
-# endforeach(target)
-#
-# foreach(target ${BENCHMARK_TARGETS}) add_executable(${target}
-# re2/testing/${target}.cc util/benchmark.cc) target_link_libraries(${target}
-# testing re2 ${EXTRA_TARGET_LINK_LIBRARIES}) endforeach(target) endif()
-#
-# set(RE2_HEADERS re2/filtered_re2.h re2/re2.h re2/set.h re2/stringpiece.h )
-#
-# install(FILES ${RE2_HEADERS} DESTINATION include/re2) install(TARGETS re2
-# EXPORT re2Config ARCHIVE DESTINATION lib LIBRARY DESTINATION lib RUNTIME
-# DESTINATION bin INCLUDES DESTINATION include) install(EXPORT re2Config
-# DESTINATION lib/cmake/re2 NAMESPACE re2::)
+target_include_directories(
+  re2
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
+set_target_properties(re2 PROPERTIES EXPORT_NAME duckdb_re2)
+
+install(TARGETS re2
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
+disable_target_warnings(re2)

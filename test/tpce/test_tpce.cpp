@@ -18,16 +18,14 @@ TEST_CASE("Test TPC-E", "[tpce][.]") {
 	tpce::dbgen(db, sf);
 
 	auto result = con.Query("SELECT * FROM sqlite_master()");
-	result->Print();
 
 	for (size_t i = 0; i < result->collection.count; i++) {
 		auto table_name = result->collection.GetValue(1, i);
 
-		fprintf(stderr, "%s\n\n", table_name.str_value.c_str());
-		auto result2 = con.Query("SELECT COUNT(*) FROM " + table_name.str_value);
+		REQUIRE_NO_FAIL(con.Query("SELECT COUNT(*) FROM " + table_name.str_value));
+
 		// result2->Print();
 
-		REQUIRE(1 == 1);
 		// result2 = con.Query("SELECT * FROM " + table_name.str_value + " LIMIT
 		// 3"); result2->Print();
 	}

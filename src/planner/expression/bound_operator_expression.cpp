@@ -1,4 +1,5 @@
-#include "planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -19,14 +20,9 @@ string BoundOperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	for (index_t i = 0; i < children.size(); i++) {
-		result += children[i]->GetName();
-		if (i + 1 < children.size()) {
-			result += ", ";
-		} else {
-			result += ")";
-		}
-	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<Expression> &child) { return child->GetName(); });
+	result += ")";
 	return result;
 }
 
@@ -38,7 +34,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
 	if (children.size() != other->children.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < children.size(); i++) {
+	for (idx_t i = 0; i < children.size(); i++) {
 		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
 			return false;
 		}

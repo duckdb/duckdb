@@ -1,4 +1,4 @@
-#include "common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/physical_operator_type.hpp"
 
 using namespace std;
 
@@ -86,6 +86,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPLAIN";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
+    case PhysicalOperatorType::RECURSIVE_CTE:
+        return "REC_CTE";
 	case PhysicalOperatorType::INVALID:
 	default:
 		return "INVALID";

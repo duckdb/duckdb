@@ -1,4 +1,4 @@
-#include "common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 
 using namespace std;
 
@@ -41,8 +41,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::COPY_FROM_FILE:
 		return "COPY_FROM_FILE";
-	case LogicalOperatorType::SUBQUERY:
-		return "SUBQUERY";
 	case LogicalOperatorType::JOIN:
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:
@@ -77,6 +75,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXECUTE";
 	case LogicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
+    case LogicalOperatorType::RECURSIVE_CTE:
+        return "REC_CTE";
+    case LogicalOperatorType::CTE_REF:
+        return "CTE_SCAN";
 	case LogicalOperatorType::INVALID:
 	default:
 		return "INVALID";

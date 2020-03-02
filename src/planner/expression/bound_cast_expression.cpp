@@ -1,4 +1,6 @@
-#include "planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -7,6 +9,23 @@ BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> c
                                          SQLType target_type)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)),
       source_type(source_type), target_type(target_type) {
+}
+
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, SQLType source_type,
+                                                          SQLType target_type) {
+	assert(expr);
+	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
+		auto &parameter = (BoundParameterExpression &)*expr;
+		parameter.sql_type = target_type;
+		parameter.return_type = GetInternalType(target_type);
+	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
+		auto &def = (BoundDefaultExpression &)*expr;
+		def.sql_type = target_type;
+		def.return_type = GetInternalType(target_type);
+	} else if (source_type != target_type) {
+		return make_unique<BoundCastExpression>(GetInternalType(target_type), move(expr), source_type, target_type);
+	}
+	return expr;
 }
 
 string BoundCastExpression::ToString() const {

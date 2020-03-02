@@ -1,7 +1,16 @@
-#include "execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalChunkScanState : public PhysicalOperatorState {
+public:
+	PhysicalChunkScanState() : PhysicalOperatorState(nullptr), chunk_index(0) {
+	}
+
+	//! The current position in the scan
+	idx_t chunk_index;
+};
 
 void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalChunkScanState *)state_;
@@ -14,9 +23,7 @@ void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		return;
 	}
 	auto &collection_chunk = *collection->chunks[state->chunk_index];
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].Reference(collection_chunk.data[i]);
-	}
+	chunk.Reference(collection_chunk);
 	state->chunk_index++;
 }
 

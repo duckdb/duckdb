@@ -1,6 +1,4 @@
-#include "main/query_result.hpp"
-
-#include "main/client_context.hpp"
+#include "duckdb/main/query_result.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -45,11 +43,11 @@ bool QueryResult::Equals(QueryResult &other) {
 		if (lchunk->size() != rchunk->size()) {
 			return false;
 		}
-		assert(lchunk->column_count == rchunk->column_count);
-		for (index_t col = 0; col < rchunk->column_count; col++) {
-			for (index_t row = 0; row < rchunk->size(); row++) {
-				auto lvalue = lchunk->data[col].GetValue(row);
-				auto rvalue = rchunk->data[col].GetValue(row);
+		assert(lchunk->column_count() == rchunk->column_count());
+		for (idx_t col = 0; col < rchunk->column_count(); col++) {
+			for (idx_t row = 0; row < rchunk->size(); row++) {
+				auto lvalue = lchunk->GetValue(col, row);
+				auto rvalue = rchunk->GetValue(col, row);
 				if (lvalue != rvalue) {
 					return false;
 				}
@@ -68,8 +66,8 @@ string QueryResult::HeaderToString() {
 		result += name + "\t";
 	}
 	result += "\n";
-	for (auto &type : types) {
-		result += TypeIdToString(type) + "\t";
+	for (auto &type : sql_types) {
+		result += SQLTypeToString(type) + "\t";
 	}
 	result += "\n";
 	return result;

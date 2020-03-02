@@ -1,13 +1,12 @@
-#include "execution/aggregate_hashtable.hpp"
-#include "execution/operator/join/physical_delim_join.hpp"
-#include "execution/operator/join/physical_hash_join.hpp"
-#include "execution/operator/projection/physical_projection.hpp"
-#include "execution/operator/scan/physical_chunk_scan.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "function/aggregate/distributive_functions.hpp"
-#include "planner/operator/logical_delim_join.hpp"
-#include "planner/expression/bound_aggregate_expression.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/planner/operator/logical_delim_join.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -41,7 +40,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
 		delim_types.push_back(delim_expr->return_type);
 	}
-	if (op.type == JoinType::MARK) {
+	if (op.join_type == JoinType::MARK) {
 		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
 		auto &hash_join = (PhysicalHashJoin &)*plan;
 		// correlated MARK join
@@ -56,10 +55,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = hash_join.hash_table->correlated_mark_join_info;
 
-			vector<TypeId> payload_types = {TypeId::BIGINT, TypeId::BIGINT}; // COUNT types
-			vector<AggregateFunction> aggregate_functions = {CountStar::GetFunction(), Count::GetFunction()};
+			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
+			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
-			for (index_t i = 0; i < aggregate_functions.size(); ++i) {
+			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
 				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));

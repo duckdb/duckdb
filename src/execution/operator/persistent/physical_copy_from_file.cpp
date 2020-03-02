@@ -1,16 +1,27 @@
-#include "execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/file_system.hpp"
-#include "common/gzip_stream.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/gzip_stream.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 #include <fstream>
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalCopyFromFileOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalCopyFromFileOperatorState();
+	~PhysicalCopyFromFileOperatorState();
+
+	//! The istream to read from
+	unique_ptr<std::istream> csv_stream;
+	//! The CSV reader
+	unique_ptr<BufferedCSVReader> csv_reader;
+};
 
 void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalCopyFromFileOperatorState &)*state_;
@@ -20,7 +31,7 @@ void PhysicalCopyFromFile::GetChunkInternal(ClientContext &context, DataChunk &c
 		// initialize CSV reader
 		// open the file
 		assert(info.is_from);
-		if (!context.db.file_system->FileExists(info.file_path)) {
+		if (!FileSystem::GetFileSystem(context).FileExists(info.file_path)) {
 			throw IOException("File \"%s\" not found", info.file_path.c_str());
 		}
 

@@ -1,34 +1,41 @@
-#include "common/file_buffer.hpp"
-#include "common/file_system.hpp"
-#include "common/helper.hpp"
-#include "common/checksum.hpp"
-#include "common/exception.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/checksum.hpp"
+#include "duckdb/common/exception.hpp"
+
+#include <cstring>
 
 using namespace duckdb;
 using namespace std;
 
-FileBuffer::FileBuffer(uint64_t bufsiz) {
-	assert(bufsiz % FILE_BUFFER_BLOCK_SIZE == 0);
-	assert(bufsiz >= FILE_BUFFER_BLOCK_SIZE);
-	// we add (FILE_BUFFER_BLOCK_SIZE - 1) to ensure that we can align the buffer to FILE_BUFFER_BLOCK_SIZE
-	malloced_buffer = (data_ptr_t)malloc(bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1));
+FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
+	const int SECTOR_SIZE = Storage::SECTOR_SIZE;
+	// round up to the nearest SECTOR_SIZE, thi sis only really necessary if the file buffer will be used for Direct IO
+	if (bufsiz % SECTOR_SIZE != 0) {
+		bufsiz += SECTOR_SIZE - (bufsiz % SECTOR_SIZE);
+	}
+	assert(bufsiz % SECTOR_SIZE == 0);
+	assert(bufsiz >= SECTOR_SIZE);
+	// we add (SECTOR_SIZE - 1) to ensure that we can align the buffer to SECTOR_SIZE
+	malloced_buffer = (data_ptr_t)malloc(bufsiz + (SECTOR_SIZE - 1));
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
-	// round to multiple of FILE_BUFFER_BLOCK_SIZE
+	// round to multiple of SECTOR_SIZE
 	uint64_t num = (uint64_t)malloced_buffer;
-	uint64_t remainder = num % FILE_BUFFER_BLOCK_SIZE;
+	uint64_t remainder = num % SECTOR_SIZE;
 	if (remainder != 0) {
-		num = num + FILE_BUFFER_BLOCK_SIZE - remainder;
+		num = num + SECTOR_SIZE - remainder;
 	}
-	assert(num % FILE_BUFFER_BLOCK_SIZE == 0);
-	assert(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (FILE_BUFFER_BLOCK_SIZE - 1)));
+	assert(num % SECTOR_SIZE == 0);
+	assert(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (SECTOR_SIZE - 1)));
 	assert(num >= (uint64_t)malloced_buffer);
 	// construct the FileBuffer object
 	internal_buffer = (data_ptr_t)num;
 	internal_size = bufsiz;
-	buffer = internal_buffer + FILE_BUFFER_HEADER_SIZE;
-	size = internal_size - FILE_BUFFER_HEADER_SIZE;
+	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
+	size = internal_size - Storage::BLOCK_HEADER_SIZE;
 }
 
 FileBuffer::~FileBuffer() {

@@ -1,6 +1,7 @@
-#include "common/types/null_value.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <cstring>
 
@@ -17,17 +18,17 @@ bool IsNullValue(data_ptr_t ptr, TypeId type) {
 //! Writes NullValue<T> value of a specific type to a memory address
 void SetNullValue(data_ptr_t ptr, TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
+	case TypeId::BOOL:
+	case TypeId::INT8:
 		*((int8_t *)ptr) = NullValue<int8_t>();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		*((int16_t *)ptr) = NullValue<int16_t>();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		*((int32_t *)ptr) = NullValue<int32_t>();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		*((int64_t *)ptr) = NullValue<int64_t>();
 		break;
 	case TypeId::FLOAT:
@@ -37,7 +38,7 @@ void SetNullValue(data_ptr_t ptr, TypeId type) {
 		*((double *)ptr) = NullValue<double>();
 		break;
 	case TypeId::VARCHAR:
-		*((const char **)ptr) = NullValue<const char *>();
+		*((string_t *)ptr) = string_t(NullValue<const char *>());
 		break;
 	default:
 		throw InvalidTypeException(type, "Unsupported type for SetNullValue!");

@@ -1,16 +1,24 @@
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundComparisonExpression &expr, Vector &result) {
-	Vector left, right;
-	Execute(*expr.left, left);
-	Execute(*expr.right, right);
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto result = make_unique<ExpressionState>(expr, root);
+	result->AddChild(expr.left.get());
+	result->AddChild(expr.right.get());
+	return result;
+}
 
-	result.Initialize(TypeId::BOOLEAN);
+void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, Vector &result) {
+	// resolve the children
+	Vector left(GetCardinality(), expr.left->return_type);
+	Vector right(GetCardinality(), expr.right->return_type);
+	Execute(*expr.left, state->child_states[0].get(), left);
+	Execute(*expr.right, state->child_states[1].get(), right);
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -36,4 +44,39 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, Vector &result
 	default:
 		throw NotImplementedException("Unknown comparison type!");
 	}
+}
+
+idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, sel_t result[]) {
+	// resolve the children
+	Vector left(GetCardinality(), expr.left->return_type);
+	Vector right(GetCardinality(), expr.right->return_type);
+	Execute(*expr.left, state->child_states[0].get(), left);
+	Execute(*expr.right, state->child_states[1].get(), right);
+
+	idx_t result_count;
+	switch (expr.type) {
+	case ExpressionType::COMPARE_EQUAL:
+		result_count = VectorOperations::SelectEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result_count = VectorOperations::SelectNotEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		result_count = VectorOperations::SelectLessThan(left, right, result);
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		result_count = VectorOperations::SelectGreaterThan(left, right, result);
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		result_count = VectorOperations::SelectLessThanEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		result_count = VectorOperations::SelectGreaterThanEquals(left, right, result);
+		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
+	default:
+		throw NotImplementedException("Unknown comparison type!");
+	}
+	return result_count;
 }

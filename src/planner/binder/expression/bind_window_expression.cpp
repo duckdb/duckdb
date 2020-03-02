@@ -1,8 +1,11 @@
-#include "parser/expression/window_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
-#include "planner/expression_binder/select_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -38,7 +41,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	return move(((BoundExpression &)*expr).expr);
 }
 
-BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
+BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (inside_window) {
 		throw BinderException("window function calls cannot be nested");
 	}
@@ -73,7 +76,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	for (auto &child : window.children) {
 		assert(child.get());
 		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
-		auto& bound = (BoundExpression &) *child;
+		auto &bound = (BoundExpression &)*child;
 		types.push_back(bound.sql_type);
 		children.push_back(GetExpression(child));
 	}
@@ -82,16 +85,18 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, index_t depth) {
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
-		auto func = (AggregateFunctionCatalogEntry *) context.catalog.GetFunction(context.ActiveTransaction(), window.schema, window.function_name);
+		auto func =
+		    (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+		        context, window.schema, window.function_name);
 		if (func->type != CatalogType::AGGREGATE_FUNCTION) {
-		    throw BinderException("Unknown windowed aggregate");
+			throw BinderException("Unknown windowed aggregate");
 		}
 		// bind the aggregate
 		auto best_function = Function::BindFunction(func->name, func->functions, types);
 		// found a matching function!
 		auto &bound_function = func->functions[best_function];
 		// check if we need to add casts to the children
-		CastToFunctionArguments(bound_function, children, types);
+		bound_function.CastToFunctionArguments(children, types);
 		// create the aggregate
 		aggregate = make_unique<AggregateFunction>(func->functions[best_function]);
 		sql_type = aggregate->return_type;

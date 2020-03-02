@@ -1,6 +1,8 @@
 include_directories(../../third_party/sqlite/include)
 add_library(duckdb_benchmark_micro OBJECT
             append.cpp
+            bulkupdate.cpp
+            cast.cpp
             groupby.cpp
             in.cpp
             multiplications.cpp
@@ -9,6 +11,7 @@ add_library(duckdb_benchmark_micro OBJECT
             indexcreation.cpp
             rangejoin.cpp
             rangequery.cpp
+            string.cpp
             window.cpp
             storage.cpp)
 set(BENCHMARK_OBJECT_FILES

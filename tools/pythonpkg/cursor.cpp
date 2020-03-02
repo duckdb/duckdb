@@ -1,6 +1,5 @@
 #include "cursor.h"
 #include <vector>
-#include "common/types/timestamp.hpp"
 #include "module.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION // motherfucker
@@ -32,7 +31,6 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	return 0;
 }
 
-
 static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	/* Reset the statement if the user has not closed the cursor */
 	duckdb_cursor_close(self, NULL);
@@ -59,7 +57,6 @@ static int check_cursor(duckdb_Cursor *cur) {
 
 	return duckdb_check_connection(cur->connection);
 }
-
 
 static const char *_duckdb_stringconvert(PyObject *pystr) {
 	const char *cstr;
@@ -91,15 +88,13 @@ static const char *_duckdb_stringconvert(PyObject *pystr) {
 	return cstr;
 }
 
-
-typedef enum {TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
+typedef enum { TYPE_INT, TYPE_LONG, TYPE_FLOAT, TYPE_STRING, TYPE_BUFFER, TYPE_UNKNOWN } parameter_type;
 
 #ifdef WORDS_BIGENDIAN
 #define IS_LITTLE_ENDIAN 0
 #else
 #define IS_LITTLE_ENDIAN 1
 #endif
-
 
 duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 	parameter_type paramtype = TYPE_UNKNOWN;
@@ -108,11 +103,11 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 		return duckdb::Value();
 	}
 #if PY_MAJOR_VERSION < 3
-    if (PyInt_CheckExact(parameter)) {
-        paramtype = TYPE_INT;
-    } else
+	if (PyInt_CheckExact(parameter)) {
+		paramtype = TYPE_INT;
+	} else
 #endif
-    if (PyLong_CheckExact(parameter)) {
+	    if (PyLong_CheckExact(parameter)) {
 		paramtype = TYPE_LONG;
 	} else if (PyFloat_CheckExact(parameter)) {
 		paramtype = TYPE_FLOAT;
@@ -136,9 +131,9 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 
 	switch (paramtype) {
 #if PY_MAJOR_VERSION < 3
-    case TYPE_INT: {
+	case TYPE_INT: {
 		return duckdb::Value::BIGINT(PyInt_AsLong(parameter));
-    }
+	}
 #endif
 	case TYPE_LONG: {
 		int overflow;
@@ -151,7 +146,7 @@ duckdb::Value _duckdb_pyobject_to_value(PyObject *parameter) {
 	case TYPE_FLOAT:
 		return duckdb::Value::DOUBLE(PyFloat_AsDouble(parameter));
 	case TYPE_STRING:
-		return duckdb::Value( _duckdb_stringconvert(parameter));
+		return duckdb::Value(_duckdb_stringconvert(parameter));
 	default:
 		break;
 	}
@@ -200,10 +195,9 @@ void _duckdb_bind_parameters(PyObject *parameters, std::vector<duckdb::Value> &p
 
 			try {
 				params[i] = _duckdb_pyobject_to_value(current_param);
-			} catch (std::exception& e) {
+			} catch (std::exception &e) {
 				PyErr_Format(duckdb_DatabaseError, "Error binding parameter %d - %s", i, e.what());
 				return;
-
 			}
 		}
 	} else {
@@ -405,14 +399,14 @@ static PyObject *mafunc_ref = NULL;
 
 static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId sql_type) {
 	switch (type) {
-	case duckdb::TypeId::BOOLEAN:
-	case duckdb::TypeId::TINYINT:
+	case duckdb::TypeId::BOOL:
+	case duckdb::TypeId::INT8:
 		return NPY_INT8;
-	case duckdb::TypeId::SMALLINT:
+	case duckdb::TypeId::INT16:
 		return NPY_INT16;
-	case duckdb::TypeId::INTEGER:
+	case duckdb::TypeId::INT32:
 		return NPY_INT32;
-	case duckdb::TypeId::BIGINT:
+	case duckdb::TypeId::INT64:
 		if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
 			return NPY_DATETIME;
 		} else {
@@ -496,7 +490,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].data)[chunk_idx]);
+						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].GetData())[chunk_idx]);
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
@@ -505,19 +499,22 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
-			case duckdb::TypeId::BIGINT:
+			case duckdb::TypeId::INT64:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
-					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].data);
+					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-						array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+						auto timestamp = chunk_data_ptr[chunk_idx];
+						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(duckdb::Timestamp::GetDate(timestamp)) * 1000 +
+						                            (int64_t)(duckdb::Timestamp::GetTime(timestamp));
 					}
 					break;
 				}    // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].data,
+				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].GetData(),
 				       duckdb_type_size * chunk->size());
 			}
 		}
@@ -607,17 +604,17 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 			continue;
 		}
 		switch (dval.type) {
-		case duckdb::TypeId::BOOLEAN:
-		case duckdb::TypeId::TINYINT:
+		case duckdb::TypeId::BOOL:
+		case duckdb::TypeId::INT8:
 			val = Py_BuildValue("b", dval.value_.tinyint);
 			break;
-		case duckdb::TypeId::SMALLINT:
+		case duckdb::TypeId::INT16:
 			val = Py_BuildValue("h", dval.value_.smallint);
 			break;
-		case duckdb::TypeId::INTEGER:
+		case duckdb::TypeId::INT32:
 			val = Py_BuildValue("i", dval.value_.integer);
 			break;
-		case duckdb::TypeId::BIGINT:
+		case duckdb::TypeId::INT64:
 			val = Py_BuildValue("L", dval.value_.bigint);
 			break;
 		case duckdb::TypeId::FLOAT:

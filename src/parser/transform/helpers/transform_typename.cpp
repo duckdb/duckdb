@@ -1,13 +1,12 @@
-#include "common/exception.hpp"
-#include "common/string_util.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 static SQLType TransformStringToSQLType(char *str) {
-	string lower_str = StringUtil::Lower(string(str));
+	auto lower_str = StringUtil::Lower(string(str));
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed") {
 		return SQLType::INTEGER;
@@ -38,8 +37,8 @@ static SQLType TransformStringToSQLType(char *str) {
 	}
 }
 
-SQLType Transformer::TransformTypeName(TypeName *type_name) {
-	char *name = (reinterpret_cast<postgres::Value *>(type_name->names->tail->data.ptr_value)->val.str);
+SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
+	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	return TransformStringToSQLType(name);
 }

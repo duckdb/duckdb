@@ -1,6 +1,6 @@
-#include "execution/operator/helper/physical_prune_columns.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_prune_columns.hpp"
+#include "duckdb/execution/operator/helper/physical_prune_columns.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_prune_columns.hpp"
 
 using namespace duckdb;
 using namespace std;

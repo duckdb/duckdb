@@ -1,7 +1,7 @@
-#include "parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
-#include "common/assert.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,7 +29,7 @@ void SelectStatement::Serialize(Serializer &serializer) {
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectStatement>();
 	auto cte_count = source.Read<uint32_t>();
-	for (index_t i = 0; i < cte_count; i++) {
+	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto statement = QueryNode::Deserialize(source);
 		result->cte_map[name] = move(statement);

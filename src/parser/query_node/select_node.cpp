@@ -1,4 +1,5 @@
-#include "parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,32 +14,16 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	auto other = (SelectNode *)other_;
 
 	// first check counts of all lists and such
-	if (select_list.size() != other->select_list.size() || select_distinct != other->select_distinct ||
-	    orders.size() != other->orders.size() || groups.size() != other->groups.size() ||
-	    distinct_on_targets.size() != other->distinct_on_targets.size() || values.size() != other->values.size()) {
+	if (select_distinct != other->select_distinct || orders.size() != other->orders.size()) {
 		return false;
 	}
-	for (index_t i = 0; i < values.size(); i++) {
-		if (values[i].size() != other->values[i].size()) {
-			return false;
-		}
-		for (index_t j = 0; j < values[i].size(); j++) {
-			if (!values[i][j]->Equals(other->values[i][j].get())) {
-				return false;
-			}
-		}
-	}
 	// SELECT
-	for (index_t i = 0; i < select_list.size(); i++) {
-		if (!select_list[i]->Equals(other->select_list[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(select_list, other->select_list)) {
+		return false;
 	}
 	// DISTINCT ON
-	for (index_t i = 0; i < distinct_on_targets.size(); i++) {
-		if (!distinct_on_targets[i]->Equals(other->distinct_on_targets[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(distinct_on_targets, other->distinct_on_targets)) {
+		return false;
 	}
 	// FROM
 	if (from_table) {
@@ -56,10 +41,8 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 		return false;
 	}
 	// GROUP BY
-	for (index_t i = 0; i < groups.size(); i++) {
-		if (!groups[i]->Equals(other->groups[i].get())) {
-			return false;
-		}
+	if (!ExpressionUtil::ListEquals(groups, other->groups)) {
+		return false;
 	}
 
 	// HAVING
@@ -85,14 +68,6 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 		result->groups.push_back(group->Copy());
 	}
 	result->having = having ? having->Copy() : nullptr;
-	// value list
-	for (auto &val_list : values) {
-		vector<unique_ptr<ParsedExpression>> new_val_list;
-		for (auto &val : val_list) {
-			new_val_list.push_back(val->Copy());
-		}
-		result->values.push_back(move(new_val_list));
-	}
 	this->CopyProperties(*result);
 	return move(result);
 }
@@ -110,11 +85,6 @@ void SelectNode::Serialize(Serializer &serializer) {
 	// group by / having
 	serializer.WriteList(groups);
 	serializer.WriteOptional(having);
-	// value list
-	serializer.Write<index_t>(values.size());
-	for (index_t i = 0; i < values.size(); i++) {
-		serializer.WriteList(values[i]);
-	}
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
@@ -130,12 +100,5 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	// group by / having
 	source.ReadList<ParsedExpression>(result->groups);
 	result->having = source.ReadOptional<ParsedExpression>();
-	// value list
-	index_t value_list_size = source.Read<index_t>();
-	for (index_t i = 0; i < value_list_size; i++) {
-		vector<unique_ptr<ParsedExpression>> value_list;
-		source.ReadList<ParsedExpression>(value_list);
-		result->values.push_back(move(value_list));
-	}
 	return move(result);
 }

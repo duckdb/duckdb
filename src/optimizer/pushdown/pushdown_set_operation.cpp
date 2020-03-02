@@ -1,27 +1,29 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "optimizer/optimizer.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_set_operation.hpp"
-#include "planner/operator/logical_subquery.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSetOpBindings(LogicalSetOperation &setop, Expression &expr, index_t child_index) {
+static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
+                                 LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
 		assert(colref.binding.table_index == setop.table_index);
-		assert(colref.binding.column_index < setop.column_count);
 		assert(colref.depth == 0);
-		// replace the reference to the set operation with a reference to the child subquery
-		colref.binding.table_index = child_index;
+
+		// rewrite the binding by looking into the bound_tables list of the subquery
+		colref.binding = bindings[colref.binding.column_index];
+		filter.bindings.insert(colref.binding.table_index);
+		return;
 	}
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](Expression &child) { ReplaceSetOpBindings(setop, child, child_index); });
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](Expression &child) { ReplaceSetOpBindings(bindings, filter, child, setop); });
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
@@ -30,29 +32,20 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	auto &setop = (LogicalSetOperation &)*op;
 
 	assert(op->children.size() == 2);
-	// create subqueries to wrap the children, if necessary
-	for (index_t i = 0; i < 2; i++) {
-		if (op->children[i]->type != LogicalOperatorType::SUBQUERY) {
-			op->children[i] =
-			    make_unique<LogicalSubquery>(move(op->children[i]), optimizer.binder.GenerateTableIndex());
-		}
-	}
-	assert(op->children[0]->type == LogicalOperatorType::SUBQUERY &&
-	       op->children[1]->type == LogicalOperatorType::SUBQUERY);
-	index_t left_index = ((LogicalSubquery &)*op->children[0]).table_index;
-	index_t right_index = ((LogicalSubquery &)*op->children[1]).table_index;
+	auto left_bindings = op->children[0]->GetColumnBindings();
+	auto right_bindings = op->children[1]->GetColumnBindings();
 
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
-	for (index_t i = 0; i < filters.size(); i++) {
+	for (idx_t i = 0; i < filters.size(); i++) {
 		// first create a copy of the filter
 		auto right_filter = make_unique<Filter>();
 		right_filter->filter = filters[i]->filter->Copy();
 
 		// in the original filter, rewrite references to the result of the union into references to the left_index
-		ReplaceSetOpBindings(setop, *filters[i]->filter, left_index);
+		ReplaceSetOpBindings(left_bindings, *filters[i], *filters[i]->filter, setop);
 		// in the copied filter, rewrite references to the result of the union into references to the right_index
-		ReplaceSetOpBindings(setop, *right_filter->filter, right_index);
+		ReplaceSetOpBindings(right_bindings, *right_filter, *right_filter->filter, setop);
 
 		// extract bindings again
 		filters[i]->ExtractBindings();

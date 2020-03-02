@@ -1,17 +1,17 @@
-#include "planner/subquery/rewrite_correlated_expressions.hpp"
+#include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 
-#include "planner/expression/bound_case_expression.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression/bound_operator_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_binding,
-                                                           column_binding_map_t<index_t> &correlated_map)
+                                                           column_binding_map_t<idx_t> &correlated_map)
     : base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -48,7 +48,7 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundSubqueryE
 }
 
 RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecursive(
-    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<index_t> &correlated_map)
+    BoundSubqueryExpression &parent, ColumnBinding base_binding, column_binding_map_t<idx_t> &correlated_map)
     : parent(parent), base_binding(base_binding), correlated_map(correlated_map) {
 }
 
@@ -93,7 +93,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	}
 }
 
-RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<index_t> &replacement_map)
+RewriteCountAggregates::RewriteCountAggregates(column_binding_map_t<idx_t> &replacement_map)
     : replacement_map(replacement_map) {
 }
 
@@ -103,7 +103,7 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
-		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOLEAN);
+		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, TypeId::BOOL);
 		is_null->children.push_back(expr.Copy());
 		auto check = move(is_null);
 		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));

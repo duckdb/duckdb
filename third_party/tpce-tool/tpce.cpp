@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "main/connection.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include "tpce_generated.hpp"
 #include "tpce.hpp"

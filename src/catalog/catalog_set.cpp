@@ -1,9 +1,11 @@
-#include "catalog/catalog_set.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 
-#include "catalog/catalog.hpp"
-#include "common/exception.hpp"
-#include "transaction/transaction_manager.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -63,7 +65,7 @@ bool CatalogSet::CreateEntry(Transaction &transaction, const string &name, uniqu
 }
 
 bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
-	auto &transaction = context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(context);
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
@@ -97,8 +99,13 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	value->child->parent = value.get();
 	value->set = this;
 
+	// serialize the AlterInfo into a temporary buffer
+	BufferedSerializer serializer;
+	alter_info->Serialize(serializer);
+	BinaryData serialized_alter = serializer.GetData();
+
 	// push the old entry in the undo buffer for this transaction
-	transaction.PushCatalogEntry(value->child.get());
+	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
 	data[name] = move(value);
 
 	return true;
@@ -140,7 +147,7 @@ void CatalogSet::DropEntryInternal(Transaction &transaction, CatalogEntry &curre
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, make_unique<lock_guard<mutex>>(catalog_lock)));
+		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
 	}
 
 	// create a new entry and replace the currently stored one
@@ -188,11 +195,17 @@ CatalogEntry *CatalogSet::GetEntry(Transaction &transaction, const string &name)
 		return nullptr;
 	}
 	// if it does, we have to check version numbers
-	CatalogEntry *current = GetEntryForTransaction(transaction, data[name].get());
+	CatalogEntry *current = GetEntryForTransaction(transaction, entry->second.get());
 	if (current->deleted) {
 		return nullptr;
 	}
 	return current;
+}
+
+CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
+	lock_guard<mutex> lock(catalog_lock);
+	auto entry = data.find(name);
+	return entry == data.end() ? nullptr : entry->second.get();
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {

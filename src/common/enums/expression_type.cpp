@@ -1,6 +1,6 @@
-#include "common/enums/expression_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace std;
 

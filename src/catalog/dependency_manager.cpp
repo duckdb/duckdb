@@ -1,6 +1,6 @@
-#include "catalog/dependency_manager.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
-#include "catalog/catalog.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,7 +20,7 @@ void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object
 			throw TransactionException("Catalog write-write conflict on create with \"%s\"", object->name.c_str());
 		}
 	}
-	// add the object to the dependents_map of each object that it depents on
+	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies) {
 		dependents_map[dependency].insert(object);
 	}

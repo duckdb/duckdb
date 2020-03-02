@@ -1,12 +1,11 @@
 #include "dbgen.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "dbgen_gunk.hpp"
-#include "main/client_context.hpp"
-#include "parser/column_definition.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "tpch_constants.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
@@ -43,19 +42,19 @@ struct tpch_append_information {
 };
 
 void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value) {
-	((int32_t *)chunk.data[column++].data)[index] = value;
+	((int32_t *)chunk.data[column++].GetData())[index] = value;
 }
 
 void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
-	chunk.data[column++].SetStringValue(index, value);
+	chunk.SetValue(column++, index, Value(value));
 }
 
 void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {
-	((double *)chunk.data[column++].data)[index] = (double)value / 100.0;
+	((double *)chunk.data[column++].GetData())[index] = (double)value / 100.0;
 }
 
 void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	((date_t *)chunk.data[column++].data)[index] = Date::FromString(value);
+	((date_t *)chunk.data[column++].GetData())[index] = Date::FromString(value);
 }
 
 void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
@@ -68,7 +67,7 @@ void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
 static void append_to_append_info(tpch_append_information &info) {
 	auto &chunk = info.chunk;
 	auto &table = info.table;
-	if (chunk.column_count == 0) {
+	if (chunk.column_count() == 0) {
 		// initalize the chunk
 		auto types = table->GetTypes();
 		chunk.Initialize(types);
@@ -78,9 +77,7 @@ static void append_to_append_info(tpch_append_information &info) {
 		// have to reset the chunk
 		chunk.Reset();
 	}
-	for (size_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].count++;
-	}
+	chunk.SetCardinality(chunk.size() + 1);
 }
 
 static void append_order(order_t *o, tpch_append_information *info) {
@@ -462,6 +459,7 @@ static string LineitemSchema(string schema, string suffix) {
 }
 
 void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
+	unique_ptr<QueryResult> result;
 	Connection con(db);
 	con.Query("BEGIN TRANSACTION");
 
@@ -541,10 +539,11 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	tdefs[REGION].base = regions.count;
 
 	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
-			append_info[i].table = db.catalog->GetTable(con.context->ActiveTransaction(), schema, tname + suffix);
+			append_info[i].table = db.catalog->GetEntry<TableCatalogEntry>(*con.context, schema, tname + suffix);
 		}
 		append_info[i].context = con.context.get();
 	}
@@ -586,7 +585,9 @@ string get_answer(double sf, int query) {
 		throw SyntaxException("Out of range TPC-H query number %d", query);
 	}
 	const char *answer;
-	if (sf == 0.1) {
+	if (sf == 0.01) {
+		answer = TPCH_ANSWERS_SF0_01[query - 1];
+	} else if (sf == 0.1) {
 		answer = TPCH_ANSWERS_SF0_1[query - 1];
 	} else if (sf == 1) {
 		answer = TPCH_ANSWERS_SF1[query - 1];

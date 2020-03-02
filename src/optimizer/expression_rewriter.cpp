@@ -1,8 +1,8 @@
-#include "optimizer/expression_rewriter.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 
-#include "common/exception.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_filter.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -59,7 +59,7 @@ void ExpressionRewriter::Apply(LogicalOperator &root) {
 		// no rules to apply on this node
 		return;
 	}
-	for (index_t i = 0; i < root.expressions.size(); i++) {
+	for (idx_t i = 0; i < root.expressions.size(); i++) {
 		bool changes_made;
 		do {
 			changes_made = false;

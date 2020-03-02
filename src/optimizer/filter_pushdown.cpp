@@ -1,8 +1,8 @@
-#include "optimizer/filter_pushdown.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
 
-#include "optimizer/filter_combiner.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_join.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -22,8 +22,6 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::ANY_JOIN:
 	case LogicalOperatorType::DELIM_JOIN:
 		return PushdownJoin(move(op));
-	case LogicalOperatorType::SUBQUERY:
-		return PushdownSubquery(move(op));
 	case LogicalOperatorType::PROJECTION:
 		return PushdownProjection(move(op));
 	case LogicalOperatorType::INTERSECT:
@@ -46,11 +44,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	assert(op->type == LogicalOperatorType::COMPARISON_JOIN || op->type == LogicalOperatorType::ANY_JOIN ||
 	       op->type == LogicalOperatorType::DELIM_JOIN);
 	auto &join = (LogicalJoin &)*op;
-	unordered_set<index_t> left_bindings, right_bindings;
+	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
-	switch (join.type) {
+	switch (join.join_type) {
 	case JoinType::INNER:
 		return PushdownInnerJoin(move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
@@ -100,7 +98,7 @@ void FilterPushdown::GenerateFilters() {
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
-	for (index_t i = 0; i < op->children.size(); i++) {
+	for (idx_t i = 0; i < op->children.size(); i++) {
 		FilterPushdown pushdown(optimizer);
 		op->children[i] = pushdown.Rewrite(move(op->children[i]));
 	}

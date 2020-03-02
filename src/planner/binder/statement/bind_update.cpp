@@ -1,13 +1,15 @@
-#include "parser/statement/update_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_default_expression.hpp"
-#include "planner/expression_binder/update_binder.hpp"
-#include "planner/expression_binder/where_binder.hpp"
-#include "planner/statement/bound_update_statement.hpp"
-#include "planner/tableref/bound_basetableref.hpp"
-#include "planner/constraints/bound_check_constraint.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/expression_binder/update_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/statement/bound_update_statement.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/storage/data_table.hpp"
+
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;
@@ -17,9 +19,9 @@ static void BindExtraColumns(TableCatalogEntry &table, Binder &binder, ClientCon
 	if (bound_columns.size() <= 1) {
 		return;
 	}
-	index_t found_column_count = 0;
-	unordered_set<index_t> found_columns;
-	for (index_t i = 0; i < result.column_ids.size(); i++) {
+	idx_t found_column_count = 0;
+	unordered_set<idx_t> found_columns;
+	for (idx_t i = 0; i < result.column_ids.size(); i++) {
 		if (bound_columns.find(result.column_ids[i]) != bound_columns.end()) {
 			// this column is referenced in the CHECK constraint
 			found_column_count++;
@@ -60,9 +62,22 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 			BindExtraColumns(table, binder, context, result, check.bound_columns);
 		}
 	}
-	// do the same for all the indexes with multiple columns
+	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a
+	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
+	// index columns
+	result.is_index_update = false;
 	for (auto &index : table.storage->indexes) {
-		BindExtraColumns(table, binder, context, result, index->column_id_set);
+		if (index->IndexIsUpdated(result.column_ids)) {
+			result.is_index_update = true;
+		}
+	}
+	if (result.is_index_update) {
+		// the update updates a column required by an index, push projections for all columns
+		unordered_set<column_t> all_columns;
+		for (idx_t i = 0; i < table.storage->types.size(); i++) {
+			all_columns.insert(i);
+		}
+		BindExtraColumns(table, binder, context, result, all_columns);
 	}
 }
 
@@ -74,6 +89,10 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		throw BinderException("Can only update base table!");
 	}
 	auto table = ((BoundBaseTableRef &)*result->table).table;
+	if (!table->temporary) {
+		// update of persistent table: not read only!
+		this->read_only = false;
+	}
 	result->proj_index = GenerateTableIndex();
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
@@ -81,13 +100,16 @@ unique_ptr<BoundSQLStatement> Binder::Bind(UpdateStatement &stmt) {
 		result->condition = binder.Bind(stmt.condition);
 	}
 	assert(stmt.columns.size() == stmt.expressions.size());
-	for (index_t i = 0; i < stmt.columns.size(); i++) {
+	for (idx_t i = 0; i < stmt.columns.size(); i++) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
 		if (!table->ColumnExists(colname)) {
 			throw BinderException("Referenced update column %s not found in table!", colname.c_str());
 		}
 		auto &column = table->GetColumn(colname);
+		if (std::find(result->column_ids.begin(), result->column_ids.end(), column.oid) != result->column_ids.end()) {
+			throw BinderException("Multiple assignments to same column \"%s\"", colname.c_str());
+		}
 		result->column_ids.push_back(column.oid);
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {

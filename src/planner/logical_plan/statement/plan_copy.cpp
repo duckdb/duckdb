@@ -1,14 +1,14 @@
-#include "planner/logical_plan_generator.hpp"
-#include "planner/operator/logical_copy_from_file.hpp"
-#include "planner/operator/logical_copy_to_file.hpp"
-#include "planner/statement/bound_copy_statement.hpp"
+#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_copy_from_file.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/planner/statement/bound_copy_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement &stmt) {
 	if (stmt.select_statement) {
-		// COPY from a query
+		// COPY TO a file
 		auto names = stmt.select_statement->names;
 		auto types = stmt.select_statement->types;
 
@@ -22,12 +22,12 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundCopyStatement 
 
 		return move(copy);
 	} else {
-		// COPY to a table
+		// COPY FROM a file
 		assert(!stmt.info->table.empty());
 		// first create a plan for the insert statement
 		auto insert = CreatePlan(*stmt.bound_insert);
 		// now create the copy statement and set it as a child of the insert statement
-		auto copy = make_unique<LogicalCopyFromFile>(move(stmt.info), stmt.sql_types);
+		auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), stmt.sql_types);
 		insert->children.push_back(move(copy));
 		return insert;
 	}

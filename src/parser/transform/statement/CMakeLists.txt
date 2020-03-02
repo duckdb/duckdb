@@ -10,6 +10,7 @@ add_library_unity(duckdb_transformer_statement
                   transform_delete.cpp
                   transform_drop.cpp
                   transform_insert.cpp
+                  transform_pragma.cpp
                   transform_rename.cpp
                   transform_select.cpp
                   transform_select_node.cpp

@@ -1,10 +1,10 @@
-#include "common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdlib>
 #include <cctype>
@@ -34,117 +34,117 @@ template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int16_t left, int8_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int16_t input, int8_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int32_t left, int8_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int32_t input, int8_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t left, int8_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int64_t input, int8_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float left, int8_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(float input, int8_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double left, int8_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(double input, int8_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int8_t Cast::Operation(int16_t left) {
-	return cast_with_overflow_check<int16_t, int8_t>(left);
+template <> int8_t Cast::Operation(int16_t input) {
+	return cast_with_overflow_check<int16_t, int8_t>(input);
 }
-template <> int8_t Cast::Operation(int32_t left) {
-	return cast_with_overflow_check<int32_t, int8_t>(left);
+template <> int8_t Cast::Operation(int32_t input) {
+	return cast_with_overflow_check<int32_t, int8_t>(input);
 }
-template <> int8_t Cast::Operation(int64_t left) {
-	return cast_with_overflow_check<int64_t, int8_t>(left);
+template <> int8_t Cast::Operation(int64_t input) {
+	return cast_with_overflow_check<int64_t, int8_t>(input);
 }
-template <> int8_t Cast::Operation(float left) {
-	return cast_with_overflow_check<float, int8_t>(left);
+template <> int8_t Cast::Operation(float input) {
+	return cast_with_overflow_check<float, int8_t>(input);
 }
-template <> int8_t Cast::Operation(double left) {
-	return cast_with_overflow_check<double, int8_t>(left);
+template <> int8_t Cast::Operation(double input) {
+	return cast_with_overflow_check<double, int8_t>(input);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int32_t left, int16_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int32_t input, int16_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t left, int16_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int64_t input, int16_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float left, int16_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(float input, int16_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double left, int16_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(double input, int16_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int16_t Cast::Operation(int32_t left) {
-	return cast_with_overflow_check<int32_t, int16_t>(left);
+template <> int16_t Cast::Operation(int32_t input) {
+	return cast_with_overflow_check<int32_t, int16_t>(input);
 }
-template <> int16_t Cast::Operation(int64_t left) {
-	return cast_with_overflow_check<int64_t, int16_t>(left);
+template <> int16_t Cast::Operation(int64_t input) {
+	return cast_with_overflow_check<int64_t, int16_t>(input);
 }
-template <> int16_t Cast::Operation(float left) {
-	return cast_with_overflow_check<float, int16_t>(left);
+template <> int16_t Cast::Operation(float input) {
+	return cast_with_overflow_check<float, int16_t>(input);
 }
-template <> int16_t Cast::Operation(double left) {
-	return cast_with_overflow_check<double, int16_t>(left);
+template <> int16_t Cast::Operation(double input) {
+	return cast_with_overflow_check<double, int16_t>(input);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int64_t left, int32_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(int64_t input, int32_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float left, int32_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(float input, int32_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double left, int32_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(double input, int32_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int32_t Cast::Operation(int64_t left) {
-	return cast_with_overflow_check<int64_t, int32_t>(left);
+template <> int32_t Cast::Operation(int64_t input) {
+	return cast_with_overflow_check<int64_t, int32_t>(input);
 }
-template <> int32_t Cast::Operation(float left) {
-	return cast_with_overflow_check<float, int32_t>(left);
+template <> int32_t Cast::Operation(float input) {
+	return cast_with_overflow_check<float, int32_t>(input);
 }
-template <> int32_t Cast::Operation(double left) {
-	return cast_with_overflow_check<double, int32_t>(left);
+template <> int32_t Cast::Operation(double input) {
+	return cast_with_overflow_check<double, int32_t>(input);
 }
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(float left, int64_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(float input, int64_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double left, int64_t &result) {
-	return try_cast_with_overflow_check(left, result);
+template <> bool TryCast::Operation(double input, int64_t &result) {
+	return try_cast_with_overflow_check(input, result);
 }
 
-template <> int64_t Cast::Operation(float left) {
-	return cast_with_overflow_check<float, int64_t>(left);
+template <> int64_t Cast::Operation(float input) {
+	return cast_with_overflow_check<float, int64_t>(input);
 }
-template <> int64_t Cast::Operation(double left) {
-	return cast_with_overflow_check<double, int64_t>(left);
+template <> int64_t Cast::Operation(double input) {
+	return cast_with_overflow_check<double, int64_t>(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
-template <class T> static T try_cast_string(const char *left) {
+template <class T> static T try_cast_string(string_t input) {
 	T result;
-	if (!TryCast::Operation<const char *, T>(left, result)) {
-		throw ConversionException("Could not convert string '%s' to numeric", left);
+	if (!TryCast::Operation<string_t, T>(input, result)) {
+		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
 	}
 	return result;
 }
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLoop(const char *buf, T &result) {
-	index_t pos = NEGATIVE ? 1 : 0;
+	idx_t pos = NEGATIVE ? 1 : 0;
 	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
@@ -227,30 +227,31 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 	}
 }
 
-template <> bool TryCast::Operation(const char *left, bool &result) {
-	if (left[0] == 't' || left[0] == 'T') {
+template <> bool TryCast::Operation(string_t input, bool &result) {
+	auto input_data = input.GetData();
+	if (input_data[0] == 't' || input_data[0] == 'T') {
 		result = true;
-	} else if (left[0] == 'f' || left[0] == 'F') {
+	} else if (input_data[0] == 'f' || input_data[0] == 'F') {
 		result = false;
 	} else {
 		return false;
 	}
 	return true;
 }
-template <> bool TryCast::Operation(const char *left, int8_t &result) {
-	return TryIntegerCast<int8_t>(left, result);
+template <> bool TryCast::Operation(string_t input, int8_t &result) {
+	return TryIntegerCast<int8_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *left, int16_t &result) {
-	return TryIntegerCast<int16_t>(left, result);
+template <> bool TryCast::Operation(string_t input, int16_t &result) {
+	return TryIntegerCast<int16_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *left, int32_t &result) {
-	return TryIntegerCast<int32_t>(left, result);
+template <> bool TryCast::Operation(string_t input, int32_t &result) {
+	return TryIntegerCast<int32_t>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *left, int64_t &result) {
-	return TryIntegerCast<int64_t>(left, result);
+template <> bool TryCast::Operation(string_t input, int64_t &result) {
+	return TryIntegerCast<int64_t>(input.GetData(), result);
 }
 
-template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, index_t decimal, index_t decimal_factor) {
+template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
 	if (decimal_factor > 1) {
 		if (NEGATIVE) {
 			result -= (T)decimal / (T)decimal_factor;
@@ -261,9 +262,9 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, ind
 }
 
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result) {
-	index_t pos = NEGATIVE ? 1 : 0;
-	index_t decimal = 0;
-	index_t decimal_factor = 0;
+	idx_t pos = NEGATIVE ? 1 : 0;
+	idx_t decimal = 0;
+	idx_t decimal_factor = 0;
 	while (buf[pos]) {
 		if (!std::isdigit(buf[pos])) {
 			// not a digit!
@@ -334,156 +335,130 @@ template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	}
 }
 
-template <> bool TryCast::Operation(const char *left, float &result) {
-	return TryDoubleCast<float>(left, result);
+template <> bool TryCast::Operation(string_t input, float &result) {
+	return TryDoubleCast<float>(input.GetData(), result);
 }
-template <> bool TryCast::Operation(const char *left, double &result) {
-	return TryDoubleCast<double>(left, result);
+template <> bool TryCast::Operation(string_t input, double &result) {
+	return TryDoubleCast<double>(input.GetData(), result);
 }
 
-template <> bool Cast::Operation(const char *left) {
-	return try_cast_string<bool>(left);
+template <> bool Cast::Operation(string_t input) {
+	return try_cast_string<bool>(input);
 }
-template <> int8_t Cast::Operation(const char *left) {
-	return try_cast_string<int8_t>(left);
+template <> int8_t Cast::Operation(string_t input) {
+	return try_cast_string<int8_t>(input);
 }
-template <> int16_t Cast::Operation(const char *left) {
-	return try_cast_string<int16_t>(left);
+template <> int16_t Cast::Operation(string_t input) {
+	return try_cast_string<int16_t>(input);
 }
-template <> int32_t Cast::Operation(const char *left) {
-	return try_cast_string<int32_t>(left);
+template <> int32_t Cast::Operation(string_t input) {
+	return try_cast_string<int32_t>(input);
 }
-template <> int64_t Cast::Operation(const char *left) {
-	return try_cast_string<int64_t>(left);
+template <> int64_t Cast::Operation(string_t input) {
+	return try_cast_string<int64_t>(input);
 }
-template <> float Cast::Operation(const char *left) {
-	return try_cast_string<float>(left);
+template <> float Cast::Operation(string_t input) {
+	return try_cast_string<float>(input);
 }
-template <> double Cast::Operation(const char *left) {
-	return try_cast_string<double>(left);
+template <> double Cast::Operation(string_t input) {
+	return try_cast_string<double>(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
-template <> string Cast::Operation(bool left) {
-	if (left) {
+template <> string Cast::Operation(bool input) {
+	if (input) {
 		return "true";
 	} else {
 		return "false";
 	}
 }
 
-template <> string Cast::Operation(int8_t left) {
-	return to_string(left);
+template <> string Cast::Operation(int8_t input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(int16_t left) {
-	return to_string(left);
+template <> string Cast::Operation(int16_t input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(int left) {
-	return to_string(left);
+template <> string Cast::Operation(int input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(int64_t left) {
-	return to_string(left);
+template <> string Cast::Operation(int64_t input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(uint64_t left) {
-	return to_string(left);
+template <> string Cast::Operation(uint64_t input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(float left) {
-	return to_string(left);
+template <> string Cast::Operation(float input) {
+	return to_string(input);
 }
 
-template <> string Cast::Operation(double left) {
-	return to_string(left);
+template <> string Cast::Operation(double input) {
+	return to_string(input);
+}
+
+template <> string Cast::Operation(string_t input) {
+	return string(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> string CastFromDate::Operation(date_t left) {
-	return Date::ToString(left);
-}
-
-template <> int32_t CastFromDate::Operation(date_t left) {
-	return (int32_t)left;
-}
-
-template <> int64_t CastFromDate::Operation(date_t left) {
-	return (int64_t)left;
+template <> string CastFromDate::Operation(date_t input) {
+	return Date::ToString(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Date
 //===--------------------------------------------------------------------===//
-template <> date_t CastToDate::Operation(const char *left) {
-	return Date::FromCString(left);
+template <> date_t CastToDate::Operation(string_t input) {
+	return Date::FromCString(input.GetData());
 }
-
-template <> date_t CastToDate::Operation(int32_t left) {
-	return (date_t)left;
-}
-
-template <> date_t CastToDate::Operation(int64_t left) {
-	return (date_t)left;
-}
-
 
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
-template <> string CastFromTime::Operation(dtime_t left) {
-	return Time::ToString(left);
-}
-
-template <> int32_t CastFromTime::Operation(dtime_t left) {
-	return (int32_t)left;
-}
-
-template <> int64_t CastFromTime::Operation(dtime_t left) {
-	return (int64_t)left;
+template <> string CastFromTime::Operation(dtime_t input) {
+	return Time::ToString(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Time
 //===--------------------------------------------------------------------===//
-template <> dtime_t CastToTime::Operation(const char *left) {
-	return Time::FromCString(left);
+template <> dtime_t CastToTime::Operation(string_t input) {
+	return Time::FromCString(input.GetData());
 }
 
-template <> dtime_t CastToTime::Operation(int32_t left) {
-	return (dtime_t)left;
-}
-
-template <> dtime_t CastToTime::Operation(int64_t left) {
-	return (dtime_t)left;
+template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
+	return Timestamp::FromDatetime(input, Time::FromTime(0, 0, 0, 0));
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
-
-template <> string CastFromTimestamp::Operation(timestamp_t left) {
-	return Timestamp::ToString(left);
+template <> string CastFromTimestamp::Operation(timestamp_t input) {
+	return Timestamp::ToString(input);
 }
 
-template <> int64_t CastFromTimestamp::Operation(timestamp_t left) {
-	return (int64_t)left;
+template <> date_t CastTimestampToDate::Operation(timestamp_t input) {
+	return Timestamp::GetDate(input);
+}
+
+template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
+	return Timestamp::GetTime(input);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
-template <> timestamp_t CastToTimestamp::Operation(const char *left) {
-	return Timestamp::FromString(left);
-}
-
-template <> timestamp_t CastToTimestamp::Operation(int64_t left) {
-	return (timestamp_t)left;
+template <> timestamp_t CastToTimestamp::Operation(string_t input) {
+	return Timestamp::FromString(input.GetData());
 }
 
 } // namespace duckdb

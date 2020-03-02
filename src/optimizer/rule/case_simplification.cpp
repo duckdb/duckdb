@@ -1,7 +1,7 @@
-#include "optimizer/rule/case_simplification.hpp"
+#include "duckdb/optimizer/rule/case_simplification.hpp"
 
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_case_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -24,7 +24,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 
 	// fold based on the constant condition
-	auto condition = constant_value.CastAs(TypeId::BOOLEAN);
+	auto condition = constant_value.CastAs(TypeId::BOOL);
 	if (condition.is_null || !condition.value_.boolean) {
 		return move(root->result_if_false);
 	} else {

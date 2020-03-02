@@ -1,16 +1,19 @@
-#include "parser/expression/subquery_expression.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
-#include "planner/expression_binder.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-
 class BoundSubqueryNode : public QueryNode {
 public:
-	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node, unique_ptr<QueryNode> subquery) :
-		QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)), bound_node(move(bound_node)), subquery(move(subquery)) {}
+	BoundSubqueryNode(unique_ptr<Binder> subquery_binder, unique_ptr<BoundQueryNode> bound_node,
+	                  unique_ptr<QueryNode> subquery)
+	    : QueryNode(QueryNodeType::BOUND_SUBQUERY_NODE), subquery_binder(move(subquery_binder)),
+	      bound_node(move(bound_node)), subquery(move(subquery)) {
+	}
 
 	unique_ptr<Binder> subquery_binder;
 	unique_ptr<BoundQueryNode> bound_node;
@@ -25,7 +28,7 @@ public:
 	}
 };
 
-BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t depth) {
+BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
 	if (expr.subquery->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		assert(depth == 0);
 		// first bind the actual subquery in a new binder
@@ -34,7 +37,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 		subquery_binder->CTE_bindings = binder.CTE_bindings;
 		auto bound_node = subquery_binder->Bind(*expr.subquery);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
-		for (index_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
+		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];
 			if (corr.depth > 1) {
 				// depth > 1, the column references the query ABOVE the current one
@@ -58,7 +61,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 	}
 	// both binding the child and binding the subquery was successful
 	assert(expr.subquery->type == QueryNodeType::BOUND_SUBQUERY_NODE);
-	auto bound_subquery = (BoundSubqueryNode*) expr.subquery.get();
+	auto bound_subquery = (BoundSubqueryNode *)expr.subquery.get();
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
 	auto bound_node = move(bound_subquery->bound_node);
@@ -74,7 +77,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, index_t de
 		// cast child and subquery child to equivalent types
 		assert(bound_node->types.size() == 1);
 		auto compare_type = MaxSQLType(child->sql_type, bound_node->types[0]);
-		child->expr = AddCastToType(move(child->expr), child->sql_type, compare_type);
+		child->expr = BoundCastExpression::AddCastToType(move(child->expr), child->sql_type, compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
 	}
