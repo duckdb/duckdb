@@ -134,7 +134,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	std::mt19937 gen;
 	gen.seed(42);
 
-	state->conn.Query("CREATE TABLE times(d DATE);");
+	state->conn.Query("CREATE TABLE times(d TIME);");
 	Appender appender(state->conn, "times");
 	// insert the elements into the database
 	for (int i = 0; i < CAST_COUNT; i++) {
@@ -162,7 +162,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	std::mt19937 gen;
 	gen.seed(42);
 
-	state->conn.Query("CREATE TABLE timestamps(d DATE);");
+	state->conn.Query("CREATE TABLE timestamps(d TIMESTAMP);");
 	Appender appender(state->conn, "timestamps");
 	// insert the elements into the database
 	for (int i = 0; i < CAST_COUNT; i++) {
