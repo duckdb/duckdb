@@ -524,53 +524,71 @@ template <> string_t StringCast::Operation(double input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
-	int32_t year;
-	int32_t month_day[2];
-	Date::Convert(input, year, month_day[0], month_day[1]);
-	// format is YYYY-MM-DD (BC)
-	// regular length is 10
-	idx_t length = 6;
-	idx_t year_length = 4;
-	bool add_bc = false;
-	if (year <= 0) {
-		// add (BC) suffix
-		length += 5;
-		year = -year;
-		add_bc = true;
-	} else {
-		// potentially add extra characters depending on length of year
-		year_length += year >= 10000;
-		year_length += year >= 100000;
-		year_length += year >= 1000000;
-		year_length += year >= 10000000;
+struct DateToStringCast {
+	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
+		// format is YYYY-MM-DD with optional (BC) at the end
+		// regular length is 10
+		idx_t length = 6;
+		year_length = 4;
+		add_bc = false;
+		if (date[0] <= 0) {
+			// add (BC) suffix
+			length += 5;
+			date[0] = -date[0];
+			add_bc = true;
+		} else {
+			// potentially add extra characters depending on length of year
+			year_length += date[0] >= 10000;
+			year_length += date[0] >= 100000;
+			year_length += date[0] >= 1000000;
+			year_length += date[0] >= 10000000;
+		}
+		length += year_length;
+		return length;
 	}
-	length += year_length;
+
+	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
+		// now we write the string, first write the year
+		auto endptr = data + year_length;
+		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
+		// add optional leading zeros
+		while(endptr > data) {
+			*--endptr = '0';
+		}
+		// now write the month and day
+		auto ptr = data + year_length;
+		for(int i = 1; i <= 2; i++) {
+			ptr[0] = '-';
+			if (date[i] < 10) {
+				ptr[1] = '0';
+				ptr[2] = '0' + date[i];
+			} else {
+				auto index = static_cast<unsigned>(date[i] * 2);
+				ptr[1] = StringToIntegerCast::string_digits[index];
+				ptr[2] = StringToIntegerCast::string_digits[index + 1];
+			}
+			ptr += 3;
+		}
+		// optionally add BC to the end of the date
+		if (add_bc) {
+			memcpy(ptr, " (BC)", 5);
+		}
+	}
+};
+
+template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
+	int32_t date[3];
+	Date::Convert(input, date[0], date[1], date[2]);
+
+	idx_t year_length;
+	bool add_bc;
+	idx_t length = DateToStringCast::Length(date, year_length, add_bc);
+
 	string_t result = vector.EmptyString(length);
 	auto data = result.GetData();
 
-	// now we write the string, first write the year
-	auto endptr = data + year_length;
-	endptr = StringToIntegerCast::FormatUnsigned(year, endptr);
-	while(endptr > data) {
-		*--endptr = '0';
-	}
-	auto ptr = data + year_length;
-	for(int i = 0; i < 2; i++) {
-		ptr[0] = '-';
-		if (month_day[i] < 10) {
-			ptr[1] = '0';
-			ptr[2] = '0' + month_day[i];
-		} else {
-			auto index = static_cast<unsigned>(month_day[i] * 2);
-			ptr[1] = StringToIntegerCast::string_digits[index];
-			ptr[2] = StringToIntegerCast::string_digits[index + 1];
-		}
-		ptr += 3;
-	}
-	if (add_bc) {
-		memcpy(ptr, " (BC)", 5);
-	}
+	DateToStringCast::Format(data, date, year_length, add_bc);
+
 	result.Finalize();
 	return result;
 }
@@ -585,9 +603,59 @@ template <> date_t CastToDate::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
+struct TimeToStringCast {
+	static idx_t Length(int32_t time[]) {
+		// format is HH:MM:DD
+		// regular length is 8
+		idx_t length = 8;
+		if (time[3] > 0) {
+			// if there are msecs, we add the miliseconds after the time with a period separator
+			// i.e. the format becomes HH:MM:DD.msec
+			length += 4;
+		}
+		return length;
+	}
+
+	static void Format(char *data, idx_t length, int32_t time[]) {
+		// first write hour, month and day
+		auto ptr = data;
+		for(int i = 0; i <= 2; i++) {
+			if (time[i] < 10) {
+				ptr[0] = '0';
+				ptr[1] = '0' + time[i];
+			} else {
+				auto index = static_cast<unsigned>(time[i] * 2);
+				ptr[0] = StringToIntegerCast::string_digits[index];
+				ptr[1] = StringToIntegerCast::string_digits[index + 1];
+			}
+			ptr[2] = ':';
+			ptr += 3;
+		}
+		// now optionally write ms at the end
+		if (time[3] > 0) {
+			auto start = ptr;
+			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
+			while(ptr > start) {
+				*--ptr = '0';
+			}
+			*--ptr = '.';
+		}
+	}
+};
+
 template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
-	string str = Time::ToString(input);
-	return vector.AddString(str);
+	int32_t time[4];
+	Time::Convert(input, time[0], time[1], time[2], time[3]);
+
+	idx_t length = TimeToStringCast::Length(time);
+
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	TimeToStringCast::Format(data, length, time);
+
+	result.Finalize();
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -605,8 +673,30 @@ template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
 template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vector) {
-	string str = Timestamp::ToString(input);
-	return vector.AddString(str);
+	date_t date_entry;
+	dtime_t time_entry;
+	Timestamp::Convert(input, date_entry, time_entry);
+
+	int32_t date[3], time[4];
+	Date::Convert(date_entry, date[0], date[1], date[2]);
+	Time::Convert(time_entry, time[0], time[1], time[2], time[3]);
+
+	// format for timestamp is DATE TIME (separated by space)
+	idx_t year_length;
+	bool add_bc;
+	idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
+	idx_t time_length = TimeToStringCast::Length(time);
+	idx_t length = date_length + time_length + 1;
+
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	DateToStringCast::Format(data, date, year_length, add_bc);
+	data[date_length] = ' ';
+	TimeToStringCast::Format(data + date_length + 1, time_length, time);
+
+	result.Finalize();
+	return result;
 }
 
 template <> date_t CastTimestampToDate::Operation(timestamp_t input) {

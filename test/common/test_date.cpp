@@ -97,6 +97,6 @@ TEST_CASE("Time parsing works", "[date]") {
 	REQUIRE(Time::ToString(Time::FromString("14:42:04.00")) == "14:42:04");
 	REQUIRE(Time::ToString(Time::FromString("14:42:04.0000")) == "14:42:04"); // questionable
 
-	REQUIRE(Time::ToString(Time::FromString("14:42:04.2")) == "14:42:04.2");
-	REQUIRE(Time::ToString(Time::FromString("14:42:04.03")) == "14:42:04.03");
+	REQUIRE(Time::ToString(Time::FromString("14:42:04.200")) == "14:42:04.200");
+	REQUIRE(Time::ToString(Time::FromString("14:42:04.030")) == "14:42:04.030");
 }
