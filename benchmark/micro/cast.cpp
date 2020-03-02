@@ -115,7 +115,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	}
 }
 string GetQuery() override {
-	return "SELECT CAST(i AS VARCHAR) FROM dates";
+	return "SELECT CAST(d AS VARCHAR) FROM dates";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -142,7 +142,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	}
 }
 string GetQuery() override {
-	return "SELECT CAST(i AS VARCHAR) FROM times";
+	return "SELECT CAST(d AS VARCHAR) FROM times";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -170,7 +170,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	}
 }
 string GetQuery() override {
-	return "SELECT CAST(i AS VARCHAR) FROM timestamps";
+	return "SELECT CAST(d AS VARCHAR) FROM timestamps";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
