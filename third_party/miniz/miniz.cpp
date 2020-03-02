@@ -2052,8 +2052,8 @@ mz_uint tdefl_create_comp_flags_from_zip_params(int level, int window_bits, int 
 }
 
 #ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4204) /* nonstandard extension used : non-constant aggregate initializer (also supported by GNU C and C99, so no big deal) */
+//#pragma warning(push)
+//#pragma warning(disable : 4204) /* nonstandard extension used : non-constant aggregate initializer (also supported by GNU C and C99, so no big deal) */
 #endif
 
 /* Simple PNG writer function by Alex Evans, 2011. Released into the public domain: https://gist.github.com/908299, more context at
@@ -2157,7 +2157,7 @@ void tdefl_compressor_free(tdefl_compressor *pComp)
 }
 
 #ifdef _MSC_VER
-#pragma warning(pop)
+//#pragma warning(pop)
 #endif
 
 #ifdef __cplusplus
@@ -3028,7 +3028,7 @@ static FILE *mz_freopen(const char *pPath, const char *pMode, FILE *pStream)
 #define MZ_DELETE_FILE remove
 
 #else
-#pragma message("Using fopen, ftello, fseeko, stat() etc. path for file I/O - this path may not support large files.")
+//#pragma message("Using fopen, ftello, fseeko, stat() etc. path for file I/O - this path may not support large files.")
 #ifndef MINIZ_NO_TIME
 #include <utime.h>
 #endif

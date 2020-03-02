@@ -6,5 +6,7 @@ if [ ! -f "src/duckdb.cpp" ]; then
 		exit 1
 	fi
 	(cd ../.. && python scripts/amalgamation.py)
-	cp ../../src/amalgamation/duckdb.* src/
+	cat ../../src/amalgamation/duckdb.cpp | sed 's|#include "duckdb.hpp"|#include "duckdb.h"|' > src/duckdb.cpp
+	cp ../../src/amalgamation/duckdb.hpp src/duckdb.h
+
 fi

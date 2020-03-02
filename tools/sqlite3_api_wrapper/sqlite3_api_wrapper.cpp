@@ -2,9 +2,6 @@
 
 #include <ctype.h>
 #include <duckdb.hpp>
-#ifndef _WIN32
-#include <err.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

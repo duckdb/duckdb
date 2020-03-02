@@ -329,7 +329,7 @@ void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr_ptr, uniq
 	// first visit the children of the node, if any
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		PlanSubqueries(&expr, root);
-		return expr;
+		return move(expr);
 	});
 
 	// check if this is a subquery node

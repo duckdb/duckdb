@@ -68,7 +68,7 @@
 
 // Silence "zero-sized array in struct/union" warning for OneState::action.
 #ifdef _MSC_VER
-#pragma warning(disable: 4200)
+//#pragma warning(disable: 4200)
 #endif
 
 namespace re2 {

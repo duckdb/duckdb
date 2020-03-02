@@ -63,5 +63,7 @@ DBItest::test_all(c(
 	"column_info_consistent",
 	"column_info_consistent",
 	"reexport",
-	"roundtrip_logical"
+	"roundtrip_logical",
+
+	"package_dependencies"
 	))

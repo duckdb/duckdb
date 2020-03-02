@@ -1,1 +1,1 @@
-rm src/duckdb.cpp src/duckdb.hpp src/duckdb.o
+rm -f src/duckdb.cpp src/duckdb.h src/duckdb.o

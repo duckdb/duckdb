@@ -10762,10 +10762,13 @@ YY_BUFFER_STATE core_yy_scan_buffer  (char * base, yy_size_t  size , yyscan_t yy
 #define YY_EXIT_FAILURE 2
 #endif
 
+#include <stdexcept>
+
 static void yy_fatal_error (yyconst char* msg , yyscan_t yyscanner)
 {
-    fprintf_to_ereport("%s\n", msg );
-	exit( YY_EXIT_FAILURE );
+//    fprintf_to_ereport("%s\n", msg );
+//	exit( YY_EXIT_FAILURE );
+	throw std::runtime_error(msg);
 }
 
 /* Redefine yyless() so it works in section 3 code. */

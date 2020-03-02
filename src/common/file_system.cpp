@@ -38,6 +38,11 @@ static void AssertValidFileFlags(uint8_t flags) {
 #define O_CLOEXEC 0
 #endif
 
+// Solaris
+#ifndef O_DIRECT
+# define O_DIRECT 0
+#endif
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, path), fd(fd) {
@@ -76,6 +81,9 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
+#if defined(__sun) && defined(__SVR4)
+		throw Exception("DIRECT_IO not supported on Solaris");
+#endif
 #if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
 		open_flags |= O_SYNC;
