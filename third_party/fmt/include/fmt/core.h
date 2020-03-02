@@ -224,17 +224,8 @@ namespace internal {
 // A workaround for gcc 4.8 to make void_t work in a SFINAE context.
 template <typename... Ts> struct void_t_impl { using type = void; };
 
-FMT_API void assert_fail(const char* file, int line, const char* message);
-
 #ifndef FMT_ASSERT
-#  ifdef NDEBUG
-#    define FMT_ASSERT(condition, message)
-#  else
-#    define FMT_ASSERT(condition, message) \
-      ((condition)                         \
-           ? void()                        \
-           : fmt::internal::assert_fail(__FILE__, __LINE__, (message)))
-#  endif
+#define FMT_ASSERT(condition, message)
 #endif
 
 #if defined(FMT_USE_STRING_VIEW)
@@ -1478,42 +1469,6 @@ inline std::basic_string<Char> format(const S& format_str, Args&&... args) {
       {internal::make_args_checked<Args...>(format_str, args...)});
 }
 
-FMT_API void vprint(std::FILE* f, string_view format_str, format_args args);
-FMT_API void vprint(string_view format_str, format_args args);
-
-/**
-  \rst
-  Prints formatted data to the file *f*. For wide format strings,
-  *f* should be in wide-oriented mode set via ``fwide(f, 1)`` or
-  ``_setmode(_fileno(f), _O_U8TEXT)`` on Windows.
-
-  **Example**::
-
-    fmt::print(stderr, "Don't {}!", "panic");
-  \endrst
- */
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(internal::is_string<S>::value)>
-inline void print(std::FILE* f, const S& format_str, Args&&... args) {
-  vprint(f, to_string_view(format_str),
-         internal::make_args_checked<Args...>(format_str, args...));
-}
-
-/**
-  \rst
-  Prints formatted data to ``stdout``.
-
-  **Example**::
-
-    fmt::print("Elapsed time: {0:.2f} seconds", 1.23);
-  \endrst
- */
-template <typename S, typename... Args,
-          FMT_ENABLE_IF(internal::is_string<S>::value)>
-inline void print(const S& format_str, Args&&... args) {
-  vprint(to_string_view(format_str),
-         internal::make_args_checked<Args...>(format_str, args...));
-}
 FMT_END_NAMESPACE
 
 #endif  // FMT_CORE_H_

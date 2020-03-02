@@ -33,6 +33,7 @@
 #ifndef FMT_FORMAT_H_
 #define FMT_FORMAT_H_
 
+#include "duckdb/common/exception.hpp"
 #include "fmt/core.h"
 
 #include <algorithm>
@@ -687,19 +688,6 @@ void basic_memory_buffer<T, SIZE, Allocator>::grow(std::size_t size) {
 using memory_buffer = basic_memory_buffer<char>;
 using wmemory_buffer = basic_memory_buffer<wchar_t>;
 
-/** A formatting error such as invalid format string. */
-class FMT_API format_error : public std::runtime_error {
- public:
-  explicit format_error(const char* message) : std::runtime_error(message) {}
-  explicit format_error(const std::string& message)
-      : std::runtime_error(message) {}
-  format_error(const format_error&) = default;
-  format_error& operator=(const format_error&) = default;
-  format_error(format_error&&) = default;
-  format_error& operator=(format_error&&) = default;
-  ~format_error() FMT_NOEXCEPT FMT_OVERRIDE;
-};
-
 namespace internal {
 
 // Returns true if value is negative, false otherwise.
@@ -930,53 +918,6 @@ inline It format_uint(It out, UInt value, int num_digits, bool upper = false) {
   format_uint<BASE_BITS>(buffer, value, num_digits, upper);
   return internal::copy_str<Char>(buffer, buffer + num_digits, out);
 }
-
-#ifndef _WIN32
-#  define FMT_USE_WINDOWS_H 0
-#elif !defined(FMT_USE_WINDOWS_H)
-#  define FMT_USE_WINDOWS_H 1
-#endif
-
-// Define FMT_USE_WINDOWS_H to 0 to disable use of windows.h.
-// All the functionality that relies on it will be disabled too.
-#if FMT_USE_WINDOWS_H
-// A converter from UTF-8 to UTF-16.
-// It is only provided for Windows since other systems support UTF-8 natively.
-class utf8_to_utf16 {
- private:
-  wmemory_buffer buffer_;
-
- public:
-  FMT_API explicit utf8_to_utf16(string_view s);
-  operator wstring_view() const { return wstring_view(&buffer_[0], size()); }
-  size_t size() const { return buffer_.size() - 1; }
-  const wchar_t* c_str() const { return &buffer_[0]; }
-  std::wstring str() const { return std::wstring(&buffer_[0], size()); }
-};
-
-// A converter from UTF-16 to UTF-8.
-// It is only provided for Windows since other systems support UTF-8 natively.
-class utf16_to_utf8 {
- private:
-  memory_buffer buffer_;
-
- public:
-  utf16_to_utf8() {}
-  FMT_API explicit utf16_to_utf8(wstring_view s);
-  operator string_view() const { return string_view(&buffer_[0], size()); }
-  size_t size() const { return buffer_.size() - 1; }
-  const char* c_str() const { return &buffer_[0]; }
-  std::string str() const { return std::string(&buffer_[0], size()); }
-
-  // Performs conversion returning a system error code instead of
-  // throwing exception on conversion error. This method may still throw
-  // in case of memory allocation error.
-  FMT_API int convert(wstring_view s);
-};
-
-FMT_API void format_windows_error(internal::buffer<char>& out, int error_code,
-                                  string_view message) FMT_NOEXCEPT;
-#endif
 
 template <typename T = void> struct null {};
 
@@ -1587,7 +1528,7 @@ template <typename Range> class basic_writer {
     }
 
     FMT_NORETURN void on_error() {
-      FMT_THROW(format_error("invalid type specifier"));
+      FMT_THROW(duckdb::Exception("invalid type specifier"));
     }
   };
 
@@ -1820,7 +1761,7 @@ class arg_formatter_base {
 
   void write(const char_type* value) {
     if (!value) {
-      FMT_THROW(format_error("string pointer is null"));
+      FMT_THROW(duckdb::Exception("string pointer is null"));
     } else {
       auto length = std::char_traits<char_type>::length(value);
       basic_string_view<char_type> sv(value, length);
@@ -2695,125 +2636,6 @@ class arg_formatter : public internal::arg_formatter_base<Range> {
   }
 };
 
-/**
- An error returned by an operating system or a language runtime,
- for example a file opening error.
-*/
-class FMT_API system_error : public std::runtime_error {
- private:
-  void init(int err_code, string_view format_str, format_args args);
-
- protected:
-  int error_code_;
-
-  system_error() : std::runtime_error(""), error_code_(0) {}
-
- public:
-  /**
-   \rst
-   Constructs a :class:`fmt::system_error` object with a description
-   formatted with `fmt::format_system_error`. *message* and additional
-   arguments passed into the constructor are formatted similarly to
-   `fmt::format`.
-
-   **Example**::
-
-     // This throws a system_error with the description
-     //   cannot open file 'madeup': No such file or directory
-     // or similar (system message may vary).
-     const char *filename = "madeup";
-     std::FILE *file = std::fopen(filename, "r");
-     if (!file)
-       throw fmt::system_error(errno, "cannot open file '{}'", filename);
-   \endrst
-  */
-  template <typename... Args>
-  system_error(int error_code, string_view message, const Args&... args)
-      : std::runtime_error("") {
-    init(error_code, message, make_format_args(args...));
-  }
-  system_error(const system_error&) = default;
-  system_error& operator=(const system_error&) = default;
-  system_error(system_error&&) = default;
-  system_error& operator=(system_error&&) = default;
-  ~system_error() FMT_NOEXCEPT FMT_OVERRIDE;
-
-  int error_code() const { return error_code_; }
-};
-
-/**
-  \rst
-  Formats an error returned by an operating system or a language runtime,
-  for example a file opening error, and writes it to *out* in the following
-  form:
-
-  .. parsed-literal::
-     *<message>*: *<system-message>*
-
-  where *<message>* is the passed message and *<system-message>* is
-  the system message corresponding to the error code.
-  *error_code* is a system error code as given by ``errno``.
-  If *error_code* is not a valid error code such as -1, the system message
-  may look like "Unknown error -1" and is platform-dependent.
-  \endrst
- */
-FMT_API void format_system_error(internal::buffer<char>& out, int error_code,
-                                 string_view message) FMT_NOEXCEPT;
-
-// Reports a system error without throwing an exception.
-// Can be used to report errors from destructors.
-FMT_API void report_system_error(int error_code,
-                                 string_view message) FMT_NOEXCEPT;
-
-#if FMT_USE_WINDOWS_H
-
-/** A Windows error. */
-class windows_error : public system_error {
- private:
-  FMT_API void init(int error_code, string_view format_str, format_args args);
-
- public:
-  /**
-   \rst
-   Constructs a :class:`fmt::windows_error` object with the description
-   of the form
-
-   .. parsed-literal::
-     *<message>*: *<system-message>*
-
-   where *<message>* is the formatted message and *<system-message>* is the
-   system message corresponding to the error code.
-   *error_code* is a Windows error code as given by ``GetLastError``.
-   If *error_code* is not a valid error code such as -1, the system message
-   will look like "error -1".
-
-   **Example**::
-
-     // This throws a windows_error with the description
-     //   cannot open file 'madeup': The system cannot find the file specified.
-     // or similar (system message may vary).
-     const char *filename = "madeup";
-     LPOFSTRUCT of = LPOFSTRUCT();
-     HFILE file = OpenFile(filename, &of, OF_READ);
-     if (file == HFILE_ERROR) {
-       throw fmt::windows_error(GetLastError(),
-                                "cannot open file '{}'", filename);
-     }
-   \endrst
-  */
-  template <typename... Args>
-  windows_error(int error_code, string_view message, const Args&... args) {
-    init(error_code, message, make_format_args(args...));
-  }
-};
-
-// Reports a Windows error without throwing an exception.
-// Can be used to report errors from destructors.
-FMT_API void report_windows_error(int error_code,
-                                  string_view message) FMT_NOEXCEPT;
-
-#endif
-
 /** Fast integer formatter. */
 class format_int {
  private:
@@ -3391,21 +3213,6 @@ inline std::basic_string<Char> internal::vformat(
 template <typename... Args>
 inline std::size_t formatted_size(string_view format_str, const Args&... args) {
   return format_to(internal::counting_iterator(), format_str, args...).count();
-}
-
-template <typename Char, FMT_ENABLE_IF(std::is_same<Char, wchar_t>::value)>
-void vprint(std::FILE* f, basic_string_view<Char> format_str,
-            wformat_args args) {
-  wmemory_buffer buffer;
-  internal::vformat_to(buffer, format_str, args);
-  buffer.push_back(L'\0');
-  if (std::fputws(buffer.data(), f) == -1)
-    FMT_THROW(system_error(errno, "cannot write to file"));
-}
-
-template <typename Char, FMT_ENABLE_IF(std::is_same<Char, wchar_t>::value)>
-void vprint(basic_string_view<Char> format_str, wformat_args args) {
-  vprint(stdout, format_str, args);
 }
 
 #if FMT_USE_USER_DEFINED_LITERALS

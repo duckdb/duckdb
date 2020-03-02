@@ -42,11 +42,6 @@ inline fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
 FMT_BEGIN_NAMESPACE
 namespace internal {
 
-FMT_FUNC void assert_fail(const char* file, int line, const char* message) {
-  print(stderr, "{}:{}: assertion failed: {}", file, line, message);
-  std::abort();
-}
-
 #ifndef _MSC_VER
 #  define FMT_SNPRINTF snprintf
 #else  // _MSC_VER
@@ -155,15 +150,6 @@ FMT_FUNC void format_error_code(internal::buffer<char>& out, int error_code,
   assert(out.size() <= inline_buffer_size);
 }
 
-// A wrapper around fwrite that throws on error.
-FMT_FUNC void fwrite_fully(const void* ptr, size_t size, size_t count,
-                           FILE* stream) {
-  size_t written = std::fwrite(ptr, size, count, stream);
-  if (written < count) {
-    FMT_THROW(system_error(errno, "cannot write to file"));
-  }
-}
-
 FMT_FUNC void report_error(format_func func, int error_code,
                            string_view message) FMT_NOEXCEPT {
   memory_buffer full_message;
@@ -213,18 +199,6 @@ FMT_FUNC Char internal::decimal_point_impl(locale_ref) {
   return '.';
 }
 #endif
-
-FMT_API FMT_FUNC format_error::~format_error() FMT_NOEXCEPT = default;
-FMT_API FMT_FUNC system_error::~system_error() FMT_NOEXCEPT = default;
-
-FMT_FUNC void system_error::init(int err_code, string_view format_str,
-                                 format_args args) {
-  error_code_ = err_code;
-  memory_buffer buffer;
-  format_system_error(buffer, err_code, vformat(format_str, args));
-  std::runtime_error& base = *this;
-  base = std::runtime_error(to_string(buffer));
-}
 
 namespace internal {
 
@@ -1227,49 +1201,8 @@ template <> struct formatter<internal::bigint> {
   }
 };
 
-FMT_FUNC void format_system_error(internal::buffer<char>& out, int error_code,
-                                  string_view message) FMT_NOEXCEPT {
-  FMT_TRY {
-    memory_buffer buf;
-    buf.resize(inline_buffer_size);
-    for (;;) {
-      char* system_message = &buf[0];
-      int result =
-          internal::safe_strerror(error_code, system_message, buf.size());
-      if (result == 0) {
-        internal::writer w(out);
-        w.write(message);
-        w.write(": ");
-        w.write(system_message);
-        return;
-      }
-      if (result != ERANGE)
-        break;  // Can't get error message, report error code instead.
-      buf.resize(buf.size() * 2);
-    }
-  }
-  FMT_CATCH(...) {}
-  format_error_code(out, error_code, message);
-}
-
 FMT_FUNC void internal::error_handler::on_error(const char* message) {
-  FMT_THROW(format_error(message));
-}
-
-FMT_FUNC void report_system_error(int error_code,
-                                  fmt::string_view message) FMT_NOEXCEPT {
-  report_error(format_system_error, error_code, message);
-}
-
-FMT_FUNC void vprint(std::FILE* f, string_view format_str, format_args args) {
-  memory_buffer buffer;
-  internal::vformat_to(buffer, format_str,
-                       basic_format_args<buffer_context<char>>(args));
-  internal::fwrite_fully(buffer.data(), 1, buffer.size(), f);
-}
-
-FMT_FUNC void vprint(string_view format_str, format_args args) {
-  vprint(stdout, format_str, args);
+  FMT_THROW(duckdb::Exception(message));
 }
 
 FMT_END_NAMESPACE
