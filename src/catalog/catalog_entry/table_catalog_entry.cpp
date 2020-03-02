@@ -199,3 +199,17 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	}
 	return info;
 }
+
+unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+    for (index_t i = 0; i < columns.size(); i++) {
+        ColumnDefinition copy(columns[i].name, columns[i].type);
+        copy.oid = columns[i].oid;
+        copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+        create_info->columns.push_back(move(copy));
+    }
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
+}
