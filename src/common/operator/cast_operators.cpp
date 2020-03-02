@@ -7,6 +7,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+#include "fmt/format.h"
+
 #include <cstdlib>
 #include <cctype>
 #include <cmath>
@@ -512,13 +514,13 @@ template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
 }
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
-	string str = to_string(input);
-	return vector.AddString(str);
+	std::string s = fmt::format("{}", input);
+	return vector.AddString(s);
 }
 
 template <> string_t StringCast::Operation(double input, Vector &vector) {
-	string str = to_string(input);
-	return vector.AddString(str);
+	std::string s = fmt::format("{}", input);
+	return vector.AddString(s);
 }
 
 //===--------------------------------------------------------------------===//

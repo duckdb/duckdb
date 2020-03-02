@@ -161,6 +161,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 include_directories(src/include)
+include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
