@@ -174,7 +174,11 @@ date_t Date::FromString(string str) {
 string Date::ToString(int32_t date) {
 	int32_t year, month, day;
 	number_to_date(date, year, month, day);
-	return StringUtil::Format("%04d-%02d-%02d", year, month, day);
+	if (year < 0) {
+		return StringUtil::Format("%04d-%02d-%02d (BC)", -year, month, day);
+	} else {
+		return StringUtil::Format("%04d-%02d-%02d", year, month, day);
+	}
 }
 
 string Date::Format(int32_t year, int32_t month, int32_t day) {

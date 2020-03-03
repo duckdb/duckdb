@@ -1,10 +1,11 @@
 add_library_unity(duckdb_func_string
                   OBJECT
-		  reverse.cpp
+                  reverse.cpp
                   caseconvert.cpp
                   concat.cpp
                   length.cpp
                   like.cpp
+                  printf.cpp
                   regexp.cpp
                   substring.cpp)
 set(ALL_OBJECT_FILES
