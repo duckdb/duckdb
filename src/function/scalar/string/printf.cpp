@@ -49,6 +49,8 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		count = args.size();
 		sel_vector = args.sel_vector;
 	}
+	auto format_data = (string_t *) format_string.GetData();
+	auto result_data = (string_t *) result.GetData();
 	for(idx_t i = 0; i < count; i++) {
 		idx_t current_idx = sel_vector ? sel_vector[i] : i;
 		if (result.nullmask[current_idx]) {
@@ -56,11 +58,12 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			continue;
 		}
 
-		std::vector<fmt::basic_format_arg<ctx>> format_args;
-
-		auto format_data = (string_t *) format_string.GetData();
+		// first fetch the format string
 		auto fmt_idx = format_string.vector_type == VectorType::CONSTANT_VECTOR ? 0 : current_idx;
-		auto format_string = format_data[fmt_idx].GetString();
+		auto format_string = format_data[fmt_idx].GetData();
+
+		// now gather all the format arguments
+		std::vector<fmt::basic_format_arg<ctx>> format_args;
 		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : current_idx;
@@ -109,8 +112,8 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 				throw Exception("Unsupported type for format!");
 			}
 		}
-		string dynamic_result = FORMAT_FUN::template OP<ctx>(format_string.c_str(), format_args);
-		auto result_data = (string_t *) result.GetData();
+		// finally actually perform the format
+		string dynamic_result = FORMAT_FUN::template OP<ctx>(format_string, format_args);
 		result_data[current_idx] = result.AddString(dynamic_result);
 	}
 }

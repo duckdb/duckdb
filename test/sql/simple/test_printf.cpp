@@ -94,6 +94,9 @@ TEST_CASE("Test printf with vectors", "[printf]") {
 	// printf without format specifiers: too few parameters
 	REQUIRE_FAIL(con.Query("SELECT printf(fmt) FROM strings ORDER BY idx"));
 
+	result = con.Query("SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "20", "30"}));
+
 	// standard vectorized printf
 	result = con.Query("SELECT printf(fmt, pint, pstring) FROM strings ORDER BY idx");
 	REQUIRE(CHECK_COLUMN(result, 0, {"10: hello", "blabla 20 blabla blabla", Value()}));
