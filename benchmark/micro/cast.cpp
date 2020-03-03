@@ -32,6 +32,29 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(CastIntToString)
 
+DUCKDB_BENCHMARK(FormatIntToString, "[cast]")
+void Load(DuckDBBenchmarkState *state) override {
+	state->conn.Query("CREATE TABLE integers(i INTEGER);");
+	Appender appender(state->conn, "integers");
+	// insert the elements into the database
+	for (int i = 0; i < CAST_COUNT; i++) {
+		appender.AppendRow(i);
+	}
+}
+string GetQuery() override {
+	return "SELECT format('{}', i) FROM integers";
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Convert integer to string using format function";
+}
+FINISH_BENCHMARK(FormatIntToString)
+
 DUCKDB_BENCHMARK(CastDoubleToString, "[cast]")
 void Load(DuckDBBenchmarkState *state) override {
 	state->conn.Query("CREATE TABLE doubles(i DOUBLE);");
