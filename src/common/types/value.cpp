@@ -271,39 +271,7 @@ template <> int64_t Value::GetValue() {
 	return GetValueInternal<int64_t>();
 }
 template <> string Value::GetValue() {
-	if (is_null) {
-		return NullValue<string>();
-	}
-	FlatVector v;
-	string_t result;
-	switch (type) {
-	case TypeId::BOOL:
-		result = StringCast::Operation<bool>(value_.boolean, v);
-		break;
-	case TypeId::INT8:
-		result = StringCast::Operation<int8_t>(value_.tinyint, v);
-		break;
-	case TypeId::INT16:
-		result = StringCast::Operation<int16_t>(value_.smallint, v);
-		break;
-	case TypeId::INT32:
-		result = StringCast::Operation<int32_t>(value_.integer, v);
-		break;
-	case TypeId::INT64:
-		result = StringCast::Operation<int64_t>(value_.bigint, v);
-		break;
-	case TypeId::FLOAT:
-		result = StringCast::Operation<float>(value_.float_, v);
-		break;
-	case TypeId::DOUBLE:
-		result = StringCast::Operation<double>(value_.double_, v);
-		break;
-	case TypeId::VARCHAR:
-		return str_value;
-	default:
-		throw NotImplementedException("Unimplemented type for GetValue()");
-	}
-	return string(result.GetData(), result.GetSize());
+	return GetValueInternal<string>();
 }
 template <> float Value::GetValue() {
 	return GetValueInternal<float>();

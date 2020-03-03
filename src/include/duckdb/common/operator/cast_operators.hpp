@@ -93,6 +93,17 @@ template <> string Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
+// these functions are convenience functions that cast a value to a std::string, they are very slow
+// for performance sensitive casting StringCast::Operation should be used
+template <> string Cast::Operation(bool input);
+template <> string Cast::Operation(int8_t  input);
+template <> string Cast::Operation(int16_t input);
+template <> string Cast::Operation(int32_t input);
+template <> string Cast::Operation(int64_t input);
+template <> string Cast::Operation(float input);
+template <> string Cast::Operation(double input);
+template <> string Cast::Operation(string_t input);
+
 class Vector;
 struct StringCast {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {

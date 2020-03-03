@@ -13,7 +13,6 @@
 #include <cctype>
 #include <cmath>
 
-using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
@@ -370,6 +369,37 @@ template <> double Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
+template<class T>
+string CastToStandardString(T input) {
+	FlatVector v;
+	return StringCast::Operation(input, v).GetString();
+}
+
+template <> string Cast::Operation(bool input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int8_t  input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int16_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int32_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int64_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(float input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(double input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(string_t input) {
+	return input.GetString();
+}
+
 template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	if (input) {
 		return vector.AddString("true", 4);
@@ -379,13 +409,6 @@ template <> string_t StringCast::Operation(bool input, Vector &vector) {
 }
 
 struct StringToIntegerCast {
-	static constexpr const char *string_digits = "0001020304050607080910111213141516171819"
-	"2021222324252627282930313233343536373839"
-	"4041424344454647484950515253545556575859"
-	"6061626364656667686970717273747576777879"
-	"8081828384858687888990919293949596979899";
-
-
 	template<class T>
 	static int UnsignedLength(T value);
 
@@ -398,16 +421,16 @@ struct StringToIntegerCast {
 			// "Three Optimization Tips for C++". See speed-test for a comparison.
 			auto index = static_cast<unsigned>((value % 100) * 2);
 			value /= 100;
-			*--ptr = string_digits[index + 1];
-			*--ptr = string_digits[index];
+			*--ptr = fmt::internal::data::digits[index + 1];
+			*--ptr = fmt::internal::data::digits[index];
 		}
 		if (value < 10) {
 			*--ptr = static_cast<char>('0' + value);
 			return ptr;
 		}
 		auto index = static_cast<unsigned>(value * 2);
-		*--ptr = string_digits[index + 1];
-		*--ptr = string_digits[index];
+		*--ptr = fmt::internal::data::digits[index + 1];
+		*--ptr = fmt::internal::data::digits[index];
 		return ptr;
 	}
 
@@ -566,8 +589,8 @@ struct DateToStringCast {
 				ptr[2] = '0' + date[i];
 			} else {
 				auto index = static_cast<unsigned>(date[i] * 2);
-				ptr[1] = StringToIntegerCast::string_digits[index];
-				ptr[2] = StringToIntegerCast::string_digits[index + 1];
+				ptr[1] = fmt::internal::data::digits[index];
+				ptr[2] = fmt::internal::data::digits[index + 1];
 			}
 			ptr += 3;
 		}
@@ -627,8 +650,8 @@ struct TimeToStringCast {
 				ptr[1] = '0' + time[i];
 			} else {
 				auto index = static_cast<unsigned>(time[i] * 2);
-				ptr[0] = StringToIntegerCast::string_digits[index];
-				ptr[1] = StringToIntegerCast::string_digits[index + 1];
+				ptr[0] = fmt::internal::data::digits[index];
+				ptr[1] = fmt::internal::data::digits[index + 1];
 			}
 			ptr[2] = ':';
 			ptr += 3;
