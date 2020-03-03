@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.1.3
+Version: 0.1.4
 Authors@R: c(person(given = "DuckDB Contributors", role = "aut"),
     person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")))
 Description: DuckDB is an embedded analytical data management system with SQL support. This package includes all of DuckDB as well as R DBI & dplyr connectors.
