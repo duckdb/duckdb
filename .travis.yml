@@ -18,7 +18,7 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 Debug
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       osx_image: xcode11
 
@@ -41,7 +41,7 @@ matrix:
 
     - os: linux
       name: Clang 6
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       dist: xenial
       addons:
         apt:
@@ -57,7 +57,7 @@ matrix:
 
     - os: linux
       name: GCC 4.9
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
          apt:
           sources:
@@ -86,7 +86,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Valgrind
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
@@ -104,7 +104,7 @@ matrix:
     - os: linux
       dist: xenial
       name: REST Server
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       before_install:
         - pip install --user boto3
@@ -152,7 +152,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 32 Bit
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
@@ -178,7 +178,7 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 9 (Vector Sizes)
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       python: 3.7
 
@@ -214,7 +214,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 5 (ARM64)
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       arch: arm64
 
@@ -248,7 +248,7 @@ matrix:
 
     - os: windows
       name: VS 2017 32 Bit
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       filter_secrets: false
 
@@ -301,7 +301,7 @@ matrix:
     - os: osx
       osx_image: xcode11
       name: R Package
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
       #r: devel
@@ -329,7 +329,7 @@ matrix:
     - os: windows
       name: R Package
       filter_secrets: false
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: cpp
 
@@ -378,7 +378,7 @@ matrix:
 
     - os: linux
       name: Python 2 Package
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: xenial
       language: python
@@ -400,7 +400,7 @@ matrix:
 
     - os: osx
       name: Python Package
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: generic
       osx_image: xcode11
@@ -419,7 +419,7 @@ matrix:
 
     - os: windows
       name: Python Package
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: cpp
       filter_secrets: false
@@ -451,7 +451,7 @@ matrix:
 
     - os: osx
       name: Xcode 11.0 (Amalgamation)
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       osx_image: xcode11
       script:
@@ -462,7 +462,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 9 (Amalgamation)
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
@@ -487,7 +487,7 @@ matrix:
 
     - os: windows
       name: VS 2017 (Amalgamation)
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       filter_secrets: false
       language: c
@@ -504,7 +504,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Solaris VM
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       sudo: true
 
       install:
@@ -532,7 +532,7 @@ matrix:
     - os: linux
       dist: bionic
       name: OpenBSD VM
-      if: (type = push AND branch = master) OR (type = pull_request)
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       sudo: true
 
       install:
