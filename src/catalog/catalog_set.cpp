@@ -95,53 +95,18 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());
 
 	value->timestamp = transaction.transaction_id;
+	value->child = move(data[name]);
+	value->child->parent = value.get();
 	value->set = this;
-	auto deleted_TCE_parent = current.Copy(context);
-	auto deleted_TCE_child  = current.Copy(context);
-    if( ( (AlterTableInfo *) alter_info)->alter_table_type == AlterTableType::RENAME_TABLE ) {
-        //TODO Multiple transactions aren't work maybe a copy of the old table is required here instead of a std::move
-		deleted_TCE_parent->deleted = true;
-		deleted_TCE_parent->timestamp = transaction.transaction_id;
-		deleted_TCE_parent->set = this;
-		deleted_TCE_parent->parent = data[name]->parent;
-		deleted_TCE_parent->child = move(data[name]);
-		deleted_TCE_parent->renamed = true;
-		deleted_TCE_parent->new_name = value->name;
-		deleted_TCE_parent->child->parent = deleted_TCE_parent.get();
 
-		deleted_TCE_child->deleted = true;
-		deleted_TCE_child->set = this;
-		value->child = move(deleted_TCE_child);
-		value->child->parent = value.get();
-    }
-    else {
-    	value->child = move(data[name]);
-        value->child->parent = value.get();
-    }
+	// serialize the AlterInfo into a temporary buffer
+	BufferedSerializer serializer;
+	alter_info->Serialize(serializer);
+	BinaryData serialized_alter = serializer.GetData();
 
-    // serialize the AlterInfo into a temporary buffer
-    BufferedSerializer serializer;
-    alter_info->Serialize(serializer);
-    BinaryData serialized_alter = serializer.GetData();
-
-    const string &value_name = value.get()->name;
-    if( ( (AlterTableInfo *) alter_info)->alter_table_type == AlterTableType::RENAME_TABLE ) {
-		// push the old entry in the undo buffer for this transaction
-		transaction.PushCatalogEntry(deleted_TCE_parent->child.get(), serialized_alter.data.get(), serialized_alter.size);
-
-		data[name] = move(deleted_TCE_parent);
-
-		// push the old entry in the undo buffer for this transaction
-		transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
-
-		// Added the new table entry to the CatalogSet
-		data[value.get()->name] = move(value);
-
-    } else {
-		// push the old entry in the undo buffer for this transaction
-		transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
-		data[name] = move(value);
-    }
+	// push the old entry in the undo buffer for this transaction
+	transaction.PushCatalogEntry(value->child.get(), serialized_alter.data.get(), serialized_alter.size);
+	data[name] = move(value);
 
 	return true;
 }
@@ -245,7 +210,6 @@ CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
 
 void CatalogSet::Undo(CatalogEntry *entry) {
 	lock_guard<mutex> lock(catalog_lock);
-	const string &str_test = "new_tbl";
 
 	// entry has to be restored
 	// and entry->parent has to be removed ("rolled back")
@@ -256,29 +220,15 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		// delete the entry from the dependency manager as well
 		catalog.dependency_manager.EraseObject(to_be_removed_node);
 	}
-	// if this entry must be deleted due to the undo of old entry, release
-	// child and parent pointer
-	if(entry->deleted) {
-		auto to_be_released = move(data[to_be_removed_node->name]);
-		data.erase(to_be_removed_node->name);
-		to_be_released->child.release();
-		to_be_released.release();
-		to_be_released = nullptr;
-	}
-	else if (to_be_removed_node->parent) {
+	if (to_be_removed_node->parent) {
 		// if the to be removed node has a parent, set the child pointer to the
 		// to be restored node
 		to_be_removed_node->parent->child = move(to_be_removed_node->child);
 		entry->parent = to_be_removed_node->parent;
-	} else { // otherwise we need to update the base entry tables
-//		if(to_be_removed_node->renamed) {
-//			auto &release_name = to_be_removed_node->new_name;
-//			data[release_name].release();
-//		}
-		const string &str = entry->name;
+	} else {
+		// otherwise we need to update the base entry tables
 		auto &name = entry->name;
-		data[name] = move(to_be_removed_node->child); // here We have a problem
+		data[name] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
 	}
-	const string &str_test2 = "new_tbl";
 }
