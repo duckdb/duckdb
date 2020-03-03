@@ -16,13 +16,13 @@ namespace duckdb {
 
 class VectorBuffer;
 class Vector;
-class FlatVector;
+class ChunkCollection;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER, // standard buffer, holds a single array of data
-	STRING_BUFFER,    // string buffer, holds a string heap
-	STRUCT_BUFFER, // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER // list buffer, holds a single flatvector child
+	STRING_BUFFER,   // string buffer, holds a string heap
+	STRUCT_BUFFER,   // struct buffer, holds a ordered mapping from name to child vector
+	LIST_BUFFER      // list buffer, holds a single flatvector child
 };
 
 template <class T> using buffer_ptr = std::shared_ptr<T>;
@@ -77,8 +77,6 @@ private:
 	vector<buffer_ptr<VectorBuffer>> references;
 };
 
-
-
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
@@ -102,17 +100,16 @@ public:
 	VectorListBuffer();
 
 	~VectorListBuffer();
+
 public:
-	FlatVector& GetChild() {
+	ChunkCollection &GetChild() {
 		return *child;
 	}
-	void SetChild(unique_ptr<FlatVector> new_child) {
-		child = move(new_child);
-	}
+	void SetChild(unique_ptr<ChunkCollection> new_child);
 
 private:
 	//! child vectors used for nested data
-	unique_ptr<FlatVector> child;
+	unique_ptr<ChunkCollection> child;
 };
 
 template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {

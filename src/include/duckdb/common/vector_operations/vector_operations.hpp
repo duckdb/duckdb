@@ -177,8 +177,6 @@ struct VectorOperations {
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
 	static void ReadFromStorage(Vector &source, Vector &target);
 
-	// Set all elements of the vector to the given constant value
-	static void Set(Vector &result, Value value);
 	//! Fill the null mask of a value, setting every NULL value to NullValue<T>()
 	static void FillNullMask(Vector &v);
 	//===--------------------------------------------------------------------===//

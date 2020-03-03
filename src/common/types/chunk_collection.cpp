@@ -11,10 +11,23 @@
 using namespace duckdb;
 using namespace std;
 
+void ChunkCollection::Verify() {
+	for (auto &chunk : chunks) {
+		chunk->Verify();
+	}
+}
+
+void ChunkCollection::Append(ChunkCollection &other) {
+	for (auto &chunk : other.chunks) {
+		Append(*chunk.get());
+	}
+}
+
 void ChunkCollection::Append(DataChunk &new_chunk) {
 	if (new_chunk.size() == 0) {
 		return;
 	}
+	new_chunk.Verify();
 	new_chunk.Normalify();
 
 	// we have to ensure that every chunk in the ChunkCollection is completely

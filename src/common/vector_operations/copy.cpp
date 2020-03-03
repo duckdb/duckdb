@@ -6,6 +6,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -153,11 +155,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 			assert(offset == 0);
 			assert(target.type == TypeId::LIST);
 			copy_loop<list_entry_t, false>(source, target.GetData(), offset, source.size());
-			auto& child = source.GetListEntry();
-			auto child_copy = make_unique<FlatVector>();
-			child_copy->Initialize(child.type, true, child.size());
-			child_copy->SetCount(child.size());
-			VectorOperations::Copy(child, *child_copy);
+			auto &child = source.GetListEntry();
+			auto child_copy = make_unique<ChunkCollection>();
+			child_copy->Append(child);
 			// TODO optimization: if offset != 0 we can skip some of the child list and adjustd offsets accordingly
 			target.SetListEntry(move(child_copy));
 		} break;
@@ -215,16 +215,19 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 			// recursively apply to children
 			auto &source_child = source.GetListEntry();
 			auto &target_child = target.GetListEntry();
-			// FIXME this can overflow
-			VectorOperations::Append(source_child, target_child);
 			// append to list index
-			auto old_len = target_child.size();
-			target_child.SetCount(target_child.size() + source_child.size());
-//			VectorOperations::Exec(source, [&](index_t i, index_t k) {
-//				if (!target.nullmask[old_count + k]) {
-//					// FIXME
-//				}
-//			});
+			auto old_target_child_len = target_child.count;
+			target_child.Append(source_child);
+
+			auto target_data = ((list_entry_t *)target.GetData());
+			auto source_data = ((list_entry_t *)source.GetData());
+
+			VectorOperations::Exec(source, [&](idx_t i, idx_t k) {
+				if (!target.nullmask[old_count + i]) {
+					target_data[old_count + i].length = source_data[i].length;
+					target_data[old_count + i].offset = source_data[i].offset + old_target_child_len;
+				}
+			});
 
 		} break;
 		default:

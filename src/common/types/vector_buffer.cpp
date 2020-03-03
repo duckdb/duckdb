@@ -1,5 +1,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 #include "duckdb/common/assert.hpp"
 
@@ -26,10 +27,15 @@ VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 }
 
-VectorStructBuffer::~VectorStructBuffer() {}
+VectorStructBuffer::~VectorStructBuffer() {
+}
 
 VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
 }
 
+void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
+	child = move(new_child);
+}
 
-VectorListBuffer::~VectorListBuffer() {}
+VectorListBuffer::~VectorListBuffer() {
+}

@@ -11,12 +11,13 @@ using namespace std;
 //! The operator state of the window
 class PhysicalUnnestOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalUnnestOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), parent_position(0) {
+	PhysicalUnnestOperatorState(PhysicalOperator *child)
+	    : PhysicalOperatorState(child), parent_position(0), list_position(0), list_length(-1) {
 	}
 
 	idx_t parent_position;
-	//	index_t list_position;
-	//	int64_t list_length = -1;
+	idx_t list_position;
+	int64_t list_length = -1;
 
 	DataChunk list_data;
 };
@@ -39,8 +40,8 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			return;
 		}
 		state->parent_position = 0;
-		// state->list_position = 0;
-		// state->list_length = -1;
+		state->list_position = 0;
+		state->list_length = -1;
 
 		// get the list data to unnest
 		ExpressionExecutor executor;
@@ -51,6 +52,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			list_data_types.push_back(bue->child->return_type);
 			executor.AddExpression(*bue->child.get());
 		}
+		state->list_data.Destroy();
 		state->list_data.Initialize(list_data_types);
 		executor.Execute(state->child_chunk, state->list_data);
 
@@ -61,11 +63,8 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		assert(state->list_data.column_count() == select_list.size());
 	}
 
-	// FIXME
-	int64_t max_list_length = -1;
-
 	// need to figure out how many times we need to repeat for current row
-	if (max_list_length < 0) {
+	if (state->list_length < 0) {
 		for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 			auto &v = state->list_data.data[col_idx];
 
@@ -73,38 +72,51 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			// TODO deal with NULL values here!
 
 			auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
-			if ((int64_t)list_entry.length > max_list_length) {
-				max_list_length = list_entry.length;
+			if ((int64_t)list_entry.length > state->list_length) {
+				state->list_length = list_entry.length;
 			}
 		}
 	}
 
-	assert(max_list_length < STANDARD_VECTOR_SIZE); // FIXME this needs to be possible
-	assert(max_list_length >= 0);
+	assert(state->list_length >= 0);
+
+	auto this_chunk_len = min((idx_t)STANDARD_VECTOR_SIZE, state->list_length - state->list_position);
 
 	// first cols are from child, last n cols from unnest
-	chunk.SetCardinality(max_list_length);
+	chunk.SetCardinality(this_chunk_len);
 
 	for (idx_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
-		VectorOperations::Set(chunk.data[col_idx],
-		                      state->child_chunk.data[col_idx].GetValue(state->parent_position));
+		auto val = state->child_chunk.data[col_idx].GetValue(state->parent_position);
+		chunk.data[col_idx].Reference(val);
 	}
+
+	// FIXME do not use GetValue/SetValue here
+	// TODO now that list entries are chink collections, simply scan them!
 	for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 		auto target_col = col_idx + state->child_chunk.column_count();
 		chunk.data[target_col].nullmask.all();
 		auto &v = state->list_data.data[col_idx];
 		auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
-		auto &child_v = v.GetListEntry();
+		auto &child_cc = v.GetListEntry();
 
-		for (idx_t i = 0; i < list_entry.length; i++) {
-			chunk.data[target_col].SetValue(i, child_v.GetValue(list_entry.offset + i));
+		idx_t i = 0;
+		if (list_entry.length > state->list_position) {
+			for (i = 0; i < min((idx_t)this_chunk_len, list_entry.length - state->list_position); i++) {
+				chunk.data[target_col].SetValue(i, child_cc.GetValue(0, list_entry.offset + i + state->list_position));
+			}
 		}
-		for (idx_t i = list_entry.length; i < (idx_t)max_list_length; i++) {
+		for (; i < (idx_t)this_chunk_len; i++) {
 			chunk.data[target_col].SetValue(i, Value());
 		}
 	}
 
-	state->parent_position++;
+	state->list_position += this_chunk_len;
+	if ((int64_t)state->list_position == state->list_length) {
+		state->parent_position++;
+		state->list_length = -1;
+		state->list_position = 0;
+	}
+
 	chunk.Verify();
 }
 

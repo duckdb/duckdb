@@ -7,8 +7,7 @@ using namespace std;
 namespace duckdb {
 
 struct list_agg_state_t {
-	FlatVector* vec;
-	ChunkCollection* cc;
+	ChunkCollection *cc;
 };
 
 static idx_t list_payload_size(TypeId return_type) {
@@ -34,23 +33,13 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
 	insert_chunk.SetCardinality(1, insert_chunk.owned_sel_vector);
 
 	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
-		if(!states[i]->vec) {
+		if (!states[i]->cc) {
 			states[i]->cc = new ChunkCollection();
-			states[i]->vec = new FlatVector();
-			states[i]->vec->Initialize(inputs[0].type, true, 150);
-			states[i]->vec->SetCount(0);
 		}
-		assert(states[i]->vec);
-		auto& state_vec = *(states[i]->vec);
-		// FIXME
-		assert(state_vec.size() <= 150);
-		state_vec.SetCount(state_vec.size()+1);
-		state_vec.SetValue(state_vec.size() - 1, inputs[0].GetValue(i)); // FIXME this is evil and slow.
-		// We could alternatively collect all values for the same vector in this input chunk and assign with selection
-		// vectors map<ptr, sel_vec>! worst case, one entry per input value, but meh todo: could abort?
+		assert(states[i]->cc);
 		insert_chunk.sel_vector[0] = i;
 		insert_chunk.Verify();
-		//states[i]->cc->Append(insert_chunk);
+		states[i]->cc->Append(insert_chunk);
 	});
 }
 
@@ -62,10 +51,8 @@ static void list_combine(Vector &state, Vector &combined) {
 static void list_destroy(Vector &state) {
 	auto states = (list_agg_state_t **)state.GetData();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		if (states[i]->vec) {
-			delete states[i]->vec;
+		if (states[i]->cc) {
 			delete states[i]->cc;
-
 		}
 	});
 }
@@ -78,31 +65,30 @@ static void list_finalize(Vector &state, Vector &result) {
 
 	size_t total_len = 0;
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		assert(states[i]->vec);
-		auto& state_vec = *(states[i]->vec);
-		list_struct_data[i].length = state_vec.size();
+		assert(states[i]->cc);
+		auto &state_cc = *(states[i]->cc);
+		assert(state_cc.types.size() == 1);
+		list_struct_data[i].length = state_cc.count;
 		list_struct_data[i].offset = total_len;
-		total_len += state_vec.size();
+		total_len += state_cc.count;
 	});
 
-	auto list_child = make_unique<FlatVector>();
-	list_child->Initialize(states[0]->vec->type, false, total_len);
-	list_child->SetCount(0);
+	auto list_child = make_unique<ChunkCollection>();
 	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto& state_vec = *(states[i]->vec);
-		VectorOperations::Append(state_vec, *list_child);
-		list_child->SetCount(list_child->size() + state_vec.size());
+		auto &state_cc = *(states[i]->cc);
+		assert(state_cc.chunks[0]->column_count() == 1);
+		list_child->Append(state_cc);
 	});
-	assert(list_child->size() == total_len);
+	assert(list_child->count == total_len);
 	result.SetListEntry(move(list_child));
 }
 
-
-unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, SQLType& return_type) {
+unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, SQLType &return_type) {
 	assert(expr.children.size() == 1);
 	return_type = SQLType::LIST;
 	return_type.child_type.push_back(make_pair("", expr.arguments[0]));
-	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all except for sanity checking
+	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
+	                                    // except for sanity checking
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {

@@ -27,7 +27,8 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 
 		// init result to false
 		Vector intermediate(GetCardinality(), TypeId::BOOL);
-		VectorOperations::Set(intermediate, Value(false));
+		Value false_val = Value::BOOLEAN(false);
+		intermediate.Reference(false_val);
 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparision with the left

@@ -192,19 +192,23 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
 	// TODO check second col
 
-	result = con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data WHERE g > 2GROUP BY g ORDER BY g");
+	result =
+	    con.Query("SELECT g, LIST(STRUCT_PACK(a := e, b := e+1)) ls from list_data WHERE g > 2GROUP BY g ORDER BY g");
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 5}));
 	REQUIRE(CHECK_COLUMN(
 	    result, 1,
-	    {Value::LIST(
-	        {Value::STRUCT({make_pair("a", Value::INTEGER(6)),
-	                        make_pair("b", Value::INTEGER(7))})}), Value::LIST(
-	                    	        {Value::STRUCT({make_pair("a", Value()),
-	                    	                        make_pair("b", Value())})})}));
-	//	// FIXME
-//	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq 	GROUP BY g2");
-//	result->Print();
+	    {Value::LIST({Value::STRUCT({make_pair("a", Value::INTEGER(6)), make_pair("b", Value::INTEGER(7))})}),
+	     Value::LIST({Value::STRUCT({make_pair("a", Value()), make_pair("b", Value())})})}));
 
+	// list of list of int
+	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq 	GROUP "
+	                   "BY g2 ORDER BY g2");
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
+
+	REQUIRE(CHECK_COLUMN(
+	    result, 1,
+	    {Value::LIST({Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)})}),
+	     Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({}), Value::LIST({Value()})})}));
 
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));
@@ -224,16 +228,10 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
 
-	// TODO lists longer than standard_vector_size
 	// TODO scalar list constructor (how about array[] ?)
 	// TODO group by list/struct
 	// TODO join by list/struct
-
-	// TODO append to a list child of structs bigger than svs
-
-	// pack/unpack lineitem sf1 into scalar
 }
-
 
 TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 	DuckDB db(nullptr);
@@ -243,9 +241,60 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 	auto sf = 0.01;
 	// TODO this has a small limit in it right now because of performance issues. Fix this.
 	tpch::dbgen(sf, db, DEFAULT_SCHEMA, "_org");
-	REQUIRE_NO_FAIL(con.Query("CREATE VIEW lineitem AS SELECT l_orderkey, STRUCT_EXTRACT(struct, 'l_partkey') l_partkey, STRUCT_EXTRACT(struct, 'l_suppkey') l_suppkey, STRUCT_EXTRACT(struct, 'l_linenumber') l_linenumber, STRUCT_EXTRACT(struct, 'l_quantity') l_quantity, STRUCT_EXTRACT(struct, 'l_extendedprice') l_extendedprice, STRUCT_EXTRACT(struct, 'l_discount') l_discount, STRUCT_EXTRACT(struct, 'l_tax') l_tax, STRUCT_EXTRACT(struct, 'l_returnflag') l_returnflag, STRUCT_EXTRACT(struct, 'l_linestatus') l_linestatus, STRUCT_EXTRACT(struct, 'l_shipdate') l_shipdate, STRUCT_EXTRACT(struct, 'l_commitdate') l_commitdate, STRUCT_EXTRACT(struct, 'l_receiptdate') l_receiptdate, STRUCT_EXTRACT(struct, 'l_shipinstruct') l_shipinstruct, STRUCT_EXTRACT(struct, 'l_shipmode') l_shipmode, STRUCT_EXTRACT(struct, 'l_comment') l_comment FROM (SELECT l_orderkey, UNLIST(rest) struct FROM (SELECT l_orderkey, LIST(STRUCT_PACK(l_partkey ,l_suppkey ,l_linenumber ,l_quantity ,l_extendedprice ,l_discount ,l_tax ,l_returnflag ,l_linestatus ,l_shipdate ,l_commitdate ,l_receiptdate ,l_shipinstruct ,l_shipmode ,l_comment)) rest FROM (SELECT * FROM lineitem_org LIMIT 100) lss GROUP BY l_orderkey) s1) s2;"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE VIEW lineitem AS SELECT l_orderkey, STRUCT_EXTRACT(struct, 'l_partkey') l_partkey, "
+	    "STRUCT_EXTRACT(struct, 'l_suppkey') l_suppkey, STRUCT_EXTRACT(struct, 'l_linenumber') l_linenumber, "
+	    "STRUCT_EXTRACT(struct, 'l_quantity') l_quantity, STRUCT_EXTRACT(struct, 'l_extendedprice') l_extendedprice, "
+	    "STRUCT_EXTRACT(struct, 'l_discount') l_discount, STRUCT_EXTRACT(struct, 'l_tax') l_tax, "
+	    "STRUCT_EXTRACT(struct, 'l_returnflag') l_returnflag, STRUCT_EXTRACT(struct, 'l_linestatus') l_linestatus, "
+	    "STRUCT_EXTRACT(struct, 'l_shipdate') l_shipdate, STRUCT_EXTRACT(struct, 'l_commitdate') l_commitdate, "
+	    "STRUCT_EXTRACT(struct, 'l_receiptdate') l_receiptdate, STRUCT_EXTRACT(struct, 'l_shipinstruct') "
+	    "l_shipinstruct, STRUCT_EXTRACT(struct, 'l_shipmode') l_shipmode, STRUCT_EXTRACT(struct, 'l_comment') "
+	    "l_comment FROM (SELECT l_orderkey, UNLIST(rest) struct FROM (SELECT l_orderkey, LIST(STRUCT_PACK(l_partkey "
+	    ",l_suppkey ,l_linenumber ,l_quantity ,l_extendedprice ,l_discount ,l_tax ,l_returnflag ,l_linestatus "
+	    ",l_shipdate ,l_commitdate ,l_receiptdate ,l_shipinstruct ,l_shipmode ,l_comment)) rest FROM (SELECT * FROM "
+	    "lineitem_org ) lss GROUP BY l_orderkey) s1) s2;"));
 	result = con.Query(tpch::get_query(1));
 	REQUIRE(result->success);
-	//	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
-}
+	//	result->Print();
+	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 
+	// database as-a-value
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE OR REPLACE VIEW lineitem AS SELECT STRUCT_EXTRACT(ls, 'l_orderkey') l_orderkey, STRUCT_EXTRACT(ls, "
+	    "'l_partkey') l_partkey, STRUCT_EXTRACT(ls, 'l_suppkey') l_suppkey, STRUCT_EXTRACT(ls, 'l_linenumber') "
+	    "l_linenumber, STRUCT_EXTRACT(ls, 'l_quantity') l_quantity, STRUCT_EXTRACT(ls, 'l_extendedprice') "
+	    "l_extendedprice, STRUCT_EXTRACT(ls, 'l_discount') l_discount, STRUCT_EXTRACT(ls, 'l_tax') l_tax, "
+	    "STRUCT_EXTRACT(ls, 'l_returnflag') l_returnflag, STRUCT_EXTRACT(ls, 'l_linestatus') l_linestatus, "
+	    "STRUCT_EXTRACT(ls, 'l_shipdate') l_shipdate, STRUCT_EXTRACT(ls, 'l_commitdate') l_commitdate, "
+	    "STRUCT_EXTRACT(ls, 'l_receiptdate') l_receiptdate, STRUCT_EXTRACT(ls, 'l_shipinstruct') l_shipinstruct, "
+	    "STRUCT_EXTRACT(ls, 'l_shipmode') l_shipmode, STRUCT_EXTRACT(ls, 'l_comment') l_comment FROM (SELECT "
+	    "UNNEST(lineitem) ls FROM (SELECT LIST(STRUCT_PACK(l_orderkey, l_partkey ,l_suppkey ,l_linenumber ,l_quantity "
+	    ",l_extendedprice ,l_discount ,l_tax ,l_returnflag ,l_linestatus ,l_shipdate ,l_commitdate ,l_receiptdate "
+	    ",l_shipinstruct ,l_shipmode ,l_comment)) lineitem FROM (SELECT * FROM lineitem_org LIMIT 1050) s1) s2) s3;"));
+	result = con.Query(tpch::get_query(1));
+	REQUIRE(result->success);
+	//	result->Print();
+
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE OR REPLACE VIEW lineitem AS SELECT UNNEST(STRUCT_EXTRACT(lineitem, 'll_orderkey')) l_orderkey, "
+	    "UNNEST(STRUCT_EXTRACT(lineitem, 'll_partkey')) l_partkey, UNNEST(STRUCT_EXTRACT(lineitem, 'll_suppkey')) "
+	    "l_suppkey, UNNEST(STRUCT_EXTRACT(lineitem, 'll_linenumber')) l_linenumber, UNNEST(STRUCT_EXTRACT(lineitem, "
+	    "'ll_quantity')) l_quantity, UNNEST(STRUCT_EXTRACT(lineitem, 'll_extendedprice')) l_extendedprice, "
+	    "UNNEST(STRUCT_EXTRACT(lineitem, 'll_discount')) l_discount, UNNEST(STRUCT_EXTRACT(lineitem, 'll_tax')) l_tax, "
+	    "UNNEST(STRUCT_EXTRACT(lineitem, 'll_returnflag')) l_returnflag, UNNEST(STRUCT_EXTRACT(lineitem, "
+	    "'ll_linestatus')) l_linestatus, UNNEST(STRUCT_EXTRACT(lineitem, 'll_shipdate')) l_shipdate, "
+	    "UNNEST(STRUCT_EXTRACT(lineitem, 'll_commitdate')) l_commitdate, UNNEST(STRUCT_EXTRACT(lineitem, "
+	    "'ll_receiptdate')) l_receiptdate, UNNEST(STRUCT_EXTRACT(lineitem, 'll_shipinstruct')) l_shipinstruct, "
+	    "UNNEST(STRUCT_EXTRACT(lineitem, 'll_shipmode')) l_shipmode, UNNEST(STRUCT_EXTRACT(lineitem, 'll_comment')) "
+	    "l_comment FROM (SELECT STRUCT_PACK(ll_orderkey:= LIST(l_orderkey), ll_partkey := LIST(l_partkey ), ll_suppkey "
+	    ":= LIST(l_suppkey ), ll_linenumber := LIST(l_linenumber ), ll_quantity := LIST(l_quantity ), ll_extendedprice "
+	    ":= LIST(l_extendedprice ), ll_discount := LIST(l_discount ), ll_tax := LIST(l_tax ), ll_returnflag := "
+	    "LIST(l_returnflag ), ll_linestatus := LIST(l_linestatus ), ll_shipdate := LIST(l_shipdate ), ll_commitdate := "
+	    "LIST(l_commitdate ), ll_receiptdate := LIST(l_receiptdate ), ll_shipinstruct := LIST(l_shipinstruct ), "
+	    "ll_shipmode := LIST(l_shipmode ), ll_comment:= LIST(l_comment)) lineitem FROM (SELECT * FROM lineitem_org "
+	    "LIMIT 1050) s1) s2;"));
+	result = con.Query(tpch::get_query(1));
+	REQUIRE(result->success);
+	//	result->Print();
+}
