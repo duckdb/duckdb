@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 

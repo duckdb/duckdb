@@ -9,6 +9,7 @@
 #pragma once
 
 #include "constants.hpp"
+#include <cassert>
 
 namespace duckdb {
 constexpr const size_t FULL_MASK = 0xFF;

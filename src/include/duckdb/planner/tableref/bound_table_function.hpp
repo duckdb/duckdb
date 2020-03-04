@@ -11,6 +11,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 class TableFunctionCatalogEntry;
