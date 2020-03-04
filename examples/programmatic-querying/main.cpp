@@ -8,6 +8,12 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 
+/**
+This file contains an example on how a query tree can be programmatically constructed. This is essentially hand-rolling the binding+planning phase for one specific query.
+
+Note that this API is currently very unstable, and is subject to change at any moment. In general, this API should not be used currently outside of internal use cases.
+**/
+
 using namespace duckdb;
 
 struct MyScanFunctionData : public TableFunctionData {
@@ -17,13 +23,22 @@ struct MyScanFunctionData : public TableFunctionData {
 	size_t nrow;
 };
 
-FunctionData *my_scan_function_init(ClientContext &context) {
+unique_ptr<FunctionData> my_scan_function_init(ClientContext &context) {
 	// initialize the function data structure
-	return new MyScanFunctionData();
+	return make_unique<MyScanFunctionData>();
 }
 
-void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static void my_scan_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("some_int");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("some_string");
+	return_types.push_back(SQLType::VARCHAR);
+}
+
+void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((MyScanFunctionData *)dataptr);
+	assert(input.size() == 0);
 
 	if (data.nrow < 1) {
 		return;
@@ -46,8 +61,7 @@ void my_scan_function(ClientContext &context, DataChunk &input, DataChunk &outpu
 class MyScanFunction : public TableFunction {
 public:
 	MyScanFunction()
-	    : TableFunction("my_scan", {}, {SQLType::INTEGER, SQLType::VARCHAR}, {"some_int", "some_string"},
-	                    my_scan_function_init, my_scan_function, nullptr){};
+	    : TableFunction("my_scan", {}, my_scan_bind, my_scan_function_init, my_scan_function, nullptr){};
 };
 
 unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string name, vector<SQLType> function_args,
@@ -114,7 +128,7 @@ int main() {
 	vector<unique_ptr<ParsedExpression>> children; // empty
 	auto scan_function_catalog_entry =
 	    con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
-	vector<unique_ptr<Expression>> parameters; // empty
+	vector<Value> parameters; // empty
 	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(parameters));
 
 	//  FILTER[some_int<=7 some_int>=3]
