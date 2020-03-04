@@ -8,14 +8,7 @@
 using namespace duckdb;
 using namespace std;
 
-class PhysicalTableFunctionOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalTableFunctionOperatorState() : PhysicalOperatorState(nullptr) {
-	}
-};
-
-void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = (PhysicalTableFunctionOperatorState *)state_;
+void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	// run main code
 	function->function.function(context, parameters, chunk, bind_data.get());
 	if (chunk.size() == 0) {
@@ -24,8 +17,4 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 			function->function.final(context, bind_data.get());
 		}
 	}
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalTableFunction::GetOperatorState() {
-	return make_unique<PhysicalTableFunctionOperatorState>();
 }
