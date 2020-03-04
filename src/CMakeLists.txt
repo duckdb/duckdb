@@ -34,6 +34,7 @@ else()
   add_subdirectory(transaction)
 
   set(DUCKDB_LINK_LIBS
+      fmt
       pg_query
       hyperloglog
       re2

@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include <vector>
 
 using namespace duckdb;
@@ -227,6 +228,9 @@ static void TestStringCastDouble(vector<string> &working_values, vector<DST> &ex
 		REQUIRE_NOTHROW(Cast::Operation<string_t, DST>(string_t(value)) == expected_value);
 		REQUIRE(TryCast::Operation<string_t, DST>(string_t(value), result));
 		REQUIRE(ApproxEqual(result, expected_value));
+
+		auto to_str_and_back = Cast::Operation<string_t, DST>(string_t(Cast::Operation<DST, string>(expected_value)));
+		REQUIRE(ApproxEqual(to_str_and_back, expected_value));
 	}
 	for (auto &value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<string_t, DST>(string_t(value)));

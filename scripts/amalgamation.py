@@ -6,6 +6,8 @@ source_file = os.path.join(amal_dir, "duckdb.cpp")
 
 src_dir = 'src'
 include_dir = os.path.join('src', 'include')
+fmt_dir = os.path.join('third_party', 'fmt')
+fmt_include_dir = os.path.join('third_party', 'fmt', 'include')
 hll_dir = os.path.join('third_party', 'hyperloglog')
 miniz_dir = os.path.join('third_party', 'miniz')
 re2_dir = os.path.join('third_party', 're2')
@@ -16,9 +18,9 @@ pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), os.path.join(include_dir, 'duckdb.h'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'), os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'), os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'), os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp')]
 
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, hll_dir, re2_dir, miniz_dir, pg_query_include_dir, pg_query_dir]
+include_paths = [include_dir, fmt_include_dir, hll_dir, re2_dir, miniz_dir, pg_query_include_dir, pg_query_dir]
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, hll_dir, miniz_dir, re2_dir, pg_query_dir]
+compile_directories = [src_dir, fmt_dir, hll_dir, miniz_dir, re2_dir, pg_query_dir]
 
 # files excluded from the amalgamation
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
