@@ -240,9 +240,9 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	parsed_result.Initialize(internal_types);
 
 	// convert the CSV string into a stringstream
-	istringstream csv_stream(csv);
+	auto source = make_unique<istringstream>(csv);
 
-	BufferedCSVReader reader(info, sql_types, csv_stream);
+	BufferedCSVReader reader(info, sql_types, move(source));
 	idx_t collection_index = 0;
 	idx_t tuple_count = 0;
 	while (true) {

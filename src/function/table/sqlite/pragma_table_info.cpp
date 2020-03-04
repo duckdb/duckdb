@@ -19,22 +19,36 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	idx_t offset;
 };
 
-FunctionData *pragma_table_info_init(ClientContext &context) {
-	// initialize the function data structure
-	return new PragmaTableFunctionData();
+static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> inputs,
+                                                       vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("cid");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("notnull");
+	return_types.push_back(SQLType::BOOLEAN);
+
+	names.push_back("dflt_value");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("pk");
+	return_types.push_back(SQLType::BOOLEAN);
+
+	return make_unique<PragmaTableFunctionData>();
 }
 
-void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static void pragma_table_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
-		if (input.size() != 1) {
-			throw Exception("Expected a single table name as input");
-		}
-		if (input.column_count() != 1 || input.data[0].type != TypeId::VARCHAR) {
-			throw Exception("Expected a single table name as input");
-		}
-		auto table_name = input.GetValue(0, 0).str_value;
+		assert(input.size() == 1);
+
+		auto table_name = input[0].GetValue<string>();
 		// look up the table name in the catalog
 		auto &catalog = Catalog::GetCatalog(context);
 		data.entry = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, table_name);
@@ -72,6 +86,11 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;
+}
+
+void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(
+	    TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

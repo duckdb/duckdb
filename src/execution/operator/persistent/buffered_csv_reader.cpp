@@ -7,6 +7,10 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/gzip_stream.hpp"
+#include "duckdb/common/string_util.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <queue>
@@ -47,12 +51,17 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, istream &source)
-    : info(info), sql_types(sql_types), source(source), buffer_size(0), position(0), start(0),
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> sql_types)
+    : BufferedCSVReader(info, sql_types, OpenCSV(context, info)) {
+}
+
+BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, unique_ptr<istream> ssource)
+    : info(info), sql_types(sql_types), source(move(ssource)), buffer_size(0), position(0), start(0),
       delimiter_search(info.delimiter), escape_search(info.escape), quote_search(info.quote) {
 	if (info.force_not_null.size() == 0) {
 		info.force_not_null.resize(sql_types.size(), false);
 	}
+
 	assert(info.force_not_null.size() == sql_types.size());
 	// initialize the parse_chunk with a set of VARCHAR types
 	vector<TypeId> varchar_types;
@@ -64,9 +73,25 @@ BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, 
 	if (info.header) {
 		// ignore the first line as a header line
 		string read_line;
-		getline(source, read_line);
+		getline(*source, read_line);
 		linenr++;
 	}
+}
+
+unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, CopyInfo &info) {
+	if (!FileSystem::GetFileSystem(context).FileExists(info.file_path)) {
+		throw IOException("File \"%s\" not found", info.file_path.c_str());
+	}
+	unique_ptr<istream> result;
+	// decide based on the extension which stream to use
+	if (StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
+		result = make_unique<GzipStream>(info.file_path);
+	} else {
+		auto csv_local = make_unique<ifstream>();
+		csv_local->open(info.file_path);
+		result = move(csv_local);
+	}
+	return result;
 }
 
 void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
@@ -461,8 +486,8 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 		// remaining from last buffer: copy it here
 		memcpy(buffer.get(), old_buffer.get() + start, remaining);
 	}
-	source.read(buffer.get() + remaining, buffer_read_size);
-	idx_t read_count = source.eof() ? source.gcount() : buffer_read_size;
+	source->read(buffer.get() + remaining, buffer_read_size);
+	idx_t read_count = source->eof() ? source->gcount() : buffer_read_size;
 	buffer_size = remaining + read_count;
 	buffer[buffer_size] = '\0';
 	if (old_buffer) {

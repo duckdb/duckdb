@@ -4,6 +4,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,10 +26,19 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		                       (int)fexpr->children.size());
 	}
 	auto result = make_unique<BoundTableFunction>(function, bind_index);
+	// evalate the input parameters to the function
 	for (auto &child : fexpr->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
-		result->parameters.push_back(binder.Bind(child));
+		auto expr = binder.Bind(child);
+		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
+		result->parameters.push_back(constant);
 	}
-	bind_context.AddTableFunction(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, function);
+	// perform the binding
+	result->bind_data = function->function.bind(context, result->parameters, result->return_types, result->names);
+	assert(result->return_types.size() == result->names.size());
+	assert(result->return_types.size() > 0);
+	// now add the table function to the bind context so its columns can be bound
+	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,
+	                               result->return_types);
 	return move(result);
 }

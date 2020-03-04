@@ -44,8 +44,6 @@ public:
 	void AddBaseTable(BoundBaseTableRef *bound, const string &alias);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
-	//! Adds a table function with a given alias to the BindContext
-	void AddTableFunction(idx_t index, const string &alias, TableFunctionCatalogEntry *function_entry);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
 

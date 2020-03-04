@@ -245,6 +245,7 @@ string SQLTypeIdToString(SQLTypeId type);
 string SQLTypeToString(SQLType type);
 
 SQLType MaxSQLType(SQLType left, SQLType right);
+SQLType TransformStringToSQLType(string str);
 
 //! Gets the internal type associated with the given SQL type
 TypeId GetInternalType(SQLType type);

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
 #include <cmath>
@@ -230,6 +231,40 @@ string SQLTypeToString(SQLType type) {
 	}
 	default:
 		return SQLTypeIdToString(type.id);
+	}
+}
+
+SQLType TransformStringToSQLType(string str) {
+	auto lower_str = StringUtil::Lower(str);
+	// Transform column type
+	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
+	    lower_str == "integral" || lower_str == "int32") {
+		return SQLType::INTEGER;
+	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
+	           lower_str == "char") {
+		return SQLType::VARCHAR;
+	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
+		return SQLType::BIGINT;
+	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
+		return SQLType::SMALLINT;
+	} else if (lower_str == "timestamp" || lower_str == "datetime") {
+		return SQLType::TIMESTAMP;
+	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
+		return SQLType(SQLTypeId::BOOLEAN);
+	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
+		return SQLType::FLOAT;
+	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8") {
+		return SQLType::DOUBLE;
+	} else if (lower_str == "tinyint" || lower_str == "int1") {
+		return SQLType::TINYINT;
+	} else if (lower_str == "varbinary") {
+		return SQLType(SQLTypeId::VARBINARY);
+	} else if (lower_str == "date") {
+		return SQLType::DATE;
+	} else if (lower_str == "time") {
+		return SQLType::TIME;
+	} else {
+		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
 	}
 }
 
