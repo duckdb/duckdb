@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 # Install the DuckDB R package like so: install.packages("duckdb", repos=c("http://download.duckdb.org/alias/master/rstats/", "http://cran.rstudio.com"))
+=======
+# Install the DuckDB R package like so: R CMD INSTALL tools/rpkg
+# Or with install.packages: install.packages("duckdb", 
+#                                            repos=c("http://download.duckdb.org/alias/master/rstats/", 
+#                                                    "http://cran.rstudio.com"))
+
+>>>>>>> origin/master
 # The DuckDB R interface follows the R DBI specification
 library("DBI")
 

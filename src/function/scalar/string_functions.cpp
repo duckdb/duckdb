@@ -11,6 +11,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<ConcatFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
+	Register<PrintfFun>();
 	Register<RegexpFun>();
 	Register<SubstringFun>();
 }

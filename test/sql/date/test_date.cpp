@@ -54,6 +54,30 @@ TEST_CASE("Test basic DATE functionality", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(5), Value()}));
 }
 
+TEST_CASE("Test BC dates", "[date]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create and insert into table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(i DATE)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('-1993-08-14'), (NULL)"));
+
+	// check that we can select dates
+	result = con.Query("SELECT * FROM dates");
+	REQUIRE(result->sql_types[0] == SQLType::DATE);
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(Date::FromDate(-1993, 8, 14)), Value()}));
+
+	// YEAR function
+	result = con.Query("SELECT year(i) FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTEGER(-1993), Value()}));
+
+	// check that we can convert dates to string
+	result = con.Query("SELECT cast(i AS VARCHAR) FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("1993-08-14 (BC)"), Value()}));
+}
+
 TEST_CASE("Test out of range/incorrect date formats", "[date]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -83,4 +107,8 @@ TEST_CASE("Test out of range/incorrect date formats", "[date]") {
 	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1900a01a01')"));
 	// this should work though
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO dates VALUES ('1900-1-1')"));
+
+	// out of range dates
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('-100000000-01-01')"));
+	REQUIRE_FAIL(con.Query("INSERT INTO dates VALUES ('1000000000-01-01')"));
 }

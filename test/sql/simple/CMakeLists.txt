@@ -26,6 +26,7 @@ add_library_unity(test_sql_simple
                   test_nullboolean.cpp
                   test_orderby.cpp
                   test_overflow_handling.cpp
+                  test_printf.cpp
                   test_scalar_projections.cpp
                   test_setops.cpp
                   test_simple_projections.cpp

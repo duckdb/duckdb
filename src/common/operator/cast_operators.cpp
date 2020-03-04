@@ -5,12 +5,14 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+
+#include "fmt/format.h"
 
 #include <cstdlib>
 #include <cctype>
 #include <cmath>
 
-using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
@@ -367,51 +369,253 @@ template <> double Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
+template<class T>
+string CastToStandardString(T input) {
+	FlatVector v;
+	return StringCast::Operation(input, v).GetString();
+}
+
 template <> string Cast::Operation(bool input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int8_t  input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int16_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int32_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(int64_t input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(float input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(double input) {
+	return CastToStandardString(input);
+}
+template <> string Cast::Operation(string_t input) {
+	return input.GetString();
+}
+
+template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	if (input) {
-		return "true";
+		return vector.AddString("true", 4);
 	} else {
-		return "false";
+		return vector.AddString("false", 5);
 	}
 }
 
-template <> string Cast::Operation(int8_t input) {
-	return to_string(input);
+struct StringToIntegerCast {
+	template<class T>
+	static int UnsignedLength(T value);
+
+	// Formats value in reverse and returns a pointer to the beginning.
+	template<class T>
+	static char* FormatUnsigned(T value, char *ptr) {
+		while (value >= 100) {
+			// Integer division is slow so do it for a group of two digits instead
+			// of for every digit. The idea comes from the talk by Alexandrescu
+			// "Three Optimization Tips for C++". See speed-test for a comparison.
+			auto index = static_cast<unsigned>((value % 100) * 2);
+			value /= 100;
+			*--ptr = fmt::internal::data::digits[index + 1];
+			*--ptr = fmt::internal::data::digits[index];
+		}
+		if (value < 10) {
+			*--ptr = static_cast<char>('0' + value);
+			return ptr;
+		}
+		auto index = static_cast<unsigned>(value * 2);
+		*--ptr = fmt::internal::data::digits[index + 1];
+		*--ptr = fmt::internal::data::digits[index];
+		return ptr;
+	}
+
+	template<class SIGNED, class UNSIGNED>
+	static string_t FormatSigned(SIGNED value, Vector &vector) {
+		int sign = -(value < 0);
+		UNSIGNED unsigned_value = (value ^ sign) - sign;
+		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
+		string_t result = vector.EmptyString(length);
+		auto dataptr = result.GetData();
+		auto endptr = dataptr + length;
+		endptr = FormatUnsigned(unsigned_value, endptr);
+		if (sign) {
+			*--endptr = '-';
+		}
+		result.Finalize();
+		return result;
+	}
+};
+
+template <> int StringToIntegerCast::UnsignedLength(uint8_t value) {
+	int length = 1;
+	length += value >= 10;
+	length += value >= 100;
+	return length;
 }
 
-template <> string Cast::Operation(int16_t input) {
-	return to_string(input);
+template <> int StringToIntegerCast::UnsignedLength(uint16_t value) {
+	int length = 1;
+	length += value >= 10;
+	length += value >= 100;
+	length += value >= 1000;
+	length += value >= 10000;
+	return length;
 }
 
-template <> string Cast::Operation(int input) {
-	return to_string(input);
+template <> int StringToIntegerCast::UnsignedLength(uint32_t value) {
+	if (value >= 10000) {
+		int length = 5;
+		length += value >= 100000;
+		length += value >= 1000000;
+		length += value >= 10000000;
+		length += value >= 100000000;
+		length += value >= 1000000000;
+		return length;
+	} else {
+		int length = 1;
+		length += value >= 10;
+		length += value >= 100;
+		length += value >= 1000;
+		return length;
+	}
 }
 
-template <> string Cast::Operation(int64_t input) {
-	return to_string(input);
+template <> int StringToIntegerCast::UnsignedLength(uint64_t value) {
+	if (value >= 10000000000ULL) {
+		if (value >= 1000000000000000ULL) {
+			int length = 16;
+			length += value >= 10000000000000000ULL;
+			length += value >= 100000000000000000ULL;
+			length += value >= 1000000000000000000ULL;
+			length += value >= 10000000000000000000ULL;
+			return length;
+		} else {
+			int length = 11;
+			length += value >= 100000000000ULL;
+			length += value >= 1000000000000ULL;
+			length += value >= 10000000000000ULL;
+			length += value >= 100000000000000ULL;
+			return length;
+		}
+	} else {
+		if (value >= 100000ULL) {
+			int length = 6;
+			length += value >= 1000000ULL;
+			length += value >= 10000000ULL;
+			length += value >= 100000000ULL;
+			length += value >= 1000000000ULL;
+			return length;
+		} else {
+			int length = 1;
+			length += value >= 10ULL;
+			length += value >= 100ULL;
+			length += value >= 1000ULL;
+			length += value >= 10000ULL;
+			return length;
+		}
+	}
 }
 
-template <> string Cast::Operation(uint64_t input) {
-	return to_string(input);
+template <> string_t StringCast::Operation(int8_t input, Vector &vector) {
+	return StringToIntegerCast::FormatSigned<int8_t, uint8_t>(input, vector);
 }
 
-template <> string Cast::Operation(float input) {
-	return to_string(input);
+template <> string_t StringCast::Operation(int16_t input, Vector &vector) {
+	return StringToIntegerCast::FormatSigned<int16_t, uint16_t>(input, vector);
+}
+template <> string_t StringCast::Operation(int32_t input, Vector &vector) {
+	return StringToIntegerCast::FormatSigned<int32_t, uint32_t>(input, vector);
 }
 
-template <> string Cast::Operation(double input) {
-	return to_string(input);
+template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
+	return StringToIntegerCast::FormatSigned<int64_t, uint64_t>(input, vector);
 }
 
-template <> string Cast::Operation(string_t input) {
-	return string(input.GetData(), input.GetSize());
+template <> string_t StringCast::Operation(float input, Vector &vector) {
+	std::string s = fmt::format("{}", input);
+	return vector.AddString(s);
+}
+
+template <> string_t StringCast::Operation(double input, Vector &vector) {
+	std::string s = fmt::format("{}", input);
+	return vector.AddString(s);
 }
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
-template <> string CastFromDate::Operation(date_t input) {
-	return Date::ToString(input);
+struct DateToStringCast {
+	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
+		// format is YYYY-MM-DD with optional (BC) at the end
+		// regular length is 10
+		idx_t length = 6;
+		year_length = 4;
+		add_bc = false;
+		if (date[0] <= 0) {
+			// add (BC) suffix
+			length += 5;
+			date[0] = -date[0];
+			add_bc = true;
+		} else {
+			// potentially add extra characters depending on length of year
+			year_length += date[0] >= 10000;
+			year_length += date[0] >= 100000;
+			year_length += date[0] >= 1000000;
+			year_length += date[0] >= 10000000;
+		}
+		length += year_length;
+		return length;
+	}
+
+	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
+		// now we write the string, first write the year
+		auto endptr = data + year_length;
+		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
+		// add optional leading zeros
+		while(endptr > data) {
+			*--endptr = '0';
+		}
+		// now write the month and day
+		auto ptr = data + year_length;
+		for(int i = 1; i <= 2; i++) {
+			ptr[0] = '-';
+			if (date[i] < 10) {
+				ptr[1] = '0';
+				ptr[2] = '0' + date[i];
+			} else {
+				auto index = static_cast<unsigned>(date[i] * 2);
+				ptr[1] = fmt::internal::data::digits[index];
+				ptr[2] = fmt::internal::data::digits[index + 1];
+			}
+			ptr += 3;
+		}
+		// optionally add BC to the end of the date
+		if (add_bc) {
+			memcpy(ptr, " (BC)", 5);
+		}
+	}
+};
+
+template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
+	int32_t date[3];
+	Date::Convert(input, date[0], date[1], date[2]);
+
+	idx_t year_length;
+	bool add_bc;
+	idx_t length = DateToStringCast::Length(date, year_length, add_bc);
+
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	DateToStringCast::Format(data, date, year_length, add_bc);
+
+	result.Finalize();
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -424,8 +628,59 @@ template <> date_t CastToDate::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
-template <> string CastFromTime::Operation(dtime_t input) {
-	return Time::ToString(input);
+struct TimeToStringCast {
+	static idx_t Length(int32_t time[]) {
+		// format is HH:MM:DD
+		// regular length is 8
+		idx_t length = 8;
+		if (time[3] > 0) {
+			// if there are msecs, we add the miliseconds after the time with a period separator
+			// i.e. the format becomes HH:MM:DD.msec
+			length += 4;
+		}
+		return length;
+	}
+
+	static void Format(char *data, idx_t length, int32_t time[]) {
+		// first write hour, month and day
+		auto ptr = data;
+		for(int i = 0; i <= 2; i++) {
+			if (time[i] < 10) {
+				ptr[0] = '0';
+				ptr[1] = '0' + time[i];
+			} else {
+				auto index = static_cast<unsigned>(time[i] * 2);
+				ptr[0] = fmt::internal::data::digits[index];
+				ptr[1] = fmt::internal::data::digits[index + 1];
+			}
+			ptr[2] = ':';
+			ptr += 3;
+		}
+		// now optionally write ms at the end
+		if (time[3] > 0) {
+			auto start = ptr;
+			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
+			while(ptr > start) {
+				*--ptr = '0';
+			}
+			*--ptr = '.';
+		}
+	}
+};
+
+template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
+	int32_t time[4];
+	Time::Convert(input, time[0], time[1], time[2], time[3]);
+
+	idx_t length = TimeToStringCast::Length(time);
+
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	TimeToStringCast::Format(data, length, time);
+
+	result.Finalize();
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -442,8 +697,31 @@ template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
 //===--------------------------------------------------------------------===//
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
-template <> string CastFromTimestamp::Operation(timestamp_t input) {
-	return Timestamp::ToString(input);
+template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vector) {
+	date_t date_entry;
+	dtime_t time_entry;
+	Timestamp::Convert(input, date_entry, time_entry);
+
+	int32_t date[3], time[4];
+	Date::Convert(date_entry, date[0], date[1], date[2]);
+	Time::Convert(time_entry, time[0], time[1], time[2], time[3]);
+
+	// format for timestamp is DATE TIME (separated by space)
+	idx_t year_length;
+	bool add_bc;
+	idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
+	idx_t time_length = TimeToStringCast::Length(time);
+	idx_t length = date_length + time_length + 1;
+
+	string_t result = vector.EmptyString(length);
+	auto data = result.GetData();
+
+	DateToStringCast::Format(data, date, year_length, add_bc);
+	data[date_length] = ' ';
+	TimeToStringCast::Format(data + date_length + 1, time_length, time);
+
+	result.Finalize();
+	return result;
 }
 
 template <> date_t CastTimestampToDate::Operation(timestamp_t input) {

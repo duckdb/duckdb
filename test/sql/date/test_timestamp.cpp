@@ -70,6 +70,17 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	// date -> timestamp
 	result = con.Query("SELECT (DATE '1992-01-01')::TIMESTAMP;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1992, 1, 1, 0, 0, 0, 0)}));
+
+	// test timestamp with ms
+	result = con.Query("SELECT TIMESTAMP '2008-01-01 00:00:01.5'::VARCHAR");
+	REQUIRE(CHECK_COLUMN(result, 0, {"2008-01-01 00:00:01.500"}));
+	// test timestamp with BC date
+	result = con.Query("SELECT TIMESTAMP '-8-01-01 00:00:01.5'::VARCHAR");
+	REQUIRE(CHECK_COLUMN(result, 0, {"0008-01-01 (BC) 00:00:01.500"}));
+	// test timestamp with large date
+	// FIXME:
+	// result = con.Query("SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR");
+	// REQUIRE(CHECK_COLUMN(result, 0, {"100000-01-01 (BC) 00:00:01.500"}));
 }
 
 TEST_CASE("Test out of range/incorrect timestamp formats", "[timestamp]") {

@@ -138,19 +138,11 @@ string Time::ToString(dtime_t time) {
 	int32_t hour, min, sec, msec;
 	number_to_time(time, hour, min, sec, msec);
 
-	auto ret = StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
-
 	if (msec > 0) {
-		ret.push_back('.');
-		// don't write out trailing '0's for msec
-		uint8_t mod = 100;
-		while (msec > 0) {
-			ret.push_back('0' + msec / mod);
-			msec %= mod;
-			mod /= 10;
-		}
+		return StringUtil::Format("%02d:%02d:%02d.%03d", hour, min, sec, msec);
+	} else {
+		return StringUtil::Format("%02d:%02d:%02d", hour, min, sec);
 	}
-	return ret;
 }
 
 string Time::Format(int32_t hour, int32_t minute, int32_t second, int32_t milisecond) {
