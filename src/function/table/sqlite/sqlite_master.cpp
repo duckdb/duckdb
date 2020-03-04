@@ -66,8 +66,9 @@ static void sqlite_master_bind(vector<Value> inputs, vector<SQLType> &return_typ
 	return_types.push_back(SQLType::VARCHAR);
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
+	assert(input.size() == 0);
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = Transaction::GetTransaction(context);

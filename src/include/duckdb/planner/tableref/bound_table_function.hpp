@@ -25,7 +25,7 @@ public:
 	//! The function that is called
 	TableFunctionCatalogEntry *function;
 	//! The set of parameters to use as input to the table-producing function
-	vector<unique_ptr<Expression>> parameters;
+	vector<Value> parameters;
 	//! The set of returned sql types
 	vector<SQLType> return_types;
 	//! The set of returned column names

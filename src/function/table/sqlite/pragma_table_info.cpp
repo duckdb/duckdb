@@ -44,17 +44,13 @@ static void pragma_table_info_bind(vector<Value> inputs, vector<SQLType> &return
 	return_types.push_back(SQLType::BOOLEAN);
 }
 
-static void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static void pragma_table_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
-		if (input.size() != 1) {
-			throw Exception("Expected a single table name as input");
-		}
-		if (input.column_count() != 1 || input.data[0].type != TypeId::VARCHAR) {
-			throw Exception("Expected a single table name as input");
-		}
-		auto table_name = input.GetValue(0, 0).str_value;
+		assert(input.size() == 1);
+
+		auto table_name = input[0].GetValue<string>();
 		// look up the table name in the catalog
 		auto &catalog = Catalog::GetCatalog(context);
 		data.entry = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, table_name);

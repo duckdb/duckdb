@@ -27,16 +27,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	// evalate the input parameters to the function
-	vector<Value> inputs;
 	for (auto &child : fexpr->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		auto expr = binder.Bind(child);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
-		result->parameters.push_back(move(expr));
-		inputs.push_back(constant);
+		result->parameters.push_back(constant);
 	}
 	// perform the binding
-	function->function.bind(inputs, result->return_types, result->names);
+	function->function.bind(result->parameters, result->return_types, result->names);
 	assert(result->return_types.size() == result->names.size());
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,

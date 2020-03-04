@@ -16,16 +16,17 @@ namespace duckdb {
 class LogicalTableFunction : public LogicalOperator {
 public:
 	LogicalTableFunction(TableFunctionCatalogEntry *function, idx_t table_index,
-	                     vector<unique_ptr<Expression>> parameters, vector<SQLType> return_types, vector<string> names)
+	                     vector<Value> parameters, vector<SQLType> return_types, vector<string> names)
 	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function), table_index(table_index),
-	      return_types(move(return_types)), names(move(names)) {
-		expressions = move(parameters);
+	      parameters(move(parameters)), return_types(move(return_types)), names(move(names)) {
 	}
 
 	//! The function
 	TableFunctionCatalogEntry *function;
 	//! The table index of the table-producing function
 	idx_t table_index;
+	//! The input parameters
+	vector<Value> parameters;
 	//! The set of returned sql types
 	vector<SQLType> return_types;
 	//! The set of returned column names

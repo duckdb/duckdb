@@ -26,25 +26,8 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 		}
 		state->initialized = true;
 	}
-	// create the input arguments
-	vector<TypeId> input_types;
-	for (auto &argument_type : function->function.arguments) {
-		input_types.push_back(GetInternalType(argument_type));
-	}
-
-	DataChunk input;
-	if (parameters.size() > 0) {
-		assert(parameters.size() == input_types.size());
-		input.Initialize(input_types);
-
-		for (auto &expr : parameters) {
-			ExpressionExecutor executor(*expr);
-			executor.Execute(input);
-		}
-	}
-
 	// run main code
-	function->function.function(context, input, chunk, state->function_data.get());
+	function->function.function(context, parameters, chunk, state->function_data.get());
 	if (chunk.size() == 0) {
 		// finished, call clean up
 		if (function->function.final) {
