@@ -9,9 +9,11 @@
 #include "duckdb/main/client_context.hpp"
 
 /**
-This file contains an example on how a query tree can be programmatically constructed. This is essentially hand-rolling the binding+planning phase for one specific query.
+This file contains an example on how a query tree can be programmatically constructed. This is essentially hand-rolling
+the binding+planning phase for one specific query.
 
-Note that this API is currently very unstable, and is subject to change at any moment. In general, this API should not be used currently outside of internal use cases.
+Note that this API is currently very unstable, and is subject to change at any moment. In general, this API should not
+be used currently outside of internal use cases.
 **/
 
 using namespace duckdb;
@@ -23,7 +25,8 @@ struct MyScanFunctionData : public TableFunctionData {
 	size_t nrow;
 };
 
-static unique_ptr<FunctionData> my_scan_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> my_scan_bind(ClientContext &context, vector<Value> inputs,
+                                             vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("some_int");
 	return_types.push_back(SQLType::INTEGER);
 
@@ -57,8 +60,7 @@ void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &o
 
 class MyScanFunction : public TableFunction {
 public:
-	MyScanFunction()
-	    : TableFunction("my_scan", {}, my_scan_bind, my_scan_function, nullptr){};
+	MyScanFunction() : TableFunction("my_scan", {}, my_scan_bind, my_scan_function, nullptr){};
 };
 
 unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string name, vector<SQLType> function_args,

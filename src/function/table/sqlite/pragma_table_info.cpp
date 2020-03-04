@@ -19,7 +19,8 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> inputs,
+                                                       vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("cid");
 	return_types.push_back(SQLType::INTEGER);
 
@@ -88,7 +89,8 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
+	set.AddFunction(
+	    TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

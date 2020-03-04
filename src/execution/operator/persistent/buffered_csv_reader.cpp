@@ -51,9 +51,8 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> sql_types) :
-	BufferedCSVReader(info, sql_types, OpenCSV(context, info)) {
-
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> sql_types)
+    : BufferedCSVReader(info, sql_types, OpenCSV(context, info)) {
 }
 
 BufferedCSVReader::BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, unique_ptr<istream> ssource)

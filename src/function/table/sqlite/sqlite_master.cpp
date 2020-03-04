@@ -44,7 +44,8 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs,
+                                                   vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("type");
 	return_types.push_back(SQLType::VARCHAR);
 

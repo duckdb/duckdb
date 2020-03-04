@@ -237,9 +237,11 @@ string SQLTypeToString(SQLType type) {
 SQLType TransformStringToSQLType(string str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
-	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" || lower_str == "integral" || lower_str == "int32") {
+	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
+	    lower_str == "integral" || lower_str == "int32") {
 		return SQLType::INTEGER;
-	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" || lower_str == "char") {
+	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
+	           lower_str == "char") {
 		return SQLType::VARCHAR;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
 		return SQLType::BIGINT;

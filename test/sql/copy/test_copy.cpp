@@ -1567,7 +1567,12 @@ TEST_CASE("Test read CSV function with lineitem", "[copy]") {
 	WriteBinary(lineitem_csv, lineitem_sample, sizeof(lineitem_sample));
 
 	// create a view using the read_csv function
-	REQUIRE_NO_FAIL(con.Query("CREATE VIEW lineitem AS SELECT * FROM read_csv('" + lineitem_csv + "', '|', STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag := 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := 'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));"));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE VIEW lineitem AS SELECT * FROM read_csv('" + lineitem_csv +
+	    "', '|', STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', "
+	    "l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag "
+	    ":= 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := "
+	    "'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));"));
 
 	// each of these will read the CSV again through the view
 	result = con.Query("SELECT COUNT(*) FROM lineitem");

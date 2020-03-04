@@ -14,8 +14,9 @@ struct ReadCSVData : public TableFunctionData {
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
-	for(auto &val : inputs[2].struct_value) {
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> inputs,
+                                              vector<SQLType> &return_types, vector<string> &names) {
+	for (auto &val : inputs[2].struct_value) {
 		names.push_back(val.first);
 		if (val.second.type != TypeId::VARCHAR) {
 			throw BinderException("read_csv requires a type specification as string");
@@ -41,7 +42,8 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("read_csv", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
+	set.AddFunction(TableFunction("read_csv", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind,
+	                              read_csv_info, nullptr));
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {
