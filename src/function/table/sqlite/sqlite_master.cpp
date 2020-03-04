@@ -21,11 +21,6 @@ struct SQLiteMasterData : public TableFunctionData {
 	idx_t offset;
 };
 
-unique_ptr<FunctionData> sqlite_master_init(ClientContext &context) {
-	// initialize the function data structure
-	return make_unique<SQLiteMasterData>();
-}
-
 string GenerateQuery(CatalogEntry *entry) {
 	// generate a query from a catalog entry
 	if (entry->type == CatalogType::TABLE) {
@@ -49,7 +44,7 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-static void sqlite_master_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("type");
 	return_types.push_back(SQLType::VARCHAR);
 
@@ -64,6 +59,9 @@ static void sqlite_master_bind(vector<Value> inputs, vector<SQLType> &return_typ
 
 	names.push_back("sql");
 	return_types.push_back(SQLType::VARCHAR);
+
+	// initialize the function data structure
+	return make_unique<SQLiteMasterData>();
 }
 
 void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
@@ -125,7 +123,7 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 }
 
 void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master_init, sqlite_master, nullptr));
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
 }
 
 } // namespace duckdb

@@ -34,8 +34,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		result->parameters.push_back(constant);
 	}
 	// perform the binding
-	function->function.bind(result->parameters, result->return_types, result->names);
+	result->bind_data = function->function.bind(context, result->parameters, result->return_types, result->names);
 	assert(result->return_types.size() == result->names.size());
+	assert(result->return_types.size() > 0);
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,
 	                               result->return_types);

@@ -8,5 +8,5 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTableFunction &op) {
 	assert(op.children.size() == 0);
 
-	return make_unique<PhysicalTableFunction>(op.types, op.function, move(op.parameters));
+	return make_unique<PhysicalTableFunction>(op.types, op.function, move(op.bind_data), move(op.parameters));
 }

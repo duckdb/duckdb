@@ -19,12 +19,7 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_table_info_init(ClientContext &context) {
-	// initialize the function data structure
-	return make_unique<PragmaTableFunctionData>();
-}
-
-static void pragma_table_info_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("cid");
 	return_types.push_back(SQLType::INTEGER);
 
@@ -42,6 +37,8 @@ static void pragma_table_info_bind(vector<Value> inputs, vector<SQLType> &return
 
 	names.push_back("pk");
 	return_types.push_back(SQLType::BOOLEAN);
+
+	return make_unique<PragmaTableFunctionData>();
 }
 
 static void pragma_table_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
@@ -91,8 +88,7 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 }
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind,
-	                              pragma_table_info_init, pragma_table_info, nullptr));
+	set.AddFunction(TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

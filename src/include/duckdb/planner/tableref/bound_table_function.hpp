@@ -24,6 +24,8 @@ public:
 
 	//! The function that is called
 	TableFunctionCatalogEntry *function;
+	//! The bind data of the function
+	unique_ptr<FunctionData> bind_data;
 	//! The set of parameters to use as input to the table-producing function
 	vector<Value> parameters;
 	//! The set of returned sql types

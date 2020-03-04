@@ -23,17 +23,14 @@ struct MyScanFunctionData : public TableFunctionData {
 	size_t nrow;
 };
 
-unique_ptr<FunctionData> my_scan_function_init(ClientContext &context) {
-	// initialize the function data structure
-	return make_unique<MyScanFunctionData>();
-}
-
-static void my_scan_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> my_scan_bind(ClientContext &context, vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("some_int");
 	return_types.push_back(SQLType::INTEGER);
 
 	names.push_back("some_string");
 	return_types.push_back(SQLType::VARCHAR);
+
+	return make_unique<MyScanFunctionData>();
 }
 
 void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
@@ -61,7 +58,7 @@ void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &o
 class MyScanFunction : public TableFunction {
 public:
 	MyScanFunction()
-	    : TableFunction("my_scan", {}, my_scan_bind, my_scan_function_init, my_scan_function, nullptr){};
+	    : TableFunction("my_scan", {}, my_scan_bind, my_scan_function, nullptr){};
 };
 
 unique_ptr<BoundFunctionExpression> resolve_function(Connection &con, string name, vector<SQLType> function_args,
