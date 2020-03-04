@@ -26,6 +26,10 @@ public:
 	TableFunctionCatalogEntry *function;
 	//! The set of parameters to use as input to the table-producing function
 	vector<unique_ptr<Expression>> parameters;
+	//! The set of returned sql types
+	vector<SQLType> return_types;
+	//! The set of returned column names
+	vector<string> names;
 	//! The index in the bind context
 	idx_t bind_index;
 };

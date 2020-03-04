@@ -19,12 +19,32 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	idx_t offset;
 };
 
-FunctionData *pragma_table_info_init(ClientContext &context) {
+static unique_ptr<FunctionData> pragma_table_info_init(ClientContext &context) {
 	// initialize the function data structure
-	return new PragmaTableFunctionData();
+	return make_unique<PragmaTableFunctionData>();
 }
 
-void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static void pragma_table_info_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("cid");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("notnull");
+	return_types.push_back(SQLType::BOOLEAN);
+
+	names.push_back("dflt_value");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("pk");
+	return_types.push_back(SQLType::BOOLEAN);
+}
+
+static void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((PragmaTableFunctionData *)dataptr);
 	if (!data.entry) {
 		// first call: load the entry from the catalog
@@ -72,6 +92,11 @@ void pragma_table_info(ClientContext &context, DataChunk &input, DataChunk &outp
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;
+}
+
+void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind,
+	                              pragma_table_info_init, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

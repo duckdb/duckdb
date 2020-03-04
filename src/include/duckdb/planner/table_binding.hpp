@@ -74,17 +74,6 @@ private:
 	void AddName(string &name);
 };
 
-//! Represents a binding to a table-producing function
-struct TableFunctionBinding : public Binding {
-	TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, idx_t index);
-
-	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-
-	TableFunctionCatalogEntry *function;
-};
-
 //! Represents a generic binding with types and names
 struct GenericBinding : public Binding {
 	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, idx_t index);

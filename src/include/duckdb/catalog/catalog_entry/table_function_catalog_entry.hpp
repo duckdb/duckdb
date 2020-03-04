@@ -26,14 +26,5 @@ public:
 
 	//! The table function
 	TableFunction function;
-	//! A map of return-column name to column index
-	unordered_map<string, column_t> name_map;
-
-public:
-	//! Returns whether or not a column with the given name is returned by the
-	//! function
-	bool ColumnExists(const string &name);
-	//! Returns a list of return-types of the function
-	vector<TypeId> GetTypes();
 };
 } // namespace duckdb

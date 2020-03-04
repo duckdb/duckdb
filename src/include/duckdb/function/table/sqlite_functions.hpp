@@ -12,10 +12,12 @@
 
 namespace duckdb {
 
-FunctionData *pragma_table_info_init(ClientContext &);
-void pragma_table_info(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
+struct PragmaTableInfo {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
-FunctionData *sqlite_master_init(ClientContext &);
-void sqlite_master(ClientContext &, DataChunk &input, DataChunk &output, FunctionData *dataptr);
+struct SQLiteMaster {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 } // namespace duckdb

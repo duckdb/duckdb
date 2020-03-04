@@ -21,9 +21,9 @@ struct SQLiteMasterData : public TableFunctionData {
 	idx_t offset;
 };
 
-FunctionData *sqlite_master_init(ClientContext &context) {
+unique_ptr<FunctionData> sqlite_master_init(ClientContext &context) {
 	// initialize the function data structure
-	return new SQLiteMasterData();
+	return make_unique<SQLiteMasterData>();
 }
 
 string GenerateQuery(CatalogEntry *entry) {
@@ -47,6 +47,23 @@ string GenerateQuery(CatalogEntry *entry) {
 	} else {
 		return "[Unknown]";
 	}
+}
+
+static void sqlite_master_bind(vector<Value> inputs, vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("tbl_name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("rootpage");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("sql");
+	return_types.push_back(SQLType::VARCHAR);
 }
 
 void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
@@ -104,6 +121,10 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;
+}
+
+void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master_init, sqlite_master, nullptr));
 }
 
 } // namespace duckdb

@@ -22,10 +22,7 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 	if (!state->initialized) {
 		// run initialization code
 		if (function->function.init) {
-			auto function_data = function->function.init(context);
-			if (function_data) {
-				state->function_data = unique_ptr<FunctionData>(function_data);
-			}
+			state->function_data = function->function.init(context);
 		}
 		state->initialized = true;
 	}

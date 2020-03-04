@@ -6,5 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundTableFunction &ref) {
-	return make_unique<LogicalTableFunction>(ref.function, ref.bind_index, move(ref.parameters));
+	return make_unique<LogicalTableFunction>(ref.function, ref.bind_index, move(ref.parameters), ref.return_types,
+	                                         ref.names);
 }
