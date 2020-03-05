@@ -124,35 +124,6 @@ void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-TableFunctionBinding::TableFunctionBinding(const string &alias, TableFunctionCatalogEntry *function, idx_t index)
-    : Binding(BindingType::TABLE_FUNCTION, alias, index), function(function) {
-}
-
-bool TableFunctionBinding::HasMatchingBinding(const string &column_name) {
-	return function->ColumnExists(column_name);
-}
-
-BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto column_entry = function->name_map.find(colref.column_name);
-	if (column_entry == function->name_map.end()) {
-		return BindResult(StringUtil::Format("Table Function \"%s\" does not have a column named \"%s\"", alias.c_str(),
-		                                     colref.column_name.c_str()));
-	}
-	ColumnBinding binding;
-	binding.table_index = index;
-	binding.column_index = column_entry->second;
-	SQLType sql_type = function->function.types[column_entry->second];
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
-}
-
-void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
-                                                        vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &name : function->function.names) {
-		select_list.push_back(make_unique<ColumnRefExpression>(name, alias));
-	}
-}
-
 GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, idx_t index)
     : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());

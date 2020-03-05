@@ -42,11 +42,12 @@ class BufferedCSVReader {
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 
 public:
-	BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, std::istream &source);
+	BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> sql_types);
+	BufferedCSVReader(CopyInfo &info, vector<SQLType> sql_types, unique_ptr<std::istream> source);
 
 	CopyInfo &info;
 	vector<SQLType> sql_types;
-	std::istream &source;
+	unique_ptr<std::istream> source;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
@@ -79,6 +80,8 @@ private:
 	void Flush(DataChunk &insert_chunk);
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
+
+	unique_ptr<std::istream> OpenCSV(ClientContext &context, CopyInfo &info);
 };
 
 } // namespace duckdb

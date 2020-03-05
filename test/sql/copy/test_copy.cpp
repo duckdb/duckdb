@@ -1556,3 +1556,36 @@ TEST_CASE("Test imdb escapes", "[copy]") {
 	// TODO: actually check results
 	result = con.Query("SELECT * FROM movie_info;");
 }
+
+TEST_CASE("Test read CSV function with lineitem", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto lineitem_csv = fs.JoinPath(csv_path, "lineitem.csv");
+	WriteBinary(lineitem_csv, lineitem_sample, sizeof(lineitem_sample));
+
+	// create a view using the read_csv function
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE VIEW lineitem AS SELECT * FROM read_csv('" + lineitem_csv +
+	    "', '|', STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', "
+	    "l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag "
+	    ":= 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := "
+	    "'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));"));
+
+	// each of these will read the CSV again through the view
+	result = con.Query("SELECT COUNT(*) FROM lineitem");
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+	result = con.Query("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;");
+	REQUIRE(CHECK_COLUMN(result, 0, {15519, 6731, 6370, 214, 2403, 1564}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 1,
+	                 {"egular courts above the", "ly final dependencies: slyly bold ", "riously. regular, express dep",
+	                  "lites. fluffily even de", " pending foxes. slyly re", "arefully slyly ex"}));
+
+	// test incorrect usage of read_csv function
+	// wrong argument type
+	REQUIRE_FAIL(con.Query("SELECT * FROM read_csv('" + lineitem_csv + "', '|', STRUCT_PACK(l_orderkey := 5))"));
+}
