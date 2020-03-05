@@ -42,8 +42,6 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
 		states[i]->cc->Append(insert_chunk);
 		states[i]->cc->Verify();
 	});
-
-
 }
 
 static void list_combine(Vector &state, Vector &combined) {
@@ -63,7 +61,7 @@ static void list_destroy(Vector &state) {
 static void list_finalize(Vector &state, Vector &result) {
 	auto states = (list_agg_state_t **)state.GetData();
 
-	result.Initialize(TypeId::LIST, false, state.size());
+	result.Initialize(TypeId::LIST);
 	auto list_struct_data = (list_entry_t *)result.GetData();
 
 	size_t total_len = 0;

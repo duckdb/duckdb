@@ -86,11 +86,10 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	}
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
+void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
-	assert(count <= STANDARD_VECTOR_SIZE);
 	buffer.reset();
 	auxiliary.reset();
 	nullmask.reset();

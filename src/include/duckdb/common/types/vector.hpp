@@ -123,7 +123,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false, idx_t count = STANDARD_VECTOR_SIZE);
+	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
 	//! Flattens the vector, removing any selection vector
 	void ClearSelectionVector();
 

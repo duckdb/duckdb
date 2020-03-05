@@ -41,14 +41,14 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		// first chunk
 		types = new_chunk.GetTypes();
 	} else {
-#ifdef DEBUG
 		// the types of the new chunk should match the types of the previous one
 		assert(types.size() == new_chunk.column_count());
 		auto new_types = new_chunk.GetTypes();
 		for (idx_t i = 0; i < types.size(); i++) {
-			assert(new_types[i] == types[i]);
+			if (new_types[i] != types[i]) {
+				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
+			}
 		}
-#endif
 
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();

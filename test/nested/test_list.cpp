@@ -19,6 +19,55 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test scalar lists", "[nested]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+
+	result = con.Query("SELECT LIST_VALUE(1, 2, 3, '4') a, LIST_VALUE('a','b','c') b, LIST_VALUE(42, NULL) c, "
+	                   "LIST_VALUE(NULL, NULL, NULL) d, LIST_VALUE() e");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({1, 2, 3, 4})}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::LIST({"a", "b", "c"})}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::LIST({42, Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::LIST({Value(), Value(), Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::LIST({})}));
+
+	result = con.Query(
+	    "SELECT a FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST_VALUE(NULL)), (LIST_VALUE(42))) lv(a)");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Value::LIST({1, 2, 3, 4}), Value::LIST({}), Value::LIST({Value()}), Value::LIST({42})}));
+
+	result = con.Query("SELECT * FROM (VALUES ((LIST_VALUE()), (LIST_VALUE(NULL)), LIST_VALUE(1, 2))) lv(a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({})}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::LIST({Value()})}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)})}));
+
+	result = con.Query("SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE(NULL))) lv(a)");
+	REQUIRE(CHECK_COLUMN(
+	    result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({}), Value::LIST({Value()})}));
+
+	// empty list should not abort UNNEST
+	result = con.Query("SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST_VALUE(NULL)), "
+	                   "(LIST_VALUE(42))) lv(a)");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, Value(), 42}));
+
+	// list child type mismatch
+	REQUIRE_FAIL(con.Query("SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(a)"));
+
+	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
+	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
+
+	result = con.Query("SELECT LIST_VALUE(g, e, 42) FROM list_data WHERE g > 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({3, 6, 42}), Value::LIST({5, Value(), 42})}));
+
+	//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FROM list_data
+	//WHERE g > 1"); 	result->Print();
+	//
+	//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE() END FROM list_data WHERE
+	//g > 1"); 	result->Print();
+}
+
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -205,10 +254,10 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                   "BY g2 ORDER BY g2");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
 
-	REQUIRE(CHECK_COLUMN(
-	    result, 1,
-	    {Value::LIST({Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)})}),
-	     Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({Value()}), Value::LIST({Value::INTEGER(6)})})}));
+	REQUIRE(CHECK_COLUMN(result, 1,
+	                     {Value::LIST({Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)})}),
+	                      Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({Value()}),
+	                                   Value::LIST({Value::INTEGER(6)})})}));
 
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));

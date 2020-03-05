@@ -133,7 +133,7 @@ private:
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
-	void RegisterStructFunctions();
+	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 };
