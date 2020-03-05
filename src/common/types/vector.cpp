@@ -90,14 +90,15 @@ void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
+	assert(count <= STANDARD_VECTOR_SIZE);
 	buffer.reset();
 	auxiliary.reset();
 	nullmask.reset();
 	if (GetTypeIdSize(type) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(type, count);
+		buffer = VectorBuffer::CreateStandardVector(type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, count * GetTypeIdSize(type));
+			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 		}
 	}
 }
@@ -623,6 +624,18 @@ void Vector::Verify() {
 
 	if (type == TypeId::LIST) {
 		GetListEntry().Verify();
+		if (vector_type == VectorType::CONSTANT_VECTOR) {
+			if (!nullmask[0]) {
+				auto le = ((list_entry_t *)data)[0];
+				assert(le.offset + le.length <= GetListEntry().count);
+			}
+		} else {
+			VectorOperations::ExecType<list_entry_t>(*this, [&](list_entry_t le, uint64_t i, uint64_t k) {
+				if (!nullmask[i]) {
+					assert(le.offset + le.length <= GetListEntry().count);
+				}
+			});
+		}
 	}
 // TODO verify list and struct
 #endif

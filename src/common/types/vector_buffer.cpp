@@ -13,8 +13,8 @@ VectorBuffer::VectorBuffer(idx_t data_size) : type(VectorBufferType::STANDARD_BU
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(TypeId type, idx_t count) {
-	return make_buffer<VectorBuffer>(count * GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(TypeId type) {
+	return make_buffer<VectorBuffer>(STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(TypeId type) {

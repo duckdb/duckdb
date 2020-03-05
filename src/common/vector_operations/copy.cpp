@@ -177,7 +177,6 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 		VectorOperations::Copy(source, target);
 		return;
 	}
-
 	source.Normalify();
 
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
@@ -223,9 +222,9 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 			auto source_data = ((list_entry_t *)source.GetData());
 
 			VectorOperations::Exec(source, [&](idx_t i, idx_t k) {
-				if (!target.nullmask[old_count + i]) {
-					target_data[old_count + i].length = source_data[i].length;
-					target_data[old_count + i].offset = source_data[i].offset + old_target_child_len;
+				if (!target.nullmask[old_count + k]) {
+					target_data[old_count + k].length = source_data[i].length;
+					target_data[old_count + k].offset = source_data[i].offset + old_target_child_len;
 				}
 			});
 

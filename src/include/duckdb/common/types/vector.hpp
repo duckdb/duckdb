@@ -26,6 +26,7 @@ public:
 	VectorCardinality() : count(0), sel_vector(nullptr) {
 	}
 	VectorCardinality(idx_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
+		assert(count <= STANDARD_VECTOR_SIZE);
 	}
 
 	idx_t count;
@@ -197,6 +198,7 @@ public:
 
 public:
 	void SetCount(idx_t count) {
+		assert(count <= STANDARD_VECTOR_SIZE);
 		owned_cardinality.count = count;
 	}
 	void SetSelVector(sel_t *sel) {

@@ -208,7 +208,7 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 1,
 	    {Value::LIST({Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)})}),
-	     Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({}), Value::LIST({Value()})})}));
+	     Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({Value()}), Value::LIST({Value::INTEGER(6)})})}));
 
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));

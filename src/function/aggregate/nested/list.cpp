@@ -40,7 +40,10 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
 		insert_chunk.sel_vector[0] = i;
 		insert_chunk.Verify();
 		states[i]->cc->Append(insert_chunk);
+		states[i]->cc->Verify();
 	});
+
+
 }
 
 static void list_combine(Vector &state, Vector &combined) {
