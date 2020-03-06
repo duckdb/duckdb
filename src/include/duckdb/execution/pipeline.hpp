@@ -22,7 +22,7 @@ public:
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state
-	unique_ptr<SinkState> sink_state;
+	unique_ptr<GlobalOperatorState> sink_state;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
 	PhysicalSink *sink;
 	//! The parent pipeline (i.e. the pipeline that is dependent on this pipeline to finish)

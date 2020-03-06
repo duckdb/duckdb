@@ -97,9 +97,14 @@ public:
 	}
 };
 
-class SinkState {
+class GlobalOperatorState {
 public:
-	virtual ~SinkState(){}
+	virtual ~GlobalOperatorState(){}
+};
+
+class LocalSinkState {
+public:
+	virtual ~LocalSinkState(){}
 };
 
 class PhysicalSink : public PhysicalOperator {
@@ -107,13 +112,16 @@ public:
 	PhysicalSink(PhysicalOperatorType type, vector<TypeId> types) : PhysicalOperator(type, move(types)) {
 	}
 
-	unique_ptr<SinkState> state;
+	unique_ptr<GlobalOperatorState> sink_state;
 public:
-	virtual void Sink(DataChunk &input, SinkState &state) = 0;
-	virtual void Finalize(SinkState &state){}
+	virtual void Sink(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate, DataChunk &input) = 0;
+	virtual void Finalize(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate){}
 
-	virtual unique_ptr<SinkState> GetSinkState() {
-		return make_unique<SinkState>();
+	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) {
+		return make_unique<LocalSinkState>();
+	}
+	virtual unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) {
+		return make_unique<GlobalOperatorState>();
 	}
 
 	bool IsSink() const override {

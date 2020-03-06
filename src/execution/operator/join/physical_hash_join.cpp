@@ -8,15 +8,27 @@
 using namespace duckdb;
 using namespace std;
 
-class PhysicalHashJoinState : public PhysicalComparisonJoinState {
+class HashJoinLocalState : public LocalSinkState {
+public:
+	DataChunk build_chunk;
+	DataChunk join_keys;
+	ExpressionExecutor build_executor;
+};
+
+class HashJoinGlobalState : public GlobalOperatorState {
+public:
+	unique_ptr<JoinHashTable> hash_table;
+};
+
+class PhysicalHashJoinState : public PhysicalOperatorState {
 public:
 	PhysicalHashJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false) {
+	    : PhysicalOperatorState(left) {
 	}
 
-	bool initialized;
 	DataChunk cached_chunk;
 	DataChunk join_keys;
+	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 
@@ -29,10 +41,6 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	children.push_back(move(right));
 
 	assert(left_projection_map.size() == 0);
-
-	hash_table =
-	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions,
-	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
 }
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -40,144 +48,70 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
     : PhysicalHashJoin(context, op, move(left), move(right), move(cond), join_type, {}, {}) {
 }
 
-void PhysicalHashJoin::BuildHashTable(ClientContext &context, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-
-	// build the HT
-	auto right_state = children[1]->GetOperatorState();
-	auto types = children[1]->GetTypes();
-
-	DataChunk right_chunk, build_chunk;
-	right_chunk.Initialize(types);
-
-	if (right_projection_map.size() > 0) {
-		build_chunk.Initialize(hash_table->build_types);
-	}
-
-	state->join_keys.Initialize(hash_table->condition_types);
-	while (true) {
-		// get the child chunk
-		children[1]->GetChunk(context, right_chunk, right_state.get());
-		if (right_chunk.size() == 0) {
-			break;
-		}
-		// resolve the join keys for the right chunk
-		state->rhs_executor.Execute(right_chunk, state->join_keys);
-		// build the HT
-		if (right_projection_map.size() > 0) {
-			// there is a projection map: fill the build chunk with the projected columns
-			build_chunk.Reset();
-			build_chunk.SetCardinality(right_chunk);
-			for (idx_t i = 0; i < right_projection_map.size(); i++) {
-				build_chunk.data[i].Reference(right_chunk.data[right_projection_map[i]]);
-			}
-			hash_table->Build(state->join_keys, build_chunk);
-		} else {
-			// there is not a projected map: place the entire right chunk in the HT
-			hash_table->Build(state->join_keys, right_chunk);
-		}
-	}
-	hash_table->Finalize();
+unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
+	auto state = make_unique<HashJoinGlobalState>();
+	state->hash_table =
+	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions,
+	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
+	return move(state);
 }
 
-void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-	if (state->child_chunk.size() > 0 && state->scan_structure) {
-		// still have elements remaining from the previous probe (i.e. we got
-		// >1024 elements in the previous probe)
-		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
-		if (chunk.size() > 0) {
-			return;
-		}
-		state->scan_structure = nullptr;
+unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+	auto &sink = (HashJoinGlobalState&) *sink_state;
+	auto state = make_unique<HashJoinLocalState>();
+	if (right_projection_map.size() > 0) {
+		state->build_chunk.Initialize(sink.hash_table->build_types);
 	}
+	for (auto &cond : conditions) {
+		state->build_executor.AddExpression(*cond.right);
+	}
+	state->join_keys.Initialize(sink.hash_table->condition_types);
+	return move(state);
+}
 
-	// probe the HT
-	do {
-		// fetch the chunk from the left side
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			return;
+void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_, DataChunk &input) {
+	auto &sink = (HashJoinGlobalState&) state;
+	auto &lstate = (HashJoinLocalState&) lstate_;
+	// resolve the join keys for the right chunk
+	lstate.build_executor.Execute(input, lstate.join_keys);
+	// build the HT
+	if (right_projection_map.size() > 0) {
+		// there is a projection map: fill the build chunk with the projected columns
+		lstate.build_chunk.Reset();
+		lstate.build_chunk.SetCardinality(input);
+		for (idx_t i = 0; i < right_projection_map.size(); i++) {
+			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
-		// remove any selection vectors
-		state->child_chunk.ClearSelectionVector();
-		if (hash_table->size() == 0) {
-			// empty hash table, special case
-			if (hash_table->join_type == JoinType::ANTI) {
-				// anti join with empty hash table, NOP join
-				// return the input
-				assert(chunk.column_count() == state->child_chunk.column_count());
-				chunk.Reference(state->child_chunk);
-				return;
-			} else if (hash_table->join_type == JoinType::MARK) {
-				// MARK join with empty hash table
-				assert(hash_table->join_type == JoinType::MARK);
-				assert(chunk.column_count() == state->child_chunk.column_count() + 1);
-				auto &result_vector = chunk.data.back();
-				assert(result_vector.type == TypeId::BOOL);
-				// for every data vector, we just reference the child chunk
-				chunk.SetCardinality(state->child_chunk);
-				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
-					chunk.data[i].Reference(state->child_chunk.data[i]);
-				}
-				// for the MARK vector:
-				// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input
-				// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
-				// has NULL for every input entry
-				if (!hash_table->has_null) {
-					auto bool_result = (bool *)result_vector.GetData();
-					for (idx_t i = 0; i < result_vector.size(); i++) {
-						bool_result[i] = false;
-					}
-				} else {
-					result_vector.nullmask.set();
-				}
-				return;
-			} else if (hash_table->join_type == JoinType::LEFT || hash_table->join_type == JoinType::OUTER ||
-			           hash_table->join_type == JoinType::SINGLE) {
-				// LEFT/FULL OUTER/SINGLE join and build side is empty
-				// for the LHS we reference the data
-				chunk.SetCardinality(state->child_chunk.size());
-				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
-					chunk.data[i].Reference(state->child_chunk.data[i]);
-				}
-				// for the RHS
-				for (idx_t k = state->child_chunk.column_count(); k < chunk.column_count(); k++) {
-					chunk.data[k].vector_type = VectorType::CONSTANT_VECTOR;
-					chunk.data[k].nullmask[0] = true;
-				}
-				return;
-			}
-		}
-		// resolve the join keys for the left chunk
-		state->lhs_executor.Execute(state->child_chunk, state->join_keys);
+		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+	} else {
+		// there is not a projected map: place the entire right chunk in the HT
+		sink.hash_table->Build(lstate.join_keys, input);
+	}
+}
 
-		// perform the actual probe
-		state->scan_structure = hash_table->Probe(state->join_keys);
-		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
-	} while (chunk.size() == 0);
+void PhysicalHashJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+	auto &sink = (HashJoinGlobalState&) state;
+	sink.hash_table->Finalize();
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
-	return make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
+	auto state = make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
+	auto &sink = (HashJoinGlobalState&) state;
+	state->cached_chunk.Initialize(types);
+	state->join_keys.Initialize(sink.hash_table->condition_types);
+	for (auto &cond : conditions) {
+		state->probe_executor.AddExpression(*cond.left);
+	}
+	return move(state);
 }
-
-// void PhysicalHashJoin::Sink(DataChunk &input, SinkState &state) {
-// 	throw NotImplementedException("FIXME: order sink");
-// }
 
 void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-	if (!state->initialized) {
-		state->cached_chunk.Initialize(types);
-		BuildHashTable(context, state_);
-		state->initialized = true;
-
-		if (hash_table->size() == 0 &&
-		    (hash_table->join_type == JoinType::INNER || hash_table->join_type == JoinType::SEMI)) {
-			// empty hash table with INNER or SEMI join means empty result set
-			return;
-		}
+	auto &sink = (HashJoinGlobalState&) *sink_state;
+	if (sink.hash_table->size() == 0 &&
+		(sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
+		// empty hash table with INNER or SEMI join means empty result set
+		return;
 	}
 	do {
 		ProbeHashTable(context, chunk, state);
@@ -208,4 +142,84 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 		return;
 #endif
 	} while (true);
+}
+
+void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
+	auto &sink = (HashJoinGlobalState&) *sink_state;
+
+	if (state->child_chunk.size() > 0 && state->scan_structure) {
+		// still have elements remaining from the previous probe (i.e. we got
+		// >1024 elements in the previous probe)
+		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
+		if (chunk.size() > 0) {
+			return;
+		}
+		state->scan_structure = nullptr;
+	}
+
+	// probe the HT
+	do {
+		// fetch the chunk from the left side
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		if (state->child_chunk.size() == 0) {
+			return;
+		}
+		// remove any selection vectors
+		state->child_chunk.ClearSelectionVector();
+		if (sink.hash_table->size() == 0) {
+			// empty hash table, special case
+			if (sink.hash_table->join_type == JoinType::ANTI) {
+				// anti join with empty hash table, NOP join
+				// return the input
+				assert(chunk.column_count() == state->child_chunk.column_count());
+				chunk.Reference(state->child_chunk);
+				return;
+			} else if (sink.hash_table->join_type == JoinType::MARK) {
+				// MARK join with empty hash table
+				assert(sink.hash_table->join_type == JoinType::MARK);
+				assert(chunk.column_count() == state->child_chunk.column_count() + 1);
+				auto &result_vector = chunk.data.back();
+				assert(result_vector.type == TypeId::BOOL);
+				// for every data vector, we just reference the child chunk
+				chunk.SetCardinality(state->child_chunk);
+				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+				}
+				// for the MARK vector:
+				// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input
+				// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
+				// has NULL for every input entry
+				if (!sink.hash_table->has_null) {
+					auto bool_result = (bool *)result_vector.GetData();
+					for (idx_t i = 0; i < result_vector.size(); i++) {
+						bool_result[i] = false;
+					}
+				} else {
+					result_vector.nullmask.set();
+				}
+				return;
+			} else if (sink.hash_table->join_type == JoinType::LEFT || sink.hash_table->join_type == JoinType::OUTER ||
+			           sink.hash_table->join_type == JoinType::SINGLE) {
+				// LEFT/FULL OUTER/SINGLE join and build side is empty
+				// for the LHS we reference the data
+				chunk.SetCardinality(state->child_chunk.size());
+				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
+					chunk.data[i].Reference(state->child_chunk.data[i]);
+				}
+				// for the RHS
+				for (idx_t k = state->child_chunk.column_count(); k < chunk.column_count(); k++) {
+					chunk.data[k].vector_type = VectorType::CONSTANT_VECTOR;
+					chunk.data[k].nullmask[0] = true;
+				}
+				return;
+			}
+		}
+		// resolve the join keys for the left chunk
+		state->probe_executor.Execute(state->child_chunk, state->join_keys);
+
+		// perform the actual probe
+		state->scan_structure = sink.hash_table->Probe(state->join_keys);
+		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
+	} while (chunk.size() == 0);
 }

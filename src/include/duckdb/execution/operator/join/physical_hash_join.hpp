@@ -25,15 +25,17 @@ public:
 	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
-	unique_ptr<JoinHashTable> hash_table;
 	vector<idx_t> right_projection_map;
-
 public:
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) override;
+	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
+
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-
 private:
-	void BuildHashTable(ClientContext &context, PhysicalOperatorState *state_);
 	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 };
 

@@ -19,7 +19,6 @@ public:
 	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type);
 
 	JoinType type;
-	void Sink(DataChunk &input, SinkState &state) override{}
 };
 
 void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],

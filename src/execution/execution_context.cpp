@@ -42,7 +42,7 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pi
 		// operator is a sink, build a pipeline
 		auto pipeline = make_unique<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink*) op;
-		pipeline->sink_state = pipeline->sink->GetSinkState();
+		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		switch(op->type) {
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE:

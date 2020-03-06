@@ -11,16 +11,17 @@ Pipeline::Pipeline(ExecutionContext &execution_context) :
 void Pipeline::Execute(ClientContext &context) {
 	assert(dependents.size() == 0);
 	auto state = child->GetOperatorState();
+	auto lstate = sink->GetLocalSinkState(context);
 	// incrementally process the pipeline
 	DataChunk intermediate;
 	child->InitializeChunk(intermediate);
 	while(true) {
 		child->GetChunk(context, intermediate, state.get());
 		if (intermediate.size() == 0) {
-			sink->Finalize(*sink_state);
+			sink->Finalize(context, *sink_state, *lstate);
 			break;
 		}
-		sink->Sink(intermediate, *sink_state);
+		sink->Sink(context, *sink_state, *lstate, intermediate);
 	}
 	Finish();
 }
@@ -40,7 +41,7 @@ void Pipeline::EraseDependent(Pipeline *pipeline) {
 }
 
 void Pipeline::Finish() {
-	sink->state = move(sink_state);
+	sink->sink_state = move(sink_state);
 
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	if (parent) {
