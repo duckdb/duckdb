@@ -162,6 +162,10 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
 }
 
+// void PhysicalHashJoin::Sink(DataChunk &input, SinkState &state) {
+// 	throw NotImplementedException("FIXME: order sink");
+// }
+
 void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
 	if (!state->initialized) {

@@ -26,7 +26,7 @@ using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
+    : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this), catalog(*database.catalog),
       temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
@@ -143,12 +143,7 @@ void ClientContext::CleanupInternal() {
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
-	assert(execution_context.physical_plan);
-	auto chunk = make_unique<DataChunk>();
-	// run the plan to get the next chunks
-	execution_context.physical_plan->InitializeChunk(*chunk);
-	execution_context.physical_plan->GetChunk(*this, *chunk, execution_context.physical_state.get());
-	return chunk;
+	return execution_context.FetchChunk();
 }
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
@@ -210,10 +205,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	bool create_stream_result = statement.statement_type == StatementType::SELECT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.physical_plan = move(statement.plan);
-	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
+	execution_context.Initialize(move(statement.plan));
 
-	auto types = execution_context.physical_plan->GetTypes();
+	auto types = execution_context.GetTypes();
 	assert(types.size() == statement.sql_types.size());
 
 	if (create_stream_result) {

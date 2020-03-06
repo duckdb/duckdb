@@ -103,15 +103,19 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
+void QueryProfiler::Initialize(PhysicalOperator *root_op) {
+	if (!enabled || !running) {
+		return;
+	}
+	this->root = CreateTree(root_op);
+}
+
 void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 	if (!enabled || !running) {
 		return;
 	}
 
-	if (!root) {
-		// start of execution: create operator tree
-		root = CreateTree(phys_op);
-	}
+	assert(root);
 	if (!execution_stack.empty()) {
 		// add timing for the previous element
 		op.End();
@@ -128,6 +132,7 @@ void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 		// add it to the current node
 		node->children.push_back(move(new_tree));
 	}
+	assert(tree_map.count(phys_op) != 0);
 	execution_stack.push(phys_op);
 
 	// start timing for current element

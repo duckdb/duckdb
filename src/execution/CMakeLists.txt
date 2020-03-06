@@ -9,9 +9,11 @@ add_library_unity(duckdb_execution
                   OBJECT
                   aggregate_hashtable.cpp
                   column_binding_resolver.cpp
+                  execution_context.cpp
                   expression_executor.cpp
                   expression_executor_state.cpp
                   join_hashtable.cpp
+                  pipeline.cpp
                   physical_operator.cpp
                   physical_plan_generator.cpp
                   window_segment_tree.cpp)

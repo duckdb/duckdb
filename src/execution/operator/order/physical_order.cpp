@@ -19,6 +19,10 @@ public:
 	unique_ptr<idx_t[]> sorted_vector;
 };
 
+void PhysicalOrder::Sink(DataChunk &input, SinkState &state) {
+	throw NotImplementedException("FIXME: order sink");
+}
+
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	ChunkCollection &big_data = state->sorted_data;

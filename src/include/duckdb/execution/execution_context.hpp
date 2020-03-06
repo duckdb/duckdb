@@ -8,22 +8,41 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/query_result.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/execution/pipeline.hpp"
+#include <queue>
 
 namespace duckdb {
-class DuckDB;
+class ClientContext;
+class DataChunk;
+class PhysicalOperator;
+class PhysicalOperatorState;
 
 class ExecutionContext {
+	friend class Pipeline;
 public:
-	unique_ptr<PhysicalOperator> physical_plan;
-	unique_ptr<PhysicalOperatorState> physical_state;
+	ExecutionContext(ClientContext &context);
+	~ExecutionContext();
 
 public:
-	void Reset() {
-		physical_plan = nullptr;
-		physical_state = nullptr;
-	}
+	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
+	void BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pipeline>> &pipelines);
+
+	void Reset();
+
+	vector<TypeId> GetTypes();
+
+	unique_ptr<DataChunk> FetchChunk();
+private:
+	void Schedule(Pipeline *pipeline);
+
+	void EraseDependent(Pipeline *pipeline);
+
+	std::queue<Pipeline*> scheduled_pipelines;
+private:
+	ClientContext &context;
+	unique_ptr<PhysicalOperator> physical_plan;
+	unique_ptr<PhysicalOperatorState> physical_state;
+	vector<unique_ptr<Pipeline>> pipelines;
 };
 } // namespace duckdb

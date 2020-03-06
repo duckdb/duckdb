@@ -91,5 +91,34 @@ public:
 	virtual string ExtraRenderInformation() const {
 		return "";
 	}
+
+	virtual bool IsSink() const {
+		return false;
+	}
 };
+
+class SinkState {
+public:
+	virtual ~SinkState(){}
+};
+
+class PhysicalSink : public PhysicalOperator {
+public:
+	PhysicalSink(PhysicalOperatorType type, vector<TypeId> types) : PhysicalOperator(type, move(types)) {
+	}
+
+	unique_ptr<SinkState> state;
+public:
+	virtual void Sink(DataChunk &input, SinkState &state) = 0;
+	virtual void Finalize(SinkState &state){}
+
+	virtual unique_ptr<SinkState> GetSinkState() {
+		return make_unique<SinkState>();
+	}
+
+	bool IsSink() const override {
+		return true;
+	}
+};
+
 } // namespace duckdb
