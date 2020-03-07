@@ -490,7 +490,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((const char **)chunk->data[col_idx].GetData())[chunk_idx]);
+						str_obj = PyUnicode_FromString(((duckdb::string_t*)chunk->data[col_idx].GetData())[chunk_idx].GetData());
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
