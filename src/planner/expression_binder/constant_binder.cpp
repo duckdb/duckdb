@@ -10,13 +10,13 @@ ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string cl
 BindResult ConstantBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindResult(clause + "cannot contain column names");
+		return BindResult(clause + " cannot contain column names");
 	case ExpressionClass::SUBQUERY:
-		return BindResult(clause + "cannot contain subqueries");
+		return BindResult(clause + " cannot contain subqueries");
 	case ExpressionClass::DEFAULT:
-		return BindResult(clause + "cannot contain DEFAULT clause");
+		return BindResult(clause + " cannot contain DEFAULT clause");
 	case ExpressionClass::WINDOW:
-		return BindResult(clause + "cannot contain window functions!");
+		return BindResult(clause + " cannot contain window functions!");
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}

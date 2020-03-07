@@ -121,6 +121,7 @@ private:
 
 	// table-producing functions
 	void RegisterSQLiteFunctions();
+	void RegisterReadFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();
@@ -132,7 +133,7 @@ private:
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
-	void RegisterStructFunctions();
+	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 };

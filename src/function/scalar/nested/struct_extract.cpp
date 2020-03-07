@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -16,11 +16,11 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 	auto &vec = input.data[0];
 
 	vec.Verify();
-	auto& children = vec.GetStructEntries();
+	auto &children = vec.GetStructEntries();
 	if (info.index >= children.size()) {
 		throw Exception("Not enough struct entries for struct_extract");
 	}
-	auto& child = children[info.index];
+	auto &child = children[info.index];
 	if (child.first != info.key || child.second->type != info.type) {
 		throw Exception("Struct key or type mismatch");
 	}

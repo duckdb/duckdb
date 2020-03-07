@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/table/sqlite_functions.hpp
+// duckdb/function/table/read_csv.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,7 @@
 
 namespace duckdb {
 
-struct PragmaTableInfo {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct SQLiteMaster {
+struct ReadCSVTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

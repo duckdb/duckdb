@@ -21,11 +21,6 @@ struct SQLiteMasterData : public TableFunctionData {
 	idx_t offset;
 };
 
-FunctionData *sqlite_master_init(ClientContext &context) {
-	// initialize the function data structure
-	return new SQLiteMasterData();
-}
-
 string GenerateQuery(CatalogEntry *entry) {
 	// generate a query from a catalog entry
 	if (entry->type == CatalogType::TABLE) {
@@ -49,8 +44,30 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs,
+                                                   vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("tbl_name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("rootpage");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("sql");
+	return_types.push_back(SQLType::VARCHAR);
+
+	// initialize the function data structure
+	return make_unique<SQLiteMasterData>();
+}
+
+void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
+	assert(input.size() == 0);
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = Transaction::GetTransaction(context);
@@ -104,6 +121,10 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;
+}
+
+void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
 }
 
 } // namespace duckdb
