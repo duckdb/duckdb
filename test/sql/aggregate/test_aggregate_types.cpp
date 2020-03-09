@@ -84,15 +84,17 @@ TEST_CASE("Test scalar aggregates with many different types", "[aggregate]") {
 
 	// string agg
 	result = con.Query(
-	    "SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL)");
+	    "SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {""}));
 
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG()"));
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG('hello')"));
 	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(1, 2, 3)"));
+
 }
 
 TEST_CASE("Test aggregates with many different types", "[aggregate]") {
@@ -117,8 +119,12 @@ TEST_CASE("Test aggregates with many different types", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 	// add string_agg
-	result = con.Query("SELECT STRING_AGG(s, ' ') FROM strings");
+	result = con.Query("SELECT STRING_AGG(s, ' '), STRING_AGG(s, ''), STRING_AGG('', ''), STRING_AGG('hello', ' ') FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello world r"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"helloworldr"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"hello hello hello hello"}));
+
 	// more complex agg (groups)
 	result = con.Query(
 	    "SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings GROUP BY g ORDER BY g");
