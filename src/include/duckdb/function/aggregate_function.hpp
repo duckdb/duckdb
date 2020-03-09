@@ -69,16 +69,15 @@ public:
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
 	}
+
 public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregate(SQLType input_type, SQLType return_type) {
-		return AggregateFunction({input_type}, return_type,
-			AggregateFunction::StateSize<STATE>,
-			AggregateFunction::StateInitialize<STATE, OP>,
-			AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-			AggregateFunction::StateCombine<STATE, OP>,
-			AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-			AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
+		return AggregateFunction(
+		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
+		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+		    AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
 	};
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction UnaryAggregateDestructor(SQLType input_type, SQLType return_type) {
@@ -88,13 +87,12 @@ public:
 	};
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction BinaryAggregate(SQLType a_type, SQLType b_type, SQLType return_type) {
-		return AggregateFunction({a_type, b_type}, return_type,
-			AggregateFunction::StateSize<STATE>,
-			AggregateFunction::StateInitialize<STATE, OP>,
-			AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
-			AggregateFunction::StateCombine<STATE, OP>,
-			AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-			AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
+		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                         AggregateFunction::StateInitialize<STATE, OP>,
+		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
+		                         AggregateFunction::StateCombine<STATE, OP>,
+		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
 	};
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
 	static AggregateFunction BinaryAggregateDestructor(SQLType a_type, SQLType b_type, SQLType return_type) {
@@ -102,10 +100,10 @@ public:
 		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
 	};
+
 public:
-	template<class OP>
-	static AggregateFunction GetNumericUnaryAggregate(SQLType type) {
-		switch(type.id) {
+	template <class OP> static AggregateFunction GetNumericUnaryAggregate(SQLType type) {
+		switch (type.id) {
 		case SQLTypeId::TINYINT:
 			return UnaryAggregate<int8_t, int8_t, int8_t, OP>(type, type);
 		case SQLTypeId::SMALLINT:
@@ -125,9 +123,8 @@ public:
 		}
 	}
 
-	template<class OP>
-	static AggregateFunction GetUnaryAggregate(SQLType type) {
-		switch(type.id) {
+	template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
+		switch (type.id) {
 		case SQLTypeId::BOOLEAN:
 			return UnaryAggregate<int8_t, int8_t, int8_t, OP>(type, type);
 		case SQLTypeId::TINYINT:
@@ -148,53 +145,49 @@ public:
 			throw NotImplementedException("Unimplemented type for unary aggregate");
 		}
 	}
+
 public:
-	template<class STATE>
-	static idx_t StateSize() {
+	template <class STATE> static idx_t StateSize() {
 		return sizeof(STATE);
 	}
 
-	template<class STATE, class OP>
-	static void StateInitialize(data_ptr_t state) {
-		OP::Initialize((STATE*) state);
+	template <class STATE, class OP> static void StateInitialize(data_ptr_t state) {
+		OP::Initialize((STATE *)state);
 	}
 
-	template<class STATE, class T, class OP>
+	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states) {
 		assert(input_count == 1);
 		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states);
 	}
 
-	template<class STATE, class INPUT_TYPE, class OP>
+	template <class STATE, class INPUT_TYPE, class OP>
 	static void UnaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state) {
 		assert(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], state);
 	}
 
-	template<class STATE, class A_TYPE, class B_TYPE, class OP>
+	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states) {
 		assert(input_count == 2);
 		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], states);
 	}
 
-	template<class STATE, class A_TYPE, class B_TYPE, class OP>
+	template <class STATE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state) {
 		assert(input_count == 2);
 		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], state);
 	}
 
-	template<class STATE, class OP>
-	static void StateCombine(Vector &source, Vector &target)  {
+	template <class STATE, class OP> static void StateCombine(Vector &source, Vector &target) {
 		AggregateExecutor::Combine<STATE, OP>(source, target);
 	}
 
-	template<class STATE, class RESULT_TYPE, class OP>
-	static void StateFinalize(Vector &states, Vector &result)  {
+	template <class STATE, class RESULT_TYPE, class OP> static void StateFinalize(Vector &states, Vector &result) {
 		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, result);
 	}
 
-	template<class STATE, class OP>
-	static void StateDestroy(Vector &states) {
+	template <class STATE, class OP> static void StateDestroy(Vector &states) {
 		AggregateExecutor::Destroy<STATE, OP>(states);
 	}
 };

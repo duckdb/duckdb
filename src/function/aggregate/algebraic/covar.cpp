@@ -16,15 +16,14 @@ struct covar_state_t {
 };
 
 struct CovarOperation {
-	template<class STATE>
-	static void Initialize(STATE *state) {
+	template <class STATE> static void Initialize(STATE *state) {
 		state->count = 0;
 		state->meanx = 0;
 		state->meany = 0;
 		state->co_moment = 0;
 	}
 
-	template<class A_TYPE, class B_TYPE, class STATE, class OP>
+	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &nullmask, idx_t idx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
@@ -44,22 +43,19 @@ struct CovarOperation {
 		state->co_moment = C;
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
 			const auto count = target->count + source.count;
-			const auto meanx =
-			    (source.count * source.meanx + target->count * target->meanx) / count;
-			const auto meany =
-			    (source.count * source.meany + target->count * target->meany) / count;
+			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
+			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
 			const auto deltax = target->meanx - source.meanx;
 			const auto deltay = target->meany - source.meany;
-			target->co_moment = source.co_moment + target->co_moment +
-			                          deltax * deltay * source.count * target->count / count;
+			target->co_moment =
+			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
 			target->meanx = meanx;
 			target->meany = meany;
 			target->count = count;
@@ -72,7 +68,7 @@ struct CovarOperation {
 };
 
 struct CovarPopOperation : public CovarOperation {
-	template<class T, class STATE>
+	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (state->count == 0) {
 			nullmask[idx] = true;
@@ -83,7 +79,7 @@ struct CovarPopOperation : public CovarOperation {
 };
 
 struct CovarSampOperation : public CovarOperation {
-	template<class T, class STATE>
+	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if ((state->count) < 2) {
 			nullmask[idx] = true;
@@ -95,12 +91,15 @@ struct CovarSampOperation : public CovarOperation {
 
 void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_pop("covar_pop");
-	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(
+	    SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
 	set.AddFunction(covar_pop);
 }
 
 void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_samp("covar_samp");
-	covar_samp.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	covar_samp.AddFunction(
+	    AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(
+	        SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
 	set.AddFunction(covar_samp);
 }

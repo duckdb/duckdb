@@ -11,7 +11,7 @@ using namespace std;
 namespace duckdb {
 
 struct MinMaxBase : public StandardDistributiveFunction {
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (IsNullValue<INPUT_TYPE>(*state)) {
@@ -23,34 +23,29 @@ struct MinMaxBase : public StandardDistributiveFunction {
 };
 
 struct MinOperation : public MinMaxBase {
-	template<class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
 			*state = input;
 		}
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		Execute<STATE, STATE>(target, source);
 	}
 };
 
 struct MaxOperation : public MinMaxBase {
-	template<class STATE>
-	static void InitializeEmpty(STATE *state) {
+	template <class STATE> static void InitializeEmpty(STATE *state) {
 		*state = std::numeric_limits<STATE>::min();
 	}
 
-	template<class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, *state)) {
 			*state = input;
 		}
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		Execute<STATE, STATE>(target, source);
 	}
 };

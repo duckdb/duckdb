@@ -15,14 +15,13 @@ struct string_agg_state_t {
 };
 
 struct StringAggFunction {
-	template<class STATE>
-	static void Initialize(STATE *state) {
+	template <class STATE> static void Initialize(STATE *state) {
 		state->dataptr = nullptr;
 		state->alloc_size = 0;
 		state->size = 0;
 	}
 
-	template<class A_TYPE, class B_TYPE, class STATE, class OP>
+	template <class A_TYPE, class B_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, A_TYPE *str_data, B_TYPE *sep_data, nullmask_t &nullmask, idx_t idx) {
 		auto str = str_data[idx].GetData();
 		auto sep = sep_data[idx].GetData();
@@ -57,12 +56,11 @@ struct StringAggFunction {
 		}
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		throw NotImplementedException("String aggregate combine!");
 	}
 
-	template<class T, class STATE>
+	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->dataptr) {
 			nullmask[idx] = true;
@@ -71,8 +69,7 @@ struct StringAggFunction {
 		}
 	}
 
-	template<class STATE>
-	static void Destroy(STATE *state) {
+	template <class STATE> static void Destroy(STATE *state) {
 		if (state->dataptr) {
 			delete[] state->dataptr;
 		}
@@ -85,7 +82,9 @@ struct StringAggFunction {
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
-	string_agg.AddFunction(AggregateFunction::BinaryAggregateDestructor<string_agg_state_t, string_t, string_t, string_t, StringAggFunction>(SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR));
+	string_agg.AddFunction(AggregateFunction::BinaryAggregateDestructor<string_agg_state_t, string_t, string_t,
+	                                                                    string_t, StringAggFunction>(
+	    SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR));
 	set.AddFunction(string_agg);
 }
 

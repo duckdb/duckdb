@@ -13,7 +13,7 @@ public:
 	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
 	~PhysicalSimpleAggregateOperatorState() {
 		assert(destructors.size() == aggregates.size());
-		for(idx_t i = 0; i < destructors.size(); i++) {
+		for (idx_t i = 0; i < destructors.size(); i++) {
 			if (!destructors[i]) {
 				continue;
 			}
@@ -24,7 +24,6 @@ public:
 			destructors[i](state_vector);
 		}
 	}
-
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;

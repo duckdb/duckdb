@@ -7,19 +7,17 @@ using namespace std;
 
 namespace duckdb {
 
-template<class T>
-struct FirstState {
+template <class T> struct FirstState {
 	bool is_set;
 	T value;
 };
 
 struct FirstFunction {
-	template<class STATE>
-	static void Initialize(STATE *state) {
+	template <class STATE> static void Initialize(STATE *state) {
 		state->is_set = false;
 	}
 
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
@@ -31,19 +29,18 @@ struct FirstFunction {
 		}
 	}
 
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		if (!target->is_set) {
 			*target = source;
 		}
 	}
 
-	template<class T, class STATE>
+	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set || IsNullValue<T>(state->value)) {
 			nullmask[idx] = true;
@@ -57,13 +54,12 @@ struct FirstFunction {
 	}
 };
 
-template<class T>
-static AggregateFunction GetFirstAggregateTemplated(SQLType type) {
+template <class T> static AggregateFunction GetFirstAggregateTemplated(SQLType type) {
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
 AggregateFunction FirstFun::GetFunction(SQLType type) {
-	switch(type.id) {
+	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<bool>(type);
 	case SQLTypeId::TINYINT:

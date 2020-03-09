@@ -10,12 +10,11 @@ using namespace std;
 namespace duckdb {
 
 struct SumOperation : public StandardDistributiveFunction {
-	template<class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		*state += input;
 	}
 
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (IsNullValue<INPUT_TYPE>(*state)) {
@@ -24,8 +23,7 @@ struct SumOperation : public StandardDistributiveFunction {
 		*state += input[0] * count;
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
 };
@@ -33,9 +31,11 @@ struct SumOperation : public StandardDistributiveFunction {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, SumOperation>(SQLType::BIGINT, SQLType::BIGINT));
+	sum.AddFunction(
+	    AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, SumOperation>(SQLType::BIGINT, SQLType::BIGINT));
 	// float sums to float
-	sum.AddFunction(AggregateFunction::UnaryAggregate<double, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
+	sum.AddFunction(
+	    AggregateFunction::UnaryAggregate<double, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
 
 	set.AddFunction(sum);
 }

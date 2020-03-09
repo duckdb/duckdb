@@ -8,27 +8,25 @@ using namespace std;
 namespace duckdb {
 
 struct BaseCountFunction {
-	template<class STATE>
-	static void Initialize(STATE *state) {
+	template <class STATE> static void Initialize(STATE *state) {
 		*state = 0;
 	}
 
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		*state += 1;
 	}
 
-	template<class INPUT_TYPE, class STATE, class OP>
+	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		*state += count;
 	}
 
-	template<class STATE>
-	static void Combine(STATE source, STATE *target) {
+	template <class STATE> static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
 
-	template<class T, class STATE>
+	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		target[idx] = *state;
 	}
@@ -47,11 +45,13 @@ struct CountFunction : public BaseCountFunction {
 };
 
 AggregateFunction CountFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(SQLType(SQLTypeId::ANY), SQLType::BIGINT);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(SQLType(SQLTypeId::ANY),
+	                                                                                   SQLType::BIGINT);
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(SQLType(SQLTypeId::ANY), SQLType::BIGINT);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(SQLType(SQLTypeId::ANY),
+	                                                                                       SQLType::BIGINT);
 }
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
