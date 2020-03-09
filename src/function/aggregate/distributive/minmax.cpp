@@ -28,25 +28,13 @@ struct MinOperation : public MinMaxBase {
 			*state = input;
 		}
 	}
-
-	template <class STATE> static void Combine(STATE source, STATE *target) {
-		Execute<STATE, STATE>(target, source);
-	}
 };
 
 struct MaxOperation : public MinMaxBase {
-	template <class STATE> static void InitializeEmpty(STATE *state) {
-		*state = std::numeric_limits<STATE>::min();
-	}
-
 	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, *state)) {
 			*state = input;
 		}
-	}
-
-	template <class STATE> static void Combine(STATE source, STATE *target) {
-		Execute<STATE, STATE>(target, source);
 	}
 };
 

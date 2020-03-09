@@ -34,7 +34,7 @@ struct FirstFunction {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 	}
 
-	template <class STATE> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		if (!target->is_set) {
 			*target = source;
 		}

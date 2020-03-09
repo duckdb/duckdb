@@ -34,6 +34,20 @@ struct StandardDistributiveFunction {
 		target[idx] = *state;
 	}
 
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (IsNullValue<STATE>(source)) {
+			// source is NULL, nothing to do
+			return;
+		}
+		if (IsNullValue<STATE>(*target)) {
+			// target is NULL, use source value directly
+			*target = source;
+		} else {
+			// else perform the operation
+			OP::template Execute<STATE, STATE>(target, source);
+		}
+	}
+
 	static bool IgnoreNull() {
 		return true;
 	}

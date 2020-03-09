@@ -22,7 +22,7 @@ struct BaseCountFunction {
 		*state += count;
 	}
 
-	template <class STATE> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		*target += source;
 	}
 

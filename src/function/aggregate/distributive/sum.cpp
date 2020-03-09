@@ -22,10 +22,6 @@ struct SumOperation : public StandardDistributiveFunction {
 		}
 		*state += input[0] * count;
 	}
-
-	template <class STATE> static void Combine(STATE source, STATE *target) {
-		*target += source;
-	}
 };
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {

@@ -30,7 +30,7 @@ struct AverageFunction {
 		state->sum += input[0] * count;
 	}
 
-	template <class STATE> static void Combine(STATE source, STATE *target) {
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		target->count += source.count;
 		target->sum += source.sum;
 	}

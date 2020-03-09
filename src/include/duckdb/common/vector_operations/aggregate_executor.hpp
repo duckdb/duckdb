@@ -162,7 +162,7 @@ public:
 		auto tdata = (STATE_TYPE **)target.GetData();
 
 		VectorOperations::Exec(target.sel_vector(), target.size(),
-		                       [&](idx_t i, idx_t k) { OP::template Combine<STATE_TYPE>(sdata[i], tdata[i]); });
+		                       [&](idx_t i, idx_t k) { OP::template Combine<STATE_TYPE, OP>(sdata[i], tdata[i]); });
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP> static void Finalize(Vector &states, Vector &result) {
