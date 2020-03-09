@@ -85,7 +85,7 @@ struct CovarPopOperation : public CovarOperation {
 struct CovarSampOperation : public CovarOperation {
 	template<class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (state->count < 2) {
+		if ((state->count) < 2) {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->co_moment / (state->count - 1);
@@ -93,14 +93,14 @@ struct CovarSampOperation : public CovarOperation {
 	}
 };
 
-void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet covar_samp("covar_samp");
-	covar_samp.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
-	set.AddFunction(covar_samp);
-}
-
 void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_pop("covar_pop");
 	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
 	set.AddFunction(covar_pop);
+}
+
+void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet covar_samp("covar_samp");
+	covar_samp.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	set.AddFunction(covar_samp);
 }
