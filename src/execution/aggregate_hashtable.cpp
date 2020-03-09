@@ -24,7 +24,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
-		auto payload_size = binding->function.state_size(binding->return_type);
+		auto payload_size = binding->function.state_size();
 		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
 		                                     binding->distinct, binding->return_type));
 	}
@@ -52,7 +52,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> 
 	auto pointer = empty_payload_data.get();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
-		aggr.function.initialize(pointer, aggr.return_type);
+		aggr.function.initialize(pointer);
 		pointer += aggr.payload_size;
 	}
 

@@ -109,8 +109,8 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		for (idx_t i = 0; i < chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
-			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
-			aggr.function.initialize(aggr_state.get(), aggr.return_type);
+			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
+			aggr.function.initialize(aggr_state.get());
 
 			Vector state_vector(chunk, Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, chunk.data[i]);

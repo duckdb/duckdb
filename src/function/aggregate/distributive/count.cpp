@@ -7,90 +7,51 @@ using namespace std;
 
 namespace duckdb {
 
-struct CountOperator {
-	template <class STATE_TYPE> static inline void Operation(STATE_TYPE state) {
-		(*state)++;
+struct BaseCountFunction {
+	template<class STATE>
+	static void Initialize(STATE *state) {
+		*state = 0;
+	}
+
+	template<class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		*state += 1;
+	}
+
+	template<class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		*state += count;
+	}
+
+	template<class STATE>
+	static void Combine(STATE *source, STATE *target) {
+		*target += *source;
+	}
+
+	template<class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		target[idx] = *state;
 	}
 };
 
-static void countstar_update(Vector inputs[], idx_t input_count, Vector &addresses) {
-	// add one to each address
-	auto states = (int64_t **)addresses.GetData();
-	VectorOperations::Exec(addresses, [&](idx_t i, idx_t k) { states[i][0]++; });
-}
-
-static void countstar_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
-	// count star: just add the count
-	auto state = (int64_t *)state_;
-	*state += inputs[0].size();
-}
-
-static void count_update(Vector inputs[], idx_t input_count, Vector &addresses) {
-	auto &input = inputs[0];
-	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant input
-		if (!input.nullmask[0]) {
-			// constant NULL
-			countstar_update(inputs, input_count, addresses);
-		}
-		return;
+struct CountStarFunction : public BaseCountFunction {
+	static bool IgnoreNull() {
+		return false;
 	}
-	// regular input: first normalize
-	input.Normalify();
-	// now check nullmask
-	if (!input.nullmask.any()) {
-		// no null values, perform regular count(*) update
-		countstar_update(inputs, input_count, addresses);
-		return;
-	}
-	auto states = (int64_t **)addresses.GetData();
-	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-		if (!input.nullmask[i]) {
-			states[i][0]++;
-		}
-	});
-}
+};
 
-static void count_combine(Vector &state, Vector &combined) {
-	VectorOperations::Scatter::Add(state, combined);
-}
-
-static void count_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
-	auto state = (int64_t *)state_;
-	auto &input = inputs[0];
-	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vector, check if it is a constant NULL
-		// if not, add the results
-		if (!input.nullmask[0]) {
-			*state += input.size();
-		}
-	} else {
-		// other vector type: normalify first
-		input.Normalify();
-		if (input.nullmask.any()) {
-			// NULL values, count the amount of NULL entries
-			VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-				if (!input.nullmask[i]) {
-					(*state)++;
-				}
-			});
-		} else {
-			// no NULL values, return all
-			*state += input.size();
-		}
+struct CountFunction : public BaseCountFunction {
+	static bool IgnoreNull() {
+		return true;
 	}
-}
+};
 
 AggregateFunction CountFun::GetFunction() {
-	return AggregateFunction({SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size,
-	                         bigint_payload_initialize, count_update, count_combine, gather_finalize,
-	                         count_simple_update);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(SQLType(SQLTypeId::ANY), SQLType::BIGINT);
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction("count_star", {SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size,
-	                         bigint_payload_initialize, countstar_update, count_combine, gather_finalize,
-	                         countstar_simple_update);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(SQLType(SQLTypeId::ANY), SQLType::BIGINT);
 }
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {
@@ -104,7 +65,9 @@ void CountFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void CountStarFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(CountStarFun::GetFunction());
+	AggregateFunctionSet count("count_star");
+	count.AddFunction(CountStarFun::GetFunction());
+	set.AddFunction(count);
 }
 
 } // namespace duckdb

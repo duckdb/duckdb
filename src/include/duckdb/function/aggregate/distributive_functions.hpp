@@ -10,19 +10,35 @@
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
 
-void gather_finalize(Vector &payloads, Vector &result);
+struct StandardDistributiveFunction {
+	template<class STATE>
+	static void Initialize(STATE *state) {
+		*state = NullValue<STATE>();
+	}
 
-idx_t get_bigint_type_size(TypeId return_type);
-void bigint_payload_initialize(data_ptr_t payload, TypeId return_type);
-Value bigint_simple_initialize();
+	template<class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		if (IsNullValue<INPUT_TYPE>(*state)) {
+			*state = input[idx];
+		} else {
+			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
+		}
+	}
 
-idx_t get_return_type_size(TypeId return_type);
+	template<class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		nullmask[idx] = IsNullValue<T>(*state);
+		target[idx] = *state;
+	}
 
-void null_state_initialize(data_ptr_t state, TypeId return_type);
-Value null_simple_initialize();
+	static bool IgnoreNull() {
+		return true;
+	}
+};
 
 struct CountStarFun {
 	static AggregateFunction GetFunction();
