@@ -31,8 +31,8 @@ struct MinOperation : public MinMaxBase {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
-		Execute<STATE, STATE>(target, *source);
+	static void Combine(STATE source, STATE *target) {
+		Execute<STATE, STATE>(target, source);
 	}
 };
 
@@ -50,8 +50,8 @@ struct MaxOperation : public MinMaxBase {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
-		Execute<STATE, STATE>(target, *source);
+	static void Combine(STATE source, STATE *target) {
+		Execute<STATE, STATE>(target, source);
 	}
 };
 

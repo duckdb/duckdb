@@ -154,7 +154,7 @@ public:
 	static void Combine(Vector &source, Vector &target) {
 		assert(source.vector_type == VectorType::FLAT_VECTOR);
 		assert(target.vector_type == VectorType::FLAT_VECTOR);
-		auto sdata = (STATE_TYPE **) source.GetData();
+		auto sdata = (STATE_TYPE *) source.GetData();
 		auto tdata = (STATE_TYPE **) target.GetData();
 
 		VectorOperations::Exec(target.sel_vector(), target.size(), [&](idx_t i, idx_t k) {

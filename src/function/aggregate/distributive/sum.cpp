@@ -25,8 +25,8 @@ struct SumOperation : public StandardDistributiveFunction {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
-		*target += *source;
+	static void Combine(STATE source, STATE *target) {
+		*target += source;
 	}
 };
 

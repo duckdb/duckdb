@@ -37,9 +37,9 @@ struct FirstFunction {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
+	static void Combine(STATE source, STATE *target) {
 		if (!target->is_set) {
-			*target = *source;
+			*target = source;
 		}
 	}
 

@@ -58,7 +58,7 @@ struct StringAggFunction {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
+	static void Combine(STATE source, STATE *target) {
 		throw NotImplementedException("String aggregate combine!");
 	}
 

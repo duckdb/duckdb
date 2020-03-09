@@ -45,15 +45,15 @@ struct STDDevBaseOperation {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
+	static void Combine(STATE source, STATE *target) {
 		if (target->count == 0) {
-			*target = *source;
-		} else if (source->count > 0) {
-			const auto count = target->count + source->count;
-			const auto mean = (source->count * source->mean + target->count * target->mean) / count;
-			const auto delta = source->mean - target->mean;
-			target->dsquared = source->dsquared + target->dsquared +
-			                         delta * delta * source->count * target->count / count;
+			*target = source;
+		} else if (source.count > 0) {
+			const auto count = target->count + source.count;
+			const auto mean = (source.count * source.mean + target->count * target->mean) / count;
+			const auto delta = source.mean - target->mean;
+			target->dsquared = source.dsquared + target->dsquared +
+			                         delta * delta * source.count * target->count / count;
 			target->mean = mean;
 			target->count = count;
 		}

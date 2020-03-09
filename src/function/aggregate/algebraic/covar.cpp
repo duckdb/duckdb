@@ -45,21 +45,21 @@ struct CovarOperation {
 	}
 
 	template<class STATE>
-	static void Combine(STATE *source, STATE *target) {
+	static void Combine(STATE source, STATE *target) {
 		if (target->count == 0) {
-			*target = *source;
-		} else if (source->count > 0) {
-			const auto count = target->count + source->count;
+			*target = source;
+		} else if (source.count > 0) {
+			const auto count = target->count + source.count;
 			const auto meanx =
-			    (source->count * source->meanx + target->count * target->meanx) / count;
+			    (source.count * source.meanx + target->count * target->meanx) / count;
 			const auto meany =
-			    (source->count * source->meany + target->count * target->meany) / count;
+			    (source.count * source.meany + target->count * target->meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
-			const auto deltax = target->meanx - source->meanx;
-			const auto deltay = target->meany - source->meany;
-			target->co_moment = source->co_moment + target->co_moment +
-			                          deltax * deltay * source->count * target->count / count;
+			const auto deltax = target->meanx - source.meanx;
+			const auto deltay = target->meany - source.meany;
+			target->co_moment = source.co_moment + target->co_moment +
+			                          deltax * deltay * source.count * target->count / count;
 			target->meanx = meanx;
 			target->meany = meany;
 			target->count = count;
