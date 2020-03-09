@@ -7,6 +7,7 @@
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 using namespace duckdb;
 using namespace std;
