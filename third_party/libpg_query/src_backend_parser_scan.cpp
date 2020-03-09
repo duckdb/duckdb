@@ -8578,13 +8578,6 @@ static __thread yyconst struct yy_trans_info *yy_start_state_list[27] =
 
 
 
-/* Avoid exit() on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
-static void
-fprintf_to_ereport(const char *fmt, const char *msg)
-{
-	ereport(ERROR, (errmsg_internal("%s", msg)));
-}
-
 /*
  * GUC variables.  This is a DIRECT violation of the warning given at the
  * head of gram.y, ie flex/bison code must not depend on any GUC variables;
