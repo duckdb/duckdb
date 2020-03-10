@@ -23,7 +23,7 @@ class ClientContext;
 class CatalogEntry {
 public:
 	CatalogEntry(CatalogType type, Catalog *catalog, string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), renamed(false), temporary(false), parent(nullptr) {
+	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), parent(nullptr) {
 	}
 	virtual ~CatalogEntry();
 
@@ -44,17 +44,12 @@ public:
 	string name;
 	//! Whether or not the object is deleted
 	bool deleted;
-	//! Whether or not the object is renamed
-	bool renamed;
-	//! The new name for this entry, specially purposed for TABLE RENAME
-	string new_name;
 	//! Whether or not the object is temporary and should not be added to the WAL
 	bool temporary;
 	//! Timestamp at which the catalog entry was created
 	transaction_t timestamp;
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
-//	std::shared_ptr<CatalogEntry> child;
 	//! Parent entry (the node that owns this node)
 	CatalogEntry *parent;
 };

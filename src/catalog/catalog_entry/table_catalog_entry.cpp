@@ -118,7 +118,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_TABLE: {
         auto rename_info = (RenameTableInfo *)table_info;
         auto create_info = make_unique<CreateTableInfo>(schema->name, rename_info->new_table_name);
-//        create_info->table = rename_info->new_table_name;
 
         for (idx_t i = 0; i < columns.size(); i++) {
             ColumnDefinition copy(columns[i].name, columns[i].type);

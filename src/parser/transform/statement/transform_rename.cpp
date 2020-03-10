@@ -45,7 +45,6 @@ unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
         if (stmt->relation->schemaname) {
             schema = stmt->relation->schemaname;
         }
-//        string old_name = stmt->subname;
         string new_name = stmt->newname;
         info = make_unique<RenameTableInfo>(schema, table, new_name);
         break;
