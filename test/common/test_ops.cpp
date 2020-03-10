@@ -114,54 +114,6 @@ TEST_CASE("Compare vectors", "[vector_ops]") {
 	}
 }
 
-static void require_sg(Vector &v) {
-	uint64_t ptrs[2];
-
-	Vector p(v.cardinality(), TypeId::POINTER);
-	p.SetValue(0, Value::POINTER((uintptr_t)&ptrs[0]));
-	p.SetValue(1, Value::POINTER((uintptr_t)&ptrs[1]));
-
-	VectorOperations::Scatter::Set(v, p);
-
-	Vector r(v.cardinality(), v.type);
-
-	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
-
-	VectorOperations::Scatter::Add(v, p);
-	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
-
-	VectorOperations::Scatter::Max(v, p);
-	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(2));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
-
-	VectorOperations::Scatter::Min(v, p);
-	VectorOperations::Gather::Set(p, r, false);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(1));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(0));
-}
-
-TEST_CASE("Scatter/gather numeric vectors", "[vector_ops]") {
-	vector<TypeId> types{TypeId::INT8, TypeId::INT16, TypeId::INT32, TypeId::INT64, TypeId::FLOAT, TypeId::DOUBLE};
-	DataChunk chunk;
-	chunk.Initialize(types);
-
-	chunk.SetCardinality(2);
-	chunk.SetValue(0, 0, Value::TINYINT(1));
-	chunk.SetValue(0, 1, Value::TINYINT(0));
-
-	for (idx_t i = 0; i < types.size(); i++) {
-		require_sg(chunk.data[i]);
-		if (i + 1 < types.size()) {
-			VectorOperations::Cast(chunk.data[i], chunk.data[i + 1]);
-		}
-	}
-}
-
 static void require_generate(TypeId t) {
 	VectorCardinality cardinality(7);
 	Vector v(cardinality, t);

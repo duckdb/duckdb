@@ -52,6 +52,11 @@ TEST_CASE("Test scalar lists", "[nested]") {
 	                   "(LIST_VALUE(42))) lv(a)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, Value(), 42}));
 
+	// FIXME this should work but does not
+//	result = con.Query("SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE()), (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE(NULL)), "
+//	                   "(LIST_VALUE(42))) lv(a)");
+//	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, Value(), 42}));
+
 	// list child type mismatch
 	REQUIRE_FAIL(con.Query("SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(a)"));
 
@@ -61,11 +66,16 @@ TEST_CASE("Test scalar lists", "[nested]") {
 	result = con.Query("SELECT LIST_VALUE(g, e, 42) FROM list_data WHERE g > 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({3, 6, 42}), Value::LIST({5, Value(), 42})}));
 
-	//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FROM list_data
-	//WHERE g > 1"); 	result->Print();
-	//
-	//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE() END FROM list_data WHERE
-	//g > 1"); 	result->Print();
+//	result = con.Query("EXPLAIN SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84) END FROM list_data WHERE g > 1");
+//	result->Print();
+
+	// TODO add NULLs
+
+//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84) END FROM list_data WHERE g > 1");
+//	result->Print();
+
+	// this should fail because the list child types do not match
+	REQUIRE_FAIL(con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FROM list_data	WHERE g > 1"));
 }
 
 TEST_CASE("Test filter and projection of nested lists", "[nested]") {
@@ -346,4 +356,15 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 	result = con.Query(tpch::get_query(1));
 	REQUIRE(result->success);
 	//	result->Print();
+}
+
+
+TEST_CASE("Aggregate lists", "[nested]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+
+	result = con.Query("SELECT SUM(a), b FROM (VALUES (42, LIST_VALUE(1, 2)), (42, LIST_VALUE(3, 4, 5)), (24, LIST_VALUE(1, 2))) lv(a, b) GROUP BY b");
+	result->Print();
 }

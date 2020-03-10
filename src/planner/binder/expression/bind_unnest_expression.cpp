@@ -25,9 +25,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	if (child.sql_type.id != SQLTypeId::LIST) {
 		return BindResult("Unnest() can only be applied to lists");
 	}
-	assert(child.sql_type.child_type.size() == 1); // always the case for lists
-
-	auto return_type = child.sql_type.child_type[0].second;
+	SQLType return_type = SQLType::ANY;
+	assert(child.sql_type.child_type.size() <= 1);
+	if (child.sql_type.child_type.size() == 1) {
+		return_type = child.sql_type.child_type[0].second;
+	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
 	result->child = move(child.expr);

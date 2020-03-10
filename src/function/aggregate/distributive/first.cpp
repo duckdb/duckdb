@@ -7,14 +7,84 @@ using namespace std;
 
 namespace duckdb {
 
-static void first_update(Vector inputs[], idx_t input_count, Vector &result) {
-	assert(input_count == 1);
-	VectorOperations::Scatter::SetFirst(inputs[0], result);
+template <class T> struct FirstState {
+	bool is_set;
+	T value;
+};
+
+struct FirstFunction {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->is_set = false;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set) {
+			state->is_set = true;
+			if (nullmask[idx]) {
+				state->value = NullValue<INPUT_TYPE>();
+			} else {
+				state->value = input[idx];
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+	}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (!target->is_set) {
+			*target = source;
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set || IsNullValue<T>(state->value)) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = state->value;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+template <class T> static AggregateFunction GetFirstAggregateTemplated(SQLType type) {
+	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
 AggregateFunction FirstFun::GetFunction(SQLType type) {
-	return AggregateFunction({type}, type, get_return_type_size, null_state_initialize, first_update, nullptr,
-	                         gather_finalize);
+	switch (type.id) {
+	case SQLTypeId::BOOLEAN:
+		return GetFirstAggregateTemplated<bool>(type);
+	case SQLTypeId::TINYINT:
+		return GetFirstAggregateTemplated<int8_t>(type);
+	case SQLTypeId::SMALLINT:
+		return GetFirstAggregateTemplated<int16_t>(type);
+	case SQLTypeId::INTEGER:
+		return GetFirstAggregateTemplated<int32_t>(type);
+	case SQLTypeId::BIGINT:
+		return GetFirstAggregateTemplated<int64_t>(type);
+	case SQLTypeId::FLOAT:
+		return GetFirstAggregateTemplated<float>(type);
+	case SQLTypeId::DOUBLE:
+		return GetFirstAggregateTemplated<double>(type);
+	case SQLTypeId::DECIMAL:
+		return GetFirstAggregateTemplated<double>(type);
+	case SQLTypeId::DATE:
+		return GetFirstAggregateTemplated<date_t>(type);
+	case SQLTypeId::TIMESTAMP:
+		return GetFirstAggregateTemplated<timestamp_t>(type);
+	case SQLTypeId::VARCHAR:
+		return GetFirstAggregateTemplated<string_t>(type);
+	default:
+		throw NotImplementedException("Unimplemented type for FIRST aggregate");
+	}
 }
 
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {

@@ -10,13 +10,13 @@ struct list_agg_state_t {
 	ChunkCollection *cc;
 };
 
-static idx_t list_payload_size(TypeId return_type) {
+static idx_t list_payload_size() {
 	return sizeof(list_agg_state_t);
 }
 
 // NB: the result of this is copied around merrily, so just zero it for now
-static void list_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, sizeof(list_agg_state_t));
+static void list_initialize(data_ptr_t state) {
+	memset(state, 0, sizeof(list_agg_state_t));
 }
 
 static void list_update(Vector inputs[], idx_t input_count, Vector &state) {

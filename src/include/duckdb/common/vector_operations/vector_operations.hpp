@@ -107,22 +107,6 @@ struct VectorOperations {
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
 	struct Scatter {
-		// dest[i] = source.data[i]
-		static void Set(Vector &source, Vector &dest);
-		// dest[i] += source.data[i]
-		static void Add(Vector &source, Vector &dest);
-		// dest[i] = max(dest[i], source.data[i])
-		static void Max(Vector &source, Vector &dest);
-		// dest[i] = min(dest[i], source.data[i])
-		static void Min(Vector &source, Vector &dest);
-		//! dest[i] = dest[i] + 1
-		//! For this operation the destination type does not need to match source.type
-		//! Instead, this can **only** be used when the destination type is TypeId::INT64
-		static void AddOne(Vector &source, Vector &dest);
-		//! dest[i] = dest[i]
-		static void SetFirst(Vector &source, Vector &dest);
-		// dest[i] = dest[i] + source
-		static void Add(int64_t source, void **dest, idx_t length);
 		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null =
 		//! false
 		static void SetAll(Vector &source, Vector &dest, bool set_null = false, idx_t offset = 0);
