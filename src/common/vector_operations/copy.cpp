@@ -124,6 +124,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 	VectorOperations::Exec(
 	    source, [&](idx_t i, idx_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
 
+	if (source.nullmask.all()) {
+		return;
+	}
+
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
@@ -154,6 +158,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 			// // TODO implement non-zero offsets
 			assert(offset == 0);
 			assert(target.type == TypeId::LIST);
+
 			copy_loop<list_entry_t, false>(source, target.GetData(), offset, source.size());
 			auto &child = source.GetListEntry();
 			auto child_copy = make_unique<ChunkCollection>();
@@ -212,6 +217,19 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 
 		case TypeId::LIST: {
 			// recursively apply to children
+
+			if (!source.HasListEntry()) {
+				assert(!VectorOperations::HasNotNull(source));
+				auto new_source_child = make_unique<ChunkCollection>();
+				source.SetListEntry(move(new_source_child));
+			}
+
+			if (!target.HasListEntry()) {
+				assert(!VectorOperations::HasNotNull(target));
+				auto new_target_child = make_unique<ChunkCollection>();
+				target.SetListEntry(move(new_target_child));
+			}
+
 			auto &source_child = source.GetListEntry();
 			auto &target_child = target.GetListEntry();
 			// append to list index

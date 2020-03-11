@@ -44,7 +44,7 @@ static void list_value_fun(DataChunk &input, ExpressionState &state, Vector &res
 		cc.Append(append_vals);
 	});
 
-	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+	result.vector_type = all_const && !result.sel_vector() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 	result.Verify();
 }
 

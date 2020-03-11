@@ -25,6 +25,10 @@ TEST_CASE("Test scalar lists", "[nested]") {
 	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
+	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
+	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
+
+
 	result = con.Query("SELECT LIST_VALUE(1, 2, 3, '4') a, LIST_VALUE('a','b','c') b, LIST_VALUE(42, NULL) c, "
 	                   "LIST_VALUE(NULL, NULL, NULL) d, LIST_VALUE() e");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({1, 2, 3, 4})}));
@@ -47,32 +51,43 @@ TEST_CASE("Test scalar lists", "[nested]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 0, {Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({}), Value::LIST({Value()})}));
 
+	// casting null to list or empty list to something else should work
+	result = con.Query("SELECT LIST_VALUE(1, 2, 3) UNION ALL SELECT LIST_VALUE(NULL) UNION ALL SELECT LIST_VALUE() UNION ALL SELECT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({1, 2, 3}), Value::LIST({Value()}), Value::LIST({}), Value()}));
+
+	result = con.Query(" SELECT NULL UNION ALL SELECT LIST_VALUE() UNION ALL SELECT LIST_VALUE(NULL) UNION ALL SELECT LIST_VALUE(1, 2, 3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value::LIST({}), Value::LIST({Value()}), Value::LIST({1, 2, 3})}));
+
 	// empty list should not abort UNNEST
 	result = con.Query("SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST_VALUE(NULL)), "
 	                   "(LIST_VALUE(42))) lv(a)");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, Value(), 42}));
 
-	// FIXME this should work but does not
+	// TODO this should work but does not. its also kind of obscure
 //	result = con.Query("SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE()), (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE(NULL)), "
 //	                   "(LIST_VALUE(42))) lv(a)");
 //	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, Value(), 42}));
-
+//
 	// list child type mismatch
 	REQUIRE_FAIL(con.Query("SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(a)"));
 
-	con.Query("CREATE TABLE list_data (g INTEGER, e INTEGER)");
-	con.Query("INSERT INTO list_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)");
+	// can't cast lists to stuff
+	REQUIRE_FAIL(con.Query("SELECT CAST(LIST_VALUE(42) AS INTEGER)"));
 
-	result = con.Query("SELECT LIST_VALUE(g, e, 42) FROM list_data WHERE g > 2");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({3, 6, 42}), Value::LIST({5, Value(), 42})}));
+	// can't add a number to a list
+	REQUIRE_FAIL(con.Query("SELECT LIST_VALUE(42) + 4"));
 
-//	result = con.Query("EXPLAIN SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84) END FROM list_data WHERE g > 1");
-//	result->Print();
+	// can have unnest anywhere
+	result = con.Query("SELECT CAST(UNNEST(LIST_VALUE(42))+2 AS INTEGER)");
+	REQUIRE(CHECK_COLUMN(result, 0, {44}));
 
-	// TODO add NULLs
 
-//	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84) END FROM list_data WHERE g > 1");
-//	result->Print();
+	result = con.Query("SELECT LIST_VALUE(g, e, 42, NULL) FROM list_data WHERE g > 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({3, 6, 42, Value()}), Value::LIST({5, Value(), 42, Value()})}));
+
+	result = con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE(84, NULL) END FROM list_data WHERE g > 1 UNION ALL SELECT LIST_VALUE(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::LIST({2, 3, 42}), Value::LIST({2, 4, 42}),  Value::LIST({2, 5, 42}),  Value::LIST({84, Value()}), Value::LIST({84, Value()}), Value::LIST({Value()})}));
+
 
 	// this should fail because the list child types do not match
 	REQUIRE_FAIL(con.Query("SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FROM list_data	WHERE g > 1"));
@@ -166,7 +181,6 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                      Value::LIST({Value::DOUBLE(1.5), Value::DOUBLE(2), Value::DOUBLE(2.5)}),
 	                      Value::LIST({Value::DOUBLE(3)}), Value::LIST({Value()})}));
 
-	// TODO order
 	result = con.Query("SELECT g, LIST(CAST(e AS VARCHAR)) from list_data GROUP BY g order by g");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1,
@@ -286,10 +300,6 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	REQUIRE_FAIL(con.Query("SELECT UNNEST(42) from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT UNNEST() from list_data"));
 	REQUIRE_FAIL(con.Query("SELECT g FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1 where UNNEST(l) > 42"));
-
-	// TODO scalar list constructor (how about array[] ?)
-	// TODO group by list/struct
-	// TODO join by list/struct
 }
 
 TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
@@ -359,12 +369,12 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 }
 
 
-TEST_CASE("Aggregate lists", "[nested]") {
-	DuckDB db(nullptr);
-	Connection con(db);
-	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
-
-	result = con.Query("SELECT SUM(a), b FROM (VALUES (42, LIST_VALUE(1, 2)), (42, LIST_VALUE(3, 4, 5)), (24, LIST_VALUE(1, 2))) lv(a, b) GROUP BY b");
-	result->Print();
-}
+//TEST_CASE("Aggregate lists", "[nested]") {
+//	DuckDB db(nullptr);
+//	Connection con(db);
+//	con.EnableQueryVerification();
+//	unique_ptr<QueryResult> result;
+//
+//	result = con.Query("SELECT SUM(a), b FROM (VALUES (42, LIST_VALUE(1, 2)), (42, LIST_VALUE(3, 4, 5)), (24, LIST_VALUE(1, 2))) lv(a, b) GROUP BY b");
+//	result->Print();
+//}

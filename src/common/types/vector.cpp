@@ -451,16 +451,19 @@ void Vector::Verify() {
 	}
 
 	if (type == TypeId::LIST) {
-		GetListEntry().Verify();
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!nullmask[0]) {
+				GetListEntry().Verify();
 				auto le = ((list_entry_t *)data)[0];
-				// FIXME assert(le.offset + le.length <= GetListEntry().count);
+				assert(le.offset + le.length <= GetListEntry().count);
 			}
 		} else {
+			if (VectorOperations::HasNotNull(*this)) {
+				GetListEntry().Verify();
+			}
 			VectorOperations::ExecType<list_entry_t>(*this, [&](list_entry_t le, uint64_t i, uint64_t k) {
 				if (!nullmask[i]) {
-					// FIXME assert(le.offset + le.length <= GetListEntry().count);
+					assert(le.offset + le.length <= GetListEntry().count);
 				}
 			});
 		}
@@ -539,6 +542,12 @@ void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
 	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	((VectorStructBuffer *)auxiliary.get())->AddChild(name, move(vector));
 }
+
+bool Vector::HasListEntry() const {
+	assert(type == TypeId::LIST);
+	return auxiliary != nullptr;
+}
+
 
 ChunkCollection &Vector::GetListEntry() const {
 	assert(type == TypeId::LIST);
