@@ -79,7 +79,8 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		assert(result.type == TypeId::LIST);
 		auto list_child = make_unique<ChunkCollection>();
 		result.SetListEntry(move(list_child));
-		// fall through to NULL cast below
+		null_cast(source, result, source_type, target_type);
+		break;
 	}
 	default:
 		null_cast(source, result, source_type, target_type);

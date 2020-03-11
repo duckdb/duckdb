@@ -283,6 +283,14 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                      Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({Value()}),
 	                                   Value::LIST({Value::INTEGER(6)})})}));
 
+
+	result = con.Query("SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_data "
+	                   " GROUP BY g ORDER BY g) xx) xy");
+	REQUIRE(CHECK_COLUMN(result, 0, {21}));
+	// this is technically equivalent but is not supported
+	REQUIRE_FAIL(con.Query("SELECT SUM(UNNEST(le)) FROM ( SELECT g, LIST(e) le from list_data "
+            " GROUP BY g ORDER BY g) xx"));
+
 	// you're holding it wrong
 	REQUIRE_FAIL(con.Query("SELECT LIST(LIST(42))"));
 	REQUIRE_FAIL(con.Query("SELECT UNNEST(UNNEST(LIST(42))"));
