@@ -461,6 +461,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			dtype->meta.base = NPY_FR_ms;
 		} else if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
 			auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData *>(descr->c_metadata);
+			dtype->meta.base = NPY_FR_s;
 		}
 		cols[col_idx].array = PyArray_Empty(1, dims, descr, 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
@@ -520,7 +521,7 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 				}    // else fall-through-to-default
 			case duckdb::TypeId::INT32:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
-					int32_t *array_data_ptr = reinterpret_cast<int32_t *>(array_data + (offset * duckdb_type_size));
+					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * 2 * duckdb_type_size));
 					duckdb::date_t *chunk_data_ptr = reinterpret_cast<int32_t *>(chunk->data[col_idx].GetData());
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
@@ -630,7 +631,7 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 		case duckdb::TypeId::INT32:
 			if (self->result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
 				auto date_val = dval.value_.integer;
-				auto date_val;
+				auto date = date_val;
 				// oof
 				val = PyDate_FromDate(duckdb::Date::ExtractYear(date),
 						duckdb::Date::ExtractMonth(date),
