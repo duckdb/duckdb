@@ -406,7 +406,11 @@ static uint8_t duckdb_type_to_numpy_type(duckdb::TypeId type, duckdb::SQLTypeId 
 	case duckdb::TypeId::INT16:
 		return NPY_INT16;
 	case duckdb::TypeId::INT32:
-		return NPY_INT32;
+		if (sql_type == duckdb::SQLTypeId::DATE) {
+			return NPY_DATETIME;
+		} else {
+			return NPY_INT32;
+		}
 	case duckdb::TypeId::INT64:
 		if (sql_type == duckdb::SQLTypeId::TIMESTAMP) {
 			return NPY_DATETIME;
@@ -455,6 +459,8 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 			auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData *>(descr->c_metadata);
 			dtype->meta.base = NPY_FR_ms;
+		} else if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
+			auto dtype = reinterpret_cast<PyArray_DatetimeDTypeMetaData *>(descr->c_metadata);
 		}
 		cols[col_idx].array = PyArray_Empty(1, dims, descr, 0);
 		cols[col_idx].nullmask = PyArray_EMPTY(1, dims, NPY_BOOL, 0);
@@ -512,6 +518,17 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					}
 					break;
 				}    // else fall-through-to-default
+			case duckdb::TypeId::INT32:
+				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
+					int32_t *array_data_ptr = reinterpret_cast<int32_t *>(array_data + (offset * duckdb_type_size));
+					duckdb::date_t *chunk_data_ptr = reinterpret_cast<int32_t *>(chunk->data[col_idx].GetData());
+					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
+						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
+						auto date = chunk_data_ptr[chunk_idx];
+						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(date);
+					}
+					break;
+				}    // else fall-through-to-default	
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
@@ -611,6 +628,15 @@ PyObject *duckdb_cursor_iternext(duckdb_Cursor *self) {
 			val = Py_BuildValue("h", dval.value_.smallint);
 			break;
 		case duckdb::TypeId::INT32:
+			if (self->result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
+				auto date_val = dval.value_.integer;
+				auto date_val;
+				// oof
+				val = PyDate_FromDate(duckdb::Date::ExtractYear(date),
+						duckdb::Date::ExtractMonth(date),
+						duckdb::Date::ExtractDay(date));
+				break;
+			}    // else fall-through-to-default
 			val = Py_BuildValue("i", dval.value_.integer);
 			break;
 		case duckdb::TypeId::INT64:
