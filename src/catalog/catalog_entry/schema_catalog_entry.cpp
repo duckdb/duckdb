@@ -144,6 +144,9 @@ void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info
         case AlterTableType::RENAME_TABLE: {
             auto &transaction = Transaction::GetTransaction(context);
             auto entry = tables.GetEntry(transaction, info->table);
+            if(entry == nullptr) {
+                throw CatalogException("Table \"%s\" doesn't exist!", info->table.c_str());
+            }
             assert(entry->type == CatalogType::TABLE);
 
             auto copied_entry = entry->Copy(context);
