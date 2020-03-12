@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include <memory>
 
 namespace duckdb {
 struct AlterInfo;
@@ -30,6 +31,9 @@ public:
 		throw CatalogException("Unsupported alter type for catalog entry!");
 	}
 
+	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) {
+		throw CatalogException("Unsupported copy type for catalog entry!");
+	}
 	//! The type of this catalog entry
 	CatalogType type;
 	//! Reference to the catalog this entry belongs to
