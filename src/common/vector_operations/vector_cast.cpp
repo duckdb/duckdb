@@ -6,6 +6,7 @@
 
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
