@@ -77,53 +77,53 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
-	if (info->type != AlterType::ALTER_TABLE) {
-		throw CatalogException("Can only modify table with ALTER TABLE statement");
-	}
-	if (constraints.size() > 0) {
-		throw CatalogException("Cannot modify a table with constraints");
-	}
-	auto table_info = (AlterTableInfo *)info;
-	switch (table_info->alter_table_type) {
-	case AlterTableType::RENAME_COLUMN: {
-		auto rename_info = (RenameColumnInfo *)table_info;
-		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-		create_info->temporary = temporary;
-		bool found = false;
-		for (idx_t i = 0; i < columns.size(); i++) {
-			ColumnDefinition copy(columns[i].name, columns[i].type);
-			copy.oid = columns[i].oid;
-			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+    if (info->type != AlterType::ALTER_TABLE) {
+        throw CatalogException("Can only modify table with ALTER TABLE statement");
+    }
+    if (constraints.size() > 0) {
+        throw CatalogException("Cannot modify a table with constraints");
+    }
+    auto table_info = (AlterTableInfo *)info;
+    switch (table_info->alter_table_type) {
+    case AlterTableType::RENAME_COLUMN: {
+        auto rename_info = (RenameColumnInfo *)table_info;
+        auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+        create_info->temporary = temporary;
+        bool found = false;
+        for (idx_t i = 0; i < columns.size(); i++) {
+            ColumnDefinition copy(columns[i].name, columns[i].type);
+            copy.oid = columns[i].oid;
+            copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
 
-			create_info->columns.push_back(move(copy));
-			if (rename_info->name == columns[i].name) {
-				assert(!found);
-				create_info->columns[i].name = rename_info->new_name;
-				found = true;
-			}
-		}
-		if (!found) {
-			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
-		}
-		assert(constraints.size() == 0);
-		// create_info->constraints.resize(constraints.size());
-		// for (idx_t i = 0; i < constraints.size(); i++) {
-		// 	create_info->constraints[i] = constraints[i]->Copy();
-		// }
-		Binder binder(context);
-		auto bound_create_info = binder.BindCreateInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
-		                                      storage);
+            create_info->columns.push_back(move(copy));
+            if (rename_info->name == columns[i].name) {
+                assert(!found);
+                create_info->columns[i].name = rename_info->new_name;
+                found = true;
+            }
+        }
+        if (!found) {
+            throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
+        }
+        assert(constraints.size() == 0);
+        // create_info->constraints.resize(constraints.size());
+        // for (idx_t i = 0; i < constraints.size(); i++) {
+        // 	create_info->constraints[i] = constraints[i]->Copy();
+        // }
+        Binder binder(context);
+        auto bound_create_info = binder.BindCreateInfo(move(create_info));
+        return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+                                              storage);
 	}
-	case AlterTableType::RENAME_TABLE: {
+    case AlterTableType::RENAME_TABLE: {
         auto rename_info = (RenameTableInfo *)table_info;
         auto copied_table = Copy(context);
         copied_table->name = rename_info->new_table_name;
         return copied_table;
-	}
-	default:
-		throw CatalogException("Unrecognized alter table type!");
-	}
+    }
+    default:
+        throw CatalogException("Unrecognized alter table type!");
+    }
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
