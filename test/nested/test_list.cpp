@@ -77,6 +77,9 @@ TEST_CASE("Test scalar lists", "[nested]") {
 	// can't add a number to a list
 	REQUIRE_FAIL(con.Query("SELECT LIST_VALUE(42) + 4"));
 
+	// can't add a number to a list
+	REQUIRE_FAIL(con.Query("SELECT LIST_VALUE(42, 'a')"));
+
 	// can have unnest anywhere
 	result = con.Query("SELECT CAST(UNNEST(LIST_VALUE(42))+2 AS INTEGER)");
 	REQUIRE(CHECK_COLUMN(result, 0, {44}));

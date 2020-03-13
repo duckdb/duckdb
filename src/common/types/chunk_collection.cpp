@@ -12,9 +12,11 @@ using namespace duckdb;
 using namespace std;
 
 void ChunkCollection::Verify() {
+#ifdef DEBUG
 	for (auto &chunk : chunks) {
 		chunk->Verify();
 	}
+#endif
 }
 
 void ChunkCollection::Append(ChunkCollection &other) {
@@ -48,6 +50,20 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			if (new_types[i] != types[i]) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
+			if (types[i] == TypeId::LIST) {
+				for (auto& chunk : chunks) { // need to check all the chunks because they can have only-null list entries
+					auto& chunk_vec = chunk->data[i];
+					auto& new_vec = new_chunk.data[i];
+					if (chunk_vec.HasListEntry() && new_vec.HasListEntry()) {
+						auto& chunk_types = chunk_vec.GetListEntry().types;
+						auto& new_types= new_vec.GetListEntry().types;
+						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
+							throw TypeMismatchException(chunk_types[0], new_types[i], "Type mismatch when combining lists");
+						}
+					}
+				}
+			}
+			// TODO check structs, too
 		}
 
 		// first append data to the current chunk
