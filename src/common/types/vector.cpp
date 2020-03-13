@@ -170,7 +170,6 @@ void Vector::SetValue(idx_t index, Value val) {
 		// TODO optimization: in-place update if fits
 		auto offset = child_cc.count;
 		if (val.list_value.size() > 0) {
-
 			idx_t append_idx = 0;
 			while (append_idx < val.list_value.size()) {
 				idx_t this_append_len = min((idx_t)STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);

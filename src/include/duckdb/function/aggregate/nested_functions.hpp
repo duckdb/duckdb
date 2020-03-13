@@ -15,7 +15,6 @@ namespace duckdb {
 
 
 struct ListBindData : public FunctionData {
-
 	ListBindData() {
 	}
 

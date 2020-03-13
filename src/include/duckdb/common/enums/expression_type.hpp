@@ -133,7 +133,6 @@ enum class ExpressionType : uint8_t {
 	BOUND_REF = 227,
 	BOUND_COLUMN_REF = 228,
 	BOUND_UNNEST = 229
-
 };
 
 //===--------------------------------------------------------------------===//

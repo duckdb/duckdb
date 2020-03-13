@@ -245,7 +245,6 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 					target_data[old_count + k].offset = source_data[i].offset + old_target_child_len;
 				}
 			});
-
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for APPEND");
