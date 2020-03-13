@@ -24,7 +24,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggregateExpression *> bindings) {
 	vector<AggregateObject> aggregates;
 	for (auto &binding : bindings) {
-		auto payload_size = binding->function.state_size(binding->return_type);
+		auto payload_size = binding->function.state_size();
 		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
 		                                     binding->distinct, binding->return_type));
 	}
@@ -52,7 +52,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> 
 	auto pointer = empty_payload_data.get();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
-		aggr.function.initialize(pointer, aggr.return_type);
+		aggr.function.initialize(pointer);
 		pointer += aggr.payload_size;
 	}
 
@@ -267,18 +267,19 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 					distinct_sel_vector[match_count++] = sel_idx;
 				}
 			}
+			if (match_count > 0) {
+				VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
+				Vector distinct_payload(distinct_cardinality);
+				Vector distinct_addresses(distinct_cardinality);
 
-			VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
-			Vector distinct_payload(distinct_cardinality);
-			Vector distinct_addresses(distinct_cardinality);
+				distinct_payload.Reference(payload.data[payload_idx]);
+				distinct_addresses.Reference(addresses);
 
-			distinct_payload.Reference(payload.data[payload_idx]);
-			distinct_addresses.Reference(addresses);
+				distinct_payload.Verify();
+				distinct_addresses.Verify();
 
-			distinct_payload.Verify();
-			distinct_addresses.Verify();
-
-			aggr.function.update(&distinct_payload, 1, distinct_addresses);
+				aggr.function.update(&distinct_payload, 1, distinct_addresses);
+			}
 			payload_idx++;
 		} else {
 			auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
