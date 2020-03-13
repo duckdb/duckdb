@@ -73,8 +73,9 @@ TEST_CASE("Test joins with different types", "[join]") {
 			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
 		}
 		// range joins
-		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i < j");
+		result = con.Query("select count(*), sum(i) from a, (SELECT 100::" + type + " AS j) b where i < j");
 		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		REQUIRE(CHECK_COLUMN(result, 1, {4950}));
 		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i <= j");
 		REQUIRE(CHECK_COLUMN(result, 0, {100}));
 		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i > j");

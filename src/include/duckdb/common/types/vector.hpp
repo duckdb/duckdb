@@ -113,6 +113,8 @@ public:
 	void Reference(Vector &other);
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, idx_t offset);
+	//! Creates a reference to a slice of the other vector
+	void Slice(Vector &other, buffer_ptr<VectorBuffer> dictionary);
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 
@@ -179,6 +181,15 @@ protected:
 	buffer_ptr<VectorBuffer> auxiliary;
 	//! child vectors used for nested data
 	child_list_t<unique_ptr<Vector>> children;
+};
+
+//! The DictionaryBuffer holds a selection vector
+class VectorChildBuffer : public VectorBuffer {
+public:
+	VectorChildBuffer(const VectorCardinality &cardinality) : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(cardinality) {
+	}
+public:
+	Vector data;
 };
 
 class FlatVector : public Vector {

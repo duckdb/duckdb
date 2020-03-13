@@ -249,7 +249,10 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		// now perform the join
 		switch (type) {
 		case JoinType::INNER: {
-			sel_t lvector[STANDARD_VECTOR_SIZE], rvector[STANDARD_VECTOR_SIZE];
+			auto left_dictionary = make_buffer<DictionaryBuffer>();
+			auto right_dictionary = make_buffer<DictionaryBuffer>();
+			auto lvector = left_dictionary->GetSelVector();
+			auto rvector = right_dictionary->GetSelVector();
 			idx_t match_count =
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_join_condition,
 			                                 right_chunk, lvector, rvector, conditions);
@@ -262,18 +265,14 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// construct the result
 			// create a reference to the chunk on the left side using the lvector
 			// VectorCardinality lcardinality(match_count, lvector);
-			chunk.SetCardinality(match_count, lvector);
 			for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
-				chunk.data[i].Reference(state->child_chunk.data[i]);
-				chunk.data[i].ClearSelectionVector();
+				chunk.data[i].Slice(state->child_chunk.data[i], left_dictionary);
 			}
-			chunk.SetCardinality(match_count, rvector);
 			// now create a reference to the chunk on the right side using the rvector
 			// VectorCardinality rcardinality(match_count, rvector);
 			for (idx_t i = 0; i < right_data.column_count(); i++) {
 				idx_t chunk_entry = state->child_chunk.column_count() + i;
-				chunk.data[chunk_entry].Reference(right_data.data[i]);
-				chunk.data[chunk_entry].ClearSelectionVector();
+				chunk.data[chunk_entry].Slice(right_data.data[i], right_dictionary);
 			}
 			chunk.SetCardinality(match_count);
 			break;

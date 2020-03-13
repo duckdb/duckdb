@@ -34,10 +34,13 @@ struct ScalarMergeInfo : public MergeInfo {
 	idx_t count;
 	sel_t *sel_vector;
 	idx_t &pos;
-	sel_t result[STANDARD_VECTOR_SIZE];
+	buffer_ptr<DictionaryBuffer> dictionary;
+	sel_t *result;
 
 	ScalarMergeInfo(Vector &v, idx_t count, sel_t *sel_vector, idx_t &pos)
 	    : MergeInfo(MergeInfoType::SCALAR_MERGE_INFO, v.type), v(v), count(count), sel_vector(sel_vector), pos(pos) {
+		dictionary = make_buffer<DictionaryBuffer>();
+		result = dictionary->GetSelVector();
 	}
 };
 

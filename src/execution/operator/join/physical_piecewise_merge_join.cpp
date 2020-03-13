@@ -179,17 +179,12 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				state->left_position = 0;
 				state->right_position = 0;
 			} else {
-				chunk.SetCardinality(result_count, left_info.result);
 				for (idx_t i = 0; i < state->child_chunk.column_count(); i++) {
-					chunk.data[i].Reference(state->child_chunk.data[i]);
-					chunk.data[i].ClearSelectionVector();
+					chunk.data[i].Slice(state->child_chunk.data[i], left_info.dictionary);
 				}
-				// now create a reference to the chunk on the right side
-				chunk.SetCardinality(result_count, right.result);
 				for (idx_t i = 0; i < right_chunk.column_count(); i++) {
 					idx_t chunk_entry = state->child_chunk.column_count() + i;
-					chunk.data[chunk_entry].Reference(right_chunk.data[i]);
-					chunk.data[chunk_entry].ClearSelectionVector();
+					chunk.data[chunk_entry].Slice(right_chunk.data[i], right.dictionary);
 				}
 				chunk.SetCardinality(result_count);
 			}

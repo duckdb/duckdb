@@ -18,6 +18,8 @@ class VectorBuffer;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER, // standard buffer, holds a single array of data
+	DICTIONARY_BUFFER, // dictionary buffer, holds a selection vector
+	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
 	STRING_BUFFER    // string buffer, holds a string heap
 };
 
@@ -42,11 +44,22 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type, idx_t count = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(TypeId type);
 
-private:
+protected:
 	unique_ptr<data_t[]> data;
 };
 
-//! The VectorStringBuffer is
+//! The DictionaryBuffer holds a selection vector
+class DictionaryBuffer : public VectorBuffer {
+public:
+	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER) {
+		data = unique_ptr<data_t[]>(new data_t[count * sizeof(sel_t)]);
+	}
+public:
+	sel_t* GetSelVector() {
+		return (sel_t*) data.get();
+	}
+};
+
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();

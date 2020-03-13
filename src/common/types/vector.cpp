@@ -71,7 +71,12 @@ void Vector::Reference(Vector &other) {
 }
 
 void Vector::Slice(Vector &other, idx_t offset) {
+	if (other.vector_type == VectorType::CONSTANT_VECTOR) {
+		Reference(other);
+		return;
+	}
 	assert(!other.sel_vector());
+	assert(other.vector_type == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
 	Reference(other);
@@ -79,6 +84,22 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		data = data + GetTypeIdSize(type) * offset;
 		nullmask <<= offset;
 	}
+}
+
+void Vector::Slice(Vector &other, buffer_ptr<VectorBuffer> dictionary) {
+	if (other.vector_type == VectorType::CONSTANT_VECTOR) {
+		// slicing a constant vector just results in that constant
+		Reference(other);
+		return;
+	}
+
+	assert(dictionary->type == VectorBufferType::DICTIONARY_BUFFER);
+	auto child_ref = make_buffer<VectorChildBuffer>(vcardinality);;
+	child_ref->data.Reference(other);
+
+	buffer = move(dictionary);
+	auxiliary = move(child_ref);
+	vector_type = VectorType::DICTIONARY_VECTOR;
 }
 
 void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
@@ -235,6 +256,8 @@ string VectorTypeToString(VectorType type) {
 		return "FLAT";
 	case VectorType::SEQUENCE_VECTOR:
 		return "SEQUENCE";
+	case VectorType::DICTIONARY_VECTOR:
+		return "DICTIONARY";
 	case VectorType::CONSTANT_VECTOR:
 		return "CONSTANT";
 	default:
@@ -253,6 +276,12 @@ string Vector::ToString() const {
 			retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
+	// case VectorType::DICTIONARY_VECTOR: {
+	// 	for (idx_t i = 0; i < count; i++) {
+	// 		retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
+	// 	}
+	// 	break;
+	// }
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
@@ -292,6 +321,19 @@ void Vector::Normalify() {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
+	case VectorType::DICTIONARY_VECTOR: {
+		// FIXME: VectorOperations::Copy should not rely on this selection vector!
+		throw NotImplementedException("FIXME: fold dicitonary vector");
+
+		// // create a new vector with the same size, but without a selection vector
+		// VectorCardinality other_cardinality(size());
+		// Vector other(other_cardinality, type);
+		// // now copy the data of this vector to the other vector, removing the selection vector in the process
+		// VectorOperations::Copy(*this, other);
+		// // create a reference to the data in the other vector
+		// this->Reference(other);
+		break;
+	}
 	case VectorType::CONSTANT_VECTOR: {
 		vector_type = VectorType::FLAT_VECTOR;
 		// allocate a new buffer for the vector
@@ -389,6 +431,19 @@ void Vector::Verify() {
 			if (!nullmask[0]) {
 				auto string = ((string_t *)data)[0];
 				string.Verify();
+			}
+		} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
+			auto &sel_buffer = (DictionaryBuffer &) *buffer;
+			auto &child_buffer = (VectorChildBuffer &) *auxiliary;
+			auto sel = sel_buffer.GetSelVector();
+			if (child_buffer.data.vector_type == VectorType::FLAT_VECTOR) {
+				auto strings = (string_t *) child_buffer.data.GetData();
+				for(idx_t i = 0; i < size(); i++) {
+					auto idx = sel[i];
+					if (!nullmask[idx]) {
+						strings[idx].Verify();
+					}
+				}
 			}
 		} else {
 			VectorOperations::ExecType<string_t>(*this, [&](string_t string, uint64_t i, uint64_t k) {
