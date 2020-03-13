@@ -277,14 +277,14 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	     Value::LIST({Value::STRUCT({make_pair("a", Value()), make_pair("b", Value())})})}));
 
 	// list of list of int
-	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g) sq 	GROUP "
+	result = con.Query("SELECT g2, LIST(le) FROM (SELECT g % 2 g2, LIST(e) le from list_data GROUP BY g ORDER BY g) sq 	GROUP "
 	                   "BY g2 ORDER BY g2");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
 
 	REQUIRE(CHECK_COLUMN(result, 1,
-	                     {Value::LIST({Value::LIST({Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5)})}),
-	                      Value::LIST({Value::LIST({Value::INTEGER(1), Value::INTEGER(2)}), Value::LIST({Value()}),
-	                                   Value::LIST({Value::INTEGER(6)})})}));
+	                     {Value::LIST({Value::LIST({3,4,5})}),
+	                      Value::LIST({Value::LIST({1,2}),
+	                                   Value::LIST({6}), Value::LIST({Value()})})}));
 
 
 	result = con.Query("SELECT SUM(ue) FROM (SELECT UNNEST(le) ue FROM (SELECT g, LIST(e) le from list_data "

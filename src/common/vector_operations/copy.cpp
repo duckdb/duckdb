@@ -156,10 +156,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 		case TypeId::LIST: {
 			// // copy main vector
 			// // TODO implement non-zero offsets
-			assert(offset == 0);
+			assert(offset == 0 || !target.HasListEntry());
 			assert(target.type == TypeId::LIST);
 
-			copy_loop<list_entry_t, false>(source, target.GetData(), offset, source.size());
+			copy_loop<list_entry_t, false>(source, target.GetData(), offset, copy_count);
 			auto &child = source.GetListEntry();
 			auto child_copy = make_unique<ChunkCollection>();
 			child_copy->Append(child);
