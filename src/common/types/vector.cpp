@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace std;
 
@@ -451,13 +452,16 @@ void Vector::Verify() {
 	}
 
 	if (type == TypeId::LIST) {
-		GetListEntry().Verify();
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!nullmask[0]) {
+				GetListEntry().Verify();
 				auto le = ((list_entry_t *)data)[0];
 				assert(le.offset + le.length <= GetListEntry().count);
 			}
 		} else {
+			if (VectorOperations::HasNotNull(*this)) {
+				GetListEntry().Verify();
+			}
 			VectorOperations::ExecType<list_entry_t>(*this, [&](list_entry_t le, uint64_t i, uint64_t k) {
 				if (!nullmask[i]) {
 					assert(le.offset + le.length <= GetListEntry().count);
@@ -539,6 +543,12 @@ void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
 	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	((VectorStructBuffer *)auxiliary.get())->AddChild(name, move(vector));
 }
+
+bool Vector::HasListEntry() const {
+	assert(type == TypeId::LIST);
+	return auxiliary != nullptr;
+}
+
 
 ChunkCollection &Vector::GetListEntry() const {
 	assert(type == TypeId::LIST);

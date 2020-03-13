@@ -54,6 +54,8 @@ struct VectorOperations {
 	static void IsNull(Vector &A, Vector &result);
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
+	static bool HasNotNull(Vector &A);
+
 	//! Creates a selection vector that points only to non-null values for the
 	//! given null mask. Returns the amount of not-null values.
 	//! result_assignment will be set to either result_vector (if there are null

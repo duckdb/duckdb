@@ -14,7 +14,6 @@ static void list_value_fun(DataChunk &input, ExpressionState &state, Vector &res
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	assert(result.type == TypeId::LIST);
-	result.Initialize(TypeId::LIST); // TODO this required?
 	auto list_child = make_unique<ChunkCollection>();
 	result.SetListEntry(move(list_child));
 
@@ -45,11 +44,7 @@ static void list_value_fun(DataChunk &input, ExpressionState &state, Vector &res
 		cc.Append(append_vals);
 	});
 
-	VectorOperations::ExecType<list_entry_t>(result, [&](list_entry_t le, uint64_t i, uint64_t k) {
-
-	});
-
-	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+	result.vector_type = all_const && !result.sel_vector() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 	result.Verify();
 }
 

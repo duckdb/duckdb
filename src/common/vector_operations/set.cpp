@@ -60,6 +60,11 @@ void VectorOperations::FillNullMask(Vector &v) {
 	case TypeId::VARCHAR:
 		templated_fill_nullmask<string_t>(v);
 		break;
+	case TypeId::LIST:
+		templated_fill_nullmask<list_entry_t>(v);
+		break;
+	case TypeId::STRUCT:
+		break;
 	default:
 		throw NotImplementedException("Type not implemented for null mask");
 	}

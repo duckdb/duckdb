@@ -166,6 +166,7 @@ public:
 	void AddStructEntry(string name, unique_ptr<Vector> vector);
 
 	ChunkCollection &GetListEntry() const;
+	bool HasListEntry() const;
 	void SetListEntry(unique_ptr<ChunkCollection> vector);
 
 	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
