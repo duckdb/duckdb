@@ -16,6 +16,24 @@
 using namespace duckdb;
 using namespace std;
 
+// add your initializer for new functions here
+void BuiltinFunctions::Initialize() {
+	RegisterSQLiteFunctions();
+	RegisterReadFunctions();
+
+	RegisterAlgebraicAggregates();
+	RegisterDistributiveAggregates();
+	RegisterNestedAggregates();
+
+	RegisterDateFunctions();
+	RegisterMathFunctions();
+	RegisterOperators();
+	RegisterSequenceFunctions();
+	RegisterStringFunctions();
+	RegisterNestedFunctions();
+	RegisterTrigonometricsFunctions();
+}
+
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
 }
 
@@ -42,22 +60,6 @@ void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 void BuiltinFunctions::AddFunction(TableFunction function) {
 	CreateTableFunctionInfo info(function);
 	catalog.CreateTableFunction(context, &info);
-}
-
-void BuiltinFunctions::Initialize() {
-	RegisterSQLiteFunctions();
-	RegisterReadFunctions();
-
-	RegisterAlgebraicAggregates();
-	RegisterDistributiveAggregates();
-
-	RegisterDateFunctions();
-	RegisterMathFunctions();
-	RegisterOperators();
-	RegisterSequenceFunctions();
-	RegisterStringFunctions();
-	RegisterStructFunctions();
-	RegisterTrigonometricsFunctions();
 }
 
 string Function::CallToString(string name, vector<SQLType> arguments) {

@@ -85,8 +85,11 @@ protected:
 
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
+
 
 	virtual string UnsupportedAggregateMessage();
+	virtual string UnsupportedUnnestMessage();
 
 	Binder &binder;
 	ClientContext &context;

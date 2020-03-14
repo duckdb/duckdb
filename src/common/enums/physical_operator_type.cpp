@@ -32,6 +32,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "AGGREGATE";
 	case PhysicalOperatorType::WINDOW:
 		return "WINDOW";
+	case PhysicalOperatorType::UNNEST:
+		return "UNNEST";
 	case PhysicalOperatorType::DISTINCT:
 		return "DISTINCT";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
@@ -86,8 +88,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPLAIN";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
-    case PhysicalOperatorType::RECURSIVE_CTE:
-        return "REC_CTE";
+	case PhysicalOperatorType::RECURSIVE_CTE:
+		return "REC_CTE";
 	case PhysicalOperatorType::INVALID:
 	default:
 		return "INVALID";

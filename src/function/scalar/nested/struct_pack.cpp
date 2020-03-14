@@ -1,7 +1,7 @@
-#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <set>
 
@@ -11,23 +11,25 @@ namespace duckdb {
 
 static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StructPackBindData &)*func_expr.bind_info;
+	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
 	assert(input.column_count() == info.stype.child_type.size());
 
 	bool all_const = true;
 	for (size_t i = 0; i < input.column_count(); i++) {
+		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
+			all_const = false;
+		}
 		// same holds for this
 		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
 		auto new_child = make_unique<Vector>(result.cardinality());
 		new_child->Reference(input.data[i]);
-		result.AddChild(move(new_child), info.stype.child_type[i].first);
-		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
-			all_const = false;
-		}
+		result.AddStructEntry(info.stype.child_type[i].first, move(new_child));
 	}
 	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+
+	result.Verify();
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
@@ -54,7 +56,7 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 
 	// this is more for completeness reasons
 	expr.sql_return_type = stype;
-	return make_unique<StructPackBindData>(stype);
+	return make_unique<VariableReturnBindData>(stype);
 }
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {

@@ -26,6 +26,7 @@ public:
 	VectorCardinality() : count(0), sel_vector(nullptr) {
 	}
 	VectorCardinality(idx_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
+		assert(count <= STANDARD_VECTOR_SIZE);
 	}
 
 	idx_t count;
@@ -35,6 +36,10 @@ public:
 		return sel_vector ? sel_vector[idx] : idx;
 	}
 };
+
+class VectorStructBuffer;
+class VectorListBuffer;
+class ChunkCollection;
 
 //!  Vector of values of a specified TypeId.
 /*!
@@ -118,7 +123,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false, idx_t count = STANDARD_VECTOR_SIZE);
+	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
 	//! Flattens the vector, removing any selection vector
 	void ClearSelectionVector();
 
@@ -157,8 +162,12 @@ public:
 	//! Add a reference from this vector to the string heap of the provided vector
 	void AddHeapReference(Vector &other);
 
-	child_list_t<unique_ptr<Vector>> &GetChildren();
-	void AddChild(unique_ptr<Vector> vector, string name = "");
+	child_list_t<unique_ptr<Vector>> &GetStructEntries() const;
+	void AddStructEntry(string name, unique_ptr<Vector> vector);
+
+	ChunkCollection &GetListEntry() const;
+	bool HasListEntry() const;
+	void SetListEntry(unique_ptr<ChunkCollection> vector);
 
 	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
 	//! the vector, and returns the element that is physically in location [index].
@@ -177,8 +186,6 @@ protected:
 	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
 	//! strings
 	buffer_ptr<VectorBuffer> auxiliary;
-	//! child vectors used for nested data
-	child_list_t<unique_ptr<Vector>> children;
 };
 
 class FlatVector : public Vector {
@@ -192,6 +199,7 @@ public:
 
 public:
 	void SetCount(idx_t count) {
+		assert(count <= STANDARD_VECTOR_SIZE);
 		owned_cardinality.count = count;
 	}
 	void SetSelVector(sel_t *sel) {

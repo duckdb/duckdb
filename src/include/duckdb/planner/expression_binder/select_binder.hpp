@@ -34,6 +34,8 @@ protected:
 
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth) override;
 
+	BindResult BindUnnest(FunctionExpression &function, idx_t depth) override;
+
 	bool inside_window;
 
 	BoundSelectNode &node;

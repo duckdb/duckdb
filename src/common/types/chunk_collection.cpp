@@ -11,10 +11,25 @@
 using namespace duckdb;
 using namespace std;
 
+void ChunkCollection::Verify() {
+#ifdef DEBUG
+	for (auto &chunk : chunks) {
+		chunk->Verify();
+	}
+#endif
+}
+
+void ChunkCollection::Append(ChunkCollection &other) {
+	for (auto &chunk : other.chunks) {
+		Append(*chunk.get());
+	}
+}
+
 void ChunkCollection::Append(DataChunk &new_chunk) {
 	if (new_chunk.size() == 0) {
 		return;
 	}
+	new_chunk.Verify();
 	new_chunk.Normalify();
 
 	// we have to ensure that every chunk in the ChunkCollection is completely
@@ -28,14 +43,28 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		// first chunk
 		types = new_chunk.GetTypes();
 	} else {
-#ifdef DEBUG
 		// the types of the new chunk should match the types of the previous one
 		assert(types.size() == new_chunk.column_count());
 		auto new_types = new_chunk.GetTypes();
 		for (idx_t i = 0; i < types.size(); i++) {
-			assert(new_types[i] == types[i]);
+			if (new_types[i] != types[i]) {
+				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
+			}
+			if (types[i] == TypeId::LIST) {
+				for (auto& chunk : chunks) { // need to check all the chunks because they can have only-null list entries
+					auto& chunk_vec = chunk->data[i];
+					auto& new_vec = new_chunk.data[i];
+					if (chunk_vec.HasListEntry() && new_vec.HasListEntry()) {
+						auto& chunk_types = chunk_vec.GetListEntry().types;
+						auto& new_types= new_vec.GetListEntry().types;
+						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
+							throw TypeMismatchException(chunk_types[0], new_types[i], "Type mismatch when combining lists");
+						}
+					}
+				}
+			}
+			// TODO check structs, too
 		}
-#endif
 
 		// first append data to the current chunk
 		DataChunk &last_chunk = *chunks.back();
@@ -296,6 +325,8 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 		case TypeId::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+
+		case TypeId::LIST:
 		case TypeId::STRUCT: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;

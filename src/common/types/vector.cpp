@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace std;
 
@@ -55,18 +56,23 @@ void Vector::Reference(Value &value) {
 void Vector::Reference(Vector &other) {
 	vector_type = other.vector_type;
 	buffer = other.buffer;
-	auxiliary = other.auxiliary;
 	data = other.data;
 	type = other.type;
 	nullmask = other.nullmask;
-	if (type == TypeId::STRUCT || type == TypeId::LIST) {
-		for (size_t i = 0; i < other.children.size(); i++) {
-			auto &other_child_vec = other.children[i].second;
-			auto child_ref = make_unique<Vector>(vcardinality);
-			child_ref->type = other_child_vec->type;
-			child_ref->Reference(*other_child_vec.get());
-			children.push_back(pair<string, unique_ptr<Vector>>(other.children[i].first, move(child_ref)));
+	auxiliary = nullptr;
+
+	switch (type) {
+	case TypeId::STRUCT:
+		for (auto &child : other.GetStructEntries()) {
+			auto child_copy = make_unique<Vector>(cardinality(), child.second->type);
+			child_copy->Reference(*child.second);
+			AddStructEntry(child.first, move(child_copy));
 		}
+		break;
+
+	default:
+		auxiliary = other.auxiliary;
+		break;
 	}
 }
 
@@ -81,7 +87,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	}
 }
 
-void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
+void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
@@ -89,10 +95,10 @@ void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
 	auxiliary.reset();
 	nullmask.reset();
 	if (GetTypeIdSize(type) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(type, count);
+		buffer = VectorBuffer::CreateStandardVector(type);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, count * GetTypeIdSize(type));
+			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
 		}
 	}
 }
@@ -134,27 +140,59 @@ void Vector::SetValue(idx_t index, Value val) {
 		break;
 	}
 	case TypeId::STRUCT: {
+		if (!auxiliary || GetStructEntries().size() == 0) {
+			for (size_t i = 0; i < val.struct_value.size(); i++) {
+				auto &struct_child = val.struct_value[i];
+				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
+				cv->vector_type = vector_type;
+				AddStructEntry(struct_child.first, move(cv));
+			}
+		}
+
+		auto &children = GetStructEntries();
+		assert(children.size() == val.struct_value.size());
+
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
 			auto &struct_child = val.struct_value[i];
 			assert(vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR);
-			if (i == children.size()) {
-				// TODO should this child vector already exist here?
-				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
-				cv->vector_type = vector_type;
-				children.push_back(pair<string, unique_ptr<Vector>>(struct_child.first, move(cv)));
-			}
 			auto &vec_child = children[i];
-			if (vec_child.first != struct_child.first) {
-				throw Exception("Struct child name mismatch");
-			}
+			assert(vec_child.first == struct_child.first);
 			vec_child.second->SetValue(index, struct_child.second);
 		}
 	} break;
+
 	case TypeId::LIST: {
-		// TODO hmmm how do we make space for the value?
-	}
+		if (!auxiliary) {
+			auto cc = make_unique<ChunkCollection>();
+			SetListEntry(move(cc));
+		}
+		auto &child_cc = GetListEntry();
+		// TODO optimization: in-place update if fits
+		auto offset = child_cc.count;
+		if (val.list_value.size() > 0) {
+			idx_t append_idx = 0;
+			while (append_idx < val.list_value.size()) {
+				idx_t this_append_len = min((idx_t)STANDARD_VECTOR_SIZE, val.list_value.size() - append_idx);
+
+				DataChunk child_append_chunk;
+				child_append_chunk.count = this_append_len;
+				vector<TypeId> types;
+				types.push_back(val.list_value[0].type);
+				child_append_chunk.Initialize(types);
+				for (idx_t i = 0; i < this_append_len; i++) {
+					child_append_chunk.data[0].SetValue(i, val.list_value[i + append_idx]);
+				}
+				child_cc.Append(child_append_chunk);
+				append_idx += this_append_len;
+			}
+		}
+		// now set the pointer
+		auto &entry = ((list_entry_t *)GetData())[index];
+		entry.length = val.list_value.size();
+		entry.offset = offset;
+	} break;
 	default:
-		throw NotImplementedException("Unimplemented type for adding");
+		throw NotImplementedException("Unimplemented type for Vector::SetValue");
 	}
 }
 
@@ -194,7 +232,7 @@ Value Vector::GetValue(idx_t index) const {
 		Value ret(TypeId::STRUCT);
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
-		for (auto &struct_child : children) {
+		for (auto &struct_child : GetStructEntries()) {
 			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
@@ -202,11 +240,10 @@ Value Vector::GetValue(idx_t index) const {
 	case TypeId::LIST: {
 		Value ret(TypeId::LIST);
 		ret.is_null = false;
-		// get offset and length
 		auto offlen = ((list_entry_t *)data)[index];
-		assert(children.size() == 1);
+		auto &child_cc = GetListEntry();
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
-			ret.list_value.push_back(children[0].second->GetValue(i));
+			ret.list_value.push_back(child_cc.GetValue(0, i));
 		}
 		return ret;
 	}
@@ -334,12 +371,17 @@ void Vector::Normalify() {
 		case TypeId::VARCHAR:
 			flatten_constant_vector_loop<string_t>(data, old_data, count, sel);
 			break;
-		case TypeId::STRUCT:
-			for (auto &child : GetChildren()) {
+		case TypeId::LIST: {
+			flatten_constant_vector_loop<list_entry_t>(data, old_data, count, sel);
+			break;
+		}
+		case TypeId::STRUCT: {
+			for (auto &child : GetStructEntries()) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->Normalify();
 			}
-			break;
+			// sel_vector = nullptr;
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
 		}
@@ -398,6 +440,35 @@ void Vector::Verify() {
 			});
 		}
 	}
+
+	if (type == TypeId::STRUCT) {
+		auto &children = GetStructEntries();
+		assert(children.size() > 0);
+		for (auto &child : children) {
+			assert(child.second->SameCardinality(*this));
+			child.second->Verify();
+		}
+	}
+
+	if (type == TypeId::LIST) {
+		if (vector_type == VectorType::CONSTANT_VECTOR) {
+			if (!nullmask[0]) {
+				GetListEntry().Verify();
+				auto le = ((list_entry_t *)data)[0];
+				assert(le.offset + le.length <= GetListEntry().count);
+			}
+		} else {
+			if (VectorOperations::HasNotNull(*this)) {
+				GetListEntry().Verify();
+			}
+			VectorOperations::ExecType<list_entry_t>(*this, [&](list_entry_t le, uint64_t i, uint64_t k) {
+				if (!nullmask[i]) {
+					assert(le.offset + le.length <= GetListEntry().count);
+				}
+			});
+		}
+	}
+// TODO verify list and struct
 #endif
 }
 
@@ -439,6 +510,9 @@ string_t Vector::EmptyString(idx_t len) {
 }
 
 void Vector::AddHeapReference(Vector &other) {
+	assert(type == TypeId::VARCHAR);
+	assert(other.type == TypeId::VARCHAR);
+
 	if (!other.auxiliary) {
 		return;
 	}
@@ -451,14 +525,44 @@ void Vector::AddHeapReference(Vector &other) {
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>> &Vector::GetChildren() {
+child_list_t<unique_ptr<Vector>> &Vector::GetStructEntries() const {
 	assert(type == TypeId::STRUCT);
-	return children;
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	return ((VectorStructBuffer *)auxiliary.get())->GetChildren();
 }
 
-void Vector::AddChild(unique_ptr<Vector> vector, string name) {
+void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
+	// TODO asser that an entry with this name does not already exist
 	assert(type == TypeId::STRUCT);
-	children.push_back(make_pair(name, move(vector)));
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorStructBuffer>();
+	}
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	((VectorStructBuffer *)auxiliary.get())->AddChild(name, move(vector));
+}
+
+bool Vector::HasListEntry() const {
+	assert(type == TypeId::LIST);
+	return auxiliary != nullptr;
+}
+
+
+ChunkCollection &Vector::GetListEntry() const {
+	assert(type == TypeId::LIST);
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
+	return ((VectorListBuffer *)auxiliary.get())->GetChild();
+}
+void Vector::SetListEntry(unique_ptr<ChunkCollection> cc) {
+	assert(type == TypeId::LIST);
+	if (!auxiliary) {
+		auxiliary = make_buffer<VectorListBuffer>();
+	}
+	assert(auxiliary);
+	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
+	((VectorListBuffer *)auxiliary.get())->SetChild(move(cc));
 }
 
 } // namespace duckdb

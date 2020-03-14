@@ -367,6 +367,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case SQLTypeId::TIME:
 	case SQLTypeId::TIMESTAMP:
 	case SQLTypeId::VARCHAR:
+	case SQLTypeId::LIST:
+	case SQLTypeId::STRUCT:
 		return SQLITE_BLOB;
 	default:
 		return 0;
