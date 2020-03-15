@@ -8,7 +8,8 @@ add_library_unity(test_sql_function
                   test_table_function.cpp
                   test_regex.cpp
                   test_stringfunctions.cpp
-                  test_trigo.cpp)
+                  test_trigo.cpp
+                  test_instr.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_function>
     PARENT_SCOPE)
