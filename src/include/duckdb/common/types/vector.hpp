@@ -23,44 +23,21 @@ extern nullmask_t ZERO_MASK;
 
 class VectorCardinality {
 public:
-	VectorCardinality() : count(0), sel_vector(nullptr) {
+	VectorCardinality() : count(0) {
 	}
-	VectorCardinality(idx_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
+	VectorCardinality(idx_t count) : count(count) {
 	}
 
 	idx_t count;
-	sel_t *sel_vector;
+};
 
-	idx_t get_index(idx_t idx) {
-		return sel_vector ? sel_vector[idx] : idx;
-	}
+struct VectorData {
+	SelectionVector *sel;
+	data_ptr_t data;
+	nullmask_t *nullmask;
 };
 
 //!  Vector of values of a specified TypeId.
-/*!
-  The vector class is the smallest unit of data used by the execution engine. It
-  represents a chunk of values of a single type. A vector can either (1) own its
-  own data (in which case own_data is set to true), or (2) hold only a reference
-  to a set of data (e.g. the base columns or another vector).
-
-  The execution engine operates on vectors mostly through the the set of
-  available VectorOperations.
-
-  A vector also has an optional selection vector property. When this property is
-  set, the selection vector must be used to access the data as the data pointer
-  itself might hold irrelevant empty entries. A simple loop for this would be as
-  follows:
-
-  for(auto i = 0; i < count; i++) {
-    sum += data[sel_vector[i]];
-  }
-
-  Selection vectors are used for two purposes:
-
-  (1) Filtering data without requiring moving and copying data around
-
-  (2) Ordering data
-*/
 class Vector {
 	friend class DataChunk;
 
@@ -89,24 +66,31 @@ public:
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
-	//! The null mask of the vector, if the Vector has any NULL values
-	nullmask_t nullmask;
-
 public:
 	idx_t size() const {
 		return vcardinality.count;
 	}
-	sel_t *sel_vector() const {
-		return vcardinality.sel_vector;
+	bool is_null() {
+		assert(vector_type == VectorType::CONSTANT);
+
 	}
+	nullmask_t nullmask() {
+		assert(vector_type == VectorType::FLAT_VECTOR);
+		return
+	}
+	SelectionVector &GetSelVector() const {
+		assert(vector_type == VectorType::DICTIONARY_VECTOR);
+		return ((DictionaryBuffer&) buffer).GetSelVector();
+	}
+	Vector &GetDictionaryChild() const;
 	const VectorCardinality &cardinality() const {
 		return vcardinality;
 	}
 	bool SameCardinality(const Vector &other) const {
-		return size() == other.size() && sel_vector() == other.sel_vector();
+		return size() == other.size();
 	}
 	bool SameCardinality(const VectorCardinality &other) const {
-		return size() == other.count && sel_vector() == other.sel_vector;
+		return size() == other.count;
 	}
 
 	//! Causes this vector to reference the data held by the other vector.
@@ -121,8 +105,6 @@ public:
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false, idx_t count = STANDARD_VECTOR_SIZE);
-	//! Flattens the vector, removing any selection vector
-	void ClearSelectionVector();
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;
@@ -130,6 +112,8 @@ public:
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	void Normalify();
+	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
+	void Orrify(SelectionVector **out_sel, data_ptr_t *out_data);
 
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
@@ -143,6 +127,9 @@ public:
 	data_ptr_t GetData() {
 		return data;
 	}
+
+	void MoveStringsToHeap(StringHeap &heap);
+	void MoveStringsToHeap(StringHeap &heap, SelectionVector &sel);
 
 	//! Add a string to the string heap of the vector (auxiliary data)
 	string_t AddString(const char *data, idx_t len);
@@ -174,10 +161,12 @@ protected:
 	const VectorCardinality &vcardinality;
 	//! A pointer to the data.
 	data_ptr_t data;
+	//! The buffer holding the null mask of the vector
+	buffer_ptr<VectorBuffer> nulls;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
-	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
-	//! strings
+	//! The buffer holding auxiliary data of the vector
+	//! e.g. a string vector uses this to store strings
 	buffer_ptr<VectorBuffer> auxiliary;
 	//! child vectors used for nested data
 	child_list_t<unique_ptr<Vector>> children;
@@ -205,10 +194,6 @@ public:
 	void SetCount(idx_t count) {
 		owned_cardinality.count = count;
 	}
-	void SetSelVector(sel_t *sel) {
-		owned_cardinality.sel_vector = sel;
-	}
-
 protected:
 	VectorCardinality owned_cardinality;
 };

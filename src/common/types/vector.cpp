@@ -75,7 +75,6 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		return;
 	}
-	assert(!other.sel_vector());
 	assert(other.vector_type == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
@@ -119,6 +118,12 @@ void Vector::Initialize(TypeId new_type, bool zero_data, idx_t count) {
 }
 
 void Vector::SetValue(idx_t index, Value val) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// dictionary: apply dictionary and forward to child
+		auto &sel_vector = GetSelVector();
+		auto &child = GetDictionaryChild();
+		return child.SetValue(sel_vector.get_index(index), move(val));
+	}
 	Value newVal = val.CastAs(type);
 
 	nullmask[index] = newVal.is_null;
@@ -182,9 +187,15 @@ void Vector::SetValue(idx_t index, Value val) {
 Value Vector::GetValue(idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
+	} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// dictionary: apply dictionary and forward to child
+		auto &sel_vector = GetSelVector();
+		auto &child = GetDictionaryChild();
+		return child.GetValue(sel_vector.get_index(index));
 	} else {
 		assert(vector_type == VectorType::FLAT_VECTOR);
 	}
+
 	if (nullmask[index]) {
 		return Value(type);
 	}
@@ -236,20 +247,6 @@ Value Vector::GetValue(idx_t index) const {
 	}
 }
 
-void Vector::ClearSelectionVector() {
-	Normalify();
-	if (!sel_vector()) {
-		return;
-	}
-	// create a new vector with the same size, but without a selection vector
-	VectorCardinality other_cardinality(size());
-	Vector other(other_cardinality, type);
-	// now copy the data of this vector to the other vector, removing the selection vector in the process
-	VectorOperations::Copy(*this, other);
-	// create a reference to the data in the other vector
-	this->Reference(other);
-}
-
 string VectorTypeToString(VectorType type) {
 	switch (type) {
 	case VectorType::FLAT_VECTOR:
@@ -267,21 +264,15 @@ string VectorTypeToString(VectorType type) {
 
 string Vector::ToString() const {
 	auto count = size();
-	auto sel = sel_vector();
 
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
+	case VectorType::DICTIONARY_VECTOR:
 		for (idx_t i = 0; i < count; i++) {
-			retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
-	// case VectorType::DICTIONARY_VECTOR: {
-	// 	for (idx_t i = 0; i < count; i++) {
-	// 		retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
-	// 	}
-	// 	break;
-	// }
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
@@ -289,8 +280,7 @@ string Vector::ToString() const {
 		int64_t start, increment;
 		GetSequence(start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel ? sel[i] : i;
-			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
+			retval += to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}
@@ -315,15 +305,13 @@ static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, i
 
 void Vector::Normalify() {
 	auto count = size();
-	auto sel = sel_vector();
 
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
 	case VectorType::DICTIONARY_VECTOR: {
-		// FIXME: VectorOperations::Copy should not rely on this selection vector!
-		throw NotImplementedException("FIXME: fold dicitonary vector");
+		throw NotImplementedException("FIXME: flatten dicitonary vector");
 
 		// // create a new vector with the same size, but without a selection vector
 		// VectorCardinality other_cardinality(size());
@@ -402,6 +390,30 @@ void Vector::Normalify() {
 	}
 }
 
+void Vector::Orrify(SelectionVector **out_sel, data_ptr_t *out_data) {
+	switch (vector_type) {
+	case VectorType::DICTIONARY_VECTOR: {
+		auto &sel = GetSelVector();
+		auto &child = GetDictionaryChild();
+		child.Normalify();
+
+		*out_sel = &sel;
+		*out_data = child.GetData();
+		break;
+	}
+	case VectorType::CONSTANT_VECTOR:
+		*out_sel = Vector::CONSTANT_SEL;
+		*out_data = GetData();
+		break;
+	default:
+		Normalify();
+
+		*out_sel = Vector::INCREMENTAL_SEL;
+		*out_data = GetData();
+		break;
+	}
+}
+
 void Vector::Sequence(int64_t start, int64_t increment) {
 	vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 2);
@@ -427,33 +439,105 @@ void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		if (vector_type == VectorType::CONSTANT_VECTOR) {
+		switch(vector_type) {
+		case VectorType::CONSTANT_VECTOR: {
+			auto strings = (string_t *) GetData();
 			if (!nullmask[0]) {
-				auto string = ((string_t *)data)[0];
-				string.Verify();
+				strings[0].Verify();
 			}
-		} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
-			auto &sel_buffer = (DictionaryBuffer &) *buffer;
-			auto &child_buffer = (VectorChildBuffer &) *auxiliary;
-			auto sel = sel_buffer.GetSelVector();
-			if (child_buffer.data.vector_type == VectorType::FLAT_VECTOR) {
-				auto strings = (string_t *) child_buffer.data.GetData();
-				for(idx_t i = 0; i < size(); i++) {
-					auto idx = sel[i];
-					if (!nullmask[idx]) {
-						strings[idx].Verify();
-					}
-				}
-			}
-		} else {
-			VectorOperations::ExecType<string_t>(*this, [&](string_t string, uint64_t i, uint64_t k) {
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto strings = (string_t *) GetData();
+			for(idx_t i = 0; i < size(); i++) {
 				if (!nullmask[i]) {
-					string.Verify();
+					strings[i].Verify();
 				}
-			});
+			}
+			break;
+		}
+		case VectorType::DICTIONARY_VECTOR: {
+			auto &child = GetDictionaryChild();
+			child.Verify();
+			break;
+		}
+		default:
+			break;
 		}
 	}
 #endif
+}
+
+
+Vector &Vector::GetDictionaryChild() const {
+	assert(vector_type == VectorType::DICTIONARY_VECTOR);
+	return ((VectorChildBuffer&) auxiliary).data;
+}
+
+void Vector::MoveStringsToHeap(StringHeap &heap, SelectionVector &sel) {
+	Normalify();
+
+	assert(vector_type == VectorType::FLAT_VECTOR);
+	auto source_strings = (string_t *)GetData();
+	auto old_buffer = move(buffer);
+
+	buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
+	data = buffer->GetData();
+	auto target_strings = (string_t *)GetData();
+	for(idx_t i = 0; i < size(); i++) {
+		auto idx = sel.get_index(i);
+		if (!nullmask[idx] && !source_strings[idx].IsInlined()) {
+			target_strings[idx] = heap.AddString(source_strings[idx]);
+		} else {
+			target_strings[idx] = source_strings[idx];
+		}
+	}
+}
+
+void Vector::MoveStringsToHeap(StringHeap &heap) {
+	if (type != TypeId::VARCHAR) {
+		return;
+	}
+
+	switch(vector_type) {
+	case VectorType::CONSTANT_VECTOR: {
+		auto source_strings = (string_t *)GetData();
+		if (nullmask[0] || source_strings[0].IsInlined()) {
+			return;
+		}
+		auto old_buffer = move(buffer);
+
+		this->buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
+		this->data = buffer->GetData();
+		auto target_strings = (string_t *)GetData();
+		target_strings[0] = heap.AddString(source_strings[0]);
+		break;
+	}
+	case VectorType::FLAT_VECTOR: {
+		auto source_strings = (string_t *)GetData();
+		auto old_buffer = move(buffer);
+
+		buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
+		data = buffer->GetData();
+		auto target_strings = (string_t *)GetData();
+		for(idx_t i = 0; i < size(); i++) {
+			if (!nullmask[i] && !source_strings[i].IsInlined()) {
+				target_strings[i] = heap.AddString(source_strings[i]);
+			} else {
+				target_strings[i] = source_strings[i];
+			}
+		}
+		break;
+	}
+	case VectorType::DICTIONARY_VECTOR: {
+		auto &sel = GetSelVector();
+		auto &child = GetDictionaryChild();
+		child.MoveStringsToHeap(heap, sel);
+		break;
+	}
+	default:
+		throw NotImplementedException("");
+	}
 }
 
 string_t Vector::AddString(const char *data, idx_t len) {

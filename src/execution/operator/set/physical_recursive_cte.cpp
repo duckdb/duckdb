@@ -105,14 +105,14 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *sta
 	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
 
 	// Update the sel_vector of the DataChunk
+	SelectionVector sel_vector;
 	idx_t match_count = 0;
 	for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
-		idx_t sel_idx = probe_idx;
-		if (probe_data[sel_idx]) {
-			chunk.owned_sel_vector[match_count++] = sel_idx;
+		if (probe_data[probe_idx]) {
+			sel_vector.set_index(match_count++, probe_idx);
 		}
 	}
-	chunk.SetCardinality(match_count, chunk.owned_sel_vector);
+	chunk.SetCardinality(match_count, sel_vector);
 
 	return match_count;
 }

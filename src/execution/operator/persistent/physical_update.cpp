@@ -32,7 +32,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
-		state->child_chunk.ClearSelectionVector();
+		state->child_chunk.Normalify();
 		default_executor.SetChunk(state->child_chunk);
 
 		// update data in the base table

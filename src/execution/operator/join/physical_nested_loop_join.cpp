@@ -192,7 +192,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					if (state->child_chunk.size() == 0) {
 						return;
 					}
-					state->child_chunk.ClearSelectionVector();
+					state->child_chunk.Normalify();
 
 					// resolve the left join condition for the current chunk
 					state->lhs_executor.Execute(state->child_chunk, state->left_join_condition);

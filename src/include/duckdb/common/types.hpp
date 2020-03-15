@@ -23,6 +23,22 @@ struct blob_t {
 	idx_t size;
 };
 
+struct SelectionVector {
+	SelectionVector(idx_t count) {
+		sel = unique_ptr<sel_t[]>(new sel_t[count]);
+	}
+
+	void set_index(idx_t idx, idx_t loc) {
+		sel[idx] = loc;
+	}
+
+	idx_t get_index(idx_t idx) const {
+		return sel[idx];
+	}
+private:
+	unique_ptr<sel_t[]> sel;
+};
+
 struct string_t;
 
 template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;

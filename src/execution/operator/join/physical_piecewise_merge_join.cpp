@@ -112,7 +112,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
-			state->child_chunk.ClearSelectionVector();
+			state->child_chunk.Normalify();
 
 			// resolve the join keys for the left chunk
 			state->join_keys.Reset();

@@ -32,21 +32,28 @@ struct UnaryLambdaWrapper {
 
 struct UnaryExecutor {
 private:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool HAS_SEL_VECTOR>
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               sel_t *__restrict sel_vector, nullmask_t nullmask, FUNC fun) {
+	                               SelectionVector *__restrict sel_vector, nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (IGNORE_NULL && nullmask.any()) {
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				if (!nullmask[i]) {
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
+			if (!HAS_SEL_VECTOR) {
+				result_nullmask = nullmask;
+			}
+			for(idx_t i = 0; i < count; i++) {
+				auto idx = HAS_SEL_VECTOR ? i : sel_vector->get_index(i);
+				if (!nullmask[idx]) {
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx]);
+				} else if (HAS_SEL_VECTOR) {
+					result_nullmask[i] = true;
 				}
-			});
+			}
 		} else {
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
-			});
+			for(idx_t i = 0; i < count; i++) {
+				auto idx = HAS_SEL_VECTOR ? i : sel_vector->get_index(i);
+				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx]);
+			}
 		}
 	}
 
@@ -55,7 +62,8 @@ private:
 		assert(input.SameCardinality(result));
 		auto result_data = (RESULT_TYPE *)result.GetData();
 
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		switch(input.vector_type) {
+		case VectorType::CONSTANT_VECTOR:{
 			auto ldata = (INPUT_TYPE *)input.GetData();
 
 			result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -65,14 +73,28 @@ private:
 				result.nullmask[0] = false;
 				result_data[0] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[0]);
 			}
-		} else {
+			break;
+		}
+		case VectorType::DICTIONARY_VECTOR:  {
+			auto &sel = input.GetSelVector();
+			auto &child = input.GetDictionaryChild();
+			child.Normalify();
+
+			auto ldata = (INPUT_TYPE *) child.GetData();
+			result.vector_type = VectorType::FLAT_VECTOR;
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(
+			    ldata, result_data, input.size(), &sel, input.nullmask, result.nullmask, fun);
+			break;
+		}
+		default: {
 			input.Normalify();
 			auto ldata = (INPUT_TYPE *)input.GetData();
 
 			result.vector_type = VectorType::FLAT_VECTOR;
-			result.nullmask = input.nullmask;
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, input.size(), input.sel_vector(), input.nullmask, fun);
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false>(
+			    ldata, result_data, input.size(), nullptr, input.nullmask, result.nullmask, fun);
+			break;
+		}
 		}
 	}
 

@@ -42,11 +42,11 @@ void DataChunk::Destroy() {
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
 	assert(index < size());
-	return data[col_idx].GetValue(sel_vector ? sel_vector[index] : index);
+	return data[col_idx].GetValue(index);
 }
 
 void DataChunk::SetValue(idx_t col_idx, idx_t index, Value val) {
-	data[col_idx].SetValue(sel_vector ? sel_vector[index] : index, move(val));
+	data[col_idx].SetValue(index, move(val));
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
@@ -59,9 +59,10 @@ void DataChunk::Reference(DataChunk &chunk) {
 
 void DataChunk::Copy(DataChunk &other, idx_t offset) {
 	assert(column_count() == other.column_count());
-	assert(other.size() == 0 && !other.sel_vector);
+	assert(other.size() == 0);
 
 	for (idx_t i = 0; i < column_count(); i++) {
+		assert(other.data[i].vector_type == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], offset);
 	}
 	other.SetCardinality(size() - offset);
@@ -74,23 +75,11 @@ void DataChunk::Append(DataChunk &other) {
 	if (column_count() != other.column_count()) {
 		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
 	}
-	assert(!sel_vector);
 	for (idx_t i = 0; i < column_count(); i++) {
+		assert(data[i].vector_type == VectorType::FLAT_VECTOR);
 		VectorOperations::Append(other.data[i], data[i]);
 	}
 	SetCardinality(size() + other.size());
-}
-
-void DataChunk::ClearSelectionVector() {
-	Normalify();
-	if (!sel_vector) {
-		return;
-	}
-
-	for (idx_t i = 0; i < column_count(); i++) {
-		data[i].ClearSelectionVector();
-	}
-	sel_vector = nullptr;
 }
 
 void DataChunk::Normalify() {
@@ -183,34 +172,13 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
+void DataChunk::SetCardinality(idx_t count, SelectionVector &sel_vector) {
+	throw NotImplementedException("FIXME: set cardinality");
+}
+
 void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (idx_t c = 0; c < column_count(); c++) {
-		if (data[c].type == TypeId::VARCHAR) {
-			// move strings of this chunk to the specified heap
-			auto source_strings = (string_t *)data[c].GetData();
-			auto old_buffer = move(data[c].buffer);
-			if (data[c].vector_type == VectorType::CONSTANT_VECTOR) {
-				data[c].buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
-				data[c].data = data[c].buffer->GetData();
-				auto target_strings = (string_t *)data[c].GetData();
-				if (!data[c].nullmask[0] && !source_strings[0].IsInlined()) {
-					target_strings[0] = heap.AddString(source_strings[0]);
-				} else {
-					target_strings[0] = source_strings[0];
-				}
-			} else {
-				data[c].buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
-				data[c].data = data[c].buffer->GetData();
-				auto target_strings = (string_t *)data[c].GetData();
-				VectorOperations::Exec(data[c], [&](idx_t i, idx_t k) {
-					if (!data[c].nullmask[i] && !source_strings[i].IsInlined()) {
-						target_strings[i] = heap.AddString(source_strings[i]);
-					} else {
-						target_strings[i] = source_strings[i];
-					}
-				});
-			}
-		}
+		data[c].MoveStringsToHeap(heap);
 	}
 }
 
@@ -226,14 +194,9 @@ void DataChunk::Verify() {
 #ifdef DEBUG
 	assert(size() <= STANDARD_VECTOR_SIZE);
 	// verify that all vectors in this chunk have the chunk selection vector
-	sel_t *v = sel_vector;
-	for (idx_t i = 0; i < column_count(); i++) {
-		assert(data[i].sel_vector() == v);
-		data[i].Verify();
-	}
-	// verify that all vectors in the chunk have the same count
 	for (idx_t i = 0; i < column_count(); i++) {
 		assert(size() == data[i].size());
+		data[i].Verify();
 	}
 #endif
 }

@@ -21,44 +21,46 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 		auto &input = args.data[col_idx];
 		assert(input.type == TypeId::VARCHAR);
 		assert(input.SameCardinality(result));
-		if (input.vector_type != VectorType::CONSTANT_VECTOR) {
-			// non-constant vector: set the result type to a flat vector
-			input.Normalify();
-			auto input_data = (string_t *)input.GetData();
-			result.vector_type = VectorType::FLAT_VECTOR;
-			// now add the length of each vector to the result length
-			VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
-				// ignore null entries
-				if (input.nullmask[i]) {
-					return;
-				}
-				result_lengths[k] += input_data[i].GetSize();
-			});
-		} else {
+		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (input.nullmask[0]) {
 				// constant null, skip
 				continue;
 			}
 			auto input_data = (string_t *)input.GetData();
 			constant_lengths += input_data[0].GetSize();
+		} else {
+			// non-constant vector: set the result type to a flat vector
+			result.vector_type = VectorType::FLAT_VECTOR;
+			// now get the lengths of each of the input elements
+			SelectionVector *sel;
+			data_ptr_t data;
+			input.Orrify(&sel, &data);
+
+			auto input_data = (string_t *) data;
+			// now add the length of each vector to the result length
+			for(idx_t i = 0; i < result.size(); i++) {
+				if (input.nullmask[sel[i]]) {
+					continue;
+				}
+				result_lengths[i] += input_data[sel[i]].GetSize();
+			}
 		}
 	}
 
 	// first we allocate the empty strings for each of the values
 	auto result_data = (string_t *)result.GetData();
-	VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
+	for(idx_t i = 0; i < result.size(); i++) {
 		// allocate an empty string of the required size
-		idx_t str_length = constant_lengths + result_lengths[k];
+		idx_t str_length = constant_lengths + result_lengths[i];
 		result_data[i] = result.EmptyString(str_length);
 		// we reuse the result_lengths vector to store the currently appended size
-		result_lengths[k] = 0;
-	});
+		result_lengths[i] = 0;
+	}
 
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
-		auto input_data = (string_t *)input.GetData();
-		assert(input.vector_type == VectorType::FLAT_VECTOR || input.vector_type == VectorType::CONSTANT_VECTOR);
+
 		// loop over the vector and concat to all results
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			// constant vector
@@ -67,27 +69,34 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 				continue;
 			}
 			// append the constant vector to each of the strings
+			auto input_data = (string_t *)input.GetData();
 			auto input_ptr = input_data[0].GetData();
 			auto input_len = input_data[0].GetSize();
-			VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
-				memcpy(result_data[i].GetData() + result_lengths[k], input_ptr, input_len);
-				result_lengths[k] += input_len;
-			});
+			for(idx_t i = 0; i < result.size(); i++) {
+				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
+				result_lengths[i] += input_len;
+			}
 		} else {
 			// standard vector
-			VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
-				// ignore null entries
-				if (input.nullmask[i]) {
-					return;
+			SelectionVector *sel;
+			data_ptr_t data;
+			input.Orrify(&sel, &data);
+
+			auto input_data = (string_t *)data;
+			for(idx_t i = 0; i < result.size(); i++) {
+				if (input.nullmask[sel[i]]) {
+					continue;
 				}
-				auto input_ptr = input_data[i].GetData();
-				auto input_len = input_data[i].GetSize();
-				memcpy(result_data[i].GetData() + result_lengths[k], input_ptr, input_len);
-				result_lengths[k] += input_len;
-			});
+				auto input_ptr = input_data[sel[i]].GetData();
+				auto input_len = input_data[sel[i]].GetSize();
+				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
+				result_lengths[i] += input_len;
+			}
 		}
 	}
-	VectorOperations::Exec(result, [&](idx_t i, idx_t k) { result_data[i].Finalize(); });
+	for(idx_t i = 0; i < result.size(); i++) {
+		result_data[i].Finalize();
+	}
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -109,14 +118,13 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 	                                                            });
 }
 
-template <bool CONSTANT_SEP> static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data) {
+static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data, SelectionVector *sep_sel) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	// first figure out the lengths
 	for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 
-		// loop over the vector and concat to all results
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			// constant vector
 			if (input.nullmask[0]) {
@@ -125,14 +133,21 @@ template <bool CONSTANT_SEP> static void templated_concat_ws(DataChunk &args, Ve
 			}
 			auto input_data = (string_t *)input.GetData();
 			idx_t constant_size = input_data[0].GetSize();
-			VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
-				if (has_results[k]) {
-					result_lengths[k] += sep_data[CONSTANT_SEP ? 0 : i].GetSize();
+			for(idx_t i = 0; i < result.size(); i++) {
+				if (has_results[i]) {
+					result_lengths[i] += sep_data[sep_sel->get_index(i)].GetSize();
 				}
-				result_lengths[k] += constant_size;
-				has_results[k] = true;
-			});
+				result_lengths[i] += constant_size;
+				has_results[i] = true;
+			}
 		} else {
+			result.vector_type = VectorType::FLAT_VECTOR;
+
+			// now get the lengths of each of the input elements
+			SelectionVector *sel;
+			data_ptr_t data;
+			input.Orrify(&sel, &data);
+
 			input.Normalify();
 			auto input_data = (string_t *)input.GetData();
 			// standard vector
@@ -212,14 +227,32 @@ template <bool CONSTANT_SEP> static void templated_concat_ws(DataChunk &args, Ve
 
 static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &separator = args.data[0];
-	result.vector_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t i = 0; i < args.column_count(); i++) {
-		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
-			result.vector_type = VectorType::FLAT_VECTOR;
-			break;
-		}
-	}
+	SelectionVector *sep_sel;
+	data_ptr_t sep_data;
+	nullmask_t *sep_nullmask;
 
+	separator.Orrify(&sep_sel, &sep_data, &sep_nullmask);
+
+	result.vector_type = VectorType::FLAT_VECTOR;
+	switch(separator.vector_type) {
+	case VectorType::CONSTANT_VECTOR:
+		if (separator.nullmask[0]) {
+			// constant NULL as separator: return constant NULL vector
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+			result.nullmask[0] = true;
+			return;
+		}
+		result.vector_type = VectorType::CONSTANT_VECTOR;
+		break;
+	case VectorType::FLAT_VECTOR:
+		result.nullmask = separator.nullmask;
+		break;
+	default:
+		for(idx_t i = 0; i < result.size(); i++) {
+			sep.nullmask
+		}
+
+	}
 	if (separator.vector_type == VectorType::CONSTANT_VECTOR) {
 		// constant separator
 		if (separator.nullmask[0]) {
@@ -234,6 +267,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 		auto sep_data = (string_t *)separator.GetData();
 		templated_concat_ws<true>(args, result, sep_data);
 	} else {
+		result.vector_type = VectorType::FLAT_VECTOR;
 		// variable separator: copy nullmask from separator
 		separator.Normalify();
 		result.nullmask = separator.nullmask;

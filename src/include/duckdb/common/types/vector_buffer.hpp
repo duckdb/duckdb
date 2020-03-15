@@ -51,13 +51,14 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class DictionaryBuffer : public VectorBuffer {
 public:
-	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER) {
-		data = unique_ptr<data_t[]>(new data_t[count * sizeof(sel_t)]);
+	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 	}
 public:
-	sel_t* GetSelVector() {
-		return (sel_t*) data.get();
+	SelectionVector& GetSelVector() {
+		return sel_vector;
 	}
+private:
+	SelectionVector sel_vector;
 };
 
 class VectorStringBuffer : public VectorBuffer {

@@ -168,66 +168,58 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <class T> static void Exec(sel_t *sel_vector, idx_t count, T &&fun, idx_t offset = 0) {
-		idx_t i = offset;
-		if (sel_vector) {
-			//#pragma GCC ivdep
-			for (; i < count; i++) {
-				fun(sel_vector[i], i);
+	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun, SelectionVector &sel) {
+		switch(vector.vector_type) {
+		case VectorType::SEQUENCE_VECTOR: {
+			int64_t start, increment;
+			vector.GetSequence(start, increment);
+			for (idx_t i = 0; i < vector.size(); i++) {
+				fun((T)(start + increment * sel.get_index(i)));
 			}
-		} else {
-			//#pragma GCC ivdep
-			for (; i < count; i++) {
-				fun(i, i);
-			}
+			break;
 		}
-	}
-	//! Exec over the set of indexes, calls the callback function with (i) =
-	//! index, dependent on selection vector and (k) = count
-	template <class T> static void Exec(const Vector &vector, T &&fun, idx_t offset = 0, idx_t count = 0) {
-		sel_t *sel_vector;
-		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			count = 1;
-			sel_vector = nullptr;
-		} else {
-			assert(vector.vector_type == VectorType::FLAT_VECTOR);
-			if (count == 0) {
-				count = vector.size();
-			} else {
-				count = count + offset;
+		case VectorType::FLAT_VECTOR: {
+			auto data = (T *)vector.GetData();
+			for(idx_t i = 0; i < vector.size(); i++) {
+				fun(data[sel.get_index(i)]);
 			}
-			sel_vector = vector.sel_vector();
+			break;
 		}
-		VectorOperations::Exec(sel_vector, count, fun, offset);
-	}
-
-	//! Exec over a specific type. Note that it is up to the caller to verify
-	//! that the vector passed in has the correct type for the iteration! This
-	//! is equivalent to calling ::Exec() and performing data[i] for
-	//! every entry
-	template <typename T, class FUNC>
-	static void ExecType(Vector &vector, FUNC &&fun, idx_t offset = 0, idx_t limit = 0) {
-		auto data = (T *)vector.GetData();
-		VectorOperations::Exec(
-		    vector, [&](idx_t i, idx_t k) { fun(data[i], i, k); }, offset, limit);
+		default:
+			throw NotImplementedException("Unimplemented type for ExecNumeric");
+		}
 	}
 
 	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun) {
-		if (vector.vector_type == VectorType::SEQUENCE_VECTOR) {
+		switch(vector.vector_type) {
+		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
 			vector.GetSequence(start, increment);
-			auto vsel = vector.sel_vector();
 			for (idx_t i = 0; i < vector.size(); i++) {
-				idx_t idx = vsel ? vsel[i] : i;
-				fun((T)(start + increment * idx), idx, i);
+				fun((T)(start + increment * i));
 			}
-		} else if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+			break;
+		}
+		case VectorType::CONSTANT_VECTOR: {
 			auto data = (T *)vector.GetData();
-			fun(data[0], 0, 0);
-		} else {
-			assert(vector.vector_type == VectorType::FLAT_VECTOR);
+			fun(data[0]);
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
 			auto data = (T *)vector.GetData();
-			VectorOperations::Exec(vector, [&](idx_t i, idx_t k) { fun(data[i], i, k); });
+			for(idx_t i = 0; i < vector.size(); i++) {
+				fun(data[i]);
+			}
+			break;
+		}
+		case VectorType::DICTIONARY_VECTOR: {
+			auto &sel = vector.GetSelVector();
+			auto &child = vector.GetDictionaryChild();
+			ExecNumeric<T, FUNC>(child, fun, sel);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented type for ExecNumeric");
 		}
 	}
 };
