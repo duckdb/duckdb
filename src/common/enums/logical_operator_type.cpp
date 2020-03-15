@@ -31,6 +31,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "AGGREGATE_AND_GROUP_BY";
 	case LogicalOperatorType::WINDOW:
 		return "WINDOW";
+	case LogicalOperatorType::UNNEST:
+		return "UNNEST";
 	case LogicalOperatorType::LIMIT:
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
@@ -75,10 +77,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXECUTE";
 	case LogicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
-    case LogicalOperatorType::RECURSIVE_CTE:
-        return "REC_CTE";
-    case LogicalOperatorType::CTE_REF:
-        return "CTE_SCAN";
+	case LogicalOperatorType::RECURSIVE_CTE:
+		return "REC_CTE";
+	case LogicalOperatorType::CTE_REF:
+		return "CTE_SCAN";
 	case LogicalOperatorType::INVALID:
 	default:
 		return "INVALID";

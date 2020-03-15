@@ -762,7 +762,7 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 	}
 
 	// create a vector pointing to the current set of row ids
-	FlatVector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	StandaloneVector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
 	row_identifiers.SetCount(scan_count);
 

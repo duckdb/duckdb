@@ -11,6 +11,15 @@ using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth) {
 	// lookup the function in the catalog
+
+	if (function.function_name == "unnest" || function.function_name == "unlist") {
+			// special case, not in catalog
+			// TODO make sure someone does not create such a function OR
+			// have unnest live in catalog, too
+			return BindUnnest(function, depth);
+		}
+
+
 	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
 	                                                  function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
@@ -51,6 +60,16 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindResult(UnsupportedAggregateMessage());
 }
 
+BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr,
+                                           idx_t depth) {
+	return BindResult(UnsupportedUnnestMessage());
+}
+
 string ExpressionBinder::UnsupportedAggregateMessage() {
 	return "Aggregate functions are not supported here";
+}
+
+
+string ExpressionBinder::UnsupportedUnnestMessage() {
+	return "UNNEST not supported here";
 }

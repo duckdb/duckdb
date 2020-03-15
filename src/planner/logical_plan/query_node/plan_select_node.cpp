@@ -60,6 +60,18 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &st
 		root = move(win);
 	}
 
+	if (statement.unnests.size() > 0) {
+		auto unnest = make_unique<LogicalUnnest>(statement.unnest_index);
+		unnest->expressions = move(statement.unnests);
+		// visit the window expressions
+		for (auto &expr : unnest->expressions) {
+			PlanSubqueries(&expr, &root);
+		}
+		assert(unnest->expressions.size() > 0);
+		unnest->AddChild(move(root));
+		root = move(unnest);
+	}
+
 	for (auto &expr : statement.select_list) {
 		PlanSubqueries(&expr, &root);
 	}

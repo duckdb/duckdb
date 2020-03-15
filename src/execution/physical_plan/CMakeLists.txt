@@ -32,6 +32,7 @@ add_library_unity(duckdb_physical_plan
                   plan_top_n.cpp
                   plan_update.cpp
                   plan_window.cpp
+                  plan_unnest.cpp
                   plan_expression_get.cpp
                   plan_recursive_cte.cpp)
 set(ALL_OBJECT_FILES

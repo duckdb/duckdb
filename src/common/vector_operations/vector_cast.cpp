@@ -6,6 +6,7 @@
 
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -30,7 +31,7 @@ static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLTy
 		}
 	} else {
 		source.Normalify();
-		if (VectorOperations::HasNull(source)) {
+		if (VectorOperations::HasNotNull(source)) {
 			throw UnimplementedCast(source_type, target_type);
 		}
 	}
@@ -73,6 +74,13 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		break;
 	case SQLTypeId::VARCHAR: {
 		string_cast<SRC, duckdb::StringCast>(source, result);
+		break;
+	}
+	case SQLTypeId::LIST: {
+		assert(result.type == TypeId::LIST);
+		auto list_child = make_unique<ChunkCollection>();
+		result.SetListEntry(move(list_child));
+		null_cast(source, result, source_type, target_type);
 		break;
 	}
 	default:
@@ -184,7 +192,6 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 
 void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
 	assert(source_type != target_type);
-
 	// first switch on source type
 	switch (source_type.id) {
 	case SQLTypeId::BOOLEAN:

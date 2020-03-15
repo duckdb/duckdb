@@ -415,7 +415,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[]) {
-	FlatVector current_pointers;
+	StandaloneVector current_pointers;
 	current_pointers.SetCount(pointers.size());
 	current_pointers.SetSelVector(pointers.sel_vector());
 	current_pointers.Reference(pointers);

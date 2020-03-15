@@ -52,6 +52,7 @@ class BoundOperatorExpression;
 class BoundParameterExpression;
 class BoundReferenceExpression;
 class BoundSubqueryExpression;
+class BoundUnnestExpression;
 class BoundWindowExpression;
 class CommonSubExpression;
 

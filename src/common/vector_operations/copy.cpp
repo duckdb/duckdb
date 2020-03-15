@@ -6,6 +6,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
@@ -122,6 +124,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 	VectorOperations::Exec(
 	    source, [&](idx_t i, idx_t k) { target.nullmask[k - offset] = source.nullmask[i]; }, offset);
 
+	if (source.nullmask.all()) {
+		return;
+	}
+
 	if (!TypeIsConstantSize(source.type)) {
 		switch (source.type) {
 		case TypeId::VARCHAR: {
@@ -139,35 +145,26 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 		case TypeId::STRUCT: {
 			// the main vector only has a nullmask, so set that with offset
 			// recursively apply to children
-			auto &source_children = source.GetChildren();
+			auto &source_children = source.GetStructEntries();
 			for (auto &child : source_children) {
 				auto child_copy = make_unique<Vector>(target.cardinality(), child.second->type);
 
 				VectorOperations::Copy(*child.second, *child_copy, offset);
-				target.AddChild(move(child_copy), child.first);
+				target.AddStructEntry(child.first, move(child_copy));
 			}
 		} break;
 		case TypeId::LIST: {
-			throw NotImplementedException("FIXME: copy list");
-
 			// // copy main vector
-			// // FIXME
-			// assert(offset == 0);
-			// other.Initialize(TypeId::LIST);
-			// other.count = count - offset;
-			// other.selection_vector = nullptr;
+			// // TODO implement non-zero offsets
+			assert(offset == 0 || !target.HasListEntry());
+			assert(target.type == TypeId::LIST);
 
-			// // FIXME :/
-			// memcpy(other.data, data, count * GetTypeIdSize(type));
-
-			// // copy child
-			// assert(children.size() == 1); // TODO if size() = 0, we would have all NULLs?
-			// auto &child = children[0].second;
-			// auto child_copy = make_unique<Vector>();
-			// child_copy->Initialize(child->type, true, child->count);
-			// child->Copy(*child_copy.get(), offset);
-
-			// other.children.push_back(pair<string, unique_ptr<Vector>>("", move(child_copy)));
+			copy_loop<list_entry_t, false>(source, target.GetData(), offset, copy_count);
+			auto &child = source.GetListEntry();
+			auto child_copy = make_unique<ChunkCollection>();
+			child_copy->Append(child);
+			// TODO optimization: if offset != 0 we can skip some of the child list and adjustd offsets accordingly
+			target.SetListEntry(move(child_copy));
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for copy");
@@ -180,6 +177,10 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t offset) {
 void VectorOperations::Append(Vector &source, Vector &target) {
 	if (source.type != target.type) {
 		throw TypeMismatchException(source.type, target.type, "Append types don't match!");
+	}
+	if (target.size() == 0) {
+		VectorOperations::Copy(source, target);
+		return;
 	}
 	source.Normalify();
 
@@ -205,13 +206,45 @@ void VectorOperations::Append(Vector &source, Vector &target) {
 		} break;
 		case TypeId::STRUCT: {
 			// recursively apply to children
-			auto &source_children = source.GetChildren();
-			auto &target_children = target.GetChildren();
+			auto &source_children = source.GetStructEntries();
+			auto &target_children = target.GetStructEntries();
 			assert(source_children.size() == target_children.size());
 			for (size_t i = 0; i < source_children.size(); i++) {
 				assert(target_children[i].first == target_children[i].first);
 				VectorOperations::Append(*source_children[i].second, *target_children[i].second);
 			}
+		} break;
+
+		case TypeId::LIST: {
+			// recursively apply to children
+
+			if (!source.HasListEntry()) {
+				assert(!VectorOperations::HasNotNull(source));
+				auto new_source_child = make_unique<ChunkCollection>();
+				source.SetListEntry(move(new_source_child));
+			}
+
+			if (!target.HasListEntry()) {
+				assert(!VectorOperations::HasNotNull(target));
+				auto new_target_child = make_unique<ChunkCollection>();
+				target.SetListEntry(move(new_target_child));
+			}
+
+			auto &source_child = source.GetListEntry();
+			auto &target_child = target.GetListEntry();
+			// append to list index
+			auto old_target_child_len = target_child.count;
+			target_child.Append(source_child);
+
+			auto target_data = ((list_entry_t *)target.GetData());
+			auto source_data = ((list_entry_t *)source.GetData());
+
+			VectorOperations::Exec(source, [&](idx_t i, idx_t k) {
+				if (!target.nullmask[old_count + k]) {
+					target_data[old_count + k].length = source_data[i].length;
+					target_data[old_count + k].offset = source_data[i].offset + old_target_child_len;
+				}
+			});
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for APPEND");

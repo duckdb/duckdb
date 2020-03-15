@@ -3,13 +3,13 @@ add_subdirectory(math)
 add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
-add_subdirectory(struct)
+add_subdirectory(nested)
 
 add_library_unity(duckdb_func_scalar
                   OBJECT
                   date_functions.cpp
                   string_functions.cpp
-                  struct_functions.cpp
+                  nested_functions.cpp
                   math_functions.cpp
                   operators.cpp
                   sequence_functions.cpp

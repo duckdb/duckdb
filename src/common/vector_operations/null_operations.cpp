@@ -38,6 +38,24 @@ void VectorOperations::IsNull(Vector &input, Vector &result) {
 	is_null_loop<false>(input, result);
 }
 
+bool VectorOperations::HasNotNull(Vector &input) {
+	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		return !input.nullmask[0];
+	} else {
+		input.Normalify();
+		if (input.nullmask.none()) {
+			return true;
+		}
+		bool has_not_null = false;
+		VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
+			if (!input.nullmask[i]) {
+				has_not_null = true;
+			}
+		});
+		return has_not_null;
+	}
+}
+
 bool VectorOperations::HasNull(Vector &input) {
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		return input.nullmask[0];

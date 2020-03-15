@@ -41,8 +41,8 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		FlatVector pointers;
-		FlatVector build_pointer_vector;
+		StandaloneVector pointers;
+		StandaloneVector build_pointer_vector;
 		sel_t sel_vector[STANDARD_VECTOR_SIZE];
 		// whether or not the given tuple has found a match, used for LeftJoin
 		bool found_match[STANDARD_VECTOR_SIZE];

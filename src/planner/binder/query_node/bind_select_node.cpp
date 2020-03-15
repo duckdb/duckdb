@@ -20,6 +20,7 @@ unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
 	result->group_index = GenerateTableIndex();
 	result->aggregate_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
+	result->unnest_index = GenerateTableIndex();
 
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);

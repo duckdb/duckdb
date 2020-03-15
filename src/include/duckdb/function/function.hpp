@@ -126,13 +126,14 @@ private:
 	// aggregates
 	void RegisterAlgebraicAggregates();
 	void RegisterDistributiveAggregates();
+	void RegisterNestedAggregates();
 
 	// scalar functions
 	void RegisterDateFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
-	void RegisterStructFunctions();
+	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 };

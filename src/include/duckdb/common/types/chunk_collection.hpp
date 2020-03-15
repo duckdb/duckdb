@@ -41,6 +41,11 @@ public:
 	//! Append a new DataChunk directly to this ChunkCollection
 	void Append(DataChunk &new_chunk);
 
+	//! Append another ChunkCollection directly to this ChunkCollection
+	void Append(ChunkCollection &other);
+
+	void Verify();
+
 	//! Gets the value of the column at the specified index
 	Value GetValue(idx_t column, idx_t index);
 	//! Sets the value of the column at the specified index

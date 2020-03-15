@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class BoundAggregateExpression;
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
@@ -23,28 +25,32 @@ typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &s
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
+//! Binds the scalar function and creates the function data
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context, SQLType& return_type);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state);
 
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state);
 
+
+
 class AggregateFunction : public SimpleFunction {
 public:
 	AggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  aggregate_destructor_t destructor = nullptr)
+					  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
 	    : SimpleFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
-	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), destructor(destructor) {
+	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind), destructor(destructor) {
 	}
 
 	AggregateFunction(vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  aggregate_destructor_t destructor = nullptr)
+					  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, destructor) {
+	                        simple_update, bind, destructor){
 	}
 
 	//! The hashed aggregate state sizing function
@@ -59,6 +65,9 @@ public:
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
+
+	//! The bind function (may be null)
+	bind_aggregate_function_t bind;
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor;
 

@@ -183,6 +183,14 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
+Value Value::LIST(vector<Value> values) {
+	Value result(TypeId::LIST);
+	result.list_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//

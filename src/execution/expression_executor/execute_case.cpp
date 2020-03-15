@@ -1,6 +1,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -123,7 +124,74 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, sel_t tside[], id
 		result.AddHeapReference(res_true);
 		result.AddHeapReference(res_false);
 		break;
+	case TypeId::LIST:
+	{
+		auto& true_child = res_true.GetListEntry();
+		auto& false_child = res_false.GetListEntry();
+
+		assert(true_child.types.size() == 1);
+		assert(false_child.types.size() == 1);
+		if(true_child.types[0] != false_child.types[0]) {
+			throw TypeMismatchException(true_child.types[0], false_child.types[0], "CASE on LISTs requires matching list content types");
+		}
+
+		vector<TypeId> child_type;
+		child_type.push_back(true_child.types[0]);
+
+		DataChunk true_append;
+		DataChunk false_append;
+
+		true_append.InitializeEmpty(child_type);
+		false_append.InitializeEmpty(child_type);
+		true_append.SetCardinality(tcount, tside);
+		false_append.SetCardinality(fcount, fside);
+		true_append.data[0].Reference(res_true);
+		false_append.data[0].Reference(res_false);
+
+		true_append.Verify();
+		false_append.Verify();
+
+		auto result_cc = make_unique<ChunkCollection>();
+		result.SetListEntry(move(result_cc));
+
+		auto& result_child = result.GetListEntry();
+
+		result_child.Append(true_child);
+		result_child.Append(false_child);
+
+		// all the false offsets need to be incremented by true_child.count
+		fill_loop<list_entry_t>(res_true, result, tside, tcount);
+
+		// FIXME the nullmask here is likely borked
+		// TODO uuugly
+		auto data = (list_entry_t *)res_false.GetData();
+		auto res = (list_entry_t *)result.GetData();
+		if (res_false.vector_type == VectorType::CONSTANT_VECTOR) {
+			if (res_false.nullmask[0]) {
+				for (idx_t i = 0; i < fcount; i++) {
+					result.nullmask[fside[i]] = true;
+				}
+			} else {
+				for (idx_t i = 0; i < fcount; i++) {
+					auto list_entry = data[0];
+					list_entry.offset += true_child.count;
+					res[fside[i]] = list_entry;
+				}
+			}
+		} else {
+			for (idx_t i = 0; i < fcount; i++) {
+				auto list_entry = data[fside[i]];
+				list_entry.offset += true_child.count;
+				res[fside[i]] = list_entry;
+				result.nullmask[fside[i]] = res_false.nullmask[fside[i]];
+			}
+		}
+
+		result.Verify();
+
+		break;
+	}
 	default:
-		throw NotImplementedException("Unimplemented type for case expression");
+		throw NotImplementedException("Unimplemented type for case expression: %s", TypeIdToString(result.type).c_str());
 	}
 }

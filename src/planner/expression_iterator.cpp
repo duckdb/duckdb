@@ -105,6 +105,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::BOUND_UNNEST: {
+		auto &unnest_expr = (BoundUnnestExpression &)expr;
+		unnest_expr.child = callback(move(unnest_expr.child));
+		break;
+	}
 	case ExpressionClass::COMMON_SUBEXPRESSION: {
 		auto &cse_expr = (CommonSubExpression &)expr;
 		if (cse_expr.owned_child) {

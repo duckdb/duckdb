@@ -371,7 +371,7 @@ template <> double Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template<class T>
 string CastToStandardString(T input) {
-	FlatVector v;
+	StandaloneVector v;
 	return StringCast::Operation(input, v).GetString();
 }
 

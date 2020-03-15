@@ -92,6 +92,9 @@ public:
 	static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	static Value STRUCT(child_list_t<Value> values);
+	//! Create a list value with the given entries
+	static Value LIST(std::vector<Value> values);
+
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");

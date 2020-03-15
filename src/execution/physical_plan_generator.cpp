@@ -66,6 +66,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalAggregate &)op);
 	case LogicalOperatorType::WINDOW:
 		return CreatePlan((LogicalWindow &)op);
+	case LogicalOperatorType::UNNEST:
+		return CreatePlan((LogicalUnnest &)op);
 	case LogicalOperatorType::LIMIT:
 		return CreatePlan((LogicalLimit &)op);
 	case LogicalOperatorType::ORDER_BY:

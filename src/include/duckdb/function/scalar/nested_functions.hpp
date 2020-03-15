@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/scalar/struct_functions.hpp
+// duckdb/function/scalar/nested_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,18 +13,22 @@
 
 namespace duckdb {
 
-struct StructPackBindData : public FunctionData {
+struct VariableReturnBindData : public FunctionData {
 	SQLType stype;
 
-	StructPackBindData(SQLType stype) : stype(stype) {
+	VariableReturnBindData(SQLType stype) : stype(stype) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StructPackBindData>(stype);
+		return make_unique<VariableReturnBindData>(stype);
 	}
 };
 
 struct StructPackFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
