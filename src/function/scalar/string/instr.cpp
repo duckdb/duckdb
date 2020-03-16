@@ -11,16 +11,16 @@ using namespace std;
 
 namespace duckdb {
 
-static int64_t instr(string_t haystack, string_t needle);
+static int32_t instr(string_t haystack, string_t needle);
 
 struct InstrOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return instr(left.GetData(), right.GetData());
+		return instr(left, right);
 	}
 };
 
-static int64_t instr(string_t haystack, string_t needle) {
-    int64_t string_position=0;
+static int32_t instr(string_t haystack, string_t needle) {
+    int32_t string_position=0;
     unsigned char firstChar;
 
     // Getting information about the needle and the haystack
@@ -59,7 +59,7 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
                                     {SQLType::VARCHAR,
                                     SQLType::VARCHAR}, // argument list
                                     SQLType::INTEGER, // return type
-                                    ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
+                                    ScalarFunction::BinaryFunction<string_t, string_t, int32_t, InstrOperator, true>));
 }
 
 } // namespace duckdb
