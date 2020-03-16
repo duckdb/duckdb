@@ -16,7 +16,7 @@ TEST_CASE("Instr test", "[function]") {
 
 
 	result = con.Query("SELECT instr(s,'h') FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 0, 0, Value()}));/*
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 0, 0, Value()}));
 
 	result = con.Query("SELECT instr(s,'e') FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 0, 0, Value()}));
@@ -33,8 +33,8 @@ TEST_CASE("Instr test", "[function]") {
 	result = con.Query("SELECT instr(s,'he-man') FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, Value()}));
 
-    /*result = con.Query("SELECT instr(s,'o'),s FROM strings");
+    result = con.Query("SELECT instr(s,'o'),s FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 0, 2, Value()}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "b", Value()}));*/
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "b", Value()}));
 
 }
