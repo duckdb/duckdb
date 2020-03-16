@@ -12,7 +12,7 @@ using namespace std;
 namespace duckdb {
 
 
-static idx_t instr(string_t haystack, string_t needle);
+static int64_t instr(string_t haystack, string_t needle);
 
 struct InstrOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
@@ -20,8 +20,8 @@ struct InstrOperator {
 	}
 };
 
-static idx_t instr(string_t haystack, string_t needle) {
-    idx_t string_position=0;
+static int64_t instr(string_t haystack, string_t needle) {
+    int64_t string_position=0;
     unsigned char firstChar;
 
     auto input_haystack = haystack.GetData();
@@ -39,13 +39,14 @@ static idx_t instr(string_t haystack, string_t needle) {
 
             // Comapre the first letter and with that compare Needle to the Haystack
             if((input_haystack[0]==firstChar)&&((memcmp(input_haystack, input_needle, size_needle)==0))){
-                string_position++;
-                break;
+                return string_position++;
             }
             string_position++;
             size_haystack--;
             input_haystack++; 
         }
+        // Did not find the needle
+        string_position=0;
     }
     return string_position;
 }
@@ -55,7 +56,7 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
                                     {SQLType::VARCHAR,
                                     SQLType::VARCHAR}, // argument list
                                     SQLType::INTEGER, // return type
-                                    ScalarFunction::BinaryFunction<string_t, string_t, idx_t, InstrOperator, true>));
+                                    ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
 }
 
 } // namespace duckdb
