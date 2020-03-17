@@ -282,7 +282,7 @@ void ReplayState::ReplayDelete() {
 	VectorCardinality cardinality(1);
 	Vector row_identifiers(cardinality, ROW_TYPE, (data_ptr_t)row_ids);
 
-	auto source_ids = (row_t *)chunk.data[0].GetData();
+	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];

@@ -59,7 +59,7 @@ void Appender::EndRow() {
 }
 
 template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
-	((DST *)col.GetData())[col.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetData<DST>(col)[col.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 void Appender::InvalidateException(string msg) {
@@ -142,7 +142,7 @@ template <> void Appender::Append(nullptr_t value) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
-	col.nullmask[col.size()] = true;
+	FlatVector::SetNull(col, col.size(), true);
 }
 
 void Appender::AppendValue(Value value) {

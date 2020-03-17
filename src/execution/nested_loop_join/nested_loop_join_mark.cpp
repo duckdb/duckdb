@@ -6,15 +6,16 @@ using namespace duckdb;
 using namespace std;
 
 template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, bool found_match[]) {
-	auto ldata = (T *)left.GetData();
-	auto rdata = (T *)right.GetData();
-	VectorOperations::Exec(left, [&](idx_t left_position, idx_t k) {
-		VectorOperations::Exec(right, [&](idx_t right_position, idx_t k) {
-			if (OP::Operation(ldata[left_position], rdata[right_position])) {
-				found_match[left_position] = true;
-			}
-		});
-	});
+	throw NotImplementedException("FIXME");
+	// auto ldata = (T *)left.GetData();
+	// auto rdata = (T *)right.GetData();
+	// VectorOperations::Exec(left, [&](idx_t left_position, idx_t k) {
+	// 	VectorOperations::Exec(right, [&](idx_t right_position, idx_t k) {
+	// 		if (OP::Operation(ldata[left_position], rdata[right_position])) {
+	// 			found_match[left_position] = true;
+	// 		}
+	// 	});
+	// });
 }
 
 template <class OP> static void mark_join_operator(Vector &left, Vector &right, bool found_match[]) {

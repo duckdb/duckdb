@@ -33,12 +33,9 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			// we have to copy part of the chunk with an offset
 			idx_t start_position = offset - state->current_offset;
 			idx_t chunk_count = min(limit, state->child_chunk.size() - start_position);
-
+			throw NotImplementedException("FIXME slice");
 			// set up a slice of the input chunks
-			chunk.SetCardinality(chunk_count, state->child_chunk.sel_vector);
-			for (idx_t i = 0; i < chunk.column_count(); i++) {
-				chunk.data[i].Slice(state->child_chunk.data[i], start_position);
-			}
+			// chunk.Slice(state->child_chunk, start_position, chunk_count);
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
@@ -52,7 +49,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 		}
 		// instead of copying we just change the pointer in the current chunk
 		chunk.Reference(state->child_chunk);
-		chunk.SetCardinality(chunk_count, state->child_chunk.sel_vector);
+		chunk.SetCardinality(chunk_count);
 	}
 
 	state->current_offset += state->child_chunk.size();

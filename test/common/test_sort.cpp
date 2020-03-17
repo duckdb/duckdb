@@ -7,13 +7,13 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T> bool IsSorted(Vector &v) {
-	auto data = (T *)v.GetData();
-	auto vsel = v.sel_vector();
+template <class T> bool IsSorted(Vector &v, SelectionVector &sel) {
+	auto data = FlatVector::GetData<T>(v);
+	auto &nullmask = FlatVector::Nullmask(v);
 	for (size_t i = 1; i < v.size(); i++) {
-		auto lindex = vsel[i - 1], rindex = vsel[i];
-		bool left_null = v.nullmask[lindex];
-		bool right_null = v.nullmask[rindex];
+		auto lindex = sel.get_index(i - 1), rindex = sel.get_index(i);
+		bool left_null = nullmask[lindex];
+		bool right_null = nullmask[rindex];
 		if (!left_null && right_null) {
 			return false;
 		} else if (left_null) {
@@ -28,26 +28,27 @@ template <class T> bool IsSorted(Vector &v) {
 }
 
 TEST_CASE("Sorting vectors works", "[sort]") {
-	sel_t sel[STANDARD_VECTOR_SIZE];
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	VectorCardinality cardinality(STANDARD_VECTOR_SIZE);
 	Vector v(cardinality, TypeId::INT32);
-	auto data = (int *)v.GetData();
+	auto data = FlatVector::GetData<int>(v);
 	// sort without NULLs
-	VectorOperations::Exec(v, [&](size_t i, size_t k) { data[i] = i % 6; });
+	for(idx_t i = 0; i < v.size(); i++) {
+		data[i] = i % 6;
+	}
 	VectorOperations::Sort(v, sel);
 
-	cardinality.sel_vector = sel;
-	REQUIRE(IsSorted<int>(v));
+	REQUIRE(IsSorted<int>(v, sel));
 
 	// sort with NULLs
-	VectorOperations::Exec(v, [&](size_t i, size_t k) {
+	auto &nullmask = FlatVector::Nullmask(v);
+	for(idx_t i = 0; i < v.size(); i++) {
 		data[i] = i % 6;
 		if (data[i] == 5) {
-			v.nullmask[i] = true;
+			nullmask[i] = true;
 		}
-	});
+	}
 	VectorOperations::Sort(v, sel);
 
-	cardinality.sel_vector = sel;
-	REQUIRE(IsSorted<int>(v));
+	REQUIRE(IsSorted<int>(v, sel));
 }

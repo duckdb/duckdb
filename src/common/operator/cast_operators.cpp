@@ -402,9 +402,9 @@ template <> string Cast::Operation(string_t input) {
 
 template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	if (input) {
-		return vector.AddString("true", 4);
+		return StringVector::AddString(vector, "true", 4);
 	} else {
-		return vector.AddString("false", 5);
+		return StringVector::AddString(vector, "false", 5);
 	}
 }
 
@@ -439,7 +439,7 @@ struct StringToIntegerCast {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = vector.EmptyString(length);
+		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetData();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
@@ -538,12 +538,12 @@ template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
 	std::string s = fmt::format("{}", input);
-	return vector.AddString(s);
+	return StringVector::AddString(vector, s);
 }
 
 template <> string_t StringCast::Operation(double input, Vector &vector) {
 	std::string s = fmt::format("{}", input);
-	return vector.AddString(s);
+	return StringVector::AddString(vector, s);
 }
 
 //===--------------------------------------------------------------------===//
@@ -609,7 +609,7 @@ template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
 	bool add_bc;
 	idx_t length = DateToStringCast::Length(date, year_length, add_bc);
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);
@@ -674,7 +674,7 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 
 	idx_t length = TimeToStringCast::Length(time);
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	TimeToStringCast::Format(data, length, time);
@@ -713,7 +713,7 @@ template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vec
 	idx_t time_length = TimeToStringCast::Length(time);
 	idx_t length = date_length + time_length + 1;
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);

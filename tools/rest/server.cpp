@@ -56,15 +56,18 @@ struct RestClientState {
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
 template <class T, class TARGET> static void assign_json_loop(Vector *v, idx_t col_idx, json &j) {
-	auto data_ptr = (T *)v->GetData();
-	VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
-		if (!v->nullmask[i]) {
+	assert(v->vector_type == VectorType::FLAT_VECTOR);
+
+	auto data_ptr = FlatVector::GetData<T>(*v);
+	auto &nullmask = FlatVector::Nullmask(*v);
+	for(idx_t i = 0; i < v->size(); i++) {
+		if (!nullmask[i]) {
 			j["data"][col_idx] += (TARGET)data_ptr[i];
 
 		} else {
 			j["data"][col_idx] += nullptr;
 		}
-	});
+	}
 }
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
@@ -83,6 +86,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		default:
 			break;
 		}
+		v->Normalify();
 		assert(v);
 		switch (v->type) {
 		case TypeId::BOOL:
@@ -107,15 +111,16 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			assign_json_loop<float, double>(v, col_idx, j);
 			break;
 		case TypeId::VARCHAR: {
-			auto data_ptr = (string_t *)v->GetData();
-			VectorOperations::Exec(*v, [&](idx_t i, idx_t k) {
-				if (!v->nullmask[i]) {
+			auto data_ptr = FlatVector::GetData<string_t>(*v);
+			auto &nullmask = FlatVector::Nullmask(*v);
+			for(idx_t i = 0; i < v->size(); i++) {
+				if (!nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i].GetData();
 
 				} else {
 					j["data"][col_idx] += nullptr;
 				}
-			});
+			}
 			break;
 		}
 		default:

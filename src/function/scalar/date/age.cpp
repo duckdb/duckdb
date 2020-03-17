@@ -47,7 +47,7 @@ static void age_function_standard(DataChunk &input, ExpressionState &state, Vect
 
 	string output_buffer;
 	UnaryExecutor::Execute<timestamp_t, string_t, true>(input.data[0], result, [&](timestamp_t input) {
-		return result.AddString(age_scalar_function(input, current_timestamp, output_buffer));
+		return StringVector::AddString(result, age_scalar_function(input, current_timestamp, output_buffer));
 	});
 }
 
@@ -57,7 +57,7 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 	string output_buffer;
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, string_t, true>(
 	    input.data[0], input.data[1], result, [&](timestamp_t input1, timestamp_t input2) {
-		    return result.AddString(age_scalar_function(input1, input2, output_buffer));
+		    return StringVector::AddString(result, age_scalar_function(input1, input2, output_buffer));
 	    });
 }
 

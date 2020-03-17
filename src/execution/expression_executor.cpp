@@ -46,7 +46,6 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
-	result.sel_vector = result.data[0].sel_vector();
 	result.Verify();
 }
 
@@ -55,10 +54,11 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
-idx_t ExpressionExecutor::SelectExpression(DataChunk &input, sel_t result[]) {
+idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	assert(expressions.size() == 1);
 	SetChunk(&input);
-	return Select(*expressions[0], states[0]->root_state.get(), result);
+	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
+	return Select(*expressions[0], states[0]->root_state.get(), sel, false_sel);
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
@@ -160,21 +160,21 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, Vecto
 	Verify(expr, result);
 }
 
-idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel) {
 	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
-		return Select((BoundBetweenExpression &)expr, state, result);
+		return Select((BoundBetweenExpression &)expr, state, true_sel, false_sel);
 	case ExpressionClass::BOUND_COMPARISON:
-		return Select((BoundComparisonExpression &)expr, state, result);
+		return Select((BoundComparisonExpression &)expr, state, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return Select((BoundConjunctionExpression &)expr, state, result);
+		return Select((BoundConjunctionExpression &)expr, state, true_sel, false_sel);
 	default:
-		return DefaultSelect(expr, state, result);
+		return DefaultSelect(expr, state, true_sel, false_sel);
 	}
 }
 
-idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, sel_t result[]) {
+idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
@@ -182,24 +182,40 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	Vector intermediate(GetCardinality(), TypeId::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, intermediate);
 
-	auto intermediate_result = (bool *)intermediate.GetData();
-	if (intermediate.vector_type == VectorType::CONSTANT_VECTOR) {
+	switch(intermediate.vector_type) {
+	case VectorType::CONSTANT_VECTOR: {
 		// constant result: get the value
-		if (intermediate_result[0] && !intermediate.nullmask[0]) {
+		auto idata = ConstantVector::GetData<bool>(intermediate);
+		if (*idata && !ConstantVector::IsNull(intermediate)) {
 			// constant true: return everything; we skip filling the selection vector here as it will not be used
 			return chunk->size();
 		} else {
 			// constant false: filter everything
 			return 0;
 		}
-	} else {
-		// not a constant value
-		idx_t result_count = 0;
-		VectorOperations::Exec(intermediate, [&](idx_t i, idx_t k) {
-			if (intermediate_result[i] && !intermediate.nullmask[i]) {
-				result[result_count++] = i;
+	}
+	default:
+		intermediate.Normalify();
+		idx_t true_count = 0, false_count = 0;
+		auto idata = FlatVector::GetData<bool>(intermediate);
+		auto &nullmask = FlatVector::Nullmask(intermediate);
+		if (nullmask.any()) {
+			for(idx_t i = 0; i < intermediate.size(); i++) {
+				if (idata[i] && !nullmask[i]) {
+					true_sel.set_index(true_count++, i);
+				} else {
+					false_sel.set_index(false_count++, i);
+				}
 			}
-		});
-		return result_count;
+		} else {
+			for(idx_t i = 0; i < intermediate.size(); i++) {
+				if (idata[i]) {
+					true_sel.set_index(true_count++, i);
+				} else {
+					false_sel.set_index(false_count++, i);
+				}
+			}
+		}
+		return true_count;
 	}
 }

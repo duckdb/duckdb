@@ -24,15 +24,15 @@ struct CovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &nullmask, idx_t idx) {
+	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask, nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
 
-		const auto x = x_data[idx];
+		const auto x = x_data[xidx];
 		const double dx = (x - state->meanx);
 		const double meanx = state->meanx + dx / n;
 
-		const auto y = y_data[idx];
+		const auto y = y_data[yidx];
 		const double dy = (y - state->meany);
 		const double meany = state->meany + dy / n;
 

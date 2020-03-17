@@ -53,9 +53,9 @@ public:
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);
 	//! Delete a set of rows from the local storage
-	void Delete(DataTable *table, Vector &row_identifiers);
+	void Delete(DataTable *table, Vector &row_ids);
 	//! Update a set of rows in the local storage
-	void Update(DataTable *table, Vector &row_identifiers, vector<column_t> &column_ids, DataChunk &data);
+	void Update(DataTable *table, Vector &row_ids, vector<column_t> &column_ids, DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(LocalStorage::CommitState &commit_state, Transaction &transaction, WriteAheadLog *log,

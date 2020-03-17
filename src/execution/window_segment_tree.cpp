@@ -31,7 +31,8 @@ Value WindowSegmentTree::AggegateFinal() {
 	VectorCardinality cardinality(1);
 	Vector statev(cardinality, Value::POINTER((idx_t)state.data()));
 	Vector result(cardinality, result_type);
-	result.nullmask[0] = false;
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	ConstantVector::SetNull(result, false);
 	aggregate.finalize(statev, result);
 
 	return result.GetValue(0);

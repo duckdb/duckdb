@@ -1,12 +1,11 @@
 #include "dbgen.hpp"
 
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "dbgen_gunk.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "tpch_constants.hpp"
+#include "duckdb/main/appender.hpp"
 
 #define DECLARER /* EXTERN references get defined here */
 
@@ -36,120 +35,97 @@ tdef tdefs[] = {
 namespace tpch {
 
 struct tpch_append_information {
-	TableCatalogEntry *table;
-	DataChunk chunk;
-	ClientContext *context;
+	unique_ptr<Appender> appender;
 };
 
-void append_value(DataChunk &chunk, size_t index, size_t &column, int32_t value) {
-	((int32_t *)chunk.data[column++].GetData())[index] = value;
+void append_value(tpch_append_information &info, int32_t value) {
+	info.appender->Append<int32_t>(value);
 }
 
-void append_string(DataChunk &chunk, size_t index, size_t &column, const char *value) {
-	chunk.SetValue(column++, index, Value(value));
+void append_string(tpch_append_information &info, const char *value) {
+	info.appender->Append<Value>(Value(value));
 }
 
-void append_decimal(DataChunk &chunk, size_t index, size_t &column, int64_t value) {
-	((double *)chunk.data[column++].GetData())[index] = (double)value / 100.0;
+void append_decimal(tpch_append_information &info, int64_t value) {
+	info.appender->Append<double>(value / 100.0);
 }
 
-void append_date(DataChunk &chunk, size_t index, size_t &column, string value) {
-	((date_t *)chunk.data[column++].GetData())[index] = Date::FromString(value);
+void append_date(tpch_append_information &info, string value) {
+	info.appender->Append<int32_t>(Date::FromString(value));
 }
 
-void append_char(DataChunk &chunk, size_t index, size_t &column, char value) {
+void append_char(tpch_append_information &info, char value) {
 	char val[2];
 	val[0] = value;
 	val[1] = '\0';
-	append_string(chunk, index, column, val);
-}
-
-static void append_to_append_info(tpch_append_information &info) {
-	auto &chunk = info.chunk;
-	auto &table = info.table;
-	if (chunk.column_count() == 0) {
-		// initalize the chunk
-		auto types = table->GetTypes();
-		chunk.Initialize(types);
-	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
-		// flush the chunk
-		table->storage->Append(*table, *info.context, chunk);
-		// have to reset the chunk
-		chunk.Reset();
-	}
-	chunk.SetCardinality(chunk.size() + 1);
+	append_string(info, val);
 }
 
 static void append_order(order_t *o, tpch_append_information *info) {
 	auto &append_info = info[ORDER];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
 	// fill the current row with the order information
+	append_info.appender->BeginRow();
 	// o_orderkey
-	append_value(chunk, index, column, o->okey);
+	append_value(append_info, o->okey);
 	// o_custkey
-	append_value(chunk, index, column, o->custkey);
+	append_value(append_info, o->custkey);
 	// o_orderstatus
-	append_char(chunk, index, column, o->orderstatus);
+	append_char(append_info, o->orderstatus);
 	// o_totalprice
-	append_decimal(chunk, index, column, o->totalprice);
+	append_decimal(append_info, o->totalprice);
 	// o_orderdate
-	append_date(chunk, index, column, o->odate);
+	append_date(append_info, o->odate);
 	// o_orderpriority
-	append_string(chunk, index, column, o->opriority);
+	append_string(append_info, o->opriority);
 	// o_clerk
-	append_string(chunk, index, column, o->clerk);
+	append_string(append_info, o->clerk);
 	// o_shippriority
-	append_value(chunk, index, column, o->spriority);
+	append_value(append_info, o->spriority);
 	// o_comment
-	append_string(chunk, index, column, o->comment);
+	append_string(append_info, o->comment);
+	append_info.appender->EndRow();
 }
 
 static void append_line(order_t *o, tpch_append_information *info) {
 	auto &append_info = info[LINE];
-	auto &chunk = append_info.chunk;
 
 	// fill the current row with the order information
 	for (DSS_HUGE i = 0; i < o->lines; i++) {
-		append_to_append_info(append_info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
+		append_info.appender->BeginRow();
 		// l_orderkey
-		append_value(chunk, index, column, o->l[i].okey);
+		append_value(append_info, o->l[i].okey);
 		// l_partkey
-		append_value(chunk, index, column, o->l[i].partkey);
+		append_value(append_info, o->l[i].partkey);
 		// l_suppkey
-		append_value(chunk, index, column, o->l[i].suppkey);
+		append_value(append_info, o->l[i].suppkey);
 		// l_linenumber
-		append_value(chunk, index, column, o->l[i].lcnt);
+		append_value(append_info, o->l[i].lcnt);
 		// l_quantity
-		append_value(chunk, index, column, o->l[i].quantity);
+		append_value(append_info, o->l[i].quantity);
 		// l_extendedprice
-		append_decimal(chunk, index, column, o->l[i].eprice);
+		append_decimal(append_info, o->l[i].eprice);
 		// l_discount
-		append_decimal(chunk, index, column, o->l[i].discount);
+		append_decimal(append_info, o->l[i].discount);
 		// l_tax
-		append_decimal(chunk, index, column, o->l[i].tax);
+		append_decimal(append_info, o->l[i].tax);
 		// l_returnflag
-		append_char(chunk, index, column, o->l[i].rflag[0]);
+		append_char(append_info, o->l[i].rflag[0]);
 		// l_linestatus
-		append_char(chunk, index, column, o->l[i].lstatus[0]);
+		append_char(append_info, o->l[i].lstatus[0]);
 		// l_shipdate
-		append_date(chunk, index, column, o->l[i].sdate);
+		append_date(append_info, o->l[i].sdate);
 		// l_commitdate
-		append_date(chunk, index, column, o->l[i].cdate);
+		append_date(append_info, o->l[i].cdate);
 		// l_receiptdate
-		append_date(chunk, index, column, o->l[i].rdate);
+		append_date(append_info, o->l[i].rdate);
 		// l_shipinstruct
-		append_string(chunk, index, column, o->l[i].shipinstruct);
+		append_string(append_info, o->l[i].shipinstruct);
 		// l_shipmode
-		append_string(chunk, index, column, o->l[i].shipmode);
+		append_string(append_info, o->l[i].shipmode);
 		// l_comment
-		append_string(chunk, index, column, o->l[i].comment);
+		append_string(append_info, o->l[i].comment);
+		append_info.appender->EndRow();
 	}
 }
 
@@ -160,97 +136,88 @@ static void append_order_line(order_t *o, tpch_append_information *info) {
 
 static void append_supp(supplier_t *supp, tpch_append_information *info) {
 	auto &append_info = info[SUPP];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
+	append_info.appender->BeginRow();
 	// s_suppkey
-	append_value(chunk, index, column, supp->suppkey);
+	append_value(append_info, supp->suppkey);
 	// s_name
-	append_string(chunk, index, column, supp->name);
+	append_string(append_info, supp->name);
 	// s_address
-	append_string(chunk, index, column, supp->address);
+	append_string(append_info, supp->address);
 	// s_nationkey
-	append_value(chunk, index, column, supp->nation_code);
+	append_value(append_info, supp->nation_code);
 	// s_phone
-	append_string(chunk, index, column, supp->phone);
+	append_string(append_info, supp->phone);
 	// s_acctbal
-	append_decimal(chunk, index, column, supp->acctbal);
+	append_decimal(append_info, supp->acctbal);
 	// s_comment
-	append_string(chunk, index, column, supp->comment);
+	append_string(append_info, supp->comment);
+	append_info.appender->EndRow();
 }
 
 static void append_cust(customer_t *c, tpch_append_information *info) {
 	auto &append_info = info[CUST];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
+	append_info.appender->BeginRow();
 	// c_custkey
-	append_value(chunk, index, column, c->custkey);
+	append_value(append_info, c->custkey);
 	// c_name
-	append_string(chunk, index, column, c->name);
+	append_string(append_info, c->name);
 	// c_address
-	append_string(chunk, index, column, c->address);
+	append_string(append_info, c->address);
 	// c_nationkey
-	append_value(chunk, index, column, c->nation_code);
+	append_value(append_info, c->nation_code);
 	// c_phone
-	append_string(chunk, index, column, c->phone);
+	append_string(append_info, c->phone);
 	// c_acctbal
-	append_decimal(chunk, index, column, c->acctbal);
+	append_decimal(append_info, c->acctbal);
 	// c_mktsegment
-	append_string(chunk, index, column, c->mktsegment);
+	append_string(append_info, c->mktsegment);
 	// c_comment
-	append_string(chunk, index, column, c->comment);
+	append_string(append_info, c->comment);
+	append_info.appender->EndRow();
 }
 
 static void append_part(part_t *part, tpch_append_information *info) {
 	auto &append_info = info[PART];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
+	append_info.appender->BeginRow();
 	// p_partkey
-	append_value(chunk, index, column, part->partkey);
+	append_value(append_info, part->partkey);
 	// p_name
-	append_string(chunk, index, column, part->name);
+	append_string(append_info, part->name);
 	// p_mfgr
-	append_string(chunk, index, column, part->mfgr);
+	append_string(append_info, part->mfgr);
 	// p_brand
-	append_string(chunk, index, column, part->brand);
+	append_string(append_info, part->brand);
 	// p_type
-	append_string(chunk, index, column, part->type);
+	append_string(append_info, part->type);
 	// p_size
-	append_value(chunk, index, column, part->size);
+	append_value(append_info, part->size);
 	// p_container
-	append_string(chunk, index, column, part->container);
+	append_string(append_info, part->container);
 	// p_retailprice
-	append_decimal(chunk, index, column, part->retailprice);
+	append_decimal(append_info, part->retailprice);
 	// p_comment
-	append_string(chunk, index, column, part->comment);
+	append_string(append_info, part->comment);
+	append_info.appender->EndRow();
 }
 
 static void append_psupp(part_t *part, tpch_append_information *info) {
 	auto &append_info = info[PSUPP];
-	auto &chunk = append_info.chunk;
 	for (size_t i = 0; i < SUPP_PER_PART; i++) {
-		append_to_append_info(append_info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
+		append_info.appender->BeginRow();
 		// ps_partkey
-		append_value(chunk, index, column, part->s[i].partkey);
+		append_value(append_info, part->s[i].partkey);
 		// ps_suppkey
-		append_value(chunk, index, column, part->s[i].suppkey);
+		append_value(append_info, part->s[i].suppkey);
 		// ps_availqty
-		append_value(chunk, index, column, part->s[i].qty);
+		append_value(append_info, part->s[i].qty);
 		// ps_supplycost
-		append_decimal(chunk, index, column, part->s[i].scost);
+		append_decimal(append_info, part->s[i].scost);
 		// ps_comment
-		append_string(chunk, index, column, part->s[i].comment);
+		append_string(append_info, part->s[i].comment);
+		append_info.appender->EndRow();
 	}
 }
 
@@ -261,34 +228,30 @@ static void append_part_psupp(part_t *part, tpch_append_information *info) {
 
 static void append_nation(code_t *c, tpch_append_information *info) {
 	auto &append_info = info[NATION];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
+	append_info.appender->BeginRow();
 	// n_nationkey
-	append_value(chunk, index, column, c->code);
+	append_value(append_info, c->code);
 	// n_name
-	append_string(chunk, index, column, c->text);
+	append_string(append_info, c->text);
 	// n_regionkey
-	append_value(chunk, index, column, c->join);
+	append_value(append_info, c->join);
 	// n_comment
-	append_string(chunk, index, column, c->comment);
+	append_string(append_info, c->comment);
+	append_info.appender->EndRow();
 }
 
 static void append_region(code_t *c, tpch_append_information *info) {
 	auto &append_info = info[REGION];
-	auto &chunk = append_info.chunk;
-	append_to_append_info(append_info);
-	size_t index = chunk.size() - 1;
-	size_t column = 0;
 
+	append_info.appender->BeginRow();
 	// r_regionkey
-	append_value(chunk, index, column, c->code);
+	append_value(append_info, c->code);
 	// r_name
-	append_string(chunk, index, column, c->text);
+	append_string(append_info, c->text);
 	// r_comment
-	append_string(chunk, index, column, c->comment);
+	append_string(append_info, c->comment);
+	append_info.appender->EndRow();
 }
 
 static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info) {
@@ -542,10 +505,8 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
-		if (!tname.empty()) {
-			append_info[i].table = db.catalog->GetEntry<TableCatalogEntry>(*con.context, schema, tname + suffix);
-		}
-		append_info[i].context = con.context.get();
+		assert(!tname.empty());
+		append_info[i].appender = make_unique<Appender>(con, schema, tname + suffix);
 	}
 
 	for (i = PART; i <= REGION; i++) {
@@ -561,12 +522,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	}
 	// flush any incomplete chunks
 	for (size_t i = PART; i <= REGION; i++) {
-		if (append_info[i].table) {
-			if (append_info[i].chunk.size() > 0) {
-				append_info[i].table->storage->Append(*append_info[i].table, *append_info[i].context,
-				                                      append_info[i].chunk);
-			}
-		}
+		append_info[i].appender->Flush();
 	}
 
 	cleanup_dists();

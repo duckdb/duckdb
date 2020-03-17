@@ -15,9 +15,9 @@ static void list_value_fun(DataChunk &input, ExpressionState &state, Vector &res
 
 	assert(result.type == TypeId::LIST);
 	auto list_child = make_unique<ChunkCollection>();
-	result.SetListEntry(move(list_child));
+	ListVector::SetEntry(result, move(list_child));
 
-	auto &cc = result.GetListEntry();
+	auto &cc = ListVector::GetEntry(result);
 	DataChunk append_vals;
 	vector<TypeId> types;
 	if (input.column_count() > 0) {
@@ -25,25 +25,22 @@ static void list_value_fun(DataChunk &input, ExpressionState &state, Vector &res
 		append_vals.Initialize(types);
 		append_vals.SetCardinality(1);
 	}
-	bool all_const = true;
-	for (size_t i = 0; i < input.column_count(); i++) {
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t i = 0; i < input.column_count(); i++) {
 		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
-			all_const = false;
+			result.vector_type = VectorType::FLAT_VECTOR;
 		}
 	}
 
-	auto result_data = ((list_entry_t *)result.GetData());
-
-	VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	for(idx_t i = 0; i < result.size(); i++) {
 		result_data[i].offset = cc.count;
 		for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
-			append_vals.SetValue(0, 0, input.GetValue(col_idx, k).CastAs(types[0])); // FIXME evil pattern
+			append_vals.SetValue(0, 0, input.GetValue(col_idx, i).CastAs(types[0])); // FIXME evil pattern
 			cc.Append(append_vals);
 		}
 		result_data[i].length = input.column_count();
-	});
-
-	result.vector_type = all_const && !result.sel_vector() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
+	}
 	result.Verify();
 }
 

@@ -18,35 +18,40 @@ struct HashOp {
 
 template <class T>
 static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data, idx_t count,
-                                   sel_t *__restrict sel_vector, nullmask_t &nullmask) {
-	ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+                                   SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count,
-		                       [&](idx_t i, idx_t k) { result_data[i] = HashOp::Operation(ldata[i], nullmask[i]); });
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			result_data[i] = HashOp::Operation(ldata[idx], nullmask[idx]);
+		}
 	} else {
-		VectorOperations::Exec(sel_vector, count,
-		                       [&](idx_t i, idx_t k) { result_data[i] = HashOp::Operation(ldata[i], false); });
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			result_data[i] = duckdb::Hash<T>(ldata[idx]);
+		}
 	}
 }
 
 template <class T> void templated_loop_hash(Vector &input, Vector &result) {
-	auto result_data = (uint64_t *)result.GetData();
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-		auto ldata = (T *)input.GetData();
 		result.vector_type = VectorType::CONSTANT_VECTOR;
-		result_data[0] = HashOp::Operation(ldata[0], input.nullmask[0]);
+
+		auto ldata = ConstantVector::GetData<T>(input);
+		auto result_data = ConstantVector::GetData<uint64_t>(result);
+		result_data[0] = HashOp::Operation(ldata[0], ConstantVector::IsNull(input));
 	} else {
-		input.Normalify();
-		auto ldata = (T *)input.GetData();
 		result.vector_type = VectorType::FLAT_VECTOR;
-		tight_loop_hash<T>(ldata, result_data, input.size(), input.sel_vector(), input.nullmask);
+
+		VectorData idata;
+		input.Orrify(idata);
+
+		tight_loop_hash<T>((T*) idata.data, FlatVector::GetData<uint64_t>(result), input.size(), idata.sel, *idata.nullmask);
 	}
 }
 
 void VectorOperations::Hash(Vector &input, Vector &result) {
 	assert(result.type == TypeId::HASH);
-	assert(!result.nullmask.any());
 	assert(input.SameCardinality(result));
 	switch (input.type) {
 	case TypeId::BOOL:
@@ -82,40 +87,42 @@ static inline uint64_t combine_hash(uint64_t a, uint64_t b) {
 
 template <class T>
 static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data, idx_t count,
-                                           sel_t *__restrict sel_vector, nullmask_t &nullmask) {
-	ASSERT_RESTRICT(ldata, ldata + count, hash_data, hash_data + count);
+                                           SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
-		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-			auto other_hash = HashOp::Operation(ldata[i], nullmask[i]);
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			auto other_hash = HashOp::Operation(ldata[idx], nullmask[idx]);
 			hash_data[i] = combine_hash(hash_data[i], other_hash);
-		});
+		}
 	} else {
-		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-			auto other_hash = HashOp::Operation(ldata[i], false);
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel_vector->get_index(i);
+			auto other_hash = duckdb::Hash<T>(ldata[idx]);
 			hash_data[i] = combine_hash(hash_data[i], other_hash);
-		});
+		}
 	}
 }
 
 template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashes) {
 	if (input.vector_type == VectorType::CONSTANT_VECTOR && hashes.vector_type == VectorType::CONSTANT_VECTOR) {
-		auto ldata = (T *)input.GetData();
-		auto hash_data = (uint64_t *)hashes.GetData();
+		auto ldata = ConstantVector::GetData<T>(input);
+		auto hash_data = ConstantVector::GetData<uint64_t>(hashes);
 
-		auto other_hash = HashOp::Operation(ldata[0], input.nullmask[0]);
+		auto other_hash = HashOp::Operation(ldata[0], ConstantVector::IsNull(input));
 		hash_data[0] = combine_hash(hash_data[0], other_hash);
 	} else {
-		input.Normalify();
+		VectorData idata;
+
+		input.Orrify(idata);
 		hashes.Normalify();
-		tight_loop_combine_hash<T>((T *)input.GetData(), (uint64_t *)hashes.GetData(), input.size(), input.sel_vector(),
-		                           input.nullmask);
+
+		tight_loop_combine_hash<T>((T *)idata.data, FlatVector::GetData<uint64_t>(hashes), input.size(), idata.sel, *idata.nullmask);
 	}
 }
 
 void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
 	assert(hashes.type == TypeId::HASH);
 	assert(input.SameCardinality(hashes));
-	assert(!hashes.nullmask.any());
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:

@@ -13,7 +13,6 @@ add_library_unity(duckdb_vector_operations
                   numeric_inplace_operators.cpp
                   numeric_binary_operators.cpp
                   scatter.cpp
-                  set.cpp
                   sort.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                      $<TARGET_OBJECTS:duckdb_vector_operations> PARENT_SCOPE)

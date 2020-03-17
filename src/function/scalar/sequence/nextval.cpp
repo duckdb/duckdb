@@ -71,11 +71,12 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		auto result_data = (int64_t *)result.GetData();
-		VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
+		result.vector_type = VectorType::FLAT_VECTOR;
+		auto result_data = FlatVector::GetData<int64_t>(result);
+		for(idx_t i = 0; i < result.size(); i++) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
-		});
+		}
 	} else {
 		// sequence to use comes from the input
 		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, [&](string_t value) {

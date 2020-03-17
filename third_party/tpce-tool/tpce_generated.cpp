@@ -13,64 +13,41 @@ using namespace std;
 
 namespace TPCE {
 struct tpce_append_information {
-	TableCatalogEntry *table;
-	DataChunk chunk;
-	ClientContext *context;
+	tpce_append_information(Connection &con, string schema, string table) :
+		appender(con, schema, table) {}
+
+	Appender appender;
 };
 
-static void append_value(DataChunk & chunk, size_t index,
-                         size_t & column, int32_t value) {
-	((int32_t *)chunk.data[column++].GetData())[index] = value;
+static void append_value(tpce_append_information &info, int32_t value) {
+	info.appender.Append<int32_t>(value);
 }
 
-static void append_bigint(DataChunk & chunk, size_t index,
-                          size_t & column, int64_t value) {
-	((int64_t *)chunk.data[column++].GetData())[index] = value;
+static void append_bigint(tpce_append_information &info, int64_t value) {
+	info.appender.Append<int64_t>(value);
 }
 
-static void append_string(DataChunk & chunk, size_t index,
-                          size_t & column, const char *value) {
-	chunk.data[column++].SetValue(index, Value(value));
+static void append_string(tpce_append_information &info, const char *value) {
+	info.appender.Append<Value>(Value(value));
 }
 
-static void append_double(DataChunk & chunk, size_t index,
-                          size_t & column, double value) {
-	((double *)chunk.data[column++].GetData())[index] = value;
+static void append_double(tpce_append_information &info, double value) {
+	info.appender.Append<double>(value);
 }
 
-static void append_bool(DataChunk & chunk, size_t index,
-                        size_t & column, bool value) {
-	((bool *)chunk.data[column++].GetData())[index] = value;
+static void append_bool(tpce_append_information &info, bool value) {
+	info.appender.Append<bool>(value);
 }
 
-static void append_timestamp(DataChunk & chunk, size_t index,
-                             size_t & column, CDateTime time) {
-	((timestamp_t *)chunk.data[column++].GetData())[index] =
-	    0; // Timestamp::FromString(time.ToStr(1));
+static void append_timestamp(tpce_append_information &info, CDateTime time) {
+	info.appender.Append<int64_t>(0); // Timestamp::FromString(time.ToStr(1));
 }
 
-void append_char(DataChunk & chunk, size_t index, size_t & column,
-                 char value) {
+void append_char(tpce_append_information &info, char value) {
 	char val[2];
 	val[0] = value;
 	val[1] = '\0';
-	append_string(chunk, index, column, val);
-}
-
-static void append_to_append_info(tpce_append_information & info) {
-	auto &chunk = info.chunk;
-	auto &table = info.table;
-	if (chunk.column_count() == 0) {
-		// initalize the chunk
-		auto types = table->GetTypes();
-		chunk.Initialize(types);
-	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
-		// flush the chunk
-		table->storage->Append(*table, *info.context, chunk);
-		// have to reset the chunk
-		chunk.Reset();
-	}
-	chunk.SetCardinality(chunk.size() + 1);
+	append_string(info, val);
 }
 
 template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
@@ -78,967 +55,799 @@ template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
 	tpce_append_information info;
 
   public:
-	DuckDBBaseLoader(TableCatalogEntry *table, ClientContext *context) {
-		info.table = table;
-		info.context = context;
+	DuckDBBaseLoader(Connection &con, string schema, string table) :
+		info(con, schema, table) {
 	}
 
 	void FinishLoad() {
-		// append the remainder
-		info.table->storage->Append(*info.table, *info.context, info.chunk);
-		info.chunk.Reset();
+
 	}
 };
 
 
 class DuckDBAccountPermissionLoad : public DuckDBBaseLoader<ACCOUNT_PERMISSION_ROW> {
 public:
-	DuckDBAccountPermissionLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBAccountPermissionLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const ACCOUNT_PERMISSION_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.AP_CA_ID);
-		append_string(chunk, index, column, next_record.AP_ACL);
-		append_string(chunk, index, column, next_record.AP_TAX_ID);
-		append_string(chunk, index, column, next_record.AP_L_NAME);
-		append_string(chunk, index, column, next_record.AP_F_NAME);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.AP_CA_ID);
+		append_string(info, next_record.AP_ACL);
+		append_string(info, next_record.AP_TAX_ID);
+		append_string(info, next_record.AP_L_NAME);
+		append_string(info, next_record.AP_F_NAME);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBAddressLoad : public DuckDBBaseLoader<ADDRESS_ROW> {
 public:
-	DuckDBAddressLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBAddressLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const ADDRESS_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.AD_ID);
-		append_string(chunk, index, column, next_record.AD_LINE1);
-		append_string(chunk, index, column, next_record.AD_LINE2);
-		append_string(chunk, index, column, next_record.AD_ZC_CODE);
-		append_string(chunk, index, column, next_record.AD_CTRY);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.AD_ID);
+		append_string(info, next_record.AD_LINE1);
+		append_string(info, next_record.AD_LINE2);
+		append_string(info, next_record.AD_ZC_CODE);
+		append_string(info, next_record.AD_CTRY);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBBrokerLoad : public DuckDBBaseLoader<BROKER_ROW> {
 public:
-	DuckDBBrokerLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBBrokerLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const BROKER_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.B_ID);
-		append_string(chunk, index, column, next_record.B_ST_ID);
-		append_string(chunk, index, column, next_record.B_NAME);
-		append_value(chunk, index, column, next_record.B_NUM_TRADES);
-		append_double(chunk, index, column, next_record.B_COMM_TOTAL);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.B_ID);
+		append_string(info, next_record.B_ST_ID);
+		append_string(info, next_record.B_NAME);
+		append_value(info, next_record.B_NUM_TRADES);
+		append_double(info, next_record.B_COMM_TOTAL);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCashTransactionLoad : public DuckDBBaseLoader<CASH_TRANSACTION_ROW> {
 public:
-	DuckDBCashTransactionLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCashTransactionLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const CASH_TRANSACTION_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.CT_T_ID);
-		append_timestamp(chunk, index, column, next_record.CT_DTS);
-		append_double(chunk, index, column, next_record.CT_AMT);
-		append_string(chunk, index, column, next_record.CT_NAME);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.CT_T_ID);
+		append_timestamp(info, next_record.CT_DTS);
+		append_double(info, next_record.CT_AMT);
+		append_string(info, next_record.CT_NAME);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBChargeLoad : public DuckDBBaseLoader<CHARGE_ROW> {
 public:
-	DuckDBChargeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBChargeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const CHARGE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.CH_TT_ID);
-		append_value(chunk, index, column, next_record.CH_C_TIER);
-		append_double(chunk, index, column, next_record.CH_CHRG);
+		info.appender.BeginRow();
+		append_string(info, next_record.CH_TT_ID);
+		append_value(info, next_record.CH_C_TIER);
+		append_double(info, next_record.CH_CHRG);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCommissionRateLoad : public DuckDBBaseLoader<COMMISSION_RATE_ROW> {
 public:
-	DuckDBCommissionRateLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCommissionRateLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const COMMISSION_RATE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_value(chunk, index, column, next_record.CR_C_TIER);
-		append_string(chunk, index, column, next_record.CR_TT_ID);
-		append_string(chunk, index, column, next_record.CR_EX_ID);
-		append_value(chunk, index, column, next_record.CR_FROM_QTY);
-		append_value(chunk, index, column, next_record.CR_TO_QTY);
-		append_double(chunk, index, column, next_record.CR_RATE);
+		info.appender.BeginRow();
+		append_value(info, next_record.CR_C_TIER);
+		append_string(info, next_record.CR_TT_ID);
+		append_string(info, next_record.CR_EX_ID);
+		append_value(info, next_record.CR_FROM_QTY);
+		append_value(info, next_record.CR_TO_QTY);
+		append_double(info, next_record.CR_RATE);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCompanyLoad : public DuckDBBaseLoader<COMPANY_ROW> {
 public:
-	DuckDBCompanyLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCompanyLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const COMPANY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.CO_ID);
-		append_string(chunk, index, column, next_record.CO_ST_ID);
-		append_string(chunk, index, column, next_record.CO_NAME);
-		append_string(chunk, index, column, next_record.CO_IN_ID);
-		append_string(chunk, index, column, next_record.CO_SP_RATE);
-		append_string(chunk, index, column, next_record.CO_CEO);
-		append_bigint(chunk, index, column, next_record.CO_AD_ID);
-		append_string(chunk, index, column, next_record.CO_DESC);
-		append_timestamp(chunk, index, column, next_record.CO_OPEN_DATE);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.CO_ID);
+		append_string(info, next_record.CO_ST_ID);
+		append_string(info, next_record.CO_NAME);
+		append_string(info, next_record.CO_IN_ID);
+		append_string(info, next_record.CO_SP_RATE);
+		append_string(info, next_record.CO_CEO);
+		append_bigint(info, next_record.CO_AD_ID);
+		append_string(info, next_record.CO_DESC);
+		append_timestamp(info, next_record.CO_OPEN_DATE);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCompanyCompetitorLoad : public DuckDBBaseLoader<COMPANY_COMPETITOR_ROW> {
 public:
-	DuckDBCompanyCompetitorLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCompanyCompetitorLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const COMPANY_COMPETITOR_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.CP_CO_ID);
-		append_bigint(chunk, index, column, next_record.CP_COMP_CO_ID);
-		append_string(chunk, index, column, next_record.CP_IN_ID);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.CP_CO_ID);
+		append_bigint(info, next_record.CP_COMP_CO_ID);
+		append_string(info, next_record.CP_IN_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCustomerLoad : public DuckDBBaseLoader<CUSTOMER_ROW> {
 public:
-	DuckDBCustomerLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCustomerLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const CUSTOMER_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.C_ID);
-		append_string(chunk, index, column, next_record.C_TAX_ID);
-		append_string(chunk, index, column, next_record.C_ST_ID);
-		append_string(chunk, index, column, next_record.C_L_NAME);
-		append_string(chunk, index, column, next_record.C_F_NAME);
-		append_string(chunk, index, column, next_record.C_M_NAME);
-		append_char(chunk, index, column, next_record.C_GNDR);
-		append_char(chunk, index, column, next_record.C_TIER);
-		append_timestamp(chunk, index, column, next_record.C_DOB);
-		append_bigint(chunk, index, column, next_record.C_AD_ID);
-		append_string(chunk, index, column, next_record.C_CTRY_1);
-		append_string(chunk, index, column, next_record.C_AREA_1);
-		append_string(chunk, index, column, next_record.C_LOCAL_1);
-		append_string(chunk, index, column, next_record.C_EXT_1);
-		append_string(chunk, index, column, next_record.C_CTRY_2);
-		append_string(chunk, index, column, next_record.C_AREA_2);
-		append_string(chunk, index, column, next_record.C_LOCAL_2);
-		append_string(chunk, index, column, next_record.C_EXT_2);
-		append_string(chunk, index, column, next_record.C_CTRY_3);
-		append_string(chunk, index, column, next_record.C_AREA_3);
-		append_string(chunk, index, column, next_record.C_LOCAL_3);
-		append_string(chunk, index, column, next_record.C_EXT_3);
-		append_string(chunk, index, column, next_record.C_EMAIL_1);
-		append_string(chunk, index, column, next_record.C_EMAIL_2);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.C_ID);
+		append_string(info, next_record.C_TAX_ID);
+		append_string(info, next_record.C_ST_ID);
+		append_string(info, next_record.C_L_NAME);
+		append_string(info, next_record.C_F_NAME);
+		append_string(info, next_record.C_M_NAME);
+		append_char(info, next_record.C_GNDR);
+		append_char(info, next_record.C_TIER);
+		append_timestamp(info, next_record.C_DOB);
+		append_bigint(info, next_record.C_AD_ID);
+		append_string(info, next_record.C_CTRY_1);
+		append_string(info, next_record.C_AREA_1);
+		append_string(info, next_record.C_LOCAL_1);
+		append_string(info, next_record.C_EXT_1);
+		append_string(info, next_record.C_CTRY_2);
+		append_string(info, next_record.C_AREA_2);
+		append_string(info, next_record.C_LOCAL_2);
+		append_string(info, next_record.C_EXT_2);
+		append_string(info, next_record.C_CTRY_3);
+		append_string(info, next_record.C_AREA_3);
+		append_string(info, next_record.C_LOCAL_3);
+		append_string(info, next_record.C_EXT_3);
+		append_string(info, next_record.C_EMAIL_1);
+		append_string(info, next_record.C_EMAIL_2);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCustomerAccountLoad : public DuckDBBaseLoader<CUSTOMER_ACCOUNT_ROW> {
 public:
-	DuckDBCustomerAccountLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCustomerAccountLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const CUSTOMER_ACCOUNT_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.CA_ID);
-		append_bigint(chunk, index, column, next_record.CA_B_ID);
-		append_bigint(chunk, index, column, next_record.CA_C_ID);
-		append_string(chunk, index, column, next_record.CA_NAME);
-		append_char(chunk, index, column, next_record.CA_TAX_ST);
-		append_double(chunk, index, column, next_record.CA_BAL);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.CA_ID);
+		append_bigint(info, next_record.CA_B_ID);
+		append_bigint(info, next_record.CA_C_ID);
+		append_string(info, next_record.CA_NAME);
+		append_char(info, next_record.CA_TAX_ST);
+		append_double(info, next_record.CA_BAL);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBCustomerTaxrateLoad : public DuckDBBaseLoader<CUSTOMER_TAXRATE_ROW> {
 public:
-	DuckDBCustomerTaxrateLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBCustomerTaxrateLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const CUSTOMER_TAXRATE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.CX_TX_ID);
-		append_bigint(chunk, index, column, next_record.CX_C_ID);
+		info.appender.BeginRow();
+		append_string(info, next_record.CX_TX_ID);
+		append_bigint(info, next_record.CX_C_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBDailyMarketLoad : public DuckDBBaseLoader<DAILY_MARKET_ROW> {
 public:
-	DuckDBDailyMarketLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBDailyMarketLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const DAILY_MARKET_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_timestamp(chunk, index, column, next_record.DM_DATE);
-		append_string(chunk, index, column, next_record.DM_S_SYMB);
-		append_double(chunk, index, column, next_record.DM_CLOSE);
-		append_double(chunk, index, column, next_record.DM_HIGH);
-		append_double(chunk, index, column, next_record.DM_LOW);
-		append_bigint(chunk, index, column, next_record.DM_VOL);
+		info.appender.BeginRow();
+		append_timestamp(info, next_record.DM_DATE);
+		append_string(info, next_record.DM_S_SYMB);
+		append_double(info, next_record.DM_CLOSE);
+		append_double(info, next_record.DM_HIGH);
+		append_double(info, next_record.DM_LOW);
+		append_bigint(info, next_record.DM_VOL);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBExchangeLoad : public DuckDBBaseLoader<EXCHANGE_ROW> {
 public:
-	DuckDBExchangeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBExchangeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const EXCHANGE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.EX_ID);
-		append_string(chunk, index, column, next_record.EX_NAME);
-		append_value(chunk, index, column, next_record.EX_NUM_SYMB);
-		append_value(chunk, index, column, next_record.EX_OPEN);
-		append_value(chunk, index, column, next_record.EX_CLOSE);
-		append_string(chunk, index, column, next_record.EX_DESC);
-		append_bigint(chunk, index, column, next_record.EX_AD_ID);
+		info.appender.BeginRow();
+		append_string(info, next_record.EX_ID);
+		append_string(info, next_record.EX_NAME);
+		append_value(info, next_record.EX_NUM_SYMB);
+		append_value(info, next_record.EX_OPEN);
+		append_value(info, next_record.EX_CLOSE);
+		append_string(info, next_record.EX_DESC);
+		append_bigint(info, next_record.EX_AD_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBFinancialLoad : public DuckDBBaseLoader<FINANCIAL_ROW> {
 public:
-	DuckDBFinancialLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBFinancialLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const FINANCIAL_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.FI_CO_ID);
-		append_value(chunk, index, column, next_record.FI_YEAR);
-		append_value(chunk, index, column, next_record.FI_QTR);
-		append_timestamp(chunk, index, column, next_record.FI_QTR_START_DATE);
-		append_double(chunk, index, column, next_record.FI_REVENUE);
-		append_double(chunk, index, column, next_record.FI_NET_EARN);
-		append_double(chunk, index, column, next_record.FI_BASIC_EPS);
-		append_double(chunk, index, column, next_record.FI_DILUT_EPS);
-		append_double(chunk, index, column, next_record.FI_MARGIN);
-		append_double(chunk, index, column, next_record.FI_INVENTORY);
-		append_double(chunk, index, column, next_record.FI_ASSETS);
-		append_double(chunk, index, column, next_record.FI_LIABILITY);
-		append_bigint(chunk, index, column, next_record.FI_OUT_BASIC);
-		append_bigint(chunk, index, column, next_record.FI_OUT_DILUT);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.FI_CO_ID);
+		append_value(info, next_record.FI_YEAR);
+		append_value(info, next_record.FI_QTR);
+		append_timestamp(info, next_record.FI_QTR_START_DATE);
+		append_double(info, next_record.FI_REVENUE);
+		append_double(info, next_record.FI_NET_EARN);
+		append_double(info, next_record.FI_BASIC_EPS);
+		append_double(info, next_record.FI_DILUT_EPS);
+		append_double(info, next_record.FI_MARGIN);
+		append_double(info, next_record.FI_INVENTORY);
+		append_double(info, next_record.FI_ASSETS);
+		append_double(info, next_record.FI_LIABILITY);
+		append_bigint(info, next_record.FI_OUT_BASIC);
+		append_bigint(info, next_record.FI_OUT_DILUT);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBHoldingLoad : public DuckDBBaseLoader<HOLDING_ROW> {
 public:
-	DuckDBHoldingLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBHoldingLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const HOLDING_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.H_T_ID);
-		append_bigint(chunk, index, column, next_record.H_CA_ID);
-		append_string(chunk, index, column, next_record.H_S_SYMB);
-		append_timestamp(chunk, index, column, next_record.H_DTS);
-		append_double(chunk, index, column, next_record.H_PRICE);
-		append_value(chunk, index, column, next_record.H_QTY);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.H_T_ID);
+		append_bigint(info, next_record.H_CA_ID);
+		append_string(info, next_record.H_S_SYMB);
+		append_timestamp(info, next_record.H_DTS);
+		append_double(info, next_record.H_PRICE);
+		append_value(info, next_record.H_QTY);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBHoldingHistoryLoad : public DuckDBBaseLoader<HOLDING_HISTORY_ROW> {
 public:
-	DuckDBHoldingHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBHoldingHistoryLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const HOLDING_HISTORY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.HH_H_T_ID);
-		append_bigint(chunk, index, column, next_record.HH_T_ID);
-		append_value(chunk, index, column, next_record.HH_BEFORE_QTY);
-		append_value(chunk, index, column, next_record.HH_AFTER_QTY);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.HH_H_T_ID);
+		append_bigint(info, next_record.HH_T_ID);
+		append_value(info, next_record.HH_BEFORE_QTY);
+		append_value(info, next_record.HH_AFTER_QTY);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBHoldingSummaryLoad : public DuckDBBaseLoader<HOLDING_SUMMARY_ROW> {
 public:
-	DuckDBHoldingSummaryLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBHoldingSummaryLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const HOLDING_SUMMARY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.HS_CA_ID);
-		append_string(chunk, index, column, next_record.HS_S_SYMB);
-		append_value(chunk, index, column, next_record.HS_QTY);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.HS_CA_ID);
+		append_string(info, next_record.HS_S_SYMB);
+		append_value(info, next_record.HS_QTY);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBIndustryLoad : public DuckDBBaseLoader<INDUSTRY_ROW> {
 public:
-	DuckDBIndustryLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBIndustryLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const INDUSTRY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.IN_ID);
-		append_string(chunk, index, column, next_record.IN_NAME);
-		append_string(chunk, index, column, next_record.IN_SC_ID);
+		info.appender.BeginRow();
+		append_string(info, next_record.IN_ID);
+		append_string(info, next_record.IN_NAME);
+		append_string(info, next_record.IN_SC_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBLastTradeLoad : public DuckDBBaseLoader<LAST_TRADE_ROW> {
 public:
-	DuckDBLastTradeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBLastTradeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const LAST_TRADE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.LT_S_SYMB);
-		append_timestamp(chunk, index, column, next_record.LT_DTS);
-		append_double(chunk, index, column, next_record.LT_PRICE);
-		append_double(chunk, index, column, next_record.LT_OPEN_PRICE);
-		append_bigint(chunk, index, column, next_record.LT_VOL);
+		info.appender.BeginRow();
+		append_string(info, next_record.LT_S_SYMB);
+		append_timestamp(info, next_record.LT_DTS);
+		append_double(info, next_record.LT_PRICE);
+		append_double(info, next_record.LT_OPEN_PRICE);
+		append_bigint(info, next_record.LT_VOL);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBNewsItemLoad : public DuckDBBaseLoader<NEWS_ITEM_ROW> {
 public:
-	DuckDBNewsItemLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBNewsItemLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const NEWS_ITEM_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.NI_ID);
-		append_string(chunk, index, column, next_record.NI_HEADLINE);
-		append_string(chunk, index, column, next_record.NI_SUMMARY);
-		append_string(chunk, index, column, next_record.NI_ITEM);
-		append_timestamp(chunk, index, column, next_record.NI_DTS);
-		append_string(chunk, index, column, next_record.NI_SOURCE);
-		append_string(chunk, index, column, next_record.NI_AUTHOR);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.NI_ID);
+		append_string(info, next_record.NI_HEADLINE);
+		append_string(info, next_record.NI_SUMMARY);
+		append_string(info, next_record.NI_ITEM);
+		append_timestamp(info, next_record.NI_DTS);
+		append_string(info, next_record.NI_SOURCE);
+		append_string(info, next_record.NI_AUTHOR);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBNewsXRefLoad : public DuckDBBaseLoader<NEWS_XREF_ROW> {
 public:
-	DuckDBNewsXRefLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBNewsXRefLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const NEWS_XREF_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.NX_NI_ID);
-		append_bigint(chunk, index, column, next_record.NX_CO_ID);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.NX_NI_ID);
+		append_bigint(info, next_record.NX_CO_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBSectorLoad : public DuckDBBaseLoader<SECTOR_ROW> {
 public:
-	DuckDBSectorLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBSectorLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const SECTOR_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.SC_ID);
-		append_string(chunk, index, column, next_record.SC_NAME);
+		info.appender.BeginRow();
+		append_string(info, next_record.SC_ID);
+		append_string(info, next_record.SC_NAME);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBSecurityLoad : public DuckDBBaseLoader<SECURITY_ROW> {
 public:
-	DuckDBSecurityLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBSecurityLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const SECURITY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.S_SYMB);
-		append_string(chunk, index, column, next_record.S_ISSUE);
-		append_string(chunk, index, column, next_record.S_ST_ID);
-		append_string(chunk, index, column, next_record.S_NAME);
-		append_string(chunk, index, column, next_record.S_EX_ID);
-		append_bigint(chunk, index, column, next_record.S_CO_ID);
-		append_bigint(chunk, index, column, next_record.S_NUM_OUT);
-		append_timestamp(chunk, index, column, next_record.S_START_DATE);
-		append_timestamp(chunk, index, column, next_record.S_EXCH_DATE);
-		append_double(chunk, index, column, next_record.S_PE);
-		append_double(chunk, index, column, next_record.S_52WK_HIGH);
-		append_timestamp(chunk, index, column, next_record.S_52WK_HIGH_DATE);
-		append_double(chunk, index, column, next_record.S_52WK_LOW);
-		append_timestamp(chunk, index, column, next_record.S_52WK_LOW_DATE);
-		append_double(chunk, index, column, next_record.S_DIVIDEND);
-		append_double(chunk, index, column, next_record.S_YIELD);
+		info.appender.BeginRow();
+		append_string(info, next_record.S_SYMB);
+		append_string(info, next_record.S_ISSUE);
+		append_string(info, next_record.S_ST_ID);
+		append_string(info, next_record.S_NAME);
+		append_string(info, next_record.S_EX_ID);
+		append_bigint(info, next_record.S_CO_ID);
+		append_bigint(info, next_record.S_NUM_OUT);
+		append_timestamp(info, next_record.S_START_DATE);
+		append_timestamp(info, next_record.S_EXCH_DATE);
+		append_double(info, next_record.S_PE);
+		append_double(info, next_record.S_52WK_HIGH);
+		append_timestamp(info, next_record.S_52WK_HIGH_DATE);
+		append_double(info, next_record.S_52WK_LOW);
+		append_timestamp(info, next_record.S_52WK_LOW_DATE);
+		append_double(info, next_record.S_DIVIDEND);
+		append_double(info, next_record.S_YIELD);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBSettlementLoad : public DuckDBBaseLoader<SETTLEMENT_ROW> {
 public:
-	DuckDBSettlementLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBSettlementLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const SETTLEMENT_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.SE_T_ID);
-		append_string(chunk, index, column, next_record.SE_CASH_TYPE);
-		append_timestamp(chunk, index, column, next_record.SE_CASH_DUE_DATE);
-		append_double(chunk, index, column, next_record.SE_AMT);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.SE_T_ID);
+		append_string(info, next_record.SE_CASH_TYPE);
+		append_timestamp(info, next_record.SE_CASH_DUE_DATE);
+		append_double(info, next_record.SE_AMT);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBStatusTypeLoad : public DuckDBBaseLoader<STATUS_TYPE_ROW> {
 public:
-	DuckDBStatusTypeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBStatusTypeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const STATUS_TYPE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.ST_ID);
-		append_string(chunk, index, column, next_record.ST_NAME);
+		info.appender.BeginRow();
+		append_string(info, next_record.ST_ID);
+		append_string(info, next_record.ST_NAME);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBTaxRateLoad : public DuckDBBaseLoader<TAX_RATE_ROW> {
 public:
-	DuckDBTaxRateLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBTaxRateLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const TAX_RATE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.TX_ID);
-		append_string(chunk, index, column, next_record.TX_NAME);
-		append_double(chunk, index, column, next_record.TX_RATE);
+		info.appender.BeginRow();
+		append_string(info, next_record.TX_ID);
+		append_string(info, next_record.TX_NAME);
+		append_double(info, next_record.TX_RATE);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBTradeLoad : public DuckDBBaseLoader<TRADE_ROW> {
 public:
-	DuckDBTradeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBTradeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const TRADE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.T_ID);
-		append_timestamp(chunk, index, column, next_record.T_DTS);
-		append_string(chunk, index, column, next_record.T_ST_ID);
-		append_string(chunk, index, column, next_record.T_TT_ID);
-		append_bool(chunk, index, column, next_record.T_IS_CASH);
-		append_string(chunk, index, column, next_record.T_S_SYMB);
-		append_value(chunk, index, column, next_record.T_QTY);
-		append_double(chunk, index, column, next_record.T_BID_PRICE);
-		append_bigint(chunk, index, column, next_record.T_CA_ID);
-		append_string(chunk, index, column, next_record.T_EXEC_NAME);
-		append_double(chunk, index, column, next_record.T_TRADE_PRICE);
-		append_double(chunk, index, column, next_record.T_CHRG);
-		append_double(chunk, index, column, next_record.T_COMM);
-		append_double(chunk, index, column, next_record.T_TAX);
-		append_bool(chunk, index, column, next_record.T_LIFO);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.T_ID);
+		append_timestamp(info, next_record.T_DTS);
+		append_string(info, next_record.T_ST_ID);
+		append_string(info, next_record.T_TT_ID);
+		append_bool(info, next_record.T_IS_CASH);
+		append_string(info, next_record.T_S_SYMB);
+		append_value(info, next_record.T_QTY);
+		append_double(info, next_record.T_BID_PRICE);
+		append_bigint(info, next_record.T_CA_ID);
+		append_string(info, next_record.T_EXEC_NAME);
+		append_double(info, next_record.T_TRADE_PRICE);
+		append_double(info, next_record.T_CHRG);
+		append_double(info, next_record.T_COMM);
+		append_double(info, next_record.T_TAX);
+		append_bool(info, next_record.T_LIFO);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBTradeHistoryLoad : public DuckDBBaseLoader<TRADE_HISTORY_ROW> {
 public:
-	DuckDBTradeHistoryLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBTradeHistoryLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const TRADE_HISTORY_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.TH_T_ID);
-		append_timestamp(chunk, index, column, next_record.TH_DTS);
-		append_string(chunk, index, column, next_record.TH_ST_ID);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.TH_T_ID);
+		append_timestamp(info, next_record.TH_DTS);
+		append_string(info, next_record.TH_ST_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBTradeRequestLoad : public DuckDBBaseLoader<TRADE_REQUEST_ROW> {
 public:
-	DuckDBTradeRequestLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBTradeRequestLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const TRADE_REQUEST_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.TR_T_ID);
-		append_string(chunk, index, column, next_record.TR_TT_ID);
-		append_string(chunk, index, column, next_record.TR_S_SYMB);
-		append_value(chunk, index, column, next_record.TR_QTY);
-		append_double(chunk, index, column, next_record.TR_BID_PRICE);
-		append_bigint(chunk, index, column, next_record.TR_B_ID);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.TR_T_ID);
+		append_string(info, next_record.TR_TT_ID);
+		append_string(info, next_record.TR_S_SYMB);
+		append_value(info, next_record.TR_QTY);
+		append_double(info, next_record.TR_BID_PRICE);
+		append_bigint(info, next_record.TR_B_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBTradeTypeLoad : public DuckDBBaseLoader<TRADE_TYPE_ROW> {
 public:
-	DuckDBTradeTypeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBTradeTypeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const TRADE_TYPE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.TT_ID);
-		append_string(chunk, index, column, next_record.TT_NAME);
-		append_bool(chunk, index, column, next_record.TT_IS_SELL);
-		append_bool(chunk, index, column, next_record.TT_IS_MRKT);
+		info.appender.BeginRow();
+		append_string(info, next_record.TT_ID);
+		append_string(info, next_record.TT_NAME);
+		append_bool(info, next_record.TT_IS_SELL);
+		append_bool(info, next_record.TT_IS_MRKT);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBWatchItemLoad : public DuckDBBaseLoader<WATCH_ITEM_ROW> {
 public:
-	DuckDBWatchItemLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBWatchItemLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const WATCH_ITEM_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.WI_WL_ID);
-		append_string(chunk, index, column, next_record.WI_S_SYMB);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.WI_WL_ID);
+		append_string(info, next_record.WI_S_SYMB);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBWatchListLoad : public DuckDBBaseLoader<WATCH_LIST_ROW> {
 public:
-	DuckDBWatchListLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBWatchListLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const WATCH_LIST_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_bigint(chunk, index, column, next_record.WL_ID);
-		append_bigint(chunk, index, column, next_record.WL_C_ID);
+		info.appender.BeginRow();
+		append_bigint(info, next_record.WL_ID);
+		append_bigint(info, next_record.WL_C_ID);
+		info.appender.EndRow();
 	}
 
 };
 class DuckDBZipCodeLoad : public DuckDBBaseLoader<ZIP_CODE_ROW> {
 public:
-	DuckDBZipCodeLoad(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDBZipCodeLoad(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const ZIP_CODE_ROW &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;
-
-		append_string(chunk, index, column, next_record.ZC_CODE);
-		append_string(chunk, index, column, next_record.ZC_TOWN);
-		append_string(chunk, index, column, next_record.ZC_DIV);
+		info.appender.BeginRow();
+		append_string(info, next_record.ZC_CODE);
+		append_string(info, next_record.ZC_TOWN);
+		append_string(info, next_record.ZC_DIV);
+		info.appender.EndRow();
 	}
 
 };
 CBaseLoader<ACCOUNT_PERMISSION_ROW> *
 DuckDBLoaderFactory::CreateAccountPermissionLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "account_permission" + suffix);
-	return new DuckDBAccountPermissionLoad(table, context);
+	return new DuckDBAccountPermissionLoad(con, schema, "account_permission" + suffix);
 }
 
 CBaseLoader<ADDRESS_ROW> *
 DuckDBLoaderFactory::CreateAddressLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "address" + suffix);
-	return new DuckDBAddressLoad(table, context);
+	return new DuckDBAddressLoad(con, schema, "address" + suffix);
 }
 
 CBaseLoader<BROKER_ROW> *
 DuckDBLoaderFactory::CreateBrokerLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "broker" + suffix);
-	return new DuckDBBrokerLoad(table, context);
+	return new DuckDBBrokerLoad(con, schema, "broker" + suffix);
 }
 
 CBaseLoader<CASH_TRANSACTION_ROW> *
 DuckDBLoaderFactory::CreateCashTransactionLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "cash_transaction" + suffix);
-	return new DuckDBCashTransactionLoad(table, context);
+	return new DuckDBCashTransactionLoad(con, schema, "cash_transaction" + suffix);
 }
 
 CBaseLoader<CHARGE_ROW> *
 DuckDBLoaderFactory::CreateChargeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "charge" + suffix);
-	return new DuckDBChargeLoad(table, context);
+	return new DuckDBChargeLoad(con, schema, "charge" + suffix);
 }
 
 CBaseLoader<COMMISSION_RATE_ROW> *
 DuckDBLoaderFactory::CreateCommissionRateLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "commission_rate" + suffix);
-	return new DuckDBCommissionRateLoad(table, context);
+	return new DuckDBCommissionRateLoad(con, schema, "commission_rate" + suffix);
 }
 
 CBaseLoader<COMPANY_ROW> *
 DuckDBLoaderFactory::CreateCompanyLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "company" + suffix);
-	return new DuckDBCompanyLoad(table, context);
+	return new DuckDBCompanyLoad(con, schema, "company" + suffix);
 }
 
 CBaseLoader<COMPANY_COMPETITOR_ROW> *
 DuckDBLoaderFactory::CreateCompanyCompetitorLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "company_competitor" + suffix);
-	return new DuckDBCompanyCompetitorLoad(table, context);
+	return new DuckDBCompanyCompetitorLoad(con, schema, "company_competitor" + suffix);
 }
 
 CBaseLoader<CUSTOMER_ROW> *
 DuckDBLoaderFactory::CreateCustomerLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "customer" + suffix);
-	return new DuckDBCustomerLoad(table, context);
+	return new DuckDBCustomerLoad(con, schema, "customer" + suffix);
 }
 
 CBaseLoader<CUSTOMER_ACCOUNT_ROW> *
 DuckDBLoaderFactory::CreateCustomerAccountLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "customer_account" + suffix);
-	return new DuckDBCustomerAccountLoad(table, context);
+	return new DuckDBCustomerAccountLoad(con, schema, "customer_account" + suffix);
 }
 
 CBaseLoader<CUSTOMER_TAXRATE_ROW> *
 DuckDBLoaderFactory::CreateCustomerTaxrateLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "customer_taxrate" + suffix);
-	return new DuckDBCustomerTaxrateLoad(table, context);
+	return new DuckDBCustomerTaxrateLoad(con, schema, "customer_taxrate" + suffix);
 }
 
 CBaseLoader<DAILY_MARKET_ROW> *
 DuckDBLoaderFactory::CreateDailyMarketLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "daily_market" + suffix);
-	return new DuckDBDailyMarketLoad(table, context);
+	return new DuckDBDailyMarketLoad(con, schema, "daily_market" + suffix);
 }
 
 CBaseLoader<EXCHANGE_ROW> *
 DuckDBLoaderFactory::CreateExchangeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "exchange" + suffix);
-	return new DuckDBExchangeLoad(table, context);
+	return new DuckDBExchangeLoad(con, schema, "exchange" + suffix);
 }
 
 CBaseLoader<FINANCIAL_ROW> *
 DuckDBLoaderFactory::CreateFinancialLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "financial" + suffix);
-	return new DuckDBFinancialLoad(table, context);
+	return new DuckDBFinancialLoad(con, schema, "financial" + suffix);
 }
 
 CBaseLoader<HOLDING_ROW> *
 DuckDBLoaderFactory::CreateHoldingLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "holding" + suffix);
-	return new DuckDBHoldingLoad(table, context);
+	return new DuckDBHoldingLoad(con, schema, "holding" + suffix);
 }
 
 CBaseLoader<HOLDING_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateHoldingHistoryLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "holding_history" + suffix);
-	return new DuckDBHoldingHistoryLoad(table, context);
+	return new DuckDBHoldingHistoryLoad(con, schema, "holding_history" + suffix);
 }
 
 CBaseLoader<HOLDING_SUMMARY_ROW> *
 DuckDBLoaderFactory::CreateHoldingSummaryLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "holding_summary" + suffix);
-	return new DuckDBHoldingSummaryLoad(table, context);
+	return new DuckDBHoldingSummaryLoad(con, schema, "holding_summary" + suffix);
 }
 
 CBaseLoader<INDUSTRY_ROW> *
 DuckDBLoaderFactory::CreateIndustryLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "industry" + suffix);
-	return new DuckDBIndustryLoad(table, context);
+	return new DuckDBIndustryLoad(con, schema, "industry" + suffix);
 }
 
 CBaseLoader<LAST_TRADE_ROW> *
 DuckDBLoaderFactory::CreateLastTradeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "last_trade" + suffix);
-	return new DuckDBLastTradeLoad(table, context);
+	return new DuckDBLastTradeLoad(con, schema, "last_trade" + suffix);
 }
 
 CBaseLoader<NEWS_ITEM_ROW> *
 DuckDBLoaderFactory::CreateNewsItemLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "news_item" + suffix);
-	return new DuckDBNewsItemLoad(table, context);
+	return new DuckDBNewsItemLoad(con, schema, "news_item" + suffix);
 }
 
 CBaseLoader<NEWS_XREF_ROW> *
 DuckDBLoaderFactory::CreateNewsXRefLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "news_xref" + suffix);
-	return new DuckDBNewsXRefLoad(table, context);
+	return new DuckDBNewsXRefLoad(con, schema, "news_xref" + suffix);
 }
 
 CBaseLoader<SECTOR_ROW> *
 DuckDBLoaderFactory::CreateSectorLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "sector" + suffix);
-	return new DuckDBSectorLoad(table, context);
+	return new DuckDBSectorLoad(con, schema, "sector" + suffix);
 }
 
 CBaseLoader<SECURITY_ROW> *
 DuckDBLoaderFactory::CreateSecurityLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "security" + suffix);
-	return new DuckDBSecurityLoad(table, context);
+	return new DuckDBSecurityLoad(con, schema, "security" + suffix);
 }
 
 CBaseLoader<SETTLEMENT_ROW> *
 DuckDBLoaderFactory::CreateSettlementLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "settlement" + suffix);
-	return new DuckDBSettlementLoad(table, context);
+	return new DuckDBSettlementLoad(con, schema, "settlement" + suffix);
 }
 
 CBaseLoader<STATUS_TYPE_ROW> *
 DuckDBLoaderFactory::CreateStatusTypeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "status_type" + suffix);
-	return new DuckDBStatusTypeLoad(table, context);
+	return new DuckDBStatusTypeLoad(con, schema, "status_type" + suffix);
 }
 
 CBaseLoader<TAX_RATE_ROW> *
 DuckDBLoaderFactory::CreateTaxRateLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "tax_rate" + suffix);
-	return new DuckDBTaxRateLoad(table, context);
+	return new DuckDBTaxRateLoad(con, schema, "tax_rate" + suffix);
 }
 
 CBaseLoader<TRADE_ROW> *
 DuckDBLoaderFactory::CreateTradeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "trade" + suffix);
-	return new DuckDBTradeLoad(table, context);
+	return new DuckDBTradeLoad(con, schema, "trade" + suffix);
 }
 
 CBaseLoader<TRADE_HISTORY_ROW> *
 DuckDBLoaderFactory::CreateTradeHistoryLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "trade_history" + suffix);
-	return new DuckDBTradeHistoryLoad(table, context);
+	return new DuckDBTradeHistoryLoad(con, schema, "trade_history" + suffix);
 }
 
 CBaseLoader<TRADE_REQUEST_ROW> *
 DuckDBLoaderFactory::CreateTradeRequestLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "trade_request" + suffix);
-	return new DuckDBTradeRequestLoad(table, context);
+	return new DuckDBTradeRequestLoad(con, schema, "trade_request" + suffix);
 }
 
 CBaseLoader<TRADE_TYPE_ROW> *
 DuckDBLoaderFactory::CreateTradeTypeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "trade_type" + suffix);
-	return new DuckDBTradeTypeLoad(table, context);
+	return new DuckDBTradeTypeLoad(con, schema, "trade_type" + suffix);
 }
 
 CBaseLoader<WATCH_ITEM_ROW> *
 DuckDBLoaderFactory::CreateWatchItemLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "watch_item" + suffix);
-	return new DuckDBWatchItemLoad(table, context);
+	return new DuckDBWatchItemLoad(con, schema, "watch_item" + suffix);
 }
 
 CBaseLoader<WATCH_LIST_ROW> *
 DuckDBLoaderFactory::CreateWatchListLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "watch_list" + suffix);
-	return new DuckDBWatchListLoad(table, context);
+	return new DuckDBWatchListLoad(con, schema, "watch_list" + suffix);
 }
 
 CBaseLoader<ZIP_CODE_ROW> *
 DuckDBLoaderFactory::CreateZipCodeLoader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "zip_code" + suffix);
-	return new DuckDBZipCodeLoad(table, context);
+	return new DuckDBZipCodeLoad(con, schema, "zip_code" + suffix);
 }
 
 static string AccountPermissionSchema(string schema, string suffix) {

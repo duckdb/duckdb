@@ -16,7 +16,7 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 	auto &vec = input.data[0];
 
 	vec.Verify();
-	auto &children = vec.GetStructEntries();
+	auto &children = StructVector::GetEntries(vec);
 	if (info.index >= children.size()) {
 		throw Exception("Not enough struct entries for struct_extract");
 	}

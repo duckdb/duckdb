@@ -71,33 +71,41 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-		if (input.nullmask[i]) {
+	VectorData idata;
+	input.Orrify(idata);
+
+	auto input_data = (T *)idata.data;
+	for(idx_t i = 0; i < input.size(); i++) {
+		auto idx = idata.sel->get_index(i);
+		if ((*idata.nullmask)[idx]) {
 			keys.push_back(nullptr);
 		} else {
-			keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
+			keys.push_back(Key::CreateKey<T>(input_data[idx], is_little_endian));
 		}
-	});
+	}
 }
 
 template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-		if (input.nullmask[i] || !keys[k]) {
+	VectorData idata;
+	input.Orrify(idata);
+
+	auto input_data = (T *)idata.data;
+	for(idx_t i = 0; i < input.size(); i++) {
+		auto idx = idata.sel->get_index(i);
+		if ((*idata.nullmask)[idx] || !keys[i]) {
 			// either this column is NULL, or the previous column is NULL!
-			keys[k] = nullptr;
+			keys[i] = nullptr;
 		} else {
 			// concatenate the keys
-			auto old_key = move(keys[k]);
-			auto new_key = Key::CreateKey<T>(input_data[i], is_little_endian);
+			auto old_key = move(keys[i]);
+			auto new_key = Key::CreateKey<T>(input_data[idx], is_little_endian);
 			auto keyLen = old_key->len + new_key->len;
 			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
 			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
-			keys[k] = make_unique<Key>(move(compound_data), keyLen);
+			keys[i] = make_unique<Key>(move(compound_data), keyLen);
 		}
-	});
+	}
 }
 
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
@@ -129,7 +137,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
 	for (idx_t i = 1; i < input.column_count(); i++) {
-		// for each fo the remaining columns, concatenate
+		// for each of the remaining columns, concatenate
 		switch (input.data[i].type) {
 		case TypeId::INT8:
 			concatenate_keys<int8_t>(input.data[i], keys, is_little_endian);
@@ -169,15 +177,14 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	// now insert the elements into the index
 	row_ids.Normalify();
-	auto row_identifiers = (row_t *)row_ids.GetData();
-	auto rsel = row_ids.sel_vector();
+	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = INVALID_INDEX;
 	for (idx_t i = 0; i < row_ids.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
 
-		row_t row_id = row_identifiers[rsel ? rsel[i] : i];
+		row_t row_id = row_identifiers[i];
 		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
@@ -196,8 +203,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (!keys[i]) {
 				continue;
 			}
-			idx_t k = rsel ? rsel[i] : i;
-			row_t row_id = row_identifiers[k];
+			row_t row_id = row_identifiers[i];
 			Erase(tree, *keys[i], 0, row_id);
 		}
 		return false;
@@ -326,7 +332,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 	// now erase the elements from the database
 	row_ids.Normalify();
-	auto row_identifiers = (int64_t *)row_ids.GetData();
+	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
 	for (idx_t i = 0; i < row_ids.size(); i++) {
 		if (!keys[i]) {

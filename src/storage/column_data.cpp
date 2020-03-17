@@ -110,12 +110,12 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
+void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids) {
 	// first find the segment that the update belongs to
-	idx_t first_id = ids[updates.sel_vector() ? updates.sel_vector()[0] : 0];
+	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
-	segment->Update(*this, transaction, updates, ids);
+	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids));
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

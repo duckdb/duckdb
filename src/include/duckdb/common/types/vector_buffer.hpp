@@ -27,8 +27,6 @@ enum class VectorBufferType : uint8_t {
 	LIST_BUFFER      // list buffer, holds a single flatvector child
 };
 
-template <class T> using buffer_ptr = std::shared_ptr<T>;
-
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
 public:
@@ -55,13 +53,14 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class DictionaryBuffer : public VectorBuffer {
 public:
-	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER) {
-		data = unique_ptr<data_t[]>(new data_t[count * sizeof(sel_t)]);
+	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 	}
 public:
-	sel_t* GetSelVector() {
-		return (sel_t*) data.get();
+	SelectionVector& GetSelVector() {
+		return sel_vector;
 	}
+private:
+	SelectionVector sel_vector;
 };
 
 class VectorStringBuffer : public VectorBuffer {
@@ -124,9 +123,5 @@ private:
 	//! child vectors used for nested data
 	unique_ptr<ChunkCollection> child;
 };
-
-template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {
-	return std::make_shared<T>(std::forward<Args>(args)...);
-}
 
 } // namespace duckdb

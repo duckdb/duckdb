@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
@@ -23,18 +24,18 @@ extern nullmask_t ZERO_MASK;
 
 class VectorCardinality {
 public:
-	VectorCardinality() : count(0), sel_vector(nullptr) {
+	VectorCardinality() : count(0) {
 	}
-	VectorCardinality(idx_t count, sel_t *sel_vector = nullptr) : count(count), sel_vector(sel_vector) {
-		assert(count <= STANDARD_VECTOR_SIZE);
+	VectorCardinality(idx_t count) : count(count) {
 	}
 
 	idx_t count;
-	sel_t *sel_vector;
+};
 
-	idx_t get_index(idx_t idx) {
-		return sel_vector ? sel_vector[idx] : idx;
-	}
+struct VectorData {
+	SelectionVector *sel;
+	data_ptr_t data;
+	nullmask_t *nullmask;
 };
 
 class VectorStructBuffer;
@@ -42,33 +43,16 @@ class VectorListBuffer;
 class ChunkCollection;
 
 //!  Vector of values of a specified TypeId.
-/*!
-  The vector class is the smallest unit of data used by the execution engine. It
-  represents a chunk of values of a single type. A vector can either (1) own its
-  own data (in which case own_data is set to true), or (2) hold only a reference
-  to a set of data (e.g. the base columns or another vector).
-
-  The execution engine operates on vectors mostly through the the set of
-  available VectorOperations.
-
-  A vector also has an optional selection vector property. When this property is
-  set, the selection vector must be used to access the data as the data pointer
-  itself might hold irrelevant empty entries. A simple loop for this would be as
-  follows:
-
-  for(auto i = 0; i < count; i++) {
-    sum += data[sel_vector[i]];
-  }
-
-  Selection vectors are used for two purposes:
-
-  (1) Filtering data without requiring moving and copying data around
-
-  (2) Ordering data
-*/
 class Vector {
-	friend class DataChunk;
+	friend struct ConstantVector;
+	friend struct DictionaryVector;
+	friend struct FlatVector;
+	friend struct ListVector;
+	friend struct StringVector;
+	friend struct StructVector;
+	friend struct SequenceVector;
 
+	friend class DataChunk;
 public:
 	Vector(const VectorCardinality &cardinality);
 	//! Create a vector of size one holding the passed on value
@@ -94,40 +78,32 @@ public:
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
-	//! The null mask of the vector, if the Vector has any NULL values
-	nullmask_t nullmask;
-
 public:
 	idx_t size() const {
 		return vcardinality.count;
-	}
-	sel_t *sel_vector() const {
-		return vcardinality.sel_vector;
 	}
 	const VectorCardinality &cardinality() const {
 		return vcardinality;
 	}
 	bool SameCardinality(const Vector &other) const {
-		return size() == other.size() && sel_vector() == other.sel_vector();
+		return size() == other.size();
 	}
 	bool SameCardinality(const VectorCardinality &other) const {
-		return size() == other.count && sel_vector() == other.sel_vector;
+		return size() == other.count;
 	}
 
+	//! Create a vector that references the specified value.
+	void Reference(Value &value);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, idx_t offset);
 	//! Creates a reference to a slice of the other vector
-	void Slice(Vector &other, buffer_ptr<VectorBuffer> dictionary);
-	//! Create a vector that references the specified value.
-	void Reference(Value &value);
+	void Slice(Vector &other, SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
-	//! Flattens the vector, removing any selection vector
-	void ClearSelectionVector();
 
 	//! Converts this Vector to a printable string representation
 	string ToString() const;
@@ -135,58 +111,31 @@ public:
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	void Normalify();
+	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
+	void Orrify(VectorData &data);
 
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
-	//! Get the sequence attributes of a sequence vector
-	void GetSequence(int64_t &start, int64_t &increment) const;
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
 
-	data_ptr_t GetData() {
-		return data;
-	}
-
-	//! Add a string to the string heap of the vector (auxiliary data)
-	string_t AddString(const char *data, idx_t len);
-	//! Add a string to the string heap of the vector (auxiliary data)
-	string_t AddString(const char *data);
-	//! Add a string to the string heap of the vector (auxiliary data)
-	string_t AddString(string_t data);
-	//! Add a string to the string heap of the vector (auxiliary data)
-	string_t AddString(const string &data);
-	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
-	//! result of an operation
-	string_t EmptyString(idx_t len);
-
-	//! Add a reference from this vector to the string heap of the provided vector
-	void AddHeapReference(Vector &other);
-
-	child_list_t<unique_ptr<Vector>> &GetStructEntries() const;
-	void AddStructEntry(string name, unique_ptr<Vector> vector);
-
-	ChunkCollection &GetListEntry() const;
-	bool HasListEntry() const;
-	void SetListEntry(unique_ptr<ChunkCollection> vector);
-
-	//! Returns the [index] element of the Vector as a Value. Note that this does not consider any selection vectors on
-	//! the vector, and returns the element that is physically in location [index].
+	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;
-	//! Sets the [index] element of the Vector to the specified Value. Note that this does not consider any selection
-	//! vectors on the vector, and returns the element that is physically in location [index].
+	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, Value val);
-
 protected:
 	//! The cardinality of the vector
 	const VectorCardinality &vcardinality;
 	//! A pointer to the data.
 	data_ptr_t data;
+	//! The nullmask of the vector
+	nullmask_t nullmask;
 	//! The main buffer holding the data of the vector
 	buffer_ptr<VectorBuffer> buffer;
-	//! The secondary buffer holding auxiliary data of the vector, for example, a string vector uses this to store
-	//! strings
+	//! The buffer holding auxiliary data of the vector
+	//! e.g. a string vector uses this to store strings
 	buffer_ptr<VectorBuffer> auxiliary;
 };
 
@@ -197,6 +146,113 @@ public:
 	}
 public:
 	Vector data;
+};
+
+struct ConstantVector {
+	static data_ptr_t GetData(Vector &vector) {
+		assert(vector.vector_type == VectorType::CONSTANT_VECTOR || vector.vector_type == VectorType::FLAT_VECTOR);
+		return vector.data;
+	}
+	template<class T>
+	static T* GetData(Vector &vector) {
+		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		return (T*) vector.data;
+	}
+	static bool IsNull(const Vector &vector) {
+		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		return vector.nullmask[0];
+	}
+	static void SetNull(Vector &vector, bool is_null) {
+		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		vector.nullmask[0] = is_null;
+	}
+	static nullmask_t& Nullmask(Vector &vector) {
+		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
+		return vector.nullmask;
+	}
+};
+
+struct DictionaryVector {
+	static SelectionVector &SelectionVector(const Vector &vector) {
+		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
+		return ((DictionaryBuffer&) vector.buffer).GetSelVector();
+	}
+	static Vector &Child(const Vector &vector) {
+		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
+		return ((VectorChildBuffer&) vector.auxiliary).data;
+	}
+};
+
+struct FlatVector {
+	static data_ptr_t GetData(Vector &vector) {
+		return ConstantVector::GetData(vector);
+	}
+	template<class T>
+	static T* GetData(Vector &vector) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		return (T*) vector.data;
+	}
+	template<class T>
+	static T GetValue(Vector &vector, idx_t idx) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		return FlatVector::GetData<T>(vector)[idx];
+	}
+	static nullmask_t& Nullmask(Vector &vector) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		return vector.nullmask;
+	}
+	static void SetNullmask(Vector &vector, nullmask_t new_mask) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		vector.nullmask = move(new_mask);
+	}
+	static void SetNull(Vector &vector, idx_t idx, bool value) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		vector.nullmask[idx] = value;
+	}
+	static bool IsNull(const Vector &vector, idx_t idx) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		return vector.nullmask[idx];
+	}
+};
+
+struct ListVector {
+	static ChunkCollection &GetEntry(const Vector &vector);
+	static bool HasEntry(const Vector &vector);
+	static void SetEntry(Vector &vector, unique_ptr<ChunkCollection> entry);
+};
+
+struct StringVector {
+	static void MoveStringsToHeap(Vector &vector, StringHeap &heap);
+	static void MoveStringsToHeap(Vector &vector, StringHeap &heap, SelectionVector &sel);
+
+	//! Add a string to the string heap of the vector (auxiliary data)
+	static string_t AddString(Vector &vector, const char *data, idx_t len);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	static string_t AddString(Vector &vector, const char *data);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	static string_t AddString(Vector &vector, string_t data);
+	//! Add a string to the string heap of the vector (auxiliary data)
+	static string_t AddString(Vector &vector, const string &data);
+	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
+	//! result of an operation
+	static string_t EmptyString(Vector &vector, idx_t len);
+
+	//! Add a reference from this vector to the string heap of the provided vector
+	static void AddHeapReference(Vector &vector, Vector &other);
+};
+
+struct StructVector {
+	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
+	static void AddEntry(Vector &vector, string name, unique_ptr<Vector> entry);
+};
+
+struct SequenceVector {
+	static void GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
+		assert(vector.vector_type == VectorType::SEQUENCE_VECTOR);
+		auto data = (int64_t *)vector.buffer->GetData();
+		start = data[0];
+		increment = data[1];
+	}
 };
 
 class StandaloneVector : public Vector {
@@ -213,10 +269,6 @@ public:
 		assert(count <= STANDARD_VECTOR_SIZE);
 		owned_cardinality.count = count;
 	}
-	void SetSelVector(sel_t *sel) {
-		owned_cardinality.sel_vector = sel;
-	}
-
 protected:
 	VectorCardinality owned_cardinality;
 };

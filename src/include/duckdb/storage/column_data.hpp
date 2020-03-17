@@ -51,7 +51,7 @@ public:
 	void RevertAppend(row_t start_row);
 
 	//! Update the specified row identifiers
-	void Update(Transaction &transaction, Vector &updates, row_t *ids);
+	void Update(Transaction &transaction, Vector &updates, Vector &row_ids);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);

@@ -40,9 +40,6 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-	//! The selection vector of a chunk, if it owns it
-	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
-
 public:
 	idx_t size() const {
 		return count;
@@ -50,13 +47,13 @@ public:
 	idx_t column_count() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count, sel_t *sel_vector = nullptr) {
+	void SetCardinality(idx_t count) {
 		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
-		this->sel_vector = sel_vector;
 	}
+	void SetCardinality(idx_t count, SelectionVector &sel_vector);
 	void SetCardinality(const VectorCardinality &cardinality) {
-		SetCardinality(cardinality.count, cardinality.sel_vector);
+		SetCardinality(cardinality.count);
 	}
 
 	Value GetValue(idx_t col_idx, idx_t index) const;
@@ -81,9 +78,6 @@ public:
 
 	//! Copies the data from this vector to another vector.
 	void Copy(DataChunk &other, idx_t offset = 0);
-
-	//! Removes the selection vector from the chunk
-	void ClearSelectionVector();
 
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();

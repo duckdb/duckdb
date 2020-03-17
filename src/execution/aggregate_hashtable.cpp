@@ -153,7 +153,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 		groups.Initialize(group_types);
 
 		Vector addresses(groups, TypeId::POINTER);
-		auto data_pointers = (data_ptr_t *)addresses.GetData();
+		auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 		data_ptr_t ptr = data;
 		data_ptr_t end = data + capacity * tuple_size;
@@ -192,9 +192,10 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			assert(addresses.type == new_addresses.type && addresses.type == TypeId::POINTER);
 			assert(addresses.SameCardinality(new_addresses));
 
-			auto new_address_data = (data_ptr_t *)new_addresses.GetData();
-			VectorOperations::Exec(
-			    addresses, [&](idx_t i, idx_t k) { memcpy(new_address_data[i], data_pointers[i], payload_width); });
+			auto new_address_data = FlatVector::GetData<data_ptr_t>(new_addresses);
+			for(idx_t i = 0; i < addresses.size(); i++) {
+				memcpy(new_address_data[i], data_pointers[i], payload_width);
+			}
 		}
 
 		assert(this->entries == new_table->entries);
@@ -236,51 +237,49 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.distinct) {
-			assert(groups.sel_vector == payload.sel_vector);
-
 			// construct chunk for secondary hash table probing
-			vector<TypeId> probe_types(group_types);
-			probe_types.push_back(payload_types[payload_idx]);
-			DataChunk probe_chunk;
-			probe_chunk.Initialize(probe_types);
-			for (idx_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
-				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
-			}
-			probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
-			probe_chunk.SetCardinality(groups);
-			probe_chunk.Verify();
+			throw NotImplementedException("FIXME: aggr distinct");
+			// vector<TypeId> probe_types(group_types);
+			// probe_types.push_back(payload_types[payload_idx]);
+			// DataChunk probe_chunk;
+			// probe_chunk.Initialize(probe_types);
+			// for (idx_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
+			// 	probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
+			// }
+			// probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
+			// probe_chunk.SetCardinality(groups);
+			// probe_chunk.Verify();
 
-			Vector dummy_addresses(probe_chunk, TypeId::POINTER);
-			Vector probe_result(probe_chunk, TypeId::BOOL);
-			// this is the actual meat, find out which groups plus payload
-			// value have not been seen yet
-			distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, probe_result);
+			// Vector dummy_addresses(probe_chunk, TypeId::POINTER);
+			// Vector probe_result(probe_chunk, TypeId::BOOL);
+			// // this is the actual meat, find out which groups plus payload
+			// // value have not been seen yet
+			// distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, probe_result);
 
-			// now fix up the payload and addresses accordingly by creating
-			// a selection vector
-			sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
-			idx_t match_count = 0;
-			auto probe_result_data = (bool *)probe_result.GetData();
-			for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
-				idx_t sel_idx = payload.sel_vector ? payload.sel_vector[probe_idx] : probe_idx;
-				if (probe_result_data[sel_idx]) {
-					distinct_sel_vector[match_count++] = sel_idx;
-				}
-			}
-			if (match_count > 0) {
-				VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
-				Vector distinct_payload(distinct_cardinality);
-				Vector distinct_addresses(distinct_cardinality);
+			// // now fix up the payload and addresses accordingly by creating
+			// // a selection vector
+			// sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
+			// idx_t match_count = 0;
+			// auto probe_result_data = FlatVector::GetData<bool>(probe_result);
+			// for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
+			// 	if (probe_result_data[sel_idx]) {
+			// 		distinct_sel_vector[match_count++] = probe_idx;
+			// 	}
+			// }
+			// if (match_count > 0) {
+			// 	VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
+			// 	Vector distinct_payload(distinct_cardinality);
+			// 	Vector distinct_addresses(distinct_cardinality);
 
-				distinct_payload.Reference(payload.data[payload_idx]);
-				distinct_addresses.Reference(addresses);
+			// 	distinct_payload.Reference(payload.data[payload_idx]);
+			// 	distinct_addresses.Reference(addresses);
 
-				distinct_payload.Verify();
-				distinct_addresses.Verify();
+			// 	distinct_payload.Verify();
+			// 	distinct_addresses.Verify();
 
-				aggr.function.update(&distinct_payload, 1, distinct_addresses);
-			}
-			payload_idx++;
+			// 	aggr.function.update(&distinct_payload, 1, distinct_addresses);
+			// }
+			// payload_idx++;
 		} else {
 			auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
 			aggr.function.update(&payload.data[payload_idx], input_count, addresses);
@@ -320,7 +319,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 template <class T>
 void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], idx_t &sel_count,
                                     sel_t no_match_vector[], idx_t &no_match_count) {
-	auto data = (T *)groups.GetData();
+	auto data = FlatVector::GetData<T>(groups);
 	idx_t current_count = 0;
 	assert(groups.vector_type == VectorType::FLAT_VECTOR);
 	for (idx_t i = 0; i < sel_count; i++) {
@@ -391,105 +390,107 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
 void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {
-	assert(addresses.SameCardinality(groups) && addresses.SameCardinality(groups));
-	// resize at 50% capacity, also need to fit the entire vector
-	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
-		Resize(capacity * 2);
-	}
+	throw NotImplementedException("FIXME: find or create groups");
+	// assert(addresses.SameCardinality(groups) && addresses.SameCardinality(groups));
+	// // resize at 50% capacity, also need to fit the entire vector
+	// if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
+	// 	Resize(capacity * 2);
+	// }
 
-	// for each group, fill in the NULL value
-	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-		VectorOperations::FillNullMask(groups.data[group_idx]);
-	}
+	// // FIXME: handle NULL values
+	// // for each group, fill in the NULL value
+	// // for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+	// // 	VectorOperations::FillNullMask(groups.data[group_idx]);
+	// // }
 
-	// we need to be able to fit at least one vector of data
-	assert(capacity - entries > STANDARD_VECTOR_SIZE);
-	assert(new_group.type == TypeId::BOOL);
-	assert(addresses.type == TypeId::POINTER);
+	// // we need to be able to fit at least one vector of data
+	// assert(capacity - entries > STANDARD_VECTOR_SIZE);
+	// assert(new_group.type == TypeId::BOOL);
+	// assert(addresses.type == TypeId::POINTER);
 
-	HashGroups(groups, addresses);
-	// FIXME: optimize for constant group index
-	groups.Normalify();
-	addresses.Normalify();
+	// HashGroups(groups, addresses);
+	// // FIXME: optimize for constant group index
+	// groups.Normalify();
+	// addresses.Normalify();
 
-	sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];
-	idx_t sel_count = groups.size();
-	VectorOperations::Exec(addresses, [&](idx_t i, idx_t k) { sel_vector[k] = i; });
+	// sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];
+	// idx_t sel_count = groups.size();
+	// VectorOperations::Exec(addresses, [&](idx_t i, idx_t k) { sel_vector[k] = i; });
 
-	// list of addresses for the tuples
-	auto data_pointers = (data_ptr_t *)addresses.GetData();
-	if (parallel) {
-		throw NotImplementedException("Parallel HT not implemented");
-	}
+	// // list of addresses for the tuples
+	// auto data_pointers = (data_ptr_t *)addresses.GetData();
+	// if (parallel) {
+	// 	throw NotImplementedException("Parallel HT not implemented");
+	// }
 
-	// zero initialize the new_groups array
-	auto new_groups = ((bool *)new_group.GetData());
-	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	// // zero initialize the new_groups array
+	// auto new_groups = ((bool *)new_group.GetData());
+	// memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
-	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	Vector pointers(groups, TypeId::POINTER, (data_ptr_t)group_pointers);
+	// data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
+	// Vector pointers(groups, TypeId::POINTER, (data_ptr_t)group_pointers);
 
-	while (sel_count > 0) {
-		idx_t current_count = 0;
-		idx_t empty_count = 0;
+	// while (sel_count > 0) {
+	// 	idx_t current_count = 0;
+	// 	idx_t empty_count = 0;
 
-		// first figure out for each remaining whether or not it belongs to a full or empty group
-		for (idx_t i = 0; i < sel_count; i++) {
-			idx_t index = sel_vector[i];
-			auto entry = data_pointers[index];
-			if (*entry == EMPTY_CELL) {
-				// cell is empty; mark the cell as filled
-				*entry = FULL_CELL;
-				empty_vector[empty_count++] = index;
-				new_groups[index] = true;
-				// initialize the payload info for the column
-				memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
-			} else {
-				// cell is occupied: add to check list
-				sel_vector[current_count++] = index;
-			}
-			group_pointers[index] = entry + FLAG_SIZE;
-			data_pointers[index] = entry + FLAG_SIZE + group_width;
-		}
-		sel_count = current_count;
+	// 	// first figure out for each remaining whether or not it belongs to a full or empty group
+	// 	for (idx_t i = 0; i < sel_count; i++) {
+	// 		idx_t index = sel_vector[i];
+	// 		auto entry = data_pointers[index];
+	// 		if (*entry == EMPTY_CELL) {
+	// 			// cell is empty; mark the cell as filled
+	// 			*entry = FULL_CELL;
+	// 			empty_vector[empty_count++] = index;
+	// 			new_groups[index] = true;
+	// 			// initialize the payload info for the column
+	// 			memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
+	// 		} else {
+	// 			// cell is occupied: add to check list
+	// 			sel_vector[current_count++] = index;
+	// 		}
+	// 		group_pointers[index] = entry + FLAG_SIZE;
+	// 		data_pointers[index] = entry + FLAG_SIZE + group_width;
+	// 	}
+	// 	sel_count = current_count;
 
-		if (empty_count > 0) {
-			// for each of the locations that are empty, serialize the group columns to the locations
-			auto old_sel_vector = groups.sel_vector;
-			idx_t old_count = groups.size();
-			groups.SetCardinality(empty_count, empty_vector);
-			for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-				// set up the new sel vector with the entries we need to write
-				auto &group_column = groups.data[group_idx];
+	// 	if (empty_count > 0) {
+	// 		// for each of the locations that are empty, serialize the group columns to the locations
+	// 		auto old_sel_vector = groups.sel_vector;
+	// 		idx_t old_count = groups.size();
+	// 		groups.SetCardinality(empty_count, empty_vector);
+	// 		for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+	// 			// set up the new sel vector with the entries we need to write
+	// 			auto &group_column = groups.data[group_idx];
 
-				VectorOperations::Scatter::SetAll(group_column, pointers);
-				VectorOperations::AddInPlace(pointers, GetTypeIdSize(group_column.type));
-			}
-			// restore the old sel_vector and count
-			groups.SetCardinality(old_count, old_sel_vector);
-			entries += empty_count;
-		}
-		// now we have only the tuples remaining that might match to an existing group
-		// start performing comparisons with each of the groups
-		sel_t no_match_vector[STANDARD_VECTOR_SIZE];
-		idx_t no_match_count = 0;
-		for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-			CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector,
-			                   no_match_count);
-		}
+	// 			VectorOperations::Scatter::SetAll(group_column, pointers);
+	// 			VectorOperations::AddInPlace(pointers, GetTypeIdSize(group_column.type));
+	// 		}
+	// 		// restore the old sel_vector and count
+	// 		groups.SetCardinality(old_count, old_sel_vector);
+	// 		entries += empty_count;
+	// 	}
+	// 	// now we have only the tuples remaining that might match to an existing group
+	// 	// start performing comparisons with each of the groups
+	// 	sel_t no_match_vector[STANDARD_VECTOR_SIZE];
+	// 	idx_t no_match_count = 0;
+	// 	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+	// 		CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector,
+	// 		                   no_match_count);
+	// 	}
 
-		// each of the entries that do not match need to be moved to the next entry
-		for (idx_t i = 0; i < no_match_count; i++) {
-			idx_t index = no_match_vector[i];
-			sel_vector[i] = index;
-			data_pointers[index] += payload_width;
-			assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
-			if (data_pointers[index] >= endptr) {
-				data_pointers[index] = data;
-			}
-		}
-		sel_count = no_match_count;
-	}
+	// 	// each of the entries that do not match need to be moved to the next entry
+	// 	for (idx_t i = 0; i < no_match_count; i++) {
+	// 		idx_t index = no_match_vector[i];
+	// 		sel_vector[i] = index;
+	// 		data_pointers[index] += payload_width;
+	// 		assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
+	// 		if (data_pointers[index] >= endptr) {
+	// 			data_pointers[index] = data;
+	// 		}
+	// 	}
+	// 	sel_count = no_match_count;
+	// }
 }
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
@@ -501,7 +502,7 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	}
 
 	Vector addresses(groups, TypeId::POINTER);
-	auto data_pointers = (data_ptr_t *)addresses.GetData();
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// scan the table for full cells starting from the scan position
 	idx_t entry = 0;

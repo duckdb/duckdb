@@ -51,49 +51,50 @@ void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 }
 
 void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
-	if (!state.storage || state.chunk_index > state.max_index) {
-		// nothing left to scan
-		result.Reset();
-		return;
-	}
-	auto &chunk = *state.storage->collection.chunks[state.chunk_index];
-	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
-	idx_t count = chunk_count;
+	throw NotImplementedException("FIXME local scan");
+	// if (!state.storage || state.chunk_index > state.max_index) {
+	// 	// nothing left to scan
+	// 	result.Reset();
+	// 	return;
+	// }
+	// auto &chunk = *state.storage->collection.chunks[state.chunk_index];
+	// idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
+	// idx_t count = chunk_count;
 
-	// first create a selection vector from the deleted entries (if any)
-	sel_t *sel_vector = nullptr;
-	auto entry = state.storage->deleted_entries.find(state.chunk_index);
-	if (entry != state.storage->deleted_entries.end()) {
-		// deleted entries! create a selection vector
-		auto deleted = entry->second.get();
-		sel_vector = state.sel_vector_data;
-		idx_t new_count = 0;
-		for (idx_t i = 0; i < count; i++) {
-			if (!deleted[i]) {
-				sel_vector[new_count++] = i;
-			}
-		}
-		if (new_count == 0 && count > 0) {
-			// all entries in this chunk were deleted: continue to next chunk
-			state.chunk_index++;
-			Scan(state, column_ids, result);
-			return;
-		}
-		count = new_count;
-	}
+	// // first create a selection vector from the deleted entries (if any)
+	// sel_t *sel_vector = nullptr;
+	// auto entry = state.storage->deleted_entries.find(state.chunk_index);
+	// if (entry != state.storage->deleted_entries.end()) {
+	// 	// deleted entries! create a selection vector
+	// 	auto deleted = entry->second.get();
+	// 	sel_vector = state.sel_vector_data;
+	// 	idx_t new_count = 0;
+	// 	for (idx_t i = 0; i < count; i++) {
+	// 		if (!deleted[i]) {
+	// 			sel_vector[new_count++] = i;
+	// 		}
+	// 	}
+	// 	if (new_count == 0 && count > 0) {
+	// 		// all entries in this chunk were deleted: continue to next chunk
+	// 		state.chunk_index++;
+	// 		Scan(state, column_ids, result);
+	// 		return;
+	// 	}
+	// 	count = new_count;
+	// }
 
-	// now scan the vectors of the chunk
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto id = column_ids[i];
-		if (id == COLUMN_IDENTIFIER_ROW_ID) {
-			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
-		} else {
-			result.data[i].Reference(chunk.data[id]);
-		}
-	}
-	result.SetCardinality(count, sel_vector);
-	state.chunk_index++;
+	// // now scan the vectors of the chunk
+	// for (idx_t i = 0; i < column_ids.size(); i++) {
+	// 	auto id = column_ids[i];
+	// 	if (id == COLUMN_IDENTIFIER_ROW_ID) {
+	// 		// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+	// 		result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
+	// 	} else {
+	// 		result.data[i].Reference(chunk.data[id]);
+	// 	}
+	// }
+	// result.SetCardinality(count, sel_vector);
+	// state.chunk_index++;
 }
 
 void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
@@ -111,12 +112,12 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		idx_t base_id = MAX_ROW_ID + storage->collection.count;
 
 		// first generate the vector of row identifiers
-		Vector row_identifiers(chunk, ROW_TYPE);
-		VectorOperations::GenerateSequence(row_identifiers, base_id, 1, true);
+		Vector row_ids(chunk, ROW_TYPE);
+		VectorOperations::GenerateSequence(row_ids, base_id, 1);
 
 		// now append the entries to the indices
 		for (auto &index : storage->indexes) {
-			if (!index->Append(chunk, row_identifiers)) {
+			if (!index->Append(chunk, row_ids)) {
 				throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
 			}
 		}
@@ -132,27 +133,25 @@ LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
 	return entry->second.get();
 }
 
-static idx_t GetChunk(Vector &row_identifiers) {
-	row_identifiers.Normalify();
-	auto ids = (row_t *)row_identifiers.GetData();
-	auto rsel = row_identifiers.sel_vector();
-	auto first_id = ids[rsel ? rsel[0] : 0] - MAX_ROW_ID;
+static idx_t GetChunk(Vector &row_ids) {
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto first_id = ids[0] - MAX_ROW_ID;
 
 	idx_t chunk_idx = first_id / STANDARD_VECTOR_SIZE;
 	// verify that all row ids belong to the same chunk
 #ifdef DEBUG
-	VectorOperations::Exec(row_identifiers, [&](idx_t i, idx_t k) {
+	for(idx_t i = 0; i < row_ids.size(); i++) {
 		idx_t idx = (ids[i] - MAX_ROW_ID) / STANDARD_VECTOR_SIZE;
 		assert(idx == chunk_idx);
-	});
+	}
 #endif
 	return chunk_idx;
 }
 
-void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
+void LocalStorage::Delete(DataTable *table, Vector &row_ids) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
-	idx_t chunk_idx = GetChunk(row_identifiers);
+	idx_t chunk_idx = GetChunk(row_ids);
 	assert(chunk_idx < storage->collection.chunks.size());
 
 	// get a pointer to the deleted entries for this chunk
@@ -171,57 +170,64 @@ void LocalStorage::Delete(DataTable *table, Vector &row_identifiers) {
 	// now actually mark the entries as deleted in the deleted vector
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
-	auto ids = (row_t *)row_identifiers.GetData();
-	VectorOperations::Exec(row_identifiers, [&](idx_t i, idx_t k) {
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	for(idx_t i = 0; i < row_ids.size(); i++) {
 		auto id = ids[i] - base_index;
 		deleted[id] = true;
-	});
+	}
 }
 
 template <class T>
-static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_identifiers, idx_t base_index) {
-	auto target = (T *)data_vector.GetData();
-	auto updates = (T *)update_vector.GetData();
-	auto ids = (row_t *)row_identifiers.GetData();
-	VectorOperations::Exec(row_identifiers, [&](idx_t i, idx_t k) {
+static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_ids, idx_t base_index) {
+	VectorData udata;
+	update_vector.Orrify(udata);
+
+	auto target = FlatVector::GetData<T>(data_vector);
+	auto &nullmask = FlatVector::Nullmask(data_vector);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto updates = (T *)udata.data;
+
+	for(idx_t i = 0; i < row_ids.size(); i++) {
+		auto uidx = udata.sel->get_index(i);
+
 		auto id = ids[i] - base_index;
-		target[id] = updates[i];
-	});
+		target[id] = updates[uidx];
+		nullmask[id] = (*udata.nullmask)[uidx];
+	}
 }
 
-static void update_chunk(Vector &data, Vector &updates, Vector &row_identifiers, idx_t base_index) {
+static void update_chunk(Vector &data, Vector &updates, Vector &row_ids, idx_t base_index) {
 	assert(data.type == updates.type);
-	assert(row_identifiers.type == ROW_TYPE);
-	assert(updates.sel_vector() == row_identifiers.sel_vector());
+	assert(row_ids.type == ROW_TYPE);
 
 	switch (data.type) {
 	case TypeId::INT8:
-		update_data<int8_t>(data, updates, row_identifiers, base_index);
+		update_data<int8_t>(data, updates, row_ids, base_index);
 		break;
 	case TypeId::INT16:
-		update_data<int16_t>(data, updates, row_identifiers, base_index);
+		update_data<int16_t>(data, updates, row_ids, base_index);
 		break;
 	case TypeId::INT32:
-		update_data<int32_t>(data, updates, row_identifiers, base_index);
+		update_data<int32_t>(data, updates, row_ids, base_index);
 		break;
 	case TypeId::INT64:
-		update_data<int64_t>(data, updates, row_identifiers, base_index);
+		update_data<int64_t>(data, updates, row_ids, base_index);
 		break;
 	case TypeId::FLOAT:
-		update_data<float>(data, updates, row_identifiers, base_index);
+		update_data<float>(data, updates, row_ids, base_index);
 		break;
 	case TypeId::DOUBLE:
-		update_data<double>(data, updates, row_identifiers, base_index);
+		update_data<double>(data, updates, row_ids, base_index);
 		break;
 	default:
 		throw Exception("Unsupported type for in-place update");
 	}
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_identifiers, vector<column_t> &column_ids, DataChunk &data) {
+void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &column_ids, DataChunk &data) {
 	auto storage = GetStorage(table);
 	// figure out the chunk from which these row ids came
-	idx_t chunk_idx = GetChunk(row_identifiers);
+	idx_t chunk_idx = GetChunk(row_ids);
 	assert(chunk_idx < storage->collection.chunks.size());
 
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
@@ -230,7 +236,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_identifiers, vector<colu
 	auto &chunk = *storage->collection.chunks[chunk_idx];
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = column_ids[i];
-		update_chunk(chunk.data[col_idx], data.data[i], row_identifiers, base_index);
+		update_chunk(chunk.data[col_idx], data.data[i], row_ids, base_index);
 	}
 }
 

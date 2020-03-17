@@ -25,18 +25,16 @@ static NotImplementedException UnimplementedCast(SQLType source_type, SQLType ta
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 static void null_cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type) {
-	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
-		if (!source.nullmask[0]) {
-			throw UnimplementedCast(source_type, target_type);
-		}
-	} else {
-		source.Normalify();
-		if (VectorOperations::HasNotNull(source)) {
-			throw UnimplementedCast(source_type, target_type);
-		}
+	if (VectorOperations::HasNotNull(source)) {
+		throw UnimplementedCast(source_type, target_type);
 	}
-	result.vector_type = source.vector_type;
-	result.nullmask = source.nullmask;
+	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
+		result.vector_type = VectorType::CONSTANT_VECTOR;
+		ConstantVector::SetNull(result, true);
+	} else {
+		result.vector_type = VectorType::FLAT_VECTOR;
+		FlatVector::Nullmask(result).set();
+	}
 }
 
 template <class SRC>
@@ -79,7 +77,7 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 	case SQLTypeId::LIST: {
 		assert(result.type == TypeId::LIST);
 		auto list_child = make_unique<ChunkCollection>();
-		result.SetListEntry(move(list_child));
+		ListVector::SetEntry(result, move(list_child));
 		null_cast(source, result, source_type, target_type);
 		break;
 	}
@@ -241,8 +239,8 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		break;
 	case SQLTypeId::SQLNULL: {
 		// cast a NULL to another type, just copy the properties and change the type
-		result.vector_type = source.vector_type;
-		result.nullmask = source.nullmask;
+		result.vector_type = VectorType::CONSTANT_VECTOR;
+		ConstantVector::SetNull(result, true);
 		break;
 	}
 	default:

@@ -93,12 +93,12 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	TernaryExecutor::Execute<string_t, string_t, string_t, string_t, true>(
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
 	    strings, patterns, replaces, result, [&](string_t input, string_t pattern, string_t replace) {
 		    RE2 re(CreateStringPiece(pattern), options);
 		    std::string sstring(input.GetData(), input.GetSize());
 		    RE2::Replace(&sstring, re, CreateStringPiece(replace));
-		    return result.AddString(sstring);
+		    return StringVector::AddString(result, sstring);
 	    });
 }
 

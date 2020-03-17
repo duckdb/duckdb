@@ -41,8 +41,6 @@ struct VectorOperations {
 	// In-Place Operators
 	//===--------------------------------------------------------------------===//
 	//! A += B
-	static void AddInPlace(Vector &A, Vector &B);
-	//! A += B
 	static void AddInPlace(Vector &A, int64_t B);
 
 	//===--------------------------------------------------------------------===//
@@ -55,13 +53,6 @@ struct VectorOperations {
 	// Returns whether or not a vector has a NULL value
 	static bool HasNull(Vector &A);
 	static bool HasNotNull(Vector &A);
-
-	//! Creates a selection vector that points only to non-null values for the
-	//! given null mask. Returns the amount of not-null values.
-	//! result_assignment will be set to either result_vector (if there are null
-	//! values) or to nullptr (if there are no null values)
-	static idx_t NotNullSelVector(Vector &vector, sel_t *not_null_vector, sel_t *&result_assignment,
-	                              sel_t *null_vector = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
@@ -93,17 +84,17 @@ struct VectorOperations {
 	// Select Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// result = A == B
-	static idx_t SelectEquals(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A != B
-	static idx_t SelectNotEquals(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectNotEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A > B
-	static idx_t SelectGreaterThan(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectGreaterThan(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A >= B
-	static idx_t SelectGreaterThanEquals(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectGreaterThanEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A < B
-	static idx_t SelectLessThan(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectLessThan(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A <= B
-	static idx_t SelectLessThanEquals(Vector &A, Vector &B, sel_t result[]);
+	static idx_t SelectLessThanEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
 
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
@@ -124,10 +115,10 @@ struct VectorOperations {
 	// Sort functions
 	//===--------------------------------------------------------------------===//
 	// Sort the vector, setting the given selection vector to a sorted state.
-	static void Sort(Vector &vector, sel_t result[]);
+	static void Sort(Vector &vector, SelectionVector &result);
 	// Sort the vector, setting the given selection vector to a sorted state
 	// while ignoring NULL values.
-	static void Sort(Vector &vector, sel_t *result_vector, idx_t count, sel_t result[]);
+	static void Sort(Vector &vector, sel_t *result_vector, idx_t count, SelectionVector &result);
 	// Checks whether or not the vector contains only unique values
 	static bool Unique(Vector &vector);
 	//===--------------------------------------------------------------------===//
@@ -141,8 +132,8 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
-	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1,
-	                             bool ignore_sel_vector = false);
+	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1);
+	static void GenerateSequence(Vector &result, SelectionVector &sel, int64_t start = 0, int64_t increment = 1);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
@@ -163,71 +154,61 @@ struct VectorOperations {
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
 	static void ReadFromStorage(Vector &source, Vector &target);
 
-	//! Fill the null mask of a value, setting every NULL value to NullValue<T>()
-	static void FillNullMask(Vector &v);
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <class T> static void Exec(sel_t *sel_vector, idx_t count, T &&fun, idx_t offset = 0) {
-		idx_t i = offset;
-		if (sel_vector) {
-			//#pragma GCC ivdep
-			for (; i < count; i++) {
-				fun(sel_vector[i], i);
+	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun, SelectionVector &sel) {
+		switch(vector.vector_type) {
+		case VectorType::SEQUENCE_VECTOR: {
+			int64_t start, increment;
+			SequenceVector::GetSequence(vector, start, increment);
+			for (idx_t i = 0; i < vector.size(); i++) {
+				fun((T)(start + increment * sel.get_index(i)));
 			}
-		} else {
-			//#pragma GCC ivdep
-			for (; i < count; i++) {
-				fun(i, i);
-			}
+			break;
 		}
-	}
-	//! Exec over the set of indexes, calls the callback function with (i) =
-	//! index, dependent on selection vector and (k) = count
-	template <class T> static void Exec(const Vector &vector, T &&fun, idx_t offset = 0, idx_t count = 0) {
-		sel_t *sel_vector;
-		if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			count = 1;
-			sel_vector = nullptr;
-		} else {
-			assert(vector.vector_type == VectorType::FLAT_VECTOR);
-			if (count == 0) {
-				count = vector.size();
-			} else {
-				count = count + offset;
+		case VectorType::FLAT_VECTOR: {
+			auto data = FlatVector::GetData<T>(vector);
+			for(idx_t i = 0; i < vector.size(); i++) {
+				fun(data[sel.get_index(i)]);
 			}
-			sel_vector = vector.sel_vector();
+			break;
 		}
-		VectorOperations::Exec(sel_vector, count, fun, offset);
-	}
-
-	//! Exec over a specific type. Note that it is up to the caller to verify
-	//! that the vector passed in has the correct type for the iteration! This
-	//! is equivalent to calling ::Exec() and performing data[i] for
-	//! every entry
-	template <typename T, class FUNC>
-	static void ExecType(Vector &vector, FUNC &&fun, idx_t offset = 0, idx_t limit = 0) {
-		auto data = (T *)vector.GetData();
-		VectorOperations::Exec(
-		    vector, [&](idx_t i, idx_t k) { fun(data[i], i, k); }, offset, limit);
+		default:
+			throw NotImplementedException("Unimplemented type for ExecNumeric");
+		}
 	}
 
 	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun) {
-		if (vector.vector_type == VectorType::SEQUENCE_VECTOR) {
+		switch(vector.vector_type) {
+		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;
-			vector.GetSequence(start, increment);
-			auto vsel = vector.sel_vector();
+			SequenceVector::GetSequence(vector, start, increment);
 			for (idx_t i = 0; i < vector.size(); i++) {
-				idx_t idx = vsel ? vsel[i] : i;
-				fun((T)(start + increment * idx), idx, i);
+				fun((T)(start + increment * i));
 			}
-		} else if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-			auto data = (T *)vector.GetData();
-			fun(data[0], 0, 0);
-		} else {
-			assert(vector.vector_type == VectorType::FLAT_VECTOR);
-			auto data = (T *)vector.GetData();
-			VectorOperations::Exec(vector, [&](idx_t i, idx_t k) { fun(data[i], i, k); });
+			break;
+		}
+		case VectorType::CONSTANT_VECTOR: {
+			auto data = ConstantVector::GetData<T>(vector);
+			fun(data[0]);
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto data = FlatVector::GetData<T>(vector);
+			for(idx_t i = 0; i < vector.size(); i++) {
+				fun(data[i]);
+			}
+			break;
+		}
+		case VectorType::DICTIONARY_VECTOR: {
+			auto &sel = DictionaryVector::SelectionVector(vector);
+			auto &child = DictionaryVector::Child(vector);
+			VectorOperations::ExecNumeric<T>(child, fun, sel);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented type for ExecNumeric");
 		}
 	}
 };

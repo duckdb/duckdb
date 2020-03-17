@@ -183,116 +183,119 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, sel_t result[]) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, SelectionVector &true_sel, SelectionVector &false_sel) {
 	auto state = (ConjunctionState *)state_;
 	if (!chunk) {
-		return DefaultSelect(expr, state, result);
+		return DefaultSelect(expr, state, true_sel, false_sel);
 	}
 
 	chrono::time_point<chrono::high_resolution_clock> start_time;
 	chrono::time_point<chrono::high_resolution_clock> end_time;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
-		// store the initial selection vector and count
-		auto initial_sel = chunk->sel_vector;
-		idx_t initial_count = chunk->size();
-		idx_t current_count = chunk->size();
+		throw NotImplementedException("FIXME AND");
 
-		// get runtime statistics
-		start_time = chrono::high_resolution_clock::now();
+		// // store the initial selection vector and count
+		// auto initial_sel = chunk->sel_vector;
+		// idx_t initial_count = chunk->size();
+		// idx_t current_count = chunk->size();
 
-		for (idx_t i = 0; i < expr.children.size(); i++) {
+		// // get runtime statistics
+		// start_time = chrono::high_resolution_clock::now();
 
-			// first resolve the current expression and get its execution time
-			idx_t new_count =
-			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), result);
+		// for (idx_t i = 0; i < expr.children.size(); i++) {
 
-			if (new_count == 0) {
-				current_count = 0;
-				break;
-			}
-			if (new_count != current_count) {
-				// disqualify all non-qualifying tuples by updating the selection vector
-				chunk->SetCardinality(new_count, result);
-				current_count = new_count;
-			}
-		}
+		// 	// first resolve the current expression and get its execution time
+		// 	idx_t new_count =
+		// 	    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), result);
 
-		// adapt runtime statistics
-		end_time = chrono::high_resolution_clock::now();
-		AdaptRuntimeStatistics(expr, state,
-		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		// 	if (new_count == 0) {
+		// 		current_count = 0;
+		// 		break;
+		// 	}
+		// 	if (new_count != current_count) {
+		// 		// disqualify all non-qualifying tuples by updating the selection vector
+		// 		chunk->SetCardinality(new_count, result);
+		// 		current_count = new_count;
+		// 	}
+		// }
 
-		// restore the initial selection vector and count
-		chunk->SetCardinality(initial_count, initial_sel);
-		return current_count;
+		// // adapt runtime statistics
+		// end_time = chrono::high_resolution_clock::now();
+		// AdaptRuntimeStatistics(expr, state,
+		//                        chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+
+		// // restore the initial selection vector and count
+		// chunk->SetCardinality(initial_count, initial_sel);
+		// return current_count;
 	} else {
-		sel_t *initial_sel = chunk->sel_vector;
-		idx_t initial_count = chunk->size();
-		idx_t current_count = chunk->size();
-		sel_t *current_sel = initial_sel;
+		throw NotImplementedException("FIXME OR");
+		// sel_t *initial_sel = chunk->sel_vector;
+		// idx_t initial_count = chunk->size();
+		// idx_t current_count = chunk->size();
+		// sel_t *current_sel = initial_sel;
 
-		sel_t intermediate_result[STANDARD_VECTOR_SIZE];
-		sel_t expression_result[STANDARD_VECTOR_SIZE];
-		sel_t remaining[STANDARD_VECTOR_SIZE];
-		idx_t result_count = 0;
-		idx_t remaining_count = 0;
-		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
+		// sel_t intermediate_result[STANDARD_VECTOR_SIZE];
+		// sel_t expression_result[STANDARD_VECTOR_SIZE];
+		// sel_t remaining[STANDARD_VECTOR_SIZE];
+		// idx_t result_count = 0;
+		// idx_t remaining_count = 0;
+		// sel_t *result_vector = initial_sel == result ? intermediate_result : result;
 
-		// get runtime statistics
-		start_time = chrono::high_resolution_clock::now();
+		// // get runtime statistics
+		// start_time = chrono::high_resolution_clock::now();
 
-		for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
-			// first resolve the current expression
-			idx_t new_count = Select(*expr.children[state->permutation[expr_idx]],
-			                         state->child_states[state->permutation[expr_idx]].get(), expression_result);
-			if (new_count == 0) {
-				// no new qualifying entries: continue
-				continue;
-			}
-			if (new_count == current_count) {
-				// all remaining entries qualified! add them to the result
-				if (!current_sel) {
-					// first iteration already passes all tuples, no need to set up selection vector
-					assert(current_count == initial_count);
-					result_count = initial_count;
-					break;
-				}
-				MergeSelectionVectorIntoResult(result_vector, result_count, current_sel, current_count);
-				break;
-			}
-			// first merge the current results back into the result vector
-			MergeSelectionVectorIntoResult(result_vector, result_count, expression_result, new_count);
-			if (expr_idx + 1 == expr.children.size()) {
-				// this is the last child: we don't need to construct the remaining tuples
-				break;
-			}
-			// now we only need to continue executing tuples that were not qualified
-			// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
-			idx_t new_idx = 0;
-			remaining_count = 0;
-			for (idx_t i = 0; i < current_count; i++) {
-				auto entry = current_sel ? current_sel[i] : i;
-				if (new_idx >= new_count || expression_result[new_idx] != entry) {
-					remaining[remaining_count++] = entry;
-				} else {
-					new_idx++;
-				}
-			}
-			current_sel = remaining;
-			current_count = remaining_count;
-			chunk->SetCardinality(remaining_count, remaining);
-		}
+		// for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
+		// 	// first resolve the current expression
+		// 	idx_t new_count = Select(*expr.children[state->permutation[expr_idx]],
+		// 	                         state->child_states[state->permutation[expr_idx]].get(), expression_result);
+		// 	if (new_count == 0) {
+		// 		// no new qualifying entries: continue
+		// 		continue;
+		// 	}
+		// 	if (new_count == current_count) {
+		// 		// all remaining entries qualified! add them to the result
+		// 		if (!current_sel) {
+		// 			// first iteration already passes all tuples, no need to set up selection vector
+		// 			assert(current_count == initial_count);
+		// 			result_count = initial_count;
+		// 			break;
+		// 		}
+		// 		MergeSelectionVectorIntoResult(result_vector, result_count, current_sel, current_count);
+		// 		break;
+		// 	}
+		// 	// first merge the current results back into the result vector
+		// 	MergeSelectionVectorIntoResult(result_vector, result_count, expression_result, new_count);
+		// 	if (expr_idx + 1 == expr.children.size()) {
+		// 		// this is the last child: we don't need to construct the remaining tuples
+		// 		break;
+		// 	}
+		// 	// now we only need to continue executing tuples that were not qualified
+		// 	// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
+		// 	idx_t new_idx = 0;
+		// 	remaining_count = 0;
+		// 	for (idx_t i = 0; i < current_count; i++) {
+		// 		auto entry = current_sel ? current_sel[i] : i;
+		// 		if (new_idx >= new_count || expression_result[new_idx] != entry) {
+		// 			remaining[remaining_count++] = entry;
+		// 		} else {
+		// 			new_idx++;
+		// 		}
+		// 	}
+		// 	current_sel = remaining;
+		// 	current_count = remaining_count;
+		// 	chunk->SetCardinality(remaining_count, remaining);
+		// }
 
-		// adapt runtime statistics
-		end_time = chrono::high_resolution_clock::now();
-		AdaptRuntimeStatistics(expr, state,
-		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		// // adapt runtime statistics
+		// end_time = chrono::high_resolution_clock::now();
+		// AdaptRuntimeStatistics(expr, state,
+		//                        chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 
-		chunk->SetCardinality(initial_count, initial_sel);
-		if (result_vector != result && result_count > 0) {
-			memcpy(result, result_vector, result_count * sizeof(sel_t));
-		}
-		return result_count;
+		// chunk->SetCardinality(initial_count, initial_sel);
+		// if (result_vector != result && result_count > 0) {
+		// 	memcpy(result, result_vector, result_count * sizeof(sel_t));
+		// }
+		// return result_count;
 	}
 }

@@ -71,7 +71,6 @@ struct TableScanState {
 	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t offset;
-	sel_t sel_vector[STANDARD_VECTOR_SIZE];
 	vector<column_t> column_ids;
 	LocalScanState local_state;
 };

@@ -81,7 +81,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (string_t *)result.GetData();
+	auto result_data = FlatVector::GetData<string_t>(result);
 
 	if (string_updates && string_updates[vector_index]) {
 		// there are updates: merge them in
@@ -103,7 +103,7 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 			result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[i]);
 		}
 	}
-	result.nullmask = base_nullmask;
+	FlatVector::SetNullmask(result, base_nullmask);
 }
 
 //===--------------------------------------------------------------------===//
@@ -114,13 +114,14 @@ void StringSegment::FetchUpdateData(ColumnScanState &state, Transaction &transac
 	// fetch data from updates
 	auto handle = state.primary_handle.get();
 
-	auto result_data = (string_t *)result.GetData();
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (string_location_t *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			auto string = FetchString(state.handles, handle->node->buffer, info_data[i]);
 			result_data[current->tuples[i]] = string;
-			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
+			result_mask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
 	});
 }
@@ -229,7 +230,8 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 	auto base = baseptr + vector_index * vector_size;
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
-	auto result_data = (string_t *)result.GetData();
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 
 	bool found_data = false;
 	// first see if there is any updated version of this tuple we must fetch
@@ -242,7 +244,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 					// found the relevant tuple
 					found_data = true;
 					result_data[result_idx] = FetchString(state.handles, baseptr, info_data[i]);
-					result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
+					result_mask[result_idx] = current->nullmask[current->tuples[i]];
 					break;
 				} else if (current->tuples[i] > row_id) {
 					// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
@@ -270,7 +272,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]);
 		}
 	}
-	result.nullmask[result_idx] = base_nullmask[id_in_vector];
+	result_mask[result_idx] = base_nullmask[id_in_vector];
 }
 
 //===--------------------------------------------------------------------===//
@@ -312,67 +314,69 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
                                Vector &source, idx_t offset, idx_t count) {
 	assert(offset + count <= source.size());
-	auto ldata = (string_t *)source.GetData();
+	VectorData adata;
+	source.Orrify(adata);
+
+	auto sdata = (string_t *) adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
-	VectorOperations::Exec(
-	    source.sel_vector(), count + offset,
-	    [&](idx_t i, idx_t k) {
-		    if (source.nullmask[i]) {
-			    // null value is stored as -1
-			    result_data[k - offset + target_offset] = 0;
-			    result_nullmask[k - offset + target_offset] = true;
-			    stats.has_null = true;
-		    } else {
-			    assert(dictionary_offset < Storage::BLOCK_SIZE);
-			    // non-null value, check if we can fit it within the block
-			    idx_t string_length = ldata[i].GetSize();
-			    idx_t total_length = string_length + 1 + sizeof(uint16_t);
+	for(idx_t i = 0; i < count; i++) {
+		auto source_idx = adata.sel->get_index(offset + i);
+		auto target_idx = target_offset + i;
+		if ((*adata.nullmask)[source_idx]) {
+			// null value is stored as -1
+			result_data[target_idx] = 0;
+			result_nullmask[target_idx] = true;
+			stats.has_null = true;
+		} else {
+			assert(dictionary_offset < Storage::BLOCK_SIZE);
+			// non-null value, check if we can fit it within the block
+			idx_t string_length = sdata[source_idx].GetSize();
+			idx_t total_length = string_length + 1 + sizeof(uint16_t);
 
-			    if (string_length > stats.max_string_length) {
-				    stats.max_string_length = string_length;
-			    }
-			    // determine hwether or not the string needs to be stored in an overflow block
-			    // we never place small strings in the overflow blocks: the pointer would take more space than the
-			    // string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
-			    // to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
-			    if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
-			        (total_length >= STRING_BLOCK_LIMIT ||
-			         total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
-				    assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
-				    // string is too big for block: write to overflow blocks
-				    block_id_t block;
-				    int32_t offset;
-				    // write the string into the current string block
-				    WriteString(ldata[i], block, offset);
+			if (string_length > stats.max_string_length) {
+				stats.max_string_length = string_length;
+			}
+			// determine hwether or not the string needs to be stored in an overflow block
+			// we never place small strings in the overflow blocks: the pointer would take more space than the
+			// string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
+			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
+			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
+				(total_length >= STRING_BLOCK_LIMIT ||
+					total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
+				assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
+				// string is too big for block: write to overflow blocks
+				block_id_t block;
+				int32_t offset;
+				// write the string into the current string block
+				WriteString(sdata[source_idx], block, offset);
 
-				    dictionary_offset += BIG_STRING_MARKER_SIZE;
-				    auto dict_pos = end - dictionary_offset;
+				dictionary_offset += BIG_STRING_MARKER_SIZE;
+				auto dict_pos = end - dictionary_offset;
 
-				    // write a big string marker into the dictionary
-				    WriteStringMarker(dict_pos, block, offset);
+				// write a big string marker into the dictionary
+				WriteStringMarker(dict_pos, block, offset);
 
-				    stats.has_overflow_strings = true;
-			    } else {
-				    // string fits in block, append to dictionary and increment dictionary position
-				    assert(string_length < std::numeric_limits<uint16_t>::max());
-				    dictionary_offset += total_length;
-				    auto dict_pos = end - dictionary_offset;
+				stats.has_overflow_strings = true;
+			} else {
+				// string fits in block, append to dictionary and increment dictionary position
+				assert(string_length < std::numeric_limits<uint16_t>::max());
+				dictionary_offset += total_length;
+				auto dict_pos = end - dictionary_offset;
 
-				    // first write the length as u16
-				    uint16_t string_length_u16 = string_length;
-				    memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
-				    // now write the actual string data into the dictionary
-				    memcpy(dict_pos + sizeof(uint16_t), ldata[i].GetData(), string_length + 1);
-			    }
-			    // place the dictionary offset into the set of vectors
-			    result_data[k - offset + target_offset] = dictionary_offset;
-		    }
-		    remaining_strings--;
-	    },
-	    offset);
+				// first write the length as u16
+				uint16_t string_length_u16 = string_length;
+				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
+				// now write the actual string data into the dictionary
+				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
+			}
+			// place the dictionary offset into the set of vectors
+			result_data[target_idx] = dictionary_offset;
+		}
+		remaining_strings--;
+	}
 }
 
 void StringSegment::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
@@ -504,11 +508,12 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
                                                        idx_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = update.size();
-	auto strings = (string_t *)update.GetData();
+	auto strings = FlatVector::GetData<string_t>(update);
+	auto &update_nullmask = FlatVector::Nullmask(update);
 	for (idx_t i = 0; i < update.size(); i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
-		if (!update.nullmask[i]) {
+		if (!update_nullmask[i]) {
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
@@ -523,10 +528,11 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	auto info = make_unique<StringUpdateInfo>();
 
 	// perform a merge between the new and old indexes
-	auto strings = (string_t *)update.GetData();
+	auto strings = FlatVector::GetData<string_t>(update);
+	auto &update_nullmask = FlatVector::Nullmask(update);
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
 		info->ids[count] = id;
-		if (!update.nullmask[idx]) {
+		if (!update_nullmask[idx]) {
 			WriteString(strings[idx], info->block_ids[count], info->offsets[count]);
 		} else {
 			info->block_ids[count] = INVALID_BLOCK;
@@ -619,8 +625,9 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 	}
 
 	// now update the original nullmask
+	auto &update_nullmask = FlatVector::Nullmask(update);
 	for (idx_t i = 0; i < update.size(); i++) {
-		base_nullmask[ids[i] - vector_offset] = update.nullmask[i];
+		base_nullmask[ids[i] - vector_offset] = update_nullmask[i];
 	}
 
 	// now that the original strings are placed in the undo buffer and the updated strings are placed in the base table

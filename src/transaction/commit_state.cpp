@@ -94,7 +94,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 		vector<TypeId> delete_types = {ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
-	auto rows = (row_t *)delete_chunk->data[0].GetData();
+	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	for (idx_t i = 0; i < info->count; i++) {
 		rows[i] = info->base_row + info->rows[i];
 	}
@@ -119,12 +119,13 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	info->segment->Fetch(state, info->vector_index, update_chunk->data[0]);
 
 	// write the row ids into the chunk
-	auto row_ids = (row_t *)update_chunk->data[1].GetData();
+	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
-	update_chunk->SetCardinality(info->N, info->tuples);
+	// update_chunk->SetCardinality(info->N, info->tuples);
+	throw NotImplementedException("FIXME set sel vector");
 
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }

@@ -11,35 +11,36 @@ template <class T> idx_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, 
 }
 
 template <class T, class OP> static idx_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	assert(l.sel_vector);
-	auto ldata = (T *)l.v.GetData();
-	l.pos = l.count;
-	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
-		// we only care about the SMALLEST value in each of the RHS
-		// because we want to figure out if they are greater than [or equal] to ANY value
-		// get the smallest value from the RHS
-		auto &rorder = r.order_info[chunk_idx];
-		auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
-		auto min_r_value = rdata[rorder.order[0]];
-		// now we start from the current lpos value and check if we found a new value that is [>= OR >] the min RHS
-		// value
-		while (true) {
-			if (OP::Operation(ldata[l.sel_vector[l.pos - 1]], min_r_value)) {
-				// found a match for lpos, set it in the found_match vector
-				r.found_match[l.sel_vector[l.pos - 1]] = true;
-				l.pos--;
-				if (l.pos == 0) {
-					// early out: we exhausted the entire LHS and they all match
-					return 0;
-				}
-			} else {
-				// we found no match: any subsequent value from the LHS we scan now will be smaller and thus also not
-				// match move to the next RHS chunk
-				break;
-			}
-		}
-	}
-	return 0;
+	throw NotImplementedException("MERGE JOIN MARK");
+	// assert(l.sel_vector);
+	// auto ldata = (T *)l.v.GetData();
+	// l.pos = l.count;
+	// for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	// 	// we only care about the SMALLEST value in each of the RHS
+	// 	// because we want to figure out if they are greater than [or equal] to ANY value
+	// 	// get the smallest value from the RHS
+	// 	auto &rorder = r.order_info[chunk_idx];
+	// 	auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
+	// 	auto min_r_value = rdata[rorder.order[0]];
+	// 	// now we start from the current lpos value and check if we found a new value that is [>= OR >] the min RHS
+	// 	// value
+	// 	while (true) {
+	// 		if (OP::Operation(ldata[l.sel_vector[l.pos - 1]], min_r_value)) {
+	// 			// found a match for lpos, set it in the found_match vector
+	// 			r.found_match[l.sel_vector[l.pos - 1]] = true;
+	// 			l.pos--;
+	// 			if (l.pos == 0) {
+	// 				// early out: we exhausted the entire LHS and they all match
+	// 				return 0;
+	// 			}
+	// 		} else {
+	// 			// we found no match: any subsequent value from the LHS we scan now will be smaller and thus also not
+	// 			// match move to the next RHS chunk
+	// 			break;
+	// 		}
+	// 	}
+	// }
+	// return 0;
 }
 template <class T> idx_t MergeJoinMark::GreaterThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {
 	return merge_join_mark_gt<T, duckdb::GreaterThan>(l, r);
@@ -50,35 +51,36 @@ template <class T> idx_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMerge
 }
 
 template <class T, class OP> static idx_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	assert(l.sel_vector);
-	auto ldata = (T *)l.v.GetData();
-	l.pos = 0;
-	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
-		// we only care about the BIGGEST value in each of the RHS
-		// because we want to figure out if they are less than [or equal] to ANY value
-		// get the biggest value from the RHS
-		auto &rorder = r.order_info[chunk_idx];
-		auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
-		auto max_r_value = rdata[rorder.order[rorder.count - 1]];
-		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
-		// value
-		while (true) {
-			if (OP::Operation(ldata[l.sel_vector[l.pos]], max_r_value)) {
-				// found a match for lpos, set it in the found_match vector
-				r.found_match[l.sel_vector[l.pos]] = true;
-				l.pos++;
-				if (l.pos == l.count) {
-					// early out: we exhausted the entire LHS and they all match
-					return 0;
-				}
-			} else {
-				// we found no match: any subsequent value from the LHS we scan now will be bigger and thus also not
-				// match move to the next RHS chunk
-				break;
-			}
-		}
-	}
-	return 0;
+	throw NotImplementedException("MERGE JOIN MARK");
+	// assert(l.sel_vector);
+	// auto ldata = (T *)l.v.GetData();
+	// l.pos = 0;
+	// for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
+	// 	// we only care about the BIGGEST value in each of the RHS
+	// 	// because we want to figure out if they are less than [or equal] to ANY value
+	// 	// get the biggest value from the RHS
+	// 	auto &rorder = r.order_info[chunk_idx];
+	// 	auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
+	// 	auto max_r_value = rdata[rorder.order[rorder.count - 1]];
+	// 	// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
+	// 	// value
+	// 	while (true) {
+	// 		if (OP::Operation(ldata[l.sel_vector[l.pos]], max_r_value)) {
+	// 			// found a match for lpos, set it in the found_match vector
+	// 			r.found_match[l.sel_vector[l.pos]] = true;
+	// 			l.pos++;
+	// 			if (l.pos == l.count) {
+	// 				// early out: we exhausted the entire LHS and they all match
+	// 				return 0;
+	// 			}
+	// 		} else {
+	// 			// we found no match: any subsequent value from the LHS we scan now will be bigger and thus also not
+	// 			// match move to the next RHS chunk
+	// 			break;
+	// 		}
+	// 	}
+	// }
+	// return 0;
 }
 
 template <class T> idx_t MergeJoinMark::LessThan::Operation(ScalarMergeInfo &l, ChunkMergeInfo &r) {

@@ -86,11 +86,9 @@ private:
 		block_id_t block_id;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
-	                    data_ptr_t tuple_locations[], data_ptr_t hash_locations[], idx_t remaining);
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[], idx_t remaining);
 
 	void Hash(DataChunk &keys, Vector &hashes);
-
 public:
 	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
 	              JoinType type);
@@ -104,13 +102,13 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 
-	//! The stringheap of the JoinHashTable
-	StringHeap string_heap;
-
 	idx_t size() {
 		return count;
 	}
 
+	//! The stringheap of the JoinHashTable
+	StringHeap string_heap;
+	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<TypeId> equality_types;

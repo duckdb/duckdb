@@ -13,51 +13,63 @@ using namespace std;
 
 struct GatherLoopSetNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
-		auto source = (data_ptr_t *)src.GetData();
-		auto ldata = (T *)result.GetData();
-		auto rsel = result.sel_vector();
-		if (rsel) {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				if (IsNullValue<T>(source_value)) {
-					result.nullmask.set(rsel[k]);
-				} else {
-					ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
-				}
-			});
-		} else {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				if (IsNullValue<T>(source_value)) {
-					result.nullmask.set(k);
-				} else {
-					ldata[k] = OP::Operation(source_value, ldata[i]);
-				}
-			});
-		}
+		auto source = FlatVector::GetData<data_ptr_t>(src);
+		auto result_data = FlatVector::GetData<T>(result);
+		auto &result_nullmask = FlatVector::Nullmask(result);
+		throw NotImplementedException("FIXME gather");
+		// auto rsel = result.sel_vector();
+		// if (rsel) {
+		// 	VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
+		// 		data_ptr_t ptr = source[i] + offset;
+		// 		T source_value = *((T *)ptr);
+		// 		if (IsNullValue<T>(source_value)) {
+		// 			result.nullmask.set(rsel[k]);
+		// 		} else {
+		// 			ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
+		// 		}
+		// 	});
+		// } else {
+			// VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
+			// 	data_ptr_t ptr = source[i] + offset;
+			// 	T source_value = *((T *)ptr);
+			// 	if (IsNullValue<T>(source_value)) {
+			// 		result.nullmask.set(k);
+			// 	} else {
+			// 		ldata[k] = OP::Operation(source_value, ldata[i]);
+			// 	}
+			// });
+		// }
+		// for(idx_t i = 0; i < result.size(); i++) {
+		// 	data_ptr_t ptr = source[i] + offset;
+		// 	T source_value = *((T *)ptr);
+		// 	if (IsNullValue<T>(source_value)) {
+		// 		result_nullmask[k] = true;
+		// 	} else {
+		// 		result_data[k] = OP::Operation(source_value, ldata[i]);
+		// 	}
+		// }
 	}
 };
 
 struct GatherLoopIgnoreNull {
 	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
-		auto source = (data_ptr_t *)src.GetData();
-		auto ldata = (T *)result.GetData();
-		auto rsel = result.sel_vector();
-		if (rsel) {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
-			});
-		} else {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				ldata[k] = OP::Operation(source_value, ldata[i]);
-			});
-		}
+		throw NotImplementedException("FIXME gather");
+		// auto source = (data_ptr_t *)src.GetData();
+		// auto ldata = (T *)result.GetData();
+		// auto rsel = result.sel_vector();
+		// if (rsel) {
+		// 	VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
+		// 		data_ptr_t ptr = source[i] + offset;
+		// 		T source_value = *((T *)ptr);
+		// 		ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
+		// 	});
+		// } else {
+		// 	VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
+		// 		data_ptr_t ptr = source[i] + offset;
+		// 		T source_value = *((T *)ptr);
+		// 		ldata[k] = OP::Operation(source_value, ldata[i]);
+		// 	});
+		// }
 	}
 };
 

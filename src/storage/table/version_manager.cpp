@@ -59,8 +59,9 @@ void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
 
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
-	VectorOperations::ExecNumeric<row_t>(row_ids,
-	                                     [&](row_t idx, idx_t i, idx_t k) { del_state.Delete(idx - base_row); });
+	VectorOperations::ExecNumeric<row_t>(row_ids, [&](row_t idx) {
+		del_state.Delete(idx - base_row);
+	});
 	del_state.Flush();
 }
 

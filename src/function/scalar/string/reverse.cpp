@@ -42,7 +42,7 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 
-		auto target = result.EmptyString(input_length);
+		auto target = StringVector::EmptyString(result, input_length);
 		strreverse(input_data, input_length, target.GetData());
 		return target;
 	});

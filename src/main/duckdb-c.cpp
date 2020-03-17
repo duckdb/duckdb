@@ -73,7 +73,7 @@ template <class T> void WriteData(duckdb_result *out, ChunkCollection &source, i
 	idx_t row = 0;
 	auto target = (T *)out->columns[col].data;
 	for (auto &chunk : source.chunks) {
-		auto source = (T *)chunk->data[col].GetData();
+		auto source = FlatVector::GetData<T>(chunk->data[col]);
 		for (idx_t k = 0; k < chunk->size(); k++) {
 			target[row++] = source[k];
 		}
@@ -121,9 +121,8 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		// first set the nullmask
 		idx_t row = 0;
 		for (auto &chunk : result->collection.chunks) {
-			assert(!chunk->data[col].sel_vector());
 			for (idx_t k = 0; k < chunk->size(); k++) {
-				out->columns[col].nullmask[row++] = chunk->data[col].nullmask[k];
+				out->columns[col].nullmask[row++] = FlatVector::IsNull(chunk->data[col], k);
 			}
 		}
 		// then write the data
@@ -154,9 +153,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (string_t *)chunk->data[col].GetData();
+				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
-					if (!chunk->data[col].nullmask[k]) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						target[row] = strdup(source[k].GetData());
 					}
 					row++;
@@ -168,9 +167,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (date_t *)chunk->data[col].GetData();
+				auto source = FlatVector::GetData<date_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
-					if (!chunk->data[col].nullmask[k]) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						int32_t year, month, day;
 						Date::Convert(source[k], year, month, day);
 						target[row].year = year;
@@ -186,9 +185,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (dtime_t *)chunk->data[col].GetData();
+				auto source = FlatVector::GetData<dtime_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
-					if (!chunk->data[col].nullmask[k]) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						int32_t hour, min, sec, msec;
 						Time::Convert(source[k], hour, min, sec, msec);
 						target[row].hour = hour;
@@ -205,9 +204,9 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
-				auto source = (timestamp_t *)chunk->data[col].GetData();
+				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
-					if (!chunk->data[col].nullmask[k]) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						date_t date;
 						dtime_t time;
 						Timestamp::Convert(source[k], date, time);

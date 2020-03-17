@@ -41,8 +41,8 @@ Vector::Vector(const VectorCardinality &vcardinality)
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(other.type), nullmask(other.nullmask), vcardinality(other.vcardinality),
-      data(other.data), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(other.type), vcardinality(other.vcardinality),
+      data(other.data), nullmask(other.nullmask), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(Value &value) {
@@ -63,10 +63,10 @@ void Vector::Reference(Vector &other) {
 
 	switch (type) {
 	case TypeId::STRUCT:
-		for (auto &child : other.GetStructEntries()) {
+		for (auto &child : StructVector::GetEntries(other)) {
 			auto child_copy = make_unique<Vector>(cardinality(), child.second->type);
 			child_copy->Reference(*child.second);
-			AddStructEntry(child.first, move(child_copy));
+			StructVector::AddEntry(*this, child.first, move(child_copy));
 		}
 		break;
 
@@ -81,7 +81,6 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		Reference(other);
 		return;
 	}
-	assert(!other.sel_vector());
 	assert(other.vector_type == VectorType::FLAT_VECTOR);
 
 	// create a reference to the other vector
@@ -92,20 +91,21 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	}
 }
 
-void Vector::Slice(Vector &other, buffer_ptr<VectorBuffer> dictionary) {
+void Vector::Slice(Vector &other, SelectionVector &sel) {
 	if (other.vector_type == VectorType::CONSTANT_VECTOR) {
 		// slicing a constant vector just results in that constant
 		Reference(other);
 		return;
 	}
 
-	assert(dictionary->type == VectorBufferType::DICTIONARY_BUFFER);
-	auto child_ref = make_buffer<VectorChildBuffer>(vcardinality);;
-	child_ref->data.Reference(other);
+	throw NotImplementedException("FIXME: slice");
+	// assert(dictionary->type == VectorBufferType::DICTIONARY_BUFFER);
+	// auto child_ref = make_buffer<VectorChildBuffer>(vcardinality);
+	// child_ref->data.Reference(other);
 
-	buffer = move(dictionary);
-	auxiliary = move(child_ref);
-	vector_type = VectorType::DICTIONARY_VECTOR;
+	// buffer = move(dictionary);
+	// auxiliary = move(child_ref);
+	// vector_type = VectorType::DICTIONARY_VECTOR;
 }
 
 void Vector::Initialize(TypeId new_type, bool zero_data) {
@@ -125,6 +125,12 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 }
 
 void Vector::SetValue(idx_t index, Value val) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// dictionary: apply dictionary and forward to child
+		auto &sel_vector = DictionaryVector::SelectionVector(*this);
+		auto &child = DictionaryVector::Child(*this);
+		return child.SetValue(sel_vector.get_index(index), move(val));
+	}
 	Value newVal = val.CastAs(type);
 
 	nullmask[index] = newVal.is_null;
@@ -157,20 +163,20 @@ void Vector::SetValue(idx_t index, Value val) {
 		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
-		((string_t *)data)[index] = AddString(newVal.str_value);
+		((string_t *)data)[index] = StringVector::AddString(*this, newVal.str_value);
 		break;
 	}
 	case TypeId::STRUCT: {
-		if (!auxiliary || GetStructEntries().size() == 0) {
+		if (!auxiliary || StructVector::GetEntries(*this).size() == 0) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
 				auto &struct_child = val.struct_value[i];
 				auto cv = make_unique<Vector>(vcardinality, struct_child.second.type);
 				cv->vector_type = vector_type;
-				AddStructEntry(struct_child.first, move(cv));
+				StructVector::AddEntry(*this, struct_child.first, move(cv));
 			}
 		}
 
-		auto &children = GetStructEntries();
+		auto &children = StructVector::GetEntries(*this);
 		assert(children.size() == val.struct_value.size());
 
 		for (size_t i = 0; i < val.struct_value.size(); i++) {
@@ -185,9 +191,9 @@ void Vector::SetValue(idx_t index, Value val) {
 	case TypeId::LIST: {
 		if (!auxiliary) {
 			auto cc = make_unique<ChunkCollection>();
-			SetListEntry(move(cc));
+			ListVector::SetEntry(*this, move(cc));
 		}
-		auto &child_cc = GetListEntry();
+		auto &child_cc = ListVector::GetEntry(*this);
 		// TODO optimization: in-place update if fits
 		auto offset = child_cc.count;
 		if (val.list_value.size() > 0) {
@@ -208,7 +214,7 @@ void Vector::SetValue(idx_t index, Value val) {
 			}
 		}
 		// now set the pointer
-		auto &entry = ((list_entry_t *)GetData())[index];
+		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
 	} break;
@@ -220,9 +226,15 @@ void Vector::SetValue(idx_t index, Value val) {
 Value Vector::GetValue(idx_t index) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		index = 0;
+	} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// dictionary: apply dictionary and forward to child
+		auto &sel_vector = DictionaryVector::SelectionVector(*this);
+		auto &child = DictionaryVector::Child(*this);
+		return child.GetValue(sel_vector.get_index(index));
 	} else {
 		assert(vector_type == VectorType::FLAT_VECTOR);
 	}
+
 	if (nullmask[index]) {
 		return Value(type);
 	}
@@ -253,7 +265,7 @@ Value Vector::GetValue(idx_t index) const {
 		Value ret(TypeId::STRUCT);
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
-		for (auto &struct_child : GetStructEntries()) {
+		for (auto &struct_child : StructVector::GetEntries(*this)) {
 			ret.struct_value.push_back(pair<string, Value>(struct_child.first, struct_child.second->GetValue(index)));
 		}
 		return ret;
@@ -262,7 +274,7 @@ Value Vector::GetValue(idx_t index) const {
 		Value ret(TypeId::LIST);
 		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
-		auto &child_cc = GetListEntry();
+		auto &child_cc = ListVector::GetEntry(*this);
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			ret.list_value.push_back(child_cc.GetValue(0, i));
 		}
@@ -271,20 +283,6 @@ Value Vector::GetValue(idx_t index) const {
 	default:
 		throw NotImplementedException("Unimplemented type for value access");
 	}
-}
-
-void Vector::ClearSelectionVector() {
-	Normalify();
-	if (!sel_vector()) {
-		return;
-	}
-	// create a new vector with the same size, but without a selection vector
-	VectorCardinality other_cardinality(size());
-	Vector other(other_cardinality, type);
-	// now copy the data of this vector to the other vector, removing the selection vector in the process
-	VectorOperations::Copy(*this, other);
-	// create a reference to the data in the other vector
-	this->Reference(other);
 }
 
 string VectorTypeToString(VectorType type) {
@@ -304,30 +302,23 @@ string VectorTypeToString(VectorType type) {
 
 string Vector::ToString() const {
 	auto count = size();
-	auto sel = sel_vector();
 
 	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
+	case VectorType::DICTIONARY_VECTOR:
 		for (idx_t i = 0; i < count; i++) {
-			retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 		break;
-	// case VectorType::DICTIONARY_VECTOR: {
-	// 	for (idx_t i = 0; i < count; i++) {
-	// 		retval += GetValue(sel ? sel[i] : i).ToString() + (i == count - 1 ? "" : ", ");
-	// 	}
-	// 	break;
-	// }
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
-		GetSequence(start, increment);
+		SequenceVector::GetSequence(*this, start, increment);
 		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = sel ? sel[i] : i;
-			retval += to_string(start + increment * idx) + (i == count - 1 ? "" : ", ");
+			retval += to_string(start + increment * i) + (i == count - 1 ? "" : ", ");
 		}
 		break;
 	}
@@ -344,23 +335,26 @@ void Vector::Print() {
 }
 
 template <class T>
-static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count, sel_t *sel_vector) {
+static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
 	auto constant = *((T *)old_data);
 	auto output = (T *)data;
-	VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) { output[i] = constant; });
+	for(idx_t i = 0; i < count; i++) {
+		output[i] = constant;
+	}
 }
+
+// void Vector::Normalify(SelectionVector &sel) {
+// }
 
 void Vector::Normalify() {
 	auto count = size();
-	auto sel = sel_vector();
 
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
 	case VectorType::DICTIONARY_VECTOR: {
-		// FIXME: VectorOperations::Copy should not rely on this selection vector!
-		throw NotImplementedException("FIXME: fold dicitonary vector");
+		throw NotImplementedException("FIXME: flatten dicitonary vector");
 
 		// // create a new vector with the same size, but without a selection vector
 		// VectorCardinality other_cardinality(size());
@@ -387,42 +381,41 @@ void Vector::Normalify() {
 		switch (type) {
 		case TypeId::BOOL:
 		case TypeId::INT8:
-			flatten_constant_vector_loop<int8_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<int8_t>(data, old_data, count);
 			break;
 		case TypeId::INT16:
-			flatten_constant_vector_loop<int16_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<int16_t>(data, old_data, count);
 			break;
 		case TypeId::INT32:
-			flatten_constant_vector_loop<int32_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<int32_t>(data, old_data, count);
 			break;
 		case TypeId::INT64:
-			flatten_constant_vector_loop<int64_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<int64_t>(data, old_data, count);
 			break;
 		case TypeId::FLOAT:
-			flatten_constant_vector_loop<float>(data, old_data, count, sel);
+			flatten_constant_vector_loop<float>(data, old_data, count);
 			break;
 		case TypeId::DOUBLE:
-			flatten_constant_vector_loop<double>(data, old_data, count, sel);
+			flatten_constant_vector_loop<double>(data, old_data, count);
 			break;
 		case TypeId::HASH:
-			flatten_constant_vector_loop<uint64_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<uint64_t>(data, old_data, count);
 			break;
 		case TypeId::POINTER:
-			flatten_constant_vector_loop<uintptr_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<uintptr_t>(data, old_data, count);
 			break;
 		case TypeId::VARCHAR:
-			flatten_constant_vector_loop<string_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<string_t>(data, old_data, count);
 			break;
 		case TypeId::LIST: {
-			flatten_constant_vector_loop<list_entry_t>(data, old_data, count, sel);
+			flatten_constant_vector_loop<list_entry_t>(data, old_data, count);
 			break;
 		}
 		case TypeId::STRUCT: {
-			for (auto &child : GetStructEntries()) {
+			for (auto &child : StructVector::GetEntries(*this)) {
 				assert(child.second->vector_type == VectorType::CONSTANT_VECTOR);
 				child.second->Normalify();
 			}
-			// sel_vector = nullptr;
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
@@ -431,7 +424,7 @@ void Vector::Normalify() {
 	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
-		GetSequence(start, increment);
+		SequenceVector::GetSequence(*this, start, increment);
 
 		vector_type = VectorType::FLAT_VECTOR;
 		buffer = VectorBuffer::CreateStandardVector(type);
@@ -441,6 +434,32 @@ void Vector::Normalify() {
 	}
 	default:
 		throw NotImplementedException("FIXME: unimplemented type for normalify");
+	}
+}
+
+void Vector::Orrify(VectorData &data) {
+	switch (vector_type) {
+	case VectorType::DICTIONARY_VECTOR: {
+		auto &sel = DictionaryVector::SelectionVector(*this);
+		auto &child = DictionaryVector::Child(*this);
+		child.Normalify();
+
+		data.sel = &sel;
+		data.data = FlatVector::GetData(child);
+		data.nullmask = &child.nullmask;
+		break;
+	}
+	case VectorType::CONSTANT_VECTOR:
+		// data.sel = &Vector::CONSTANT_SEL;
+		data.data = ConstantVector::GetData(*this);
+		data.nullmask = &nullmask;
+		break;
+	default:
+		Normalify();
+		// data.sel = &Vector::INCREMENTAL_SEL;
+		data.data = FlatVector::GetData(*this);
+		data.nullmask = &nullmask;
+		break;
 	}
 }
 
@@ -454,13 +473,6 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 	auxiliary.reset();
 }
 
-void Vector::GetSequence(int64_t &start, int64_t &increment) const {
-	assert(vector_type == VectorType::SEQUENCE_VECTOR);
-	auto data = (int64_t *)buffer->GetData();
-	start = data[0];
-	increment = data[1];
-}
-
 void Vector::Verify() {
 	if (size() == 0) {
 		return;
@@ -469,35 +481,35 @@ void Vector::Verify() {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		if (vector_type == VectorType::CONSTANT_VECTOR) {
-			if (!nullmask[0]) {
-				auto string = ((string_t *)data)[0];
-				string.Verify();
+		switch(vector_type) {
+		case VectorType::CONSTANT_VECTOR: {
+			auto string = ConstantVector::GetData<string_t>(*this);
+			if (!ConstantVector::IsNull(*this)) {
+				string->Verify();
 			}
-		} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
-			auto &sel_buffer = (DictionaryBuffer &) *buffer;
-			auto &child_buffer = (VectorChildBuffer &) *auxiliary;
-			auto sel = sel_buffer.GetSelVector();
-			if (child_buffer.data.vector_type == VectorType::FLAT_VECTOR) {
-				auto strings = (string_t *) child_buffer.data.GetData();
-				for(idx_t i = 0; i < size(); i++) {
-					auto idx = sel[i];
-					if (!nullmask[idx]) {
-						strings[idx].Verify();
-					}
-				}
-			}
-		} else {
-			VectorOperations::ExecType<string_t>(*this, [&](string_t string, uint64_t i, uint64_t k) {
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto strings = FlatVector::GetData<string_t>(*this);
+			for(idx_t i = 0; i < size(); i++) {
 				if (!nullmask[i]) {
-					string.Verify();
+					strings[i].Verify();
 				}
-			});
+			}
+			break;
+		}
+		case VectorType::DICTIONARY_VECTOR: {
+			auto &child = DictionaryVector::Child(*this);
+			child.Verify();
+			break;
+		}
+		default:
+			break;
 		}
 	}
 
 	if (type == TypeId::STRUCT) {
-		auto &children = GetStructEntries();
+		auto &children = StructVector::GetEntries(*this);
 		assert(children.size() > 0);
 		for (auto &child : children) {
 			assert(child.second->SameCardinality(*this));
@@ -507,117 +519,188 @@ void Vector::Verify() {
 
 	if (type == TypeId::LIST) {
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
-			if (!nullmask[0]) {
-				GetListEntry().Verify();
-				auto le = ((list_entry_t *)data)[0];
-				assert(le.offset + le.length <= GetListEntry().count);
+			if (!ConstantVector::IsNull(*this)) {
+				ListVector::GetEntry(*this).Verify();
+				auto le = ConstantVector::GetData<list_entry_t>(*this);
+				assert(le->offset + le->length <= ListVector::GetEntry(*this).count);
 			}
-		} else {
+		} else if (vector_type == VectorType::FLAT_VECTOR) {
 			if (VectorOperations::HasNotNull(*this)) {
-				GetListEntry().Verify();
+				ListVector::GetEntry(*this).Verify();
 			}
-			VectorOperations::ExecType<list_entry_t>(*this, [&](list_entry_t le, uint64_t i, uint64_t k) {
+			auto list_data = FlatVector::GetData<list_entry_t>(*this);
+			for(idx_t i = 0; i < size(); i++) {
+				auto &le = list_data[i];
 				if (!nullmask[i]) {
-					assert(le.offset + le.length <= GetListEntry().count);
+					assert(le.offset + le.length <= ListVector::GetEntry(*this).count);
 				}
-			});
+			}
 		}
 	}
 // TODO verify list and struct
 #endif
 }
 
-string_t Vector::AddString(const char *data, idx_t len) {
-	return AddString(string_t(data, len));
+void StringVector::MoveStringsToHeap(Vector &vector, StringHeap &heap, SelectionVector &sel) {
+	assert(vector.type == TypeId::VARCHAR);
+
+	vector.Normalify();
+
+	assert(vector.vector_type == VectorType::FLAT_VECTOR);
+	auto source_strings = FlatVector::GetData<string_t>(vector);
+	auto old_buffer = move(vector.buffer);
+
+	vector.buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
+	vector.data = vector.buffer->GetData();
+	auto target_strings = FlatVector::GetData<string_t>(vector);
+	auto &nullmask = FlatVector::Nullmask(vector);
+	for(idx_t i = 0; i < vector.size(); i++) {
+		auto idx = sel.get_index(i);
+		if (!nullmask[idx] && !source_strings[idx].IsInlined()) {
+			target_strings[idx] = heap.AddString(source_strings[idx]);
+		} else {
+			target_strings[idx] = source_strings[idx];
+		}
+	}
 }
 
-string_t Vector::AddString(const char *data) {
-	return AddString(string_t(data, strlen(data)));
+void StringVector::MoveStringsToHeap(Vector &vector, StringHeap &heap) {
+	assert(vector.type == TypeId::VARCHAR);
+
+	switch(vector.vector_type) {
+	case VectorType::CONSTANT_VECTOR: {
+		auto source_strings = ConstantVector::GetData<string_t>(vector);
+		if (ConstantVector::IsNull(vector) || source_strings[0].IsInlined()) {
+			return;
+		}
+		auto old_buffer = move(vector.buffer);
+
+		vector.buffer = VectorBuffer::CreateConstantVector(TypeId::VARCHAR);
+		vector.data = vector.buffer->GetData();
+		auto target_strings = ConstantVector::GetData<string_t>(vector);
+		target_strings[0] = heap.AddString(source_strings[0]);
+		break;
+	}
+	case VectorType::FLAT_VECTOR: {
+		auto source_strings = FlatVector::GetData<string_t>(vector);
+		auto old_buffer = move(vector.buffer);
+
+		vector.buffer = VectorBuffer::CreateStandardVector(TypeId::VARCHAR);
+		vector.data = vector.buffer->GetData();
+		auto target_strings = FlatVector::GetData<string_t>(vector);
+		for(idx_t i = 0; i < vector.size(); i++) {
+			if (!vector.nullmask[i] && !source_strings[i].IsInlined()) {
+				target_strings[i] = heap.AddString(source_strings[i]);
+			} else {
+				target_strings[i] = source_strings[i];
+			}
+		}
+		break;
+	}
+	case VectorType::DICTIONARY_VECTOR: {
+		auto &sel = DictionaryVector::SelectionVector(vector);
+		auto &child = DictionaryVector::Child(vector);;
+		StringVector::MoveStringsToHeap(child, heap, sel);
+		break;
+	}
+	default:
+		throw NotImplementedException("");
+	}
 }
 
-string_t Vector::AddString(const string &data) {
-	return AddString(string_t(data.c_str(), data.size()));
+string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
+	return StringVector::AddString(vector, string_t(data, len));
 }
 
-string_t Vector::AddString(string_t data) {
+string_t StringVector::AddString(Vector &vector, const char *data) {
+	return StringVector::AddString(vector, string_t(data, strlen(data)));
+}
+
+string_t StringVector::AddString(Vector &vector, const string &data) {
+	return StringVector::AddString(vector, string_t(data.c_str(), data.size()));
+}
+
+string_t StringVector::AddString(Vector &vector, string_t data) {
+	assert(vector.type == TypeId::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	if (!auxiliary) {
-		auxiliary = make_buffer<VectorStringBuffer>();
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.AddString(data);
 }
 
-string_t Vector::EmptyString(idx_t len) {
+string_t StringVector::EmptyString(Vector &vector, idx_t len) {
+	assert(vector.type == TypeId::VARCHAR);
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
-	if (!auxiliary) {
-		auxiliary = make_buffer<VectorStringBuffer>();
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.EmptyString(len);
 }
 
-void Vector::AddHeapReference(Vector &other) {
-	assert(type == TypeId::VARCHAR);
+void StringVector::AddHeapReference(Vector &vector, Vector &other) {
+	assert(vector.type == TypeId::VARCHAR);
 	assert(other.type == TypeId::VARCHAR);
 
 	if (!other.auxiliary) {
 		return;
 	}
-	if (!auxiliary) {
-		auxiliary = make_buffer<VectorStringBuffer>();
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	assert(auxiliary->type == VectorBufferType::STRING_BUFFER);
+	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*auxiliary;
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
 }
 
-child_list_t<unique_ptr<Vector>> &Vector::GetStructEntries() const {
-	assert(type == TypeId::STRUCT);
-	assert(auxiliary);
-	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
-	return ((VectorStructBuffer *)auxiliary.get())->GetChildren();
+child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
+	assert(vector.type == TypeId::STRUCT);
+	assert(vector.auxiliary);
+	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
 }
 
-void Vector::AddStructEntry(string name, unique_ptr<Vector> vector) {
+void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
-	assert(type == TypeId::STRUCT);
-	if (!auxiliary) {
-		auxiliary = make_buffer<VectorStructBuffer>();
+	assert(vector.type == TypeId::STRUCT);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStructBuffer>();
 	}
-	assert(auxiliary);
-	assert(auxiliary->type == VectorBufferType::STRUCT_BUFFER);
-	((VectorStructBuffer *)auxiliary.get())->AddChild(name, move(vector));
+	assert(vector.auxiliary);
+	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	((VectorStructBuffer *)vector.auxiliary.get())->AddChild(name, move(entry));
 }
 
-bool Vector::HasListEntry() const {
-	assert(type == TypeId::LIST);
-	return auxiliary != nullptr;
+bool ListVector::HasEntry(const Vector &vector) {
+	assert(vector.type == TypeId::LIST);
+	return vector.auxiliary != nullptr;
 }
 
-
-ChunkCollection &Vector::GetListEntry() const {
-	assert(type == TypeId::LIST);
-	assert(auxiliary);
-	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
-	return ((VectorListBuffer *)auxiliary.get())->GetChild();
+ChunkCollection &ListVector::GetEntry(const Vector &vector) {
+	assert(vector.type == TypeId::LIST);
+	assert(vector.auxiliary);
+	assert(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
+	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
 }
-void Vector::SetListEntry(unique_ptr<ChunkCollection> cc) {
-	assert(type == TypeId::LIST);
-	if (!auxiliary) {
-		auxiliary = make_buffer<VectorListBuffer>();
+
+void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
+	assert(vector.type == TypeId::LIST);
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorListBuffer>();
 	}
-	assert(auxiliary);
-	assert(auxiliary->type == VectorBufferType::LIST_BUFFER);
-	((VectorListBuffer *)auxiliary.get())->SetChild(move(cc));
+	assert(vector.auxiliary);
+	assert(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
+	((VectorListBuffer *)vector.auxiliary.get())->SetChild(move(cc));
 }
 
 } // namespace duckdb

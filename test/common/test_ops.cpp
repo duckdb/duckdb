@@ -167,22 +167,6 @@ static void require_arith(TypeId t) {
 	REQUIRE(r.GetValue(4).is_null);
 	REQUIRE(r.GetValue(5).is_null);
 
-	VectorOperations::AddInPlace(r, v2);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(9));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(12));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(15));
-	REQUIRE(r.GetValue(3).is_null);
-	REQUIRE(r.GetValue(4).is_null);
-	REQUIRE(r.GetValue(5).is_null);
-
-	VectorOperations::AddInPlace(r, 10);
-	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(19));
-	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(22));
-	REQUIRE(r.GetValue(2).CastAs(TypeId::INT64) == Value::BIGINT(25));
-	REQUIRE(r.GetValue(3).is_null);
-	REQUIRE(r.GetValue(4).is_null);
-	REQUIRE(r.GetValue(5).is_null);
-
 	VectorOperations::Subtract(v1, v2, r);
 	REQUIRE(r.GetValue(0).CastAs(TypeId::INT64) == Value::BIGINT(-3));
 	REQUIRE(r.GetValue(1).CastAs(TypeId::INT64) == Value::BIGINT(-3));
