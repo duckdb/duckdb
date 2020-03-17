@@ -5,11 +5,11 @@ using namespace duckdb;
 using namespace std;
 
 /* Test Case disclaimer
-*
-*  Assertions built using the Domain Testing technique
-*  at: https://bbst.courses/wp-content/uploads/2018/01/Kaner-Intro-to-Domain-Testing-2018.pdf
-*
-*/
+ *
+ *  Assertions built using the Domain Testing technique
+ *  at: https://bbst.courses/wp-content/uploads/2018/01/Kaner-Intro-to-Domain-Testing-2018.pdf
+ *
+ */
 TEST_CASE("Instr test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -41,15 +41,15 @@ TEST_CASE("Instr test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 0, 0, Value()}));
 
 	// Test multiple letters at the end
-    result = con.Query("SELECT instr(s,'lo') FROM strings");
+	result = con.Query("SELECT instr(s,'lo') FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 0, 0, Value()}));
 
 	// Test no match
 	result = con.Query("SELECT instr(s,'he-man') FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {0, 0, 0, Value()}));
 
-    // Test matching needle in multiple rows
-    result = con.Query("SELECT instr(s,'o'),s FROM strings");
+	// Test matching needle in multiple rows
+	result = con.Query("SELECT instr(s,'o'),s FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 2, 0, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "world", "b", Value()}));
 
