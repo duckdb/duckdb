@@ -29,7 +29,7 @@ struct ListFunction {
 	}
 };
 
-static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
+static void list_update(Vector inputs[], idx_t input_count, Vector &state, idx_t count) {
 	// assert(input_count == 1);
 	// inputs[0].Normalify();
 	// auto states = (list_agg_state_t **)state.GetData();
@@ -55,7 +55,7 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
 	throw NotImplementedException("FIXME list update");
 }
 
-static void list_finalize(Vector &state, Vector &result) {
+static void list_finalize(Vector &state, Vector &result, idx_t count) {
 	// auto states = (list_agg_state_t **)state.GetData();
 
 	// result.Initialize(TypeId::LIST);

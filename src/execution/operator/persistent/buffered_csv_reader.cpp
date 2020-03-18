@@ -587,7 +587,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
-			                       sql_types[col_idx]);
+			                       sql_types[col_idx], parse_chunk.size());
 		}
 	}
 	parse_chunk.Reset();

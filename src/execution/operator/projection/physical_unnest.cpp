@@ -119,7 +119,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 
 		chunk.Verify();
-		if (chunk.count > 0) {
+		if (chunk.size() > 0) {
 			return;
 		}
 	}

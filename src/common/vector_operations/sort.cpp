@@ -154,23 +154,24 @@ void VectorOperations::Sort(Vector &vector, SelectionVector &result) {
 }
 
 template <class T> bool is_unique(Vector &vector, sel_t sel_vector[]) {
-	auto data = FlatVector::GetData<T>(vector);
-	for (idx_t i = 1; i < vector.size(); i++) {
-		if (FlatVector::IsNull(vector, sel_vector[i])) {
-			continue;
-		}
-		if (Equals::Operation<T>(data[sel_vector[i - 1]], data[sel_vector[i]])) {
-			return false;
-		}
-	}
-	return true;
+	throw NotImplementedException("FIXME: is_unique");
+	// auto data = FlatVector::GetData<T>(vector);
+	// for (idx_t i = 1; i < vector.size(); i++) {
+	// 	if (FlatVector::IsNull(vector, sel_vector[i])) {
+	// 		continue;
+	// 	}
+	// 	if (Equals::Operation<T>(data[sel_vector[i - 1]], data[sel_vector[i]])) {
+	// 		return false;
+	// 	}
+	// }
+	// return true;
 }
 
 bool VectorOperations::Unique(Vector &vector) {
-	if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vector, value is unique if count is 1 OR value is a constant NULL
-		return vector.size() == 1 || ConstantVector::IsNull(vector);
-	}
+	// if (vector.vector_type == VectorType::CONSTANT_VECTOR) {
+	// 	// constant vector, value is unique if count is 1 OR value is a constant NULL
+	// 	return vector.size() == 1 || ConstantVector::IsNull(vector);
+	// }
 	throw NotImplementedException("FIXME: unique");
 	// // first we extract NULL values
 	// sel_t sort_sel[STANDARD_VECTOR_SIZE];

@@ -39,8 +39,8 @@ void TransientSegment::FetchRow(ColumnFetchState &state, Transaction &transactio
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 
-void TransientSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) {
-	data->Update(column_data, stats, transaction, updates, ids, this->start);
+void TransientSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids, idx_t count) {
+	data->Update(column_data, stats, transaction, updates, ids, count, this->start);
 }
 
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {

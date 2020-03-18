@@ -9,8 +9,7 @@ using namespace std;
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount, SelectionVector &fside,
           idx_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
-                                                                ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr, ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
@@ -18,10 +17,10 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result) {
-	Vector check(GetCardinality(), expr.check->return_type);
-	Vector res_true(GetCardinality(), expr.result_if_true->return_type);
-	Vector res_false(GetCardinality(), expr.result_if_false->return_type);
+void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+	Vector check(expr.check->return_type);
+	Vector res_true(expr.result_if_true->return_type);
+	Vector res_false(expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -29,19 +28,19 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 	// first execute the check expression
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
-	idx_t tcount = Select(*expr.check, check_state, true_sel, false_sel);
-	idx_t fcount = check.size() - tcount;
+	idx_t tcount = Select(*expr.check, check_state, count, true_sel, false_sel);
+	idx_t fcount = count - tcount;
 	if (fcount == 0) {
 		// everything is true, only execute TRUE side
-		Execute(*expr.result_if_true, res_true_state, result);
+		Execute(*expr.result_if_true, res_true_state, result, count);
 	} else if (tcount == 0) {
 		// everything is false, only execute FALSE side
-		Execute(*expr.result_if_false, res_false_state, result);
+		Execute(*expr.result_if_false, res_false_state, result, count);
 	} else {
 		// have to execute both and mix and match
 		// FIXME: pass selection vector into execute here and don't use Case operation as we do below!
-		Execute(*expr.result_if_true, res_true_state, res_true);
-		Execute(*expr.result_if_false, res_false_state, res_false);
+		Execute(*expr.result_if_true, res_true_state, res_true, count);
+		Execute(*expr.result_if_false, res_false_state, res_false, count);
 
 		Case(res_true, res_false, result, true_sel, tcount, false_sel, fcount);
 	}
@@ -63,7 +62,7 @@ template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVecto
 		}
 	} else {
 		VectorData vdata;
-		vector.Orrify(vdata);
+		vector.Orrify(count, vdata);
 		auto data = (T*) vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = vdata.sel->get_index(i);

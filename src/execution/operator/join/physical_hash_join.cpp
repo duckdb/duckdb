@@ -126,7 +126,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
 					auto bool_result = FlatVector::GetData<bool>(result_vector);
-					for (idx_t i = 0; i < result_vector.size(); i++) {
+					for (idx_t i = 0; i < chunk.size(); i++) {
 						bool_result[i] = false;
 					}
 				} else {

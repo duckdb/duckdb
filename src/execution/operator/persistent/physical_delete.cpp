@@ -15,7 +15,7 @@ void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		// delete data in the base table
 		// the row ids are given to us as the last column of the child chunk
-		table.Delete(tableref, context, state->child_chunk.data[row_id_index]);
+		table.Delete(tableref, context, state->child_chunk.data[row_id_index], state->child_chunk.size());
 		deleted_count += state->child_chunk.size();
 	}
 

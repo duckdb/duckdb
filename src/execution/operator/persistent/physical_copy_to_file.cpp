@@ -173,7 +173,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			} else {
 				// non varchar column, perform the cast
 				VectorOperations::Cast(state->child_chunk.data[col_idx], cast_chunk.data[col_idx], sql_types[col_idx],
-				                       SQLType::VARCHAR);
+				                       SQLType::VARCHAR, cast_chunk.size());
 			}
 		}
 		cast_chunk.Normalify();

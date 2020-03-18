@@ -11,13 +11,13 @@
 using namespace duckdb;
 using namespace std;
 
-DataChunk::DataChunk() {
+DataChunk::DataChunk() : count(0) {
 }
 
 void DataChunk::InitializeEmpty(vector<TypeId> &types) {
 	assert(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {
-		data.emplace_back(Vector(*this, types[i], nullptr));
+		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
@@ -64,7 +64,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) {
 
 	for (idx_t i = 0; i < column_count(); i++) {
 		assert(other.data[i].vector_type == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(data[i], other.data[i], offset);
+		VectorOperations::Copy(data[i], other.data[i], size(), offset);
 	}
 	other.SetCardinality(size() - offset);
 }
@@ -78,14 +78,14 @@ void DataChunk::Append(DataChunk &other) {
 	}
 	for (idx_t i = 0; i < column_count(); i++) {
 		assert(data[i].vector_type == VectorType::FLAT_VECTOR);
-		VectorOperations::Append(other.data[i], data[i]);
+		VectorOperations::Append(other.data[i], data[i], other.size(), size());
 	}
 	SetCardinality(size() + other.size());
 }
 
 void DataChunk::Normalify() {
 	for (idx_t i = 0; i < column_count(); i++) {
-		data[i].Normalify();
+		data[i].Normalify(size());
 	}
 }
 
@@ -100,7 +100,7 @@ vector<TypeId> DataChunk::GetTypes() {
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(column_count()) + " Columns]\n";
 	for (idx_t i = 0; i < column_count(); i++) {
-		retval += "- " + data[i].ToString() + "\n";
+		retval += "- " + data[i].ToString(size()) + "\n";
 	}
 	return retval;
 }
@@ -115,7 +115,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 	}
 	// write the data
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		data[col_idx].Normalify();
+		data[col_idx].Normalify(size());
 		auto type = data[col_idx].type;
 		if (TypeIsConstantSize(type)) {
 			idx_t write_size = GetTypeIdSize(type) * size();
@@ -154,8 +154,8 @@ void DataChunk::Deserialize(Deserializer &source) {
 			auto column_size = GetTypeIdSize(type) * rows;
 			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 			source.ReadData(ptr.get(), column_size);
-			Vector v(*this, data[i].type, ptr.get());
-			VectorOperations::ReadFromStorage(v, data[i]);
+			Vector v(data[i].type, ptr.get());
+			VectorOperations::ReadFromStorage(v, data[i], rows);
 		} else {
 			auto strings = (string_t *)data[i].data;
 			for (idx_t j = 0; j < rows; j++) {
@@ -189,16 +189,16 @@ void DataChunk::SetCardinality(idx_t count, SelectionVector &sel_vector) {
 void DataChunk::MoveStringsToHeap(StringHeap &heap) {
 	for (idx_t c = 0; c < column_count(); c++) {
 		if (data[c].type == TypeId::VARCHAR) {
-			StringVector::MoveStringsToHeap(data[c], heap);
+			StringVector::MoveStringsToHeap(data[c], size(), heap);
 		}
 	}
 }
 
 void DataChunk::Hash(Vector &result) {
 	assert(result.type == TypeId::HASH);
-	VectorOperations::Hash(data[0], result);
+	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < column_count(); i++) {
-		VectorOperations::CombineHash(result, data[i]);
+		VectorOperations::CombineHash(result, data[i], size());
 	}
 }
 
@@ -207,8 +207,7 @@ void DataChunk::Verify() {
 	assert(size() <= STANDARD_VECTOR_SIZE);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < column_count(); i++) {
-		assert(size() == data[i].size());
-		data[i].Verify();
+		data[i].Verify(size());
 	}
 #endif
 }

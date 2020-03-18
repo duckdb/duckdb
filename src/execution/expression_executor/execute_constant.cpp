@@ -10,6 +10,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConstantExp
 	return nullptr;
 }
 
-void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
 	result.Reference(expr.value);
 }

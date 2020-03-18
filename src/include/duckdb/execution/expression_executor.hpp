@@ -59,9 +59,6 @@ public:
 	void SetChunk(DataChunk &chunk) {
 		SetChunk(&chunk);
 	}
-	VectorCardinality &GetCardinality() {
-		return chunk ? *chunk : constant_cardinality;
-	}
 
 	//! The expressions of the executor
 	vector<Expression *> expressions;
@@ -78,41 +75,39 @@ protected:
 	static unique_ptr<ExpressionState> InitializeState(BoundCastExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(CommonSubExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundComparisonExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr,
-	                                                   ExpressionExecutorState &state);
+	static unique_ptr<ExpressionState> InitializeState(BoundConjunctionExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundConstantExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundFunctionExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundOperatorExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(BoundParameterExpression &expr, ExpressionExecutorState &state);
 
-	void Execute(Expression &expr, ExpressionState *state, Vector &result);
+	void Execute(Expression &expr, ExpressionState *state, Vector &result, idx_t count);
 
-	void Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundComparisonExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundFunctionExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundOperatorExpression &expr, ExpressionState *state, Vector &result);
-	void Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result);
+	void Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundCastExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundComparisonExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundConstantExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundFunctionExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundOperatorExpression &expr, ExpressionState *state, Vector &result, idx_t count);
+	void Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result, idx_t count);
 
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in
 	//! the result
-	idx_t Select(Expression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t DefaultSelect(Expression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(Expression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t DefaultSelect(Expression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 
-	idx_t Select(BoundBetweenExpression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t Select(BoundComparisonExpression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t Select(BoundConjunctionExpression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(BoundBetweenExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(BoundComparisonExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(BoundConjunctionExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(Expression &expr, Vector &result);
 
 private:
-	VectorCardinality constant_cardinality = VectorCardinality(1);
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
 	//! The cached result of already-computed Common Subexpression results

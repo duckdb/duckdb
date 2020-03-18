@@ -21,7 +21,7 @@ using namespace std;
 // 	});
 // }
 
-void VectorOperations::ReadFromStorage(Vector &source, Vector &target) {
+void VectorOperations::ReadFromStorage(Vector &source, Vector &target, idx_t count) {
 	throw NotImplementedException("READ FROM STORAGE");
 
 	// assert(source.SameCardinality(target));

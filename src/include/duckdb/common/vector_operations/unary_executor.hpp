@@ -58,9 +58,7 @@ private:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static inline void ExecuteStandard(Vector &input, Vector &result, FUNC fun) {
-		assert(input.SameCardinality(result));
-
+	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, FUNC fun) {
 		switch(input.vector_type) {
 		case VectorType::CONSTANT_VECTOR:{
 			result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -71,32 +69,32 @@ private:
 				ConstantVector::SetNull(result, true);
 			} else {
 				ConstantVector::SetNull(result, false);
-				result_data[0] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[0]);
+				*result_data = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, *ldata);
 			}
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR:  {
 			auto &sel = DictionaryVector::SelectionVector(input);
 			auto &child = DictionaryVector::Child(input);
-			child.Normalify();
+			child.Normalify(count);
 
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(child);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(
-			    ldata, result_data, input.size(), &sel, FlatVector::Nullmask(child), FlatVector::Nullmask(result), fun);
+			    ldata, result_data, count, &sel, FlatVector::Nullmask(child), FlatVector::Nullmask(result), fun);
 			break;
 		}
 		default: {
-			input.Normalify();
+			input.Normalify(count);
 
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false>(
-			    ldata, result_data, input.size(), nullptr, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
+			    ldata, result_data, count, nullptr, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
 			break;
 		}
 		}
@@ -104,14 +102,14 @@ private:
 
 public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
-	static void Execute(Vector &input, Vector &result) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryOperatorWrapper, OP, bool, IGNORE_NULL>(input, result, false);
+	static void Execute(Vector &input, Vector &result, idx_t count) {
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryOperatorWrapper, OP, bool, IGNORE_NULL>(input, result, count, false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,
 	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
-	static void Execute(Vector &input, Vector &result, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC, IGNORE_NULL>(input, result, fun);
+	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC, IGNORE_NULL>(input, result, count, fun);
 	}
 };
 

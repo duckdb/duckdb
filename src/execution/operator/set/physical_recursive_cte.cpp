@@ -96,8 +96,8 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
-	Vector dummy_addresses(chunk, TypeId::POINTER);
-	Vector probe_result(chunk, TypeId::BOOL);
+	Vector dummy_addresses(TypeId::POINTER);
+	Vector probe_result(TypeId::BOOL);
 
 	auto probe_data = FlatVector::GetData<bool>(probe_result);
 
@@ -107,7 +107,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *sta
 	// Update the sel_vector of the DataChunk
 	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);
 	idx_t match_count = 0;
-	for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
+	for (idx_t probe_idx = 0; probe_idx < chunk.size(); probe_idx++) {
 		if (probe_data[probe_idx]) {
 			sel_vector.set_index(match_count++, probe_idx);
 		}

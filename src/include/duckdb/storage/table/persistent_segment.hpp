@@ -42,7 +42,7 @@ public:
 	              idx_t result_idx) override;
 
 	//! Perform an update within the segment
-	void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) override;
+	void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids, idx_t count) override;
 };
 
 } // namespace duckdb

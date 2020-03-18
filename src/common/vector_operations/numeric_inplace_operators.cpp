@@ -15,7 +15,7 @@ using namespace std;
 // In-Place Addition
 //===--------------------------------------------------------------------===//
 
-void VectorOperations::AddInPlace(Vector &input, int64_t right) {
+void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 	assert(input.type == TypeId::POINTER);
 	switch(input.vector_type) {
 	case VectorType::CONSTANT_VECTOR: {
@@ -27,7 +27,7 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right) {
 	default: {
 		assert(input.vector_type == VectorType::FLAT_VECTOR);
 		auto data = FlatVector::GetData<uint64_t>(input);
-		for(idx_t i = 0; i < input.size(); i++) {
+		for(idx_t i = 0; i < count; i++) {
 			data[i] += right;
 		}
 		break;

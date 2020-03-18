@@ -75,7 +75,7 @@ public:
 	                      idx_t result_idx) = 0;
 
 	//! Perform an update within the segment
-	virtual void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids) = 0;
+	virtual void Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids, idx_t count) = 0;
 };
 
 } // namespace duckdb

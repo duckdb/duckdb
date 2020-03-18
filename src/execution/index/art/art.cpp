@@ -70,12 +70,12 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T> static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
-	input.Orrify(idata);
+	input.Orrify(count, idata);
 
 	auto input_data = (T *)idata.data;
-	for(idx_t i = 0; i < input.size(); i++) {
+	for(idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if ((*idata.nullmask)[idx]) {
 			keys.push_back(nullptr);
@@ -85,12 +85,12 @@ template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Ke
 	}
 }
 
-template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T> static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
-	input.Orrify(idata);
+	input.Orrify(count, idata);
 
 	auto input_data = (T *)idata.data;
-	for(idx_t i = 0; i < input.size(); i++) {
+	for(idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if ((*idata.nullmask)[idx] || !keys[i]) {
 			// either this column is NULL, or the previous column is NULL!
@@ -113,25 +113,25 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].type) {
 	case TypeId::INT8:
-		generate_keys<int8_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT16:
-		generate_keys<int16_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT32:
-		generate_keys<int32_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT64:
-		generate_keys<int64_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::FLOAT:
-		generate_keys<float>(input.data[0], keys, is_little_endian);
+		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::DOUBLE:
-		generate_keys<double>(input.data[0], keys, is_little_endian);
+		generate_keys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::VARCHAR:
-		generate_keys<string_t>(input.data[0], keys, is_little_endian);
+		generate_keys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -140,25 +140,25 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type) {
 		case TypeId::INT8:
-			concatenate_keys<int8_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT16:
-			concatenate_keys<int16_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT32:
-			concatenate_keys<int32_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT64:
-			concatenate_keys<int64_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::FLOAT:
-			concatenate_keys<float>(input.data[i], keys, is_little_endian);
+			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::DOUBLE:
-			concatenate_keys<double>(input.data[i], keys, is_little_endian);
+			concatenate_keys<double>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::VARCHAR:
-			concatenate_keys<string_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -168,7 +168,6 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == ROW_TYPE);
-	assert(input.size() == row_ids.size());
 	assert(types[0] == input.data[0].type);
 
 	// generate the keys for the given input
@@ -176,10 +175,10 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
-	row_ids.Normalify();
+	row_ids.Normalify(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = INVALID_INDEX;
-	for (idx_t i = 0; i < row_ids.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -331,10 +330,10 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	row_ids.Normalify();
+	row_ids.Normalify(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
-	for (idx_t i = 0; i < row_ids.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
@@ -768,12 +767,11 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 	}
 
 	// create a vector pointing to the current set of row ids
-	StandaloneVector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
-	row_identifiers.SetCount(scan_count);
 
 	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
+	table.Fetch(transaction, result, state->column_ids, row_identifiers, scan_count, table_state);
 
 	// move to the next set of row ids
 	state->result_index += scan_count;

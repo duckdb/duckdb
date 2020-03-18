@@ -31,23 +31,23 @@ struct ExclusiveBetweenOperator {
 	}
 };
 
-template <class OP> static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, SelectionVector &true_sel, SelectionVector &false_sel) {
+template <class OP> static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::INT16:
-		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<int16_t, int16_t, int16_t, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::INT32:
-		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<int32_t, int32_t, int32_t, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::INT64:
-		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<int64_t, int64_t, int64_t, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::FLOAT:
-		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::DOUBLE:
-		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<double, double, double, OP>(input, lower, upper, count, true_sel, false_sel);
 	case TypeId::VARCHAR:
-		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, true_sel, false_sel);
+		return TernaryExecutor::Select<string_t, string_t, string_t, OP>(input, lower, upper, count, true_sel, false_sel);
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for BETWEEN");
 	}
@@ -62,50 +62,50 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
 	// resolve the children
-	Vector input(GetCardinality(), expr.input->return_type);
-	Vector lower(GetCardinality(), expr.lower->return_type);
-	Vector upper(GetCardinality(), expr.upper->return_type);
-	Execute(*expr.input, state->child_states[0].get(), input);
-	Execute(*expr.lower, state->child_states[1].get(), lower);
-	Execute(*expr.upper, state->child_states[2].get(), upper);
+	Vector input(expr.input->return_type);
+	Vector lower(expr.lower->return_type);
+	Vector upper(expr.upper->return_type);
+	Execute(*expr.input, state->child_states[0].get(), input, count);
+	Execute(*expr.lower, state->child_states[1].get(), lower, count);
+	Execute(*expr.upper, state->child_states[2].get(), upper, count);
 
-	Vector intermediate1(GetCardinality(), TypeId::BOOL);
-	Vector intermediate2(GetCardinality(), TypeId::BOOL);
+	Vector intermediate1(TypeId::BOOL);
+	Vector intermediate2(TypeId::BOOL);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
-		VectorOperations::LessThanEquals(input, upper, intermediate2);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
+		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
 	} else if (expr.lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
-		VectorOperations::LessThan(input, upper, intermediate2);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
+		VectorOperations::LessThan(input, upper, intermediate2, count);
 	} else if (expr.upper_inclusive) {
-		VectorOperations::GreaterThan(input, lower, intermediate1);
-		VectorOperations::LessThanEquals(input, upper, intermediate2);
+		VectorOperations::GreaterThan(input, lower, intermediate1, count);
+		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
 	} else {
-		VectorOperations::GreaterThan(input, lower, intermediate1);
-		VectorOperations::LessThan(input, upper, intermediate2);
+		VectorOperations::GreaterThan(input, lower, intermediate1, count);
+		VectorOperations::LessThan(input, upper, intermediate2, count);
 	}
-	VectorOperations::And(intermediate1, intermediate2, result);
+	VectorOperations::And(intermediate1, intermediate2, result, count);
 }
 
-idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	// resolve the children
-	Vector input(GetCardinality(), expr.input->return_type);
-	Vector lower(GetCardinality(), expr.lower->return_type);
-	Vector upper(GetCardinality(), expr.upper->return_type);
-	Execute(*expr.input, state->child_states[0].get(), input);
-	Execute(*expr.lower, state->child_states[1].get(), lower);
-	Execute(*expr.upper, state->child_states[2].get(), upper);
+	Vector input(expr.input->return_type);
+	Vector lower(expr.lower->return_type);
+	Vector upper(expr.upper->return_type);
+	Execute(*expr.input, state->child_states[0].get(), input, count);
+	Execute(*expr.lower, state->child_states[1].get(), lower, count);
+	Execute(*expr.upper, state->child_states[2].get(), upper, count);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
-		return between_loop_type_switch<BothInclusiveBetweenOperator>(input, lower, upper, true_sel, false_sel);
+		return between_loop_type_switch<BothInclusiveBetweenOperator>(input, lower, upper, count, true_sel, false_sel);
 	} else if (expr.lower_inclusive) {
-		return between_loop_type_switch<LowerInclusiveBetweenOperator>(input, lower, upper, true_sel, false_sel);
+		return between_loop_type_switch<LowerInclusiveBetweenOperator>(input, lower, upper, count, true_sel, false_sel);
 	} else if (expr.upper_inclusive) {
-		return between_loop_type_switch<UpperInclusiveBetweenOperator>(input, lower, upper, true_sel, false_sel);
+		return between_loop_type_switch<UpperInclusiveBetweenOperator>(input, lower, upper, count, true_sel, false_sel);
 	} else {
-		return between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, true_sel, false_sel);
+		return between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, count, true_sel, false_sel);
 	}
 }

@@ -33,7 +33,7 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk : public VectorCardinality {
+class DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
@@ -51,10 +51,10 @@ public:
 		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
 	}
-	void SetCardinality(idx_t count, SelectionVector &sel_vector);
-	void SetCardinality(const VectorCardinality &cardinality) {
-		SetCardinality(cardinality.count);
+	void SetCardinality(const DataChunk &other) {
+		this->count = other.size();
 	}
+	void SetCardinality(idx_t count, SelectionVector &sel_vector);
 
 	Value GetValue(idx_t col_idx, idx_t index) const;
 	void SetValue(idx_t col_idx, idx_t index, Value val);
@@ -111,5 +111,7 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
+private:
+	idx_t count;
 };
 } // namespace duckdb

@@ -116,7 +116,7 @@ private:
 
 private:
 	void Destroy();
-	void CallDestructors(Vector &state_vector);
+	void CallDestructors(Vector &state_vector, idx_t count);
 };
 
 } // namespace duckdb

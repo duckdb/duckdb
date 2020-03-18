@@ -128,19 +128,19 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 // Update
 //===--------------------------------------------------------------------===//
 void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-                            row_t *ids, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
+                            row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
 	if (!node) {
 		auto handle = manager.Pin(block_id);
 
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(column_data, transaction, ids, update.size(), vector_index, vector_offset, type_size);
+		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
 		auto handle = manager.Pin(block_id);
 
-		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids,
+		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, count,
 		                      vector_offset);
 	}
 }
@@ -171,13 +171,12 @@ template <class T> static void update_min_max(T value, T *__restrict min, T *__r
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
-	assert(offset + count <= source.size());
 	auto nullmask = (nullmask_t *)target;
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 
 	VectorData adata;
-	source.Orrify(adata);
+	source.Orrify(count, adata);
 
 	auto sdata = (T *) adata.data;
 	auto tdata = (T *)(target + sizeof(nullmask_t));
@@ -298,7 +297,7 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 // Merge Update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
+static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids, idx_t count,
                               idx_t vector_offset) {
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
@@ -341,7 +340,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 		node->tuples[count] = id;
 	};
 	// perform the merge
-	node->N = merge_loop(ids, old_ids, update.size(), node->N, vector_offset, merge, pick_new, pick_old);
+	node->N = merge_loop(ids, old_ids, count, node->N, vector_offset, merge, pick_new, pick_old);
 }
 
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {

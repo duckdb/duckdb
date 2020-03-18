@@ -109,11 +109,12 @@ template <class LOOP, class OP> static void generic_gather_loop(Vector &source, 
 	}
 }
 
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, idx_t offset) {
-	assert(source.size() == dest.size());
-	if (set_null) {
-		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
-	} else {
-		generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest, offset);
-	}
+void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count, bool set_null, idx_t offset) {
+	throw NotImplementedException("FIXME gather");
+	// assert(source.size() == dest.size());
+	// if (set_null) {
+	// 	generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
+	// } else {
+	// 	generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest, offset);
+	// }
 }

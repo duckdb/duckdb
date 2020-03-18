@@ -10,7 +10,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterEx
 	return nullptr;
 }
 
-void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
 	assert(expr.value);
 	assert(expr.value->type == expr.return_type);
 	result.Reference(*expr.value);

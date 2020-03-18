@@ -78,7 +78,7 @@ public:
 	void RollbackUpdate(UpdateInfo *info) override;
 
 protected:
-	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
+	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, idx_t count,
 	            idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
 
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
@@ -114,11 +114,11 @@ private:
 	//! Expand the string segment, adding an additional maximum vector to the segment
 	void ExpandStringSegment(data_ptr_t baseptr);
 
-	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t vector_offset);
-	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t vector_offset,
+	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count, idx_t vector_offset);
+	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count, idx_t vector_offset,
 	                                       StringUpdateInfo &update_info);
 
-	void MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, idx_t vector_offset,
+	void MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
 	                     string_location_t string_locations[], nullmask_t original_nullmask);
 
 	//! The amount of bytes remaining to store in the block

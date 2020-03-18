@@ -70,13 +70,13 @@ public:
 	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
+	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids, idx_t fetch_count,
 	           TableIndexScanState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
-	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids);
+	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
@@ -100,7 +100,7 @@ public:
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(Vector &row_identifiers);
+	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
 	//! Is this a temporary table?
 	bool IsTemporary();
 
@@ -120,7 +120,7 @@ private:
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
-	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);
+	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);

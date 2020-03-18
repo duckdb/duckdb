@@ -36,7 +36,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			break;
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
-			args.data[i].Normalify();
+			args.data[i].Normalify(args.size());
 			result.vector_type = VectorType::FLAT_VECTOR;
 			FlatVector::Nullmask(result) |= FlatVector::Nullmask(args.data[i]);
 			break;

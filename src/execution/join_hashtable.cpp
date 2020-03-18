@@ -14,7 +14,7 @@ namespace duckdb {
 using ScanStructure = JoinHashTable::ScanStructure;
 
 static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
-	Vector target_vector(source, TypeId::POINTER, (data_ptr_t)targets);
+	Vector target_vector(TypeId::POINTER, (data_ptr_t)targets);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < source.column_count(); i++) {
 		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
@@ -78,24 +78,24 @@ JoinHashTable::~JoinHashTable() {
 	}
 }
 
-void JoinHashTable::ApplyBitmask(Vector &hashes) {
+void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
 		assert(!ConstantVector::IsNull(hashes));
 		auto indices = ConstantVector::GetData<uint64_t>(hashes);
-		indices[0] = indices[0] & bitmask;
+		*indices = *indices & bitmask;
 	} else {
-		hashes.Normalify();
+		hashes.Normalify(count);
 		auto indices = ConstantVector::GetData<uint64_t>(hashes);
-		for(idx_t i = 0; i < hashes.size(); i++) {
+		for(idx_t i = 0; i < count; i++) {
 			indices[i] &= bitmask;
 		}
 	}
 }
 
 void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
-	VectorOperations::Hash(keys.data[0], hashes);
+	VectorOperations::Hash(keys.data[0], hashes, keys.size());
 	for (idx_t i = 1; i < equality_types.size(); i++) {
-		VectorOperations::CombineHash(hashes, keys.data[i]);
+		VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
 	}
 }
 
@@ -189,7 +189,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Vector hash_values(keys, TypeId::HASH);
+	Vector hash_values(TypeId::HASH);
 	Hash(keys, hash_values);
 
 	throw NotImplementedException("FIXME: serialize chunk");
@@ -201,17 +201,17 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// SerializeChunk(hash_chunk, hash_locations);
 }
 
-void JoinHashTable::InsertHashes(Vector &hashes, data_ptr_t key_locations[]) {
+void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
 	assert(hashes.type == TypeId::HASH);
 
 	// use bitmask to get position in array
-	ApplyBitmask(hashes);
+	ApplyBitmask(hashes, count);
 
-	hashes.Normalify();
+	hashes.Normalify(count);
 	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<uint64_t>(hashes);
-	for(idx_t i = 0; i < hashes.size(); i++) {
+	for(idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
@@ -235,8 +235,7 @@ void JoinHashTable::Finalize() {
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
-	VectorCardinality hash_cardinality;
-	Vector hashes(hash_cardinality, TypeId::HASH);
+	Vector hashes(TypeId::HASH);
 	auto hash_data = FlatVector::GetData<uint64_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
@@ -255,9 +254,8 @@ void JoinHashTable::Finalize() {
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
-			hash_cardinality.count = next;
 			// now insert into the hash table
-			InsertHashes(hashes, key_locations);
+			InsertHashes(hashes, next, key_locations);
 
 			entry += next;
 		}
@@ -279,24 +277,24 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 	// first hash all the keys to do the lookup
-	Vector hashes(keys, TypeId::HASH);
+	Vector hashes(TypeId::HASH);
 	Hash(keys, hashes);
 
 	// use bitmask to get index in array
-	ApplyBitmask(hashes);
+	ApplyBitmask(hashes, keys.size());
 
 	// FIXME: optimize for constant key vector
-	hashes.Normalify();
+	hashes.Normalify(keys.size());
 
 	// now create the initial pointers from the hashes
 	auto ptrs = FlatVector::GetData<data_ptr_t>(ss->pointers);
 	auto indices = FlatVector::GetData<uint64_t>(hashes);
 	auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
-	for (idx_t i = 0; i < hashes.size(); i++) {
+	for (idx_t i = 0; i < keys.size(); i++) {
 		auto index = indices[i];
 		ptrs[i] = hashed_pointers[index];
 	}
-	ss->pointers.SetCount(hashes.size());
+	ss->pointers.SetCount(keys.size());
 
 	switch (join_type) {
 	case JoinType::SEMI:
@@ -443,9 +441,8 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[
 
 void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
 	// initialize result to false
-	assert(final_result.SameCardinality(pointers));
 	auto result_data = FlatVector::GetData<bool>(final_result);
-	for(idx_t i = 0; i < final_result.size(); i++) {
+	for(idx_t i = 0; i < keys.size(); i++) {
 		result_data[i] = false;
 	}
 

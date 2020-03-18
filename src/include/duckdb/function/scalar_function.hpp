@@ -71,13 +71,13 @@ public:
 	template <class TA, class TR, class OP, bool SKIP_NULLS = false>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() >= 1);
-		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result);
+		UnaryExecutor::Execute<TA, TR, OP, SKIP_NULLS>(input.data[0], result, input.size());
 	};
 
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result);
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result, input.size());
 	};
 
 public:
@@ -135,6 +135,27 @@ public:
 			return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
+		}
+	}
+
+	template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType type) {
+		switch (type.id) {
+		case SQLTypeId::TINYINT:
+			return ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+		case SQLTypeId::SMALLINT:
+			return ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+		case SQLTypeId::INTEGER:
+			return ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+		case SQLTypeId::BIGINT:
+			return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		case SQLTypeId::FLOAT:
+			return ScalarFunction::BinaryFunction<float, float, float, OP>;
+		case SQLTypeId::DOUBLE:
+			return ScalarFunction::BinaryFunction<double, double, double, OP>;
+		case SQLTypeId::DECIMAL:
+			return ScalarFunction::BinaryFunction<double, double, double, OP>;
+		default:
+			throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
 		}
 	}
 };

@@ -71,9 +71,8 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	idx_t offset = 0;
-	idx_t count = vector.size();
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vector, offset, count);
@@ -110,12 +109,12 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids) {
+void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) {
 	// first find the segment that the update belongs to
 	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
-	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids));
+	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

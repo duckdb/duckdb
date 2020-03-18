@@ -157,10 +157,10 @@ public:
 
 private:
 	//! Apply a bitmask to the hashes
-	void ApplyBitmask(Vector &hashes);
+	void ApplyBitmask(Vector &hashes, idx_t count);
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
+	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;

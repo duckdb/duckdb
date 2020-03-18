@@ -47,23 +47,23 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(GetCardinality(), TypeId::BOOL);
-		Execute(*expr.children[i], state->child_states[i].get(), current_result);
+		Vector current_result(TypeId::BOOL);
+		Execute(*expr.children[i], state->child_states[i].get(), current_result, count);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
 		} else {
-			Vector intermediate(GetCardinality(), TypeId::BOOL);
+			Vector intermediate(TypeId::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(current_result, result, intermediate);
+				VectorOperations::And(current_result, result, intermediate, count);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(current_result, result, intermediate);
+				VectorOperations::Or(current_result, result, intermediate, count);
 				break;
 			default:
 				throw NotImplementedException("Unknown conjunction type!");
@@ -183,10 +183,10 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	auto state = (ConjunctionState *)state_;
 	if (!chunk) {
-		return DefaultSelect(expr, state, true_sel, false_sel);
+		return DefaultSelect(expr, state, count, true_sel, false_sel);
 	}
 
 	chrono::time_point<chrono::high_resolution_clock> start_time;

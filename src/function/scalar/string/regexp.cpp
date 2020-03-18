@@ -42,12 +42,12 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 
 	if (info.constant_pattern) {
 		// FIXME: this should be a unary loop
-		UnaryExecutor::Execute<string_t, bool, true>(strings, result, [&](string_t input) {
+		UnaryExecutor::Execute<string_t, bool, true>(strings, result, args.size(), [&](string_t input) {
 			return RE2::PartialMatch(CreateStringPiece(input), *info.constant_pattern);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool, true>(
-		    strings, patterns, result, [&](string_t input, string_t pattern) {
+		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), options);
 			    if (!re.ok()) {
 				    throw Exception(re.error());
@@ -94,7 +94,7 @@ static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vec
 	options.set_log_errors(false);
 
 	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
-	    strings, patterns, replaces, result, [&](string_t input, string_t pattern, string_t replace) {
+	    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
 		    RE2 re(CreateStringPiece(pattern), options);
 		    std::string sstring(input.GetData(), input.GetSize());
 		    RE2::Replace(&sstring, re, CreateStringPiece(replace));

@@ -24,77 +24,63 @@ namespace duckdb {
 // or Add(A, B, C)
 struct VectorOperations {
 	//===--------------------------------------------------------------------===//
-	// Numeric Binary Operators
-	//===--------------------------------------------------------------------===//
-	//! result = A + B
-	static void Add(Vector &A, Vector &B, Vector &result);
-	//! result = A - B
-	static void Subtract(Vector &A, Vector &B, Vector &result);
-	//! result = A * B
-	static void Multiply(Vector &A, Vector &B, Vector &result);
-	//! result = A / B
-	static void Divide(Vector &A, Vector &B, Vector &result);
-	//! result = A % B
-	static void Modulo(Vector &A, Vector &B, Vector &result);
-
-	//===--------------------------------------------------------------------===//
 	// In-Place Operators
 	//===--------------------------------------------------------------------===//
 	//! A += B
-	static void AddInPlace(Vector &A, int64_t B);
+	static void AddInPlace(Vector &A, int64_t B, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// NULL Operators
 	//===--------------------------------------------------------------------===//
 	//! result = IS NOT NULL(A)
-	static void IsNotNull(Vector &A, Vector &result);
+	static void IsNotNull(Vector &A, Vector &result, idx_t count);
 	//! result = IS NULL (A)
-	static void IsNull(Vector &A, Vector &result);
+	static void IsNull(Vector &A, Vector &result, idx_t count);
 	// Returns whether or not a vector has a NULL value
-	static bool HasNull(Vector &A);
-	static bool HasNotNull(Vector &A);
+	static bool HasNull(Vector &A, idx_t count);
+	static bool HasNotNull(Vector &A, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Boolean Operations
 	//===--------------------------------------------------------------------===//
 	// result = A && B
-	static void And(Vector &A, Vector &B, Vector &result);
+	static void And(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A || B
-	static void Or(Vector &A, Vector &B, Vector &result);
+	static void Or(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = NOT(A)
-	static void Not(Vector &A, Vector &result);
+	static void Not(Vector &A, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// result = A == B
-	static void Equals(Vector &A, Vector &B, Vector &result);
+	static void Equals(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A != B
-	static void NotEquals(Vector &A, Vector &B, Vector &result);
+	static void NotEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A > B
-	static void GreaterThan(Vector &A, Vector &B, Vector &result);
+	static void GreaterThan(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A >= B
-	static void GreaterThanEquals(Vector &A, Vector &B, Vector &result);
+	static void GreaterThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A < B
-	static void LessThan(Vector &A, Vector &B, Vector &result);
+	static void LessThan(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A <= B
-	static void LessThanEquals(Vector &A, Vector &B, Vector &result);
+	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Select Comparison Operations
 	//===--------------------------------------------------------------------===//
 	// result = A == B
-	static idx_t SelectEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A != B
-	static idx_t SelectNotEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectNotEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A > B
-	static idx_t SelectGreaterThan(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectGreaterThan(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A >= B
-	static idx_t SelectGreaterThanEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectGreaterThanEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A < B
-	static idx_t SelectLessThan(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectLessThan(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 	// result = A <= B
-	static idx_t SelectLessThanEquals(Vector &A, Vector &B, SelectionVector &true_sel, SelectionVector &false_sel);
+	static idx_t SelectLessThanEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
 
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
@@ -108,7 +94,7 @@ struct VectorOperations {
 	struct Gather {
 		//! dest.data[i] = ptr[i]. If set_null is true, NullValue<T> is checked for and converted to the nullmask in
 		//! dest. If set_null is false, NullValue<T> is ignored.
-		static void Set(Vector &source, Vector &dest, bool set_null = true, idx_t offset = 0);
+		static void Set(Vector &source, Vector &dest, idx_t count, bool set_null = true, idx_t offset = 0);
 	};
 
 	//===--------------------------------------------------------------------===//
@@ -125,91 +111,33 @@ struct VectorOperations {
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// result = HASH(A)
-	static void Hash(Vector &A, Vector &result);
+	static void Hash(Vector &A, Vector &result, idx_t count);
 	// A ^= HASH(B)
-	static void CombineHash(Vector &hashes, Vector &B);
+	static void CombineHash(Vector &hashes, Vector &B, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Generate functions
 	//===--------------------------------------------------------------------===//
-	static void GenerateSequence(Vector &result, int64_t start = 0, int64_t increment = 1);
-	static void GenerateSequence(Vector &result, SelectionVector &sel, int64_t start = 0, int64_t increment = 1);
+	static void GenerateSequence(Vector &result, idx_t count, int64_t start = 0, int64_t increment = 1);
+	static void GenerateSequence(Vector &result, idx_t count, SelectionVector &sel, int64_t start = 0, int64_t increment = 1);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	// Cast the data from the source type to the target type
-	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type);
+	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count);
 	// Cast the data from the source type to the target type
-	static void Cast(Vector &source, Vector &result);
+	static void Cast(Vector &source, Vector &result, idx_t count);
 	// Copy the data of <source> to the target location
 	static void Copy(Vector &source, void *target, idx_t offset = 0, idx_t element_count = 0);
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, idx_t offset = 0);
+	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset = 0);
 	// Append the data of <source> to the target vector
-	static void Append(Vector &source, Vector &target);
+	static void Append(Vector &source, Vector &target, idx_t source_count, idx_t target_offset);
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
 	static void CopyToStorage(Vector &source, void *target, idx_t offset = 0, idx_t element_count = 0);
 	// Reads the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
-	static void ReadFromStorage(Vector &source, Vector &target);
-
-	//===--------------------------------------------------------------------===//
-	// Exec
-	//===--------------------------------------------------------------------===//
-	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun, const SelectionVector &sel) {
-		switch(vector.vector_type) {
-		case VectorType::SEQUENCE_VECTOR: {
-			int64_t start, increment;
-			SequenceVector::GetSequence(vector, start, increment);
-			for (idx_t i = 0; i < vector.size(); i++) {
-				fun((T)(start + increment * sel.get_index(i)));
-			}
-			break;
-		}
-		case VectorType::FLAT_VECTOR: {
-			auto data = FlatVector::GetData<T>(vector);
-			for(idx_t i = 0; i < vector.size(); i++) {
-				fun(data[sel.get_index(i)]);
-			}
-			break;
-		}
-		default:
-			throw NotImplementedException("Unimplemented type for ExecNumeric");
-		}
-	}
-
-	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun) {
-		switch(vector.vector_type) {
-		case VectorType::SEQUENCE_VECTOR: {
-			int64_t start, increment;
-			SequenceVector::GetSequence(vector, start, increment);
-			for (idx_t i = 0; i < vector.size(); i++) {
-				fun((T)(start + increment * i));
-			}
-			break;
-		}
-		case VectorType::CONSTANT_VECTOR: {
-			auto data = ConstantVector::GetData<T>(vector);
-			fun(data[0]);
-			break;
-		}
-		case VectorType::FLAT_VECTOR: {
-			auto data = FlatVector::GetData<T>(vector);
-			for(idx_t i = 0; i < vector.size(); i++) {
-				fun(data[i]);
-			}
-			break;
-		}
-		case VectorType::DICTIONARY_VECTOR: {
-			auto &sel = DictionaryVector::SelectionVector(vector);
-			auto &child = DictionaryVector::Child(vector);
-			VectorOperations::ExecNumeric<T>(child, fun, sel);
-			break;
-		}
-		default:
-			throw NotImplementedException("Unimplemented type for ExecNumeric");
-		}
-	}
+	static void ReadFromStorage(Vector &source, Vector &target, idx_t count);
 };
 } // namespace duckdb

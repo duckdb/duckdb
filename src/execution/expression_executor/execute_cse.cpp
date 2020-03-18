@@ -10,6 +10,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(CommonSubExpress
 	return nullptr;
 }
 
-void ExpressionExecutor::Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(CommonSubExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
 	throw NotImplementedException("FIXME: rework CSE again");
 }

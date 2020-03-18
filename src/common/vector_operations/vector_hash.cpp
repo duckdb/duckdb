@@ -32,49 +32,47 @@ static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict res
 	}
 }
 
-template <class T> void templated_loop_hash(Vector &input, Vector &result) {
-
+template <class T> void templated_loop_hash(Vector &input, Vector &result, idx_t count) {
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;
 
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto result_data = ConstantVector::GetData<uint64_t>(result);
-		result_data[0] = HashOp::Operation(ldata[0], ConstantVector::IsNull(input));
+		*result_data = HashOp::Operation(*ldata, ConstantVector::IsNull(input));
 	} else {
 		result.vector_type = VectorType::FLAT_VECTOR;
 
 		VectorData idata;
-		input.Orrify(idata);
+		input.Orrify(count, idata);
 
-		tight_loop_hash<T>((T*) idata.data, FlatVector::GetData<uint64_t>(result), input.size(), idata.sel, *idata.nullmask);
+		tight_loop_hash<T>((T*) idata.data, FlatVector::GetData<uint64_t>(result), count, idata.sel, *idata.nullmask);
 	}
 }
 
-void VectorOperations::Hash(Vector &input, Vector &result) {
+void VectorOperations::Hash(Vector &input, Vector &result, idx_t count) {
 	assert(result.type == TypeId::HASH);
-	assert(input.SameCardinality(result));
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		templated_loop_hash<int8_t>(input, result);
+		templated_loop_hash<int8_t>(input, result, count);
 		break;
 	case TypeId::INT16:
-		templated_loop_hash<int16_t>(input, result);
+		templated_loop_hash<int16_t>(input, result, count);
 		break;
 	case TypeId::INT32:
-		templated_loop_hash<int32_t>(input, result);
+		templated_loop_hash<int32_t>(input, result, count);
 		break;
 	case TypeId::INT64:
-		templated_loop_hash<int64_t>(input, result);
+		templated_loop_hash<int64_t>(input, result, count);
 		break;
 	case TypeId::FLOAT:
-		templated_loop_hash<float>(input, result);
+		templated_loop_hash<float>(input, result, count);
 		break;
 	case TypeId::DOUBLE:
-		templated_loop_hash<double>(input, result);
+		templated_loop_hash<double>(input, result, count);
 		break;
 	case TypeId::VARCHAR:
-		templated_loop_hash<string_t>(input, result);
+		templated_loop_hash<string_t>(input, result, count);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for hash");
@@ -103,48 +101,47 @@ static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__rest
 	}
 }
 
-template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashes) {
+template <class T> void templated_loop_combine_hash(Vector &input, Vector &hashes, idx_t count) {
 	if (input.vector_type == VectorType::CONSTANT_VECTOR && hashes.vector_type == VectorType::CONSTANT_VECTOR) {
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto hash_data = ConstantVector::GetData<uint64_t>(hashes);
 
-		auto other_hash = HashOp::Operation(ldata[0], ConstantVector::IsNull(input));
-		hash_data[0] = combine_hash(hash_data[0], other_hash);
+		auto other_hash = HashOp::Operation(*ldata, ConstantVector::IsNull(input));
+		*hash_data = combine_hash(*hash_data, other_hash);
 	} else {
 		VectorData idata;
 
-		input.Orrify(idata);
-		hashes.Normalify();
+		input.Orrify(count, idata);
+		hashes.Normalify(count);
 
-		tight_loop_combine_hash<T>((T *)idata.data, FlatVector::GetData<uint64_t>(hashes), input.size(), idata.sel, *idata.nullmask);
+		tight_loop_combine_hash<T>((T *)idata.data, FlatVector::GetData<uint64_t>(hashes), count, idata.sel, *idata.nullmask);
 	}
 }
 
-void VectorOperations::CombineHash(Vector &hashes, Vector &input) {
+void VectorOperations::CombineHash(Vector &hashes, Vector &input, idx_t count) {
 	assert(hashes.type == TypeId::HASH);
-	assert(input.SameCardinality(hashes));
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		templated_loop_combine_hash<int8_t>(input, hashes);
+		templated_loop_combine_hash<int8_t>(input, hashes, count);
 		break;
 	case TypeId::INT16:
-		templated_loop_combine_hash<int16_t>(input, hashes);
+		templated_loop_combine_hash<int16_t>(input, hashes, count);
 		break;
 	case TypeId::INT32:
-		templated_loop_combine_hash<int32_t>(input, hashes);
+		templated_loop_combine_hash<int32_t>(input, hashes, count);
 		break;
 	case TypeId::INT64:
-		templated_loop_combine_hash<int64_t>(input, hashes);
+		templated_loop_combine_hash<int64_t>(input, hashes, count);
 		break;
 	case TypeId::FLOAT:
-		templated_loop_combine_hash<float>(input, hashes);
+		templated_loop_combine_hash<float>(input, hashes, count);
 		break;
 	case TypeId::DOUBLE:
-		templated_loop_combine_hash<double>(input, hashes);
+		templated_loop_combine_hash<double>(input, hashes, count);
 		break;
 	case TypeId::VARCHAR:
-		templated_loop_combine_hash<string_t>(input, hashes);
+		templated_loop_combine_hash<string_t>(input, hashes, count);
 		break;
 	default:
 		throw InvalidTypeException(input.type, "Invalid type for hash");

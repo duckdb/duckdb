@@ -20,18 +20,18 @@ typedef idx_t (*aggregate_size_t)();
 //! The type used for initializing hashed aggregate function states
 typedef void (*aggregate_initialize_t)(data_ptr_t state);
 //! The type used for updating hashed aggregate functions
-typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &state);
+typedef void (*aggregate_update_t)(Vector inputs[], idx_t input_count, Vector &state, idx_t count);
 //! The type used for combining hashed aggregate states (optional)
-typedef void (*aggregate_combine_t)(Vector &state, Vector &combined);
+typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &state, Vector &result);
+typedef void (*aggregate_finalize_t)(Vector &state, Vector &result, idx_t count);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BoundAggregateExpression &expr, ClientContext &context, SQLType& return_type);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
-typedef void (*aggregate_destructor_t)(Vector &state);
+typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
 
 //! The type used for updating simple (non-grouped) aggregate functions
-typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state);
+typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count);
 
 
 
@@ -165,39 +165,39 @@ public:
 	}
 
 	template <class STATE, class T, class OP>
-	static void UnaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states) {
+	static void UnaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
 		assert(input_count == 1);
-		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states);
+		AggregateExecutor::UnaryScatter<STATE, T, OP>(inputs[0], states, count);
 	}
 
 	template <class STATE, class INPUT_TYPE, class OP>
-	static void UnaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state) {
+	static void UnaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
 		assert(input_count == 1);
-		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], state);
+		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], state, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states) {
+	static void BinaryScatterUpdate(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
 		assert(input_count == 2);
-		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], states);
+		AggregateExecutor::BinaryScatter<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], states, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state) {
+	static void BinaryUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
 		assert(input_count == 2);
-		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], state);
+		AggregateExecutor::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>(inputs[0], inputs[1], state, count);
 	}
 
-	template <class STATE, class OP> static void StateCombine(Vector &source, Vector &target) {
-		AggregateExecutor::Combine<STATE, OP>(source, target);
+	template <class STATE, class OP> static void StateCombine(Vector &source, Vector &target, idx_t count) {
+		AggregateExecutor::Combine<STATE, OP>(source, target, count);
 	}
 
-	template <class STATE, class RESULT_TYPE, class OP> static void StateFinalize(Vector &states, Vector &result) {
-		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, result);
+	template <class STATE, class RESULT_TYPE, class OP> static void StateFinalize(Vector &states, Vector &result, idx_t count) {
+		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, result, count);
 	}
 
-	template <class STATE, class OP> static void StateDestroy(Vector &states) {
-		AggregateExecutor::Destroy<STATE, OP>(states);
+	template <class STATE, class OP> static void StateDestroy(Vector &states, idx_t count) {
+		AggregateExecutor::Destroy<STATE, OP>(states, count);
 	}
 };
 

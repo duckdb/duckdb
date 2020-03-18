@@ -27,7 +27,7 @@ static void random_function(DataChunk &args, ExpressionState &state, Vector &res
 
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<double>(result);
-	for(idx_t i = 0; i < result.size(); i++) {
+	for(idx_t i = 0; i < args.size(); i++) {
 		result_data[i] = info.dist(info.context.random_engine);
 	}
 }

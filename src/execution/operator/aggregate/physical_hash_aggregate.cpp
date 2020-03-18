@@ -112,8 +112,8 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
 			aggr.function.initialize(aggr_state.get());
 
-			Vector state_vector(chunk, Value::POINTER((uintptr_t)aggr_state.get()));
-			aggr.function.finalize(state_vector, chunk.data[i]);
+			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			aggr.function.finalize(state_vector, chunk.data[i], 1);
 		}
 		state->finished = true;
 		return;

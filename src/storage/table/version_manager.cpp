@@ -54,14 +54,18 @@ public:
 	void Flush();
 };
 
-void VersionManager::Delete(Transaction &transaction, Vector &row_ids) {
+void VersionManager::Delete(Transaction &transaction, Vector &row_ids, idx_t count) {
 	VersionDeleteState del_state(*this, transaction, base_row);
 
+	VectorData rdata;
+	row_ids.Orrify(count, rdata);
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
-	VectorOperations::ExecNumeric<row_t>(row_ids, [&](row_t idx) {
-		del_state.Delete(idx - base_row);
-	});
+	auto ids = (row_t *) rdata.data;
+	for(idx_t i = 0; i < count; i++) {
+		auto ridx = rdata.sel->get_index(i);
+		del_state.Delete(ids[ridx] - base_row);
+	}
 	del_state.Flush();
 }
 

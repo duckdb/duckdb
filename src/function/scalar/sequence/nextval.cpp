@@ -61,7 +61,6 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 }
 
 static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(result.SameCardinality(args.data[0]));
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
 	assert(args.column_count() == 1 && args.data[0].type == TypeId::VARCHAR);
@@ -73,13 +72,13 @@ static void nextval_function(DataChunk &args, ExpressionState &state, Vector &re
 		// increment the sequence
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<int64_t>(result);
-		for(idx_t i = 0; i < result.size(); i++) {
+		for(idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
 		}
 	} else {
 		// sequence to use comes from the input
-		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, [&](string_t value) {
+		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, args.size(), [&](string_t value) {
 			string schema, seq;
 			string seqname = value.GetString();
 			Catalog::ParseRangeVar(seqname, schema, seq);

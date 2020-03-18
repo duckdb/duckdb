@@ -10,48 +10,47 @@
 using namespace duckdb;
 using namespace std;
 
-template <bool INVERSE> void is_null_loop(Vector &input, Vector &result) {
-	assert(input.SameCardinality(result));
+template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t count) {
 	assert(result.type == TypeId::BOOL);
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;
 		auto result_data = ConstantVector::GetData<bool>(result);
-		result_data[0] = INVERSE ? !ConstantVector::IsNull(input) : ConstantVector::IsNull(input);
+		*result_data = INVERSE ? !ConstantVector::IsNull(input) : ConstantVector::IsNull(input);
 	} else {
 		VectorData data;
-		input.Orrify(data);
+		input.Orrify(count, data);
 
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<bool>(result);
-		for(idx_t i = 0; i < result.size(); i++) {
+		for(idx_t i = 0; i < count; i++) {
 			result_data[i] = INVERSE ? !(*data.nullmask)[data.sel->get_index(i)] : (*data.nullmask)[data.sel->get_index(i)];
 		}
 	}
 }
 
-void VectorOperations::IsNotNull(Vector &input, Vector &result) {
-	is_null_loop<true>(input, result);
+void VectorOperations::IsNotNull(Vector &input, Vector &result, idx_t count) {
+	is_null_loop<true>(input, result, count);
 }
 
-void VectorOperations::IsNull(Vector &input, Vector &result) {
-	is_null_loop<false>(input, result);
+void VectorOperations::IsNull(Vector &input, Vector &result, idx_t count) {
+	is_null_loop<false>(input, result, count);
 }
 
-bool VectorOperations::HasNotNull(Vector &input) {
-	if (input.size() == 0) {
+bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
+	if (count == 0) {
 		return false;
 	}
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		return !ConstantVector::IsNull(input);
 	} else {
 		VectorData data;
-		input.Orrify(data);
+		input.Orrify(count, data);
 
 		if (data.nullmask->none()) {
 			return true;
 		}
-		for(idx_t i = 0; i < input.size(); i++) {
+		for(idx_t i = 0; i < count; i++) {
 			if (!(*data.nullmask)[i]) {
 				return true;
 			}
@@ -60,11 +59,11 @@ bool VectorOperations::HasNotNull(Vector &input) {
 	}
 }
 
-bool VectorOperations::HasNull(Vector &input) {
-	if (input.size() == 0) {
+bool VectorOperations::HasNull(Vector &input, idx_t count) {
+	if (count == 0) {
 		return false;
 	}
-	return !VectorOperations::HasNotNull(input);
+	return !VectorOperations::HasNotNull(input, count);
 }
 
 // idx_t VectorOperations::NotNullSelVector(Vector &vector, SelectionVector &not_null, SelectionVector &null) {

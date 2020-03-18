@@ -18,10 +18,10 @@ template <class OP> static void strcase(const char *input_data, idx_t input_leng
 	output[input_length] = '\0';
 }
 
-template <class OP> static void caseconvert_function(Vector &input, Vector &result) {
+template <class OP> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
 	assert(input.type == TypeId::VARCHAR);
 
-	UnaryExecutor::Execute<string_t, string_t, true>(input, result, [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 
@@ -45,12 +45,12 @@ struct StringToLower {
 
 static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<StringToUpper>(args.data[0], result);
+	caseconvert_function<StringToUpper>(args.data[0], result, args.size());
 }
 
 static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<StringToLower>(args.data[0], result);
+	caseconvert_function<StringToLower>(args.data[0], result, args.size());
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {

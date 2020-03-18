@@ -313,9 +313,8 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
                                Vector &source, idx_t offset, idx_t count) {
-	assert(offset + count <= source.size());
 	VectorData adata;
-	source.Orrify(adata);
+	source.Orrify(count, adata);
 
 	auto sdata = (string_t *) adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
@@ -504,13 +503,13 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 //===--------------------------------------------------------------------===//
 // String Update
 //===--------------------------------------------------------------------===//
-string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
+string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
                                                        idx_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
-	info->count = update.size();
+	info->count = count;
 	auto strings = FlatVector::GetData<string_t>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
-	for (idx_t i = 0; i < update.size(); i++) {
+	for (idx_t i = 0; i < count; i++) {
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
@@ -523,7 +522,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 	return info;
 }
 
-string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
+string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t update_count,
                                                       idx_t vector_offset, StringUpdateInfo &update_info) {
 	auto info = make_unique<StringUpdateInfo>();
 
@@ -551,14 +550,14 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	};
 
 	info->count =
-	    merge_loop(ids, update_info.ids, update.size(), update_info.count, vector_offset, merge, pick_new, pick_old);
+	    merge_loop(ids, update_info.ids, update_count, update_info.count, vector_offset, merge, pick_new, pick_old);
 	return info;
 }
 
 //===--------------------------------------------------------------------===//
 // Update Info
 //===--------------------------------------------------------------------===//
-void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids, idx_t vector_offset,
+void StringSegment::MergeUpdateInfo(UpdateInfo *node, row_t *ids, idx_t update_count, idx_t vector_offset,
                                     string_location_t base_data[], nullmask_t base_nullmask) {
 	auto info_data = (string_location_t *)node->tuple_data;
 
@@ -591,14 +590,14 @@ void StringSegment::MergeUpdateInfo(UpdateInfo *node, Vector &update, row_t *ids
 		node->tuples[count] = id;
 	};
 	// perform the merge
-	node->N = merge_loop(ids, old_ids, update.size(), node->N, vector_offset, merge, pick_new, pick_old);
+	node->N = merge_loop(ids, old_ids, update_count, node->N, vector_offset, merge, pick_new, pick_old);
 }
 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
 void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-                           row_t *ids, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
+                           row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
 	if (!string_updates) {
 		string_updates = unique_ptr<string_update_info_t[]>(new string_update_info_t[max_vector_count]);
 	}
@@ -612,21 +611,21 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 	// fetch the original string locations and copy the original nullmask
 	string_location_t string_locations[STANDARD_VECTOR_SIZE];
 	nullmask_t original_nullmask = base_nullmask;
-	FetchStringLocations(baseptr, ids, vector_index, vector_offset, update.size(), string_locations);
+	FetchStringLocations(baseptr, ids, vector_index, vector_offset, count, string_locations);
 
 	string_update_info_t new_update_info;
 	// next up: create the updates
 	if (!string_updates[vector_index]) {
 		// no string updates yet, allocate a block and place the updates there
-		new_update_info = CreateStringUpdate(stats, update, ids, vector_offset);
+		new_update_info = CreateStringUpdate(stats, update, ids, count, vector_offset);
 	} else {
 		// string updates already exist, merge the string updates together
-		new_update_info = MergeStringUpdate(stats, update, ids, vector_offset, *string_updates[vector_index]);
+		new_update_info = MergeStringUpdate(stats, update, ids, count, vector_offset, *string_updates[vector_index]);
 	}
 
 	// now update the original nullmask
 	auto &update_nullmask = FlatVector::Nullmask(update);
-	for (idx_t i = 0; i < update.size(); i++) {
+	for (idx_t i = 0; i < count; i++) {
 		base_nullmask[ids[i] - vector_offset] = update_nullmask[i];
 	}
 
@@ -634,15 +633,15 @@ void StringSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Tr
 	// create the update node
 	if (!node) {
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(column_data, transaction, ids, update.size(), vector_index, vector_offset,
+		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset,
 		                        sizeof(string_location_t));
 
 		// copy the string location data into the undo buffer
 		node->nullmask = original_nullmask;
-		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * update.size());
+		memcpy(node->tuple_data, string_locations, sizeof(string_location_t) * count);
 	} else {
 		// node in the update info already exists, merge the new updates in
-		MergeUpdateInfo(node, update, ids, vector_offset, string_locations, original_nullmask);
+		MergeUpdateInfo(node, ids, count, vector_offset, string_locations, original_nullmask);
 	}
 	// finally move the string updates in place
 	string_updates[vector_index] = move(new_update_info);

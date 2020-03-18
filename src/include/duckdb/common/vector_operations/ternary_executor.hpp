@@ -46,8 +46,7 @@ private:
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
 	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
-	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, FUN fun) {
-		assert(a.SameCardinality(b) && a.SameCardinality(c) && a.SameCardinality(result));
+	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
 		if (a.vector_type == VectorType::CONSTANT_VECTOR && b.vector_type == VectorType::CONSTANT_VECTOR && c.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
@@ -63,16 +62,16 @@ public:
 			result.vector_type = VectorType::FLAT_VECTOR;
 
 			VectorData adata, bdata, cdata;
-			a.Orrify(adata);
-			b.Orrify(bdata);
-			c.Orrify(cdata);
+			a.Orrify(count, adata);
+			b.Orrify(count, bdata);
+			c.Orrify(count, cdata);
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
 				(A_TYPE*) adata.data,
 				(B_TYPE*) bdata.data,
 				(C_TYPE*) cdata.data,
 				FlatVector::GetData<RESULT_TYPE>(result),
-				result.size(),
+				count,
 				*adata.sel,
 				*bdata.sel,
 				*cdata.sel,
@@ -120,8 +119,7 @@ private:
 	}
 public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
-	static idx_t Select(Vector &a, Vector &b, Vector &c, SelectionVector &true_sel, SelectionVector &false_sel) {
-		assert(a.SameCardinality(b) && a.SameCardinality(c));
+	static idx_t Select(Vector &a, Vector &b, Vector &c, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 		if (a.vector_type == VectorType::CONSTANT_VECTOR && b.vector_type == VectorType::CONSTANT_VECTOR && c.vector_type == VectorType::CONSTANT_VECTOR) {
 			auto adata = ConstantVector::GetData<A_TYPE>(a);
 			auto bdata = ConstantVector::GetData<B_TYPE>(b);
@@ -130,19 +128,19 @@ public:
 				ConstantVector::IsNull(c) || !OP::Operation(*adata, *bdata, *cdata)) {
 				return 0;
 			} else {
-				return a.size();
+				return count;
 			}
 		} else {
 			VectorData adata, bdata, cdata;
-			a.Orrify(adata);
-			b.Orrify(bdata);
-			c.Orrify(cdata);
+			a.Orrify(count, adata);
+			b.Orrify(count, bdata);
+			c.Orrify(count, cdata);
 
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP>(
 				(A_TYPE*) adata.data,
 				(B_TYPE*) bdata.data,
 				(C_TYPE*) cdata.data,
-				a.size(),
+				count,
 				*adata.sel,
 				*bdata.sel,
 				*cdata.sel,

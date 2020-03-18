@@ -26,10 +26,10 @@ struct ValueOperations {
 	static Value Divide(const Value &left, const Value &right);
 	// A % B
 	static Value Modulo(const Value &left, const Value &right);
-	// MIN(A, B)
-	static Value Min(const Value &left, const Value &right);
-	// MAX(A, B)
-	static Value Max(const Value &left, const Value &right);
+	// // MIN(A, B)
+	// static Value Min(const Value &left, const Value &right);
+	// // MAX(A, B)
+	// static Value Max(const Value &left, const Value &right);
 	//===--------------------------------------------------------------------===//
 	// Comparison Operations
 	//===--------------------------------------------------------------------===//

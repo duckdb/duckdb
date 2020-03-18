@@ -22,16 +22,6 @@ typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
 
-class VectorCardinality {
-public:
-	VectorCardinality() : count(0) {
-	}
-	VectorCardinality(idx_t count) : count(count) {
-	}
-
-	idx_t count;
-};
-
 struct VectorData {
 	const SelectionVector *sel;
 	data_ptr_t data;
@@ -54,20 +44,20 @@ class Vector {
 
 	friend class DataChunk;
 public:
-	Vector(const VectorCardinality &cardinality);
+	Vector();
 	//! Create a vector of size one holding the passed on value
-	Vector(const VectorCardinality &cardinality, Value value);
+	Vector(Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(const VectorCardinality &cardinality, TypeId type);
+	Vector(TypeId type);
 	//! Create a non-owning vector that references the specified data
-	Vector(const VectorCardinality &cardinality, TypeId type, data_ptr_t dataptr);
+	Vector(TypeId type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(const VectorCardinality &cardinality, TypeId type, bool create_data, bool zero_data);
+	Vector(TypeId type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -79,19 +69,6 @@ public:
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
 public:
-	idx_t size() const {
-		return vcardinality.count;
-	}
-	const VectorCardinality &cardinality() const {
-		return vcardinality;
-	}
-	bool SameCardinality(const Vector &other) const {
-		return size() == other.size();
-	}
-	bool SameCardinality(const VectorCardinality &other) const {
-		return size() == other.count;
-	}
-
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
 	//! Causes this vector to reference the data held by the other vector.
@@ -108,28 +85,29 @@ public:
 	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
+	string ToString(idx_t count) const;
+	void Print(idx_t count);
+
 	string ToString() const;
 	void Print();
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	void Normalify();
+	void Normalify(idx_t count);
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
-	void Orrify(VectorData &data);
+	void Orrify(idx_t count, VectorData &data);
 
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	void Verify();
+	void Verify(idx_t count);
 
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, Value val);
 protected:
-	//! The cardinality of the vector
-	const VectorCardinality &vcardinality;
 	//! A pointer to the data.
 	data_ptr_t data;
 	//! The nullmask of the vector
@@ -144,7 +122,7 @@ protected:
 //! The DictionaryBuffer holds a selection vector
 class VectorChildBuffer : public VectorBuffer {
 public:
-	VectorChildBuffer(const VectorCardinality &cardinality) : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(cardinality) {
+	VectorChildBuffer() : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data() {
 	}
 public:
 	Vector data;
@@ -228,8 +206,8 @@ struct ListVector {
 };
 
 struct StringVector {
-	static void MoveStringsToHeap(Vector &vector, StringHeap &heap);
-	static void MoveStringsToHeap(Vector &vector, StringHeap &heap, SelectionVector &sel);
+	static void MoveStringsToHeap(Vector &vector, idx_t count, StringHeap &heap);
+	static void MoveStringsToHeap(Vector &vector, idx_t count, StringHeap &heap, SelectionVector &sel);
 
 	//! Add a string to the string heap of the vector (auxiliary data)
 	static string_t AddString(Vector &vector, const char *data, idx_t len);
@@ -263,20 +241,23 @@ struct SequenceVector {
 
 class StandaloneVector : public Vector {
 public:
-	StandaloneVector() : Vector(owned_cardinality) {
+	StandaloneVector() : Vector() {
 	}
-	StandaloneVector(TypeId type) : Vector(owned_cardinality, type) {
+	StandaloneVector(TypeId type) : Vector(type) {
 	}
-	StandaloneVector(TypeId type, data_ptr_t dataptr) : Vector(owned_cardinality, type, dataptr) {
+	StandaloneVector(TypeId type, data_ptr_t dataptr) : Vector(type, dataptr) {
 	}
 
 public:
+	idx_t size() {
+		return count;
+	}
 	void SetCount(idx_t count) {
 		assert(count <= STANDARD_VECTOR_SIZE);
-		owned_cardinality.count = count;
+		this->count = count;
 	}
 protected:
-	VectorCardinality owned_cardinality;
+	idx_t count;
 };
 
 } // namespace duckdb

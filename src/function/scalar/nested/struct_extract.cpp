@@ -7,15 +7,15 @@ using namespace std;
 
 namespace duckdb {
 
-static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector &result) {
+static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	assert(input.column_count() == 1);
-	auto &vec = input.data[0];
+	assert(args.column_count() == 1);
+	auto &vec = args.data[0];
 
-	vec.Verify();
+	vec.Verify(args.size());
 	auto &children = StructVector::GetEntries(vec);
 	if (info.index >= children.size()) {
 		throw Exception("Not enough struct entries for struct_extract");
@@ -25,7 +25,7 @@ static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector 
 		throw Exception("Struct key or type mismatch");
 	}
 	result.Reference(*child.second.get());
-	result.Verify();
+	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &expr, ClientContext &context) {

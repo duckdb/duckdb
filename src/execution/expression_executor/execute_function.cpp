@@ -24,15 +24,15 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, Vector &result) {
+void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, Vector &result, idx_t count) {
 	auto state = (FunctionState *)state_;
 	DataChunk arguments;
+	arguments.SetCardinality(count);
 	if (state->child_types.size() > 0) {
 		arguments.Initialize(state->child_types);
-		arguments.SetCardinality(GetCardinality());
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			assert(state->child_types[i] == expr.children[i]->return_type);
-			Execute(*expr.children[i], state->child_states[i].get(), arguments.data[i]);
+			Execute(*expr.children[i], state->child_states[i].get(), arguments.data[i], count);
 		}
 		arguments.Verify();
 	}

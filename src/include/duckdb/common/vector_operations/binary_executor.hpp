@@ -86,13 +86,13 @@ private:
 			ConstantVector::SetNull(result, true);
 			return;
 		}
-		result_data[0] = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
-			fun, ldata[0], rdata[0], ConstantVector::Nullmask(result), 0);
+		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
+			fun, *ldata, *rdata, ConstantVector::Nullmask(result), 0);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, FUNC fun) {
+	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
 		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
 
@@ -112,7 +112,7 @@ private:
 		} else {
 			FlatVector::SetNullmask(result, FlatVector::Nullmask(left) | FlatVector::Nullmask(right));
 		}
-		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, result_data, result.size(), FlatVector::Nullmask(result), fun);
+		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, result_data, count, FlatVector::Nullmask(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
@@ -144,67 +144,66 @@ private:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
 	          bool IGNORE_NULL>
-	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, FUNC fun) {
+	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		VectorData ldata, rdata;
 
-		left.Orrify(ldata);
-		right.Orrify(rdata);
+		left.Orrify(count, ldata);
+		right.Orrify(count, rdata);
 
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, result_data, ldata.sel, rdata.sel, result.size(), *ldata.nullmask, *rdata.nullmask, FlatVector::Nullmask(result), fun);
+		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, result_data, ldata.sel, rdata.sel, count, *ldata.nullmask, *rdata.nullmask, FlatVector::Nullmask(result), fun);
 	}
 
 
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
-	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, FUNC fun) {
-		assert(left.SameCardinality(right) && left.SameCardinality(result));
+	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, fun);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true>(left, right, result, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true>(left, right, result, count, fun);
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false>(left, right, result, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false>(left, right, result, count, fun);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false>(left, right, result, fun);
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false>(left, right, result, count, fun);
 		} else {
-			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, fun);
+			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result, count, fun);
 		}
 	}
 
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,
 	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
-	static void Execute(Vector &left, Vector &right, Vector &result, FUNC fun) {
+	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC, IGNORE_NULL>(left, right,
-		                                                                                                result, fun);
+		                                                                                                result, count, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false,
 	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
-	static void Execute(Vector &left, Vector &right, Vector &result) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(left, right, result, false);
+	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(left, right, result, count, false);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
-	static void ExecuteStandard(Vector &left, Vector &right, Vector &result) {
+	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool, IGNORE_NULL>(
-		    left, right, result, false);
+		    left, right, result, count, false);
 	}
 
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t SelectConstant(Vector &left, Vector &right, SelectionVector &true_sel, SelectionVector &false_sel) {
+	static idx_t SelectConstant(Vector &left, Vector &right, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
 
 		// both sides are constant, return either 0 or the count
 		// in this case we do not fill in the result selection vector at all
-		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right) || !OP::Operation(ldata[0], rdata[0])) {
+		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right) || !OP::Operation(*ldata, *rdata)) {
 			return 0;
 		} else {
-			return left.size();
+			return count;
 		}
 	}
 
@@ -237,7 +236,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
-	static idx_t SelectFlat(Vector &left, Vector &right, SelectionVector &true_sel, SelectionVector &false_sel) {
+	static idx_t SelectFlat(Vector &left, Vector &right, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
 		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
 
@@ -249,12 +248,12 @@ public:
 		}
 
 		if (LEFT_CONSTANT) {
-			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, left.size(), FlatVector::Nullmask(right));
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, count, FlatVector::Nullmask(right));
 		} else if (RIGHT_CONSTANT) {
-			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, left.size(), FlatVector::Nullmask(left));
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, count, FlatVector::Nullmask(left));
 		} else {
 			auto nullmask = FlatVector::Nullmask(left) | FlatVector::Nullmask(right);
-			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, left.size(), nullmask);
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT>(ldata, rdata, true_sel, false_sel, count, nullmask);
 		}
 	}
 
@@ -286,28 +285,27 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t SelectGeneric(Vector &left, Vector &right, SelectionVector &true_sel, SelectionVector &false_sel) {
+	static idx_t SelectGeneric(Vector &left, Vector &right, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 		VectorData ldata, rdata;
 
-		left.Orrify(ldata);
-		right.Orrify(rdata);
+		left.Orrify(count, ldata);
+		right.Orrify(count, rdata);
 
-		SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, ldata.sel, rdata.sel, left.size(), *ldata.nullmask, *rdata.nullmask, true_sel, false_sel);
+		SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, ldata.sel, rdata.sel, count, *ldata.nullmask, *rdata.nullmask, true_sel, false_sel);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static idx_t Select(Vector &left, Vector &right, SelectionVector &true_sel, SelectionVector &false_sel) {
-		assert(left.SameCardinality(right));
+	static idx_t Select(Vector &left, Vector &right, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			return SelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, true_sel, false_sel);
+			return SelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, count, true_sel, false_sel);
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, true_sel, false_sel);
+			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, true, false>(left, right, count, true_sel, false_sel);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(left, right, true_sel, false_sel);
+			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, true>(left, right, count, true_sel, false_sel);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, true_sel, false_sel);
+			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, count, true_sel, false_sel);
 		} else {
-			return SelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, true_sel, false_sel);
+			return SelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, count, true_sel, false_sel);
 		}
 	}
 };

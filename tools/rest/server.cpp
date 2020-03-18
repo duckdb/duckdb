@@ -55,12 +55,10 @@ struct RestClientState {
 
 enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
-template <class T, class TARGET> static void assign_json_loop(Vector *v, idx_t col_idx, json &j) {
-	assert(v->vector_type == VectorType::FLAT_VECTOR);
-
-	auto data_ptr = FlatVector::GetData<T>(*v);
-	auto &nullmask = FlatVector::Nullmask(*v);
-	for(idx_t i = 0; i < v->size(); i++) {
+template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
+	auto data_ptr = FlatVector::GetData<T>(v);
+	auto &nullmask = FlatVector::Nullmask(v);
+	for(idx_t i = 0; i < count; i++) {
 		if (!nullmask[i]) {
 			j["data"][col_idx] += (TARGET)data_ptr[i];
 
@@ -72,48 +70,48 @@ template <class T, class TARGET> static void assign_json_loop(Vector *v, idx_t c
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2(*chunk, TypeId::VARCHAR);
+	Vector v2(TypeId::VARCHAR);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 		Vector *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
 		case SQLTypeId::TIMESTAMP: {
-			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR);
+			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR, chunk->size());
 			v = &v2;
 			break;
 		}
 		default:
 			break;
 		}
-		v->Normalify();
+		v->Normalify(chunk->size());
 		assert(v);
 		switch (v->type) {
 		case TypeId::BOOL:
-			assign_json_loop<bool, int64_t>(v, col_idx, j);
+			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(),j);
 			break;
 		case TypeId::INT8:
-			assign_json_loop<int8_t, int64_t>(v, col_idx, j);
+			assign_json_loop<int8_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::INT16:
-			assign_json_loop<int16_t, int64_t>(v, col_idx, j);
+			assign_json_loop<int16_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::INT32:
-			assign_json_loop<int32_t, int64_t>(v, col_idx, j);
+			assign_json_loop<int32_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::INT64:
-			assign_json_loop<int64_t, int64_t>(v, col_idx, j);
+			assign_json_loop<int64_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::FLOAT:
-			assign_json_loop<float, double>(v, col_idx, j);
+			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::DOUBLE:
-			assign_json_loop<float, double>(v, col_idx, j);
+			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::VARCHAR: {
 			auto data_ptr = FlatVector::GetData<string_t>(*v);
 			auto &nullmask = FlatVector::Nullmask(*v);
-			for(idx_t i = 0; i < v->size(); i++) {
+			for(idx_t i = 0; i < chunk->size(); i++) {
 				if (!nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i].GetData();
 

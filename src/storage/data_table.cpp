@@ -171,10 +171,10 @@ void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableInde
 // Fetch
 //===--------------------------------------------------------------------===//
 void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids,
-                      Vector &row_identifiers, TableIndexScanState &state) {
+                      Vector &row_identifiers, idx_t fetch_count, TableIndexScanState &state) {
 	// first figure out which row identifiers we should use for this transaction by looking at the VersionManagers
 	row_t rows[STANDARD_VECTOR_SIZE];
-	idx_t count = FetchRows(transaction, row_identifiers, rows);
+	idx_t count = FetchRows(transaction, row_identifiers, fetch_count, rows);
 
 	if (count == 0) {
 		// no rows to use
@@ -202,7 +202,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 	}
 }
 
-idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]) {
+idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]) {
 	assert(row_identifiers.type == ROW_TYPE);
 
 	// obtain a read lock on the version managers
@@ -213,7 +213,7 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, ro
 	idx_t count = 0;
 
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	for(idx_t i = 0; i < row_identifiers.size(); i++) {
+	for(idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
 		bool use_row;
 		if ((idx_t)row_id < persistent_manager.max_row) {
@@ -234,15 +234,15 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, ro
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, string &col_name) {
-	if (VectorOperations::HasNull(vector)) {
+static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, string &col_name) {
+	if (VectorOperations::HasNull(vector, count)) {
 		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(), col_name.c_str());
 	}
 }
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(chunk, TypeId::INT32);
+	Vector result(TypeId::INT32);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
@@ -251,10 +251,10 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
 	}
 	VectorData vdata;
-	result.Orrify(vdata);
+	result.Orrify(chunk.size(), vdata);
 
 	auto dataptr = (int32_t*) vdata.data;
-	for (idx_t i = 0; i < result.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx] && dataptr[idx] == 0) {
 			throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
@@ -267,7 +267,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			VerifyNotNullConstraint(table, chunk.data[not_null.index], table.columns[not_null.index].name);
+			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(), table.columns[not_null.index].name);
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -333,7 +333,7 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 
 	// append the physical data to each of the entries
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].Append(state.states[i], chunk.data[i]);
+		columns[i].Append(state.states[i], chunk.data[i], chunk.size());
 	}
 	cardinality += chunk.size();
 	state.current_row += chunk.size();
@@ -363,7 +363,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return true;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(chunk, ROW_TYPE);
+	Vector row_identifiers(ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, row_start, 1);
 
 	idx_t failed_index = INVALID_INDEX;
@@ -390,7 +390,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 		return;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(chunk, ROW_TYPE);
+	Vector row_identifiers(ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, row_start, 1);
 
 	// now remove the entries from the indices
@@ -403,53 +403,52 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 	}
 }
 
-void DataTable::RemoveFromIndexes(Vector &row_identifiers) {
-	throw NotImplementedException("FIXME: remove from indexes");
-	// auto row_ids = (row_t *)row_identifiers.GetData();
-	// // create a selection vector from the row_ids
-	// sel_t sel[STANDARD_VECTOR_SIZE];
-	// for (idx_t i = 0; i < row_identifiers.size(); i++) {
-	// 	sel[i] = row_ids[i] % STANDARD_VECTOR_SIZE;
-	// }
+void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	// create a selection vector from the row_ids
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < count; i++) {
+		sel.set_index(i, row_ids[i] % STANDARD_VECTOR_SIZE);
+	}
 
-	// // fetch the data for these row identifiers
-	// DataChunk result;
-	// result.Initialize(types);
-	// // FIXME: we do not need to fetch all columns, only the columns required by the indices!
-	// auto states = unique_ptr<ColumnScanState[]>(new ColumnScanState[types.size()]);
-	// for (idx_t i = 0; i < types.size(); i++) {
-	// 	columns[i].Fetch(states[i], row_ids[0], result.data[i]);
-	// }
-	// result.SetCardinality(row_identifiers.size(), sel);
-	// for (idx_t i = 0; i < indexes.size(); i++) {
-	// 	indexes[i]->Delete(result, row_identifiers);
-	// }
+	// fetch the data for these row identifiers
+	DataChunk result;
+	result.Initialize(types);
+	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
+	auto states = unique_ptr<ColumnScanState[]>(new ColumnScanState[types.size()]);
+	for (idx_t i = 0; i < types.size(); i++) {
+		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
+	}
+	result.SetCardinality(count, sel);
+	for (idx_t i = 0; i < indexes.size(); i++) {
+		indexes[i]->Delete(result, row_identifiers);
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers) {
+void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
 	assert(row_identifiers.type == ROW_TYPE);
-	if (row_identifiers.size() == 0) {
+	if (count == 0) {
 		return;
 	}
 
 	auto &transaction = Transaction::GetTransaction(context);
 
-	row_identifiers.Normalify();
+	row_identifiers.Normalify(count);
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto first_id = ids[0];
 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
-		transaction.storage.Delete(this, row_identifiers);
+		transaction.storage.Delete(this, row_identifiers, count);
 	} else if ((idx_t)first_id < persistent_manager.max_row) {
 		// deletion is in persistent storage: delete in the persistent version manager
-		persistent_manager.Delete(transaction, row_identifiers);
+		persistent_manager.Delete(transaction, row_identifiers, count);
 	} else {
 		// deletion is in transient storage: delete in the persistent version manager
-		transient_manager.Delete(transaction, row_identifiers);
+		transient_manager.Delete(transaction, row_identifiers, count);
 	}
 }
 
@@ -500,7 +499,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == not_null.index) {
 					// found the column id: check the data in
-					VerifyNotNullConstraint(table, chunk.data[i], table.columns[not_null.index].name);
+					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].name);
 					break;
 				}
 			}
@@ -534,10 +533,9 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
                        vector<column_t> &column_ids, DataChunk &updates) {
 	assert(row_ids.type == ROW_TYPE);
-	assert(updates.size() == row_ids.size());
 
 	updates.Verify();
-	if (row_ids.size() == 0) {
+	if (updates.size() == 0) {
 		return;
 	}
 
@@ -547,7 +545,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);
 
-	row_ids.Normalify();
+	row_ids.Normalify(updates.size());
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		// update is in transaction-local storage: push update into local storage
@@ -559,7 +557,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto column = column_ids[i];
 		assert(column != COLUMN_IDENTIFIER_ROW_ID);
 
-		columns[column].Update(transaction, updates.data[i], row_ids);
+		columns[column].Update(transaction, updates.data[i], row_ids, updates.size());
 	}
 }
 
