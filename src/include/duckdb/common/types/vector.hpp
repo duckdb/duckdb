@@ -157,11 +157,11 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline SelectionVector &SelectionVector(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer&) vector.buffer).GetSelVector();
+		return ((DictionaryBuffer&) *vector.buffer).GetSelVector();
 	}
 	static inline Vector &Child(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer&) vector.auxiliary).data;
+		return ((VectorChildBuffer&) *vector.auxiliary).data;
 	}
 };
 

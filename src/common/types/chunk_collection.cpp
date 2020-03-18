@@ -31,7 +31,6 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		return;
 	}
 	new_chunk.Verify();
-	new_chunk.Normalify();
 
 	// we have to ensure that every chunk in the ChunkCollection is completely
 	// filled, otherwise our O(1) lookup in GetValue and SetValue does not work

@@ -32,27 +32,43 @@ struct UnaryLambdaWrapper {
 
 struct UnaryExecutor {
 private:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool HAS_SEL_VECTOR>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
 	                               const SelectionVector *__restrict sel_vector, nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (IGNORE_NULL && nullmask.any()) {
-			if (!HAS_SEL_VECTOR) {
-				result_nullmask = nullmask;
-			}
 			for(idx_t i = 0; i < count; i++) {
-				auto idx = HAS_SEL_VECTOR ? i : sel_vector->get_index(i);
+				auto idx = sel_vector->get_index(i);
 				if (!nullmask[idx]) {
 					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx]);
-				} else if (HAS_SEL_VECTOR) {
+				} else {
 					result_nullmask[i] = true;
 				}
 			}
 		} else {
 			for(idx_t i = 0; i < count; i++) {
-				auto idx = HAS_SEL_VECTOR ? i : sel_vector->get_index(i);
+				auto idx = sel_vector->get_index(i);
 				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx]);
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
+	static inline void ExecuteFlat(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
+	                               nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
+		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
+
+		if (IGNORE_NULL && nullmask.any()) {
+			result_nullmask = nullmask;
+			for(idx_t i = 0; i < count; i++) {
+				if (!nullmask[i]) {
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
+				}
+			}
+		} else {
+			for(idx_t i = 0; i < count; i++) {
+				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i]);
 			}
 		}
 	}
@@ -82,7 +98,7 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(child);
 
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true>(
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
 			    ldata, result_data, count, &sel, FlatVector::Nullmask(child), FlatVector::Nullmask(result), fun);
 			break;
 		}
@@ -93,8 +109,8 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false>(
-			    ldata, result_data, count, nullptr, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
+			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
+			    ldata, result_data, count, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
 			break;
 		}
 		}
