@@ -18,7 +18,7 @@ struct HashOp {
 
 template <class T>
 static inline void tight_loop_hash(T *__restrict ldata, uint64_t *__restrict result_data, idx_t count,
-                                   SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+                                   const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for(idx_t i = 0; i < count; i++) {
 			auto idx = sel_vector->get_index(i);
@@ -87,7 +87,7 @@ static inline uint64_t combine_hash(uint64_t a, uint64_t b) {
 
 template <class T>
 static inline void tight_loop_combine_hash(T *__restrict ldata, uint64_t *__restrict hash_data, idx_t count,
-                                           SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
+                                          const SelectionVector *__restrict sel_vector, nullmask_t &nullmask) {
 	if (nullmask.any()) {
 		for(idx_t i = 0; i < count; i++) {
 			auto idx = sel_vector->get_index(i);

@@ -157,7 +157,7 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Exec
 	//===--------------------------------------------------------------------===//
-	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun, SelectionVector &sel) {
+	template <typename T, class FUNC> static void ExecNumeric(Vector &vector, FUNC &&fun, const SelectionVector &sel) {
 		switch(vector.vector_type) {
 		case VectorType::SEQUENCE_VECTOR: {
 			int64_t start, increment;

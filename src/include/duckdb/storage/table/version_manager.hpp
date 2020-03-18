@@ -39,7 +39,7 @@ public:
 public:
 	//! For a given chunk index, fills the selection vector with the relevant tuples for a given transaction. If count
 	//! == max_count, all tuples are relevant and the selection vector is not set
-	idx_t GetSelVector(Transaction &transaction, idx_t index, sel_t sel_vector[], idx_t max_count);
+	idx_t GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector, idx_t max_count);
 
 	//! Fetch a specific row from the VersionManager, returns true if the row should be used for the transaction and
 	//! false otherwise.

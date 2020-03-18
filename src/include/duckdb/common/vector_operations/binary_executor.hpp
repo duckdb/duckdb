@@ -117,7 +117,7 @@ private:
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL>
 	static void ExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
-	                        RESULT_TYPE *__restrict result_data, SelectionVector *__restrict lsel, SelectionVector *__restrict rsel, idx_t count,
+	                        RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel, idx_t count,
 	                        nullmask_t &lnullmask, nullmask_t &rnullmask, nullmask_t &result_nullmask, FUNC fun) {
 		if (lnullmask.any() || rnullmask.any()) {
 			for(idx_t i = 0; i < count; i++) {
@@ -259,7 +259,7 @@ public:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
-	static inline idx_t SelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, SelectionVector *__restrict lsel, SelectionVector *__restrict rsel, idx_t count, nullmask_t &lnullmask, nullmask_t &rnullmask, SelectionVector &true_sel, SelectionVector &false_sel) {
+	static inline idx_t SelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata, const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel, idx_t count, nullmask_t &lnullmask, nullmask_t &rnullmask, SelectionVector &true_sel, SelectionVector &false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		if (lnullmask.any() || rnullmask.any()) {
 			for(idx_t i = 0; i < count; i++) {

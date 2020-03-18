@@ -5,7 +5,7 @@ add_library_unity(duckdb_vector_operations
                   vector_cast.cpp
                   comparison_operators.cpp
                   comparison_select_operators.cpp
-                  copy.cpp
+                  vector_copy.cpp
                   generators.cpp
                   gather.cpp
                   vector_hash.cpp

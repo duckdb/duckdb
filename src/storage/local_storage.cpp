@@ -51,50 +51,63 @@ void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 }
 
 void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
-	throw NotImplementedException("FIXME local scan");
-	// if (!state.storage || state.chunk_index > state.max_index) {
-	// 	// nothing left to scan
-	// 	result.Reset();
-	// 	return;
-	// }
-	// auto &chunk = *state.storage->collection.chunks[state.chunk_index];
-	// idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
-	// idx_t count = chunk_count;
+	if (!state.storage || state.chunk_index > state.max_index) {
+		// nothing left to scan
+		result.Reset();
+		return;
+	}
+	auto &chunk = *state.storage->collection.chunks[state.chunk_index];
+	idx_t chunk_count = state.chunk_index == state.max_index ? state.last_chunk_count : chunk.size();
+	idx_t count = chunk_count;
 
-	// // first create a selection vector from the deleted entries (if any)
-	// sel_t *sel_vector = nullptr;
-	// auto entry = state.storage->deleted_entries.find(state.chunk_index);
-	// if (entry != state.storage->deleted_entries.end()) {
-	// 	// deleted entries! create a selection vector
-	// 	auto deleted = entry->second.get();
-	// 	sel_vector = state.sel_vector_data;
-	// 	idx_t new_count = 0;
-	// 	for (idx_t i = 0; i < count; i++) {
-	// 		if (!deleted[i]) {
-	// 			sel_vector[new_count++] = i;
-	// 		}
-	// 	}
-	// 	if (new_count == 0 && count > 0) {
-	// 		// all entries in this chunk were deleted: continue to next chunk
-	// 		state.chunk_index++;
-	// 		Scan(state, column_ids, result);
-	// 		return;
-	// 	}
-	// 	count = new_count;
-	// }
+	// first create a selection vector from the deleted entries (if any)
+	SelectionVector sel;
+	auto entry = state.storage->deleted_entries.find(state.chunk_index);
+	if (entry != state.storage->deleted_entries.end()) {
+		// deleted entries! create a selection vector
+		auto deleted = entry->second.get();
+		idx_t new_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			if (!deleted[i]) {
+				sel.set_index(new_count++, i);
+			}
+		}
+		if (new_count == 0 && count > 0) {
+			// all entries in this chunk were deleted: continue to next chunk
+			state.chunk_index++;
+			Scan(state, column_ids, result);
+			return;
+		}
+		count = new_count;
+	}
 
-	// // now scan the vectors of the chunk
-	// for (idx_t i = 0; i < column_ids.size(); i++) {
-	// 	auto id = column_ids[i];
-	// 	if (id == COLUMN_IDENTIFIER_ROW_ID) {
-	// 		// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-	// 		result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
-	// 	} else {
-	// 		result.data[i].Reference(chunk.data[id]);
-	// 	}
-	// }
-	// result.SetCardinality(count, sel_vector);
-	// state.chunk_index++;
+	if (count == chunk_count) {
+		// now scan the vectors of the chunk
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto id = column_ids[i];
+			if (id == COLUMN_IDENTIFIER_ROW_ID) {
+				// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+				result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
+			} else {
+				result.data[i].Reference(chunk.data[id]);
+			}
+		}
+		result.SetCardinality(chunk_count);
+	} else {
+		throw NotImplementedException("FIXME: apply selection vector to chunk");
+		// // now scan the vectors of the chunk
+		// for (idx_t i = 0; i < column_ids.size(); i++) {
+		// 	auto id = column_ids[i];
+		// 	if (id == COLUMN_IDENTIFIER_ROW_ID) {
+		// 		// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+		// 		result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
+		// 	} else {
+		// 		result.data[i].Reference(chunk.data[id]);
+		// 	}
+		// }
+		// result.SetCardinality(count, sel_vector);
+	}
+	state.chunk_index++;
 }
 
 void LocalStorage::Append(DataTable *table, DataChunk &chunk) {

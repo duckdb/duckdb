@@ -20,7 +20,7 @@ private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUN>
 	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               RESULT_TYPE *__restrict result_data, idx_t count,
-								   SelectionVector &asel, SelectionVector &bsel, SelectionVector &csel,
+								   const SelectionVector &asel, const SelectionVector &bsel, const SelectionVector &csel,
 								   nullmask_t &anullmask, nullmask_t &bnullmask, nullmask_t &cnullmask,
 	                               nullmask_t &result_nullmask, FUN fun) {
 		if (anullmask.any() || bnullmask.any() || cnullmask.any()) {
@@ -88,7 +88,7 @@ private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
 	static inline idx_t SelectLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               idx_t count,
-								   SelectionVector &asel, SelectionVector &bsel, SelectionVector &csel,
+								   const SelectionVector &asel, const SelectionVector &bsel, const SelectionVector &csel,
 								   nullmask_t &anullmask, nullmask_t &bnullmask, nullmask_t &cnullmask,
 								   SelectionVector &true_sel, SelectionVector &false_sel) {
 		idx_t true_count = 0, false_count = 0;

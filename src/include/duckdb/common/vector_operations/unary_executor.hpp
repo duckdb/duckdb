@@ -34,7 +34,7 @@ struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC, bool IGNORE_NULL, bool HAS_SEL_VECTOR>
 	static inline void ExecuteLoop(INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               SelectionVector *__restrict sel_vector, nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
+	                               const SelectionVector *__restrict sel_vector, nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (IGNORE_NULL && nullmask.any()) {

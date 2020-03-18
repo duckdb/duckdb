@@ -60,8 +60,6 @@ struct LocalScanState {
 	idx_t chunk_index;
 	idx_t max_index;
 	idx_t last_chunk_count;
-
-	sel_t sel_vector_data[STANDARD_VECTOR_SIZE];
 };
 
 struct TableScanState {

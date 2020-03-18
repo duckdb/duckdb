@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, sel_t sel_vector[], idx_t max_count) {
+idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector, idx_t max_count) {
 	// obtain a read lock
 	auto read_lock = lock.GetSharedLock();
 

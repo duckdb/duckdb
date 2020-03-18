@@ -33,7 +33,7 @@ public:
 };
 
 struct VectorData {
-	SelectionVector *sel;
+	const SelectionVector *sel;
 	data_ptr_t data;
 	nullmask_t *nullmask;
 };
@@ -100,6 +100,8 @@ public:
 	void Slice(Vector &other, idx_t offset);
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, SelectionVector &sel);
+	//! Turns the vector into a dictionary vector with the specified dictionary
+	void Slice(SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
@@ -149,70 +151,74 @@ public:
 };
 
 struct ConstantVector {
-	static data_ptr_t GetData(Vector &vector) {
+	static inline data_ptr_t GetData(Vector &vector) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR || vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.data;
 	}
 	template<class T>
-	static T* GetData(Vector &vector) {
-		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
-		return (T*) vector.data;
+	static inline T* GetData(Vector &vector) {
+		return (T*) ConstantVector::GetData(vector);
 	}
-	static bool IsNull(const Vector &vector) {
+	static inline bool IsNull(const Vector &vector) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
 		return vector.nullmask[0];
 	}
-	static void SetNull(Vector &vector, bool is_null) {
+	static inline void SetNull(Vector &vector, bool is_null) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
 		vector.nullmask[0] = is_null;
 	}
-	static nullmask_t& Nullmask(Vector &vector) {
+	static inline nullmask_t& Nullmask(Vector &vector) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
 		return vector.nullmask;
 	}
+
+	static const sel_t zero_vector[STANDARD_VECTOR_SIZE];
+	static const SelectionVector ZeroSelectionVector;
 };
 
 struct DictionaryVector {
-	static SelectionVector &SelectionVector(const Vector &vector) {
+	static inline SelectionVector &SelectionVector(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer&) vector.buffer).GetSelVector();
 	}
-	static Vector &Child(const Vector &vector) {
+	static inline Vector &Child(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
 		return ((VectorChildBuffer&) vector.auxiliary).data;
 	}
 };
 
 struct FlatVector {
-	static data_ptr_t GetData(Vector &vector) {
+	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
 	template<class T>
-	static T* GetData(Vector &vector) {
-		assert(vector.vector_type == VectorType::FLAT_VECTOR);
-		return (T*) vector.data;
+	static inline T* GetData(Vector &vector) {
+		return ConstantVector::GetData<T>(vector);
 	}
 	template<class T>
-	static T GetValue(Vector &vector, idx_t idx) {
+	static inline T GetValue(Vector &vector, idx_t idx) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
-	static nullmask_t& Nullmask(Vector &vector) {
+	static inline nullmask_t& Nullmask(Vector &vector) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.nullmask;
 	}
-	static void SetNullmask(Vector &vector, nullmask_t new_mask) {
+	static inline void SetNullmask(Vector &vector, nullmask_t new_mask) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		vector.nullmask = move(new_mask);
 	}
-	static void SetNull(Vector &vector, idx_t idx, bool value) {
+	static inline void SetNull(Vector &vector, idx_t idx, bool value) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		vector.nullmask[idx] = value;
 	}
-	static bool IsNull(const Vector &vector, idx_t idx) {
+	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.nullmask[idx];
 	}
+
+	static const sel_t incremental_vector[STANDARD_VECTOR_SIZE];
+	static const SelectionVector IncrementalSelectionVector;
 };
 
 struct ListVector {

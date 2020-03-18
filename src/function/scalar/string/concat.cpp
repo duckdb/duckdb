@@ -47,9 +47,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = result.vector_type == VectorType::CONSTANT_VECTOR ?
-							ConstantVector::GetData<string_t>(result) :
-							FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetData<string_t>(result);
 	for(idx_t i = 0; i < result.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
@@ -119,7 +117,7 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 		});
 }
 
-static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data, SelectionVector *sep_sel) {
+static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data, const SelectionVector *sep_sel) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	// first figure out the lengths
@@ -162,9 +160,7 @@ static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_d
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = result.vector_type == VectorType::CONSTANT_VECTOR ?
-							ConstantVector::GetData<string_t>(result) :
-							FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetData<string_t>(result);
 	for(idx_t i = 0; i < result.size(); i++) {
 		// allocate an empty string of the required size
 		result_data[i] = StringVector::EmptyString(result, result_lengths[i]);

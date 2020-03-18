@@ -175,7 +175,15 @@ void DataChunk::Deserialize(Deserializer &source) {
 }
 
 void DataChunk::SetCardinality(idx_t count, SelectionVector &sel_vector) {
-	throw NotImplementedException("FIXME: set cardinality");
+	this->count = count;
+	for(idx_t c = 0; c < column_count(); c++) {
+		if (data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
+			// already a dictionary! merge the dictionaries
+			throw NotImplementedException("FIXME merge dictionary");
+		} else {
+			data[c].Slice(sel_vector);
+		}
+	}
 }
 
 void DataChunk::MoveStringsToHeap(StringHeap &heap) {

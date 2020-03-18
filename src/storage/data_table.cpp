@@ -87,49 +87,48 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
                               idx_t max_row, idx_t base_row, VersionManager &manager) {
-	  throw NotImplementedException("FIXME: scan base table");
-	// if (current_row >= max_row) {
-	// 	// exceeded the amount of rows to scan
-	// 	return false;
-	// }
-	// idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
-	// idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
-	// // first scan the version chunk manager to figure out which tuples to load for this transaction
-	// SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-	// idx_t count = manager.GetSelVector(transaction, vector_offset, valid_sel, max_count);
-	// if (count == 0) {
-	// 	// nothing to scan for this vector, skip the entire vector
-	// 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
-	// 		auto column = state.column_ids[i];
-	// 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-	// 			state.column_scans[i].Next();
-	// 		}
-	// 	}
-	// 	current_row += STANDARD_VECTOR_SIZE;
-	// 	return true;
-	// }
+	if (current_row >= max_row) {
+		// exceeded the amount of rows to scan
+		return false;
+	}
+	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
+	idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
+	// first scan the version chunk manager to figure out which tuples to load for this transaction
+	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
+	idx_t count = manager.GetSelVector(transaction, vector_offset, valid_sel, max_count);
+	if (count == 0) {
+		// nothing to scan for this vector, skip the entire vector
+		for (idx_t i = 0; i < state.column_ids.size(); i++) {
+			auto column = state.column_ids[i];
+			if (column != COLUMN_IDENTIFIER_ROW_ID) {
+				state.column_scans[i].Next();
+			}
+		}
+		current_row += STANDARD_VECTOR_SIZE;
+		return true;
+	}
 
-	// result.SetCardinality(count);
-	// if (count == max_count) {
-	// 	// no deleted tuples
-	// 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
-	// 		auto column = state.column_ids[i];
-	// 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
-	// 			// scan row id
-	// 			assert(result.data[i].type == ROW_TYPE);
-	// 			result.data[i].Sequence(base_row + current_row, 1);
-	// 		} else {
-	// 			// scan actual base column
-	// 			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
-	// 		}
-	// 	}
-	// } else {
-	// 	// deleted tuples
-	// 	throw NotImplementedException("FIXME: add dictionary vector!");
-	// }
+	if (count == max_count) {
+		// no deleted tuples
+		for (idx_t i = 0; i < state.column_ids.size(); i++) {
+			auto column = state.column_ids[i];
+			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				// scan row id
+				assert(result.data[i].type == ROW_TYPE);
+				result.data[i].Sequence(base_row + current_row, 1);
+			} else {
+				// scan actual base column
+				columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
+			}
+		}
+		result.SetCardinality(count);
+	} else {
+		// deleted tuples
+		throw NotImplementedException("FIXME: add dictionary vector!");
+	}
 
-	// current_row += STANDARD_VECTOR_SIZE;
-	// return true;
+	current_row += STANDARD_VECTOR_SIZE;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

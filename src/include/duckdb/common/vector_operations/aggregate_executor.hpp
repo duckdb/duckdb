@@ -18,7 +18,7 @@ class AggregateExecutor {
 private:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_SEL_VECTOR>
 	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, STATE_TYPE **__restrict states, idx_t count,
-	                                    nullmask_t &nullmask, SelectionVector *__restrict sel_vector) {
+	                                    nullmask_t &nullmask, const SelectionVector *__restrict sel_vector) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
 			for(idx_t i = 0; i < count; i++) {
@@ -38,7 +38,7 @@ private:
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_SEL_VECTOR>
 	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata, STATE_TYPE *__restrict state, idx_t count,
-	                                   nullmask_t &nullmask, SelectionVector *__restrict sel_vector) {
+	                                   nullmask_t &nullmask, const SelectionVector *__restrict sel_vector) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
 			for(idx_t i = 0; i < count; i++) {
@@ -58,7 +58,7 @@ private:
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata,
-	                                     STATE_TYPE **__restrict states, idx_t count, SelectionVector *__restrict asel, SelectionVector *__restrict bsel, nullmask_t &anullmask, nullmask_t &bnullmask) {
+	                                     STATE_TYPE **__restrict states, idx_t count, const SelectionVector *__restrict asel, const SelectionVector *__restrict bsel, nullmask_t &anullmask, nullmask_t &bnullmask) {
 		if (OP::IgnoreNull() && (anullmask.any() || bnullmask.any())) {
 			// potential NULL values and NULL values are ignored
 			for(idx_t i = 0; i < count; i++) {
@@ -80,7 +80,7 @@ private:
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata,
-	                                    STATE_TYPE *__restrict state, idx_t count, SelectionVector *__restrict asel, SelectionVector *__restrict bsel,
+	                                    STATE_TYPE *__restrict state, idx_t count, const SelectionVector *__restrict asel, const SelectionVector *__restrict bsel,
 										nullmask_t &anullmask, nullmask_t &bnullmask) {
 		if (OP::IgnoreNull() && (anullmask.any() || bnullmask.any())) {
 			// potential NULL values and NULL values are ignored
