@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define STRING_COUNT 10000000
+#define STRING_COUNT 1000000
 #define STRING_LENGTH 4
 
 #define STRING_DATA_GEN_BODY(STRING_LENGTH)                                                                            \
@@ -140,3 +140,43 @@ string BenchmarkInfo() override {
 	return "STRING LENGTH";
 }
 FINISH_BENCHMARK(StringAggLong)
+
+DUCKDB_BENCHMARK(StringInstr, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT INSTR(s1, 'h') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING INSTR";
+}
+FINISH_BENCHMARK(StringInstr)
+
+DUCKDB_BENCHMARK(StringInstrNull, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT INSTR(s1, '') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING INSTR";
+}
+FINISH_BENCHMARK(StringInstrNull)
+
+DUCKDB_BENCHMARK(StringRegex, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT REGEXP_MATCHES(s1, 'h') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING REGEX";
+}
+FINISH_BENCHMARK(StringRegex)
+
+DUCKDB_BENCHMARK(StringRegexNull, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT REGEXP_MATCHES(s1, '') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING REGEX";
+}
+FINISH_BENCHMARK(StringRegexNull)

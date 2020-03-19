@@ -11,7 +11,7 @@ using namespace std;
 
 namespace duckdb {
 
-static int32_t instr(string_t haystack, string_t needle);
+static int64_t instr(string_t haystack, string_t needle);
 
 struct InstrOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
@@ -19,9 +19,8 @@ struct InstrOperator {
 	}
 };
 
-static int32_t instr(string_t haystack, string_t needle) {
-	int32_t string_position = 0;
-	unsigned char firstChar;
+static int64_t instr(string_t haystack, string_t needle) {
+	int64_t string_position = 0;
 
 	// Getting information about the needle and the haystack
 	auto input_haystack = haystack.GetData();
@@ -30,20 +29,18 @@ static int32_t instr(string_t haystack, string_t needle) {
 	auto size_needle = needle.GetSize();
 
 	// Needle needs something to proceed
-	// Haystack should be bigger than the needle
-	if ((size_needle > 0) && (size_haystack >= size_needle)) {
-		firstChar = input_needle[0];
+	if (size_needle > 0) {
 
-		// find the positions with the first letter
-		while (size_haystack > 0) {
-			char b = input_haystack[0];
+		// Haystack should be bigger or equal size to the needle
+		while (size_haystack >= size_needle) {
 
-			// Compare the first letter and with that compare Needle to the Haystack
-			if ((b == firstChar) && ((memcmp(input_haystack, input_needle, size_needle) == 0))) {
-				string_position += (b & 0xC0) != 0x80;
+			// Increment and check continuation bytes: bit 7 should be set and 6 unset
+			string_position += (input_haystack[0] & 0xC0) != 0x80;
+
+			// Compare Needle to the Haystack
+			if ((memcmp(input_haystack, input_needle, size_needle) == 0)) {		
 				return string_position;
 			}
-			string_position += (b & 0xC0) != 0x80;
 			size_haystack--;
 			input_haystack++;
 		}
@@ -57,8 +54,8 @@ static int32_t instr(string_t haystack, string_t needle) {
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("instr",                              // name of the function
 	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-	                               SQLType::INTEGER,                     // return type
-	                               ScalarFunction::BinaryFunction<string_t, string_t, int32_t, InstrOperator, true>));
+	                               SQLType::BIGINT,                     // return type
+	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
 }
 
 } // namespace duckdb
