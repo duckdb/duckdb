@@ -30,13 +30,10 @@ static int64_t instr(string_t haystack, string_t needle) {
 
 	// Needle needs something to proceed
 	if (size_needle > 0) {
-
 		// Haystack should be bigger or equal size to the needle
 		while (size_haystack >= size_needle) {
-
 			// Increment and check continuation bytes: bit 7 should be set and 6 unset
 			string_position += (input_haystack[0] & 0xC0) != 0x80;
-
 			// Compare Needle to the Haystack
 			if ((memcmp(input_haystack, input_needle, size_needle) == 0)) {
 				return string_position;
