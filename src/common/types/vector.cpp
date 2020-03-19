@@ -105,6 +105,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;
 	}
+	vector_type = VectorType::FLAT_VECTOR;
 	buffer.reset();
 	auxiliary.reset();
 	nullmask.reset();
@@ -442,7 +443,7 @@ void Vector::Normalify(idx_t count) {
 		vector_type = VectorType::FLAT_VECTOR;
 		buffer = VectorBuffer::CreateStandardVector(type);
 		data = buffer->GetData();
-		VectorOperations::GenerateSequence(*this, start, increment);
+		VectorOperations::GenerateSequence(*this, count, start, increment);
 		break;
 	}
 	default:
@@ -513,7 +514,7 @@ void Vector::Verify(idx_t count) {
 		}
 		case VectorType::DICTIONARY_VECTOR: {
 			auto &child = DictionaryVector::Child(*this);
-			throw NotImplementedException("FIXME: verify child");
+			// throw NotImplementedException("FIXME: verify child");
 			// child.Verify(count);
 			break;
 		}

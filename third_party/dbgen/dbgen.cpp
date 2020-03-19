@@ -505,8 +505,9 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
-		assert(!tname.empty());
-		append_info[i].appender = make_unique<Appender>(con, schema, tname + suffix);
+		if (!tname.empty()) {
+			append_info[i].appender = make_unique<Appender>(con, schema, string(tname) + string(suffix));
+		}
 	}
 
 	for (i = PART; i <= REGION; i++) {
@@ -522,7 +523,10 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 	}
 	// flush any incomplete chunks
 	for (size_t i = PART; i <= REGION; i++) {
-		append_info[i].appender->Flush();
+		if (append_info[i].appender) {
+			append_info[i].appender->Flush();
+			append_info[i].appender.reset();
+		}
 	}
 
 	cleanup_dists();

@@ -73,48 +73,55 @@ struct GatherLoopIgnoreNull {
 	}
 };
 
-template <class LOOP, class OP> static void generic_gather_loop(Vector &source, Vector &dest, idx_t offset = 0) {
-	if (source.type != TypeId::POINTER) {
-		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
+template<class T>
+static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
+	auto addresses = FlatVector::GetData<uint64_t>(source);
+	auto data = FlatVector::GetData<T>(dest);
+	auto &nullmask = FlatVector::Nullmask(dest);
+
+	for(idx_t i = 0; i < count; i++) {
+		auto dataptr = (T*) addresses[i];
+		if (IsNullValue<T>(*dataptr)) {
+			nullmask[i] = true;
+		} else {
+			data[i] = *dataptr;
+		}
+		addresses[i] += sizeof(T);
 	}
+}
+
+void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
+	assert(source.vector_type == VectorType::FLAT_VECTOR);
+	assert(source.type == TypeId::POINTER); // "Cannot gather from non-pointer type!"
+
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		LOOP::template Operation<int8_t, OP>(source, dest, offset);
+		templated_gather_loop<int8_t>(source, dest, count);
 		break;
 	case TypeId::INT16:
-		LOOP::template Operation<int16_t, OP>(source, dest, offset);
+		templated_gather_loop<int16_t>(source, dest, count);
 		break;
 	case TypeId::INT32:
-		LOOP::template Operation<int32_t, OP>(source, dest, offset);
+		templated_gather_loop<int32_t>(source, dest, count);
 		break;
 	case TypeId::INT64:
-		LOOP::template Operation<int64_t, OP>(source, dest, offset);
+		templated_gather_loop<int64_t>(source, dest, count);
 		break;
 	case TypeId::FLOAT:
-		LOOP::template Operation<float, OP>(source, dest, offset);
+		templated_gather_loop<float>(source, dest, count);
 		break;
 	case TypeId::DOUBLE:
-		LOOP::template Operation<double, OP>(source, dest, offset);
+		templated_gather_loop<double>(source, dest, count);
 		break;
 	case TypeId::POINTER:
-		LOOP::template Operation<uint64_t, OP>(source, dest, offset);
+		templated_gather_loop<uint64_t>(source, dest, count);
 		break;
 	case TypeId::VARCHAR:
-		LOOP::template Operation<string_t, OP>(source, dest, offset);
+		templated_gather_loop<string_t>(source, dest, count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for gather");
 	}
-}
-
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count, bool set_null, idx_t offset) {
-	throw NotImplementedException("FIXME gather");
-	// assert(source.size() == dest.size());
-	// if (set_null) {
-	// 	generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
-	// } else {
-	// 	generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest, offset);
-	// }
 }

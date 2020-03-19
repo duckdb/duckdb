@@ -179,7 +179,6 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			for (idx_t i = 0; i < groups.column_count(); i++) {
 				auto &column = groups.data[i];
 				VectorOperations::Gather::Set(addresses, column, found_entries);
-				VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type), found_entries);
 			}
 
 			groups.Verify();
@@ -311,65 +310,6 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 		assert(payload_types[aggr_idx] == TypeId::INT64);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx], groups.size());
-		VectorOperations::AddInPlace(addresses, aggregates[aggr_idx].payload_size, groups.size());
-	}
-}
-
-template <class T>
-void templated_compare_group_vector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], idx_t &sel_count,
-                                    sel_t no_match_vector[], idx_t &no_match_count) {
-	auto data = FlatVector::GetData<T>(groups);
-	idx_t current_count = 0;
-	assert(groups.vector_type == VectorType::FLAT_VECTOR);
-	for (idx_t i = 0; i < sel_count; i++) {
-		idx_t index = sel_vector[i];
-		auto entry = group_pointers[index];
-		if (Equals::Operation<T>(*((T *)entry), data[index])) {
-			// match, continue to next group (if any)
-			sel_vector[current_count++] = index;
-		} else {
-			// no match, move to next group
-			no_match_vector[no_match_count++] = index;
-		}
-		group_pointers[index] += sizeof(T);
-	}
-	sel_count = current_count;
-}
-
-static void CompareGroupVector(data_ptr_t group_pointers[], Vector &groups, sel_t sel_vector[], idx_t &sel_count,
-                               sel_t no_match_vector[], idx_t &no_match_count) {
-	switch (groups.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
-		templated_compare_group_vector<int8_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                       no_match_count);
-		break;
-	case TypeId::INT16:
-		templated_compare_group_vector<int16_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                        no_match_count);
-		break;
-	case TypeId::INT32:
-		templated_compare_group_vector<int32_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                        no_match_count);
-		break;
-	case TypeId::INT64:
-		templated_compare_group_vector<int64_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                        no_match_count);
-		break;
-	case TypeId::FLOAT:
-		templated_compare_group_vector<float>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                      no_match_count);
-		break;
-	case TypeId::DOUBLE:
-		templated_compare_group_vector<double>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                       no_match_count);
-		break;
-	case TypeId::VARCHAR:
-		templated_compare_group_vector<string_t>(group_pointers, groups, sel_vector, sel_count, no_match_vector,
-		                                         no_match_count);
-		break;
-	default:
-		throw Exception("Unsupported type for group vector");
 	}
 }
 
@@ -386,110 +326,228 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	});
 }
 
+template<class T>
+static void templated_scatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count, idx_t type_size) {
+	auto data = (T*) gdata.data;
+	auto pointers = FlatVector::GetData<uint64_t>(addresses);
+	if (gdata.nullmask->any()) {
+		for(idx_t i = 0; i < count; i++) {
+			auto pointer_idx = sel.get_index(i);
+			auto group_idx = gdata.sel->get_index(pointer_idx);
+			auto ptr = (T*) pointers[pointer_idx];
+
+			if ((*gdata.nullmask)[group_idx]) {
+				*ptr = NullValue<T>();
+			} else {
+				*ptr = data[group_idx];
+			}
+			pointers[pointer_idx] += type_size;
+		}
+	} else {
+		for(idx_t i = 0; i < count; i++) {
+			auto pointer_idx = sel.get_index(i);
+			auto group_idx = gdata.sel->get_index(pointer_idx);
+			auto ptr = (T*) pointers[pointer_idx];
+
+			*ptr = data[group_idx];
+			pointers[pointer_idx] += type_size;
+		}
+	}
+}
+
+static void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, const SelectionVector &sel, idx_t count) {
+	for(idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+		auto &data = groups.data[grp_idx];
+		auto &gdata = group_data[grp_idx];
+
+		auto type_size = GetTypeIdSize(data.type);
+
+		switch (data.type) {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+			templated_scatter<int8_t>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::INT16:
+			templated_scatter<int16_t>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::INT32:
+			templated_scatter<int32_t>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::INT64:
+			templated_scatter<int64_t>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::FLOAT:
+			templated_scatter<float>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::DOUBLE:
+			templated_scatter<double>(gdata, addresses, sel, count, type_size);
+			break;
+		case TypeId::VARCHAR:
+			templated_scatter<string_t>(gdata, addresses, sel, count, type_size);
+			break;
+		default:
+			throw Exception("Unsupported type for group vector");
+		}
+	}
+}
+
+template<class T>
+static void templated_compare_groups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count, idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
+	auto data = (T*) gdata.data;
+	auto pointers = FlatVector::GetData<uint64_t>(addresses);
+	idx_t match_count = 0;
+	// if (gdata.nullmask->any()) {
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto group_idx = gdata.sel->get_index(idx);
+			auto value = (T*) pointers[idx];
+
+			if ((*gdata.nullmask)[group_idx]) {
+				if (IsNullValue<T>(*value)) {
+					// match: move to next value to compare
+					sel.set_index(match_count++, idx);
+					pointers[idx] += type_size;
+				} else {
+					no_match.set_index(no_match_count++, idx);
+				}
+			} else {
+				if (Equals::Operation<T>(data[group_idx], *value)) {
+					sel.set_index(match_count++, idx);
+					pointers[idx] += type_size;
+				} else {
+					no_match.set_index(no_match_count++, idx);
+				}
+			}
+		}
+	// } else {
+	// }
+	count = match_count;
+}
+
+static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, SelectionVector &sel, idx_t count, SelectionVector &no_match) {
+	idx_t no_match_count = 0;
+	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
+		auto &data = groups.data[group_idx];
+		auto &gdata = group_data[group_idx];
+		auto type_size = GetTypeIdSize(data.type);
+		switch (data.type) {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+			templated_compare_groups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::INT16:
+			templated_compare_groups<int16_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::INT32:
+			templated_compare_groups<int32_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::INT64:
+			templated_compare_groups<int64_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::FLOAT:
+			templated_compare_groups<float>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::DOUBLE:
+			templated_compare_groups<double>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::VARCHAR:
+			templated_compare_groups<string_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		default:
+			throw Exception("Unsupported type for group vector");
+		}
+	}
+	return no_match_count;
+}
+
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
 void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {
-	throw NotImplementedException("FIXME: find or create groups");
-	// assert(addresses.SameCardinality(groups) && addresses.SameCardinality(groups));
-	// // resize at 50% capacity, also need to fit the entire vector
-	// if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
-	// 	Resize(capacity * 2);
-	// }
+	// resize at 50% capacity, also need to fit the entire vector
+	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
+		Resize(capacity * 2);
+	}
 
-	// // FIXME: handle NULL values
-	// // for each group, fill in the NULL value
-	// // for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-	// // 	VectorOperations::FillNullMask(groups.data[group_idx]);
-	// // }
+	// zero initialize the new_groups array
+	auto new_groups = FlatVector::GetData<bool>(new_group);
+	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 
-	// // we need to be able to fit at least one vector of data
-	// assert(capacity - entries > STANDARD_VECTOR_SIZE);
-	// assert(new_group.type == TypeId::BOOL);
-	// assert(addresses.type == TypeId::POINTER);
+	// we need to be able to fit at least one vector of data
+	assert(capacity - entries > STANDARD_VECTOR_SIZE);
+	assert(new_group.type == TypeId::BOOL);
+	assert(addresses.type == TypeId::POINTER);
 
-	// HashGroups(groups, addresses);
-	// // FIXME: optimize for constant group index
-	// groups.Normalify();
-	// addresses.Normalify();
+	// hash the groups to get the addresses
+	HashGroups(groups, addresses);
 
-	// sel_t sel_vector[STANDARD_VECTOR_SIZE], empty_vector[STANDARD_VECTOR_SIZE];
-	// idx_t sel_count = groups.size();
-	// VectorOperations::Exec(addresses, [&](idx_t i, idx_t k) { sel_vector[k] = i; });
+	addresses.Normalify(groups.size());
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// // list of addresses for the tuples
-	// auto data_pointers = (data_ptr_t *)addresses.GetData();
-	// if (parallel) {
-	// 	throw NotImplementedException("Parallel HT not implemented");
-	// }
+	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
+	Vector pointers(TypeId::POINTER, (data_ptr_t)group_pointers);
 
-	// // zero initialize the new_groups array
-	// auto new_groups = ((bool *)new_group.GetData());
-	// memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	// set up the selection vectors
+	SelectionVector v1(STANDARD_VECTOR_SIZE);
+	SelectionVector v2(STANDARD_VECTOR_SIZE);
+	SelectionVector empty_vector(STANDARD_VECTOR_SIZE);
 
-	// data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	// Vector pointers(groups, TypeId::POINTER, (data_ptr_t)group_pointers);
+	// we start out with all entries [0, 1, 2, ..., groups.size()]
+	const SelectionVector *sel_vector = &FlatVector::IncrementalSelectionVector;
+	SelectionVector *next_vector = &v1;
+	SelectionVector *no_match_vector = &v2;
+	idx_t remaining_entries = groups.size();
 
-	// while (sel_count > 0) {
-	// 	idx_t current_count = 0;
-	// 	idx_t empty_count = 0;
+	// orrify all the groups
+	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.column_count()]);
+	for(idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
+	}
 
-	// 	// first figure out for each remaining whether or not it belongs to a full or empty group
-	// 	for (idx_t i = 0; i < sel_count; i++) {
-	// 		idx_t index = sel_vector[i];
-	// 		auto entry = data_pointers[index];
-	// 		if (*entry == EMPTY_CELL) {
-	// 			// cell is empty; mark the cell as filled
-	// 			*entry = FULL_CELL;
-	// 			empty_vector[empty_count++] = index;
-	// 			new_groups[index] = true;
-	// 			// initialize the payload info for the column
-	// 			memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
-	// 		} else {
-	// 			// cell is occupied: add to check list
-	// 			sel_vector[current_count++] = index;
-	// 		}
-	// 		group_pointers[index] = entry + FLAG_SIZE;
-	// 		data_pointers[index] = entry + FLAG_SIZE + group_width;
-	// 	}
-	// 	sel_count = current_count;
+	while (remaining_entries > 0) {
+		idx_t entry_count = 0;
+		idx_t empty_count = 0;
 
-	// 	if (empty_count > 0) {
-	// 		// for each of the locations that are empty, serialize the group columns to the locations
-	// 		auto old_sel_vector = groups.sel_vector;
-	// 		idx_t old_count = groups.size();
-	// 		groups.SetCardinality(empty_count, empty_vector);
-	// 		for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-	// 			// set up the new sel vector with the entries we need to write
-	// 			auto &group_column = groups.data[group_idx];
+		// first figure out for each remaining whether or not it belongs to a full or empty group
+		for (idx_t i = 0; i < remaining_entries; i++) {
+			idx_t index = sel_vector->get_index(i);
+			auto entry = data_pointers[index];
+			if (*entry == EMPTY_CELL) {
+				// cell is empty; mark the cell as filled
+				*entry = FULL_CELL;
+				empty_vector.set_index(empty_count++, index);
+				new_groups[index] = true;
+				// initialize the payload info for the column
+				memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
+			} else {
+				// cell is occupied: add to check list
+				next_vector->set_index(entry_count++, index);
+			}
+			group_pointers[index] = entry + FLAG_SIZE;
+			data_pointers[index] = entry + FLAG_SIZE + group_width;
+		}
 
-	// 			VectorOperations::Scatter::SetAll(group_column, pointers);
-	// 			VectorOperations::AddInPlace(pointers, GetTypeIdSize(group_column.type));
-	// 		}
-	// 		// restore the old sel_vector and count
-	// 		groups.SetCardinality(old_count, old_sel_vector);
-	// 		entries += empty_count;
-	// 	}
-	// 	// now we have only the tuples remaining that might match to an existing group
-	// 	// start performing comparisons with each of the groups
-	// 	sel_t no_match_vector[STANDARD_VECTOR_SIZE];
-	// 	idx_t no_match_count = 0;
-	// 	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
-	// 		CompareGroupVector(group_pointers, groups.data[group_idx], sel_vector, sel_count, no_match_vector,
-	// 		                   no_match_count);
-	// 	}
+		if (empty_count > 0) {
+			// for each of the locations that are empty, serialize the group columns to the locations
+			ScatterGroups(groups, group_data, pointers, empty_vector, empty_count);
+			entries += empty_count;
+		}
+		// now we have only the tuples remaining that might match to an existing group
+		// start performing comparisons with each of the groups
+		idx_t no_match_count = CompareGroups(groups, group_data, pointers, *next_vector, entry_count, *no_match_vector);
 
-	// 	// each of the entries that do not match need to be moved to the next entry
-	// 	for (idx_t i = 0; i < no_match_count; i++) {
-	// 		idx_t index = no_match_vector[i];
-	// 		sel_vector[i] = index;
-	// 		data_pointers[index] += payload_width;
-	// 		assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
-	// 		if (data_pointers[index] >= endptr) {
-	// 			data_pointers[index] = data;
-	// 		}
-	// 	}
-	// 	sel_count = no_match_count;
-	// }
+		// each of the entries that do not match we move them to the next entry in the HT
+		for (idx_t i = 0; i < no_match_count; i++) {
+			idx_t index = no_match_vector->get_index(i);
+			data_pointers[index] += payload_width;
+			assert(((uint64_t)(data_pointers[index] - data)) % tuple_size == 0);
+			if (data_pointers[index] >= endptr) {
+				data_pointers[index] = data;
+			}
+		}
+		sel_vector = no_match_vector;
+		std::swap(next_vector, no_match_vector);
+		remaining_entries = no_match_count;
+	}
 }
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
@@ -520,7 +578,6 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	for (idx_t i = 0; i < groups.column_count(); i++) {
 		auto &column = groups.data[i];
 		VectorOperations::Gather::Set(addresses, column, groups.size());
-		VectorOperations::AddInPlace(addresses, GetTypeIdSize(column.type), groups.size());
 	}
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
