@@ -58,10 +58,13 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
+	auto source_nullmask = (nullmask_t *) data + offset;
+	auto source_data = data + offset + sizeof(nullmask_t);
+
 	// fetch the nullmask and copy the data from the base table
 	result.vector_type = VectorType::FLAT_VECTOR;
-	FlatVector::SetNullmask(result, *((nullmask_t *)(data + offset)));
-	memcpy(FlatVector::GetData(result), data + offset + sizeof(nullmask_t), count * type_size);
+	FlatVector::SetNullmask(result, *source_nullmask);
+	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
 void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
@@ -171,7 +174,7 @@ template <class T> static void update_min_max(T value, T *__restrict min, T *__r
 template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
-	auto nullmask = (nullmask_t *)target;
+	auto &nullmask = *((nullmask_t *)target);
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 
@@ -185,8 +188,8 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
 			bool is_null = (*adata.nullmask)[source_idx];
-		    nullmask[target_idx] = is_null;
 		    if (is_null) {
+			    nullmask[target_idx] = true;
 			    stats.has_null = true;
 		    } else {
 			    update_min_max(sdata[source_idx], min, max);
