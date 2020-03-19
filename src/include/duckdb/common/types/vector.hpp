@@ -155,7 +155,7 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline SelectionVector &SelectionVector(const Vector &vector) {
+	static inline SelectionVector &SelVector(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
 		return ((DictionaryBuffer&) *vector.buffer).GetSelVector();
 	}

@@ -117,7 +117,7 @@ public:
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR: {
-			auto &sel = DictionaryVector::SelectionVector(input);
+			auto &sel = DictionaryVector::SelVector(input);
 			auto &child = DictionaryVector::Child(input);
 			child.Normalify(count);
 
@@ -147,7 +147,7 @@ public:
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR: {
-			auto &sel = DictionaryVector::SelectionVector(input);
+			auto &sel = DictionaryVector::SelVector(input);
 			auto &child = DictionaryVector::Child(input);
 			child.Normalify(count);
 

@@ -121,7 +121,7 @@ void Vector::Initialize(TypeId new_type, bool zero_data) {
 void Vector::SetValue(idx_t index, Value val) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
-		auto &sel_vector = DictionaryVector::SelectionVector(*this);
+		auto &sel_vector = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), move(val));
 	}
@@ -222,7 +222,7 @@ Value Vector::GetValue(idx_t index) const {
 		index = 0;
 	} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
-		auto &sel_vector = DictionaryVector::SelectionVector(*this);
+		auto &sel_vector = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
 		return child.GetValue(sel_vector.get_index(index));
 	} else {
@@ -454,7 +454,7 @@ void Vector::Normalify(idx_t count) {
 void Vector::Orrify(idx_t count, VectorData &data) {
 	switch (vector_type) {
 	case VectorType::DICTIONARY_VECTOR: {
-		auto &sel = DictionaryVector::SelectionVector(*this);
+		auto &sel = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
 		child.Normalify(count);
 
@@ -612,7 +612,7 @@ void StringVector::MoveStringsToHeap(Vector &vector, idx_t count, StringHeap &he
 		break;
 	}
 	case VectorType::DICTIONARY_VECTOR: {
-		auto &sel = DictionaryVector::SelectionVector(vector);
+		auto &sel = DictionaryVector::SelVector(vector);
 		auto &child = DictionaryVector::Child(vector);;
 		StringVector::MoveStringsToHeap(child, count, heap, sel);
 		break;
