@@ -19,7 +19,7 @@ using namespace std;
 		}                                                                                                              \
 		return result;                                                                                                 \
 	}                                                                                                                  \
-	void Load(DuckDBBenchmarkState *state) override {                                                                   \
+	void Load(DuckDBBenchmarkState *state) override {                                                                  \
 		std::uniform_int_distribution<> distribution(0, strlen(chars) - 1);                                            \
 		std::mt19937 gen;                                                                                              \
 		gen.seed(42);                                                                                                  \
@@ -33,13 +33,12 @@ using namespace std;
 		}                                                                                                              \
 		appender.Close();                                                                                              \
 	}                                                                                                                  \
-	string VerifyResult(QueryResult *result) override {                                                                 \
+	string VerifyResult(QueryResult *result) override {                                                                \
 		if (!result->success) {                                                                                        \
 			return result->error;                                                                                      \
 		}                                                                                                              \
 		return string();                                                                                               \
 	}
-
 
 DUCKDB_BENCHMARK(StringConcatShort, "[string]")
 STRING_DATA_GEN_BODY(4)

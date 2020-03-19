@@ -38,7 +38,7 @@ static int64_t instr(string_t haystack, string_t needle) {
 			string_position += (input_haystack[0] & 0xC0) != 0x80;
 
 			// Compare Needle to the Haystack
-			if ((memcmp(input_haystack, input_needle, size_needle) == 0)) {		
+			if ((memcmp(input_haystack, input_needle, size_needle) == 0)) {
 				return string_position;
 			}
 			size_haystack--;
@@ -54,7 +54,7 @@ static int64_t instr(string_t haystack, string_t needle) {
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("instr",                              // name of the function
 	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-	                               SQLType::BIGINT,                     // return type
+	                               SQLType::BIGINT,                      // return type
 	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
 }
 
