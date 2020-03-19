@@ -291,7 +291,7 @@ public:
 		left.Orrify(count, ldata);
 		right.Orrify(count, rdata);
 
-		SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, ldata.sel, rdata.sel, count, *ldata.nullmask, *rdata.nullmask, true_sel, false_sel);
+		return SelectGenericLoop<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE*) ldata.data, (RIGHT_TYPE*) rdata.data, ldata.sel, rdata.sel, count, *ldata.nullmask, *rdata.nullmask, true_sel, false_sel);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP>

@@ -396,7 +396,7 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 	auto data = (T*) gdata.data;
 	auto pointers = FlatVector::GetData<uint64_t>(addresses);
 	idx_t match_count = 0;
-	// if (gdata.nullmask->any()) {
+	if (gdata.nullmask->any()) {
 		for(idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
@@ -419,8 +419,20 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 				}
 			}
 		}
-	// } else {
-	// }
+	} else {
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto group_idx = gdata.sel->get_index(idx);
+			auto value = (T*) pointers[idx];
+
+			if (Equals::Operation<T>(data[group_idx], *value)) {
+				sel.set_index(match_count++, idx);
+				pointers[idx] += type_size;
+			} else {
+				no_match.set_index(no_match_count++, idx);
+			}
+		}
+	}
 	count = match_count;
 }
 
