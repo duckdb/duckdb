@@ -58,7 +58,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
-	auto source_nullmask = (nullmask_t *) data + offset;
+	auto source_nullmask = (nullmask_t *) (data + offset);
 	auto source_data = data + offset + sizeof(nullmask_t);
 
 	// fetch the nullmask and copy the data from the base table

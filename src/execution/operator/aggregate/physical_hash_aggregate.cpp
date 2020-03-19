@@ -88,10 +88,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		payload_chunk.Verify();
 		assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-		// move the strings inside the groups to the string heap
-		group_chunk.MoveStringsToHeap(state->ht->string_heap);
-		payload_chunk.MoveStringsToHeap(state->ht->string_heap);
-
 		state->ht->AddChunk(group_chunk, payload_chunk);
 		state->tuples_scanned += state->child_chunk.size();
 	} while (state->child_chunk.size() > 0);

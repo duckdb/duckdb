@@ -355,7 +355,7 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 	}
 }
 
-static void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, const SelectionVector &sel, idx_t count) {
+void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, const SelectionVector &sel, idx_t count) {
 	for(idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
@@ -382,9 +382,26 @@ static void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_dat
 		case TypeId::DOUBLE:
 			templated_scatter<double>(gdata, addresses, sel, count, type_size);
 			break;
-		case TypeId::VARCHAR:
-			templated_scatter<string_t>(gdata, addresses, sel, count, type_size);
+		case TypeId::VARCHAR: {
+			auto data = (string_t*) gdata.data;
+			auto pointers = FlatVector::GetData<uint64_t>(addresses);
+
+			for(idx_t i = 0; i < count; i++) {
+				auto pointer_idx = sel.get_index(i);
+				auto group_idx = gdata.sel->get_index(pointer_idx);
+				auto ptr = (string_t*) pointers[pointer_idx];
+
+				if ((*gdata.nullmask)[group_idx]) {
+					*ptr = NullValue<string_t>();
+				} else if (data[group_idx].IsInlined()) {
+					*ptr = data[group_idx];
+				} else {
+					*ptr = string_heap.AddString(data[group_idx]);
+				}
+				pointers[pointer_idx] += type_size;
+			}
 			break;
+		}
 		default:
 			throw Exception("Unsupported type for group vector");
 		}
