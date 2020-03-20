@@ -110,9 +110,11 @@ struct VectorOperations {
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// result = HASH(A)
-	static void Hash(Vector &A, Vector &result, idx_t count);
+	static void Hash(Vector &input, Vector &hashes, idx_t count);
+	static void Hash(Vector &input, Vector &hashes, const SelectionVector &rsel, idx_t count);
 	// A ^= HASH(B)
 	static void CombineHash(Vector &hashes, Vector &B, idx_t count);
+	static void CombineHash(Vector &hashes, Vector &B, const SelectionVector &rsel, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Generate functions

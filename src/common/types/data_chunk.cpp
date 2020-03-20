@@ -186,14 +186,6 @@ void DataChunk::SetCardinality(idx_t count, SelectionVector &sel_vector) {
 	}
 }
 
-void DataChunk::MoveStringsToHeap(StringHeap &heap) {
-	for (idx_t c = 0; c < column_count(); c++) {
-		if (data[c].type == TypeId::VARCHAR) {
-			StringVector::MoveStringsToHeap(data[c], size(), heap);
-		}
-	}
-}
-
 void DataChunk::Hash(Vector &result) {
 	assert(result.type == TypeId::HASH);
 	VectorOperations::Hash(data[0], result, size());

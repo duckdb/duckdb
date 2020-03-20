@@ -93,9 +93,6 @@ public:
 	//! SerializationException]
 	void Deserialize(Deserializer &source);
 
-	//! Move all the strings inside this DataChunk to the specified heap
-	void MoveStringsToHeap(StringHeap &heap);
-
 	//! Hashes the DataChunk to the target vector
 	void Hash(Vector &result);
 

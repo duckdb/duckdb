@@ -88,7 +88,7 @@ private:
 
 	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[], idx_t remaining);
 
-	void Hash(DataChunk &keys, Vector &hashes);
+	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 public:
 	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
 	              JoinType type);
@@ -161,6 +161,9 @@ private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
+
+	void SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
+	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;

@@ -206,9 +206,6 @@ struct ListVector {
 };
 
 struct StringVector {
-	static void MoveStringsToHeap(Vector &vector, idx_t count, StringHeap &heap);
-	static void MoveStringsToHeap(Vector &vector, idx_t count, StringHeap &heap, SelectionVector &sel);
-
 	//! Add a string to the string heap of the vector (auxiliary data)
 	static string_t AddString(Vector &vector, const char *data, idx_t len);
 	//! Add a string to the string heap of the vector (auxiliary data)

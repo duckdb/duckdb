@@ -13,15 +13,6 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-static void SerializeChunk(DataChunk &source, data_ptr_t targets[]) {
-	Vector target_vector(TypeId::POINTER, (data_ptr_t)targets);
-	idx_t offset = 0;
-	for (idx_t i = 0; i < source.column_count(); i++) {
-		VectorOperations::Scatter::SetAll(source.data[i], target_vector, true, offset);
-		offset += GetTypeIdSize(source.data[i].type);
-	}
-}
-
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<TypeId> build_types, JoinType type)
     : buffer_manager(buffer_manager), build_types(build_types), equality_size(0), condition_size(0), build_size(0),
@@ -92,23 +83,101 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	}
 }
 
-void JoinHashTable::Hash(DataChunk &keys, Vector &hashes) {
-	VectorOperations::Hash(keys.data[0], hashes, keys.size());
-	for (idx_t i = 1; i < equality_types.size(); i++) {
-		VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
+void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes) {
+	if (count == keys.size()) {
+		// no null values are filtered: use regular hash functions
+		VectorOperations::Hash(keys.data[0], hashes, keys.size());
+		for (idx_t i = 1; i < equality_types.size(); i++) {
+			VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
+		}
+	} else {
+		// null values were filtered: use selection vector
+		VectorOperations::Hash(keys.data[0], hashes, sel, count);
+		for (idx_t i = 1; i < equality_types.size(); i++) {
+			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
+		}
+	}
+}
+template<class T>
+static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
+	auto source = (T*) vdata.data;
+	if (vdata.nullmask->any()) {
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			auto target = (T*) key_locations[i];
+			if ((*vdata.nullmask)[source_idx]) {
+				*target = NullValue<T>();
+			} else {
+				*target = source[source_idx];
+			}
+			key_locations[i] += sizeof(T);
+		}
+	} else {
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			auto target = (T*) key_locations[i];
+			*target = source[source_idx];
+			key_locations[i] += sizeof(T);
+		}
 	}
 }
 
-static idx_t CreateNotNullSelVector(DataChunk &keys, sel_t *not_null_sel_vector) {
-	throw NotImplementedException("FIXME create not null sel vector");
-	// sel_t *sel_vector = keys.sel_vector;
-	// idx_t result_count = keys.size();
-	// // first we loop over all the columns and figure out where the
-	// for (idx_t i = 0; i < keys.column_count(); i++) {
-	// 	result_count = VectorOperations::NotNullSelVector(keys.data[i], not_null_sel_vector, sel_vector, nullptr);
-	// 	keys.SetCardinality(result_count, sel_vector);
-	// }
-	// return result_count;
+void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
+	switch (type) {
+	case TypeId::BOOL:
+	case TypeId::INT8:
+		templated_serialize_vdata<int8_t>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::INT16:
+		templated_serialize_vdata<int16_t>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::INT32:
+		templated_serialize_vdata<int32_t>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::INT64:
+		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::FLOAT:
+		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::DOUBLE:
+		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::HASH:
+		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
+		break;
+	case TypeId::VARCHAR: {
+		auto source = (string_t *) vdata.data;
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx);
+
+			auto target = (string_t*) key_locations[i];
+			if ((*vdata.nullmask)[source_idx]) {
+				*target = NullValue<string_t>();
+			} else if (source[source_idx].IsInlined()) {
+				*target = source[source_idx];
+			} else {
+				*target = string_heap.AddString(source[source_idx]);
+			}
+			key_locations[i] += sizeof(string_t);
+		}
+		break;
+	}
+	default:
+		throw NotImplementedException("FIXME: unimplemented serialize");
+	}
+}
+
+void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
+	VectorData vdata;
+	v.Orrify(vcount, vdata);
+
+	SerializeVectorData(vdata, v.type, sel, count, key_locations);
 }
 
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[], idx_t remaining) {
@@ -123,17 +192,51 @@ idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx
 	return append_count;
 }
 
+static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
+	auto &nullmask = *vdata.nullmask;
+	idx_t result_count = 0;
+	for(idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto key_idx = vdata.sel->get_index(idx);
+		if (!nullmask[key_idx]) {
+			result.set_index(result_count++, idx);
+		}
+	}
+	return result_count;
+}
+
 void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	assert(!finalized);
 	assert(keys.size() == payload.size());
 	if (keys.size() == 0) {
 		return;
 	}
-	count += keys.size();
 
-	// move strings to the string heap
-	keys.MoveStringsToHeap(string_heap);
-	payload.MoveStringsToHeap(string_heap);
+	// orrify all the keys
+	auto key_data = unique_ptr<VectorData[]>(new VectorData[keys.column_count()]);
+	for(idx_t key_idx = 0; key_idx < keys.column_count(); key_idx++) {
+		keys.data[key_idx].Orrify(keys.size(), key_data[key_idx]);
+	}
+
+	// figure out which keys are NULL, and create a selection vector out of them
+	const SelectionVector *current_sel = &FlatVector::IncrementalSelectionVector;
+	SelectionVector sel;
+	idx_t added_count = keys.size();
+	for(idx_t i = 0; i < keys.column_count(); i++) {
+		if (!null_values_are_equal[i]) {
+			if (!key_data[i].nullmask->any()) {
+				continue;
+			}
+			added_count = FilterNullValues(key_data[i], *current_sel, added_count, sel);
+			// null values are NOT equal for this column, filter them out
+			current_sel = &sel;
+		}
+	}
+
+	if (added_count == 0) {
+		return;
+	}
+	count += added_count;
 
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
@@ -154,12 +257,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
 
-	// FIXME: filter out nulls!
-
 	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
-	idx_t remaining = keys.size();
+	idx_t remaining = added_count;
 	// first append to the last block (if any)
 	if (blocks.size() != 0) {
 		auto &last_block = blocks.back();
@@ -167,7 +268,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			// last block has space: pin the buffer of this block
 			auto handle = buffer_manager.Pin(last_block.block_id);
 			// now append to the block
-			idx_t append_count = AppendToBlock(last_block, *handle, keys.size(), key_locations, remaining);
+			idx_t append_count = AppendToBlock(last_block, *handle, remaining, key_locations, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
 		}
@@ -181,7 +282,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		new_block.capacity = block_capacity;
 		new_block.block_id = handle->block_id;
 
-		idx_t append_count = AppendToBlock(new_block, *handle, keys.size(), key_locations, remaining);
+		idx_t append_count = AppendToBlock(new_block, *handle, remaining, key_locations, remaining);
 		remaining -= append_count;
 		handles.push_back(move(handle));
 		blocks.push_back(new_block);
@@ -190,15 +291,17 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Vector hash_values(TypeId::HASH);
-	Hash(keys, hash_values);
+	Hash(keys, *current_sel, added_count, hash_values);
 
-	throw NotImplementedException("FIXME: serialize chunk");
-	// // serialize the key, payload and hash values to these locations
-	// SerializeChunk(keys, key_locations);
-	// if (build_size > 0) {
-	// 	SerializeChunk(payload, tuple_locations);
-	// }
-	// SerializeChunk(hash_chunk, hash_locations);
+	// serialize the keys to the key locations
+	for(idx_t i = 0; i < keys.column_count(); i++) {
+		SerializeVectorData(key_data[i], keys.data[i].type, *current_sel, added_count, key_locations);
+	}
+	// now serialize the payload
+	for(idx_t i = 0; i < payload.column_count(); i++) {
+		SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
+	}
+	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
@@ -267,6 +370,7 @@ void JoinHashTable::Finalize() {
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(count > 0); // should be handled before
 	assert(finalized);
+	throw NotImplementedException("FIXME probe");
 
 	// for (idx_t i = 0; i < keys.column_count(); i++) {
 	// 	if (null_values_are_equal[i]) {
@@ -275,64 +379,64 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// }
 
 	// scan structure
-	auto ss = make_unique<ScanStructure>(*this);
-	// first hash all the keys to do the lookup
-	Vector hashes(TypeId::HASH);
-	Hash(keys, hashes);
+	// auto ss = make_unique<ScanStructure>(*this);
+	// // first hash all the keys to do the lookup
+	// Vector hashes(TypeId::HASH);
+	// Hash(keys, hashes);
 
-	// use bitmask to get index in array
-	ApplyBitmask(hashes, keys.size());
+	// // use bitmask to get index in array
+	// ApplyBitmask(hashes, keys.size());
 
-	// FIXME: optimize for constant key vector
-	hashes.Normalify(keys.size());
+	// // FIXME: optimize for constant key vector
+	// hashes.Normalify(keys.size());
 
-	// now create the initial pointers from the hashes
-	auto ptrs = FlatVector::GetData<data_ptr_t>(ss->pointers);
-	auto indices = FlatVector::GetData<uint64_t>(hashes);
-	auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
-	for (idx_t i = 0; i < keys.size(); i++) {
-		auto index = indices[i];
-		ptrs[i] = hashed_pointers[index];
-	}
-	ss->pointers.SetCount(keys.size());
+	// // now create the initial pointers from the hashes
+	// auto ptrs = FlatVector::GetData<data_ptr_t>(ss->pointers);
+	// auto indices = FlatVector::GetData<uint64_t>(hashes);
+	// auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
+	// for (idx_t i = 0; i < keys.size(); i++) {
+	// 	auto index = indices[i];
+	// 	ptrs[i] = hashed_pointers[index];
+	// }
+	// ss->pointers.SetCount(keys.size());
 
-	switch (join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-	case JoinType::LEFT:
-	case JoinType::SINGLE:
-	case JoinType::MARK:
-		// initialize all tuples with found_match to false
-		memset(ss->found_match, 0, sizeof(ss->found_match));
-		break;
-	default:
-		break;
-	}
+	// switch (join_type) {
+	// case JoinType::SEMI:
+	// case JoinType::ANTI:
+	// case JoinType::LEFT:
+	// case JoinType::SINGLE:
+	// case JoinType::MARK:
+	// 	// initialize all tuples with found_match to false
+	// 	memset(ss->found_match, 0, sizeof(ss->found_match));
+	// 	break;
+	// default:
+	// 	break;
+	// }
 
-	switch (join_type) {
-	case JoinType::SEMI:
-	case JoinType::ANTI:
-	case JoinType::LEFT:
-	case JoinType::SINGLE:
-	case JoinType::MARK:
-	case JoinType::INNER: {
-		// create the selection vector linking to only non-empty entries
-		// idx_t count = 0;
-		// for (idx_t i = 0; i < ss->pointers.size(); i++) {
-		// 	if (ptrs[i]) {
-		// 		ss->sel_vector[count++] = i;
-		// 	}
-		// }
-		throw NotImplementedException("FIXME");
-		// ss->pointers.SetSelVector(ss->sel_vector);
-		// ss->pointers.SetCount(count);
-		break;
-	}
-	default:
-		throw NotImplementedException("Unimplemented join type for hash join");
-	}
+	// switch (join_type) {
+	// case JoinType::SEMI:
+	// case JoinType::ANTI:
+	// case JoinType::LEFT:
+	// case JoinType::SINGLE:
+	// case JoinType::MARK:
+	// case JoinType::INNER: {
+	// 	// create the selection vector linking to only non-empty entries
+	// 	// idx_t count = 0;
+	// 	// for (idx_t i = 0; i < ss->pointers.size(); i++) {
+	// 	// 	if (ptrs[i]) {
+	// 	// 		ss->sel_vector[count++] = i;
+	// 	// 	}
+	// 	// }
+	// 	throw NotImplementedException("FIXME");
+	// 	// ss->pointers.SetSelVector(ss->sel_vector);
+	// 	// ss->pointers.SetCount(count);
+	// 	break;
+	// }
+	// default:
+	// 	throw NotImplementedException("Unimplemented join type for hash join");
+	// }
 
-	return ss;
+	// return ss;
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht), finished(false) {
