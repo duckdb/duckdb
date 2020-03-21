@@ -41,11 +41,12 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		StandaloneVector pointers;
-		StandaloneVector build_pointer_vector;
-		sel_t sel_vector[STANDARD_VECTOR_SIZE];
-		// whether or not the given tuple has found a match, used for LeftJoin
-		bool found_match[STANDARD_VECTOR_SIZE];
+		unique_ptr<VectorData[]> key_data;
+		Vector pointers;
+		idx_t count;
+		SelectionVector sel_vector;
+		// whether or not the given tuple has found a match
+		unique_ptr<bool[]> found_match;
 		JoinHashTable &ht;
 		bool finished;
 
@@ -54,6 +55,8 @@ public:
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 	private:
+		void AdvancePointers();
+
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
@@ -72,10 +75,11 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result, SelectionVector &result_vector);
 
 		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
-		idx_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &result);
+		void GatherResult(Vector &result, SelectionVector &sel_vector, idx_t count, idx_t &offset);
 	};
 
 private:
@@ -158,10 +162,12 @@ public:
 private:
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
+	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
+	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel);
 	void SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 

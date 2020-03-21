@@ -100,7 +100,6 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 			return;
 		}
 		// remove any selection vectors
-		state->child_chunk.Normalify();
 		if (hash_table->size() == 0) {
 			// empty hash table, special case
 			if (hash_table->join_type == JoinType::ANTI) {

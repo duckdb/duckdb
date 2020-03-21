@@ -76,10 +76,25 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 		*indices = *indices & bitmask;
 	} else {
 		hashes.Normalify(count);
-		auto indices = ConstantVector::GetData<uint64_t>(hashes);
+		auto indices = FlatVector::GetData<uint64_t>(hashes);
 		for(idx_t i = 0; i < count; i++) {
 			indices[i] &= bitmask;
 		}
+	}
+}
+
+void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers) {
+	VectorData hdata;
+	hashes.Orrify(count, hdata);
+
+	auto hash_data = (uint64_t *) hdata.data;
+	auto result_data = FlatVector::GetData<data_ptr_t*>(pointers);
+	auto main_ht = (data_ptr_t *) hash_map->node->buffer;
+	for(idx_t i = 0; i < count; i++) {
+		auto rindex = sel.get_index(i);
+		auto hindex = hdata.sel->get_index(i);
+		auto hash = hash_data[hindex];
+		result_data[rindex] = main_ht + (hash & bitmask);
 	}
 }
 
@@ -205,22 +220,15 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 	return result_count;
 }
 
-void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
-	assert(!finalized);
-	assert(keys.size() == payload.size());
-	if (keys.size() == 0) {
-		return;
-	}
 
-	// orrify all the keys
-	auto key_data = unique_ptr<VectorData[]>(new VectorData[keys.column_count()]);
+idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel) {
+	key_data = unique_ptr<VectorData[]>(new VectorData[keys.column_count()]);
 	for(idx_t key_idx = 0; key_idx < keys.column_count(); key_idx++) {
 		keys.data[key_idx].Orrify(keys.size(), key_data[key_idx]);
 	}
 
 	// figure out which keys are NULL, and create a selection vector out of them
-	const SelectionVector *current_sel = &FlatVector::IncrementalSelectionVector;
-	SelectionVector sel;
+	current_sel = &FlatVector::IncrementalSelectionVector;
 	idx_t added_count = keys.size();
 	for(idx_t i = 0; i < keys.column_count(); i++) {
 		if (!null_values_are_equal[i]) {
@@ -232,7 +240,21 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			current_sel = &sel;
 		}
 	}
+	return added_count;
+}
 
+void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
+	assert(!finalized);
+	assert(keys.size() == payload.size());
+	if (keys.size() == 0) {
+		return;
+	}
+
+	// prepare the keys for processing
+	unique_ptr<VectorData[]> key_data;
+	const SelectionVector *current_sel;
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
 	if (added_count == 0) {
 		return;
 	}
@@ -370,80 +392,47 @@ void JoinHashTable::Finalize() {
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	assert(count > 0); // should be handled before
 	assert(finalized);
-	throw NotImplementedException("FIXME probe");
 
-	// for (idx_t i = 0; i < keys.column_count(); i++) {
-	// 	if (null_values_are_equal[i]) {
-	// 		VectorOperations::FillNullMask(keys.data[i]);
-	// 	}
-	// }
+	// set up the scan structure
+	auto ss = make_unique<ScanStructure>(*this);
 
-	// scan structure
-	// auto ss = make_unique<ScanStructure>(*this);
-	// // first hash all the keys to do the lookup
-	// Vector hashes(TypeId::HASH);
-	// Hash(keys, hashes);
+	// first prepare the keys for probing
+	const SelectionVector *current_sel;
+	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector);
+	if (ss->count == 0) {
+		return ss;
+	}
 
-	// // use bitmask to get index in array
-	// ApplyBitmask(hashes, keys.size());
+	// hash all the keys
+	Vector hashes(TypeId::HASH);
+	Hash(keys, *current_sel, ss->count, hashes);
 
-	// // FIXME: optimize for constant key vector
-	// hashes.Normalify(keys.size());
+	// now initialize the pointers of the scan structure based on the hashes
+	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
 
-	// // now create the initial pointers from the hashes
-	// auto ptrs = FlatVector::GetData<data_ptr_t>(ss->pointers);
-	// auto indices = FlatVector::GetData<uint64_t>(hashes);
-	// auto hashed_pointers = (data_ptr_t *)hash_map->node->buffer;
-	// for (idx_t i = 0; i < keys.size(); i++) {
-	// 	auto index = indices[i];
-	// 	ptrs[i] = hashed_pointers[index];
-	// }
-	// ss->pointers.SetCount(keys.size());
+	if (join_type != JoinType::INNER) {
+		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	}
 
-	// switch (join_type) {
-	// case JoinType::SEMI:
-	// case JoinType::ANTI:
-	// case JoinType::LEFT:
-	// case JoinType::SINGLE:
-	// case JoinType::MARK:
-	// 	// initialize all tuples with found_match to false
-	// 	memset(ss->found_match, 0, sizeof(ss->found_match));
-	// 	break;
-	// default:
-	// 	break;
-	// }
+	// create the selection vector linking to only non-empty entries
+	idx_t count = 0;
+	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
+	for (idx_t i = 0; i < ss->count; i++) {
+		auto idx = current_sel->get_index(i);
+		auto chain_pointer = (data_ptr_t *)(pointers[idx]);
+		pointers[idx] = *chain_pointer;
+		if (pointers[idx]) {
+			ss->sel_vector.set_index(count++, idx);
 
-	// switch (join_type) {
-	// case JoinType::SEMI:
-	// case JoinType::ANTI:
-	// case JoinType::LEFT:
-	// case JoinType::SINGLE:
-	// case JoinType::MARK:
-	// case JoinType::INNER: {
-	// 	// create the selection vector linking to only non-empty entries
-	// 	// idx_t count = 0;
-	// 	// for (idx_t i = 0; i < ss->pointers.size(); i++) {
-	// 	// 	if (ptrs[i]) {
-	// 	// 		ss->sel_vector[count++] = i;
-	// 	// 	}
-	// 	// }
-	// 	throw NotImplementedException("FIXME");
-	// 	// ss->pointers.SetSelVector(ss->sel_vector);
-	// 	// ss->pointers.SetCount(count);
-	// 	break;
-	// }
-	// default:
-	// 	throw NotImplementedException("Unimplemented join type for hash join");
-	// }
-
-	// return ss;
+		}
+	}
+	ss->count = count;
+	return ss;
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht) : ht(ht), finished(false) {
+ScanStructure::ScanStructure(JoinHashTable &ht) : sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
 	pointers.Initialize(TypeId::POINTER);
-	build_pointer_vector.Initialize(TypeId::POINTER);
-	// pointers.SetSelVector(this->sel_vector);
-	throw NotImplementedException("FIXME");
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -475,151 +464,173 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-idx_t ScanStructure::ResolvePredicates(DataChunk &keys, sel_t comparison_result[]) {
-	throw NotImplementedException("FIXME");
-	// StandaloneVector current_pointers;
-	// current_pointers.SetCount(pointers.size());
-	// current_pointers.SetSelVector(pointers.sel_vector());
-	// current_pointers.Reference(pointers);
+template<class T, class OP>
+static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count, SelectionVector &match_sel, idx_t offset) {
+	idx_t result_count = 0;
+	auto data = (T*) vdata.data;
+	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
+	for(idx_t i = 0; i < count; i++) {
+		auto idx = current_sel.get_index(i);
+		auto kidx = vdata.sel->get_index(idx);
+		auto gdata = (T*) (ptrs[idx] + offset);
+		if ((*vdata.nullmask)[kidx]) {
+			if (IsNullValue<T>(*gdata)) {
+				match_sel.set_index(result_count++, idx);
+			}
+		} else {
+			if (OP::template Operation<T>(data[kidx], *gdata)) {
+				match_sel.set_index(result_count++, idx);
+			}
+		}
+	}
+	return result_count;
+}
 
-	// idx_t comparison_count;
-	// for (idx_t i = 0; i < ht.predicates.size(); i++) {
-	// 	// gather the data from the pointers
-	// 	Vector ht_data(current_pointers.cardinality(), keys.data[i].type);
-	// 	// we don't check for NULL values in the keys because either
-	// 	// (1) NULL values will have been filtered out before (null_values_are_equal = false) or
-	// 	// (2) we want NULL=NULL to be true (null_values_are_equal = true)
-	// 	VectorOperations::Gather::Set(current_pointers, ht_data, false);
+template<class OP>
+static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel, idx_t count, SelectionVector &match_sel, idx_t offset) {
+	switch(type) {
+	case TypeId::INT32:
+		return TemplatedGather<int32_t, OP>(data, pointers, current_sel, count, match_sel, offset);
+	default:
+		throw NotImplementedException("Unimplemented vector type for join");
+	}
 
-	// 	// set the selection vector
-	// 	assert(!keys.data[i].sel_vector());
-	// 	idx_t old_count = keys.data[i].size();
+}
 
-	// 	keys.SetCardinality(ht_data.cardinality());
-
-	// 	// perform the comparison expression
-	// 	switch (ht.predicates[i]) {
-	// 	case ExpressionType::COMPARE_EQUAL:
-	// 		comparison_count = VectorOperations::SelectEquals(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	case ExpressionType::COMPARE_GREATERTHAN:
-	// 		comparison_count = VectorOperations::SelectGreaterThan(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	// 		comparison_count = VectorOperations::SelectGreaterThanEquals(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	case ExpressionType::COMPARE_LESSTHAN:
-	// 		comparison_count = VectorOperations::SelectLessThan(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	// 		comparison_count = VectorOperations::SelectLessThanEquals(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	case ExpressionType::COMPARE_NOTEQUAL:
-	// 		comparison_count = VectorOperations::SelectNotEquals(keys.data[i], ht_data, comparison_result);
-	// 		break;
-	// 	default:
-	// 		throw NotImplementedException("Unimplemented comparison type for join");
-	// 	}
-	// 	// reset the selection vector
-	// 	keys.SetCardinality(old_count);
-
-	// 	if (comparison_count == 0) {
-	// 		// no matches remaining, skip any remaining comparisons
-	// 		idx_t increment = 0;
-	// 		for (idx_t j = i; j < ht.predicates.size(); j++) {
-	// 			increment += GetTypeIdSize(keys.data[j].type);
-	// 		}
-	// 		VectorOperations::AddInPlace(pointers, increment);
-	// 		return 0;
-	// 	}
-	// 	if (i + 1 < ht.predicates.size()) {
-	// 		// more predicates remaining: update the selection vector to avoid unnecessary comparisons
-	// 		current_pointers.SetSelVector(comparison_result);
-	// 		current_pointers.SetCount(comparison_count);
-	// 	}
-	// 	// move all the pointers to the next element
-	// 	VectorOperations::AddInPlace(pointers, GetTypeIdSize(keys.data[i].type));
-	// }
-	// return comparison_count;
+idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &result) {
+	SelectionVector *current_sel = &this->sel_vector;
+	idx_t remaining_count = this->count;
+	idx_t offset = 0;
+	for (idx_t i = 0; i < ht.predicates.size(); i++) {
+		switch (ht.predicates[i]) {
+		case ExpressionType::COMPARE_EQUAL:
+			remaining_count = GatherSwitch<Equals>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, result, offset);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented comparison type for join");
+		}
+		if (remaining_count == 0) {
+			break;
+		}
+		current_sel = &result;
+		offset += GetTypeIdSize(keys.data[i].type);
+	}
+	return remaining_count;
 }
 
 void ScanStructure::ResolvePredicates(DataChunk &keys, Vector &final_result) {
-	// initialize result to false
-	auto result_data = FlatVector::GetData<bool>(final_result);
-	for(idx_t i = 0; i < keys.size(); i++) {
-		result_data[i] = false;
-	}
+	throw NotImplementedException("FIXME");
+	// // initialize result to false
+	// auto result_data = FlatVector::GetData<bool>(final_result);
+	// for(idx_t i = 0; i < keys.size(); i++) {
+	// 	result_data[i] = false;
+	// }
 
-	// now resolve the predicates with the keys
-	sel_t matching_tuples[STANDARD_VECTOR_SIZE];
-	idx_t match_count = ResolvePredicates(keys, matching_tuples);
+	// // now resolve the predicates with the keys
+	// sel_t matching_tuples[STANDARD_VECTOR_SIZE];
+	// idx_t match_count = ResolvePredicates(keys, matching_tuples);
 
-	// finished with all comparisons, mark the matching tuples
-	for (idx_t i = 0; i < match_count; i++) {
-		result_data[matching_tuples[i]] = true;
+	// // finished with all comparisons, mark the matching tuples
+	// for (idx_t i = 0; i < match_count; i++) {
+	// 	result_data[matching_tuples[i]] = true;
+	// }
+}
+
+idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result, SelectionVector &result_vector) {
+	while(true) {
+		// resolve the predicates for this set of keys
+		idx_t result_count = ResolvePredicates(keys, result_vector);
+
+		// after doing all the comparisons set the found_match vector
+		if (found_match) {
+			for (idx_t i = 0; i < result_count; i++) {
+				auto idx = result_vector.get_index(i);
+				found_match[idx] = true;
+			}
+		}
+		if (result_count > 0) {
+			return result_count;
+		}
+		// no matches found: check the next set of pointers
+		AdvancePointers();
+		if (this->count == 0) {
+			return 0;
+		}
 	}
 }
 
-idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	throw NotImplementedException("FIXME");
-	// sel_t comparison_result[STANDARD_VECTOR_SIZE];
-	// idx_t result_count = 0;
-	// do {
-	// 	auto build_pointers = FlatVector::GetData<data_ptr_t>(build_pointer_vector);
+void ScanStructure::AdvancePointers() {
+	// now for all the pointers, we move on to the next set of pointers
+	idx_t new_count = 0;
+	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
+	for(idx_t i = 0; i < this->count; i++) {
+		auto idx = this->sel_vector.get_index(i);
+		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
+		ptrs[idx] = *chain_pointer;
+		if (ptrs[idx]) {
+			this->sel_vector.set_index(new_count++, idx);
+		}
+	}
+	this->count = new_count;
+}
 
-	// 	// resolve the predicates for all the pointers
-	// 	result_count = ResolvePredicates(keys, comparison_result);
 
-	// 	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-	// 	// after doing all the comparisons we loop to find all the actual matches (if any)
-	// 	for (idx_t i = 0; i < result_count; i++) {
-	// 		auto index = comparison_result[i];
-	// 		found_match[index] = true;
-	// 		result.owned_sel_vector[i] = index;
-	// 		build_pointers[i] = ptrs[index];
-	// 	}
 
-	// 	// finally we chase the pointers for the next iteration
-	// 	idx_t new_count = 0;
-	// 	VectorOperations::Exec(pointers, [&](idx_t index, idx_t k) {
-	// 		auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
-	// 		ptrs[index] = *prev_pointer;
-	// 		if (ptrs[index]) {
-	// 			// if there is a next pointer, we keep this entry
-	// 			// otherwise the entry is removed from the sel_vector
-	// 			sel_vector[new_count++] = index;
-	// 		}
-	// 	});
-	// 	pointers.SetCount(new_count);
-	// } while (pointers.size() > 0 && result_count == 0);
-	// return result_count;
+template<class T>
+static void TemplatedGatherResult(Vector &result, uint64_t *pointers, SelectionVector &sel_vector, idx_t count, idx_t offset) {
+	auto rdata = FlatVector::GetData<T>(result);
+	auto &nullmask = FlatVector::Nullmask(result);
+	for(idx_t i = 0; i < count; i++) {
+		auto pidx = sel_vector.get_index(i);
+		auto hdata = (T*) (pointers[pidx] + offset);
+		if (IsNullValue<T>(*hdata)) {
+			nullmask[i] = true;
+		} else {
+			rdata[i] = *hdata;
+		}
+	}
+}
+
+void ScanStructure::GatherResult(Vector &result, SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
+	switch(result.type) {
+	case TypeId::INT32:
+		TemplatedGatherResult<int32_t>(result, ptrs, sel_vector, count, offset);
+		break;
+	default:
+		throw NotImplementedException("bla");
+	}
+	offset += GetTypeIdSize(result.type);
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	throw NotImplementedException("FIXME");
-	// assert(result.column_count() == left.column_count() + ht.build_types.size());
-	// if (pointers.size() == 0) {
-	// 	// no pointers left to chase
-	// 	return;
-	// }
+	assert(result.column_count() == left.column_count() + ht.build_types.size());
+	if (this->count == 0) {
+		// no pointers left to chase
+		return;
+	}
 
-	// idx_t result_count = ScanInnerJoin(keys, left, result);
-	// if (result_count > 0) {
-	// 	// matches were found
-	// 	// construct the result
-	// 	build_pointer_vector.SetCount(result_count);
-	// 	result.SetCardinality(result_count, result.owned_sel_vector);
-	// 	// reference the columns of the left side from the result
-	// 	for (idx_t i = 0; i < left.column_count(); i++) {
-	// 		result.data[i].Reference(left.data[i]);
-	// 	}
-	// 	// now fetch the right side data from the HT
-	// 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
-	// 		auto &vector = result.data[left.column_count() + i];
-	// 		VectorOperations::Gather::Set(build_pointer_vector, vector);
-	// 		VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
-	// 	}
-	// }
+	SelectionVector result_vector(STANDARD_VECTOR_SIZE);
+
+	idx_t result_count = ScanInnerJoin(keys, left, result, result_vector);
+	if (result_count > 0) {
+		// matches were found
+		// construct the result
+		// on the LHS, we create a slice using the result vector
+		for (idx_t i = 0; i < left.column_count(); i++) {
+			result.data[i].Slice(left.data[i], result_vector);
+		}
+		// on the RHS, we need to fetch the data from the hash table
+		idx_t offset = ht.condition_size;
+		for (idx_t i = 0; i < ht.build_types.size(); i++) {
+			auto &vector = result.data[left.column_count() + i];
+			assert(vector.type == ht.build_types[i]);
+			GatherResult(vector, result_vector, result_count, offset);
+		}
+		result.SetCardinality(result_count);
+		AdvancePointers();
+	}
 }
 
 void ScanStructure::ScanKeyMatches(DataChunk &keys) {
