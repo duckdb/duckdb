@@ -10,6 +10,8 @@ typedef struct {
 	uint64_t rowcount;
 	uint64_t offset;
 
+	PyObject* description;
+
 	int closed;
 	int reset;
 	int initialized;
