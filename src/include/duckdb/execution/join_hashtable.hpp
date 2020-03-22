@@ -56,6 +56,7 @@ public:
 
 	private:
 		void AdvancePointers();
+		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
@@ -75,11 +76,14 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result, SelectionVector &result_vector);
+		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
-		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
-		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &result);
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
 		void GatherResult(Vector &result, SelectionVector &sel_vector, idx_t count, idx_t &offset);
+
+		template<bool NO_MATCH_SEL>
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);
 	};
 
 private:
