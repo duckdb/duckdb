@@ -67,22 +67,6 @@ struct VectorOperations {
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
-	// Select Comparison Operations
-	//===--------------------------------------------------------------------===//
-	// result = A == B
-	static idx_t SelectEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	// result = A != B
-	static idx_t SelectNotEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	// result = A > B
-	static idx_t SelectGreaterThan(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	// result = A >= B
-	static idx_t SelectGreaterThanEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	// result = A < B
-	static idx_t SelectLessThan(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	// result = A <= B
-	static idx_t SelectLessThanEquals(Vector &A, Vector &B, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-
-	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
 	struct Scatter {

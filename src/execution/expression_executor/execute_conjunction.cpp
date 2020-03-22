@@ -73,52 +73,6 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
 	}
 }
 
-static void MergeSelectionVectorIntoResult(sel_t *result, idx_t &result_count, sel_t *sel, idx_t count) {
-	assert(count > 0);
-	if (result_count == 0) {
-		// nothing to merge
-		memcpy(result, sel, count * sizeof(sel_t));
-		result_count = count;
-		return;
-	}
-
-	sel_t temp_result[STANDARD_VECTOR_SIZE];
-	idx_t res_idx = 0, sel_idx = 0;
-	idx_t temp_count = 0;
-	while (true) {
-		// the two sets should be disjunct
-		assert(result[res_idx] != sel[sel_idx]);
-		if (result[res_idx] < sel[sel_idx]) {
-			temp_result[temp_count++] = result[res_idx];
-			res_idx++;
-			if (res_idx >= result_count) {
-				break;
-			}
-		} else {
-			assert(result[res_idx] > sel[sel_idx]);
-			temp_result[temp_count++] = sel[sel_idx];
-			sel_idx++;
-			if (sel_idx >= count) {
-				break;
-			}
-		}
-	}
-	// append remaining entries
-	if (sel_idx < count) {
-		// first copy the temp_result to the result
-		memcpy(result, temp_result, temp_count * sizeof(sel_t));
-		// now copy the remaining entries in the selection vector after the initial result
-		memcpy(result + temp_count, sel + sel_idx, (count - sel_idx) * sizeof(sel_t));
-		result_count = temp_count + count - sel_idx;
-	} else {
-		// first copy the remainder of the result into the temp_result vector
-		memcpy(temp_result + temp_count, result + res_idx, (result_count - res_idx) * sizeof(sel_t));
-		result_count = temp_count + (result_count - res_idx);
-		// now copy the temp_result back into the main result vector
-		memcpy(result, temp_result, result_count * sizeof(sel_t));
-	}
-}
-
 void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *state, double duration) {
 	state->iteration_count++;
 	state->runtime_sum += duration;
@@ -194,7 +148,6 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 		idx_t current_count = count;
 
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			// first resolve the current expression and get its execution time
 			current_count = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, true_sel, false_sel);
 			if (current_count == 0) {
 				break;
@@ -210,73 +163,31 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 		return current_count;
 	} else {
-		throw NotImplementedException("FIXME OR");
-		// sel_t *initial_sel = chunk->sel_vector;
-		// idx_t initial_count = chunk->size();
-		// idx_t current_count = chunk->size();
-		// sel_t *current_sel = initial_sel;
+		// get runtime statistics
+		auto start_time = chrono::high_resolution_clock::now();
 
-		// sel_t intermediate_result[STANDARD_VECTOR_SIZE];
-		// sel_t expression_result[STANDARD_VECTOR_SIZE];
-		// sel_t remaining[STANDARD_VECTOR_SIZE];
-		// idx_t result_count = 0;
-		// idx_t remaining_count = 0;
-		// sel_t *result_vector = initial_sel == result ? intermediate_result : result;
+		const SelectionVector *current_sel = sel;
+		idx_t current_count = count;
+		idx_t result_count = 0;
 
-		// // get runtime statistics
-		// start_time = chrono::high_resolution_clock::now();
+		SelectionVector temp_true(STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, temp_true, false_sel);
+			if (tcount > 0) {
+				// tuples passed, move them into the actual result vector
+				for(idx_t i = 0; i < tcount; i++) {
+					true_sel.set_index(result_count++, temp_true.get_index(i));
+				}
+				// now move on to check only the non-passing tuples
+				current_count -= tcount;
+				current_sel = &false_sel;
+				break;
+			}
+		}
 
-		// for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
-		// 	// first resolve the current expression
-		// 	idx_t new_count = Select(*expr.children[state->permutation[expr_idx]],
-		// 	                         state->child_states[state->permutation[expr_idx]].get(), expression_result);
-		// 	if (new_count == 0) {
-		// 		// no new qualifying entries: continue
-		// 		continue;
-		// 	}
-		// 	if (new_count == current_count) {
-		// 		// all remaining entries qualified! add them to the result
-		// 		if (!current_sel) {
-		// 			// first iteration already passes all tuples, no need to set up selection vector
-		// 			assert(current_count == initial_count);
-		// 			result_count = initial_count;
-		// 			break;
-		// 		}
-		// 		MergeSelectionVectorIntoResult(result_vector, result_count, current_sel, current_count);
-		// 		break;
-		// 	}
-		// 	// first merge the current results back into the result vector
-		// 	MergeSelectionVectorIntoResult(result_vector, result_count, expression_result, new_count);
-		// 	if (expr_idx + 1 == expr.children.size()) {
-		// 		// this is the last child: we don't need to construct the remaining tuples
-		// 		break;
-		// 	}
-		// 	// now we only need to continue executing tuples that were not qualified
-		// 	// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
-		// 	idx_t new_idx = 0;
-		// 	remaining_count = 0;
-		// 	for (idx_t i = 0; i < current_count; i++) {
-		// 		auto entry = current_sel ? current_sel[i] : i;
-		// 		if (new_idx >= new_count || expression_result[new_idx] != entry) {
-		// 			remaining[remaining_count++] = entry;
-		// 		} else {
-		// 			new_idx++;
-		// 		}
-		// 	}
-		// 	current_sel = remaining;
-		// 	current_count = remaining_count;
-		// 	chunk->SetCardinality(remaining_count, remaining);
-		// }
-
-		// // adapt runtime statistics
-		// end_time = chrono::high_resolution_clock::now();
-		// AdaptRuntimeStatistics(expr, state,
-		//                        chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
-
-		// chunk->SetCardinality(initial_count, initial_sel);
-		// if (result_vector != result && result_count > 0) {
-		// 	memcpy(result, result_vector, result_count * sizeof(sel_t));
-		// }
-		// return result_count;
+		// adapt runtime statistics
+		auto end_time = chrono::high_resolution_clock::now();
+		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		return result_count;
 	}
 }

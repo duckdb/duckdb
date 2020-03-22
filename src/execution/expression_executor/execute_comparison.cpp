@@ -1,6 +1,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -45,6 +47,31 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 	}
 }
 
+template <class OP> static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+	// the inplace loops take the result as the last parameter
+	switch (left.type) {
+	case TypeId::BOOL:
+	case TypeId::INT8:
+		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::INT16:
+		return BinaryExecutor::Select<int16_t, int16_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::INT32:
+		return BinaryExecutor::Select<int32_t, int32_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::INT64:
+		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::POINTER:
+		return BinaryExecutor::Select<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::FLOAT:
+		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::DOUBLE:
+		return BinaryExecutor::Select<double, double, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::VARCHAR:
+		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
+	default:
+		throw InvalidTypeException(left.type, "Invalid type for comparison");
+	}
+}
+
 idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	// resolve the children
 	Vector left(expr.left->return_type), right(expr.right->return_type);
@@ -53,17 +80,17 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::SelectEquals(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::SelectNotEquals(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::SelectLessThan(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::LessThan>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::SelectGreaterThan(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::SelectLessThanEquals(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::LessThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::SelectGreaterThanEquals(left, right, count, true_sel, false_sel);
+		return templated_select_operation<duckdb::GreaterThanEquals>(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		throw NotImplementedException("Unimplemented compare: COMPARE_DISTINCT_FROM");
 	default:
