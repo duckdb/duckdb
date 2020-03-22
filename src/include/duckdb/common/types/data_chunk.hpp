@@ -54,7 +54,6 @@ public:
 	void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
 	}
-	void SetCardinality(idx_t count, const SelectionVector &sel_vector);
 
 	Value GetValue(idx_t col_idx, idx_t index) const;
 	void SetValue(idx_t col_idx, idx_t index, Value val);
@@ -82,6 +81,7 @@ public:
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();
 
+	void Slice(const SelectionVector &sel_vector, idx_t count);
 	void Slice(DataChunk &other, const SelectionVector &sel, idx_t count);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize

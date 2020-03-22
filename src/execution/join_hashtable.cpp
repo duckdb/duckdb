@@ -689,11 +689,7 @@ template <bool MATCH> void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, Da
 	if (result_count > 0) {
 		// we only return the columns on the left side
 		// reference the columns of the left side from the result
-		for (idx_t i = 0; i < left.column_count(); i++) {
-			result.data[i].Reference(left.data[i]);
-		}
-		// project them using the result selection vector
-		result.SetCardinality(result_count, sel);
+		result.Slice(left, sel, result_count);
 	} else {
 		assert(result.size() == 0);
 	}
@@ -826,17 +822,14 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 		}
 		if (remaining_count > 0) {
 			// have remaining tuples
-			// first set the left side
-			idx_t i = 0;
-			for (; i < left.column_count(); i++) {
-				result.data[i].Reference(left.data[i]);
-			}
+			// slice the left side with tuples that did not find a match
+			result.Slice(left, sel, remaining_count);
+
 			// now set the right side to NULL
-			for (; i < result.column_count(); i++) {
+			for (idx_t i = left.column_count(); i < result.column_count(); i++) {
 				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
 				ConstantVector::SetNull(result.data[i], true);
 			}
-			result.SetCardinality(remaining_count, sel);
 		}
 		finished = true;
 	}

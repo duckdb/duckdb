@@ -199,7 +199,7 @@ static void MergeDictionaries(const SelectionVector &sel, SelectionVector &targe
 	}
 }
 
-void DataChunk::SetCardinality(idx_t count, const SelectionVector &sel_vector) {
+void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 	this->count = count;
 	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
 	for(idx_t c = 0; c < column_count(); c++) {

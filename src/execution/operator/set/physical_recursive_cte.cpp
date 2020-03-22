@@ -112,7 +112,7 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *sta
 			sel_vector.set_index(match_count++, probe_idx);
 		}
 	}
-	chunk.SetCardinality(match_count, sel_vector);
+	chunk.Slice(sel_vector, match_count);
 
 	return match_count;
 }

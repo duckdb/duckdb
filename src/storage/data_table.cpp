@@ -419,7 +419,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
 	}
-	result.SetCardinality(count, sel);
+	result.Slice(sel, count);
 	for (idx_t i = 0; i < indexes.size(); i++) {
 		indexes[i]->Delete(result, row_identifiers);
 	}
