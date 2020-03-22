@@ -13,12 +13,11 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonE
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
 	// resolve the children
-	Vector left(expr.left->return_type);
-	Vector right(expr.right->return_type);
-	Execute(*expr.left, state->child_states[0].get(), left, count);
-	Execute(*expr.right, state->child_states[1].get(), right, count);
+	Vector left(expr.left->return_type), right(expr.right->return_type);
+	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
+	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -46,12 +45,11 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	// resolve the children
-	Vector left(expr.left->return_type);
-	Vector right(expr.right->return_type);
-	Execute(*expr.left, state->child_states[0].get(), left, count);
-	Execute(*expr.right, state->child_states[1].get(), right, count);
+	Vector left(expr.left->return_type), right(expr.right->return_type);
+	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
+	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
 	switch (expr.type) {
 	case ExpressionType::COMPARE_EQUAL:

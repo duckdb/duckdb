@@ -76,9 +76,9 @@ public:
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, idx_t offset);
 	//! Creates a reference to a slice of the other vector
-	void Slice(Vector &other, SelectionVector &sel);
+	void Slice(Vector &other, const SelectionVector &sel);
 	//! Turns the vector into a dictionary vector with the specified dictionary
-	void Slice(SelectionVector &sel);
+	void Slice(const SelectionVector &sel);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.

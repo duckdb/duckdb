@@ -86,12 +86,12 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	}
 }
 
-void Vector::Slice(Vector &other, SelectionVector &sel) {
+void Vector::Slice(Vector &other, const SelectionVector &sel) {
 	Reference(other);
 	Slice(sel);
 }
 
-void Vector::Slice(SelectionVector &sel) {
+void Vector::Slice(const SelectionVector &sel) {
 	assert(vector_type != VectorType::DICTIONARY_VECTOR);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// dictionary on a constant is just a constant

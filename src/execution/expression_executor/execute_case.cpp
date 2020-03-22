@@ -17,10 +17,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
-	Vector check(expr.check->return_type);
-	Vector res_true(expr.result_if_true->return_type);
-	Vector res_false(expr.result_if_false->return_type);
+void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+	Vector check(expr.check->return_type), res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -28,19 +26,18 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 	// first execute the check expression
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
-	idx_t tcount = Select(*expr.check, check_state, count, true_sel, false_sel);
+	idx_t tcount = Select(*expr.check, check_state, sel, count, true_sel, false_sel);
 	idx_t fcount = count - tcount;
 	if (fcount == 0) {
 		// everything is true, only execute TRUE side
-		Execute(*expr.result_if_true, res_true_state, result, count);
+		Execute(*expr.result_if_true, res_true_state, sel, count, result);
 	} else if (tcount == 0) {
 		// everything is false, only execute FALSE side
-		Execute(*expr.result_if_false, res_false_state, result, count);
+		Execute(*expr.result_if_false, res_false_state, sel, count, result);
 	} else {
 		// have to execute both and mix and match
-		// FIXME: pass selection vector into execute here and don't use Case operation as we do below!
-		Execute(*expr.result_if_true, res_true_state, res_true, count);
-		Execute(*expr.result_if_false, res_false_state, res_false, count);
+		Execute(*expr.result_if_true, res_true_state, &true_sel, tcount, res_true);
+		Execute(*expr.result_if_false, res_false_state, &false_sel, fcount, res_false);
 
 		Case(res_true, res_false, result, true_sel, tcount, false_sel, fcount);
 	}

@@ -47,11 +47,11 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		Vector current_result(TypeId::BOOL);
-		Execute(*expr.children[i], state->child_states[i].get(), current_result, count);
+		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
@@ -183,51 +183,32 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	auto state = (ConjunctionState *)state_;
-	if (!chunk) {
-		return DefaultSelect(expr, state, count, true_sel, false_sel);
-	}
-
-	chrono::time_point<chrono::high_resolution_clock> start_time;
-	chrono::time_point<chrono::high_resolution_clock> end_time;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
-		throw NotImplementedException("FIXME AND");
+		// get runtime statistics
+		auto start_time = chrono::high_resolution_clock::now();
 
-		// // store the initial selection vector and count
-		// auto initial_sel = chunk->sel_vector;
-		// idx_t initial_count = chunk->size();
-		// idx_t current_count = chunk->size();
+		const SelectionVector *current_sel = sel;
+		idx_t current_count = count;
 
-		// // get runtime statistics
-		// start_time = chrono::high_resolution_clock::now();
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			// first resolve the current expression and get its execution time
+			current_count = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, true_sel, false_sel);
+			if (current_count == 0) {
+				break;
+			}
+			if (current_count < count) {
+				// tuples were filtered out: move on to using the true_sel to only evaluate passing tuples in subsequent iterations
+				current_sel = &true_sel;
+			}
+		}
 
-		// for (idx_t i = 0; i < expr.children.size(); i++) {
-
-		// 	// first resolve the current expression and get its execution time
-		// 	idx_t new_count =
-		// 	    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), result);
-
-		// 	if (new_count == 0) {
-		// 		current_count = 0;
-		// 		break;
-		// 	}
-		// 	if (new_count != current_count) {
-		// 		// disqualify all non-qualifying tuples by updating the selection vector
-		// 		chunk->SetCardinality(new_count, result);
-		// 		current_count = new_count;
-		// 	}
-		// }
-
-		// // adapt runtime statistics
-		// end_time = chrono::high_resolution_clock::now();
-		// AdaptRuntimeStatistics(expr, state,
-		//                        chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
-
-		// // restore the initial selection vector and count
-		// chunk->SetCardinality(initial_count, initial_sel);
-		// return current_count;
+		// adapt runtime statistics
+		auto end_time = chrono::high_resolution_clock::now();
+		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		return current_count;
 	} else {
 		throw NotImplementedException("FIXME OR");
 		// sel_t *initial_sel = chunk->sel_vector;

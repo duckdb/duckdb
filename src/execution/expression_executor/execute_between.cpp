@@ -62,14 +62,12 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
 	// resolve the children
-	Vector input(expr.input->return_type);
-	Vector lower(expr.lower->return_type);
-	Vector upper(expr.upper->return_type);
-	Execute(*expr.input, state->child_states[0].get(), input, count);
-	Execute(*expr.lower, state->child_states[1].get(), lower, count);
-	Execute(*expr.upper, state->child_states[2].get(), upper, count);
+	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
+	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
+	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
+	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
 
 	Vector intermediate1(TypeId::BOOL);
 	Vector intermediate2(TypeId::BOOL);
@@ -90,14 +88,12 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	VectorOperations::And(intermediate1, intermediate2, result, count);
 }
 
-idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
 	// resolve the children
-	Vector input(expr.input->return_type);
-	Vector lower(expr.lower->return_type);
-	Vector upper(expr.upper->return_type);
-	Execute(*expr.input, state->child_states[0].get(), input, count);
-	Execute(*expr.lower, state->child_states[1].get(), lower, count);
-	Execute(*expr.upper, state->child_states[2].get(), upper, count);
+	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
+	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
+	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
+	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		return between_loop_type_switch<BothInclusiveBetweenOperator>(input, lower, upper, count, true_sel, false_sel);

@@ -9,8 +9,12 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceEx
 	return nullptr;
 }
 
-void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
 	assert(expr.index != INVALID_INDEX);
 	assert(expr.index < chunk->column_count());
-	result.Reference(chunk->data[expr.index]);
+	if (sel) {
+		result.Slice(chunk->data[expr.index], *sel);
+	} else {
+		result.Reference(chunk->data[expr.index]);
+	}
 }

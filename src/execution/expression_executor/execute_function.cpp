@@ -24,7 +24,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, Vector &result) {
 	auto state = (FunctionState *)state_;
 	DataChunk arguments;
 	arguments.SetCardinality(count);
@@ -32,7 +32,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Initialize(state->child_types);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			assert(state->child_types[i] == expr.children[i]->return_type);
-			Execute(*expr.children[i], state->child_states[i].get(), arguments.data[i], count);
+			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 		}
 		arguments.Verify();
 	}

@@ -14,7 +14,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExp
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState *state, Vector &result, idx_t count) {
+void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
@@ -23,7 +23,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		}
 		Vector left(expr.children[0]->return_type);
 		// eval left side
-		Execute(*expr.children[0], state->child_states[0].get(), left, count);
+		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
 
 		// init result to false
 		Vector intermediate(TypeId::BOOL);
@@ -37,7 +37,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 			Vector vector_to_check(expr.children[child]->return_type);
 			Vector comp_res(TypeId::BOOL);
 
-			Execute(*expr.children[child], state->child_states[child].get(), vector_to_check, count);
+			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
 			VectorOperations::Equals(left, vector_to_check, comp_res, count);
 
 			if (child == 1) {
@@ -59,7 +59,7 @@ void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState 
 		}
 	} else if (expr.children.size() == 1) {
 		Vector child(expr.children[0]->return_type);
-		Execute(*expr.children[0], state->child_states[0].get(), child, count);
+		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.type) {
 		case ExpressionType::OPERATOR_NOT: {
 			VectorOperations::Not(child, result, count);
