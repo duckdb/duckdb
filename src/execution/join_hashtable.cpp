@@ -639,9 +639,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		// matches were found
 		// construct the result
 		// on the LHS, we create a slice using the result vector
-		for (idx_t i = 0; i < left.column_count(); i++) {
-			result.data[i].Slice(left.data[i], result_vector);
-		}
+		result.Slice(left, result_vector, result_count);
+
 		// on the RHS, we need to fetch the data from the hash table
 		idx_t offset = ht.condition_size;
 		for (idx_t i = 0; i < ht.build_types.size(); i++) {
@@ -649,7 +648,6 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 			assert(vector.type == ht.build_types[i]);
 			GatherResult(vector, result_vector, result_count, offset);
 		}
-		result.SetCardinality(result_count);
 		AdvancePointers();
 	}
 }

@@ -40,6 +40,10 @@ struct SelectionVector {
 		selection_data = make_buffer<SelectionData>(count);
 		sel_vector = selection_data->owned_data.get();
 	}
+	void Initialize(buffer_ptr<SelectionData> data) {
+		selection_data = move(data);
+		sel_vector = selection_data->owned_data.get();
+	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
 		sel_vector = other.sel_vector;
@@ -53,6 +57,9 @@ struct SelectionVector {
 	}
 	idx_t get_index(idx_t idx) const {
 		return sel_vector[idx];
+	}
+	sel_t *data() {
+		return sel_vector;
 	}
 private:
 	sel_t *sel_vector;

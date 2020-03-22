@@ -6,7 +6,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/common/unordered_map.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -174,14 +174,58 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
-void DataChunk::SetCardinality(idx_t count, SelectionVector &sel_vector) {
+static void MergeDictionaries(const SelectionVector &sel, SelectionVector &target, idx_t count, unordered_map<sel_t*, buffer_ptr<SelectionData>> &merge_cache) {
+	auto target_data = target.data();
+	// first check if the entry is already in the cache
+	auto entry = merge_cache.find(target_data);
+	if (entry != merge_cache.end()) {
+		// already merged: assign from cache
+		target.Initialize(entry->second);
+	} else {
+		// have to perform the merge
+		auto data = make_buffer<SelectionData>(count);
+		auto result_ptr = data->owned_data.get();
+		// for every element, we perform result[i] = target[new[i]]
+		for(idx_t i = 0; i < count; i++) {
+			auto new_idx = sel.get_index(i);
+			auto idx = target.get_index(new_idx);
+			result_ptr[i] = idx;
+		}
+
+		// place the merged data into the cache
+		merge_cache[target_data] = data;
+		// and move the data into the merged selection vector
+		target.Initialize(move(data));
+	}
+}
+
+void DataChunk::SetCardinality(idx_t count, const SelectionVector &sel_vector) {
 	this->count = count;
+	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
 	for(idx_t c = 0; c < column_count(); c++) {
 		if (data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
-			throw NotImplementedException("FIXME merge dictionary");
+			auto &current_sel = DictionaryVector::SelVector(data[c]);
+			MergeDictionaries(sel_vector, current_sel, count, merge_cache);
 		} else {
 			data[c].Slice(sel_vector);
+		}
+	}
+}
+
+void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count) {
+	assert(other.column_count() <= column_count());
+	this->count = count;
+	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
+	for(idx_t c = 0; c < other.column_count(); c++) {
+		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
+			// already a dictionary! merge the dictionaries
+			data[c].Reference(other.data[c]);
+
+			auto &current_sel = DictionaryVector::SelVector(data[c]);
+			MergeDictionaries(sel, current_sel, count, merge_cache);
+		} else {
+			data[c].Slice(other.data[c], sel);
 		}
 	}
 }
