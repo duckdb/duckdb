@@ -35,7 +35,7 @@ setMethod("dbIsValid", "duckdb_connection",
           function(dbObj, ...) {
             valid <- FALSE
             tryCatch ({
-              dbExecute(dbObj, SQL("SELECT 1"))
+              dbGetQuery(dbObj, SQL("SELECT 1"))
               valid <- TRUE
             }, error = function(c) {
             })
@@ -65,36 +65,15 @@ setMethod("dbSendQuery", c("duckdb_connection", "character"),
             if (conn@debug) {
               cat("Q ", statement, "\n")
             }
-		    statement <- enc2utf8(statement)
-            resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
-            attr(resultset, "row.names") <-
-              c(NA_integer_, as.integer(-1 * length(resultset[[1]])))
-            class(resultset) <- "data.frame"
+		        statement <- enc2utf8(statement)
+            stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)
+
             duckdb_result(
               connection = conn,
-              statement = statement,
-              has_resultset = TRUE,
-              resultset = resultset
+              stmt_lst = stmt_lst
             )
           })
 
-#' @rdname DBI
-#' @inheritParams DBI::dbSendStatement
-#' @export
-setMethod("dbSendStatement", c("duckdb_connection", "character"),
-          function(conn, statement, ...) {
-            if (conn@debug) {
-              cat("S ", statement, "\n")
-            }
-		    statement <- enc2utf8(statement)
-            resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
-            duckdb_result(
-              connection = conn,
-              statement = statement,
-              has_resultset = FALSE,
-              rows_affected = as.numeric(resultset[[1]][1])
-            )
-          })
 
 #' @rdname DBI
 #' @inheritParams DBI::dbDataType
