@@ -288,8 +288,29 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (LENGTH(valsexp) != 1) {
 			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
-		} // TODO esoteric types, date time datetime etc.
-		if (TYPEOF(valsexp) == LGLSXP) {
+		}
+		if (TYPEOF(valsexp) == REALSXP && TYPEOF(GET_CLASS(valsexp)) == STRSXP &&
+			strcmp("POSIXct", CHAR(STRING_ELT(GET_CLASS(valsexp), 0))) == 0) {
+			// Timestamp
+			auto ts_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
+			val.is_null = RTimestampType::IsNull(ts_val);
+		} else if (TYPEOF(valsexp) == REALSXP && TYPEOF(GET_CLASS(valsexp)) == STRSXP &&
+				   strcmp("Date", CHAR(STRING_ELT(GET_CLASS(valsexp), 0))) == 0) {
+			// Date
+			auto d_val = NUMERIC_POINTER(valsexp)[0];
+			val = Value::INTEGER(RDateType::Convert(d_val));
+			val.is_null = RDateType::IsNull(d_val);
+		} else if (isFactor(valsexp) && TYPEOF(valsexp) == INTSXP) {
+			auto int_val = INTEGER_POINTER(valsexp)[0];
+			auto levels = GET_LEVELS(valsexp);
+			val.type = TypeId::STRING;
+			val.is_null = RIntegerType::IsNull(int_val);
+			if (!val.is_null) {
+				auto str_val = STRING_ELT(levels, int_val - 1);
+				val.str_value = string(CHAR(str_val));
+			}
+		} else if (TYPEOF(valsexp) == LGLSXP) {
 			auto lgl_val = INTEGER_POINTER(valsexp)[0];
 			val = Value::BOOLEAN(lgl_val);
 			val.is_null = RBooleanType::IsNull(lgl_val);
