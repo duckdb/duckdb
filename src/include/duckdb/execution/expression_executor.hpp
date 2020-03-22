@@ -95,15 +95,15 @@ protected:
 
 	//! Execute the (boolean-returning) expression and generate a selection vector with all entries that are "true" in
 	//! the result
-	idx_t Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 
-	idx_t Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
-	idx_t Select(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel);
+	idx_t Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	idx_t Select(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//! Verify that the output of a step in the ExpressionExecutor is correct
-	void Verify(Expression &expr, Vector &result);
+	void Verify(Expression &expr, Vector &result, idx_t count);
 
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions

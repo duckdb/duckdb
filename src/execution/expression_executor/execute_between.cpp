@@ -31,7 +31,7 @@ struct ExclusiveBetweenOperator {
 	}
 };
 
-template <class OP> static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+template <class OP> static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	switch (input.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -88,7 +88,7 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 	VectorOperations::And(intermediate1, intermediate2, result, count);
 }
 
-idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
 	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);

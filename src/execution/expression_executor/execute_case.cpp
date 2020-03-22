@@ -26,7 +26,7 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 	// first execute the check expression
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
-	idx_t tcount = Select(*expr.check, check_state, sel, count, true_sel, false_sel);
+	idx_t tcount = Select(*expr.check, check_state, sel, count, &true_sel, &false_sel);
 	idx_t fcount = count - tcount;
 	if (fcount == 0) {
 		// everything is true, only execute TRUE side

@@ -497,6 +497,13 @@ void Vector::Verify(idx_t count) {
 		return;
 	}
 #ifdef DEBUG
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto sel = DictionaryVector::SelVector(*this);
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			assert(idx >= 0 && idx < STANDARD_VECTOR_SIZE);
+		}
+	}
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt

@@ -137,7 +137,7 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	auto state = (ConjunctionState *)state_;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
@@ -146,15 +146,33 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
+		idx_t false_count = 0;
 
+		unique_ptr<SelectionVector> temp_true, temp_false;
+		if (false_sel) {
+			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+		}
+		if (!true_sel) {
+			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			true_sel = temp_true.get();
+		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			current_count = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, true_sel, false_sel);
+			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, true_sel, temp_false.get());
+			idx_t fcount = current_count - tcount;
+			if (fcount > 0 && false_sel) {
+				// move failing tuples into the false_sel
+				// tuples passed, move them into the actual result vector
+				for(idx_t i = 0; i < fcount; i++) {
+					false_sel->set_index(false_count++, temp_false->get_index(i));
+				}
+			}
+			current_count = tcount;
 			if (current_count == 0) {
 				break;
 			}
 			if (current_count < count) {
 				// tuples were filtered out: move on to using the true_sel to only evaluate passing tuples in subsequent iterations
-				current_sel = &true_sel;
+				current_sel = true_sel;
 			}
 		}
 
@@ -170,18 +188,26 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 		idx_t current_count = count;
 		idx_t result_count = 0;
 
-		SelectionVector temp_true(STANDARD_VECTOR_SIZE);
+		unique_ptr<SelectionVector> temp_true, temp_false;
+		if (true_sel) {
+			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+		}
+		if (!false_sel) {
+			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			false_sel = temp_false.get();
+		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, temp_true, false_sel);
+			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
-				// tuples passed, move them into the actual result vector
-				for(idx_t i = 0; i < tcount; i++) {
-					true_sel.set_index(result_count++, temp_true.get_index(i));
+				if (true_sel) {
+					// tuples passed, move them into the actual result vector
+					for(idx_t i = 0; i < tcount; i++) {
+						true_sel->set_index(result_count++, temp_true->get_index(i));
+					}
 				}
 				// now move on to check only the non-passing tuples
 				current_count -= tcount;
-				current_sel = &false_sel;
-				break;
+				current_sel = false_sel;
 			}
 		}
 

@@ -47,7 +47,7 @@ void ExpressionExecutor::Execute(BoundComparisonExpression &expr, ExpressionStat
 	}
 }
 
-template <class OP> static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+template <class OP> static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (left.type) {
 	case TypeId::BOOL:
@@ -72,7 +72,7 @@ template <class OP> static idx_t templated_select_operation(Vector &left, Vector
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
 	Vector left(expr.left->return_type), right(expr.right->return_type);
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);

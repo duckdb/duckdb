@@ -57,8 +57,7 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	assert(expressions.size() == 1);
 	SetChunk(&input);
-	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
-	return Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), sel, false_sel);
+	return Select(*expressions[0], states[0]->root_state.get(), nullptr, input.size(), &sel, nullptr);
 }
 
 void ExpressionExecutor::ExecuteExpression(Vector &result) {
@@ -84,9 +83,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	return result.GetValue(0);
 }
 
-void ExpressionExecutor::Verify(Expression &expr, Vector &vector) {
+void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
 	assert(expr.return_type == vector.type);
-	vector.Verify(chunk ? chunk->size() : 1);
+	vector.Verify(count);
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr, ExpressionExecutorState &state) {
@@ -151,10 +150,11 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	default:
 		throw NotImplementedException("Attempting to execute expression of unknown type!");
 	}
-	Verify(expr, result);
+	Verify(expr, result, count);
 }
 
-idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+	assert(true_sel || false_sel);
 	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
@@ -168,7 +168,42 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 	}
 }
 
-idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector &true_sel, SelectionVector &false_sel) {
+template<bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restrict bdata, nullmask_t &nullmask, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+	idx_t true_count = 0, false_count = 0;
+	for(idx_t i = 0; i < count; i++) {
+		auto bidx = bsel->get_index(i);
+		auto result_idx = sel->get_index(i);
+		if (bdata[bidx] && (NO_NULL || !nullmask[bidx])) {
+			if (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count++, result_idx);
+			}
+		} else {
+			if (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count++, result_idx);
+			}
+		}
+	}
+	if (HAS_TRUE_SEL) {
+		return true_count;
+	} else {
+		return count - false_count;
+	}
+}
+
+template<bool NO_NULL>
+static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+	if (true_sel && false_sel) {
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+	} else if (true_sel) {
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+	} else {
+		assert(false_sel);
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+	}
+}
+
+idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
@@ -176,40 +211,14 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
-	switch(intermediate.vector_type) {
-	case VectorType::CONSTANT_VECTOR: {
-		// constant result: get the value
-		auto idata = ConstantVector::GetData<bool>(intermediate);
-		if (*idata && !ConstantVector::IsNull(intermediate)) {
-			// constant true: return everything; we skip filling the selection vector here as it will not be used
-			return count;
-		} else {
-			// constant false: filter everything
-			return 0;
-		}
+	VectorData idata;
+	intermediate.Orrify(count, idata);
+	if (!sel) {
+		sel = &FlatVector::IncrementalSelectionVector;
 	}
-	default:
-		intermediate.Normalify(count);
-		idx_t true_count = 0, false_count = 0;
-		auto idata = FlatVector::GetData<bool>(intermediate);
-		auto &nullmask = FlatVector::Nullmask(intermediate);
-		if (nullmask.any()) {
-			for(idx_t i = 0; i < count; i++) {
-				if (idata[i] && !nullmask[i]) {
-					true_sel.set_index(true_count++, i);
-				} else {
-					false_sel.set_index(false_count++, i);
-				}
-			}
-		} else {
-			for(idx_t i = 0; i < count; i++) {
-				if (idata[i]) {
-					true_sel.set_index(true_count++, i);
-				} else {
-					false_sel.set_index(false_count++, i);
-				}
-			}
-		}
-		return true_count;
+	if (idata.nullmask->any()) {
+		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
+	} else {
+		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
 	}
 }
