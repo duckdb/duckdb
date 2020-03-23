@@ -70,6 +70,8 @@ private:
 	unique_ptr<UpdateStatement> TransformUpdate(PGNode *node);
 	//! Transform a Postgres T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformPragma(PGNode *node);
+	unique_ptr<ExplainStatement> TransformExplain(PGNode *node);
+	unique_ptr<VacuumStatement> TransformVacuum(PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(PGNode *node);

@@ -38,6 +38,8 @@ string StatementTypeToString(StatementType type) {
 		return "DROP";
 	case StatementType::PRAGMA:
 		return "PRAGMA";
+	case StatementType::VACUUM:
+		return "VACUUM";
 	default:
 		return "INVALID";
 	}

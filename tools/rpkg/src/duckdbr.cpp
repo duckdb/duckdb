@@ -166,17 +166,20 @@ static RType detect_rtype(SEXP v) {
 
 extern "C" {
 
-SEXP duckdb_finalize_statement_R(SEXP stmtsexp) {
+SEXP duckdb_release_R(SEXP stmtsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_release_R: Need external pointer parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (stmtsexp) {
-		warning("duckdb_finalize_statement_R: Statement is garbage-collected, use dbClearResult() to avoid this.");
 		R_ClearExternalPtr(stmtsexp);
 		delete stmtholder;
 	}
 	return R_NilValue;
+}
+
+SEXP duckdb_finalize_statement_R(SEXP stmtsexp) {
+	return duckdb_release_R(stmtsexp);
 }
 
 SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
@@ -287,15 +290,19 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		Rf_error("duckdb_bind_R: Invalid statement");
 	}
 
+	stmtholder->parameters.clear();
+	stmtholder->parameters.resize(stmtholder->stmt->n_param);
+
 	if (stmtholder->stmt->n_param == 0) {
-		Rf_error("duckdb_bind_R: Query does not take any parameters");
+		if (LENGTH(paramsexp) > 0) {
+			Rf_error("duckdb_bind_R: Parameters to bind given but query takes none");
+		}
+		return R_NilValue;
 	}
 
 	if (TYPEOF(paramsexp) != VECSXP || LENGTH(paramsexp) != stmtholder->stmt->n_param) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
-	stmtholder->parameters.clear();
-	stmtholder->parameters.resize(stmtholder->stmt->n_param);
 
 	for (idx_t param_idx = 0; param_idx < LENGTH(paramsexp); param_idx++) {
 		Value val;
@@ -546,18 +553,6 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 		return retlist;
 	}
 	return ScalarReal(0); // no need for protection because no allocation can happen afterwards
-}
-
-SEXP duckdb_release_R(SEXP stmtsexp) {
-	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_release_R: Need external pointer parameter");
-	}
-	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
-	if (stmtsexp) {
-		R_ClearExternalPtr(stmtsexp);
-		delete stmtholder;
-	}
-	return R_NilValue;
 }
 
 static SEXP duckdb_finalize_database_R(SEXP dbsexp) {

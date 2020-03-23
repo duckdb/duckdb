@@ -20,6 +20,9 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSimpleStatemen
 	case StatementType::TRANSACTION:
 		type = LogicalOperatorType::TRANSACTION;
 		break;
+	case StatementType::VACUUM:
+		type = LogicalOperatorType::VACUUM;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for LogicalSimple!");
 	}

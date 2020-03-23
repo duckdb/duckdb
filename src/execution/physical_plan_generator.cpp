@@ -128,6 +128,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::ALTER:
 	case LogicalOperatorType::DROP:
 	case LogicalOperatorType::PRAGMA:
+	case LogicalOperatorType::VACUUM:
 		return CreatePlan((LogicalSimple &)op);
 	case LogicalOperatorType::RECURSIVE_CTE:
 		return CreatePlan((LogicalRecursiveCTE &)op);

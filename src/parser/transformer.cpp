@@ -19,15 +19,6 @@ bool Transformer::TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatemen
 	return true;
 }
 
-static unique_ptr<SQLStatement> create_dummy_statement() {
-	auto sn = make_unique<SelectNode>();
-	sn->select_list.push_back(make_unique<ConstantExpression>(SQLType::INTEGER, Value::INTEGER(0)));
-	sn->from_table = make_unique<EmptyTableRef>();
-	auto ss = make_unique<SelectStatement>();
-	ss->node = move(sn);
-	return move(ss);
-}
-
 unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 	switch (stmt->type) {
 	case T_PGRawStmt: {
@@ -77,13 +68,11 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 		return TransformCreateTableAs(stmt);
 	case T_PGPragmaStmt:
 		return TransformPragma(stmt);
-	case T_PGExplainStmt: {
-		PGExplainStmt *explain_stmt = reinterpret_cast<PGExplainStmt *>(stmt);
-		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
-	}
-	case T_PGVacuumStmt: { // Ignore VACUUM/ANALYZE for now, but we need to plan something
-		return (create_dummy_statement());
-	}
+	case T_PGExplainStmt:
+		return TransformExplain(stmt);
+	case T_PGVacuumStmt:
+		return TransformVacuum(stmt);
+
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

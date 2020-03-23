@@ -61,7 +61,7 @@ setMethod("dbDisconnect", "duckdb_connection",
 #' @inheritParams DBI::dbSendQuery
 #' @export
 setMethod("dbSendQuery", c("duckdb_connection", "character"),
-          function(conn, statement, ...) {
+          function(conn, statement, ..., immediate=FALSE) {
             if (conn@debug) {
               cat("Q ", statement, "\n")
             }
