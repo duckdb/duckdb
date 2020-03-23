@@ -61,7 +61,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	idx_t count = chunk_count;
 
 	// first create a selection vector from the deleted entries (if any)
-	SelectionVector sel;
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	auto entry = state.storage->deleted_entries.find(state.chunk_index);
 	if (entry != state.storage->deleted_entries.end()) {
 		// deleted entries! create a selection vector
@@ -81,31 +81,20 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		count = new_count;
 	}
 
-	if (count == chunk_count) {
-		// now scan the vectors of the chunk
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto id = column_ids[i];
-			if (id == COLUMN_IDENTIFIER_ROW_ID) {
-				// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-				result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
-			} else {
-				result.data[i].Reference(chunk.data[id]);
-			}
+	// now scan the vectors of the chunk
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto id = column_ids[i];
+		if (id == COLUMN_IDENTIFIER_ROW_ID) {
+			// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
+			result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
+		} else {
+			result.data[i].Reference(chunk.data[id]);
 		}
-		result.SetCardinality(chunk_count);
+	}
+	if (count == chunk_count) {
+		result.SetCardinality(count);
 	} else {
-		throw NotImplementedException("FIXME: apply selection vector to chunk");
-		// // now scan the vectors of the chunk
-		// for (idx_t i = 0; i < column_ids.size(); i++) {
-		// 	auto id = column_ids[i];
-		// 	if (id == COLUMN_IDENTIFIER_ROW_ID) {
-		// 		// row identifier: return a sequence of rowids starting from MAX_ROW_ID plus the row offset in the chunk
-		// 		result.data[i].Sequence(MAX_ROW_ID + state.chunk_index * STANDARD_VECTOR_SIZE, 1);
-		// 	} else {
-		// 		result.data[i].Reference(chunk.data[id]);
-		// 	}
-		// }
-		// result.SetCardinality(count, sel_vector);
+		result.Slice(sel, count);
 	}
 	state.chunk_index++;
 }
