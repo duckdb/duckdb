@@ -89,28 +89,27 @@ private:
 			}
 			break;
 		}
-		case VectorType::DICTIONARY_VECTOR:  {
-			auto &sel = DictionaryVector::SelVector(input);
-			auto &child = DictionaryVector::Child(input);
-			child.Normalify(count);
-
-			result.vector_type = VectorType::FLAT_VECTOR;
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-			auto ldata = FlatVector::GetData<INPUT_TYPE>(child);
-
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
-			    ldata, result_data, count, &sel, FlatVector::Nullmask(child), FlatVector::Nullmask(result), fun);
-			break;
-		}
-		default: {
-			input.Normalify(count);
-
+		case VectorType::FLAT_VECTOR: {
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input));
+
 			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
 			    ldata, result_data, count, FlatVector::Nullmask(input), FlatVector::Nullmask(result), fun);
+			break;
+		}
+		default: {
+			VectorData vdata;
+			input.Orrify(count, vdata);
+
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+			auto ldata = (INPUT_TYPE*) vdata.data;
+
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(
+			    ldata, result_data, count, vdata.sel, *vdata.nullmask, FlatVector::Nullmask(result), fun);
 			break;
 		}
 		}
