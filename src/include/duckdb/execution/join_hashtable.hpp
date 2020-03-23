@@ -80,7 +80,8 @@ public:
 
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
-		void GatherResult(Vector &result, SelectionVector &sel_vector, idx_t count, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
 
 		template<bool NO_MATCH_SEL>
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);

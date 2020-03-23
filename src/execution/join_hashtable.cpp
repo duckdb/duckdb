@@ -598,31 +598,36 @@ void ScanStructure::AdvancePointers()  {
 }
 
 template<class T>
-static void TemplatedGatherResult(Vector &result, uint64_t *pointers, SelectionVector &sel_vector, idx_t count, idx_t offset) {
+static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
 	for(idx_t i = 0; i < count; i++) {
+		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
 		auto hdata = (T*) (pointers[pidx] + offset);
 		if (IsNullValue<T>(*hdata)) {
-			nullmask[i] = true;
+			nullmask[ridx] = true;
 		} else {
-			rdata[i] = *hdata;
+			rdata[ridx] = *hdata;
 		}
 	}
 }
 
-void ScanStructure::GatherResult(Vector &result, SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
 	switch(result.type) {
 	case TypeId::INT32:
-		TemplatedGatherResult<int32_t>(result, ptrs, sel_vector, count, offset);
+		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	default:
 		throw NotImplementedException("bla");
 	}
 	offset += GetTypeIdSize(result.type);
+}
+
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+	GatherResult(result, FlatVector::IncrementalSelectionVector, sel_vector, count, offset);
 }
 
 void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -836,67 +841,50 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 }
 
 void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
-	throw NotImplementedException("FIXME single join");
-	// // single join
-	// // this join is similar to the semi join except that
-	// // (1) we actually return data from the RHS and
-	// // (2) we return NULL for that data if there is no match
-	// Vector comparison_result(pointers.cardinality(), TypeId::BOOL);
+	// single join
+	// this join is similar to the semi join except that
+	// (1) we actually return data from the RHS and
+	// (2) we return NULL for that data if there is no match
+	idx_t result_count = 0;
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+	while(this->count > 0) {
+		// resolve the predicates for the current set of pointers
+		idx_t match_count = ResolvePredicates(keys, match_sel, no_match_sel);
+		idx_t no_match_count = this->count - match_count;
 
-	// auto build_pointers = (data_ptr_t *)build_pointer_vector.GetData();
-	// idx_t result_count = 0;
-	// sel_t result_sel_vector[STANDARD_VECTOR_SIZE];
-	// while (pointers.size() > 0) {
-	// 	// resolve the predicates for all the pointers
-	// 	ResolvePredicates(keys, comparison_result);
+		// mark each of the matches as found
+		for(idx_t i = 0; i < match_count; i++) {
+			// found a match for this index
+			auto index = match_sel.get_index(i);
+			found_match[index] = true;
+			result_sel.set_index(result_count++, index);
+		}
+		// continue searching for the ones where we did not find a match yet
+		AdvancePointers(no_match_sel, no_match_count);
+	}
+	// reference the columns of the left side from the result
+	assert(input.column_count() > 0);
+	for (idx_t i = 0; i < input.column_count(); i++) {
+		result.data[i].Reference(input.data[i]);
+	}
+	// now fetch the data from the RHS
+	idx_t offset = ht.condition_size;
+	for (idx_t i = 0; i < ht.build_types.size(); i++) {
+		auto &vector = result.data[input.column_count() + i];
+		// fetch fetch the values
+		GatherResult(vector, result_sel, result_sel, result_count, offset);
+		// set NULL entries for every entry that was not found
+		auto &nullmask = FlatVector::Nullmask(vector);
+		nullmask.set();
+		for (idx_t j = 0; j < result_count; j++) {
+			nullmask[result_sel.get_index(j)] = false;
+		}
+	}
+	result.SetCardinality(input.size());
 
-	// 	auto ptrs = (data_ptr_t *)pointers.GetData();
-	// 	// after doing all the comparisons we loop to find all the actual matches
-	// 	idx_t new_count = 0;
-	// 	auto psel = pointers.sel_vector();
-	// 	VectorOperations::ExecType<bool>(comparison_result, [&](bool match, idx_t index, idx_t k) {
-	// 		if (match) {
-	// 			// found a match for this index
-	// 			// set the build_pointers to this position
-	// 			found_match[index] = true;
-	// 			build_pointers[result_count] = ptrs[index];
-	// 			result_sel_vector[result_count] = index;
-	// 			result_count++;
-	// 		} else {
-	// 			auto prev_pointer = (data_ptr_t *)(ptrs[index] + ht.build_size);
-	// 			ptrs[index] = *prev_pointer;
-	// 			if (ptrs[index]) {
-	// 				// if there is a next pointer, and we have not found a match yet, we keep this entry
-	// 				psel[new_count++] = index;
-	// 			}
-	// 		}
-	// 	});
-	// 	pointers.SetCount(new_count);
-	// }
-
-	// // now we construct the final result
-	// build_pointer_vector.SetCount(result_count);
-	// // reference the columns of the left side from the result
-	// assert(input.column_count() > 0);
-	// result.SetCardinality(result_count, result_sel_vector);
-	// for (idx_t i = 0; i < input.column_count(); i++) {
-	// 	result.data[i].Reference(input.data[i]);
-	// }
-	// // now fetch the data from the RHS
-	// for (idx_t i = 0; i < ht.build_types.size(); i++) {
-	// 	auto &vector = result.data[input.column_count() + i];
-	// 	// set NULL entries for every entry that was not found
-	// 	vector.nullmask.set();
-	// 	for (idx_t j = 0; j < result_count; j++) {
-	// 		vector.nullmask[result_sel_vector[j]] = false;
-	// 	}
-	// 	// fetch the data from the HT for tuples that found a match
-	// 	VectorOperations::Gather::Set(build_pointer_vector, vector);
-	// 	VectorOperations::AddInPlace(build_pointer_vector, GetTypeIdSize(ht.build_types[i]));
-	// }
-	// result.SetCardinality(input);
-	// // like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
-	// finished = true;
+	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
+	finished = true;
 }
 
 } // namespace duckdb

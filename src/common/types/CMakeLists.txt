@@ -6,6 +6,7 @@ add_library_unity(duckdb_common_types
                   hash.cpp
                   hyperloglog.cpp
                   null_value.cpp
+                  selection_vector.cpp
                   string_heap.cpp
                   string_type.cpp
                   timestamp.cpp

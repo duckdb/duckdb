@@ -31,7 +31,7 @@ struct SelectionVector {
 	SelectionVector(const SelectionVector &sel_vector) {
 		Initialize(sel_vector);
 	}
-
+public:
 	void Initialize(sel_t *sel) {
 		selection_data.reset();
 		sel_vector = sel;
@@ -61,6 +61,9 @@ struct SelectionVector {
 	sel_t *data() {
 		return sel_vector;
 	}
+
+	string ToString(idx_t count = 0);
+	void Print(idx_t count = 0);
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
