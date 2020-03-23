@@ -165,6 +165,8 @@ include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
+include_directories(third_party/utf8proc/include)
+
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)

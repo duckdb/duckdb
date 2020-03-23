@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "utf8proc.hpp"
 
 #include <iosfwd>
 #include <memory.h>
@@ -47,7 +48,7 @@ public:
 	//! Create a VARCHAR value
 	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 		if (IsUTF8String(val.c_str())) {
-			str_value = val;
+			str_value = Utf8Proc::Normalize(val);
 		} else {
 			throw Exception("String value is not valid UTF8");
 		}
