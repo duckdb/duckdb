@@ -90,11 +90,8 @@ test_that("dbBind() is called from dbGetQuery and dbExecute", {
 
 })
 
-
-
 test_that("various error cases for dbBind()", {
 	con <- dbConnect(duckdb::duckdb())
-
 
 	q <- dbSendQuery(con, "SELECT CAST (? AS INTEGER)")
 
@@ -146,7 +143,5 @@ test_that("various error cases for dbBind()", {
 	expect_error(dbGetQuery(con, "SELECT CAST (42 AS INTEGER)", list("asdf")))
 	expect_error(dbGetQuery(con, "SELECT CAST (42 AS INTEGER)", list("asdf", "asdf")))
 
-
 	dbDisconnect(con)
-
 })

@@ -18,11 +18,9 @@ duckdb_result <- function(connection, stmt_lst) {
 
 duckdb_execute <- function(res) {
   res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref)
-  res@env$needs_execute <- FALSE
   attr(res@env$resultset, "row.names") <-
           c(NA_integer_, as.integer(-1 * length(res@env$resultset[[1]])))
   class(res@env$resultset) <- "data.frame"
-
   if (res@stmt_lst$type != 'SELECT') {
     res@env$rows_affected <- as.numeric(res@env$resultset[[1]][1])
   }
@@ -217,7 +215,6 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
-    res@env$needs_execute <- TRUE
     res@env$rows_fetched <- 0
     res@env$resultset <- data.frame()
 
