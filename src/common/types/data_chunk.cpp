@@ -115,24 +115,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 	}
 	// write the data
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		data[col_idx].Normalify(size());
-		auto type = data[col_idx].type;
-		if (TypeIsConstantSize(type)) {
-			idx_t write_size = GetTypeIdSize(type) * size();
-			auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
-			// constant size type: simple memcpy
-			VectorOperations::CopyToStorage(data[col_idx], ptr.get());
-			serializer.WriteData(ptr.get(), write_size);
-		} else {
-			assert(type == TypeId::VARCHAR);
-			// strings are inlined into the blob
-			// we use null-padding to store them
-			auto strings = FlatVector::GetData<string_t>(data[col_idx]);
-			for(idx_t row_idx = 0; row_idx < size(); row_idx++) {
-				auto source = !FlatVector::IsNull(data[col_idx], row_idx) ? strings[row_idx].GetData() : NullValue<const char *>();
-				serializer.WriteString(source);
-			}
-		}
+		data[col_idx].Serialize(size(), serializer);
 	}
 }
 
@@ -148,28 +131,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	// now load the column data
 	SetCardinality(rows);
 	for (idx_t i = 0; i < column_count; i++) {
-		auto type = data[i].type;
-		if (TypeIsConstantSize(type)) {
-			// constant size type: simple memcpy
-			auto column_size = GetTypeIdSize(type) * rows;
-			auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
-			source.ReadData(ptr.get(), column_size);
-			Vector v(data[i].type, ptr.get());
-			VectorOperations::ReadFromStorage(v, data[i], rows);
-		} else {
-			auto strings = (string_t *)data[i].data;
-			for (idx_t j = 0; j < rows; j++) {
-				// read the strings
-				auto str = source.Read<string>();
-				// now add the string to the StringHeap of the vector
-				// and write the pointer into the vector
-				if (IsNullValue<const char *>((const char *)str.c_str())) {
-					data[i].nullmask[j] = true;
-				} else {
-					strings[j] = StringVector::AddString(data[i], str);
-				}
-			}
-		}
+		data[i].Deserialize(rows, source);
 	}
 	Verify();
 }

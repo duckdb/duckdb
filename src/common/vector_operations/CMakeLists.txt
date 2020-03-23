@@ -1,6 +1,5 @@
 add_library_unity(duckdb_vector_operations
                   OBJECT
-                  append.cpp
                   boolean_operators.cpp
                   vector_cast.cpp
                   comparison_operators.cpp
@@ -8,6 +7,7 @@ add_library_unity(duckdb_vector_operations
                   generators.cpp
                   gather.cpp
                   vector_hash.cpp
+                  vector_storage.cpp
                   null_operations.cpp
                   numeric_inplace_operators.cpp
                   scatter.cpp

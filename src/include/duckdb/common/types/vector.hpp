@@ -73,6 +73,7 @@ public:
 	void Reference(Value &value);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
+
 	//! Creates a reference to a slice of the other vector
 	void Slice(Vector &other, idx_t offset);
 	//! Creates a reference to a slice of the other vector
@@ -93,6 +94,7 @@ public:
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	void Normalify(idx_t count);
+	void Normalify(const SelectionVector &sel, idx_t count);
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
 	void Orrify(idx_t count, VectorData &data);
 
@@ -107,6 +109,11 @@ public:
 	Value GetValue(idx_t index) const;
 	//! Sets the [index] element of the Vector to the specified Value.
 	void SetValue(idx_t index, Value val);
+
+	//! Serializes a Vector to a stand-alone binary blob
+	void Serialize(idx_t count, Serializer &serializer);
+	//! Deserializes a blob back into a Vector
+	void Deserialize(idx_t count, Deserializer &source);
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;

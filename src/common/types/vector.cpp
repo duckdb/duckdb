@@ -364,24 +364,18 @@ static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, i
 	}
 }
 
-// void Vector::Normalify(SelectionVector &sel) {
-// }
-
 void Vector::Normalify(idx_t count) {
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
 	case VectorType::DICTIONARY_VECTOR: {
-		throw NotImplementedException("FIXME: flatten dicitonary vector");
-
-		// // create a new vector with the same size, but without a selection vector
-		// VectorCardinality other_cardinality(size());
-		// Vector other(other_cardinality, type);
-		// // now copy the data of this vector to the other vector, removing the selection vector in the process
-		// VectorOperations::Copy(*this, other);
-		// // create a reference to the data in the other vector
-		// this->Reference(other);
+		// create a new flat vector of this type
+		Vector other(type);
+		// now copy the data of this vector to the other vector, removing the selection vector in the process
+		VectorOperations::Copy(*this, other, count);
+		// create a reference to the data in the other vector
+		this->Reference(other);
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR: {
@@ -456,12 +450,32 @@ void Vector::Normalify(idx_t count) {
 	}
 }
 
+void Vector::Normalify(const SelectionVector &sel, idx_t count) {
+	switch (vector_type) {
+	case VectorType::FLAT_VECTOR:
+		// already a flat vector
+		break;
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		SequenceVector::GetSequence(*this, start, increment);
+
+		vector_type = VectorType::FLAT_VECTOR;
+		buffer = VectorBuffer::CreateStandardVector(type);
+		data = buffer->GetData();
+		VectorOperations::GenerateSequence(*this, count, sel, start, increment);
+		break;
+	}
+	default:
+		throw NotImplementedException("Unimplemented type for normalify with selection vector");
+	}
+}
+
 void Vector::Orrify(idx_t count, VectorData &data) {
 	switch (vector_type) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
-		child.Normalify(count);
+		child.Normalify(sel, count);
 
 		data.sel = &sel;
 		data.data = FlatVector::GetData(child);
@@ -492,11 +506,63 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 	auxiliary.reset();
 }
 
+void Vector::Serialize(idx_t count, Serializer &serializer) {
+	if (TypeIsConstantSize(type)) {
+		// constant size type: simple copy
+		idx_t write_size = GetTypeIdSize(type) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		serializer.WriteData(ptr.get(), write_size);
+	} else {
+		VectorData vdata;
+		Orrify(count, vdata);
+
+		switch(type) {
+		case TypeId::VARCHAR: {
+			auto strings = (string_t *) vdata.data;
+			for(idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = (*vdata.nullmask)[idx] ? NullValue<const char *>() : strings[idx].GetData();
+				serializer.WriteString(source);
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented type for Vector::Serialize!");
+		}
+	}
+}
+
+void Vector::Deserialize(idx_t count, Deserializer &source) {
+	if (TypeIsConstantSize(type)) {
+		// constant size type: read fixed amount of data from
+		auto column_size = GetTypeIdSize(type) * count;
+		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+		source.ReadData(ptr.get(), column_size);
+
+		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
+	} else {
+		auto strings = FlatVector::GetData<string_t>(*this);
+		auto &nullmask = FlatVector::Nullmask(*this);
+		for (idx_t i = 0; i < count; i++) {
+			// read the strings
+			auto str = source.Read<string>();
+			// now add the string to the StringHeap of the vector
+			// and write the pointer into the vector
+			if (IsNullValue<const char *>((const char *)str.c_str())) {
+				nullmask[i] = true;
+			} else {
+				strings[i] = StringVector::AddString(*this, str);
+			}
+		}
+	}
+}
+
 void Vector::Verify(idx_t count) {
+#ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
-#ifdef DEBUG
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto sel = DictionaryVector::SelVector(*this);
 		for(idx_t i = 0; i < count; i++) {

@@ -51,7 +51,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	}
 }
 
-template <class T> void templated_generate_sequence(Vector &result, idx_t count, SelectionVector &sel, int64_t start, int64_t increment) {
+template <class T> void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start, int64_t increment) {
 	assert(TypeIsNumeric(result.type));
 	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
 		throw Exception("Sequence start or increment out of type range");
@@ -65,7 +65,7 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 	}
 }
 
-void VectorOperations::GenerateSequence(Vector &result, idx_t count, SelectionVector &sel, int64_t start, int64_t increment) {
+void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start, int64_t increment) {
 	if (!TypeIsNumeric(result.type)) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}

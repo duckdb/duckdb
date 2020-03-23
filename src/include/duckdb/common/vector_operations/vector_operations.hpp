@@ -104,7 +104,7 @@ struct VectorOperations {
 	// Generate functions
 	//===--------------------------------------------------------------------===//
 	static void GenerateSequence(Vector &result, idx_t count, int64_t start = 0, int64_t increment = 1);
-	static void GenerateSequence(Vector &result, idx_t count, SelectionVector &sel, int64_t start = 0, int64_t increment = 1);
+	static void GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start = 0, int64_t increment = 1);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
@@ -112,17 +112,17 @@ struct VectorOperations {
 	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count);
 	// Cast the data from the source type to the target type
 	static void Cast(Vector &source, Vector &result, idx_t count);
-	// Copy the data of <source> to the target location
-	static void Copy(Vector &source, void *target, idx_t offset = 0, idx_t element_count = 0);
+
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset = 0);
 	// Append the data of <source> to the target vector
 	static void Append(Vector &source, Vector &target, idx_t source_count, idx_t target_offset);
+
 	// Copy the data of <source> to the target location, setting null values to
 	// NullValue<T>. Used to store data without separate NULL mask.
-	static void CopyToStorage(Vector &source, void *target, idx_t offset = 0, idx_t element_count = 0);
+	static void WriteToStorage(Vector &source, idx_t count, data_ptr_t target);
 	// Reads the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
-	static void ReadFromStorage(Vector &source, Vector &target, idx_t count);
+	static void ReadFromStorage(data_ptr_t source, idx_t count, Vector &result);
 };
 } // namespace duckdb

@@ -91,8 +91,7 @@ public:
 
 	//! Serializes a DataChunk to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into a DataChunk [CAN THROW:
-	//! SerializationException]
+	//! Deserializes a blob back into a DataChunk
 	void Deserialize(Deserializer &source);
 
 	//! Hashes the DataChunk to the target vector
