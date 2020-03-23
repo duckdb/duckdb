@@ -53,7 +53,8 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 			return true;
 		}
 		for(idx_t i = 0; i < count; i++) {
-			if (!(*data.nullmask)[i]) {
+			auto idx = data.sel->get_index(i);
+			if (!(*data.nullmask)[idx]) {
 				return true;
 			}
 		}
@@ -65,24 +66,21 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	if (count == 0) {
 		return false;
 	}
-	return !VectorOperations::HasNotNull(input, count);
-}
+	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::IsNull(input);
+	} else {
+		VectorData data;
+		input.Orrify(count, data);
 
-// idx_t VectorOperations::NotNullSelVector(Vector &vector, SelectionVector &not_null, SelectionVector &null) {
-// 	throw NotImplementedException("FIXME");
-// 	// vector.Normalify();
-// 	// if (vector.nullmask.any()) {
-// 	// 	idx_t not_null_count = 0, null_count = 0;
-// 	// 	VectorOperations::Exec(vector, [&](uint64_t i, uint64_t k) {
-// 	// 		if (!vector.nullmask[i]) {
-// 	// 			not_null_vector->set_index([result_count++] = i;
-// 	// 		} else if (null_vector) {
-// 	// 			null_vector[null_count++] = i;
-// 	// 		}
-// 	// 	});
-// 	// 	result_assignment = not_null_vector;
-// 	// 	return result_count;
-// 	// } else {
-// 	// 	return vector.size();
-// 	// }
-// }
+		if (data.nullmask->none()) {
+			return false;
+		}
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = data.sel->get_index(i);
+			if ((*data.nullmask)[idx]) {
+				return true;
+			}
+		}
+		return false;
+	}
+}

@@ -93,7 +93,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 	auto main_ht = (data_ptr_t *) hash_map->node->buffer;
 	for(idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
-		auto hindex = hdata.sel->get_index(i);
+		auto hindex = hdata.sel->get_index(rindex);
 		auto hash = hash_data[hindex];
 		result_data[rindex] = main_ht + (hash & bitmask);
 	}
@@ -221,7 +221,6 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 	return result_count;
 }
 
-
 idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel) {
 	key_data = unique_ptr<VectorData[]>(new VectorData[keys.column_count()]);
 	for(idx_t key_idx = 0; key_idx < keys.column_count(); key_idx++) {
@@ -336,6 +335,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	ApplyBitmask(hashes, count);
 
 	hashes.Normalify(count);
+
 	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<uint64_t>(hashes);
@@ -749,8 +749,7 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 	finished = true;
 }
 
-void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],
-                             bool right_has_null) {
+void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result) {
 	// for the initial set of columns we just reference the left side
 	result.SetCardinality(child);
 	for (idx_t i = 0; i < child.column_count(); i++) {
@@ -762,24 +761,29 @@ void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetData<bool>(result_vector);
 	auto &nullmask = FlatVector::Nullmask(result_vector);
-	if (join_keys.column_count() > 0) {
-		for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
-			VectorData jdata;
-			join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
-			if (jdata.nullmask->any()) {
-				for(idx_t i = 0; i < join_keys.size(); i++) {
-					auto jidx = jdata.sel->get_index(i);
-					nullmask[i] = (*jdata.nullmask)[jidx];
-				}
+	for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
+		if (ht.null_values_are_equal[col_idx]) {
+			continue;
+		}
+		VectorData jdata;
+		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
+		if (jdata.nullmask->any()) {
+			for(idx_t i = 0; i < join_keys.size(); i++) {
+				auto jidx = jdata.sel->get_index(i);
+				nullmask[i] = (*jdata.nullmask)[jidx];
 			}
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
-	for (idx_t i = 0; i < child.size(); i++) {
-		bool_result[i] = found_match[i];
+	if (found_match) {
+		for (idx_t i = 0; i < child.size(); i++) {
+			bool_result[i] = found_match[i];
+		}
+	} else {
+		memset(bool_result, 0, sizeof(bool) * child.size());
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (right_has_null) {
+	if (ht.has_null) {
 		for (idx_t i = 0; i < child.size(); i++) {
 			if (!bool_result[i]) {
 				nullmask[i] = true;
@@ -796,7 +800,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 
 	ScanKeyMatches(keys);
 	if (ht.correlated_mark_join_info.correlated_types.size() == 0) {
-		ConstructMarkJoinResult(keys, input, result, found_match.get(), ht.has_null);
+		ConstructMarkJoinResult(keys, input, result);
 	} else {
 		auto &info = ht.correlated_mark_join_info;
 		// there are correlated columns

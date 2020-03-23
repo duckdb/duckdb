@@ -76,6 +76,8 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
+		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
+
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);

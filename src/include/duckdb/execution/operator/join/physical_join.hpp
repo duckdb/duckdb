@@ -21,6 +21,4 @@ public:
 	JoinType type;
 };
 
-void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],
-                             bool right_has_null);
 } // namespace duckdb
