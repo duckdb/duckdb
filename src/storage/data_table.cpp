@@ -364,7 +364,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(ROW_TYPE);
-	VectorOperations::GenerateSequence(row_identifiers, row_start, 1);
+	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	idx_t failed_index = INVALID_INDEX;
 	// now append the entries to the indices
@@ -391,7 +391,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 	}
 	// first generate the vector of row identifiers
 	Vector row_identifiers(ROW_TYPE);
-	VectorOperations::GenerateSequence(row_identifiers, row_start, 1);
+	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	// now remove the entries from the indices
 	RemoveFromIndexes(state, chunk, row_identifiers);

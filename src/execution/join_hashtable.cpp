@@ -500,12 +500,24 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 template<bool NO_MATCH_SEL, class OP>
 static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel, idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel, idx_t &no_match_count) {
 	switch(type) {
+	case TypeId::BOOL:
+	case TypeId::INT8:
+		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+	case TypeId::INT16:
+		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
 	case TypeId::INT32:
 		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+	case TypeId::INT64:
+		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+	case TypeId::FLOAT:
+		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+	case TypeId::DOUBLE:
+		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+	case TypeId::VARCHAR:
+		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
 	default:
-		throw NotImplementedException("Unimplemented vector type for join");
+		throw NotImplementedException("Unimplemented type for GatherSwitch");
 	}
-
 }
 
 template<bool NO_MATCH_SEL>
@@ -617,11 +629,30 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
 	switch(result.type) {
+	case TypeId::BOOL:
+	case TypeId::INT8:
+		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::INT16:
+		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
 	case TypeId::INT32:
 		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
+	case TypeId::INT64:
+		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::FLOAT:
+		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::DOUBLE:
+		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::VARCHAR:
+		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
 	default:
-		throw NotImplementedException("bla");
+		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
 	offset += GetTypeIdSize(result.type);
 }

@@ -126,7 +126,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 
 		// first generate the vector of row identifiers
 		Vector row_ids(ROW_TYPE);
-		VectorOperations::GenerateSequence(row_ids, base_id, 1);
+		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
 
 		// now append the entries to the indices
 		for (auto &index : storage->indexes) {
