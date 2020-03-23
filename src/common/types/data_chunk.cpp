@@ -175,19 +175,19 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 	}
 }
 
-void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count) {
-	assert(other.column_count() <= column_count());
+void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
+	assert(other.column_count() <= col_offset + column_count());
 	this->count = count;
 	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
 	for(idx_t c = 0; c < other.column_count(); c++) {
 		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
-			data[c].Reference(other.data[c]);
+			data[col_offset + c].Reference(other.data[c]);
 
 			auto &current_sel = DictionaryVector::SelVector(data[c]);
 			MergeDictionaries(sel, current_sel, count, merge_cache);
 		} else {
-			data[c].Slice(other.data[c], sel);
+			data[col_offset + c].Slice(other.data[c], sel);
 		}
 	}
 }

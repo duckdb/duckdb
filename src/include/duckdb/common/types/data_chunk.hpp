@@ -82,7 +82,7 @@ public:
 	void Normalify();
 
 	void Slice(const SelectionVector &sel_vector, idx_t count);
-	void Slice(DataChunk &other, const SelectionVector &sel, idx_t count);
+	void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member
