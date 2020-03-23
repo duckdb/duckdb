@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 using namespace std;
