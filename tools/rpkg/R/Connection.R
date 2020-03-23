@@ -68,10 +68,18 @@ setMethod("dbSendQuery", c("duckdb_connection", "character"),
 		        statement <- enc2utf8(statement)
             stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)
 
-            duckdb_result(
+            res <- duckdb_result(
               connection = conn,
               stmt_lst = stmt_lst
             )
+            params <- list(...)
+            if (length(params) == 1 && class(params[[1]])[[1]] == "list") {
+              params <- params[[1]]
+            }
+            if (length(params) > 0) {
+              dbBind(res, params)
+            }
+            return(res)
           })
 
 

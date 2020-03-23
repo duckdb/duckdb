@@ -217,7 +217,6 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
-
     res@env$needs_execute <- TRUE
     res@env$rows_fetched <- 0
     res@env$resultset <- data.frame()
