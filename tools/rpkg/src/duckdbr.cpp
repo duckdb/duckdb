@@ -294,9 +294,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 	stmtholder->parameters.resize(stmtholder->stmt->n_param);
 
 	if (stmtholder->stmt->n_param == 0) {
-		if (LENGTH(paramsexp) > 0) {
-			Rf_error("duckdb_bind_R: Parameters to bind given but query takes none");
-		}
+		Rf_error("duckdb_bind_R: dbBind called but query takes no parameters");
 		return R_NilValue;
 	}
 

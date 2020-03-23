@@ -50,10 +50,11 @@ setMethod("dbDisconnect", "duckdb_connection",
             if (!dbIsValid(conn)) {
               warning("Connection already closed.", call. = FALSE)
             }
+            .Call(duckdb_disconnect_R, conn@conn_ref)
             if (shutdown) {
               duckdb_shutdown(conn@driver)
             }
-            .Call(duckdb_disconnect_R, conn@conn_ref)
+
             invisible(TRUE)
           })
 

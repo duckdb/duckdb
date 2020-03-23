@@ -17,15 +17,15 @@ test_convert <- function(con, type, val) {
 
 	dbExecute(con, "DROP TABLE IF EXISTS bind_test")
 	dbExecute(con, sprintf("CREATE TEMPORARY TABLE bind_test(i INTEGER, a %s)", type))
-	q <- dbSendStatement(con, sprintf("INSERT INTO bind_test VALUES ($1, $2)", type))
+	q <- dbSendStatement(con, "INSERT INTO bind_test VALUES ($1, $2)")
 	dbBind(q, list(1, val))
 	dbBind(q, list(2, NA))
 	dbClearResult(q)
 	res3 <- dbGetQuery(con, "SELECT a FROM bind_test ORDER BY i")
+	dbExecute(con, "DROP TABLE bind_test")
+
 	expect_equal(res3[[1]][1], val_comp)
 	expect_true(is.na(res3[[1]][2]))
-
-
 }
 
 test_that("dbBind() works as expected for all types", {
@@ -46,15 +46,13 @@ test_that("dbBind() works as expected for all types", {
 	test_convert(con, "TIMESTAMP", as.POSIXct("2019-11-26 21:11Z", "UTC"))
 
 	test_convert(con, "STRING", as.factor("Hello, World"))
-	dbDisconnect(con)
+	
+	dbDisconnect(con, shutdown=T)
 
 })
 
 test_that("dbBind() is called from dbGetQuery and dbExecute", {
 	con <- dbConnect(duckdb::duckdb())
-
-	dbExecute(con, "DROP TABLE IF EXISTS bind_test")
-	dbExecute(con, "CREATE TEMPORARY TABLE bind_test(i INTEGER, a STRING)")
 
 	res <- dbGetQuery(con, "SELECT CAST (? AS INTEGER), CAST(? AS STRING)", 42, "Hello")
 
@@ -86,11 +84,13 @@ test_that("dbBind() is called from dbGetQuery and dbExecute", {
 
 
 	dbClearResult(q)
-	dbDisconnect(con)
+
+	dbDisconnect(con, shutdown=T)
 
 })
 
 test_that("various error cases for dbBind()", {
+	# testthat::skip("eek")
 	con <- dbConnect(duckdb::duckdb())
 
 	q <- dbSendQuery(con, "SELECT CAST (? AS INTEGER)")
@@ -143,5 +143,6 @@ test_that("various error cases for dbBind()", {
 	expect_error(dbGetQuery(con, "SELECT CAST (42 AS INTEGER)", list("asdf")))
 	expect_error(dbGetQuery(con, "SELECT CAST (42 AS INTEGER)", list("asdf", "asdf")))
 
-	dbDisconnect(con)
+
+	dbDisconnect(con, shutdown=T)
 })
