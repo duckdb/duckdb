@@ -116,111 +116,72 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 		});
 }
 
-static void templated_concat_ws(DataChunk &args, Vector &result, string_t *sep_data, const SelectionVector *sep_sel) {
+static void templated_concat_ws(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel, const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
+	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[args.column_count() - 1]);
+	for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
+		args.data[col_idx].Orrify(args.size(), orrified_data[col_idx - 1]);
+	}
+
 	// first figure out the lengths
 	for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
-		auto &input = args.data[col_idx];
+		auto &idata = orrified_data[col_idx - 1];
 
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-			// constant vector
-			if (ConstantVector::IsNull(input)) {
-				// constant null, skip
+		auto input_data = (string_t *)idata.data;
+		for(idx_t i = 0; i < count; i++) {
+			auto ridx = rsel.get_index(i);
+			auto sep_idx = sep_sel.get_index(ridx);
+			auto idx = idata.sel->get_index(ridx);
+			if ((*idata.nullmask)[idx]) {
 				continue;
 			}
-			auto input_data = ConstantVector::GetData<string_t>(input);
-			idx_t constant_size = input_data->GetSize();
-			for(idx_t i = 0; i < args.size(); i++) {
-				if (has_results[i]) {
-					result_lengths[i] += sep_data[sep_sel->get_index(i)].GetSize();
-				}
-				result_lengths[i] += constant_size;
-				has_results[i] = true;
+			if (has_results[ridx]) {
+				result_lengths[ridx] += sep_data[sep_idx].GetSize();
 			}
-		} else {
-			result.vector_type = VectorType::FLAT_VECTOR;
-			VectorData idata;
-			input.Orrify(args.size(), idata);
-
-			auto input_data = (string_t *)idata.data;
-			for(idx_t i = 0; i < args.size(); i++) {
-				auto idx = idata.sel->get_index(i);
-				if ((*idata.nullmask)[idx]) {
-					continue;
-				}
-				if (has_results[i]) {
-					result_lengths[i] += sep_data[sep_sel->get_index(i)].GetSize();
-				}
-				result_lengths[i] += input_data[idx].GetSize();
-				has_results[i] = true;
-			}
+			result_lengths[ridx] += input_data[idx].GetSize();
+			has_results[ridx] = true;
 		}
 	}
 
 	// first we allocate the empty strings for each of the values
 	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t i = 0; i < args.size(); i++) {
+	for(idx_t i = 0; i < count; i++) {
+		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size
-		result_data[i] = StringVector::EmptyString(result, result_lengths[i]);
+		result_data[ridx] = StringVector::EmptyString(result, result_lengths[ridx]);
 		// we reuse the result_lengths vector to store the currently appended size
-		result_lengths[i] = 0;
-		has_results[i] = false;
+		result_lengths[ridx] = 0;
+		has_results[ridx] = false;
 	}
 
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
-		auto &input = args.data[col_idx];
-		// loop over the vector and concat to all results
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-			// constant vector
-			if (ConstantVector::IsNull(input)) {
-				// constant null, skip
+		auto &idata = orrified_data[col_idx - 1];
+		auto input_data = (string_t *)idata.data;
+		for(idx_t i = 0; i < count; i++) {
+			auto ridx = rsel.get_index(i);
+			auto sep_idx = sep_sel.get_index(ridx);
+			auto idx = idata.sel->get_index(ridx);
+			if ((*idata.nullmask)[idx]) {
 				continue;
 			}
-			// append the constant vector to each of the strings
-			auto input_data = ConstantVector::GetData<string_t>(input);
-			auto input_ptr = input_data->GetData();
-			auto input_len = input_data->GetSize();
-			for(idx_t i = 0; i < args.size(); i++) {
-				if (has_results[i]) {
-					auto sep_idx = sep_sel->get_index(i);
-					auto sep_size = sep_data[sep_idx].GetSize();
-					auto sep_ptr = sep_data[sep_idx].GetData();
-					memcpy(result_data[i].GetData() + result_lengths[i], sep_ptr, sep_size);
-					result_lengths[i] += sep_size;
-				}
-				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
-				result_lengths[i] += input_len;
-				has_results[i] = true;
+			if (has_results[ridx]) {
+				auto sep_size = sep_data[sep_idx].GetSize();
+				auto sep_ptr = sep_data[sep_idx].GetData();
+				memcpy(result_data[ridx].GetData() + result_lengths[ridx], sep_ptr, sep_size);
+				result_lengths[ridx] += sep_size;
 			}
-		} else {
-			VectorData idata;
-			input.Orrify(args.size(), idata);
-
-			auto input_data = (string_t *)idata.data;
-			for(idx_t i = 0; i < args.size(); i++) {
-				auto idx = idata.sel->get_index(i);
-				if ((*idata.nullmask)[idx]) {
-					continue;
-				}
-				if (has_results[i]) {
-					auto sep_idx = sep_sel->get_index(i);
-					auto sep_size = sep_data[sep_idx].GetSize();
-					auto sep_ptr = sep_data[sep_idx].GetData();
-					memcpy(result_data[i].GetData() + result_lengths[i], sep_ptr, sep_size);
-					result_lengths[i] += sep_size;
-				}
-				auto input_ptr = input_data[i].GetData();
-				auto input_len = input_data[i].GetSize();
-				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
-				result_lengths[i] += input_len;
-				has_results[i] = true;
-			}
+			auto input_ptr = input_data[idx].GetData();
+			auto input_len = input_data[idx].GetSize();
+			memcpy(result_data[ridx].GetData() + result_lengths[ridx], input_ptr, input_len);
+			result_lengths[ridx] += input_len;
+			has_results[ridx] = true;
 		}
 	}
-	for(idx_t i = 0; i < args.size(); i++) {
-		result_data[i].Finalize();
+	for(idx_t i = 0; i < count; i++) {
+		auto ridx = rsel.get_index(i);
+		result_data[ridx].Finalize();
 	}
 }
 
@@ -229,28 +190,40 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 	VectorData vdata;
 	separator.Orrify(args.size(), vdata);
 
-	result.vector_type = VectorType::FLAT_VECTOR;
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+		if (args.data[col_idx].vector_type != VectorType::CONSTANT_VECTOR) {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			break;
+		}
+	}
 	switch(separator.vector_type) {
 	case VectorType::CONSTANT_VECTOR:
-		result.vector_type = VectorType::CONSTANT_VECTOR;
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
+			result.vector_type = VectorType::CONSTANT_VECTOR;
 			ConstantVector::SetNull(result, true);
 			return;
 		}
-		break;
-	case VectorType::FLAT_VECTOR:
-		FlatVector::SetNullmask(result, FlatVector::Nullmask(separator));
-		break;
+		// no null values
+		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, FlatVector::IncrementalSelectionVector, args.size(), result);
+		return;
 	default: {
+		// default case: loop over nullmask and create a non-null selection vector
+		idx_t not_null_count = 0;
+		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
 		auto &result_nullmask = FlatVector::Nullmask(result);
 		for(idx_t i = 0; i < args.size(); i++) {
-			result_nullmask[i] = (*vdata.nullmask)[vdata.sel->get_index(i)];
+			if ((*vdata.nullmask)[vdata.sel->get_index(i)]) {
+				result_nullmask[i] = true;
+			} else {
+				not_null_vector.set_index(not_null_count++, i);
+			}
 		}
-		break;
+		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, not_null_vector, not_null_count, result);
+		return;
 	}
 	}
-	templated_concat_ws(args, result, (string_t *)vdata.data, vdata.sel);
 }
 
 void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
