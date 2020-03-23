@@ -97,24 +97,15 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *sta
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
 	Vector dummy_addresses(TypeId::POINTER);
-	Vector probe_result(TypeId::BOOL);
 
-	auto probe_data = FlatVector::GetData<bool>(probe_result);
+	// Use the HT to eliminate duplicate rows
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	idx_t new_group_count = state->ht->FindOrCreateGroups(chunk, dummy_addresses, new_groups);
 
-	// Use the HT to find duplicate rows
-	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
+	// we only return entries we have not seen before (i.e. new groups)
+	chunk.Slice(new_groups, new_group_count);
 
-	// Update the sel_vector of the DataChunk
-	SelectionVector sel_vector(STANDARD_VECTOR_SIZE);
-	idx_t match_count = 0;
-	for (idx_t probe_idx = 0; probe_idx < chunk.size(); probe_idx++) {
-		if (probe_data[probe_idx]) {
-			sel_vector.set_index(match_count++, probe_idx);
-		}
-	}
-	chunk.Slice(sel_vector, match_count);
-
-	return match_count;
+	return new_group_count;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {

@@ -92,7 +92,7 @@ void SuperLargeHashTable::CallDestructors(Vector &state_vector, idx_t count) {
 	if (count == 0) {
 		return;
 	}
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (aggr.function.destructor) {
 			aggr.function.destructor(state_vector, count);
@@ -184,8 +184,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			groups.Verify();
 			assert(groups.size() == found_entries);
 			Vector new_addresses(TypeId::POINTER);
-			Vector new_group_dummy(TypeId::BOOL);
-			new_table->FindOrCreateGroups(groups, new_addresses, new_group_dummy);
+			new_table->FindOrCreateGroups(groups, new_addresses);
 
 			// NB: both address vectors already point to the payload start
 			assert(addresses.type == new_addresses.type && addresses.type == TypeId::POINTER);
@@ -221,9 +220,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	}
 
 	Vector addresses(TypeId::POINTER);
-	Vector new_group_dummy(TypeId::BOOL);
-
-	FindOrCreateGroups(groups, addresses, new_group_dummy);
+	FindOrCreateGroups(groups, addresses);
 
 	// now every cell has an entry
 	// update the aggregates
@@ -234,57 +231,50 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 
 		// for any entries for which a group was found, update the aggregate
 		auto &aggr = aggregates[aggr_idx];
+		auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
-			throw NotImplementedException("FIXME: aggr distinct");
-			// vector<TypeId> probe_types(group_types);
-			// probe_types.push_back(payload_types[payload_idx]);
-			// DataChunk probe_chunk;
-			// probe_chunk.Initialize(probe_types);
-			// for (idx_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
-			// 	probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
-			// }
-			// probe_chunk.data[group_types.size()].Reference(payload.data[payload_idx]);
-			// probe_chunk.SetCardinality(groups);
-			// probe_chunk.Verify();
+			vector<TypeId> probe_types(group_types);
+			for(idx_t i = 0; i < aggr.child_count; i++) {
+				probe_types.push_back(payload_types[payload_idx]);
+			}
+			DataChunk probe_chunk;
+			probe_chunk.Initialize(probe_types);
+			for (idx_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
+				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
+			}
+			for(idx_t i = 0; i < aggr.child_count; i++) {
+				probe_chunk.data[group_types.size() + i].Reference(payload.data[payload_idx + i]);
+			}
+			probe_chunk.SetCardinality(groups);
+			probe_chunk.Verify();
 
-			// Vector dummy_addresses(probe_chunk, TypeId::POINTER);
-			// Vector probe_result(probe_chunk, TypeId::BOOL);
-			// // this is the actual meat, find out which groups plus payload
-			// // value have not been seen yet
-			// distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, probe_result);
+			Vector dummy_addresses(TypeId::POINTER);
+			SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+			// this is the actual meat, find out which groups plus payload
+			// value have not been seen yet
+			idx_t new_group_count = distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
 
-			// // now fix up the payload and addresses accordingly by creating
-			// // a selection vector
-			// sel_t distinct_sel_vector[STANDARD_VECTOR_SIZE];
-			// idx_t match_count = 0;
-			// auto probe_result_data = FlatVector::GetData<bool>(probe_result);
-			// for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
-			// 	if (probe_result_data[sel_idx]) {
-			// 		distinct_sel_vector[match_count++] = probe_idx;
-			// 	}
-			// }
-			// if (match_count > 0) {
-			// 	VectorCardinality distinct_cardinality(match_count, distinct_sel_vector);
-			// 	Vector distinct_payload(distinct_cardinality);
-			// 	Vector distinct_addresses(distinct_cardinality);
+			// now fix up the payload and addresses accordingly by creating
+			// a selection vector
+			if (new_group_count > 0) {
+				Vector distinct_addresses;
+				distinct_addresses.Slice(addresses, new_groups);
+				for(idx_t i = 0; i < aggr.child_count; i++) {
+					payload.data[payload_idx + i].Slice(new_groups);
+					payload.data[payload_idx + i].Verify(new_group_count);
+				}
 
-			// 	distinct_payload.Reference(payload.data[payload_idx]);
-			// 	distinct_addresses.Reference(addresses);
+				distinct_addresses.Verify(new_group_count);
 
-			// 	distinct_payload.Verify();
-			// 	distinct_addresses.Verify();
-
-			// 	aggr.function.update(&distinct_payload, 1, distinct_addresses);
-			// }
-			// payload_idx++;
+				aggr.function.update(&payload.data[payload_idx], input_count, distinct_addresses, new_group_count);
+			}
 		} else {
-			auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
 			aggr.function.update(&payload.data[payload_idx], input_count, addresses, payload.size());
-			payload_idx += input_count;
 		}
 
 		// move to the next aggregate
+		payload_idx += input_count;
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, payload.size());
 	}
 }
@@ -302,8 +292,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
 	Vector addresses(TypeId::POINTER);
-	Vector new_group_dummy(TypeId::BOOL);
-	FindOrCreateGroups(groups, addresses, new_group_dummy);
+	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(result.column_count() > aggr_idx);
@@ -491,19 +480,14 @@ static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_da
 
 // this is to support distinct aggregations where we need to record whether we
 // have already seen a value for a group
-void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group) {
+idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups) {
 	// resize at 50% capacity, also need to fit the entire vector
 	if (entries > capacity / 2 || capacity - entries <= STANDARD_VECTOR_SIZE) {
 		Resize(capacity * 2);
 	}
 
-	// zero initialize the new_groups array
-	auto new_groups = FlatVector::GetData<bool>(new_group);
-	memset(new_groups, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
-	assert(new_group.type == TypeId::BOOL);
 	assert(addresses.type == TypeId::POINTER);
 
 	// hash the groups to get the addresses
@@ -532,6 +516,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
 	}
 
+	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {
 		idx_t entry_count = 0;
 		idx_t empty_count = 0;
@@ -544,7 +529,7 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 				// cell is empty; mark the cell as filled
 				*entry = FULL_CELL;
 				empty_vector.set_index(empty_count++, index);
-				new_groups[index] = true;
+				new_groups.set_index(new_group_count++, index);
 				// initialize the payload info for the column
 				memcpy(entry + FLAG_SIZE + group_width, empty_payload_data.get(), payload_width);
 			} else {
@@ -577,6 +562,13 @@ void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresse
 		std::swap(next_vector, no_match_vector);
 		remaining_entries = no_match_count;
 	}
+	return new_group_count;
+}
+
+void SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses) {
+	// create a dummy new_groups sel vector
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	FindOrCreateGroups(groups, addresses, new_groups);
 }
 
 idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChunk &result) {
