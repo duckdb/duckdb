@@ -50,8 +50,9 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		}
 		idx_t new_count = 0;
 		for(idx_t i = 0; i < current_count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!(*vdata.nullmask)[idx]) {
+			auto idx = current_vector->get_index(i);
+			auto vidx = vdata.sel->get_index(idx);
+			if (!(*vdata.nullmask)[vidx]) {
 				not_null_vector.set_index(new_count++, idx);
 			}
 		}

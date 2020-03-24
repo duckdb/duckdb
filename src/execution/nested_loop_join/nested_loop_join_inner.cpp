@@ -29,8 +29,8 @@ struct InitialNestedLoopJoin {
 				assert(!(*left_data.nullmask)[left_position]);
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
 					// emit tuple
-					lvector.set_index(result_count, left_position);
-					rvector.set_index(result_count, right_position);
+					lvector.set_index(result_count, lpos);
+					rvector.set_index(result_count, rpos);
 					result_count++;
 				}
 			}
@@ -56,14 +56,16 @@ struct RefineNestedLoopJoin {
 		auto rdata = (T *) right_data.data;
 		idx_t result_count = 0;
 		for (idx_t i = 0; i < current_match_count; i++) {
-			auto left_idx = left_data.sel->get_index(lvector.get_index(i));
-			auto right_idx = right_data.sel->get_index(rvector.get_index(i));
+			auto lidx = lvector.get_index(i);
+			auto ridx = rvector.get_index(i);
+			auto left_idx = left_data.sel->get_index(lidx);
+			auto right_idx = right_data.sel->get_index(ridx);
 			// null values should be filtered out before
 			assert(!(*left_data.nullmask)[left_idx]);
 			assert(!(*right_data.nullmask)[right_idx]);
 			if (OP::Operation(ldata[left_idx], rdata[right_idx])) {
-				lvector.set_index(result_count, left_idx);
-				rvector.set_index(result_count, right_idx);
+				lvector.set_index(result_count, lidx);
+				rvector.set_index(result_count, ridx);
 				result_count++;
 			}
 		}
