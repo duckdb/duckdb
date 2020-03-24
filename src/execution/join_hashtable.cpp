@@ -240,9 +240,6 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 			current_sel = &sel;
 		}
 	}
-	if (added_count < keys.size()) {
-		has_null = true;
-	}
 	return added_count;
 }
 
@@ -258,6 +255,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
+	if (added_count < keys.size()) {
+		has_null = true;
+	}
 	if (added_count == 0) {
 		return;
 	}
