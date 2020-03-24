@@ -33,9 +33,12 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			// we have to copy part of the chunk with an offset
 			idx_t start_position = offset - state->current_offset;
 			idx_t chunk_count = min(limit, state->child_chunk.size() - start_position);
-			throw NotImplementedException("FIXME slice");
+			SelectionVector sel(STANDARD_VECTOR_SIZE);
+			for(idx_t i = 0; i < chunk_count; i++) {
+				sel.set_index(i, start_position + i);
+			}
 			// set up a slice of the input chunks
-			// chunk.Slice(state->child_chunk, start_position, chunk_count);
+			chunk.Slice(state->child_chunk, sel, chunk_count);
 		}
 	} else {
 		// have to copy either the entire chunk or part of it

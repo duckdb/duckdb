@@ -240,6 +240,9 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_
 			current_sel = &sel;
 		}
 	}
+	if (added_count < keys.size()) {
+		has_null = true;
+	}
 	return added_count;
 }
 
