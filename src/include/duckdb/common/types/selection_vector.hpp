@@ -66,6 +66,10 @@ public:
 	sel_t *data() {
 		return sel_vector;
 	}
+	buffer_ptr<SelectionData> sel_data() {
+		return selection_data;
+	}
+	void Slice(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0);
 	void Print(idx_t count = 0);

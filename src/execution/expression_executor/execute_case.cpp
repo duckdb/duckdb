@@ -41,7 +41,7 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 		Case(res_true, res_false, result, true_sel, tcount, false_sel, fcount);
 		if (sel) {
-			result.Slice(*sel);
+			result.Slice(*sel, count);
 		}
 	}
 }

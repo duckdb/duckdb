@@ -145,19 +145,9 @@ static void MergeDictionaries(const SelectionVector &sel, SelectionVector &targe
 		target.Initialize(entry->second);
 	} else {
 		// have to perform the merge
-		auto data = make_buffer<SelectionData>(count);
-		auto result_ptr = data->owned_data.get();
-		// for every element, we perform result[i] = target[new[i]]
-		for(idx_t i = 0; i < count; i++) {
-			auto new_idx = sel.get_index(i);
-			auto idx = target.get_index(new_idx);
-			result_ptr[i] = idx;
-		}
-
+		target.Slice(sel, count);
 		// place the merged data into the cache
-		merge_cache[target_data] = data;
-		// and move the data into the merged selection vector
-		target.Initialize(move(data));
+		merge_cache[target_data] = target.sel_data();
 	}
 }
 
@@ -170,7 +160,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 			auto &current_sel = DictionaryVector::SelVector(data[c]);
 			MergeDictionaries(sel_vector, current_sel, count, merge_cache);
 		} else {
-			data[c].Slice(sel_vector);
+			data[c].Slice(sel_vector, count);
 		}
 	}
 }
@@ -187,7 +177,7 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count,
 			auto &current_sel = DictionaryVector::SelVector(data[c]);
 			MergeDictionaries(sel, current_sel, count, merge_cache);
 		} else {
-			data[col_offset + c].Slice(other.data[c], sel);
+			data[col_offset + c].Slice(other.data[c], sel, count);
 		}
 	}
 }

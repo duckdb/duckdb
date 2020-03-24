@@ -259,9 +259,9 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			// a selection vector
 			if (new_group_count > 0) {
 				Vector distinct_addresses;
-				distinct_addresses.Slice(addresses, new_groups);
+				distinct_addresses.Slice(addresses, new_groups, new_group_count);
 				for(idx_t i = 0; i < aggr.child_count; i++) {
-					payload.data[payload_idx + i].Slice(new_groups);
+					payload.data[payload_idx + i].Slice(new_groups, new_group_count);
 					payload.data[payload_idx + i].Verify(new_group_count);
 				}
 

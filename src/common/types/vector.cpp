@@ -86,15 +86,20 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	}
 }
 
-void Vector::Slice(Vector &other, const SelectionVector &sel) {
+void Vector::Slice(Vector &other, const SelectionVector &sel, idx_t count) {
 	Reference(other);
-	Slice(sel);
+	Slice(sel, count);
 }
 
-void Vector::Slice(const SelectionVector &sel) {
-	assert(vector_type != VectorType::DICTIONARY_VECTOR);
+void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		// dictionary on a constant is just a constant
+		return;
+	}
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// already a dictionary, slice the current dictionary
+		auto &current_sel = DictionaryVector::SelVector(*this);
+		current_sel.Slice(sel, count);
 		return;
 	}
 	auto child_ref = make_buffer<VectorChildBuffer>();
