@@ -50,73 +50,76 @@ template <class T> idx_t MergeJoinInner::Equality::Operation(ScalarMergeInfo &l,
 }
 
 template <class T> idx_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
-	throw NotImplementedException("Merge Join not implemented");
-	// if (r.pos >= r.count) {
-	// 	return 0;
-	// }
-	// assert(l.sel_vector && r.sel_vector);
-	// auto ldata = (T *)l.v.GetData();
-	// auto rdata = (T *)r.v.GetData();
-	// idx_t result_count = 0;
-	// while (true) {
-	// 	if (l.pos < l.count && duckdb::LessThan::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
-	// 		// left side smaller: found match
-	// 		l.result[result_count] = l.sel_vector[l.pos];
-	// 		r.result[result_count] = r.sel_vector[r.pos];
-	// 		result_count++;
-	// 		// move left side forward
-	// 		l.pos++;
-	// 		if (result_count == STANDARD_VECTOR_SIZE) {
-	// 			// out of space!
-	// 			break;
-	// 		}
-	// 	} else {
-	// 		// right side smaller or equal, or left side exhausted: move
-	// 		// right pointer forward reset left side to start
-	// 		l.pos = 0;
-	// 		r.pos++;
-	// 		if (r.pos == r.count) {
-	// 			break;
-	// 		}
-	// 	}
-	// }
-	// return result_count;
+	if (r.pos >= r.order.count) {
+		return 0;
+	}
+	auto ldata = (T *)l.order.vdata.data;
+	auto rdata = (T *)r.order.vdata.data;
+	auto &lorder = l.order.order;
+	auto &rorder = r.order.order;
+	idx_t result_count = 0;
+	while (true) {
+		auto lidx = lorder.get_index(l.pos);
+		auto ridx = rorder.get_index(r.pos);
+		if (l.pos < l.order.count && duckdb::LessThan::Operation(ldata[lidx], rdata[ridx])) {
+			// left side smaller: found match
+			l.result.set_index(result_count, lidx);
+			r.result.set_index(result_count, ridx);
+			result_count++;
+			// move left side forward
+			l.pos++;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				break;
+			}
+		} else {
+			// right side smaller or equal, or left side exhausted: move
+			// right pointer forward reset left side to start
+			l.pos = 0;
+			r.pos++;
+			if (r.pos == r.order.count) {
+				break;
+			}
+		}
+	}
+	return result_count;
 }
 
 template <class T> idx_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeInfo &l, ScalarMergeInfo &r) {
-	throw NotImplementedException("Merge Join not implemented");
-
-	// if (r.pos >= r.count) {
-	// 	return 0;
-	// }
-	// assert(l.sel_vector && r.sel_vector);
-	// auto ldata = (T *)l.v.GetData();
-	// auto rdata = (T *)r.v.GetData();
-	// idx_t result_count = 0;
-	// while (true) {
-	// 	if (l.pos < l.count &&
-	// 	    duckdb::LessThanEquals::Operation(ldata[l.sel_vector[l.pos]], rdata[r.sel_vector[r.pos]])) {
-	// 		// left side smaller: found match
-	// 		l.result[result_count] = l.sel_vector[l.pos];
-	// 		r.result[result_count] = r.sel_vector[r.pos];
-	// 		result_count++;
-	// 		// move left side forward
-	// 		l.pos++;
-	// 		if (result_count == STANDARD_VECTOR_SIZE) {
-	// 			// out of space!
-	// 			break;
-	// 		}
-	// 	} else {
-	// 		// right side smaller or equal, or left side exhausted: move
-	// 		// right pointer forward reset left side to start
-	// 		l.pos = 0;
-	// 		r.pos++;
-	// 		if (r.pos == r.count) {
-	// 			break;
-	// 		}
-	// 	}
-	// }
-	// return result_count;
+	if (r.pos >= r.order.count) {
+		return 0;
+	}
+	auto ldata = (T *)l.order.vdata.data;
+	auto rdata = (T *)r.order.vdata.data;
+	auto &lorder = l.order.order;
+	auto &rorder = r.order.order;
+	idx_t result_count = 0;
+	while (true) {
+		auto lidx = lorder.get_index(l.pos);
+		auto ridx = rorder.get_index(r.pos);
+		if (l.pos < l.order.count &&
+		    duckdb::LessThanEquals::Operation(ldata[lidx], rdata[ridx])) {
+			// left side smaller: found match
+			l.result.set_index(result_count, lidx);
+			r.result.set_index(result_count, ridx);
+			result_count++;
+			// move left side forward
+			l.pos++;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				break;
+			}
+		} else {
+			// right side smaller or equal, or left side exhausted: move
+			// right pointer forward reset left side to start
+			l.pos = 0;
+			r.pos++;
+			if (r.pos == r.order.count) {
+				break;
+			}
+		}
+	}
+	return result_count;
 }
 
 INSTANTIATE_MERGEJOIN_TEMPLATES(MergeJoinInner, Equality, ScalarMergeInfo, ScalarMergeInfo);

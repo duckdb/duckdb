@@ -51,7 +51,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		idx_t new_count = 0;
 		for(idx_t i = 0; i < current_count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if ((*vdata.nullmask)[idx]) {
+			if (!(*vdata.nullmask)[idx]) {
 				not_null_vector.set_index(new_count++, idx);
 			}
 		}
@@ -192,7 +192,6 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					if (state->child_chunk.size() == 0) {
 						return;
 					}
-					state->child_chunk.Normalify();
 
 					// resolve the left join condition for the current chunk
 					state->lhs_executor.Execute(state->child_chunk, state->left_join_condition);
@@ -261,8 +260,6 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 			// we have matching tuples!
 			// construct the result
-			// create a reference to the chunk on the left side using the lvector
-			// VectorCardinality lcardinality(match_count, lvector);
 			chunk.Slice(state->child_chunk, lvector, match_count);
 			chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 			break;

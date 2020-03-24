@@ -55,6 +55,11 @@ public:
 	void set_index(idx_t idx, idx_t loc) {
 		sel_vector[idx] = loc;
 	}
+	void swap(idx_t i, idx_t j) {
+		sel_t tmp = sel_vector[i];
+		sel_vector[i] = sel_vector[j];
+		sel_vector[j] = tmp;
+	}
 	idx_t get_index(idx_t idx) const {
 		return sel_vector[idx];
 	}
