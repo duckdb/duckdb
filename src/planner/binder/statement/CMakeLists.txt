@@ -12,7 +12,8 @@ add_library_unity(duckdb_bind_statement
                   bind_insert.cpp
                   bind_select.cpp
                   bind_simple.cpp
-                  bind_update.cpp)
+                  bind_update.cpp
+                  bind_vacuum.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_statement>
     PARENT_SCOPE)

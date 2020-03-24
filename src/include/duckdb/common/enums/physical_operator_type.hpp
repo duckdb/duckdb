@@ -89,7 +89,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EXPLAIN,
 	EMPTY_RESULT,
 	EXECUTE,
-	PREPARE
+	PREPARE,
+	VACUUM
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);
