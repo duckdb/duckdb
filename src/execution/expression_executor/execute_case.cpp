@@ -18,7 +18,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 }
 
 void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
-	Vector check(expr.check->return_type), res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
+	Vector res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
@@ -40,6 +40,9 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 		Execute(*expr.result_if_false, res_false_state, &false_sel, fcount, res_false);
 
 		Case(res_true, res_false, result, true_sel, tcount, false_sel, fcount);
+		if (sel) {
+			result.Slice(*sel);
+		}
 	}
 }
 
