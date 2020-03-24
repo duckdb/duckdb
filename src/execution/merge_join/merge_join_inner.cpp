@@ -61,7 +61,9 @@ template <class T> idx_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l,
 	while (true) {
 		auto lidx = lorder.get_index(l.pos);
 		auto ridx = rorder.get_index(r.pos);
-		if (l.pos < l.order.count && duckdb::LessThan::Operation(ldata[lidx], rdata[ridx])) {
+		auto dlidx = l.order.vdata.sel->get_index(lidx);
+		auto dridx = r.order.vdata.sel->get_index(ridx);
+		if (l.pos < l.order.count && duckdb::LessThan::Operation(ldata[dlidx], rdata[dridx])) {
 			// left side smaller: found match
 			l.result.set_index(result_count, lidx);
 			r.result.set_index(result_count, ridx);
@@ -97,8 +99,10 @@ template <class T> idx_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeIn
 	while (true) {
 		auto lidx = lorder.get_index(l.pos);
 		auto ridx = rorder.get_index(r.pos);
+		auto dlidx = l.order.vdata.sel->get_index(lidx);
+		auto dridx = r.order.vdata.sel->get_index(ridx);
 		if (l.pos < l.order.count &&
-		    duckdb::LessThanEquals::Operation(ldata[lidx], rdata[ridx])) {
+		    duckdb::LessThanEquals::Operation(ldata[dlidx], rdata[dridx])) {
 			// left side smaller: found match
 			l.result.set_index(result_count, lidx);
 			r.result.set_index(result_count, ridx);

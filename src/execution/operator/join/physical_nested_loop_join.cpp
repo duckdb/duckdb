@@ -67,7 +67,7 @@ static bool RemoveNullValues(DataChunk &chunk) {
 }
 
 template <bool MATCH>
-static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+void PhysicalJoin::ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
 	idx_t result_count = 0;
@@ -85,6 +85,46 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		result.Slice(left, sel, result_count);
 	} else {
 		result.SetCardinality(0);
+	}
+}
+
+void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[], bool has_null) {
+	// for the initial set of columns we just reference the left side
+	result.SetCardinality(left);
+	for (idx_t i = 0; i < left.column_count(); i++) {
+		result.data[i].Reference(left.data[i]);
+	}
+	auto &mark_vector = result.data.back();
+	mark_vector.vector_type = VectorType::FLAT_VECTOR;
+	// first we set the NULL values from the join keys
+	// if there is any NULL in the keys, the result is NULL
+	auto bool_result = FlatVector::GetData<bool>(mark_vector);
+	auto &nullmask = FlatVector::Nullmask(mark_vector);
+	for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
+		VectorData jdata;
+		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
+		if (jdata.nullmask->any()) {
+			for(idx_t i = 0; i < join_keys.size(); i++) {
+				auto jidx = jdata.sel->get_index(i);
+				nullmask[i] = (*jdata.nullmask)[jidx];
+			}
+		}
+	}
+	// now set the remaining entries to either true or false based on whether a match was found
+	if (found_match) {
+		for (idx_t i = 0; i < left.size(); i++) {
+			bool_result[i] = found_match[i];
+		}
+	} else {
+		memset(bool_result, 0, sizeof(bool) * left.size());
+	}
+	// if the right side contains NULL values, the result of any FALSE becomes NULL
+	if (has_null) {
+		for (idx_t i = 0; i < left.size(); i++) {
+			if (!bool_result[i]) {
+				nullmask[i] = true;
+			}
+		}
 	}
 }
 
@@ -144,11 +184,11 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
-			// RHS empty: just set found_match to false
-			throw NotImplementedException("FIXME: construct mark join result");
-			// bool found_match[STANDARD_VECTOR_SIZE] = {false};
-			// ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
-			//                         state->has_null);
+			// RHS empty: set FOUND MATCh vector to false
+			chunk.Reference(state->child_chunk);
+			auto &mark_vector = chunk.data.back();
+			mark_vector.vector_type = VectorType::CONSTANT_VECTOR;
+			mark_vector.SetValue(0, Value::BOOLEAN(false));
 		} else if (type == JoinType::ANTI) {
 			// ANTI join, just pull chunk from RHS
 			children[0]->GetChunk(context, chunk, state->child_state.get());
@@ -157,12 +197,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			if (state->child_chunk.size() == 0) {
 				return;
 			}
-			chunk.SetCardinality(state->child_chunk);
-			idx_t idx = 0;
-			for (; idx < state->child_chunk.column_count(); idx++) {
-				chunk.data[idx].Reference(state->child_chunk.data[idx]);
-			}
-			for (; idx < chunk.column_count(); idx++) {
+			chunk.Reference(state->child_chunk);
+			for (idx_t idx = state->child_chunk.column_count(); idx < chunk.column_count(); idx++) {
 				chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
 				ConstantVector::SetNull(chunk.data[idx], true);
 			}
@@ -219,14 +255,13 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			NestedLoopJoinMark::Perform(state->left_join_condition, state->right_chunks, found_match, conditions);
 			if (type == JoinType::MARK) {
 				// now construct the mark join result from the found matches
-				throw NotImplementedException("FIXME: mark join result");
-				// ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
-				//                         state->has_null);
+				PhysicalJoin::ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
+				                        state->has_null);
 			} else if (type == JoinType::SEMI) {
 				// construct the semi join result from the found matches
-				ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
+				PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
 			} else if (type == JoinType::ANTI) {
-				ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
+				PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
 			}
 			// move to the next LHS chunk in the next iteration
 			state->right_tuple = state->right_chunks.chunks[state->right_chunk]->size();

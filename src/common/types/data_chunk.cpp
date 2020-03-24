@@ -51,9 +51,9 @@ void DataChunk::SetValue(idx_t col_idx, idx_t index, Value val) {
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
-	assert(chunk.column_count() == column_count());
+	assert(chunk.column_count() <= column_count());
 	SetCardinality(chunk);
-	for (idx_t i = 0; i < column_count(); i++) {
+	for (idx_t i = 0; i < chunk.column_count(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
 }

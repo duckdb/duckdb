@@ -755,12 +755,12 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 	for (idx_t i = 0; i < child.column_count(); i++) {
 		result.data[i].Reference(child.data[i]);
 	}
-	auto &result_vector = result.data.back();
-	result_vector.vector_type = VectorType::FLAT_VECTOR;
+	auto &mark_vector = result.data.back();
+	mark_vector.vector_type = VectorType::FLAT_VECTOR;
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
-	auto bool_result = FlatVector::GetData<bool>(result_vector);
-	auto &nullmask = FlatVector::Nullmask(result_vector);
+	auto bool_result = FlatVector::GetData<bool>(mark_vector);
+	auto &nullmask = FlatVector::Nullmask(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.column_count(); col_idx++) {
 		if (ht.null_values_are_equal[col_idx]) {
 			continue;

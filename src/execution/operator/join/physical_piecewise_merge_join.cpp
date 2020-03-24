@@ -126,27 +126,23 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
 		switch (type) {
 		case JoinType::MARK: {
-			throw NotImplementedException("FIXME mark join");
-			// // MARK join
-			// if (state->right_chunks.count > 0) {
-			// 	ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
-			// 	throw NotImplementedException("FIXME mark join");
-			// 	// first perform the MARK join
-			// 	// this method uses the LHS to loop over the entire RHS looking for matches
-			// 	// MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
-			// 	// // now construct the mark join result from the found matches
-			// 	// ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
-			// 	//                         state->has_null);
-			// 	// move to the next LHS chunk in the next iteration
-			// } else {
-			// 	// RHS empty: just set found_match to false
-			// 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
-			// 	ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, found_match, state->has_null);
-			// 	// RHS empty: result is not NULL but just false
-			// 	chunk.data[chunk.column_count() - 1].nullmask.reset();
-			// }
-			// state->right_chunk_index = state->right_orders.size();
-			// return;
+			// MARK join
+			if (state->right_chunks.count > 0) {
+				ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
+				// first perform the MARK join
+				// this method uses the LHS to loop over the entire RHS looking for matches
+				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
+				// now construct the mark join result from the found matches
+				PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match, state->has_null);
+			} else {
+				// RHS empty: result is false for everything
+				chunk.Reference(state->child_chunk);
+				auto &mark_vector = chunk.data.back();
+				mark_vector.vector_type = VectorType::CONSTANT_VECTOR;
+				mark_vector.SetValue(0, Value::BOOLEAN(false));
+			}
+			state->right_chunk_index = state->right_orders.size();
+			return;
 		}
 		default:
 			// INNER, LEFT OUTER, etc... join that can return >STANDARD_VECTOR_SIZE entries
@@ -186,31 +182,34 @@ unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState()
 }
 
 template <class T, class OP>
-static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result) {
+static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel, idx_t count, SelectionVector &result) {
 	// select pivot
-	sel_t pivot = 0;
+	auto pivot_idx = not_null_sel.get_index(0);
+	auto dpivot_idx = sel.get_index(pivot_idx);
 	sel_t low = 0, high = count - 1;
 	// now insert elements
 	for (idx_t i = 1; i < count; i++) {
-		if (OP::Operation(data[sel.get_index(i)], data[sel.get_index(pivot)])) {
-			result.set_index(low++, sel.get_index(i));
+		auto idx = not_null_sel.get_index(i);
+		auto didx = sel.get_index(idx);
+		if (OP::Operation(data[didx], data[dpivot_idx])) {
+			result.set_index(low++, idx);
 		} else {
-			result.set_index(high--, sel.get_index(i));
+			result.set_index(high--, idx);
 		}
 	}
 	assert(low == high);
-	result.set_index(low, sel.get_index(pivot));
+	result.set_index(low, pivot_idx);
 	return low;
 }
 
 template <class T, class OP>
-static void templated_quicksort_inplace(T *data, idx_t count, SelectionVector &result, sel_t left, sel_t right) {
+static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result, sel_t left, sel_t right) {
 	if (left >= right) {
 		return;
 	}
 
 	sel_t middle = left + (right - left) / 2;
-	sel_t pivot = result.get_index(middle);
+	sel_t dpivot_idx = sel.get_index(result.get_index(middle));
 
 	// move the mid point value to the front.
 	sel_t i = left + 1;
@@ -218,11 +217,12 @@ static void templated_quicksort_inplace(T *data, idx_t count, SelectionVector &r
 
 	result.swap(middle, left);
 	while (i <= j) {
-		while (i <= j && (OP::Operation(data[result.get_index(i)], data[pivot]))) {
+
+		while (i <= j && (OP::Operation(data[sel.get_index(result.get_index(i))], data[dpivot_idx]))) {
 			i++;
 		}
 
-		while (i <= j && OP::Operation(data[pivot], data[result.get_index(j)])) {
+		while (i <= j && OP::Operation(data[dpivot_idx], data[sel.get_index(result.get_index(j))])) {
 			j--;
 		}
 
@@ -234,23 +234,23 @@ static void templated_quicksort_inplace(T *data, idx_t count, SelectionVector &r
 	sel_t part = i - 1;
 
 	if (part > 0) {
-		templated_quicksort_inplace<T, OP>(data, count, result, left, part - 1);
+		templated_quicksort_inplace<T, OP>(data, sel, count, result, left, part - 1);
 	}
-	templated_quicksort_inplace<T, OP>(data, count, result, part + 1, right);
+	templated_quicksort_inplace<T, OP>(data, sel, count, result, part + 1, right);
 }
 
-template <class T, class OP> void templated_quicksort(T *__restrict data, const SelectionVector &sel, idx_t count, SelectionVector &result) {
-	auto part = templated_quicksort_initial<T, OP>(data, sel, count, result);
+template <class T, class OP> void templated_quicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel, idx_t count, SelectionVector &result) {
+	auto part = templated_quicksort_initial<T, OP>(data, sel, not_null_sel, count, result);
 	if (part > count) {
 		return;
 	}
-	templated_quicksort_inplace<T, OP>(data, count, result, 0, part);
-	templated_quicksort_inplace<T, OP>(data, count, result, part + 1, count - 1);
+	templated_quicksort_inplace<T, OP>(data, sel, count, result, 0, part);
+	templated_quicksort_inplace<T, OP>(data, sel, count, result, part + 1, count - 1);
 }
 
 template <class T>
-static void templated_quicksort(data_ptr_t data, const SelectionVector &sel, idx_t count, SelectionVector &result) {
-	templated_quicksort<T, duckdb::LessThanEquals>((T*) data, sel, count, result);
+static void templated_quicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count, SelectionVector &result) {
+	templated_quicksort<T, duckdb::LessThanEquals>((T*) vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
 void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
@@ -266,35 +266,34 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
 	for(idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[i]) {
-			not_null.set_index(not_null_count++, idx);
+		if (!(*vdata.nullmask)[idx]) {
+			not_null.set_index(not_null_count++, i);
 		}
 	}
 	order.count = not_null_count;
 
-	auto dataptr = order.vdata.data;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
 	case TypeId::INT8:
-		templated_quicksort<int8_t>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::INT16:
-		templated_quicksort<int16_t>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<int16_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::INT32:
-		templated_quicksort<int32_t>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<int32_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::INT64:
-		templated_quicksort<int64_t>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<int64_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::FLOAT:
-		templated_quicksort<float>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<float>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::DOUBLE:
-		templated_quicksort<double>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<double>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::VARCHAR:
-		templated_quicksort<string_t>(dataptr, not_null, not_null_count, order.order);
+		templated_quicksort<string_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for sort");
