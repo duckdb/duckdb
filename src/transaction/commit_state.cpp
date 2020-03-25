@@ -107,11 +107,9 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	// switch to the current table, if necessary
 	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
 
-	if (!update_chunk || info->column_data->type != update_chunk->data[0].type) {
-		update_chunk = make_unique<DataChunk>();
-		vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
-		update_chunk->Initialize(update_types);
-	}
+	update_chunk = make_unique<DataChunk>();
+	vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
+	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base table
 	ColumnScanState state;
@@ -124,8 +122,8 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
-	// update_chunk->SetCardinality(info->N, info->tuples);
-	throw NotImplementedException("FIXME set sel vector");
+	SelectionVector sel(info->tuples);
+	update_chunk->Slice(sel, info->N);
 
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }
