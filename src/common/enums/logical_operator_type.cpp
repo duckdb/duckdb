@@ -75,6 +75,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPLAIN";
 	case LogicalOperatorType::EXECUTE:
 		return "EXECUTE";
+	case LogicalOperatorType::VACUUM:
+		return "VACUUM";
 	case LogicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
 	case LogicalOperatorType::RECURSIVE_CTE:

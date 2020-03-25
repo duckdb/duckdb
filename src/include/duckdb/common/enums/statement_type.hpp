@@ -33,6 +33,7 @@ enum class StatementType : uint8_t {
 	EXPLAIN,      // explain statement type
 	DROP,         // DROP statement type
 	PRAGMA,       // PRAGMA statement type
+	VACUUM,       // VACUUM statement type
 };
 
 string StatementTypeToString(StatementType type);

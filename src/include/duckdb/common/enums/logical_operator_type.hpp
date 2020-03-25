@@ -85,7 +85,8 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	PRUNE_COLUMNS,
 	PREPARE,
-	EXECUTE
+	EXECUTE,
+	VACUUM
 };
 
 string LogicalOperatorToString(LogicalOperatorType type);
