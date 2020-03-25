@@ -399,7 +399,7 @@ void Vector::Normalify(idx_t count) {
 		// create a new flat vector of this type
 		Vector other(type);
 		// now copy the data of this vector to the other vector, removing the selection vector in the process
-		VectorOperations::Copy(*this, other, count);
+		VectorOperations::Copy(*this, other, count, 0);
 		// create a reference to the data in the other vector
 		this->Reference(other);
 		break;
@@ -725,6 +725,11 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
 	assert(vector.type == TypeId::STRUCT);
+	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vector);
+		return StructVector::GetEntries(child);
+	}
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	assert(vector.auxiliary);
 	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
@@ -733,6 +738,7 @@ child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
 	assert(vector.type == TypeId::STRUCT);
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStructBuffer>();
 	}
@@ -743,11 +749,21 @@ void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entr
 
 bool ListVector::HasEntry(const Vector &vector) {
 	assert(vector.type == TypeId::LIST);
+	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vector);
+		return ListVector::HasEntry(child);
+	}
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	return vector.auxiliary != nullptr;
 }
 
 ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 	assert(vector.type == TypeId::LIST);
+	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vector);
+		return ListVector::GetEntry(child);
+	}
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	assert(vector.auxiliary);
 	assert(vector.auxiliary->type == VectorBufferType::LIST_BUFFER);
 	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
@@ -755,6 +771,7 @@ ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 
 void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
 	assert(vector.type == TypeId::LIST);
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorListBuffer>();
 	}

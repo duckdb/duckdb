@@ -104,7 +104,7 @@ struct VectorOperations {
 	static void Cast(Vector &source, Vector &result, idx_t count);
 
 	// Copy the data of <source> to the target vector
-	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset = 0);
+	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset);
 	// Append the data of <source> to the target vector
 	static void Append(Vector &source, Vector &target, idx_t source_count, idx_t target_offset);
 

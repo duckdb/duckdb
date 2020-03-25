@@ -85,7 +85,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		for (auto &child : source_children) {
 			auto child_copy = make_unique<Vector>(child.second->type);
 
-			VectorOperations::Copy(*child.second, *child_copy, offset);
+			VectorOperations::Copy(*child.second, *child_copy, source_count, offset);
 			StructVector::AddEntry(target, child.first, move(child_copy));
 		}
 		break;
