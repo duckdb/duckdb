@@ -246,7 +246,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	if (keys.size() == 0) {
 		return;
 	}
-
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;

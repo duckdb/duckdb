@@ -136,46 +136,23 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
-static void MergeDictionaries(const SelectionVector &sel, SelectionVector &target, idx_t count, unordered_map<sel_t*, buffer_ptr<SelectionData>> &merge_cache) {
-	auto target_data = target.data();
-	// first check if the entry is already in the cache
-	auto entry = merge_cache.find(target_data);
-	if (entry != merge_cache.end()) {
-		// already merged: assign from cache
-		target.Initialize(entry->second);
-	} else {
-		// have to perform the merge
-		target.Slice(sel, count);
-		// place the merged data into the cache
-		merge_cache[target_data] = target.sel_data();
-	}
-}
-
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 	this->count = count;
-	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
+	sel_cache_t merge_cache;
 	for(idx_t c = 0; c < column_count(); c++) {
-		if (data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
-			// already a dictionary! merge the dictionaries
-			auto &current_sel = DictionaryVector::SelVector(data[c]);
-			MergeDictionaries(sel_vector, current_sel, count, merge_cache);
-		} else {
-			data[c].Slice(sel_vector, count);
-		}
+		data[c].Slice(sel_vector, count, merge_cache);
 	}
 }
 
 void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
 	assert(other.column_count() <= col_offset + column_count());
 	this->count = count;
-	unordered_map<sel_t*, buffer_ptr<SelectionData>> merge_cache;
+	sel_cache_t merge_cache;
 	for(idx_t c = 0; c < other.column_count(); c++) {
 		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);
-
-			auto &current_sel = DictionaryVector::SelVector(data[c]);
-			MergeDictionaries(sel, current_sel, count, merge_cache);
+			data[col_offset + c].Slice(sel, count, merge_cache);
 		} else {
 			data[col_offset + c].Slice(other.data[c], sel, count);
 		}

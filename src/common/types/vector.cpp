@@ -113,6 +113,25 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	vector_type = VectorType::DICTIONARY_VECTOR;
 }
 
+void Vector::Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache) {
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		// dictionary vector: need to merge dictionaries
+		// check if we have a cached entry
+		auto &current_sel = DictionaryVector::SelVector(*this);
+		auto target_data = current_sel.data();
+		auto entry = cache.find(target_data);
+		if (entry != cache.end()) {
+			// cached entry exists: use that
+			this->buffer = entry->second;
+		} else {
+			Slice(sel, count);
+			cache[target_data] = this->buffer;
+		}
+	} else {
+		Slice(sel, count);
+	}
+}
+
 void Vector::Initialize(TypeId new_type, bool zero_data) {
 	if (new_type != TypeId::INVALID) {
 		type = new_type;

@@ -80,6 +80,8 @@ public:
 	void Slice(Vector &other, const SelectionVector &sel, idx_t count);
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	void Slice(const SelectionVector &sel, idx_t count);
+	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
+	void Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
