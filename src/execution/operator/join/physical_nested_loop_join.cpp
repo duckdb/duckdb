@@ -35,12 +35,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 	children.push_back(move(right));
 }
 
-//! Remove NULL values from a chunk; returns true if the chunk had NULL values
-static bool RemoveNullValues(DataChunk &chunk) {
-	// OR all nullmasks together
-	SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
-	idx_t current_count = chunk.size();
-	const SelectionVector *current_vector = &FlatVector::IncrementalSelectionVector;
+static bool HasNullValues(DataChunk &chunk) {
 	for(idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
 		VectorData vdata;
 		chunk.data[col_idx].Orrify(chunk.size(), vdata);
@@ -48,23 +43,14 @@ static bool RemoveNullValues(DataChunk &chunk) {
 		if (vdata.nullmask->none()) {
 			continue;
 		}
-		idx_t new_count = 0;
-		for(idx_t i = 0; i < current_count; i++) {
-			auto idx = current_vector->get_index(i);
-			auto vidx = vdata.sel->get_index(idx);
-			if (!(*vdata.nullmask)[vidx]) {
-				not_null_vector.set_index(new_count++, idx);
+		for(idx_t i = 0; i < chunk.size(); i++) {
+			auto idx = vdata.sel->get_index(i);
+			if ((*vdata.nullmask)[idx]) {
+				return true;
 			}
 		}
-		current_vector = &not_null_vector;
-		current_count = new_count;
 	}
-	if (current_count == chunk.size()) {
-		// nothing filtered out: return
-		return false;
-	}
-	chunk.Slice(not_null_vector, current_count);
-	return true;
+	return false;
 }
 
 template <bool MATCH>
@@ -164,10 +150,12 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				return;
 			}
 		} else {
-			// disqualify tuples from the RHS that have NULL values
-			for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
-				if (RemoveNullValues(*state->right_chunks.chunks[i])) {
-					state->has_null = true;
+			// for the MARK join, we check if there are null values in any of the right chunks
+			if (type == JoinType::MARK) {
+				for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
+					if (HasNullValues(*state->right_chunks.chunks[i])) {
+						state->has_null = true;
+					}
 				}
 			}
 			// initialize the chunks for the join conditions
@@ -232,12 +220,6 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 
 					// resolve the left join condition for the current chunk
 					state->lhs_executor.Execute(state->child_chunk, state->left_join_condition);
-					if (type != JoinType::MARK) {
-						// immediately disqualify any tuples from the left side that have NULL values
-						// we don't do this for the MARK join on the LHS, because the tuple will still be output, just
-						// with a NULL marker!
-						RemoveNullValues(state->left_join_condition);
-					}
 				} while (state->left_join_condition.size() == 0);
 
 				state->right_chunk = 0;

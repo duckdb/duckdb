@@ -81,6 +81,8 @@ public:
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();
 
+	unique_ptr<VectorData[]> Orrify();
+
 	void Slice(const SelectionVector &sel_vector, idx_t count);
 	void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 

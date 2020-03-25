@@ -19,14 +19,18 @@ struct InitialNestedLoopJoin {
 		idx_t result_count = 0;
 		for (; rpos < right_size; rpos++) {
 			idx_t right_position = right_data.sel->get_index(rpos);
-			assert(!(*right_data.nullmask)[right_position]);
+			if ((*right_data.nullmask)[right_position]) {
+				continue;
+			}
 			for (; lpos < left_size; lpos++) {
 				if (result_count == STANDARD_VECTOR_SIZE) {
 					// out of space!
 					return result_count;
 				}
 				idx_t left_position = left_data.sel->get_index(lpos);
-				assert(!(*left_data.nullmask)[left_position]);
+				if ((*left_data.nullmask)[left_position]) {
+					continue;
+				}
 				if (OP::Operation(ldata[left_position], rdata[right_position])) {
 					// emit tuple
 					lvector.set_index(result_count, lpos);
@@ -61,8 +65,9 @@ struct RefineNestedLoopJoin {
 			auto left_idx = left_data.sel->get_index(lidx);
 			auto right_idx = right_data.sel->get_index(ridx);
 			// null values should be filtered out before
-			assert(!(*left_data.nullmask)[left_idx]);
-			assert(!(*right_data.nullmask)[right_idx]);
+			if ((*left_data.nullmask)[left_idx] || (*right_data.nullmask)[right_idx]) {
+				continue;
+			}
 			if (OP::Operation(ldata[left_idx], rdata[right_idx])) {
 				lvector.set_index(result_count, lidx);
 				rvector.set_index(result_count, ridx);

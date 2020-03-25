@@ -70,6 +70,12 @@ TEST_CASE("Test IN statement", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, false, true}));
 
 	// multiple correlated subqueries in IN-clause
+	result = con.Query("SELECT i, (SELECT MAX(i) FROM integers WHERE i <> i1.i), (SELECT MIN(i) FROM integers WHERE i <= i1.i) FROM integers i1 ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 1, 1}));
+
+	// multiple correlated subqueries in IN-clause
 	result = con.Query("SELECT i, i IN ((SELECT MAX(i) FROM integers WHERE i <> i1.i), (SELECT MIN(i) FROM integers "
 	                   "WHERE i <= i1.i)) FROM integers i1 ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
