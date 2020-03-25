@@ -14,8 +14,14 @@ template <class T, class OP> static void mark_join_templated(Vector &left, Vecto
 	auto rdata = (T *)right_data.data;
 	for(idx_t i = 0; i < lcount; i++) {
 		auto lidx = left_data.sel->get_index(i);
+		if ((*left_data.nullmask)[lidx]) {
+			continue;
+		}
 		for(idx_t j = 0; j < rcount; j++) {
 			auto ridx = right_data.sel->get_index(j);
+			if ((*right_data.nullmask)[ridx]) {
+				continue;
+			}
 			if (OP::Operation(ldata[lidx], rdata[ridx])) {
 				found_match[i] = true;
 			}
