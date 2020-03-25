@@ -247,19 +247,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		return;
 	}
 
-	// prepare the keys for processing
-	unique_ptr<VectorData[]> key_data;
-	const SelectionVector *current_sel;
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
-	if (added_count < keys.size()) {
-		has_null = true;
-	}
-	if (added_count == 0) {
-		return;
-	}
-	count += added_count;
-
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
@@ -274,10 +261,23 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		info.payload_chunk.SetCardinality(keys);
 		for (idx_t i = 0; i < 2; i++) {
 			info.payload_chunk.data[i].Reference(keys.data[info.correlated_types.size()]);
-			info.payload_chunk.data[i].type = TypeId::INT64;
 		}
 		info.correlated_counts->AddChunk(info.group_chunk, info.payload_chunk);
 	}
+
+	// prepare the keys for processing
+	unique_ptr<VectorData[]> key_data;
+	const SelectionVector *current_sel;
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel);
+	if (added_count < keys.size()) {
+		has_null = true;
+	}
+	if (added_count == 0) {
+		return;
+	}
+	count += added_count;
+
 
 	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
@@ -832,7 +832,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			assert(count_star[i] >= count[i]);
 			bool_result[i] = found_match[i];
 			if (!bool_result[i] && count_star[i] > count[i]) {
-				// RHS has NULL value and result is false:, set to null
+				// RHS has NULL value and result is false: set to null
 				nullmask[i] = true;
 			}
 			if (count_star[i] == 0) {

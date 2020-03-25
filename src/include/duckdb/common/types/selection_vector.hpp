@@ -71,8 +71,8 @@ public:
 	}
 	void Slice(const SelectionVector &sel, idx_t count);
 
-	string ToString(idx_t count = 0);
-	void Print(idx_t count = 0);
+	string ToString(idx_t count = 0) const;
+	void Print(idx_t count = 0) const;
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
