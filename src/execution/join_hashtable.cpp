@@ -818,19 +818,38 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			result.data[i].Reference(input.data[i]);
 		}
 		// create the result matching vector
+		auto &last_key = keys.data.back();
 		auto &result_vector = result.data.back();
 		// first set the nullmask based on whether or not there were NULL values in the join key
 		result_vector.vector_type = VectorType::FLAT_VECTOR;
-		FlatVector::SetNullmask(result_vector, FlatVector::Nullmask(keys.data.back()));
-
 		auto bool_result = FlatVector::GetData<bool>(result_vector);
 		auto &nullmask = FlatVector::Nullmask(result_vector);
+		switch(last_key.vector_type) {
+		case VectorType::CONSTANT_VECTOR:
+			if (ConstantVector::IsNull(last_key)) {
+				nullmask.set();
+			}
+			break;
+		case VectorType::FLAT_VECTOR:
+			nullmask = FlatVector::Nullmask(last_key);
+			break;
+		default: {
+			VectorData kdata;
+			last_key.Orrify(keys.size(), kdata);
+			for(idx_t i = 0; i < input.size(); i++) {
+				auto kidx = kdata.sel->get_index(i);;
+				nullmask[i] = (*kdata.nullmask)[kidx];
+			}
+			break;
+		}
+		}
+
 		auto count_star = FlatVector::GetData<int64_t>(info.result_chunk.data[0]);
 		auto count = FlatVector::GetData<int64_t>(info.result_chunk.data[1]);
 		// set the entries to either true or false based on whether a match was found
 		for (idx_t i = 0; i < input.size(); i++) {
 			assert(count_star[i] >= count[i]);
-			bool_result[i] = found_match[i];
+			bool_result[i] = found_match ? found_match[i] : false;
 			if (!bool_result[i] && count_star[i] > count[i]) {
 				// RHS has NULL value and result is false: set to null
 				nullmask[i] = true;
