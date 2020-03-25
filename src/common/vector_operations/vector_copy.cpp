@@ -97,11 +97,13 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		assert(target.type == TypeId::LIST);
 
 		TemplatedCopy<list_entry_t>(source, sdata, target, offset, copy_count);
-		auto &child = ListVector::GetEntry(source);
-		auto child_copy = make_unique<ChunkCollection>();
-		child_copy->Append(child);
-		// TODO optimization: if offset != 0 we can skip some of the child list and adjustd offsets accordingly
-		ListVector::SetEntry(target, move(child_copy));
+		if (ListVector::HasEntry(source)) {
+			auto &child = ListVector::GetEntry(source);
+			auto child_copy = make_unique<ChunkCollection>();
+			child_copy->Append(child);
+			// TODO optimization: if offset != 0 we can skip some of the child list and adjustd offsets accordingly
+			ListVector::SetEntry(target, move(child_copy));
+		}
 		break;
 	}
 	default:
