@@ -63,34 +63,37 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			if (right_chunk.size() == 0) {
 				break;
 			}
+			// resolve the join keys for this chunk
+			state->rhs_executor.SetChunk(right_chunk);
+
+			state->join_keys.Reset();
+			state->join_keys.SetCardinality(right_chunk);
+			for (idx_t k = 0; k < conditions.size(); k++) {
+				// resolve the join key
+				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
+			}
+			// append the join keys and the chunk to the chunk collection
 			state->right_chunks.Append(right_chunk);
+			state->right_conditions.Append(state->join_keys);
 		}
 		if (state->right_chunks.count == 0 && (type == JoinType::INNER || type == JoinType::SEMI)) {
 			// empty RHS with INNER or SEMI join means empty result set
 			return;
 		}
 		// now order all the chunks
-		state->right_orders.resize(state->right_chunks.chunks.size());
-		for (idx_t i = 0; i < state->right_chunks.chunks.size(); i++) {
-			auto &chunk_to_order = *state->right_chunks.chunks[i];
-			// create a new selection vector
-			// resolve the join keys for the right chunk
-			state->join_keys.Reset();
-			state->rhs_executor.SetChunk(chunk_to_order);
-
-			state->join_keys.SetCardinality(chunk_to_order);
-			for (idx_t k = 0; k < conditions.size(); k++) {
-				// resolve the join key
-				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
-				OrderVector(state->join_keys.data[k], state->join_keys.size(), state->right_orders[i]);
-				if (state->right_orders[i].count < state->join_keys.size()) {
+		state->right_orders.resize(state->right_conditions.chunks.size());
+		for (idx_t i = 0; i < state->right_conditions.chunks.size(); i++) {
+			auto &chunk_to_order = *state->right_conditions.chunks[i];
+			assert(chunk_to_order.column_count() == 1);
+			for(idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
+				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), state->right_orders[i]);
+				if (state->right_orders[i].count < chunk_to_order.size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
 					// this only happens if there are NULL values in the right-hand side
 					// hence we set the has_null to true (this is required for the MARK join)
 					state->has_null = true;
 				}
 			}
-			state->right_conditions.Append(state->join_keys);
 		}
 		state->right_chunk_index = state->right_orders.size();
 		state->initialized = true;
@@ -250,6 +253,9 @@ template <class T, class OP> void templated_quicksort(T *__restrict data, const 
 
 template <class T>
 static void templated_quicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count, SelectionVector &result) {
+	if (not_null_count == 0) {
+		return;
+	}
 	templated_quicksort<T, duckdb::LessThanEquals>((T*) vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
@@ -271,7 +277,6 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 		}
 	}
 	order.count = not_null_count;
-
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
 	case TypeId::INT8:
