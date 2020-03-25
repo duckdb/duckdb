@@ -182,6 +182,15 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count,
 	}
 }
 
+unique_ptr<VectorData[]> DataChunk::Orrify() {
+	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[column_count()]);
+	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
+		data[col_idx].Orrify(size(), orrified_data[col_idx]);
+	}
+	return orrified_data;
+
+}
+
 void DataChunk::Hash(Vector &result) {
 	assert(result.type == TypeId::HASH);
 	VectorOperations::Hash(data[0], result, size());

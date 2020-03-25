@@ -222,10 +222,7 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 }
 
 idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel) {
-	key_data = unique_ptr<VectorData[]>(new VectorData[keys.column_count()]);
-	for(idx_t key_idx = 0; key_idx < keys.column_count(); key_idx++) {
-		keys.data[key_idx].Orrify(keys.size(), key_data[key_idx]);
-	}
+	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = &FlatVector::IncrementalSelectionVector;
@@ -910,14 +907,14 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	idx_t offset = ht.condition_size;
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto &vector = result.data[input.column_count() + i];
-		// fetch fetch the values
-		GatherResult(vector, result_sel, result_sel, result_count, offset);
 		// set NULL entries for every entry that was not found
 		auto &nullmask = FlatVector::Nullmask(vector);
 		nullmask.set();
 		for (idx_t j = 0; j < result_count; j++) {
 			nullmask[result_sel.get_index(j)] = false;
 		}
+		// for the remaining values we fetch the values
+		GatherResult(vector, result_sel, result_sel, result_count, offset);
 	}
 	result.SetCardinality(input.size());
 
