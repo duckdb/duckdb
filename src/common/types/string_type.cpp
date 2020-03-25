@@ -11,6 +11,7 @@ void string_t::Verify() {
 	// check that the data is a valid NFC UTF8 string
 	auto normalized = Utf8Proc::Normalize(dataptr);
 	assert(strcmp(dataptr, normalized) == 0);
+	free(normalized);
 	// verify that the string is null-terminated and that the length is correct
 	assert(strlen(dataptr) == length);
 	// verify that the prefix contains the first four characters of the string
