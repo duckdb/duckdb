@@ -545,6 +545,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);
 
+	updates.Normalify();
 	row_ids.Normalify(updates.size());
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {

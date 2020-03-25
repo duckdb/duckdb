@@ -230,7 +230,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, vector<column_t> &c
 	auto &chunk = *storage->collection.chunks[chunk_idx];
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = column_ids[i];
-		update_chunk(chunk.data[col_idx], data.data[i], row_ids, chunk.size(), base_index);
+		update_chunk(chunk.data[col_idx], data.data[i], row_ids, data.size(), base_index);
 	}
 }
 
