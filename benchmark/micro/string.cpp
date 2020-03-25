@@ -7,7 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-#define STRING_COUNT 1000000
+#define STRING_COUNT 10000000
 #define STRING_LENGTH 4
 
 #define STRING_DATA_GEN_BODY(STRING_LENGTH)                                                                            \
@@ -179,3 +179,204 @@ string BenchmarkInfo() override {
 	return "STRING REGEX";
 }
 FINISH_BENCHMARK(StringRegexNull)
+
+//----------------------- PREFIX1 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX early out";
+}
+FINISH_BENCHMARK(StringPrefix)
+
+DUCKDB_BENCHMARK(StringPrefixInlined, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined)
+
+DUCKDB_BENCHMARK(StringPrefixPointer, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer)
+
+//----------------------- PREFIX2 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix222, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix2(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX222 early out";
+}
+FINISH_BENCHMARK(StringPrefix222)
+
+DUCKDB_BENCHMARK(StringPrefixInlined222, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix2(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX222 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined222)
+
+DUCKDB_BENCHMARK(StringPrefixPointer222, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix2(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX222 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer222)
+//-----------------------------------------------------------------------------
+
+//----------------------- PREFIX3 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix333, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix3(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX333 early out";
+}
+FINISH_BENCHMARK(StringPrefix333)
+
+DUCKDB_BENCHMARK(StringPrefixInlined333, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix3(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX333 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined333)
+
+DUCKDB_BENCHMARK(StringPrefixPointer333, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix3(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX333 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer333)
+//-----------------------------------------------------------------------------
+
+//----------------------- PREFIX4 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix444, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix4(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX444 early out";
+}
+FINISH_BENCHMARK(StringPrefix444)
+
+DUCKDB_BENCHMARK(StringPrefixInlined444, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix4(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX444 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined444)
+
+DUCKDB_BENCHMARK(StringPrefixPointer444, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix4(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX444 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer444)
+//-----------------------------------------------------------------------------
+
+//----------------------- PREFIX5 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix555, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix5(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX555 early out";
+}
+FINISH_BENCHMARK(StringPrefix555)
+
+DUCKDB_BENCHMARK(StringPrefixInlined555, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix5(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX555 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined555)
+
+DUCKDB_BENCHMARK(StringPrefixPointer555, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix5(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX555 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer555)
+//-----------------------------------------------------------------------------
+
+//----------------------- PREFIX REGEX benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefixRegEX, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT REGEXP_MATCHES(s1, 'a%') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX REGEX";
+}
+FINISH_BENCHMARK(StringPrefixRegEX)
+
+//----------------------- PREFIX LIKE benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefixLike, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT s1 FROM strings WHERE s1 LIKE 'a%'";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX LIKE";
+}
+FINISH_BENCHMARK(StringPrefixLike)
+
+DUCKDB_BENCHMARK(StringPrefixInlinedLike, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT s1 FROM strings WHERE s1 LIKE 'a%'";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX inlined LIKE";
+}
+FINISH_BENCHMARK(StringPrefixInlinedLike)
+
+DUCKDB_BENCHMARK(StringPrefixPointerLike, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT s1 FROM strings WHERE s1 LIKE 'a%'";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX store pointer LIKE";
+}
+FINISH_BENCHMARK(StringPrefixPointerLike)
