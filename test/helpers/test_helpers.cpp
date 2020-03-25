@@ -224,7 +224,7 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 //! Returns true if they are equal, and stores an error_message otherwise
 bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header,
                     string &error_message) {
-	assert(collection.types.size() == sql_types.size());
+	assert(collection.count == 0 || collection.types.size() == sql_types.size());
 
 	// set up the CSV reader
 	CopyInfo info;

@@ -58,6 +58,7 @@ void Vector::Reference(Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
 	type = value.type;
 	buffer = VectorBuffer::CreateConstantVector(type);
+	auxiliary.reset();
 	data = buffer->GetData();
 	SetValue(0, value);
 }
@@ -99,7 +100,8 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		// already a dictionary, slice the current dictionary
 		auto &current_sel = DictionaryVector::SelVector(*this);
-		current_sel.Slice(sel, count);
+		auto sliced_dictionary = current_sel.Slice(sel, count);
+		buffer = make_unique<DictionaryBuffer>(move(sliced_dictionary));
 		return;
 	}
 	auto child_ref = make_buffer<VectorChildBuffer>();
@@ -597,8 +599,17 @@ void Vector::Verify(idx_t count) {
 		}
 		case VectorType::DICTIONARY_VECTOR: {
 			auto &child = DictionaryVector::Child(*this);
-			// throw NotImplementedException("FIXME: verify child");
-			// child.Verify(count);
+			auto sel = DictionaryVector::SelVector(*this);
+			if (child.vector_type == VectorType::FLAT_VECTOR) {
+				auto strings = FlatVector::GetData<string_t>(child);
+				auto &nullmask = FlatVector::Nullmask(child);
+				for(idx_t i = 0; i < count; i++) {
+					auto idx = sel.get_index(i);
+					if (!nullmask[idx]) {
+						strings[idx].Verify();
+					}
+				}
+			}
 			break;
 		}
 		default:

@@ -290,7 +290,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			// last block has space: pin the buffer of this block
 			auto handle = buffer_manager.Pin(last_block.block_id);
 			// now append to the block
-			idx_t append_count = AppendToBlock(last_block, *handle, remaining, key_locations, remaining);
+			idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
 		}
@@ -304,7 +304,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		new_block.capacity = block_capacity;
 		new_block.block_id = handle->block_id;
 
-		idx_t append_count = AppendToBlock(new_block, *handle, remaining, key_locations, remaining);
+		idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
 		remaining -= append_count;
 		handles.push_back(move(handle));
 		blocks.push_back(new_block);

@@ -31,6 +31,9 @@ struct SelectionVector {
 	SelectionVector(const SelectionVector &sel_vector) {
 		Initialize(sel_vector);
 	}
+	SelectionVector(buffer_ptr<SelectionData> data) {
+		Initialize(move(data));
+	}
 public:
 	void Initialize(sel_t *sel) {
 		selection_data.reset();
@@ -69,7 +72,7 @@ public:
 	buffer_ptr<SelectionData> sel_data() {
 		return selection_data;
 	}
-	void Slice(const SelectionVector &sel, idx_t count);
+	buffer_ptr<SelectionData> Slice(const SelectionVector &sel, idx_t count);
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
