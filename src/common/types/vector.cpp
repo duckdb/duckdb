@@ -399,7 +399,7 @@ void Vector::Normalify(idx_t count) {
 		// create a new flat vector of this type
 		Vector other(type);
 		// now copy the data of this vector to the other vector, removing the selection vector in the process
-		VectorOperations::Copy(*this, other, count, 0);
+		VectorOperations::Copy(*this, other, count, 0, 0);
 		// create a reference to the data in the other vector
 		this->Reference(other);
 		break;
@@ -721,6 +721,13 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	assert(other.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	string_buffer.AddHeapReference(other.auxiliary);
+}
+
+bool StructVector::HasEntries(const Vector &vector) {
+	assert(vector.type == TypeId::STRUCT);
+	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
+	assert(vector.auxiliary == nullptr || vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
+	return vector.auxiliary != nullptr;
 }
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {

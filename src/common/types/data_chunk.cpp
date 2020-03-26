@@ -64,7 +64,7 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) {
 
 	for (idx_t i = 0; i < column_count(); i++) {
 		assert(other.data[i].vector_type == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(data[i], other.data[i], size(), offset);
+		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
 	}
 	other.SetCardinality(size() - offset);
 }
@@ -78,7 +78,7 @@ void DataChunk::Append(DataChunk &other) {
 	}
 	for (idx_t i = 0; i < column_count(); i++) {
 		assert(data[i].vector_type == VectorType::FLAT_VECTOR);
-		VectorOperations::Append(other.data[i], data[i], other.size(), size());
+		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
 	}
 	SetCardinality(size() + other.size());
 }

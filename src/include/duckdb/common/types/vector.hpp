@@ -233,6 +233,7 @@ struct StringVector {
 };
 
 struct StructVector {
+	static bool HasEntries(const Vector &vector);
 	static child_list_t<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	static void AddEntry(Vector &vector, string name, unique_ptr<Vector> entry);
 };
