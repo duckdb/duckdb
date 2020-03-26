@@ -5,26 +5,26 @@ namespace duckdb {
 nullmask_t ZERO_MASK = nullmask_t(0);
 const SelectionVector ConstantVector::ZeroSelectionVector = SelectionVector((sel_t *)ConstantVector::zero_vector);
 const SelectionVector FlatVector::IncrementalSelectionVector = SelectionVector((sel_t *)FlatVector::incremental_vector);
-constexpr sel_t ConstantVector::zero_vector[STANDARD_VECTOR_SIZE] = {0};
+const sel_t ConstantVector::zero_vector[STANDARD_VECTOR_SIZE] = {0};
 
 #if STANDARD_VECTOR_SIZE == 2
-constexpr sel_t FlatVector::incremental_vector[] = {0, 1};
+const sel_t FlatVector::incremental_vector[] = {0, 1};
 #elif STANDARD_VECTOR_SIZE == 4
-constexpr sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3};
+const sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3};
 #elif STANDARD_VECTOR_SIZE == 8
-constexpr sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3, 4, 5, 6, 7};
+const sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3, 4, 5, 6, 7};
 #elif STANDARD_VECTOR_SIZE == 16
-constexpr sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+const sel_t FlatVector::incremental_vector[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 #elif STANDARD_VECTOR_SIZE == 32
-constexpr sel_t FlatVector::incremental_vector[] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+const sel_t FlatVector::incremental_vector[] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
                                                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 #elif STANDARD_VECTOR_SIZE == 64
-constexpr sel_t FlatVector::incremental_vector[] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
+const sel_t FlatVector::incremental_vector[] = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15,
                                                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
                                                     32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
                                                     48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63};
 #elif STANDARD_VECTOR_SIZE == 128
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
@@ -32,7 +32,7 @@ constexpr sel_t FlatVector::incremental_vector[] = {
     88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
     110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
 #elif STANDARD_VECTOR_SIZE == 256
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,
     22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,
     44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,
@@ -46,7 +46,7 @@ constexpr sel_t FlatVector::incremental_vector[] = {
     220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241,
     242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255};
 #elif STANDARD_VECTOR_SIZE == 512
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  17,  18,  19,  20,  21,  22,
     23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,
     46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  64,  65,  66,  67,  68,
@@ -71,7 +71,7 @@ constexpr sel_t FlatVector::incremental_vector[] = {
     483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 493, 494, 495, 496, 497, 498, 499, 500, 501, 502, 503, 504, 505,
     506, 507, 508, 509, 510, 511};
 #elif STANDARD_VECTOR_SIZE == 1024
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14,   15,   16,   17,   18,
     19,   20,   21,   22,   23,   24,   25,   26,   27,   28,   29,   30,   31,   32,   33,   34,   35,   36,   37,
     38,   39,   40,   41,   42,   43,   44,   45,   46,   47,   48,   49,   50,   51,   52,   53,   54,   55,   56,
@@ -127,7 +127,7 @@ constexpr sel_t FlatVector::incremental_vector[] = {
     988,  989,  990,  991,  992,  993,  994,  995,  996,  997,  998,  999,  1000, 1001, 1002, 1003, 1004, 1005, 1006,
     1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023};
 #elif STANDARD_VECTOR_SIZE == 2048
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14,   15,   16,   17,   18,
     19,   20,   21,   22,   23,   24,   25,   26,   27,   28,   29,   30,   31,   32,   33,   34,   35,   36,   37,
     38,   39,   40,   41,   42,   43,   44,   45,   46,   47,   48,   49,   50,   51,   52,   53,   54,   55,   56,
@@ -237,7 +237,7 @@ constexpr sel_t FlatVector::incremental_vector[] = {
     2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032,
     2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044, 2045, 2046, 2047};
 #elif STANDARD_VECTOR_SIZE == 4096
-constexpr sel_t FlatVector::incremental_vector[] = {
+const sel_t FlatVector::incremental_vector[] = {
     0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    10,   11,   12,   13,   14,   15,   16,   17,   18,
     19,   20,   21,   22,   23,   24,   25,   26,   27,   28,   29,   30,   31,   32,   33,   34,   35,   36,   37,
     38,   39,   40,   41,   42,   43,   44,   45,   46,   47,   48,   49,   50,   51,   52,   53,   54,   55,   56,

@@ -228,7 +228,7 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 	int numcols;
 	PyObject* descriptor;
 
-	bool need_transaction;
+	bool need_transaction = false;
 
 	std::vector<duckdb::Value> params;
 	std::unique_ptr<duckdb::PreparedStatement> prep;

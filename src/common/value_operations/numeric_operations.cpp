@@ -50,9 +50,6 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	}
 	result.type = left.type;
 	switch (left.type) {
-	case TypeId::BOOL:
-		result.value_.boolean = OP::template Operation<bool, bool, bool>(left.value_.boolean, right.value_.boolean);
-		break;
 	case TypeId::INT8:
 		result.value_.tinyint =
 		    OP::template Operation<int8_t, int8_t, int8_t>(left.value_.tinyint, right.value_.tinyint);

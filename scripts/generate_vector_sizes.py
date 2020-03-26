@@ -8,7 +8,7 @@ for i in range(len(supported_vector_sizes)):
 	else:
 		result += "#elif"
 	result += " STANDARD_VECTOR_SIZE == " + str(vsize) + "\n"
-	result += "constexpr sel_t FlatVector::incremental_vector[] = {"
+	result += "const sel_t FlatVector::incremental_vector[] = {"
 	for idx in range(vsize):
 		if idx != 0:
 			result += ", "

@@ -4,12 +4,12 @@
 namespace duckdb {
 
 string SelectionVector::ToString(idx_t count) const {
-	string result = "Selection Vector (" + to_string(count) + ") [";
+	string result = "Selection Vector (" + std::to_string(count) + ") [";
 	for (idx_t i = 0; i < count; i++) {
 		if (i != 0) {
 			result += ", ";
 		}
-		result += to_string(get_index(i));
+		result += std::to_string(get_index(i));
 	}
 	result += "]";
 	return result;
