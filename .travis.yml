@@ -17,16 +17,16 @@ matrix:
   include:
 
     - os: osx
-      name: Xcode 11.0 Debug
+      name: Xcode 11.3 Debug
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      osx_image: xcode11
+      osx_image: xcode11.3
 
 
     - os: osx
-      name: Xcode 11.0
+      name: Xcode 11.3
 
-      osx_image: xcode11
+      osx_image: xcode11.3
 
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
@@ -302,7 +302,7 @@ matrix:
 
 
     - os: osx
-      osx_image: xcode11
+      osx_image: xcode11.3
       name: R Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
@@ -408,7 +408,7 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: generic
-      osx_image: xcode11
+      osx_image: xcode11.3
 
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
@@ -459,10 +459,10 @@ matrix:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
     - os: osx
-      name: Xcode 11.0 (Amalgamation)
+      name: Xcode 11.3 (Amalgamation)
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      osx_image: xcode11
+      osx_image: xcode11.3
       script:
         - python3 scripts/amalgamation.py
         - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
