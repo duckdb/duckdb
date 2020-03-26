@@ -52,9 +52,7 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state_vector
 		}
 		sel.set_index(0, i);
 		insert_chunk.data[0].Slice(input, sel, 1);
-		insert_chunk.Verify();
 		state->cc->Append(insert_chunk);
-		state->cc->Verify();
 	}
 }
 

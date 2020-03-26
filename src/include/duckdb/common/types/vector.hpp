@@ -106,6 +106,7 @@ public:
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify(idx_t count);
+	void Verify(const SelectionVector &sel, idx_t count);
 
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;

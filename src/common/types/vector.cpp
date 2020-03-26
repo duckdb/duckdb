@@ -584,17 +584,24 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	}
 }
 
-void Vector::Verify(idx_t count) {
+void Vector::Verify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
-		auto sel = DictionaryVector::SelVector(*this);
+		auto &child = DictionaryVector::Child(*this);
+		auto &dict_sel = DictionaryVector::SelVector(*this);
 		for(idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
+			auto oidx = sel.get_index(i);
+			auto idx = dict_sel.get_index(oidx);
 			assert(idx >= 0 && idx < STANDARD_VECTOR_SIZE);
 		}
+		// merge the selection vectors and verify the child
+		auto new_buffer = dict_sel.Slice(sel, count);
+		SelectionVector new_sel(new_buffer);
+		child.Verify(new_sel, count);
+		return;
 	}
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
@@ -610,23 +617,9 @@ void Vector::Verify(idx_t count) {
 		case VectorType::FLAT_VECTOR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
 			for(idx_t i = 0; i < count; i++) {
-				if (!nullmask[i]) {
-					strings[i].Verify();
-				}
-			}
-			break;
-		}
-		case VectorType::DICTIONARY_VECTOR: {
-			auto &child = DictionaryVector::Child(*this);
-			auto sel = DictionaryVector::SelVector(*this);
-			if (child.vector_type == VectorType::FLAT_VECTOR) {
-				auto strings = FlatVector::GetData<string_t>(child);
-				auto &nullmask = FlatVector::Nullmask(child);
-				for(idx_t i = 0; i < count; i++) {
-					auto idx = sel.get_index(i);
-					if (!nullmask[idx]) {
-						strings[idx].Verify();
-					}
+				auto oidx = sel.get_index(i);
+				if (!nullmask[oidx]) {
+					strings[oidx].Verify();
 				}
 			}
 			break;
@@ -637,10 +630,12 @@ void Vector::Verify(idx_t count) {
 	}
 
 	if (type == TypeId::STRUCT) {
-		auto &children = StructVector::GetEntries(*this);
-		assert(children.size() > 0);
-		for (auto &child : children) {
-			child.second->Verify(count);
+		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
+			auto &children = StructVector::GetEntries(*this);
+			assert(children.size() > 0);
+			for (auto &child : children) {
+				child.second->Verify(sel, count);
+			}
 		}
 	}
 
@@ -652,13 +647,14 @@ void Vector::Verify(idx_t count) {
 				assert(le->offset + le->length <= ListVector::GetEntry(*this).count);
 			}
 		} else if (vector_type == VectorType::FLAT_VECTOR) {
-			if (VectorOperations::HasNotNull(*this, count)) {
+			if (ListVector::HasEntry(*this)) {
 				ListVector::GetEntry(*this).Verify();
 			}
 			auto list_data = FlatVector::GetData<list_entry_t>(*this);
 			for(idx_t i = 0; i < count; i++) {
-				auto &le = list_data[i];
-				if (!nullmask[i]) {
+				auto idx = sel.get_index(i);
+				auto &le = list_data[idx];
+				if (!nullmask[idx]) {
 					assert(le.offset + le.length <= ListVector::GetEntry(*this).count);
 				}
 			}
@@ -666,6 +662,10 @@ void Vector::Verify(idx_t count) {
 	}
 // TODO verify list and struct
 #endif
+}
+
+void Vector::Verify(idx_t count) {
+	Verify(FlatVector::IncrementalSelectionVector, count);
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
@@ -725,10 +725,6 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
 	assert(vector.type == TypeId::STRUCT);
-	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vector);
-		return StructVector::GetEntries(child);
-	}
 	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	assert(vector.auxiliary);
 	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
