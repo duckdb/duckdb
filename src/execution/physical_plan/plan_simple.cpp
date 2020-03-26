@@ -9,6 +9,7 @@
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
+#include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +24,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		return make_unique<PhysicalPragma>(unique_ptr_cast<ParseInfo, PragmaInfo>(move(op.info)));
 	case LogicalOperatorType::TRANSACTION:
 		return make_unique<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(move(op.info)));
+	case LogicalOperatorType::VACUUM:
+		return make_unique<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(move(op.info)));
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

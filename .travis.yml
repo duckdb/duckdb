@@ -508,7 +508,10 @@ matrix:
       sudo: true
 
       install:
-        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp rsync > /dev/null
+        - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
+        - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
+        - sudo apt-get update > /dev/null
+        - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
         - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova"
         - VBoxManage import Solaris10_1-13-2.ova
         - rm Solaris10_1-13-2.ova
@@ -536,7 +539,10 @@ matrix:
       sudo: true
 
       install:
-        - sudo apt-get install -y virtualbox virtualbox-dkms linux-headers-gcp rsync > /dev/null
+        - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
+        - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
+        - sudo apt-get update > /dev/null
+        - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
         - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/OpenBSD.ova"
         - VBoxManage import OpenBSD.ova
         - rm OpenBSD.ova
