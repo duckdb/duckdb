@@ -1,7 +1,5 @@
 # cursor description
 
-import numpy 
-
 class TestCursorDescription(object):
     def test_description(self, duckdb_cursor):
         description = duckdb_cursor.execute("SELECT * FROM integers").description
