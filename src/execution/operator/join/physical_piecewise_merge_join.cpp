@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/merge_join.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -223,7 +224,6 @@ static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx
 
 	result.swap(middle, left);
 	while (i <= j) {
-
 		while (i <= j && (OP::Operation(data[sel.get_index(result.get_index(i))], data[dpivot_idx]))) {
 			i++;
 		}

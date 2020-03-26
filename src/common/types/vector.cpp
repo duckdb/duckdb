@@ -7,6 +7,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 using namespace std;
 
