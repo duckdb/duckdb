@@ -14,11 +14,9 @@ def check_exception(f):
 
 class TestReadOnly(object):
     def test_readonly(self, duckdb_cursor):
-        db = tempfile.mkstemp()[1]
-        try:
-            os.remove(db)
-        except OSError:
-            pass
+        fd, db = tempfile.mkstemp()
+        os.close(fd)
+        os.remove(db)
 
         check_exception(lambda :duckdb.connect(":memory:", True))
 
