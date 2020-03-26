@@ -580,7 +580,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
 			auto idx = dict_sel.get_index(oidx);
-			assert(idx >= 0 && idx < STANDARD_VECTOR_SIZE);
+			assert(idx < STANDARD_VECTOR_SIZE);
 		}
 		// merge the selection vectors and verify the child
 		auto new_buffer = dict_sel.Slice(sel, count);

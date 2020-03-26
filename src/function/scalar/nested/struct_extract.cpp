@@ -46,11 +46,8 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	// the binder should fix this for us.
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
-
-	auto &struct_child = expr.children[0];
-
 	assert(expr.arguments[0].id == SQLTypeId::STRUCT);
-	assert(struct_child->return_type == TypeId::STRUCT);
+	assert(expr.children[0]->return_type == TypeId::STRUCT);
 	if (expr.arguments[0].child_type.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}

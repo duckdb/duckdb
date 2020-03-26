@@ -16,11 +16,12 @@ struct RStatement {
 
 // converter for primitive types
 template <class SRC, class DEST>
-static void vector_to_r(Vector &src_vec, void *dest, uint64_t dest_offset, DEST na_val) {
-	auto src_ptr = (SRC *)src_vec.GetData();
+static void vector_to_r(Vector &src_vec, size_t count, void *dest, uint64_t dest_offset, DEST na_val) {
+	auto src_ptr = FlatVector::GetData<SRC>(src_vec);
+	auto &nullmask = FlatVector::Nullmask(src_vec);
 	auto dest_ptr = ((DEST *)dest) + dest_offset;
-	for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
-		dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? na_val : src_ptr[row_idx];
+	for (size_t row_idx = 0; row_idx < count; row_idx++) {
+		dest_ptr[row_idx] = nullmask[row_idx] ? na_val : src_ptr[row_idx];
 	}
 }
 
@@ -78,11 +79,12 @@ struct RBooleanType {
 
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
-	auto result_data = (DST *)result.GetData();
+	auto result_data = FlatVector::GetData<DST>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
-			result.nullmask[i] = true;
+			result_mask[i] = true;
 		} else {
 			result_data[i] = RTYPE::Convert(val);
 		}
@@ -90,11 +92,11 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 }
 
 static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
-	auto result_data = (string_t *)result.GetData();
-	for (idx_t i = 0; i < count; i++) {
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Nullmask(result);	for (idx_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
-			result.nullmask[i] = true;
+			result_mask[i] = true;
 		} else {
 			result_data[i] = string_t((char *)CHAR(val));
 		}
@@ -103,12 +105,13 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 
 static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto source_data = INTEGER_POINTER(coldata) + row_idx;
-	auto result_data = (string_t *)result.GetData();
+	auto result_data = FlatVector::GetData<string_t>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 	SEXP factor_levels = GET_LEVELS(coldata);
 	for (idx_t i = 0; i < count; i++) {
 		int val = source_data[i];
 		if (RIntegerType::IsNull(val)) {
-			result.nullmask[i] = true;
+			result_mask[i] = true;
 		} else {
 			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
 		}
@@ -447,26 +450,27 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
 				switch (result->sql_types[col_idx].id) {
 				case SQLTypeId::BOOLEAN:
-					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
 					break;
 				case SQLTypeId::TINYINT:
-					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
 					break;
 				case SQLTypeId::SMALLINT:
-					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
+					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
 					                               NA_INTEGER);
 					break;
 				case SQLTypeId::INTEGER:
-					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], INTEGER_POINTER(dest), dest_offset,
+					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
 					                               NA_INTEGER);
 					break;
 				case SQLTypeId::TIMESTAMP: {
 					auto &src_vec = chunk->data[col_idx];
-					auto src_data = (int64_t *)src_vec.GetData();
+					auto src_data = FlatVector::GetData<int64_t>(src_vec);
+					auto &nullmask = FlatVector::Nullmask(src_vec);
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
+					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 						dest_ptr[row_idx] =
-						    src_vec.nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
+						    nullmask[row_idx] ? NA_REAL : (double)Timestamp::GetEpoch(src_data[row_idx]);
 					}
 
 					// some dresssup for R
@@ -480,10 +484,11 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				}
 				case SQLTypeId::DATE: {
 					auto &src_vec = chunk->data[col_idx];
-					auto src_data = (int32_t *)src_vec.GetData();
+					auto src_data = FlatVector::GetData<int32_t>(src_vec);
+					auto &nullmask = FlatVector::Nullmask(src_vec);
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
-						dest_ptr[row_idx] = src_vec.nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
+					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+						dest_ptr[row_idx] = nullmask[row_idx] ? NA_REAL : (double)(src_data[row_idx]) - 719528;
 					}
 
 					// some dresssup for R
@@ -493,11 +498,12 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				}
 				case SQLTypeId::TIME: {
 					auto &src_vec = chunk->data[col_idx];
-					auto src_data = (int32_t *)src_vec.GetData();
+					auto src_data = FlatVector::GetData<int32_t>(src_vec);
+					auto &nullmask = FlatVector::Nullmask(src_vec);
 					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-					for (size_t row_idx = 0; row_idx < src_vec.size(); row_idx++) {
+					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 
-						if (src_vec.nullmask[row_idx]) {
+						if (nullmask[row_idx]) {
 							dest_ptr[row_idx] = NA_REAL;
 						} else {
 							time_t n = src_data[row_idx];
@@ -517,19 +523,20 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					break;
 				}
 				case SQLTypeId::BIGINT:
-					vector_to_r<int64_t, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 				case SQLTypeId::FLOAT:
-					vector_to_r<float, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 
 				case SQLTypeId::DOUBLE:
-					vector_to_r<double, double>(chunk->data[col_idx], NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 					break;
 				case SQLTypeId::VARCHAR: {
-					for (size_t row_idx = 0; row_idx < chunk->data[col_idx].size(); row_idx++) {
-						auto src_ptr = (string_t *)chunk->data[col_idx].GetData();
-						if (chunk->data[col_idx].nullmask[row_idx]) {
+					auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
+					auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
+					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+						if (nullmask[row_idx]) {
 							SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 						} else {
 							SET_STRING_ELT(dest, dest_offset + row_idx, mkCharCE(src_ptr[row_idx].GetData(), CE_UTF8));
