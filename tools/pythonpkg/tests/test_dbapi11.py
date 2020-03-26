@@ -27,17 +27,18 @@ class TestReadOnly(object):
         con_rw = duckdb.connect(db, False).cursor()
         con_rw.execute("create table a (i integer)")
         con_rw.execute("insert into a values (42)")
-        del con_rw
+
+#        del con_rw
 
         con_ro = duckdb.connect(db, True).cursor()
         con_ro.execute("select * from a").fetchall()
-
         check_exception(lambda : con_ro.execute("delete from a"))
        
-        del con_ro
+  #      del con_ro
 
         con_rw = duckdb.connect(db, False).cursor()
         con_rw.execute("drop table a")
-        del con_rw
+  
+  #      del con_rw
 
 
