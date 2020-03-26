@@ -29,7 +29,10 @@ matrix:
       osx_image: xcode11
 
       before_install:
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python /tmp/get-pip.py
         - pip install --user boto3
+
       script:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest
@@ -307,6 +310,8 @@ matrix:
       #r: devel
 
       before_install:
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python /tmp/get-pip.py
         - pip install --user boto3
         - cd tools/rpkg
         - R -f dependencies.R
@@ -405,8 +410,12 @@ matrix:
       language: generic
       osx_image: xcode11
 
-      script:
+      before_install:
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python /tmp/get-pip.py
         - pip install cibuildwheel==0.10.2 boto3
+
+      script:
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
