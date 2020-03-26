@@ -505,7 +505,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 
 		data.sel = &sel;
 		data.data = FlatVector::GetData(child);
-		data.nullmask = &child.nullmask;
+		data.nullmask = &FlatVector::Nullmask(child);
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:

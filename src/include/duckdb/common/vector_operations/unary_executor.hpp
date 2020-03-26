@@ -37,7 +37,7 @@ private:
 	                               const SelectionVector *__restrict sel_vector, nullmask_t &nullmask, nullmask_t &result_nullmask, FUNC fun) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
-		if (IGNORE_NULL && nullmask.any()) {
+		if (nullmask.any()) {
 			for(idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (!nullmask[idx]) {
