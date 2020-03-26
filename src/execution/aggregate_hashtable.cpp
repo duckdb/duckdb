@@ -200,6 +200,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 		this->data = move(new_table->data);
 		this->owned_data = move(new_table->owned_data);
 		this->capacity = new_table->capacity;
+		this->string_heap.MergeHeap(new_table->string_heap);
 		new_table->data = nullptr;
 	} else {
 		data = new data_t[size * tuple_size];
