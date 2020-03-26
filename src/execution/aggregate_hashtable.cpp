@@ -311,7 +311,7 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 
 	// now compute the entry in the table based on the hash using a modulo
 	// multiply the position by the tuple size and add the base address
-	UnaryExecutor::Execute<uint64_t, data_ptr_t>(hashes, addresses, groups.size(), [&](uint64_t element) {
+	UnaryExecutor::Execute<hash_t, data_ptr_t>(hashes, addresses, groups.size(), [&](hash_t element) {
 		assert((element & bitmask) == (element % capacity));
 		return data + ((element & bitmask) * tuple_size);
 	});
@@ -321,7 +321,7 @@ template <class T>
 static void templated_scatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
                               idx_t type_size) {
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uint64_t>(addresses);
+	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	if (gdata.nullmask->any()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
@@ -377,7 +377,7 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 			break;
 		case TypeId::VARCHAR: {
 			auto data = (string_t *)gdata.data;
-			auto pointers = FlatVector::GetData<uint64_t>(addresses);
+			auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 
 			for (idx_t i = 0; i < count; i++) {
 				auto pointer_idx = sel.get_index(i);
@@ -405,7 +405,7 @@ template <class T>
 static void templated_compare_groups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
                                      idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
 	auto data = (T *)gdata.data;
-	auto pointers = FlatVector::GetData<uint64_t>(addresses);
+	auto pointers = FlatVector::GetData<uintptr_t>(addresses);
 	idx_t match_count = 0;
 	if (gdata.nullmask->any()) {
 		for (idx_t i = 0; i < count; i++) {

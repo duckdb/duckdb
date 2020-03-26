@@ -20,13 +20,13 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 	switch (input.vector_type) {
 	case VectorType::CONSTANT_VECTOR: {
 		assert(!ConstantVector::IsNull(input));
-		auto data = ConstantVector::GetData<uint64_t>(input);
+		auto data = ConstantVector::GetData<uintptr_t>(input);
 		*data += right;
 		break;
 	}
 	default: {
 		assert(input.vector_type == VectorType::FLAT_VECTOR);
-		auto data = FlatVector::GetData<uint64_t>(input);
+		auto data = FlatVector::GetData<uintptr_t>(input);
 		for (idx_t i = 0; i < count; i++) {
 			data[i] += right;
 		}

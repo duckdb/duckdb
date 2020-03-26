@@ -93,7 +93,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
 	case TypeId::POINTER:
-		TemplatedCopy<uint64_t>(source, sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<uintptr_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
 	case TypeId::FLOAT:
 		TemplatedCopy<float>(source, sel, target, source_offset, target_offset, copy_count);

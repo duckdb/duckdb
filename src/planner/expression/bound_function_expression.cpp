@@ -25,8 +25,8 @@ string BoundFunctionExpression::ToString() const {
 	return result;
 }
 
-uint64_t BoundFunctionExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundFunctionExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	return CombineHash(result, duckdb::Hash(function.name.c_str()));
 }
 

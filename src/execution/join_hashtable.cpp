@@ -54,7 +54,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	}
 	tuple_size = condition_size + build_size;
 	// entry size is the tuple size and the size of the hash/next pointer
-	entry_size = tuple_size + std::max(sizeof(uint64_t), sizeof(void *));
+	entry_size = tuple_size + std::max(sizeof(hash_t), sizeof(uintptr_t));
 	// compute the per-block capacity of this HT
 	block_capacity = std::max((idx_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
@@ -74,11 +74,11 @@ JoinHashTable::~JoinHashTable() {
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.vector_type == VectorType::CONSTANT_VECTOR) {
 		assert(!ConstantVector::IsNull(hashes));
-		auto indices = ConstantVector::GetData<uint64_t>(hashes);
+		auto indices = ConstantVector::GetData<hash_t>(hashes);
 		*indices = *indices & bitmask;
 	} else {
 		hashes.Normalify(count);
-		auto indices = FlatVector::GetData<uint64_t>(hashes);
+		auto indices = FlatVector::GetData<hash_t>(hashes);
 		for (idx_t i = 0; i < count; i++) {
 			indices[i] &= bitmask;
 		}
@@ -89,7 +89,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 	VectorData hdata;
 	hashes.Orrify(count, hdata);
 
-	auto hash_data = (uint64_t *)hdata.data;
+	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
 	auto main_ht = (data_ptr_t *)hash_map->node->buffer;
 	for (idx_t i = 0; i < count; i++) {
@@ -167,7 +167,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
 		break;
 	case TypeId::HASH:
-		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
+		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
 	case TypeId::VARCHAR: {
 		auto source = (string_t *)vdata.data;
@@ -342,7 +342,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 
 	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
-	auto indices = FlatVector::GetData<uint64_t>(hashes);
+	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
@@ -368,7 +368,7 @@ void JoinHashTable::Finalize() {
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(TypeId::HASH);
-	auto hash_data = FlatVector::GetData<uint64_t>(hashes);
+	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
 	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
@@ -382,7 +382,7 @@ void JoinHashTable::Finalize() {
 			// fetch the next vector of entries from the blocks
 			idx_t next = std::min((idx_t)STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
-				hash_data[i] = *((uint64_t *)(dataptr + tuple_size));
+				hash_data[i] = *((hash_t *)(dataptr + tuple_size));
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
@@ -476,7 +476,7 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
                              idx_t &no_match_count) {
 	idx_t result_count = 0;
 	auto data = (T *)vdata.data;
-	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
+	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
@@ -635,7 +635,7 @@ void ScanStructure::AdvancePointers() {
 }
 
 template <class T>
-static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const SelectionVector &result_vector,
+static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const SelectionVector &result_vector,
                                   const SelectionVector &sel_vector, idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
@@ -654,7 +654,7 @@ static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const Sele
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
                                  const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
+	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 	switch (result.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:

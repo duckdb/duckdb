@@ -39,7 +39,7 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 		CopyToStorageLoop<int64_t>(vdata, count, target);
 		break;
 	case TypeId::HASH:
-		CopyToStorageLoop<uint64_t>(vdata, count, target);
+		CopyToStorageLoop<hash_t>(vdata, count, target);
 		break;
 	case TypeId::POINTER:
 		CopyToStorageLoop<uintptr_t>(vdata, count, target);
@@ -85,7 +85,7 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		ReadFromStorageLoop<int64_t>(source, count, result);
 		break;
 	case TypeId::HASH:
-		ReadFromStorageLoop<uint64_t>(source, count, result);
+		ReadFromStorageLoop<hash_t>(source, count, result);
 		break;
 	case TypeId::POINTER:
 		ReadFromStorageLoop<uintptr_t>(source, count, result);

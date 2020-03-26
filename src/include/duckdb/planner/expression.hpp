@@ -27,7 +27,7 @@ public:
 	bool HasParameter() const override;
 	virtual bool IsFoldable() const;
 
-	uint64_t Hash() const override;
+	hash_t Hash() const override;
 
 	static bool Equals(Expression *left, Expression *right) {
 		return BaseExpression::Equals((BaseExpression *)left, (BaseExpression *)right);

@@ -12,7 +12,7 @@ using namespace duckdb;
 using namespace std;
 
 template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
-	auto addresses = FlatVector::GetData<uint64_t>(source);
+	auto addresses = FlatVector::GetData<uintptr_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
 	auto &nullmask = FlatVector::Nullmask(dest);
 
@@ -53,7 +53,7 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 		templated_gather_loop<double>(source, dest, count);
 		break;
 	case TypeId::POINTER:
-		templated_gather_loop<uint64_t>(source, dest, count);
+		templated_gather_loop<uintptr_t>(source, dest, count);
 		break;
 	case TypeId::VARCHAR:
 		templated_gather_loop<string_t>(source, dest, count);

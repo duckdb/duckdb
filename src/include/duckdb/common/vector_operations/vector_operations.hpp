@@ -69,11 +69,6 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
-	struct Scatter {
-		//! Similar to Set, but also write NullValue<T> if set_null = true, or ignore null values entirely if set_null =
-		//! false
-		static void SetAll(Vector &source, Vector &dest, bool set_null = false, idx_t offset = 0);
-	};
 	// make sure dest.count is set for gather methods!
 	struct Gather {
 		//! dest.data[i] = ptr[i]. NullValue<T> is checked for and converted to the nullmask in dest. The source

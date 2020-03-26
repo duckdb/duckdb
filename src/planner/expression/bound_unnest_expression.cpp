@@ -18,8 +18,8 @@ string BoundUnnestExpression::ToString() const {
 	return "UNNEST(" + child->ToString() + ")";
 }
 
-uint64_t BoundUnnestExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundUnnestExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	return CombineHash(result, duckdb::Hash("unnest"));
 }
 

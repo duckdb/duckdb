@@ -63,7 +63,7 @@ static idx_t templated_select_operation(Vector &left, Vector &right, const Selec
 	case TypeId::INT64:
 		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case TypeId::POINTER:
-		return BinaryExecutor::Select<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
+		return BinaryExecutor::Select<uintptr_t, uintptr_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case TypeId::FLOAT:
 		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
 	case TypeId::DOUBLE:

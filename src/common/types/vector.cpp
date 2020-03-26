@@ -263,7 +263,7 @@ Value Vector::GetValue(idx_t index) const {
 	case TypeId::INT64:
 		return Value::BIGINT(((int64_t *)data)[index]);
 	case TypeId::HASH:
-		return Value::HASH(((uint64_t *)data)[index]);
+		return Value::HASH(((hash_t *)data)[index]);
 	case TypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[index]);
 	case TypeId::FLOAT:
@@ -425,7 +425,7 @@ void Vector::Normalify(idx_t count) {
 			flatten_constant_vector_loop<double>(data, old_data, count);
 			break;
 		case TypeId::HASH:
-			flatten_constant_vector_loop<uint64_t>(data, old_data, count);
+			flatten_constant_vector_loop<hash_t>(data, old_data, count);
 			break;
 		case TypeId::POINTER:
 			flatten_constant_vector_loop<uintptr_t>(data, old_data, count);

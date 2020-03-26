@@ -49,6 +49,6 @@ struct ValueOperations {
 	// Hash functions
 	//===--------------------------------------------------------------------===//
 	// result = HASH(A)
-	static uint64_t Hash(const Value &left);
+	static hash_t Hash(const Value &left);
 };
 } // namespace duckdb

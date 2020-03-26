@@ -19,7 +19,7 @@ unique_ptr<Expression> BoundColumnRefExpression::Copy() {
 	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
-uint64_t BoundColumnRefExpression::Hash() const {
+hash_t BoundColumnRefExpression::Hash() const {
 	auto result = Expression::Hash();
 	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.column_index));
 	result = CombineHash(result, duckdb::Hash<uint64_t>(binding.table_index));

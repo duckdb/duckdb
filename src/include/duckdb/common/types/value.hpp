@@ -71,7 +71,7 @@ public:
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
 	//! Create a hash Value from a specified value
-	static Value HASH(uint64_t value);
+	static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
