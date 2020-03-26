@@ -43,6 +43,7 @@ class Vector {
 	friend struct SequenceVector;
 
 	friend class DataChunk;
+
 public:
 	Vector();
 	//! Create a vector of size one holding the passed on value
@@ -68,6 +69,7 @@ public:
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
 	TypeId type;
+
 public:
 	//! Create a vector that references the specified value.
 	void Reference(Value &value);
@@ -117,6 +119,7 @@ public:
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
+
 protected:
 	//! A pointer to the data.
 	data_ptr_t data;
@@ -134,6 +137,7 @@ class VectorChildBuffer : public VectorBuffer {
 public:
 	VectorChildBuffer() : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data() {
 	}
+
 public:
 	Vector data;
 };
@@ -143,9 +147,8 @@ struct ConstantVector {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR || vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.data;
 	}
-	template<class T>
-	static inline T* GetData(Vector &vector) {
-		return (T*) ConstantVector::GetData(vector);
+	template <class T> static inline T *GetData(Vector &vector) {
+		return (T *)ConstantVector::GetData(vector);
 	}
 	static inline bool IsNull(const Vector &vector) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
@@ -155,7 +158,7 @@ struct ConstantVector {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
 		vector.nullmask[0] = is_null;
 	}
-	static inline nullmask_t& Nullmask(Vector &vector) {
+	static inline nullmask_t &Nullmask(Vector &vector) {
 		assert(vector.vector_type == VectorType::CONSTANT_VECTOR);
 		return vector.nullmask;
 	}
@@ -167,11 +170,11 @@ struct ConstantVector {
 struct DictionaryVector {
 	static inline SelectionVector &SelVector(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
-		return ((DictionaryBuffer&) *vector.buffer).GetSelVector();
+		return ((DictionaryBuffer &)*vector.buffer).GetSelVector();
 	}
 	static inline Vector &Child(const Vector &vector) {
 		assert(vector.vector_type == VectorType::DICTIONARY_VECTOR);
-		return ((VectorChildBuffer&) *vector.auxiliary).data;
+		return ((VectorChildBuffer &)*vector.auxiliary).data;
 	}
 };
 
@@ -179,16 +182,14 @@ struct FlatVector {
 	static inline data_ptr_t GetData(Vector &vector) {
 		return ConstantVector::GetData(vector);
 	}
-	template<class T>
-	static inline T* GetData(Vector &vector) {
+	template <class T> static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
-	template<class T>
-	static inline T GetValue(Vector &vector, idx_t idx) {
+	template <class T> static inline T GetValue(Vector &vector, idx_t idx) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];
 	}
-	static inline nullmask_t& Nullmask(Vector &vector) {
+	static inline nullmask_t &Nullmask(Vector &vector) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return vector.nullmask;
 	}
@@ -264,6 +265,7 @@ public:
 		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
 	}
+
 protected:
 	idx_t count;
 };

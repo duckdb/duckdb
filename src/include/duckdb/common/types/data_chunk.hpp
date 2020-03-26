@@ -40,6 +40,7 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
+
 public:
 	idx_t size() const {
 		return count;
@@ -111,6 +112,7 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
+
 private:
 	idx_t count;
 };

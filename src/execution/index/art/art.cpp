@@ -70,12 +70,13 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T> static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T>
+static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
 	auto input_data = (T *)idata.data;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if ((*idata.nullmask)[idx]) {
 			keys.push_back(nullptr);
@@ -85,12 +86,13 @@ template <class T> static void generate_keys(Vector &input, idx_t count, vector<
 	}
 }
 
-template <class T> static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+template <class T>
+static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
 	auto input_data = (T *)idata.data;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if ((*idata.nullmask)[idx] || !keys[i]) {
 			// either this column is NULL, or the previous column is NULL!

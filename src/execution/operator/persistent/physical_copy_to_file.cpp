@@ -178,7 +178,7 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 		}
 		cast_chunk.Normalify();
 		// now loop over the vectors and output the values
-		for(idx_t i = 0; i < cast_chunk.size(); i++) {
+		for (idx_t i = 0; i < cast_chunk.size(); i++) {
 			// write values
 			for (idx_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 				if (col_idx != 0) {

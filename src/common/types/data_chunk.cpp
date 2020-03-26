@@ -139,7 +139,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 	this->count = count;
 	sel_cache_t merge_cache;
-	for(idx_t c = 0; c < column_count(); c++) {
+	for (idx_t c = 0; c < column_count(); c++) {
 		data[c].Slice(sel_vector, count, merge_cache);
 	}
 }
@@ -148,7 +148,7 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count,
 	assert(other.column_count() <= col_offset + column_count());
 	this->count = count;
 	sel_cache_t merge_cache;
-	for(idx_t c = 0; c < other.column_count(); c++) {
+	for (idx_t c = 0; c < other.column_count(); c++) {
 		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);
@@ -165,7 +165,6 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 		data[col_idx].Orrify(size(), orrified_data[col_idx]);
 	}
 	return orrified_data;
-
 }
 
 void DataChunk::Hash(Vector &result) {

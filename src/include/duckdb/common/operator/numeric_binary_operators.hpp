@@ -45,7 +45,7 @@ struct DivideOperator {
 };
 
 struct ModuloOperator {
-	template <class TA, class TB, class TR>  static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		assert(right != 0);
 		return left % right;
 	}

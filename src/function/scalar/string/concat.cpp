@@ -33,9 +33,9 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			VectorData vdata;
 			input.Orrify(args.size(), vdata);
 
-			auto input_data = (string_t *) vdata.data;
+			auto input_data = (string_t *)vdata.data;
 			// now add the length of each vector to the result length
-			for(idx_t i = 0; i < args.size(); i++) {
+			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = vdata.sel->get_index(i);
 				if ((*vdata.nullmask)[idx]) {
 					continue;
@@ -47,7 +47,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 
 	// first we allocate the empty strings for each of the values
 	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
 		result_data[i] = StringVector::EmptyString(result, str_length);
@@ -70,7 +70,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			auto input_data = ConstantVector::GetData<string_t>(input);
 			auto input_ptr = input_data->GetData();
 			auto input_len = input_data->GetSize();
-			for(idx_t i = 0; i < args.size(); i++) {
+			for (idx_t i = 0; i < args.size(); i++) {
 				memcpy(result_data[i].GetData() + result_lengths[i], input_ptr, input_len);
 				result_lengths[i] += input_len;
 			}
@@ -80,7 +80,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			input.Orrify(args.size(), idata);
 
 			auto input_data = (string_t *)idata.data;
-			for(idx_t i = 0; i < args.size(); i++) {
+			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = idata.sel->get_index(i);
 				if ((*idata.nullmask)[idx]) {
 					continue;
@@ -92,31 +92,32 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 			}
 		}
 	}
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].Finalize();
 	}
 }
 
 static void concat_operator(DataChunk &args, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<string_t, string_t, string_t, true>(args.data[0], args.data[1], result, args.size(),
-		[&](string_t a, string_t b) {
-			auto a_data = a.GetData();
-			auto b_data = b.GetData();
-			auto a_length = a.GetSize();
-			auto b_length = b.GetSize();
+	BinaryExecutor::Execute<string_t, string_t, string_t, true>(
+	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
+		    auto a_data = a.GetData();
+		    auto b_data = b.GetData();
+		    auto a_length = a.GetSize();
+		    auto b_length = b.GetSize();
 
-			auto target_length = a_length + b_length;
-			auto target = StringVector::EmptyString(result, target_length);
-			auto target_data = target.GetData();
+		    auto target_length = a_length + b_length;
+		    auto target = StringVector::EmptyString(result, target_length);
+		    auto target_data = target.GetData();
 
-			memcpy(target_data, a_data, a_length);
-			memcpy(target_data + a_length, b_data, b_length);
-			target.Finalize();
-			return target;
-		});
+		    memcpy(target_data, a_data, a_length);
+		    memcpy(target_data + a_length, b_data, b_length);
+		    target.Finalize();
+		    return target;
+	    });
 }
 
-static void templated_concat_ws(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel, const SelectionVector &rsel, idx_t count, Vector &result) {
+static void templated_concat_ws(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
+                                const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
 	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[args.column_count() - 1]);
@@ -129,7 +130,7 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 		auto &idata = orrified_data[col_idx - 1];
 
 		auto input_data = (string_t *)idata.data;
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
 			auto idx = idata.sel->get_index(ridx);
@@ -146,7 +147,7 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 
 	// first we allocate the empty strings for each of the values
 	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size
 		result_data[ridx] = StringVector::EmptyString(result, result_lengths[ridx]);
@@ -159,7 +160,7 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 	for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 		auto &idata = orrified_data[col_idx - 1];
 		auto input_data = (string_t *)idata.data;
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
 			auto idx = idata.sel->get_index(ridx);
@@ -179,7 +180,7 @@ static void templated_concat_ws(DataChunk &args, string_t *sep_data, const Selec
 			has_results[ridx] = true;
 		}
 	}
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		result_data[ridx].Finalize();
 	}
@@ -197,7 +198,7 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 			break;
 		}
 	}
-	switch(separator.vector_type) {
+	switch (separator.vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		if (ConstantVector::IsNull(separator)) {
 			// constant NULL as separator: return constant NULL vector
@@ -206,14 +207,15 @@ static void concat_ws_function(DataChunk &args, ExpressionState &state, Vector &
 			return;
 		}
 		// no null values
-		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, FlatVector::IncrementalSelectionVector, args.size(), result);
+		templated_concat_ws(args, (string_t *)vdata.data, *vdata.sel, FlatVector::IncrementalSelectionVector,
+		                    args.size(), result);
 		return;
 	default: {
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
 		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
 		auto &result_nullmask = FlatVector::Nullmask(result);
-		for(idx_t i = 0; i < args.size(); i++) {
+		for (idx_t i = 0; i < args.size(); i++) {
 			if ((*vdata.nullmask)[vdata.sel->get_index(i)]) {
 				result_nullmask[i] = true;
 			} else {

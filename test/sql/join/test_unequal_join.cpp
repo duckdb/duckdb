@@ -155,25 +155,33 @@ TEST_CASE("Test mark join with different types", "[join]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {99}));
 
 		// now with a filter
-		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::" + type + "))");
+		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::" + type +
+		                   "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {49}));
-		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::" + type + "))");
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {50}));
-		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::" + type + "))");
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {49}));
-		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::" + type + "))");
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {50}));
 		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {2}));
-		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::" + type + "))");
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {49}));
 
 		// now select the actual values, instead of only the count
-		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::" + type + ")) ORDER BY 1");
+		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::" + type +
+		                   ")) ORDER BY 1");
 		REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6, 8, 10}));
-		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::" + type + ")) ORDER BY 1");
+		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::" + type +
+		                   ")) ORDER BY 1");
 		REQUIRE(CHECK_COLUMN(result, 0, {90, 92, 94, 96, 98, 100}));
-		result = con.Query("select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::" + type + ")) ORDER BY 1");
+		result = con.Query("select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::" + type +
+		                   ")) ORDER BY 1");
 		REQUIRE(CHECK_COLUMN(result, 0, {91, 92, 93, 94, 95, 97, 98, 99, 100}));
 
 		REQUIRE_NO_FAIL(con.Query("rollback"));

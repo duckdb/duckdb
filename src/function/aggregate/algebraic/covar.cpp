@@ -24,7 +24,8 @@ struct CovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask, nullmask_t &bnullmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask, nullmask_t &bnullmask,
+	                      idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
 

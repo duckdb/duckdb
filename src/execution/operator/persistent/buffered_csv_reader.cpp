@@ -576,7 +576,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
-			for(idx_t i = 0; i < parse_chunk.size(); i++) {
+			for (idx_t i = 0; i < parse_chunk.size(); i++) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					if (!Value::IsUTF8String(parse_data[i])) {
 						throw ParserException("Error on line %lld: file is not valid UTF8", linenr);

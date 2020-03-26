@@ -22,25 +22,22 @@ Vector::Vector(TypeId type, bool create_data, bool zero_data)
 Vector::Vector(TypeId type) : Vector(type, true, false) {
 }
 
-Vector::Vector(TypeId type, data_ptr_t dataptr)
-    : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
+Vector::Vector(TypeId type, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
 	if (dataptr && type == TypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(Value value)
-    : vector_type(VectorType::CONSTANT_VECTOR) {
+Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR) {
 	Reference(value);
 }
 
-Vector::Vector()
-    : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), data(nullptr) {
+Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(TypeId::INVALID), data(nullptr) {
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(other.type),
-      data(other.data), nullmask(other.nullmask), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(other.type), data(other.data), nullmask(other.nullmask),
+      buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(Value &value) {
@@ -370,11 +367,10 @@ void Vector::Print() {
 	Printer::Print(ToString());
 }
 
-template <class T>
-static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
+template <class T> static void flatten_constant_vector_loop(data_ptr_t data, data_ptr_t old_data, idx_t count) {
 	auto constant = *((T *)old_data);
 	auto output = (T *)data;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		output[i] = constant;
 	}
 }
@@ -532,10 +528,10 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		VectorData vdata;
 		Orrify(count, vdata);
 
-		switch(type) {
+		switch (type) {
 		case TypeId::VARCHAR: {
-			auto strings = (string_t *) vdata.data;
-			for(idx_t i = 0; i < count; i++) {
+			auto strings = (string_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = (*vdata.nullmask)[idx] ? NullValue<const char *>() : strings[idx].GetData();
 				serializer.WriteString(source);
@@ -581,7 +577,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(*this);
 		auto &dict_sel = DictionaryVector::SelVector(*this);
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
 			auto idx = dict_sel.get_index(oidx);
 			assert(idx >= 0 && idx < STANDARD_VECTOR_SIZE);
@@ -595,7 +591,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	if (type == TypeId::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
-		switch(vector_type) {
+		switch (vector_type) {
 		case VectorType::CONSTANT_VECTOR: {
 			auto string = ConstantVector::GetData<string_t>(*this);
 			if (!ConstantVector::IsNull(*this)) {
@@ -605,7 +601,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 		case VectorType::FLAT_VECTOR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel.get_index(i);
 				if (!nullmask[oidx]) {
 					strings[oidx].Verify();
@@ -640,7 +636,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				ListVector::GetEntry(*this).Verify();
 			}
 			auto list_data = FlatVector::GetData<list_entry_t>(*this);
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel.get_index(i);
 				auto &le = list_data[idx];
 				if (!nullmask[idx]) {

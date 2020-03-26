@@ -5,7 +5,8 @@
 using namespace duckdb;
 using namespace std;
 
-idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector, idx_t max_count) {
+idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector,
+                                   idx_t max_count) {
 	// obtain a read lock
 	auto read_lock = lock.GetSharedLock();
 
@@ -61,8 +62,8 @@ void VersionManager::Delete(Transaction &transaction, Vector &row_ids, idx_t cou
 	row_ids.Orrify(count, rdata);
 	// obtain a write lock
 	auto write_lock = lock.GetExclusiveLock();
-	auto ids = (row_t *) rdata.data;
-	for(idx_t i = 0; i < count; i++) {
+	auto ids = (row_t *)rdata.data;
+	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rdata.sel->get_index(i);
 		del_state.Delete(ids[ridx] - base_row);
 	}

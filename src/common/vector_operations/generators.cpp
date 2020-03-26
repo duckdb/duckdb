@@ -16,7 +16,7 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 	}
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T) start;
+	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i] = value;
 		value += increment;
@@ -51,21 +51,24 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	}
 }
 
-template <class T> void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start, int64_t increment) {
+template <class T>
+void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
+                                 int64_t increment) {
 	assert(TypeIsNumeric(result.type));
 	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<T>(result);
-	auto value = (T) start;
+	auto value = (T)start;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		result_data[idx] = value + increment * idx;
 	}
 }
 
-void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start, int64_t increment) {
+void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
+                                        int64_t increment) {
 	if (!TypeIsNumeric(result.type)) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}

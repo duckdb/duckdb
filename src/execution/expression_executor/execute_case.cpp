@@ -6,10 +6,11 @@
 using namespace duckdb;
 using namespace std;
 
-void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount, SelectionVector &fside,
-          idx_t fcount);
+void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+          SelectionVector &fside, idx_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr, ExpressionExecutorState &root) {
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+                                                                ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
@@ -17,7 +18,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	Vector res_true(expr.result_if_true->return_type), res_false(expr.result_if_false->return_type);
 
 	auto check_state = state->child_states[0].get();
@@ -63,7 +65,7 @@ template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVecto
 	} else {
 		VectorData vdata;
 		vector.Orrify(count, vdata);
-		auto data = (T*) vdata.data;
+		auto data = (T *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = vdata.sel->get_index(i);
 			auto res_idx = sel.get_index(i);
@@ -75,14 +77,14 @@ template <class T> void fill_loop(Vector &vector, Vector &result, SelectionVecto
 }
 
 template <class T>
-void case_loop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount, SelectionVector &fside,
-               idx_t fcount) {
+void case_loop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+               SelectionVector &fside, idx_t fcount) {
 	fill_loop<T>(res_true, result, tside, tcount);
 	fill_loop<T>(res_false, result, fside, fcount);
 }
 
-void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount, SelectionVector &fside,
-          idx_t fcount) {
+void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+          SelectionVector &fside, idx_t fcount) {
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
 	switch (result.type) {
@@ -114,16 +116,16 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		auto result_cc = make_unique<ChunkCollection>();
 		ListVector::SetEntry(result, move(result_cc));
 
-		auto& result_child = ListVector::GetEntry(result);
+		auto &result_child = ListVector::GetEntry(result);
 		idx_t offset = 0;
 		if (ListVector::HasEntry(res_true)) {
-			auto& true_child = ListVector::GetEntry(res_true);
+			auto &true_child = ListVector::GetEntry(res_true);
 			assert(true_child.types.size() == 1);
 			offset += true_child.count;
 			result_child.Append(true_child);
 		}
 		if (ListVector::HasEntry(res_false)) {
-			auto& false_child = ListVector::GetEntry(res_false);
+			auto &false_child = ListVector::GetEntry(res_false);
 			assert(false_child.types.size() == 1);
 			result_child.Append(false_child);
 		}
@@ -153,6 +155,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for case expression: %s", TypeIdToString(result.type).c_str());
+		throw NotImplementedException("Unimplemented type for case expression: %s",
+		                              TypeIdToString(result.type).c_str());
 	}
 }

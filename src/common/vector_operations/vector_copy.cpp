@@ -13,21 +13,23 @@
 using namespace duckdb;
 using namespace std;
 
-template<class T>
-static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+template <class T>
+static void TemplatedCopy(Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
+                          idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<T>(source);
 	auto tdata = FlatVector::GetData<T>(target);
-	for(idx_t i = 0; i < copy_count; i++) {
+	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel.get_index(source_offset + i);
 		tdata[target_offset + i] = ldata[source_idx];
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count, idx_t source_offset, idx_t target_offset) {
+void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVector &sel, idx_t source_count,
+                            idx_t source_offset, idx_t target_offset) {
 	assert(source_offset <= source_count);
 	assert(target.vector_type == VectorType::FLAT_VECTOR);
 	assert(source.type == target.type);
-	switch(source.vector_type) {
+	switch (source.vector_type) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary vector: merge selection vectors
 		auto &child = DictionaryVector::Child(source);
@@ -63,20 +65,20 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	auto &tmask = FlatVector::Nullmask(target);
 	if (source.vector_type == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(source)) {
-			for(idx_t i = 0; i < copy_count; i++) {
+			for (idx_t i = 0; i < copy_count; i++) {
 				tmask[target_offset + i] = true;
 			}
 		}
 	} else {
 		auto &smask = FlatVector::Nullmask(source);
-		for(idx_t i = 0; i < copy_count; i++) {
+		for (idx_t i = 0; i < copy_count; i++) {
 			auto idx = sel.get_index(source_offset + i);
 			tmask[target_offset + i] = smask[idx];
 		}
 	}
 
 	// now copy over the data
-	switch(source.type) {
+	switch (source.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
 		TemplatedCopy<int8_t>(source, sel, target, source_offset, target_offset, copy_count);
@@ -102,8 +104,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case TypeId::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(source);
 		auto tdata = FlatVector::GetData<string_t>(target);
-		for(idx_t i = 0; i < copy_count; i++) {
-			auto source_idx =  sel.get_index(source_offset + i);
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (!tmask[target_idx]) {
 				tdata[target_idx] = StringVector::AddString(target, ldata[source_idx]);
@@ -119,7 +121,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			assert(source_children.size() == target_children.size());
 			for (idx_t i = 0; i < source_children.size(); i++) {
 				assert(target_children[i].first == target_children[i].first);
-				VectorOperations::Copy(*source_children[i].second, *target_children[i].second, sel, source_count, source_offset, target_offset);
+				VectorOperations::Copy(*source_children[i].second, *target_children[i].second, sel, source_count,
+				                       source_offset, target_offset);
 			}
 		} else {
 			assert(target_offset == 0);
@@ -151,7 +154,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			// now write the list offsets
 			auto ldata = FlatVector::GetData<list_entry_t>(source);
 			auto tdata = FlatVector::GetData<list_entry_t>(target);
-			for(idx_t i = 0; i < copy_count; i++) {
+			for (idx_t i = 0; i < copy_count; i++) {
 				auto source_idx = sel.get_index(source_offset + i);
 				auto &source_entry = ldata[source_idx];
 				auto &target_entry = tdata[target_offset + i];
@@ -167,8 +170,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 }
 
-void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset, idx_t target_offset) {
-	switch(source.vector_type) {
+void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
+                            idx_t target_offset) {
+	switch (source.vector_type) {
 	case VectorType::DICTIONARY_VECTOR: {
 		// dictionary: continue into child with selection vector
 		auto &child = DictionaryVector::Child(source);
@@ -177,11 +181,13 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		VectorOperations::Copy(source, target, ConstantVector::ZeroSelectionVector, source_count, source_offset, target_offset);
+		VectorOperations::Copy(source, target, ConstantVector::ZeroSelectionVector, source_count, source_offset,
+		                       target_offset);
 		break;
 	default:
 		source.Normalify(source_count);
-		VectorOperations::Copy(source, target, FlatVector::IncrementalSelectionVector, source_count, source_offset, target_offset);
+		VectorOperations::Copy(source, target, FlatVector::IncrementalSelectionVector, source_count, source_offset,
+		                       target_offset);
 		break;
 	}
 }

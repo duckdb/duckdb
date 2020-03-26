@@ -369,8 +369,7 @@ template <> double Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
-template<class T>
-string CastToStandardString(T input) {
+template <class T> string CastToStandardString(T input) {
 	Vector v(TypeId::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
@@ -378,7 +377,7 @@ string CastToStandardString(T input) {
 template <> string Cast::Operation(bool input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(int8_t  input) {
+template <> string Cast::Operation(int8_t input) {
 	return CastToStandardString(input);
 }
 template <> string Cast::Operation(int16_t input) {
@@ -409,12 +408,10 @@ template <> string_t StringCast::Operation(bool input, Vector &vector) {
 }
 
 struct StringToIntegerCast {
-	template<class T>
-	static int UnsignedLength(T value);
+	template <class T> static int UnsignedLength(T value);
 
 	// Formats value in reverse and returns a pointer to the beginning.
-	template<class T>
-	static char* FormatUnsigned(T value, char *ptr) {
+	template <class T> static char *FormatUnsigned(T value, char *ptr) {
 		while (value >= 100) {
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
@@ -434,8 +431,7 @@ struct StringToIntegerCast {
 		return ptr;
 	}
 
-	template<class SIGNED, class UNSIGNED>
-	static string_t FormatSigned(SIGNED value, Vector &vector) {
+	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
@@ -577,12 +573,12 @@ struct DateToStringCast {
 		auto endptr = data + year_length;
 		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
 		// add optional leading zeros
-		while(endptr > data) {
+		while (endptr > data) {
 			*--endptr = '0';
 		}
 		// now write the month and day
 		auto ptr = data + year_length;
-		for(int i = 1; i <= 2; i++) {
+		for (int i = 1; i <= 2; i++) {
 			ptr[0] = '-';
 			if (date[i] < 10) {
 				ptr[1] = '0';
@@ -644,7 +640,7 @@ struct TimeToStringCast {
 	static void Format(char *data, idx_t length, int32_t time[]) {
 		// first write hour, month and day
 		auto ptr = data;
-		for(int i = 0; i <= 2; i++) {
+		for (int i = 0; i <= 2; i++) {
 			if (time[i] < 10) {
 				ptr[0] = '0';
 				ptr[1] = '0' + time[i];
@@ -660,7 +656,7 @@ struct TimeToStringCast {
 		if (time[3] > 0) {
 			auto start = ptr;
 			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
-			while(ptr > start) {
+			while (ptr > start) {
 				*--ptr = '0';
 			}
 			*--ptr = '.';

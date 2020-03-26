@@ -13,9 +13,8 @@ using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
 	assert(result.type == TypeId::VARCHAR);
-	UnaryExecutor::Execute<SRC, string_t, true>(source, result, count, [&](SRC input) {
-		return OP::template Operation<SRC>(input, result);
-	});
+	UnaryExecutor::Execute<SRC, string_t, true>(source, result, count,
+	                                            [&](SRC input) { return OP::template Operation<SRC>(input, result); });
 }
 
 static NotImplementedException UnimplementedCast(SQLType source_type, SQLType target_type) {
@@ -167,7 +166,8 @@ static void time_cast_switch(Vector &source, Vector &result, SQLType source_type
 	}
 }
 
-static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
+                                  idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::VARCHAR:

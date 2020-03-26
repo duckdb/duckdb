@@ -213,7 +213,7 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 	idx_t count = 0;
 
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	for(idx_t i = 0; i < fetch_count; i++) {
+	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
 		bool use_row;
 		if ((idx_t)row_id < persistent_manager.max_row) {
@@ -253,7 +253,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
 
-	auto dataptr = (int32_t*) vdata.data;
+	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx] && dataptr[idx] == 0) {
@@ -267,7 +267,8 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
-			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(), table.columns[not_null.index].name);
+			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
+			                        table.columns[not_null.index].name);
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -530,8 +531,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 #endif
 }
 
-void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
-                       vector<column_t> &column_ids, DataChunk &updates) {
+void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
+                       DataChunk &updates) {
 	assert(row_ids.type == ROW_TYPE);
 
 	updates.Verify();

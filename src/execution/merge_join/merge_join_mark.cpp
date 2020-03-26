@@ -62,7 +62,8 @@ template <class T, class OP> static idx_t merge_join_mark_lt(ScalarMergeInfo &l,
 		auto &rorder = r.order_info[chunk_idx];
 		auto rdata = (T *)rorder.vdata.data;
 		auto max_r_value = rdata[rorder.vdata.sel->get_index(rorder.order.get_index(rorder.count - 1))];
-		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS value
+		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
+		// value
 		while (true) {
 			auto lidx = lorder.get_index(l.pos);
 			auto dlidx = l.order.vdata.sel->get_index(lidx);

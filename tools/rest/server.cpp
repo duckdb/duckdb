@@ -58,7 +58,7 @@ enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &nullmask = FlatVector::Nullmask(v);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		if (!nullmask[i]) {
 			j["data"][col_idx] += (TARGET)data_ptr[i];
 
@@ -88,7 +88,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		assert(v);
 		switch (v->type) {
 		case TypeId::BOOL:
-			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(),j);
+			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::INT8:
 			assign_json_loop<int8_t, int64_t>(*v, col_idx, chunk->size(), j);
@@ -111,7 +111,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		case TypeId::VARCHAR: {
 			auto data_ptr = FlatVector::GetData<string_t>(*v);
 			auto &nullmask = FlatVector::Nullmask(*v);
-			for(idx_t i = 0; i < chunk->size(); i++) {
+			for (idx_t i = 0; i < chunk->size(); i++) {
 				if (!nullmask[i]) {
 					j["data"][col_idx] += data_ptr[i].GetData();
 

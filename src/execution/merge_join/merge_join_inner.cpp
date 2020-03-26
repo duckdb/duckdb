@@ -104,7 +104,7 @@ template <class T> idx_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeIn
 			auto ridx = rorder.get_index(r.pos);
 			auto dlidx = l.order.vdata.sel->get_index(lidx);
 			auto dridx = r.order.vdata.sel->get_index(ridx);
-		    if (duckdb::LessThanEquals::Operation(ldata[dlidx], rdata[dridx])) {
+			if (duckdb::LessThanEquals::Operation(ldata[dlidx], rdata[dridx])) {
 				// left side smaller: found match
 				l.result.set_index(result_count, lidx);
 				r.result.set_index(result_count, ridx);

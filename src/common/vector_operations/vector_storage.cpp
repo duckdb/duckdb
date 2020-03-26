@@ -4,11 +4,10 @@
 
 namespace duckdb {
 
-template <class T>
-static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
+template <class T> static void CopyToStorageLoop(VectorData &vdata, idx_t count, data_ptr_t target) {
 	auto ldata = (T *)vdata.data;
-	auto result_data = (T*) target;
-	for(idx_t i = 0; i < count; i++) {
+	auto result_data = (T *)target;
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if ((*vdata.nullmask)[idx]) {
 			result_data[i] = NullValue<T>();
@@ -25,7 +24,7 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	VectorData vdata;
 	source.Orrify(count, vdata);
 
-	switch(source.type) {
+	switch (source.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
 		CopyToStorageLoop<int8_t>(vdata, count, target);
@@ -56,12 +55,11 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	}
 }
 
-template <class T>
-static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
-	auto ldata = (T *) source;
+template <class T> static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
+	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		if (IsNullValue<T>(ldata[i])) {
 			nullmask[i] = true;
 		} else {
@@ -72,7 +70,7 @@ static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) 
 
 void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &result) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	switch(result.type) {
+	switch (result.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
 		ReadFromStorageLoop<int8_t>(source, count, result);
@@ -103,4 +101,4 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 	}
 }
 
-}
+} // namespace duckdb

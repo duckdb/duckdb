@@ -34,7 +34,7 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 			idx_t start_position = offset - state->current_offset;
 			idx_t chunk_count = min(limit, state->child_chunk.size() - start_position);
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
-			for(idx_t i = 0; i < chunk_count; i++) {
+			for (idx_t i = 0; i < chunk_count; i++) {
 				sel.set_index(i, start_position + i);
 			}
 			// set up a slice of the input chunks

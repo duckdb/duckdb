@@ -82,10 +82,11 @@ public:
 
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
-		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
+		                  idx_t count, idx_t &offset);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
 
-		template<bool NO_MATCH_SEL>
+		template <bool NO_MATCH_SEL>
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);
 	};
 
@@ -97,9 +98,11 @@ private:
 		block_id_t block_id;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[], idx_t remaining);
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+	                    idx_t remaining);
 
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+
 public:
 	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
 	              JoinType type);
@@ -174,8 +177,10 @@ private:
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
-	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel);
-	void SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
+	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
+	                  SelectionVector &sel);
+	void SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count,
+	                         data_ptr_t key_locations[]);
 	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 
 	//! The amount of entries stored in the HT currently

@@ -16,7 +16,8 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
-template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+template <class OP, class NULLOP>
+static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -26,7 +27,8 @@ template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector 
 		auto rdata = ConstantVector::GetData<bool>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
 		*result_data = OP::Operation(*ldata, *rdata);
-		ConstantVector::SetNull(result, NULLOP::Operation(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right)));
+		ConstantVector::SetNull(
+		    result, NULLOP::Operation(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right)));
 	} else {
 		// perform generic loop
 		VectorData ldata, rdata;
@@ -34,19 +36,20 @@ template <class OP, class NULLOP> static void templated_boolean_nullmask(Vector 
 		right.Orrify(count, rdata);
 
 		result.vector_type = VectorType::FLAT_VECTOR;
-		auto left_data = (bool*) ldata.data;
-		auto right_data = (bool*) rdata.data;
+		auto left_data = (bool *)ldata.data;
+		auto right_data = (bool *)rdata.data;
 		auto result_data = FlatVector::GetData<bool>(result);
 		auto &result_mask = FlatVector::Nullmask(result);
 		if (ldata.nullmask->any() || rdata.nullmask->any()) {
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
 				result_data[i] = OP::Operation(left_data[lidx], right_data[ridx]);
-				result_mask[i] = NULLOP::Operation(left_data[lidx], right_data[ridx], (*ldata.nullmask)[lidx], (*rdata.nullmask)[ridx]);
+				result_mask[i] = NULLOP::Operation(left_data[lidx], right_data[ridx], (*ldata.nullmask)[lidx],
+				                                   (*rdata.nullmask)[ridx]);
 			}
 		} else {
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
 				result_data[i] = OP::Operation(left_data[lidx], right_data[ridx]);

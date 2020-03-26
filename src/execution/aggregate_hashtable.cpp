@@ -190,7 +190,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 			assert(addresses.type == new_addresses.type && addresses.type == TypeId::POINTER);
 
 			auto new_address_data = FlatVector::GetData<data_ptr_t>(new_addresses);
-			for(idx_t i = 0; i < found_entries; i++) {
+			for (idx_t i = 0; i < found_entries; i++) {
 				memcpy(new_address_data[i], data_pointers[i], payload_width);
 			}
 		}
@@ -236,7 +236,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
 			vector<TypeId> probe_types(group_types);
-			for(idx_t i = 0; i < aggr.child_count; i++) {
+			for (idx_t i = 0; i < aggr.child_count; i++) {
 				probe_types.push_back(payload_types[payload_idx]);
 			}
 			DataChunk probe_chunk;
@@ -244,7 +244,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			for (idx_t group_idx = 0; group_idx < group_types.size(); group_idx++) {
 				probe_chunk.data[group_idx].Reference(groups.data[group_idx]);
 			}
-			for(idx_t i = 0; i < aggr.child_count; i++) {
+			for (idx_t i = 0; i < aggr.child_count; i++) {
 				probe_chunk.data[group_types.size() + i].Reference(payload.data[payload_idx + i]);
 			}
 			probe_chunk.SetCardinality(groups);
@@ -254,14 +254,15 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 			// this is the actual meat, find out which groups plus payload
 			// value have not been seen yet
-			idx_t new_group_count = distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
+			idx_t new_group_count =
+			    distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
 
 			// now fix up the payload and addresses accordingly by creating
 			// a selection vector
 			if (new_group_count > 0) {
 				Vector distinct_addresses;
 				distinct_addresses.Slice(addresses, new_groups, new_group_count);
-				for(idx_t i = 0; i < aggr.child_count; i++) {
+				for (idx_t i = 0; i < aggr.child_count; i++) {
 					payload.data[payload_idx + i].Slice(new_groups, new_group_count);
 					payload.data[payload_idx + i].Verify(new_group_count);
 				}
@@ -316,15 +317,16 @@ void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	});
 }
 
-template<class T>
-static void templated_scatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count, idx_t type_size) {
-	auto data = (T*) gdata.data;
+template <class T>
+static void templated_scatter(VectorData &gdata, Vector &addresses, const SelectionVector &sel, idx_t count,
+                              idx_t type_size) {
+	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uint64_t>(addresses);
 	if (gdata.nullmask->any()) {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T*) pointers[pointer_idx];
+			auto ptr = (T *)pointers[pointer_idx];
 
 			if ((*gdata.nullmask)[group_idx]) {
 				*ptr = NullValue<T>();
@@ -334,10 +336,10 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 			pointers[pointer_idx] += type_size;
 		}
 	} else {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto pointer_idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(pointer_idx);
-			auto ptr = (T*) pointers[pointer_idx];
+			auto ptr = (T *)pointers[pointer_idx];
 
 			*ptr = data[group_idx];
 			pointers[pointer_idx] += type_size;
@@ -345,8 +347,9 @@ static void templated_scatter(VectorData &gdata, Vector &addresses, const Select
 	}
 }
 
-void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, const SelectionVector &sel, idx_t count) {
-	for(idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
+                                        const SelectionVector &sel, idx_t count) {
+	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
 
@@ -373,13 +376,13 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 			templated_scatter<double>(gdata, addresses, sel, count, type_size);
 			break;
 		case TypeId::VARCHAR: {
-			auto data = (string_t*) gdata.data;
+			auto data = (string_t *)gdata.data;
 			auto pointers = FlatVector::GetData<uint64_t>(addresses);
 
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto pointer_idx = sel.get_index(i);
 				auto group_idx = gdata.sel->get_index(pointer_idx);
-				auto ptr = (string_t*) pointers[pointer_idx];
+				auto ptr = (string_t *)pointers[pointer_idx];
 
 				if ((*gdata.nullmask)[group_idx]) {
 					*ptr = NullValue<string_t>();
@@ -398,16 +401,17 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 	}
 }
 
-template<class T>
-static void templated_compare_groups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count, idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
-	auto data = (T*) gdata.data;
+template <class T>
+static void templated_compare_groups(VectorData &gdata, Vector &addresses, SelectionVector &sel, idx_t &count,
+                                     idx_t type_size, SelectionVector &no_match, idx_t &no_match_count) {
+	auto data = (T *)gdata.data;
 	auto pointers = FlatVector::GetData<uint64_t>(addresses);
 	idx_t match_count = 0;
 	if (gdata.nullmask->any()) {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T*) pointers[idx];
+			auto value = (T *)pointers[idx];
 
 			if ((*gdata.nullmask)[group_idx]) {
 				if (IsNullValue<T>(*value)) {
@@ -427,10 +431,10 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 			}
 		}
 	} else {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto group_idx = gdata.sel->get_index(idx);
-			auto value = (T*) pointers[idx];
+			auto value = (T *)pointers[idx];
 
 			if (Equals::Operation<T>(data[group_idx], *value)) {
 				sel.set_index(match_count++, idx);
@@ -443,7 +447,8 @@ static void templated_compare_groups(VectorData &gdata, Vector &addresses, Selec
 	count = match_count;
 }
 
-static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses, SelectionVector &sel, idx_t count, SelectionVector &no_match) {
+static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
+                           SelectionVector &sel, idx_t count, SelectionVector &no_match) {
 	idx_t no_match_count = 0;
 	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 		auto &data = groups.data[group_idx];
@@ -513,7 +518,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	// orrify all the groups
 	auto group_data = unique_ptr<VectorData[]>(new VectorData[groups.column_count()]);
-	for(idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
+	for (idx_t grp_idx = 0; grp_idx < groups.column_count(); grp_idx++) {
 		groups.data[grp_idx].Orrify(groups.size(), group_data[grp_idx]);
 	}
 

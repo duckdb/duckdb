@@ -12,7 +12,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	// resolve the child
 	Vector child(expr.child->return_type);
 	auto child_state = state->child_states[0].get();

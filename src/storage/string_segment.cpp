@@ -316,12 +316,12 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 	VectorData adata;
 	source.Orrify(count, adata);
 
-	auto sdata = (string_t *) adata.data;
+	auto sdata = (string_t *)adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = adata.sel->get_index(offset + i);
 		auto target_idx = target_offset + i;
 		if ((*adata.nullmask)[source_idx]) {
@@ -343,8 +343,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			// string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
 			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
 			if (total_length > BIG_STRING_MARKER_BASE_SIZE &&
-				(total_length >= STRING_BLOCK_LIMIT ||
-					total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
+			    (total_length >= STRING_BLOCK_LIMIT ||
+			     total_length + (remaining_strings * BIG_STRING_MARKER_SIZE) > RemainingSpace())) {
 				assert(RemainingSpace() >= BIG_STRING_MARKER_SIZE);
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
@@ -503,8 +503,8 @@ void StringSegment::ReadStringMarker(data_ptr_t target, block_id_t &block_id, in
 //===--------------------------------------------------------------------===//
 // String Update
 //===--------------------------------------------------------------------===//
-string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
-                                                       idx_t vector_offset) {
+string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
+                                                       idx_t count, idx_t vector_offset) {
 	auto info = make_unique<StringUpdateInfo>();
 	info->count = count;
 	auto strings = FlatVector::GetData<string_t>(update);
@@ -522,8 +522,9 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 	return info;
 }
 
-string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t update_count,
-                                                      idx_t vector_offset, StringUpdateInfo &update_info) {
+string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids,
+                                                      idx_t update_count, idx_t vector_offset,
+                                                      StringUpdateInfo &update_info) {
 	auto info = make_unique<StringUpdateInfo>();
 
 	// perform a merge between the new and old indexes

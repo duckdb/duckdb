@@ -29,7 +29,7 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	auto input_seeds = FlatVector::GetData<double>(input);
 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
 
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
 			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}

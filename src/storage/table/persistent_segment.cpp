@@ -46,7 +46,8 @@ void PersistentSegment::FetchRow(ColumnFetchState &state, Transaction &transacti
 	data->FetchRow(state, transaction, row_id - this->start, result, result_idx);
 }
 
-void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids, idx_t count) {
+void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction, Vector &updates, row_t *ids,
+                               idx_t count) {
 	// update of persistent segment: check if the table has been updated before
 	if (block_id == data->block_id) {
 		// data has not been updated before! convert the segment from one that refers to an on-disk block to one that

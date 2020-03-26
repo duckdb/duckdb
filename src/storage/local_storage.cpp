@@ -165,7 +165,7 @@ void LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	idx_t base_index = MAX_ROW_ID + chunk_idx * STANDARD_VECTOR_SIZE;
 
 	auto ids = FlatVector::GetData<row_t>(row_ids);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto id = ids[i] - base_index;
 		deleted[id] = true;
 	}
@@ -181,7 +181,7 @@ static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	auto updates = (T *)udata.data;
 
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto uidx = udata.sel->get_index(i);
 
 		auto id = ids[i] - base_index;

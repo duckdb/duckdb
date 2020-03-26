@@ -14,7 +14,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundOperatorExp
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(BoundOperatorExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
 	if (expr.type == ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {

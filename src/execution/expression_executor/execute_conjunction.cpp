@@ -47,7 +47,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		Vector current_result(TypeId::BOOL);
@@ -137,7 +138,8 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	auto state = (ConjunctionState *)state_;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
@@ -157,12 +159,14 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, true_sel, temp_false.get());
+			idx_t tcount =
+			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(),
+			           current_sel, current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
 				// tuples passed, move them into the actual result vector
-				for(idx_t i = 0; i < fcount; i++) {
+				for (idx_t i = 0; i < fcount; i++) {
 					false_sel->set_index(false_count++, temp_false->get_index(i));
 				}
 			}
@@ -171,14 +175,16 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 				break;
 			}
 			if (current_count < count) {
-				// tuples were filtered out: move on to using the true_sel to only evaluate passing tuples in subsequent iterations
+				// tuples were filtered out: move on to using the true_sel to only evaluate passing tuples in subsequent
+				// iterations
 				current_sel = true_sel;
 			}
 		}
 
 		// adapt runtime statistics
 		auto end_time = chrono::high_resolution_clock::now();
-		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		AdaptRuntimeStatistics(expr, state,
+		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 		return current_count;
 	} else {
 		// get runtime statistics
@@ -197,11 +203,13 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), current_sel, current_count, temp_true.get(), false_sel);
+			idx_t tcount =
+			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(),
+			           current_sel, current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector
-					for(idx_t i = 0; i < tcount; i++) {
+					for (idx_t i = 0; i < tcount; i++) {
 						true_sel->set_index(result_count++, temp_true->get_index(i));
 					}
 				}
@@ -213,7 +221,8 @@ idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionSta
 
 		// adapt runtime statistics
 		auto end_time = chrono::high_resolution_clock::now();
-		AdaptRuntimeStatistics(expr, state, chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
+		AdaptRuntimeStatistics(expr, state,
+		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
 		return result_count;
 	}
 }

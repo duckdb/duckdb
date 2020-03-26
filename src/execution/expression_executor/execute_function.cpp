@@ -24,7 +24,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExp
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	auto state = (FunctionState *)state_;
 	DataChunk arguments;
 	arguments.SetCardinality(count);

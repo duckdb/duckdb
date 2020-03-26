@@ -16,14 +16,16 @@ class VectorBuffer;
 
 struct SelectionData {
 	SelectionData(idx_t count) {
-		owned_data = unique_ptr<sel_t[]>(new sel_t[count]);;
+		owned_data = unique_ptr<sel_t[]>(new sel_t[count]);
+		;
 	}
 
 	unique_ptr<sel_t[]> owned_data;
 };
 
 struct SelectionVector {
-	SelectionVector() : sel_vector(nullptr) {}
+	SelectionVector() : sel_vector(nullptr) {
+	}
 	SelectionVector(sel_t *sel) {
 		Initialize(sel);
 	}
@@ -36,6 +38,7 @@ struct SelectionVector {
 	SelectionVector(buffer_ptr<SelectionData> data) {
 		Initialize(move(data));
 	}
+
 public:
 	void Initialize(sel_t *sel) {
 		selection_data.reset();
@@ -78,11 +81,12 @@ public:
 
 	string ToString(idx_t count = 0) const;
 	void Print(idx_t count = 0) const;
+
 private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
 };
 
-typedef unordered_map<sel_t*, buffer_ptr<VectorBuffer>> sel_cache_t;
+typedef unordered_map<sel_t *, buffer_ptr<VectorBuffer>> sel_cache_t;
 
-}
+} // namespace duckdb

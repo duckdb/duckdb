@@ -13,11 +13,14 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type)));
 	}
 	// we can add integers to dates
-	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE, ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
-	functions.AddFunction(ScalarFunction({SQLType::INTEGER, SQLType::DATE}, SQLType::DATE, ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
+	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::INTEGER, SQLType::DATE}, SQLType::DATE,
+	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
@@ -32,10 +35,13 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
-	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER,
+	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
+	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
@@ -50,7 +56,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type)));
+		functions.AddFunction(
+		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -70,13 +77,13 @@ struct BinaryZeroIsNullWrapper {
 	}
 };
 
-template<class T, class OP>
+template <class T, class OP>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<T, T, T, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result, input.size());
+	BinaryExecutor::Execute<T, T, T, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result,
+	                                                                    input.size());
 }
 
-template <class OP>
-static scalar_function_t GetBinaryFunctionIgnoreZero(SQLType type) {
+template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::TINYINT:
 		return BinaryScalarFunctionIgnoreZero<int8_t, OP>;

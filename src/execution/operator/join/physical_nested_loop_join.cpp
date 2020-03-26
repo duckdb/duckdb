@@ -36,14 +36,14 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 }
 
 static bool HasNullValues(DataChunk &chunk) {
-	for(idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < chunk.column_count(); col_idx++) {
 		VectorData vdata;
 		chunk.data[col_idx].Orrify(chunk.size(), vdata);
 
 		if (vdata.nullmask->none()) {
 			continue;
 		}
-		for(idx_t i = 0; i < chunk.size(); i++) {
+		for (idx_t i = 0; i < chunk.size(); i++) {
 			auto idx = vdata.sel->get_index(i);
 			if ((*vdata.nullmask)[idx]) {
 				return true;
@@ -75,7 +75,8 @@ void PhysicalJoin::ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &res
 	}
 }
 
-void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[], bool has_null) {
+void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
+                                           bool has_null) {
 	// for the initial set of columns we just reference the left side
 	result.SetCardinality(left);
 	for (idx_t i = 0; i < left.column_count(); i++) {
@@ -91,7 +92,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 		VectorData jdata;
 		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
 		if (jdata.nullmask->any()) {
-			for(idx_t i = 0; i < join_keys.size(); i++) {
+			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
 				nullmask[i] = (*jdata.nullmask)[jidx];
 			}
@@ -238,8 +239,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			NestedLoopJoinMark::Perform(state->left_join_condition, state->right_chunks, found_match, conditions);
 			if (type == JoinType::MARK) {
 				// now construct the mark join result from the found matches
-				PhysicalJoin::ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk, found_match,
-				                        state->has_null);
+				PhysicalJoin::ConstructMarkJoinResult(state->left_join_condition, state->child_chunk, chunk,
+				                                      found_match, state->has_null);
 			} else if (type == JoinType::SEMI) {
 				// construct the semi join result from the found matches
 				PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);

@@ -58,7 +58,7 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
-	auto source_nullmask = (nullmask_t *) (data + offset);
+	auto source_nullmask = (nullmask_t *)(data + offset);
 	auto source_data = data + offset + sizeof(nullmask_t);
 
 	// fetch the nullmask and copy the data from the base table
@@ -181,23 +181,23 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 	VectorData adata;
 	source.Orrify(count, adata);
 
-	auto sdata = (T *) adata.data;
+	auto sdata = (T *)adata.data;
 	auto tdata = (T *)(target + sizeof(nullmask_t));
 	if (adata.nullmask->any()) {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
 			bool is_null = (*adata.nullmask)[source_idx];
-		    if (is_null) {
-			    nullmask[target_idx] = true;
-			    stats.has_null = true;
-		    } else {
-			    update_min_max(sdata[source_idx], min, max);
-			    tdata[target_idx] = sdata[source_idx];
-		    }
+			if (is_null) {
+				nullmask[target_idx] = true;
+				stats.has_null = true;
+			} else {
+				update_min_max(sdata[source_idx], min, max);
+				tdata[target_idx] = sdata[source_idx];
+			}
 		}
 	} else {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
 			update_min_max(sdata[source_idx], min, max);
@@ -300,8 +300,8 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 // Merge Update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids, idx_t count,
-                              idx_t vector_offset) {
+static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
+                              idx_t count, idx_t vector_offset) {
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto info_data = (T *)node->tuple_data;

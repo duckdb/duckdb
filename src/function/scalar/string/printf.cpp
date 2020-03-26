@@ -7,25 +7,27 @@ using namespace std;
 namespace duckdb {
 
 struct FMTPrintf {
-	template<class ctx>
+	template <class ctx>
 	static string OP(const char *format_str, std::vector<fmt::basic_format_arg<ctx>> &format_args) {
-		return fmt::vsprintf(format_str, fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
+		return fmt::vsprintf(format_str,
+		                     fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
 struct FMTFormat {
-	template<class ctx>
+	template <class ctx>
 	static string OP(const char *format_str, std::vector<fmt::basic_format_arg<ctx>> &format_args) {
-		return fmt::vformat(format_str, fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
+		return fmt::vformat(format_str,
+		                    fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
-template<class FORMAT_FUN, class ctx>
+template <class FORMAT_FUN, class ctx>
 static void printf_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
 	result.vector_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t i = 0; i < args.column_count(); i++) {
-		switch(args.data[i].vector_type) {
+		switch (args.data[i].vector_type) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(args.data[i])) {
 				// constant null! result is always NULL regardless of other input
@@ -46,9 +48,8 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 
 	auto format_data = FlatVector::GetData<string_t>(format_string);
 	auto result_data = FlatVector::GetData<string_t>(result);
-	for(idx_t idx = 0; idx < count; idx++) {
-		if (result.vector_type == VectorType::FLAT_VECTOR &&
-			FlatVector::IsNull(result, idx)) {
+	for (idx_t idx = 0; idx < count; idx++) {
+		if (result.vector_type == VectorType::FLAT_VECTOR && FlatVector::IsNull(result, idx)) {
 			// this entry is NULL: skip it
 			continue;
 		}
@@ -62,7 +63,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-			switch(col.type) {
+			switch (col.type) {
 			case TypeId::BOOL: {
 				auto arg_data = FlatVector::GetData<bool>(col);
 				format_args.emplace_back(fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
@@ -115,12 +116,14 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 
 void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// fmt::printf_context, fmt::vsprintf
-	ScalarFunction printf_fun = ScalarFunction("printf", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTPrintf, fmt::printf_context>);
+	ScalarFunction printf_fun =
+	    ScalarFunction("printf", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTPrintf, fmt::printf_context>);
 	printf_fun.varargs = SQLType::ANY;
 	set.AddFunction(printf_fun);
 
 	// fmt::format_context, fmt::vformat
-	ScalarFunction format_fun = ScalarFunction("format", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTFormat, fmt::format_context>);
+	ScalarFunction format_fun =
+	    ScalarFunction("format", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTFormat, fmt::format_context>);
 	format_fun.varargs = SQLType::ANY;
 	set.AddFunction(format_fun);
 }

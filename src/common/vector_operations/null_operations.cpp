@@ -24,7 +24,7 @@ template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t c
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<bool>(result);
 		auto &nullmask = *data.nullmask;
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
 			result_data[i] = INVERSE ? !nullmask[idx] : nullmask[idx];
 		}
@@ -52,7 +52,7 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 		if (data.nullmask->none()) {
 			return true;
 		}
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
 			if (!(*data.nullmask)[idx]) {
 				return true;
@@ -75,7 +75,7 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 		if (data.nullmask->none()) {
 			return false;
 		}
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = data.sel->get_index(i);
 			if ((*data.nullmask)[idx]) {
 				return true;

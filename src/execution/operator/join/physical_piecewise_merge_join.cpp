@@ -85,7 +85,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		for (idx_t i = 0; i < state->right_conditions.chunks.size(); i++) {
 			auto &chunk_to_order = *state->right_conditions.chunks[i];
 			assert(chunk_to_order.column_count() == 1);
-			for(idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
+			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
 				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), state->right_orders[i]);
 				if (state->right_orders[i].count < chunk_to_order.size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
@@ -136,7 +136,8 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				// this method uses the LHS to loop over the entire RHS looking for matches
 				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
 				// now construct the mark join result from the found matches
-				PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match, state->has_null);
+				PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk,
+				                                      right_info.found_match, state->has_null);
 			} else {
 				// RHS empty: result is false for everything
 				chunk.Reference(state->child_chunk);
@@ -185,7 +186,8 @@ unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState()
 }
 
 template <class T, class OP>
-static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel, idx_t count, SelectionVector &result) {
+static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel,
+                                         idx_t count, SelectionVector &result) {
 	// select pivot
 	auto pivot_idx = not_null_sel.get_index(0);
 	auto dpivot_idx = sel.get_index(pivot_idx);
@@ -206,7 +208,8 @@ static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, co
 }
 
 template <class T, class OP>
-static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result, sel_t left, sel_t right) {
+static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result,
+                                        sel_t left, sel_t right) {
 	if (left >= right) {
 		return;
 	}
@@ -242,7 +245,9 @@ static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx
 	templated_quicksort_inplace<T, OP>(data, sel, count, result, part + 1, right);
 }
 
-template <class T, class OP> void templated_quicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel, idx_t count, SelectionVector &result) {
+template <class T, class OP>
+void templated_quicksort(T *__restrict data, const SelectionVector &sel, const SelectionVector &not_null_sel,
+                         idx_t count, SelectionVector &result) {
 	auto part = templated_quicksort_initial<T, OP>(data, sel, not_null_sel, count, result);
 	if (part > count) {
 		return;
@@ -252,11 +257,12 @@ template <class T, class OP> void templated_quicksort(T *__restrict data, const 
 }
 
 template <class T>
-static void templated_quicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count, SelectionVector &result) {
+static void templated_quicksort(VectorData &vdata, const SelectionVector &not_null_sel, idx_t not_null_count,
+                                SelectionVector &result) {
 	if (not_null_count == 0) {
 		return;
 	}
-	templated_quicksort<T, duckdb::LessThanEquals>((T*) vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
+	templated_quicksort<T, duckdb::LessThanEquals>((T *)vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
 void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
@@ -270,7 +276,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	// first filter out all the non-null values
 	idx_t not_null_count = 0;
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx]) {
 			not_null.set_index(not_null_count++, i);

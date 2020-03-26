@@ -70,8 +70,8 @@ public:
 	void IndexScan(Transaction &transaction, DataChunk &result, TableIndexScanState &state);
 
 	//! Fetch data from the specific row identifiers from the base table
-	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids, idx_t fetch_count,
-	           TableIndexScanState &state);
+	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
+	           idx_t fetch_count, TableIndexScanState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);

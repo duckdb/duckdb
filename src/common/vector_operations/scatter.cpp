@@ -46,19 +46,10 @@ using namespace std;
 // 	}
 // }
 
-// template <bool IGNORE_NULL = false> static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], idx_t offset) {
-// 	switch (source.type) {
-// 	case TypeId::BOOL:
-// 	case TypeId::INT8:
-// 		scatter_set_loop<int8_t, IGNORE_NULL>(source, dest, offset);
-// 		break;
-// 	case TypeId::INT16:
-// 		scatter_set_loop<int16_t, IGNORE_NULL>(source, dest, offset);
-// 		break;
-// 	case TypeId::INT32:
-// 		scatter_set_loop<int32_t, IGNORE_NULL>(source, dest, offset);
-// 		break;
-// 	case TypeId::INT64:
+// template <bool IGNORE_NULL = false> static void scatter_set_all_loop(Vector &source, data_ptr_t dest[], idx_t offset)
+// { 	switch (source.type) { 	case TypeId::BOOL: 	case TypeId::INT8: 		scatter_set_loop<int8_t, IGNORE_NULL>(source, dest,
+// offset); 		break; 	case TypeId::INT16: 		scatter_set_loop<int16_t, IGNORE_NULL>(source, dest, offset); 		break; 	case
+// TypeId::INT32: 		scatter_set_loop<int32_t, IGNORE_NULL>(source, dest, offset); 		break; 	case TypeId::INT64:
 // 		scatter_set_loop<int64_t, IGNORE_NULL>(source, dest, offset);
 // 		break;
 // 	case TypeId::HASH:

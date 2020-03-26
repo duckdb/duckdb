@@ -5,14 +5,15 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T, class OP> static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+template <class T, class OP>
+static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	VectorData left_data, right_data;
 	left.Orrify(lcount, left_data);
 	right.Orrify(rcount, right_data);
 
 	auto ldata = (T *)left_data.data;
 	auto rdata = (T *)right_data.data;
-	for(idx_t i = 0; i < lcount; i++) {
+	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
 		}
@@ -20,7 +21,7 @@ template <class T, class OP> static void mark_join_templated(Vector &left, Vecto
 		if ((*left_data.nullmask)[lidx]) {
 			continue;
 		}
-		for(idx_t j = 0; j < rcount; j++) {
+		for (idx_t j = 0; j < rcount; j++) {
 			auto ridx = right_data.sel->get_index(j);
 			if ((*right_data.nullmask)[ridx]) {
 				continue;
@@ -33,7 +34,8 @@ template <class T, class OP> static void mark_join_templated(Vector &left, Vecto
 	}
 }
 
-template <class OP> static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t rcount,bool found_match[]) {
+template <class OP>
+static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	switch (left.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -55,7 +57,8 @@ template <class OP> static void mark_join_operator(Vector &left, Vector &right, 
 	}
 }
 
-static void mark_join(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[], ExpressionType comparison_type) {
+static void mark_join(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
+                      ExpressionType comparison_type) {
 	assert(left.type == right.type);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -82,7 +85,8 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
 	for (idx_t chunk_idx = 0; chunk_idx < right.chunks.size(); chunk_idx++) {
 		DataChunk &right_chunk = *right.chunks[chunk_idx];
 		for (idx_t i = 0; i < conditions.size(); i++) {
-			mark_join(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match, conditions[i].comparison);
+			mark_join(left.data[i], right_chunk.data[i], left.size(), right_chunk.size(), found_match,
+			          conditions[i].comparison);
 		}
 	}
 }

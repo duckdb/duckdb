@@ -43,9 +43,9 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state_vector
 	insert_chunk.Initialize(chunk_types);
 	insert_chunk.SetCardinality(1);
 
-	auto states = (list_agg_state_t **) sdata.data;
+	auto states = (list_agg_state_t **)sdata.data;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->cc) {
 			state->cc = new ChunkCollection();
@@ -65,7 +65,7 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	size_t total_len = 0;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		assert(state->cc);
 		auto &state_cc = *state->cc;
@@ -76,7 +76,7 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	}
 
 	auto list_child = make_unique<ChunkCollection>();
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		auto &state_cc = *state->cc;
 		assert(state_cc.chunks[0]->column_count() == 1);
@@ -95,15 +95,10 @@ unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
-	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST,
-			AggregateFunction::StateSize<list_agg_state_t>,
-			AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>,
-			list_update,
-			AggregateFunction::StateCombine<list_agg_state_t, ListFunction>,
-			list_finalize,
-			nullptr,
-			list_bind,
-			AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
+	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
+	                             AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update,
+	                             AggregateFunction::StateCombine<list_agg_state_t, ListFunction>, list_finalize,
+	                             nullptr, list_bind, AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
 	set.AddFunction(agg);
 }
 

@@ -77,7 +77,8 @@ public:
 	template <class TA, class TB, class TR, class OP, bool IGNORE_NULL = false>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		assert(input.column_count() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result, input.size());
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result,
+		                                                             input.size());
 	};
 
 public:

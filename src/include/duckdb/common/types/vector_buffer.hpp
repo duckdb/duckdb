@@ -19,12 +19,12 @@ class Vector;
 class ChunkCollection;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER, // standard buffer, holds a single array of data
-	DICTIONARY_BUFFER, // dictionary buffer, holds a selection vector
+	STANDARD_BUFFER,     // standard buffer, holds a single array of data
+	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
 	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
-	STRING_BUFFER,   // string buffer, holds a string heap
-	STRUCT_BUFFER,   // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER      // list buffer, holds a single flatvector child
+	STRING_BUFFER,       // string buffer, holds a string heap
+	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
+	LIST_BUFFER          // list buffer, holds a single flatvector child
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -55,14 +55,18 @@ class DictionaryBuffer : public VectorBuffer {
 public:
 	DictionaryBuffer(const SelectionVector &sel) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
 	}
-	DictionaryBuffer(buffer_ptr<SelectionData> data) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
+	DictionaryBuffer(buffer_ptr<SelectionData> data)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
 	}
-	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
+	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
 	}
+
 public:
-	SelectionVector& GetSelVector() {
+	SelectionVector &GetSelVector() {
 		return sel_vector;
 	}
+
 private:
 	SelectionVector sel_vector;
 };

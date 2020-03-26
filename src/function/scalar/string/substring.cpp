@@ -56,8 +56,10 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
 	TernaryExecutor::Execute<string_t, int, int, string_t>(
-	    input_vector, offset_vector, length_vector, result, args.size(), [&](string_t input_string, int offset, int length) {
-		    return StringVector::AddString(result, substring_scalar_function(input_string, offset, length, output, current_len));
+	    input_vector, offset_vector, length_vector, result, args.size(),
+	    [&](string_t input_string, int offset, int length) {
+		    return StringVector::AddString(
+		        result, substring_scalar_function(input_string, offset, length, output, current_len));
 	    });
 }
 

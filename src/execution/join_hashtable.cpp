@@ -13,8 +13,8 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
-                             vector<TypeId> btypes, JoinType type)
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> btypes,
+                             JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
@@ -78,7 +78,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	} else {
 		hashes.Normalify(count);
 		auto indices = FlatVector::GetData<uint64_t>(hashes);
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			indices[i] &= bitmask;
 		}
 	}
@@ -88,10 +88,10 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 	VectorData hdata;
 	hashes.Orrify(count, hdata);
 
-	auto hash_data = (uint64_t *) hdata.data;
-	auto result_data = FlatVector::GetData<data_ptr_t*>(pointers);
-	auto main_ht = (data_ptr_t *) hash_map->node->buffer;
-	for(idx_t i = 0; i < count; i++) {
+	auto hash_data = (uint64_t *)hdata.data;
+	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
+	auto main_ht = (data_ptr_t *)hash_map->node->buffer;
+	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
 		auto hash = hash_data[hindex];
@@ -114,15 +114,16 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		}
 	}
 }
-template<class T>
-static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
-	auto source = (T*) vdata.data;
+template <class T>
+static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &sel, idx_t count,
+                                      data_ptr_t key_locations[]) {
+	auto source = (T *)vdata.data;
 	if (vdata.nullmask->any()) {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (T*) key_locations[i];
+			auto target = (T *)key_locations[i];
 			if ((*vdata.nullmask)[source_idx]) {
 				*target = NullValue<T>();
 			} else {
@@ -131,18 +132,19 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 			key_locations[i] += sizeof(T);
 		}
 	} else {
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (T*) key_locations[i];
+			auto target = (T *)key_locations[i];
 			*target = source[source_idx];
 			key_locations[i] += sizeof(T);
 		}
 	}
 }
 
-void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
+void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count,
+                                        data_ptr_t key_locations[]) {
 	switch (type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -167,12 +169,12 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 		templated_serialize_vdata<uint64_t>(vdata, sel, count, key_locations);
 		break;
 	case TypeId::VARCHAR: {
-		auto source = (string_t *) vdata.data;
-		for(idx_t i = 0; i < count; i++) {
+		auto source = (string_t *)vdata.data;
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx);
 
-			auto target = (string_t*) key_locations[i];
+			auto target = (string_t *)key_locations[i];
 			if ((*vdata.nullmask)[source_idx]) {
 				*target = NullValue<string_t>();
 			} else if (source[source_idx].IsInlined()) {
@@ -189,18 +191,20 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 	}
 }
 
-void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]) {
+void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count,
+                                    data_ptr_t key_locations[]) {
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
 	SerializeVectorData(vdata, v.type, sel, count, key_locations);
 }
 
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[], idx_t remaining) {
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+                                   idx_t remaining) {
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
 	idx_t offset = count - remaining;
-	for(idx_t i = 0; i < append_count; i++) {
+	for (idx_t i = 0; i < append_count; i++) {
 		key_locations[offset + i] = dataptr;
 		dataptr += entry_size;
 	}
@@ -211,7 +215,7 @@ idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx
 static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
 	auto &nullmask = *vdata.nullmask;
 	idx_t result_count = 0;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto key_idx = vdata.sel->get_index(idx);
 		if (!nullmask[key_idx]) {
@@ -221,13 +225,14 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 	return result_count;
 }
 
-idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel, SelectionVector &sel) {
+idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data,
+                                 const SelectionVector *&current_sel, SelectionVector &sel) {
 	key_data = keys.Orrify();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = &FlatVector::IncrementalSelectionVector;
 	idx_t added_count = keys.size();
-	for(idx_t i = 0; i < keys.column_count(); i++) {
+	for (idx_t i = 0; i < keys.column_count(); i++) {
 		if (!null_values_are_equal[i]) {
 			if (!key_data[i].nullmask->any()) {
 				continue;
@@ -277,7 +282,6 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	count += added_count;
 
-
 	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
@@ -315,12 +319,12 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
-	for(idx_t i = 0; i < keys.column_count(); i++) {
+	for (idx_t i = 0; i < keys.column_count(); i++) {
 		SerializeVectorData(key_data[i], keys.data[i].type, *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
-		for(idx_t i = 0; i < payload.column_count(); i++) {
+		for (idx_t i = 0; i < payload.column_count(); i++) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
@@ -338,7 +342,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	assert(hashes.vector_type == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<uint64_t>(hashes);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
@@ -426,7 +430,6 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 		pointers[idx] = *chain_pointer;
 		if (pointers[idx]) {
 			ss->sel_vector.set_index(count++, idx);
-
 		}
 	}
 	ss->count = count;
@@ -466,15 +469,17 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	}
 }
 
-template<bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel, idx_t &no_match_count) {
+template <bool NO_MATCH_SEL, class T, class OP>
+static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const SelectionVector &current_sel, idx_t count,
+                             idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
+                             idx_t &no_match_count) {
 	idx_t result_count = 0;
-	auto data = (T*) vdata.data;
+	auto data = (T *)vdata.data;
 	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = current_sel.get_index(i);
 		auto kidx = vdata.sel->get_index(idx);
-		auto gdata = (T*) (ptrs[idx] + offset);
+		auto gdata = (T *)(ptrs[idx] + offset);
 		if ((*vdata.nullmask)[kidx]) {
 			if (IsNullValue<T>(*gdata)) {
 				match_sel->set_index(result_count++, idx);
@@ -496,30 +501,39 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 	return result_count;
 }
 
-template<bool NO_MATCH_SEL, class OP>
-static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel, idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel, idx_t &no_match_count) {
-	switch(type) {
+template <bool NO_MATCH_SEL, class OP>
+static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel,
+                          idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
+                          idx_t &no_match_count) {
+	switch (type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
 	case TypeId::INT16:
-		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
 	case TypeId::INT32:
-		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
 	case TypeId::INT64:
-		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
 	case TypeId::FLOAT:
-		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                no_match_sel, no_match_count);
 	case TypeId::DOUBLE:
-		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
 	case TypeId::VARCHAR:
-		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel, no_match_sel, no_match_count);
+		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                   no_match_sel, no_match_count);
 	default:
 		throw NotImplementedException("Unimplemented type for GatherSwitch");
 	}
 }
 
-template<bool NO_MATCH_SEL>
+template <bool NO_MATCH_SEL>
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel) {
 	SelectionVector *current_sel = &this->sel_vector;
 	idx_t remaining_count = this->count;
@@ -528,22 +542,34 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count =
+			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			                                       remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count =
+			    GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			                                          remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], keys.data[i].type, this->pointers,
+			                                                          *current_sel, remaining_count, offset, match_sel,
+			                                                          no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(
+			    key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel,
+			    no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count =
+			    GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			                                         remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel, no_match_sel, no_match_count);
+			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], keys.data[i].type, this->pointers,
+			                                                             *current_sel, remaining_count, offset,
+			                                                             match_sel, no_match_sel, no_match_count);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison type for join");
@@ -557,7 +583,6 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 	return remaining_count;
 }
 
-
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel) {
 	return ResolvePredicates<true>(keys, &match_sel, &no_match_sel);
 }
@@ -567,7 +592,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_s
 }
 
 idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector) {
-	while(true) {
+	while (true) {
 		// resolve the predicates for this set of keys
 		idx_t result_count = ResolvePredicates(keys, result_vector);
 
@@ -593,7 +618,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	// now for all the pointers, we move on to the next set of pointers
 	idx_t new_count = 0;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
-	for(idx_t i = 0; i < sel_count; i++) {
+	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
 		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
 		ptrs[idx] = *chain_pointer;
@@ -604,18 +629,19 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	this->count = new_count;
 }
 
-void ScanStructure::AdvancePointers()  {
+void ScanStructure::AdvancePointers() {
 	AdvancePointers(this->sel_vector, this->count);
 }
 
-template<class T>
-static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t offset) {
+template <class T>
+static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const SelectionVector &result_vector,
+                                  const SelectionVector &sel_vector, idx_t count, idx_t offset) {
 	auto rdata = FlatVector::GetData<T>(result);
 	auto &nullmask = FlatVector::Nullmask(result);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto ridx = result_vector.get_index(i);
 		auto pidx = sel_vector.get_index(i);
-		auto hdata = (T*) (pointers[pidx] + offset);
+		auto hdata = (T *)(pointers[pidx] + offset);
 		if (IsNullValue<T>(*hdata)) {
 			nullmask[ridx] = true;
 		} else {
@@ -624,10 +650,11 @@ static void TemplatedGatherResult(Vector &result, uint64_t *pointers, const Sele
 	}
 }
 
-void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
+                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto ptrs = FlatVector::GetData<uint64_t>(pointers);
-	switch(result.type) {
+	switch (result.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
 		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
@@ -694,13 +721,13 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
-	while(this->count > 0) {
+	while (this->count > 0) {
 		// resolve the predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, match_sel, no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
-		for(idx_t i = 0; i < match_count; i++) {
+		for (idx_t i = 0; i < match_count; i++) {
 			found_match[match_sel.get_index(i)] = true;
 		}
 		// continue searching for the ones where we did not find a match yet
@@ -767,7 +794,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		VectorData jdata;
 		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
 		if (jdata.nullmask->any()) {
-			for(idx_t i = 0; i < join_keys.size(); i++) {
+			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
 				nullmask[i] = (*jdata.nullmask)[jidx];
 			}
@@ -823,7 +850,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		result_vector.vector_type = VectorType::FLAT_VECTOR;
 		auto bool_result = FlatVector::GetData<bool>(result_vector);
 		auto &nullmask = FlatVector::Nullmask(result_vector);
-		switch(last_key.vector_type) {
+		switch (last_key.vector_type) {
 		case VectorType::CONSTANT_VECTOR:
 			if (ConstantVector::IsNull(last_key)) {
 				nullmask.set();
@@ -835,8 +862,9 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		default: {
 			VectorData kdata;
 			last_key.Orrify(keys.size(), kdata);
-			for(idx_t i = 0; i < input.size(); i++) {
-				auto kidx = kdata.sel->get_index(i);;
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto kidx = kdata.sel->get_index(i);
+				;
 				nullmask[i] = (*kdata.nullmask)[kidx];
 			}
 			break;
@@ -901,13 +929,13 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
-	while(this->count > 0) {
+	while (this->count > 0) {
 		// resolve the predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, match_sel, no_match_sel);
 		idx_t no_match_count = this->count - match_count;
 
 		// mark each of the matches as found
-		for(idx_t i = 0; i < match_count; i++) {
+		for (idx_t i = 0; i < match_count; i++) {
 			// found a match for this index
 			auto index = match_sel.get_index(i);
 			found_match[index] = true;

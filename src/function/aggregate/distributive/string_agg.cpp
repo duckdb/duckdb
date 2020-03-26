@@ -22,7 +22,8 @@ struct StringAggFunction {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, A_TYPE *str_data, B_TYPE *sep_data, nullmask_t &str_nullmask, nullmask_t &sep_nullmask, idx_t str_idx, idx_t sep_idx) {
+	static void Operation(STATE *state, A_TYPE *str_data, B_TYPE *sep_data, nullmask_t &str_nullmask,
+	                      nullmask_t &sep_nullmask, idx_t str_idx, idx_t sep_idx) {
 		auto str = str_data[str_idx].GetData();
 		auto sep = sep_data[sep_idx].GetData();
 		auto str_size = str_data[str_idx].GetSize() + 1;

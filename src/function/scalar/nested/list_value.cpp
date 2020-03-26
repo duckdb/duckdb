@@ -33,7 +33,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = cc.count;
 		for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(types[0])); // FIXME evil pattern

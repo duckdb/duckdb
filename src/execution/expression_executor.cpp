@@ -115,7 +115,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 	}
 }
 
-void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+                                 Vector &result) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((BoundBetweenExpression &)expr, state, sel, count, result);
@@ -153,7 +154,8 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 	Verify(expr, result, count);
 }
 
-idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel) {
 	assert(true_sel || false_sel);
 	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
@@ -168,10 +170,12 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 	}
 }
 
-template<bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restrict bdata, nullmask_t &nullmask, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+template <bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restrict bdata, nullmask_t &nullmask,
+                                      const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                      SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto bidx = bsel->get_index(i);
 		auto result_idx = sel->get_index(i);
 		if (bdata[bidx] && (NO_NULL || !nullmask[bidx])) {
@@ -191,19 +195,24 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, bool *__restr
 	}
 }
 
-template<bool NO_NULL>
-static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+template <bool NO_NULL>
+static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
+                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
-		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		                                              true_sel, false_sel);
 	} else if (true_sel) {
-		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		                                               true_sel, false_sel);
 	} else {
 		assert(false_sel);
-		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (bool*) idata.data, *idata.nullmask, sel, count, true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (bool *)idata.data, *idata.nullmask, sel, count,
+		                                               true_sel, false_sel);
 	}
 }
 
-idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state, const SelectionVector *sel,
+                                        idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// generic selection of boolean expression:
 	// resolve the true/false expression first
 	// then use that to generate the selection vector

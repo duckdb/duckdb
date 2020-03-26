@@ -11,14 +11,13 @@
 using namespace duckdb;
 using namespace std;
 
-template<class T>
-static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
+template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
 	auto addresses = FlatVector::GetData<uint64_t>(source);
 	auto data = FlatVector::GetData<T>(dest);
 	auto &nullmask = FlatVector::Nullmask(dest);
 
-	for(idx_t i = 0; i < count; i++) {
-		auto dataptr = (T*) addresses[i];
+	for (idx_t i = 0; i < count; i++) {
+		auto dataptr = (T *)addresses[i];
 		if (IsNullValue<T>(*dataptr)) {
 			nullmask[i] = true;
 		} else {

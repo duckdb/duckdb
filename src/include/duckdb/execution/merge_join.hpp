@@ -97,12 +97,12 @@ struct MergeJoinMark {
 };
 
 #define INSTANTIATE_MERGEJOIN_TEMPLATES(MJCLASS, OPNAME, L, R)                                                         \
-	template idx_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                 \
-	template idx_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                \
-	template idx_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                \
-	template idx_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                \
-	template idx_t MJCLASS::OPNAME::Operation<float>(L & l, R & r);                                                  \
-	template idx_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                 \
+	template idx_t MJCLASS::OPNAME::Operation<int8_t>(L & l, R & r);                                                   \
+	template idx_t MJCLASS::OPNAME::Operation<int16_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<int32_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<int64_t>(L & l, R & r);                                                  \
+	template idx_t MJCLASS::OPNAME::Operation<float>(L & l, R & r);                                                    \
+	template idx_t MJCLASS::OPNAME::Operation<double>(L & l, R & r);                                                   \
 	template idx_t MJCLASS::OPNAME::Operation<string_t>(L & l, R & r);
 
 } // namespace duckdb

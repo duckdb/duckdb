@@ -67,8 +67,8 @@ public:
 	virtual idx_t Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) = 0;
 
 	//! Update a set of row identifiers to the specified set of updated values
-	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids, idx_t count,
-	            row_t offset);
+	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
+	            idx_t count, row_t offset);
 
 	//! Rollback a previous update
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;

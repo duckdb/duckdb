@@ -54,25 +54,31 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 		result.value_.boolean = OP::template Operation<bool, bool, bool>(left.value_.boolean, right.value_.boolean);
 		break;
 	case TypeId::INT8:
-		result.value_.tinyint = OP::template Operation<int8_t, int8_t, int8_t>(left.value_.tinyint, right.value_.tinyint);
+		result.value_.tinyint =
+		    OP::template Operation<int8_t, int8_t, int8_t>(left.value_.tinyint, right.value_.tinyint);
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = OP::template Operation<int16_t, int16_t, int16_t>(left.value_.smallint, right.value_.smallint);
+		result.value_.smallint =
+		    OP::template Operation<int16_t, int16_t, int16_t>(left.value_.smallint, right.value_.smallint);
 		break;
 	case TypeId::INT32:
-		result.value_.integer = OP::template Operation<int32_t, int32_t, int32_t>(left.value_.integer, right.value_.integer);
+		result.value_.integer =
+		    OP::template Operation<int32_t, int32_t, int32_t>(left.value_.integer, right.value_.integer);
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = OP::template Operation<int64_t, int64_t, int64_t>(left.value_.bigint, right.value_.bigint);
+		result.value_.bigint =
+		    OP::template Operation<int64_t, int64_t, int64_t>(left.value_.bigint, right.value_.bigint);
 		break;
 	case TypeId::FLOAT:
 		result.value_.float_ = OP::template Operation<float, float, float>(left.value_.float_, right.value_.float_);
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = OP::template Operation<double, double, double>(left.value_.double_, right.value_.double_);
+		result.value_.double_ =
+		    OP::template Operation<double, double, double>(left.value_.double_, right.value_.double_);
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = OP::template Operation<uint64_t, uint64_t, uint64_t>(left.value_.pointer, right.value_.pointer);
+		result.value_.pointer =
+		    OP::template Operation<uint64_t, uint64_t, uint64_t>(left.value_.pointer, right.value_.pointer);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
