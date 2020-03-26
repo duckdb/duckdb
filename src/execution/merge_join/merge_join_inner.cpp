@@ -59,29 +59,31 @@ template <class T> idx_t MergeJoinInner::LessThan::Operation(ScalarMergeInfo &l,
 	auto &rorder = r.order.order;
 	idx_t result_count = 0;
 	while (true) {
-		auto lidx = lorder.get_index(l.pos);
-		auto ridx = rorder.get_index(r.pos);
-		auto dlidx = l.order.vdata.sel->get_index(lidx);
-		auto dridx = r.order.vdata.sel->get_index(ridx);
-		if (l.pos < l.order.count && duckdb::LessThan::Operation(ldata[dlidx], rdata[dridx])) {
-			// left side smaller: found match
-			l.result.set_index(result_count, lidx);
-			r.result.set_index(result_count, ridx);
-			result_count++;
-			// move left side forward
-			l.pos++;
-			if (result_count == STANDARD_VECTOR_SIZE) {
-				// out of space!
-				break;
+		if (l.pos < l.order.count) {
+			auto lidx = lorder.get_index(l.pos);
+			auto ridx = rorder.get_index(r.pos);
+			auto dlidx = l.order.vdata.sel->get_index(lidx);
+			auto dridx = r.order.vdata.sel->get_index(ridx);
+			if (duckdb::LessThan::Operation(ldata[dlidx], rdata[dridx])) {
+				// left side smaller: found match
+				l.result.set_index(result_count, lidx);
+				r.result.set_index(result_count, ridx);
+				result_count++;
+				// move left side forward
+				l.pos++;
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					// out of space!
+					break;
+				}
+				continue;
 			}
-		} else {
-			// right side smaller or equal, or left side exhausted: move
-			// right pointer forward reset left side to start
-			l.pos = 0;
-			r.pos++;
-			if (r.pos == r.order.count) {
-				break;
-			}
+		}
+		// right side smaller or equal, or left side exhausted: move
+		// right pointer forward reset left side to start
+		l.pos = 0;
+		r.pos++;
+		if (r.pos == r.order.count) {
+			break;
 		}
 	}
 	return result_count;
@@ -97,30 +99,31 @@ template <class T> idx_t MergeJoinInner::LessThanEquals::Operation(ScalarMergeIn
 	auto &rorder = r.order.order;
 	idx_t result_count = 0;
 	while (true) {
-		auto lidx = lorder.get_index(l.pos);
-		auto ridx = rorder.get_index(r.pos);
-		auto dlidx = l.order.vdata.sel->get_index(lidx);
-		auto dridx = r.order.vdata.sel->get_index(ridx);
-		if (l.pos < l.order.count &&
-		    duckdb::LessThanEquals::Operation(ldata[dlidx], rdata[dridx])) {
-			// left side smaller: found match
-			l.result.set_index(result_count, lidx);
-			r.result.set_index(result_count, ridx);
-			result_count++;
-			// move left side forward
-			l.pos++;
-			if (result_count == STANDARD_VECTOR_SIZE) {
-				// out of space!
-				break;
+		if (l.pos < l.order.count) {
+			auto lidx = lorder.get_index(l.pos);
+			auto ridx = rorder.get_index(r.pos);
+			auto dlidx = l.order.vdata.sel->get_index(lidx);
+			auto dridx = r.order.vdata.sel->get_index(ridx);
+		    if (duckdb::LessThanEquals::Operation(ldata[dlidx], rdata[dridx])) {
+				// left side smaller: found match
+				l.result.set_index(result_count, lidx);
+				r.result.set_index(result_count, ridx);
+				result_count++;
+				// move left side forward
+				l.pos++;
+				if (result_count == STANDARD_VECTOR_SIZE) {
+					// out of space!
+					break;
+				}
+				continue;
 			}
-		} else {
-			// right side smaller or equal, or left side exhausted: move
-			// right pointer forward reset left side to start
-			l.pos = 0;
-			r.pos++;
-			if (r.pos == r.order.count) {
-				break;
-			}
+		}
+		// right side smaller or equal, or left side exhausted: move
+		// right pointer forward reset left side to start
+		l.pos = 0;
+		r.pos++;
+		if (r.pos == r.order.count) {
+			break;
 		}
 	}
 	return result_count;

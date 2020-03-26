@@ -147,7 +147,6 @@ public:
 			VectorData idata, sdata;
 			input.Orrify(count, idata);
 			states.Orrify(count, sdata);
-			assert(sdata.nullmask->none());
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE*) idata.data, (STATE_TYPE**) sdata.data, *idata.sel, *sdata.sel, *idata.nullmask, count);
 		}
 	}

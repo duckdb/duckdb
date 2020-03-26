@@ -249,7 +249,11 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// move to the next LHS chunk in the next iteration
 			state->right_tuple = state->right_chunks.chunks[state->right_chunk]->size();
 			state->right_chunk = state->right_chunks.chunks.size() - 1;
-			return;
+			if (chunk.size() > 0) {
+				return;
+			} else {
+				continue;
+			}
 		}
 		default:
 			break;

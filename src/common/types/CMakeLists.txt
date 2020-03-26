@@ -13,7 +13,8 @@ add_library_unity(duckdb_common_types
                   time.cpp
                   value.cpp
                   vector_buffer.cpp
-                  vector.cpp)
+                  vector.cpp
+                  vector_constants.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>
     PARENT_SCOPE)
