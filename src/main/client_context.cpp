@@ -458,7 +458,10 @@ void ClientContext::Invalidate() {
 	if (open_result) {
 		open_result->is_open = false;
 	}
-	// and close any open appenders
+	// and close any open appenders and prepared statements
+	for (auto &statement : prepared_statement_objects) {
+		statement->is_invalidated = true;
+	}
 	for (auto &appender : appenders) {
 		appender->Invalidate("Database that this appender belongs to has been closed!", false);
 	}

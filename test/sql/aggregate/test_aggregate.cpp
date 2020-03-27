@@ -392,3 +392,23 @@ TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {49995000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {30000}));
 }
+
+TEST_CASE("Test FIRST with non-inlined strings", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(a INTEGER, b VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')"));
+
+	// non-grouped aggregate
+	result = con.Query("SELECT FIRST(b) FROM tbl WHERE a=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {"thisisalongstring"}));
+	result = con.Query("SELECT FIRST(b) FROM tbl WHERE a=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// grouped aggregate
+	result = con.Query("SELECT a, FIRST(b) FROM tbl GROUP BY a ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), "thisisalongstring", "thisisalsoalongstring"}));
+}
