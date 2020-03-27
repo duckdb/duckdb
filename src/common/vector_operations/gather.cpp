@@ -11,97 +11,54 @@
 using namespace duckdb;
 using namespace std;
 
-struct GatherLoopSetNull {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
-		auto source = (data_ptr_t *)src.GetData();
-		auto ldata = (T *)result.GetData();
-		auto rsel = result.sel_vector();
-		if (rsel) {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				if (IsNullValue<T>(source_value)) {
-					result.nullmask.set(rsel[k]);
-				} else {
-					ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
-				}
-			});
-		} else {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				if (IsNullValue<T>(source_value)) {
-					result.nullmask.set(k);
-				} else {
-					ldata[k] = OP::Operation(source_value, ldata[i]);
-				}
-			});
-		}
-	}
-};
+template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
+	auto addresses = FlatVector::GetData<uintptr_t>(source);
+	auto data = FlatVector::GetData<T>(dest);
+	auto &nullmask = FlatVector::Nullmask(dest);
 
-struct GatherLoopIgnoreNull {
-	template <class T, class OP> static void Operation(Vector &src, Vector &result, idx_t offset) {
-		auto source = (data_ptr_t *)src.GetData();
-		auto ldata = (T *)result.GetData();
-		auto rsel = result.sel_vector();
-		if (rsel) {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				ldata[rsel[k]] = OP::Operation(source_value, ldata[i]);
-			});
+	for (idx_t i = 0; i < count; i++) {
+		auto dataptr = (T *)addresses[i];
+		if (IsNullValue<T>(*dataptr)) {
+			nullmask[i] = true;
 		} else {
-			VectorOperations::Exec(src, [&](idx_t i, idx_t k) {
-				data_ptr_t ptr = source[i] + offset;
-				T source_value = *((T *)ptr);
-				ldata[k] = OP::Operation(source_value, ldata[i]);
-			});
+			data[i] = *dataptr;
 		}
+		addresses[i] += sizeof(T);
 	}
-};
+}
 
-template <class LOOP, class OP> static void generic_gather_loop(Vector &source, Vector &dest, idx_t offset = 0) {
-	if (source.type != TypeId::POINTER) {
-		throw InvalidTypeException(source.type, "Cannot gather from non-pointer type!");
-	}
+void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
+	assert(source.vector_type == VectorType::FLAT_VECTOR);
+	assert(source.type == TypeId::POINTER); // "Cannot gather from non-pointer type!"
+
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
-		LOOP::template Operation<int8_t, OP>(source, dest, offset);
+		templated_gather_loop<int8_t>(source, dest, count);
 		break;
 	case TypeId::INT16:
-		LOOP::template Operation<int16_t, OP>(source, dest, offset);
+		templated_gather_loop<int16_t>(source, dest, count);
 		break;
 	case TypeId::INT32:
-		LOOP::template Operation<int32_t, OP>(source, dest, offset);
+		templated_gather_loop<int32_t>(source, dest, count);
 		break;
 	case TypeId::INT64:
-		LOOP::template Operation<int64_t, OP>(source, dest, offset);
+		templated_gather_loop<int64_t>(source, dest, count);
 		break;
 	case TypeId::FLOAT:
-		LOOP::template Operation<float, OP>(source, dest, offset);
+		templated_gather_loop<float>(source, dest, count);
 		break;
 	case TypeId::DOUBLE:
-		LOOP::template Operation<double, OP>(source, dest, offset);
+		templated_gather_loop<double>(source, dest, count);
 		break;
 	case TypeId::POINTER:
-		LOOP::template Operation<uint64_t, OP>(source, dest, offset);
+		templated_gather_loop<uintptr_t>(source, dest, count);
 		break;
 	case TypeId::VARCHAR:
-		LOOP::template Operation<string_t, OP>(source, dest, offset);
+		templated_gather_loop<string_t>(source, dest, count);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for gather");
-	}
-}
-
-void VectorOperations::Gather::Set(Vector &source, Vector &dest, bool set_null, idx_t offset) {
-	assert(source.size() == dest.size());
-	if (set_null) {
-		generic_gather_loop<GatherLoopSetNull, PickLeft>(source, dest, offset);
-	} else {
-		generic_gather_loop<GatherLoopIgnoreNull, PickLeft>(source, dest, offset);
 	}
 }

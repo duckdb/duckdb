@@ -348,7 +348,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return 0;
 	}
-	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->sql_types[iCol];
@@ -390,7 +390,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 	if (iCol < 0 || iCol >= (int)pStmt->result->sql_types.size()) {
 		return false;
 	}
-	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
 		return false;
 	}
 	try {

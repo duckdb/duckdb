@@ -18,7 +18,7 @@ UncompressedSegment::~UncompressedSegment() {
 	}
 }
 
-static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector &update, row_t *ids, row_t offset,
+static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, idx_t count, row_t offset,
                               UpdateInfo *&node) {
 	if (info->version_number == transaction.transaction_id) {
 		// this UpdateInfo belongs to the current transaction, set it in the node
@@ -34,7 +34,7 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 			} else if (id < info->tuples[j]) {
 				// id < the current tuple in info, move to next id
 				i++;
-				if (i == update.size()) {
+				if (i == count) {
 					break;
 				}
 			} else {
@@ -47,22 +47,21 @@ static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, Vector
 		}
 	}
 	if (info->next) {
-		CheckForConflicts(info->next, transaction, update, ids, offset, node);
+		CheckForConflicts(info->next, transaction, ids, count, offset, node);
 	}
 }
 
 void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction,
-                                 Vector &update, row_t *ids, row_t offset) {
+                                 Vector &update, row_t *ids, idx_t count, row_t offset) {
 	// can only perform in-place updates on temporary blocks
 	assert(block_id >= MAXIMUM_BLOCK);
 
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
-	assert(!update.sel_vector());
 #ifdef DEBUG
 	// verify that the ids are sorted and there are no duplicates
-	for (idx_t i = 1; i < update.size(); i++) {
+	for (idx_t i = 1; i < count; i++) {
 		assert(ids[i] > ids[i - 1]);
 	}
 #endif
@@ -77,8 +76,7 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
-	auto usel = update.sel_vector();
-	auto first_id = usel ? ids[usel[0]] : ids[0];
+	auto first_id = ids[0];
 	idx_t vector_index = (first_id - offset) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = offset + vector_index * STANDARD_VECTOR_SIZE;
 
@@ -90,9 +88,9 @@ void UncompressedSegment::Update(ColumnData &column_data, SegmentStatistics &sta
 	if (versions[vector_index]) {
 		// there is already a version here, check if there are any conflicts and search for the node that belongs to
 		// this transaction in the version chain
-		CheckForConflicts(versions[vector_index], transaction, update, ids, vector_offset, node);
+		CheckForConflicts(versions[vector_index], transaction, ids, count, vector_offset, node);
 	}
-	Update(column_data, stats, transaction, update, ids, vector_index, vector_offset, node);
+	Update(column_data, stats, transaction, update, ids, count, vector_index, vector_offset, node);
 }
 
 UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Transaction &transaction, row_t *ids,

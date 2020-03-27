@@ -17,11 +17,10 @@ public:
 			if (!destructors[i]) {
 				continue;
 			}
-			VectorCardinality cardinality(1);
-			Vector state_vector(cardinality, Value::POINTER((uintptr_t)aggregates[i].get()));
+			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
 			state_vector.vector_type = VectorType::FLAT_VECTOR;
 
-			destructors[i](state_vector);
+			destructors[i](state_vector, 1);
 		}
 	}
 
@@ -71,7 +70,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			}
 			// perform the actual aggregation
 			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
-			                                 state->aggregates[aggr_idx].get());
+			                                 state->aggregates[aggr_idx].get(), payload_chunk.size());
 			payload_idx += payload_cnt;
 		}
 	}
@@ -80,8 +79,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		Vector state_vector(chunk, Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, chunk.data[aggr_idx]);
+		Vector state_vector(Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
+		aggregate.function.finalize(state_vector, chunk.data[aggr_idx], 1);
 	}
 	state->finished = true;
 }

@@ -95,7 +95,7 @@ idx_t GetTypeIdSize(TypeId type) {
 	case TypeId::DOUBLE:
 		return sizeof(double);
 	case TypeId::HASH:
-		return sizeof(uint64_t);
+		return sizeof(hash_t);
 	case TypeId::POINTER:
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:

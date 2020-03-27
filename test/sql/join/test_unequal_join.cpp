@@ -73,8 +73,9 @@ TEST_CASE("Test joins with different types", "[join]") {
 			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
 		}
 		// range joins
-		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i < j");
+		result = con.Query("select count(*), sum(i) from a, (SELECT 100::" + type + " AS j) b where i < j");
 		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+		REQUIRE(CHECK_COLUMN(result, 1, {4950}));
 		result = con.Query("select count(*) from a, (SELECT 100::" + type + " AS j) b where i <= j");
 		REQUIRE(CHECK_COLUMN(result, 0, {100}));
 		result = con.Query("select count(*) from a, (SELECT 1::" + type + " AS j) b where i > j");
@@ -130,9 +131,15 @@ TEST_CASE("Test mark join with different types", "[join]") {
 	for (auto &type : numeric_types) {
 		REQUIRE_NO_FAIL(con.Query("begin transaction"));
 		REQUIRE_NO_FAIL(con.Query("create table a (i " + type + ")"));
+		std::vector<int32_t> values;
 		for (idx_t i = 0; i < 100; i++) {
-			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", (int32_t)i + 1));
+			values.push_back(i + 1);
 		}
+		std::random_shuffle(values.begin(), values.end());
+		for (idx_t i = 0; i < values.size(); i++) {
+			REQUIRE_NO_FAIL(con.Query("insert into a values ($1)", values[i]));
+		}
+
 		// range joins
 		result = con.Query("select count(*) from a WHERE i > ANY((SELECT 1::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {99}));
@@ -146,6 +153,36 @@ TEST_CASE("Test mark join with different types", "[join]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 		result = con.Query("select count(*) from a WHERE i <> ANY((SELECT 1::" + type + "))");
 		REQUIRE(CHECK_COLUMN(result, 0, {99}));
+
+		// now with a filter
+		result = con.Query("select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::" + type +
+		                   "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {49}));
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {50}));
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {49}));
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {50}));
+		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		result = con.Query(
+		    "select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::" + type + "))");
+		REQUIRE(CHECK_COLUMN(result, 0, {49}));
+
+		// now select the actual values, instead of only the count
+		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::" + type +
+		                   ")) ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6, 8, 10}));
+		result = con.Query("select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::" + type +
+		                   ")) ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {90, 92, 94, 96, 98, 100}));
+		result = con.Query("select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::" + type +
+		                   ")) ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {91, 92, 93, 94, 95, 97, 98, 99, 100}));
 
 		REQUIRE_NO_FAIL(con.Query("rollback"));
 	}

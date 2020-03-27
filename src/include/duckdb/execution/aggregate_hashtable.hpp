@@ -64,7 +64,11 @@ public:
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
 
-	void FindOrCreateGroups(DataChunk &groups, Vector &addresses, Vector &new_group);
+	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
+	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
+	//! created groups. The return value is the amount of newly created groups.
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses, SelectionVector &new_groups);
+	void FindOrCreateGroups(DataChunk &groups, Vector &addresses);
 
 	//! The stringheap of the AggregateHashTable
 	StringHeap string_heap;
@@ -116,7 +120,9 @@ private:
 
 private:
 	void Destroy();
-	void CallDestructors(Vector &state_vector);
+	void CallDestructors(Vector &state_vector, idx_t count);
+	void ScatterGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_data, Vector &addresses,
+	                   const SelectionVector &sel, idx_t count);
 };
 
 } // namespace duckdb

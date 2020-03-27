@@ -52,8 +52,8 @@ bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpre
 	return true;
 }
 
-uint64_t FunctionExpression::Hash() const {
-	uint64_t result = ParsedExpression::Hash();
+hash_t FunctionExpression::Hash() const {
+	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
 	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	result = CombineHash(result, duckdb::Hash<bool>(distinct));

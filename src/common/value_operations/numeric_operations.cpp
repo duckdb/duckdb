@@ -50,29 +50,32 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 	}
 	result.type = left.type;
 	switch (left.type) {
-	case TypeId::BOOL:
-		result.value_.boolean = OP::Operation(left.value_.boolean, right.value_.boolean);
-		break;
 	case TypeId::INT8:
-		result.value_.tinyint = OP::Operation(left.value_.tinyint, right.value_.tinyint);
+		result.value_.tinyint =
+		    OP::template Operation<int8_t, int8_t, int8_t>(left.value_.tinyint, right.value_.tinyint);
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = OP::Operation(left.value_.smallint, right.value_.smallint);
+		result.value_.smallint =
+		    OP::template Operation<int16_t, int16_t, int16_t>(left.value_.smallint, right.value_.smallint);
 		break;
 	case TypeId::INT32:
-		result.value_.integer = OP::Operation(left.value_.integer, right.value_.integer);
+		result.value_.integer =
+		    OP::template Operation<int32_t, int32_t, int32_t>(left.value_.integer, right.value_.integer);
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = OP::Operation(left.value_.bigint, right.value_.bigint);
+		result.value_.bigint =
+		    OP::template Operation<int64_t, int64_t, int64_t>(left.value_.bigint, right.value_.bigint);
 		break;
 	case TypeId::FLOAT:
-		result.value_.float_ = OP::Operation(left.value_.float_, right.value_.float_);
+		result.value_.float_ = OP::template Operation<float, float, float>(left.value_.float_, right.value_.float_);
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = OP::Operation(left.value_.double_, right.value_.double_);
+		result.value_.double_ =
+		    OP::template Operation<double, double, double>(left.value_.double_, right.value_.double_);
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = OP::Operation(left.value_.pointer, right.value_.pointer);
+		result.value_.pointer =
+		    OP::template Operation<uint64_t, uint64_t, uint64_t>(left.value_.pointer, right.value_.pointer);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type");
@@ -84,15 +87,15 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 // Numeric Operations
 //===--------------------------------------------------------------------===//
 Value ValueOperations::Add(const Value &left, const Value &right) {
-	return templated_binary_operation<duckdb::Add, false>(left, right);
+	return templated_binary_operation<duckdb::AddOperator, false>(left, right);
 }
 
 Value ValueOperations::Subtract(const Value &left, const Value &right) {
-	return templated_binary_operation<duckdb::Subtract, false>(left, right);
+	return templated_binary_operation<duckdb::SubtractOperator, false>(left, right);
 }
 
 Value ValueOperations::Multiply(const Value &left, const Value &right) {
-	return templated_binary_operation<duckdb::Multiply, false>(left, right);
+	return templated_binary_operation<duckdb::MultiplyOperator, false>(left, right);
 }
 
 Value ValueOperations::Modulo(const Value &left, const Value &right) {
@@ -140,14 +143,14 @@ Value ValueOperations::Divide(const Value &left, const Value &right) {
 		result.is_null = true;
 		return result;
 	} else {
-		return templated_binary_operation<duckdb::Divide, false>(left, right);
+		return templated_binary_operation<duckdb::DivideOperator, false>(left, right);
 	}
 }
 
-Value ValueOperations::Min(const Value &left, const Value &right) {
-	return templated_binary_operation<duckdb::Min, true>(left, right);
-}
+// Value ValueOperations::Min(const Value &left, const Value &right) {
+// 	return templated_binary_operation<duckdb::Min, true>(left, right);
+// }
 
-Value ValueOperations::Max(const Value &left, const Value &right) {
-	return templated_binary_operation<duckdb::Max, true>(left, right);
-}
+// Value ValueOperations::Max(const Value &left, const Value &right) {
+// 	return templated_binary_operation<duckdb::Max, true>(left, right);
+// }

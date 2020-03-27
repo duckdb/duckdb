@@ -46,12 +46,12 @@ public:
 	//! Initialize an appending phase for this column
 	void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	void Append(ColumnAppendState &state, Vector &vector);
+	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	void RevertAppend(row_t start_row);
 
 	//! Update the specified row identifiers
-	void Update(Transaction &transaction, Vector &updates, row_t *ids);
+	void Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count);
 
 	//! Fetch the vector from the column data that belongs to this specific row
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result);

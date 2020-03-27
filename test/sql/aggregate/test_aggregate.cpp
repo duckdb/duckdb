@@ -33,6 +33,8 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	REQUIRE_FAIL(con.Query("SELECT COUNT(1 ORDER BY 1)"));
 	// FILTER clause not supported
 	REQUIRE_FAIL(con.Query("SELECT COUNT(1) FILTER (WHERE false)"));
+	// cannot do DISTINCT *
+	REQUIRE_FAIL(con.Query("SELECT COUNT(DISTINCT *) FROM integers"));
 }
 
 TEST_CASE("Test aggregates with scalar inputs", "[aggregate]") {
@@ -187,7 +189,7 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"a,b", "i,j", "p", "x,y,z"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"a-b", "i+j", "p", "x-y+z"}));
 
-	// test average on empty set
+	// test agg on empty set
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
@@ -195,6 +197,19 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// numerics are auto cast to strings
 	result = con.Query("SELECT STRING_AGG(1, 2)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
+}
+
+TEST_CASE("Test distinct STRING_AGG operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('a'), ('b'), ('a');"));
+
+	result = con.Query("SELECT STRING_AGG(s,','), STRING_AGG(DISTINCT s, ',') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,a"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a,b"}));
 }
 
 TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {

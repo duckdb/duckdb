@@ -32,7 +32,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (state->child_chunk.size() == 0) {
 			break;
 		}
-		state->child_chunk.ClearSelectionVector();
+		state->child_chunk.Normalify();
 		default_executor.SetChunk(state->child_chunk);
 
 		// update data in the base table
@@ -53,7 +53,7 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 		if (is_index_update) {
 			// index update, perform a delete and an append instead
-			table.Delete(tableref, context, row_ids);
+			table.Delete(tableref, context, row_ids, update_chunk.size());
 			mock_chunk.SetCardinality(update_chunk);
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);

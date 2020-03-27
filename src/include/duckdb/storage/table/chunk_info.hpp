@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 
 namespace duckdb {
+struct SelectionVector;
 class Transaction;
 class VersionManager;
 
@@ -32,7 +33,7 @@ public:
 	ChunkInfoType type;
 
 public:
-	virtual idx_t GetSelVector(Transaction &transaction, sel_t sel_vector[], idx_t max_count) = 0;
+	virtual idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) = 0;
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(Transaction &transaction, row_t row) = 0;
 	//! Marks the set of tuples inside the chunk as deleted
@@ -50,7 +51,7 @@ public:
 	transaction_t deleted[STANDARD_VECTOR_SIZE];
 
 public:
-	idx_t GetSelVector(Transaction &transaction, sel_t sel_vector[], idx_t max_count) override;
+	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 
 	void Delete(Transaction &transaction, row_t rows[], idx_t count) override;
@@ -66,7 +67,7 @@ public:
 	transaction_t inserted[STANDARD_VECTOR_SIZE];
 
 public:
-	idx_t GetSelVector(Transaction &transaction, sel_t sel_vector[], idx_t max_count) override;
+	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(Transaction &transaction, row_t row) override;
 };
 
