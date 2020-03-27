@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -9,11 +10,12 @@
 #include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
-#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+
+#include "duckdb/optimizer/predicate_pushdown.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -47,6 +49,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("filter_pushdown");
 	FilterPushdown filter_pushdown(*this);
 	plan = filter_pushdown.Rewrite(move(plan));
+	context.profiler.EndPhase();
+
+	//! check if predicates in the filter can be pushed down in the table scans
+	context.profiler.StartPhase("predicate_pushdown");
+	PredicatePushdown predicate_pushdown;
+	plan = predicate_pushdown.Optimize(move(plan));
 	context.profiler.EndPhase();
 
 	// check if filters match with existing indexes, if true transforms filters to index scans

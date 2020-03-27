@@ -13,6 +13,7 @@ add_library_unity(duckdb_optimizer
                   in_clause_rewriter.cpp
                   join_order_optimizer.cpp
                   optimizer.cpp
+                  predicate_pushdown.cpp
                   expression_rewriter.cpp
                   regex_range_filter.cpp
                   remove_unused_columns.cpp
