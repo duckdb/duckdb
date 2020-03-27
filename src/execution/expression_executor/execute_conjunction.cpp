@@ -47,75 +47,30 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConjunction
 	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, Vector &result) {
+void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(GetCardinality(), TypeId::BOOL);
-		Execute(*expr.children[i], state->child_states[i].get(), current_result);
+		Vector current_result(TypeId::BOOL);
+		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
 		} else {
-			Vector intermediate(GetCardinality(), TypeId::BOOL);
+			Vector intermediate(TypeId::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(current_result, result, intermediate);
+				VectorOperations::And(current_result, result, intermediate, count);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(current_result, result, intermediate);
+				VectorOperations::Or(current_result, result, intermediate, count);
 				break;
 			default:
 				throw NotImplementedException("Unknown conjunction type!");
 			}
 			result.Reference(intermediate);
 		}
-	}
-}
-
-static void MergeSelectionVectorIntoResult(sel_t *result, idx_t &result_count, sel_t *sel, idx_t count) {
-	assert(count > 0);
-	if (result_count == 0) {
-		// nothing to merge
-		memcpy(result, sel, count * sizeof(sel_t));
-		result_count = count;
-		return;
-	}
-
-	sel_t temp_result[STANDARD_VECTOR_SIZE];
-	idx_t res_idx = 0, sel_idx = 0;
-	idx_t temp_count = 0;
-	while (true) {
-		// the two sets should be disjunct
-		assert(result[res_idx] != sel[sel_idx]);
-		if (result[res_idx] < sel[sel_idx]) {
-			temp_result[temp_count++] = result[res_idx];
-			res_idx++;
-			if (res_idx >= result_count) {
-				break;
-			}
-		} else {
-			assert(result[res_idx] > sel[sel_idx]);
-			temp_result[temp_count++] = sel[sel_idx];
-			sel_idx++;
-			if (sel_idx >= count) {
-				break;
-			}
-		}
-	}
-	// append remaining entries
-	if (sel_idx < count) {
-		// first copy the temp_result to the result
-		memcpy(result, temp_result, temp_count * sizeof(sel_t));
-		// now copy the remaining entries in the selection vector after the initial result
-		memcpy(result + temp_count, sel + sel_idx, (count - sel_idx) * sizeof(sel_t));
-		result_count = temp_count + count - sel_idx;
-	} else {
-		// first copy the remainder of the result into the temp_result vector
-		memcpy(temp_result + temp_count, result + res_idx, (result_count - res_idx) * sizeof(sel_t));
-		result_count = temp_count + (result_count - res_idx);
-		// now copy the temp_result back into the main result vector
-		memcpy(result, temp_result, result_count * sizeof(sel_t));
 	}
 }
 
@@ -183,116 +138,91 @@ void AdaptRuntimeStatistics(BoundConjunctionExpression &expr, ConjunctionState *
 	}
 }
 
-idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, sel_t result[]) {
+idx_t ExpressionExecutor::Select(BoundConjunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	auto state = (ConjunctionState *)state_;
-	if (!chunk) {
-		return DefaultSelect(expr, state, result);
-	}
-
-	chrono::time_point<chrono::high_resolution_clock> start_time;
-	chrono::time_point<chrono::high_resolution_clock> end_time;
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
-		// store the initial selection vector and count
-		auto initial_sel = chunk->sel_vector;
-		idx_t initial_count = chunk->size();
-		idx_t current_count = chunk->size();
-
 		// get runtime statistics
-		start_time = chrono::high_resolution_clock::now();
+		auto start_time = chrono::high_resolution_clock::now();
 
+		const SelectionVector *current_sel = sel;
+		idx_t current_count = count;
+		idx_t false_count = 0;
+
+		unique_ptr<SelectionVector> temp_true, temp_false;
+		if (false_sel) {
+			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+		}
+		if (!true_sel) {
+			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			true_sel = temp_true.get();
+		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-
-			// first resolve the current expression and get its execution time
-			idx_t new_count =
-			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(), result);
-
-			if (new_count == 0) {
-				current_count = 0;
+			idx_t tcount =
+			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(),
+			           current_sel, current_count, true_sel, temp_false.get());
+			idx_t fcount = current_count - tcount;
+			if (fcount > 0 && false_sel) {
+				// move failing tuples into the false_sel
+				// tuples passed, move them into the actual result vector
+				for (idx_t i = 0; i < fcount; i++) {
+					false_sel->set_index(false_count++, temp_false->get_index(i));
+				}
+			}
+			current_count = tcount;
+			if (current_count == 0) {
 				break;
 			}
-			if (new_count != current_count) {
-				// disqualify all non-qualifying tuples by updating the selection vector
-				chunk->SetCardinality(new_count, result);
-				current_count = new_count;
+			if (current_count < count) {
+				// tuples were filtered out: move on to using the true_sel to only evaluate passing tuples in subsequent
+				// iterations
+				current_sel = true_sel;
 			}
 		}
 
 		// adapt runtime statistics
-		end_time = chrono::high_resolution_clock::now();
+		auto end_time = chrono::high_resolution_clock::now();
 		AdaptRuntimeStatistics(expr, state,
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
-
-		// restore the initial selection vector and count
-		chunk->SetCardinality(initial_count, initial_sel);
 		return current_count;
 	} else {
-		sel_t *initial_sel = chunk->sel_vector;
-		idx_t initial_count = chunk->size();
-		idx_t current_count = chunk->size();
-		sel_t *current_sel = initial_sel;
-
-		sel_t intermediate_result[STANDARD_VECTOR_SIZE];
-		sel_t expression_result[STANDARD_VECTOR_SIZE];
-		sel_t remaining[STANDARD_VECTOR_SIZE];
-		idx_t result_count = 0;
-		idx_t remaining_count = 0;
-		sel_t *result_vector = initial_sel == result ? intermediate_result : result;
-
 		// get runtime statistics
-		start_time = chrono::high_resolution_clock::now();
+		auto start_time = chrono::high_resolution_clock::now();
 
-		for (idx_t expr_idx = 0; expr_idx < expr.children.size(); expr_idx++) {
-			// first resolve the current expression
-			idx_t new_count = Select(*expr.children[state->permutation[expr_idx]],
-			                         state->child_states[state->permutation[expr_idx]].get(), expression_result);
-			if (new_count == 0) {
-				// no new qualifying entries: continue
-				continue;
-			}
-			if (new_count == current_count) {
-				// all remaining entries qualified! add them to the result
-				if (!current_sel) {
-					// first iteration already passes all tuples, no need to set up selection vector
-					assert(current_count == initial_count);
-					result_count = initial_count;
-					break;
+		const SelectionVector *current_sel = sel;
+		idx_t current_count = count;
+		idx_t result_count = 0;
+
+		unique_ptr<SelectionVector> temp_true, temp_false;
+		if (true_sel) {
+			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+		}
+		if (!false_sel) {
+			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			false_sel = temp_false.get();
+		}
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			idx_t tcount =
+			    Select(*expr.children[state->permutation[i]], state->child_states[state->permutation[i]].get(),
+			           current_sel, current_count, temp_true.get(), false_sel);
+			if (tcount > 0) {
+				if (true_sel) {
+					// tuples passed, move them into the actual result vector
+					for (idx_t i = 0; i < tcount; i++) {
+						true_sel->set_index(result_count++, temp_true->get_index(i));
+					}
 				}
-				MergeSelectionVectorIntoResult(result_vector, result_count, current_sel, current_count);
-				break;
+				// now move on to check only the non-passing tuples
+				current_count -= tcount;
+				current_sel = false_sel;
 			}
-			// first merge the current results back into the result vector
-			MergeSelectionVectorIntoResult(result_vector, result_count, expression_result, new_count);
-			if (expr_idx + 1 == expr.children.size()) {
-				// this is the last child: we don't need to construct the remaining tuples
-				break;
-			}
-			// now we only need to continue executing tuples that were not qualified
-			// we figure this out by performing a merge of the remaining tuples and the resulting selection vector
-			idx_t new_idx = 0;
-			remaining_count = 0;
-			for (idx_t i = 0; i < current_count; i++) {
-				auto entry = current_sel ? current_sel[i] : i;
-				if (new_idx >= new_count || expression_result[new_idx] != entry) {
-					remaining[remaining_count++] = entry;
-				} else {
-					new_idx++;
-				}
-			}
-			current_sel = remaining;
-			current_count = remaining_count;
-			chunk->SetCardinality(remaining_count, remaining);
 		}
 
 		// adapt runtime statistics
-		end_time = chrono::high_resolution_clock::now();
+		auto end_time = chrono::high_resolution_clock::now();
 		AdaptRuntimeStatistics(expr, state,
 		                       chrono::duration_cast<chrono::duration<double>>(end_time - start_time).count());
-
-		chunk->SetCardinality(initial_count, initial_sel);
-		if (result_vector != result && result_count > 0) {
-			memcpy(result, result_vector, result_count * sizeof(sel_t));
-		}
 		return result_count;
 	}
 }

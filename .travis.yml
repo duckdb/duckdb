@@ -17,26 +17,29 @@ matrix:
   include:
 
     - os: osx
-      name: Xcode 11.0 Debug
+      name: Xcode 11.3 Debug
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      osx_image: xcode11
+      osx_image: xcode11.3
 
 
     - os: osx
-      name: Xcode 11.0
+      name: Xcode 11.3
 
-      osx_image: xcode11
+      osx_image: xcode11.3
 
       before_install:
-        - pip install --user boto3
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python3 /tmp/get-pip.py
+        - python3 -m pip install --user boto3
+
       script:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
 
       after_success:
-        - python tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli
+        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli
 
 
     - os: linux
@@ -299,7 +302,7 @@ matrix:
 
 
     - os: osx
-      osx_image: xcode11
+      osx_image: xcode11.3
       name: R Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
@@ -307,7 +310,9 @@ matrix:
       #r: devel
 
       before_install:
-        - pip install --user boto3
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python3 /tmp/get-pip.py
+        - python3 -m pip install --user boto3
         - cd tools/rpkg
         - R -f dependencies.R
 
@@ -322,8 +327,8 @@ matrix:
 
       after_success:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
-        - python ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
-        - python ../upload-s3.py rstats duckdb_*.tgz
+        - python3 ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
+        - python3 ../upload-s3.py rstats duckdb_*.tgz
 
 
     - os: windows
@@ -403,18 +408,22 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: generic
-      osx_image: xcode11
+      osx_image: xcode11.3
+
+      before_install:
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python3 /tmp/get-pip.py
+        - python3 -m pip install cibuildwheel==0.10.2 boto3
 
       script:
-        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
-        - python setup.py sdist
+        - python3 setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: windows
@@ -450,12 +459,12 @@ matrix:
         C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
 
     - os: osx
-      name: Xcode 11.0 (Amalgamation)
+      name: Xcode 11.3 (Amalgamation)
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      osx_image: xcode11
+      osx_image: xcode11.3
       script:
-        - python scripts/amalgamation.py
+        - python3 scripts/amalgamation.py
         - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest
 

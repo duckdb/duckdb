@@ -48,7 +48,7 @@ void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &o
 	size_t this_rows = std::min(data.nrow, (size_t)STANDARD_VECTOR_SIZE);
 	data.nrow -= this_rows;
 
-	auto int_data = (int32_t *)output.data[0].GetData();
+	auto int_data = FlatVector::GetData<int32_t>(output.data[0]);
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
 	}

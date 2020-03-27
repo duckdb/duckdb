@@ -50,7 +50,7 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.double_ = std::numeric_limits<double>::min();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uint64_t>::min();
+		result.value_.pointer = std::numeric_limits<uintptr_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -142,7 +142,7 @@ Value Value::DOUBLE(double value) {
 	return result;
 }
 
-Value Value::HASH(uint64_t value) {
+Value Value::HASH(hash_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
@@ -189,7 +189,6 @@ Value Value::LIST(vector<Value> values) {
 	result.is_null = false;
 	return result;
 }
-
 
 //===--------------------------------------------------------------------===//
 // CreateValue
@@ -465,11 +464,10 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	if (source_type == target_type) {
 		return Copy();
 	}
-	VectorCardinality cardinality(1);
-	Vector input(cardinality), result(cardinality);
+	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type);
+	VectorOperations::Cast(input, result, source_type, target_type, 1);
 	return result.GetValue(0);
 }
 

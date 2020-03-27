@@ -24,16 +24,21 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
-	result.nullmask.set();
-	auto input_seeds = (double *)input.GetData();
+	input.Normalify(args.size());
+
+	auto input_seeds = FlatVector::GetData<double>(input);
 	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
-	VectorOperations::Exec(result, [&](idx_t i, idx_t k) {
+
+	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {
 			throw Exception("SETSEED accepts seed values between -1.0 and 1.0, inclusive");
 		}
 		uint32_t norm_seed = (input_seeds[i] + 1.0) * half_max;
 		info.context.random_engine.seed(norm_seed);
-	});
+	}
+
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	ConstantVector::SetNull(result, true);
 }
 
 unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientContext &context) {

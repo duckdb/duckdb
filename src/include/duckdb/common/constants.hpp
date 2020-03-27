@@ -43,6 +43,9 @@ typedef uint64_t idx_t;
 //! The type used for row identifiers
 typedef int64_t row_t;
 
+//! The type used for hashes
+typedef uint64_t hash_t;
+
 //! The value used to signify an invalid index entry
 extern const idx_t INVALID_INDEX;
 

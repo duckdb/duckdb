@@ -5,6 +5,7 @@ namespace duckdb {
 
 void string_t::Verify() {
 	auto dataptr = GetData();
+	(void) dataptr;
 	assert(dataptr);
 	// check the data is a valid UTF8 string
 	assert(Value::IsUTF8String(*this));

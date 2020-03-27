@@ -228,7 +228,7 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 	int numcols;
 	PyObject* descriptor;
 
-	bool need_transaction;
+	bool need_transaction = false;
 
 	std::vector<duckdb::Value> params;
 	std::unique_ptr<duckdb::PreparedStatement> prep;
@@ -513,26 +513,27 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		if (chunk->size() == 0)
 			break;
 		for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
-
 			auto duckdb_type = result->types[col_idx];
 			auto duckdb_type_size = duckdb::GetTypeIdSize(duckdb_type);
 
 			char *array_data = (char *)PyArray_DATA((PyArrayObject *)cols[col_idx].array);
 			bool *mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
+			auto &nullmask = duckdb::FlatVector::Nullmask(chunk->data[col_idx]);
 
 			// collect null mask into numpy array for masked arrays
 			for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-				mask_data[chunk_idx + offset] = chunk->data[col_idx].nullmask[chunk_idx];
+				mask_data[chunk_idx + offset] = nullmask[chunk_idx];
 				cols[col_idx].found_nil = cols[col_idx].found_nil || mask_data[chunk_idx + offset];
 			}
 
 			switch (duckdb_type) {
-			case duckdb::TypeId::VARCHAR:
+			case duckdb::TypeId::VARCHAR: {
+				auto str_data = duckdb::FlatVector::GetData<duckdb::string_t>(chunk->data[col_idx]);
 				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((duckdb::string_t*)chunk->data[col_idx].GetData())[chunk_idx].GetData());
+						str_obj = PyUnicode_FromString(str_data[chunk_idx].GetData());
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
@@ -541,10 +542,11 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
+			}
 			case duckdb::TypeId::INT64:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
-					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
+					duckdb::timestamp_t *chunk_data_ptr = duckdb::FlatVector::GetData<duckdb::timestamp_t>(chunk->data[col_idx]);
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 						auto timestamp = chunk_data_ptr[chunk_idx];
@@ -556,18 +558,18 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			case duckdb::TypeId::INT32:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * 2 * duckdb_type_size));
-					duckdb::date_t *chunk_data_ptr = reinterpret_cast<int32_t *>(chunk->data[col_idx].GetData());
+					duckdb::date_t *chunk_data_ptr = duckdb::FlatVector::GetData<duckdb::date_t>(chunk->data[col_idx]);
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 						auto date = chunk_data_ptr[chunk_idx];
 						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(date);
 					}
 					break;
-				}    // else fall-through-to-default	
+				}    // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].GetData(),
+				memcpy(array_data + (offset * duckdb_type_size), duckdb::FlatVector::GetData(chunk->data[col_idx]),
 				       duckdb_type_size * chunk->size());
 			}
 		}

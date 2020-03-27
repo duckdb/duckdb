@@ -4,6 +4,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/assert.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -30,7 +31,6 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		return;
 	}
 	new_chunk.Verify();
-	new_chunk.Normalify();
 
 	// we have to ensure that every chunk in the ChunkCollection is completely
 	// filled, otherwise our O(1) lookup in GetValue and SetValue does not work
@@ -51,14 +51,16 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
 			if (types[i] == TypeId::LIST) {
-				for (auto& chunk : chunks) { // need to check all the chunks because they can have only-null list entries
-					auto& chunk_vec = chunk->data[i];
-					auto& new_vec = new_chunk.data[i];
-					if (chunk_vec.HasListEntry() && new_vec.HasListEntry()) {
-						auto& chunk_types = chunk_vec.GetListEntry().types;
-						auto& new_types= new_vec.GetListEntry().types;
+				for (auto &chunk :
+				     chunks) { // need to check all the chunks because they can have only-null list entries
+					auto &chunk_vec = chunk->data[i];
+					auto &new_vec = new_chunk.data[i];
+					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
+						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
+						auto &new_types = ListVector::GetEntry(new_vec).types;
 						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
-							throw TypeMismatchException(chunk_types[0], new_types[i], "Type mismatch when combining lists");
+							throw TypeMismatchException(chunk_types[0], new_types[i],
+							                            "Type mismatch when combining lists");
 						}
 					}
 				}
@@ -72,12 +74,12 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			idx_t old_count = new_chunk.size();
-			new_chunk.SetCardinality(added_data, new_chunk.sel_vector);
+			new_chunk.SetCardinality(added_data);
 
 			last_chunk.Append(new_chunk);
 			remaining_data -= added_data;
 			// reset the chunk to the old data
-			new_chunk.SetCardinality(old_count, new_chunk.sel_vector);
+			new_chunk.SetCardinality(old_count);
 			offset = added_data;
 		}
 	}
@@ -99,8 +101,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 template <class TYPE>
 static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, idx_t left_idx, idx_t right_idx) {
 	assert(left_vec.type == right_vec.type);
-	auto left_val = ((TYPE *)left_vec.GetData())[left_idx];
-	auto right_val = ((TYPE *)right_vec.GetData())[right_idx];
+	auto left_val = FlatVector::GetData<TYPE>(left_vec)[left_idx];
+	auto right_val = FlatVector::GetData<TYPE>(right_vec)[right_idx];
 	if (Equals::Operation<TYPE>(left_val, right_val)) {
 		return 0;
 	}
@@ -112,9 +114,8 @@ static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, idx_t
 
 // return type here is int32 because strcmp() on some platforms returns rather large values
 static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right) {
-
-	auto left_null = left_vec.nullmask[vector_idx_left];
-	auto right_null = right_vec.nullmask[vector_idx_right];
+	auto left_null = FlatVector::Nullmask(left_vec)[vector_idx_left];
+	auto right_null = FlatVector::Nullmask(right_vec)[vector_idx_right];
 
 	if (left_null && right_null) {
 		return 0;
@@ -163,8 +164,8 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, idx_
 		Vector &left_vec = left_chunk->data[col_idx];
 		Vector &right_vec = right_chunk->data[col_idx];
 
-		assert(!left_vec.sel_vector());
-		assert(!right_vec.sel_vector());
+		assert(left_vec.vector_type == VectorType::FLAT_VECTOR);
+		assert(right_vec.vector_type == VectorType::FLAT_VECTOR);
 		assert(left_vec.type == right_vec.type);
 
 		auto comp_res = compare_value(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -284,14 +285,14 @@ static void templated_set_values(ChunkCollection *src_coll, Vector &tgt_vec, idx
 
 		auto &src_chunk = src_coll->chunks[chunk_idx_src];
 		Vector &src_vec = src_chunk->data[col_idx];
-		auto source_data = (TYPE *)src_vec.GetData();
-		auto target_data = (TYPE *)tgt_vec.GetData();
+		auto source_data = FlatVector::GetData<TYPE>(src_vec);
+		auto target_data = FlatVector::GetData<TYPE>(tgt_vec);
 
-		tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
-		if (tgt_vec.nullmask[row_idx]) {
-			continue;
+		if (FlatVector::IsNull(src_vec, vector_idx_src)) {
+			FlatVector::SetNull(tgt_vec, row_idx, true);
+		} else {
+			target_data[row_idx] = source_data[vector_idx_src];
 		}
-		target_data[row_idx] = source_data[vector_idx_src];
 	}
 }
 
@@ -335,12 +336,11 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 				auto &src_chunk = chunks[chunk_idx_src];
 				Vector &src_vec = src_chunk->data[col_idx];
 				auto &tgt_vec = target.data[col_idx];
-				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
-				if (tgt_vec.nullmask[row_idx]) {
-					continue;
+				if (FlatVector::IsNull(src_vec, vector_idx_src)) {
+					FlatVector::SetNull(tgt_vec, row_idx, true);
+				} else {
+					tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 				}
-				// FIXME vectorize this!
-				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
 		} break;
 		default:
@@ -491,12 +491,11 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 				auto &src_chunk = chunks[chunk_idx_src];
 				Vector &src_vec = src_chunk->data[col_idx];
 				auto &tgt_vec = target.data[col_idx];
-				tgt_vec.nullmask[row_idx] = src_vec.nullmask[vector_idx_src];
-				if (tgt_vec.nullmask[row_idx]) {
-					continue;
+				if (FlatVector::IsNull(src_vec, vector_idx_src)) {
+					FlatVector::SetNull(tgt_vec, row_idx, true);
+				} else {
+					tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 				}
-				// FIXME vectorize this!
-				tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
 			}
 		} break;
 

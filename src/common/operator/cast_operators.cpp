@@ -369,16 +369,15 @@ template <> double Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
-template<class T>
-string CastToStandardString(T input) {
-	FlatVector v;
+template <class T> string CastToStandardString(T input) {
+	Vector v(TypeId::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
 
 template <> string Cast::Operation(bool input) {
 	return CastToStandardString(input);
 }
-template <> string Cast::Operation(int8_t  input) {
+template <> string Cast::Operation(int8_t input) {
 	return CastToStandardString(input);
 }
 template <> string Cast::Operation(int16_t input) {
@@ -402,19 +401,17 @@ template <> string Cast::Operation(string_t input) {
 
 template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	if (input) {
-		return vector.AddString("true", 4);
+		return StringVector::AddString(vector, "true", 4);
 	} else {
-		return vector.AddString("false", 5);
+		return StringVector::AddString(vector, "false", 5);
 	}
 }
 
 struct StringToIntegerCast {
-	template<class T>
-	static int UnsignedLength(T value);
+	template <class T> static int UnsignedLength(T value);
 
 	// Formats value in reverse and returns a pointer to the beginning.
-	template<class T>
-	static char* FormatUnsigned(T value, char *ptr) {
+	template <class T> static char *FormatUnsigned(T value, char *ptr) {
 		while (value >= 100) {
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
@@ -434,12 +431,11 @@ struct StringToIntegerCast {
 		return ptr;
 	}
 
-	template<class SIGNED, class UNSIGNED>
-	static string_t FormatSigned(SIGNED value, Vector &vector) {
+	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = vector.EmptyString(length);
+		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetData();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
@@ -538,12 +534,12 @@ template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
 	std::string s = fmt::format("{}", input);
-	return vector.AddString(s);
+	return StringVector::AddString(vector, s);
 }
 
 template <> string_t StringCast::Operation(double input, Vector &vector) {
 	std::string s = fmt::format("{}", input);
-	return vector.AddString(s);
+	return StringVector::AddString(vector, s);
 }
 
 //===--------------------------------------------------------------------===//
@@ -577,12 +573,12 @@ struct DateToStringCast {
 		auto endptr = data + year_length;
 		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
 		// add optional leading zeros
-		while(endptr > data) {
+		while (endptr > data) {
 			*--endptr = '0';
 		}
 		// now write the month and day
 		auto ptr = data + year_length;
-		for(int i = 1; i <= 2; i++) {
+		for (int i = 1; i <= 2; i++) {
 			ptr[0] = '-';
 			if (date[i] < 10) {
 				ptr[1] = '0';
@@ -609,7 +605,7 @@ template <> string_t CastFromDate::Operation(date_t input, Vector &vector) {
 	bool add_bc;
 	idx_t length = DateToStringCast::Length(date, year_length, add_bc);
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);
@@ -644,7 +640,7 @@ struct TimeToStringCast {
 	static void Format(char *data, idx_t length, int32_t time[]) {
 		// first write hour, month and day
 		auto ptr = data;
-		for(int i = 0; i <= 2; i++) {
+		for (int i = 0; i <= 2; i++) {
 			if (time[i] < 10) {
 				ptr[0] = '0';
 				ptr[1] = '0' + time[i];
@@ -660,7 +656,7 @@ struct TimeToStringCast {
 		if (time[3] > 0) {
 			auto start = ptr;
 			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
-			while(ptr > start) {
+			while (ptr > start) {
 				*--ptr = '0';
 			}
 			*--ptr = '.';
@@ -674,7 +670,7 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 
 	idx_t length = TimeToStringCast::Length(time);
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	TimeToStringCast::Format(data, length, time);
@@ -713,7 +709,7 @@ template <> string_t CastFromTimestamp::Operation(timestamp_t input, Vector &vec
 	idx_t time_length = TimeToStringCast::Length(time);
 	idx_t length = date_length + time_length + 1;
 
-	string_t result = vector.EmptyString(length);
+	string_t result = StringVector::EmptyString(vector, length);
 	auto data = result.GetData();
 
 	DateToStringCast::Format(data, date, year_length, add_bc);

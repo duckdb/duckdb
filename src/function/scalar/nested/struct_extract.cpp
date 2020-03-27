@@ -7,36 +7,47 @@ using namespace std;
 
 namespace duckdb {
 
-static void struct_extract_fun(DataChunk &input, ExpressionState &state, Vector &result) {
+static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
 
 	// this should be guaranteed by the binder
-	assert(input.column_count() == 1);
-	auto &vec = input.data[0];
+	assert(args.column_count() == 1);
+	auto &vec = args.data[0];
 
-	vec.Verify();
-	auto &children = vec.GetStructEntries();
-	if (info.index >= children.size()) {
-		throw Exception("Not enough struct entries for struct_extract");
+	vec.Verify(args.size());
+	if (vec.vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vec);
+		auto &dict_sel = DictionaryVector::SelVector(vec);
+		auto &children = StructVector::GetEntries(child);
+		if (info.index >= children.size()) {
+			throw Exception("Not enough struct entries for struct_extract");
+		}
+		auto &struct_child = children[info.index];
+		if (struct_child.first != info.key || struct_child.second->type != info.type) {
+			throw Exception("Struct key or type mismatch");
+		}
+		result.Slice(*struct_child.second, dict_sel, args.size());
+	} else {
+		auto &children = StructVector::GetEntries(vec);
+		if (info.index >= children.size()) {
+			throw Exception("Not enough struct entries for struct_extract");
+		}
+		auto &struct_child = children[info.index];
+		if (struct_child.first != info.key || struct_child.second->type != info.type) {
+			throw Exception("Struct key or type mismatch");
+		}
+		result.Reference(*struct_child.second);
 	}
-	auto &child = children[info.index];
-	if (child.first != info.key || child.second->type != info.type) {
-		throw Exception("Struct key or type mismatch");
-	}
-	result.Reference(*child.second.get());
-	result.Verify();
+	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &expr, ClientContext &context) {
 	// the binder should fix this for us.
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
-
-	auto &struct_child = expr.children[0];
-
 	assert(expr.arguments[0].id == SQLTypeId::STRUCT);
-	assert(struct_child->return_type == TypeId::STRUCT);
+	assert(expr.children[0]->return_type == TypeId::STRUCT);
 	if (expr.arguments[0].child_type.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}

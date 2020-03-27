@@ -6,37 +6,52 @@
 #include "pythread.h"
 
 int duckdb_connection_init(duckdb_Connection *self, PyObject *args, PyObject *kwargs) {
-	static const char *kwlist[] = {"database", NULL, NULL};
+	static const char *kwlist[] = {"database", "read_only", NULL};
 
 	char *database;
-	PyObject *database_obj;
+	PyObject *database_obj, *readonly_obj = nullptr;
 #if PY_MAJOR_VERSION >= 3
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|", (char **)kwlist, PyUnicode_FSConverter, &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O&|O", (char **)kwlist, PyUnicode_FSConverter, &database_obj, &readonly_obj)) {
 #else
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|", (char **)kwlist, &database_obj)) {
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", (char **)kwlist, &database_obj, &readonly_obj)) {
 #endif
-
 		return -1;
 	}
 
 	database = PyBytes_AsString(database_obj);
+	if (strlen(database) == 0 || strcmp(database, ":memory:") == 0) {
+		database = nullptr;
+	}
 
+	bool read_only = false;
+	if (readonly_obj) {
+		read_only = PyLong_AsLong(readonly_obj) != 0;
+	}
+	self->DatabaseError = duckdb_DatabaseError;
+
+	bool init_success = false;
 	Py_BEGIN_ALLOW_THREADS;
 	try {
-		self->db = duckdb::make_unique<duckdb::DuckDB>(database);
+		duckdb::DBConfig config;
+		config.access_mode = read_only ? duckdb::AccessMode::READ_ONLY : duckdb::AccessMode::READ_WRITE;
+		self->db = duckdb::make_unique<duckdb::DuckDB>(database, &config);
 		self->conn = duckdb::make_unique<duckdb::Connection>(*self->db.get());
 		self->conn->EnableProfiling();
-		// pandas compatibility, bit ugly
-		self->conn->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+		// pandas compatibility, <s>bit</s> ugly
+		if (!read_only) {
+			self->conn->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+		}
+		init_success = true;
+	} catch (...) { // see below
+	}
+	Py_END_ALLOW_THREADS;
 
-	} catch (...) {
+	if (!init_success) {
+		PyErr_SetString(duckdb_DatabaseError, "Exception during database initialization.");
 		return -1;
 	}
 
-	Py_END_ALLOW_THREADS;
-
 	self->initialized = 1;
-	self->DatabaseError = duckdb_DatabaseError;
 	return 0;
 }
 

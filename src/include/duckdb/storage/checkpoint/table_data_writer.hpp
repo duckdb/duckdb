@@ -24,7 +24,7 @@ public:
 	void WriteTableData(Transaction &transaction);
 
 private:
-	void AppendData(idx_t col_idx, Vector &data);
+	void AppendData(idx_t col_idx, Vector &data, idx_t count);
 
 	void CreateSegment(idx_t col_idx);
 	void FlushSegment(idx_t col_idx);

@@ -30,6 +30,7 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 
 void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t initial_count;
 	idx_t result_count;
 	do {
@@ -40,14 +41,14 @@ void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			return;
 		}
 		initial_count = chunk.size();
-		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
+		result_count = state->executor.SelectExpression(chunk, sel);
 	} while (result_count == 0);
 
 	if (result_count == initial_count) {
 		// nothing was filtered: skip adding any selection vectors
 		return;
 	}
-	chunk.SetCardinality(result_count, chunk.owned_sel_vector);
+	chunk.Slice(sel, result_count);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
