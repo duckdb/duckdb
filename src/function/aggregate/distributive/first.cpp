@@ -12,11 +12,23 @@ template <class T> struct FirstState {
 	T value;
 };
 
-struct FirstFunction {
+struct FirstFunctionBase {
 	template <class STATE> static void Initialize(STATE *state) {
 		state->is_set = false;
 	}
 
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (!target->is_set) {
+			*target = source;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set) {
@@ -34,12 +46,6 @@ struct FirstFunction {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
 	}
 
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		if (!target->is_set) {
-			*target = source;
-		}
-	}
-
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
 		if (!state->is_set || IsNullValue<T>(state->value)) {
@@ -48,9 +54,48 @@ struct FirstFunction {
 			target[idx] = state->value;
 		}
 	}
+};
 
-	static bool IgnoreNull() {
-		return false;
+struct FirstFunctionString : public FirstFunctionBase {
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set) {
+			state->is_set = true;
+			if (nullmask[idx]) {
+				state->value = NullValue<INPUT_TYPE>();
+			} else {
+				if (input[idx].IsInlined()) {
+					state->value = input[idx];
+				} else {
+					// non-inlined string, need to allocate space for it
+					auto len = input[idx].GetSize();
+					auto ptr = new char[len + 1];
+					memcpy(ptr, input[idx].GetData(), len + 1);
+
+					state->value = string_t(ptr, len);
+				}
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, input, nullmask, 0);
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!state->is_set || IsNullValue<T>(state->value)) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = StringVector::AddString(result, state->value);
+		}
+	}
+
+	template <class STATE> static void Destroy(STATE *state) {
+		if (state->is_set && !state->value.IsInlined()) {
+			delete[] state->value.GetData();
+		}
 	}
 };
 
@@ -81,7 +126,7 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 	case SQLTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<timestamp_t>(type);
 	case SQLTypeId::VARCHAR:
-		return GetFirstAggregateTemplated<string_t>(type);
+		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t, FirstFunctionString>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented type for FIRST aggregate");
 	}
