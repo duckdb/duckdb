@@ -56,8 +56,8 @@ bool Expression::HasSubquery() const {
 	return has_subquery;
 }
 
-uint64_t Expression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+hash_t Expression::Hash() const {
+	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	hash = CombineHash(hash, duckdb::Hash<uint32_t>((uint32_t)return_type));
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });

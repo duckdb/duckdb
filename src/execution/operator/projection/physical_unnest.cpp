@@ -70,8 +70,8 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 				assert(v.type == TypeId::LIST);
 				// TODO deal with NULL values here!
-
-				auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
+				auto list_data = FlatVector::GetData<list_entry_t>(v);
+				auto list_entry = list_data[state->parent_position];
 				if ((int64_t)list_entry.length > state->list_length) {
 					state->list_length = list_entry.length;
 				}
@@ -94,10 +94,10 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		// TODO now that list entries are chunk collections, simply scan them!
 		for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 			auto target_col = col_idx + state->child_chunk.column_count();
-			chunk.data[target_col].nullmask.all();
 			auto &v = state->list_data.data[col_idx];
-			auto list_entry = ((list_entry_t *)v.GetData())[state->parent_position];
-			auto &child_cc = v.GetListEntry();
+			auto list_data = FlatVector::GetData<list_entry_t>(v);
+			auto list_entry = list_data[state->parent_position];
+			auto &child_cc = ListVector::GetEntry(v);
 
 			idx_t i = 0;
 			if (list_entry.length > state->list_position) {
@@ -119,7 +119,7 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 
 		chunk.Verify();
-		if (chunk.count > 0) {
+		if (chunk.size() > 0) {
 			return;
 		}
 	}

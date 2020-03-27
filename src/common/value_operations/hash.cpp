@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-uint64_t ValueOperations::Hash(const Value &op) {
+hash_t ValueOperations::Hash(const Value &op) {
 	if (op.is_null) {
 		return 0;
 	}

@@ -28,7 +28,7 @@ private:
 	AggregateFunction aggregate;
 	vector<data_t> state;
 	DataChunk inputs;
-	FlatVector statep;
+	StandaloneVector statep;
 	TypeId result_type;
 	unique_ptr<data_t[]> levels_flat_native;
 	vector<idx_t> levels_flat_start;

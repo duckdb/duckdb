@@ -76,7 +76,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 		// for each column, we append whatever we can fit into the block
 		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
-			AppendData(i, chunk.data[i]);
+			AppendData(i, chunk.data[i], chunk.size());
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
@@ -97,8 +97,7 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 	}
 }
 
-void TableDataWriter::AppendData(idx_t col_idx, Vector &data) {
-	idx_t count = data.size();
+void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
 	while (offset < count) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);

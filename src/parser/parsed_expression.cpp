@@ -88,8 +88,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 	}
 }
 
-uint64_t ParsedExpression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+hash_t ParsedExpression::Hash() const {
+	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	ParsedExpressionIterator::EnumerateChildren(
 	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;

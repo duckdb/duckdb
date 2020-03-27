@@ -32,8 +32,8 @@ bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefEx
 	return a->column_name == b->column_name && a->table_name == b->table_name;
 }
 
-uint64_t ColumnRefExpression::Hash() const {
-	uint64_t result = ParsedExpression::Hash();
+hash_t ColumnRefExpression::Hash() const {
+	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
 	return result;
 }

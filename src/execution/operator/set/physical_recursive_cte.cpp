@@ -96,25 +96,16 @@ void PhysicalRecursiveCTE::GetChunkInternal(ClientContext &context, DataChunk &c
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
-	Vector dummy_addresses(chunk, TypeId::POINTER);
-	Vector probe_result(chunk, TypeId::BOOL);
+	Vector dummy_addresses(TypeId::POINTER);
 
-	auto probe_data = (bool *)probe_result.GetData();
+	// Use the HT to eliminate duplicate rows
+	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
+	idx_t new_group_count = state->ht->FindOrCreateGroups(chunk, dummy_addresses, new_groups);
 
-	// Use the HT to find duplicate rows
-	state->ht->FindOrCreateGroups(chunk, dummy_addresses, probe_result);
+	// we only return entries we have not seen before (i.e. new groups)
+	chunk.Slice(new_groups, new_group_count);
 
-	// Update the sel_vector of the DataChunk
-	idx_t match_count = 0;
-	for (idx_t probe_idx = 0; probe_idx < probe_result.size(); probe_idx++) {
-		idx_t sel_idx = probe_idx;
-		if (probe_data[sel_idx]) {
-			chunk.owned_sel_vector[match_count++] = sel_idx;
-		}
-	}
-	chunk.SetCardinality(match_count, chunk.owned_sel_vector);
-
-	return match_count;
+	return new_group_count;
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {

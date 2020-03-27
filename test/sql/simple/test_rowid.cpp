@@ -19,6 +19,9 @@ TEST_CASE("Test Row IDs", "[rowid]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 44}));
 	REQUIRE(result->types.size() == 2);
 
+	result = con.Query("SELECT rowid+1 FROM a WHERE CASE WHEN i=42 THEN rowid=0 ELSE rowid=1 END;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+
 	// rowid isn't expanded in *
 	result = con.Query("SELECT * FROM a");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 44}));

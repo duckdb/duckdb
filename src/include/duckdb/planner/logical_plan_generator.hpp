@@ -36,6 +36,7 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundUpdateStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCreateStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExecuteStatement &statement);
+
 	unique_ptr<LogicalOperator> CreatePlan(BoundSimpleStatement &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundExplainStatement &stmt);
 

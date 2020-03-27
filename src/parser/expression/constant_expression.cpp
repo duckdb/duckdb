@@ -19,8 +19,8 @@ bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpre
 	return a->value == b->value;
 }
 
-uint64_t ConstantExpression::Hash() const {
-	uint64_t result = ParsedExpression::Hash();
+hash_t ConstantExpression::Hash() const {
+	hash_t result = ParsedExpression::Hash();
 	return CombineHash(ValueOperations::Hash(value), result);
 }
 

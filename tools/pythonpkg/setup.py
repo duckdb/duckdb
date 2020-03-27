@@ -29,7 +29,8 @@ if not os.path.exists('duckdb.cpp'):
 includes = [numpy.get_include(), '.']
 sources = ['connection.cpp', 'cursor.cpp', 'module.cpp', 'duckdb.cpp']
 
-toolchain_args = ['-std=c++11', '-Wall']
+toolchain_args = ['-std=c++11']
+#toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])

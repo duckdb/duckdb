@@ -22,6 +22,9 @@ iris2 <- dbReadTable(con, "iris")
 # we can also run arbitray SQL commands on this table
 iris3 <- dbGetQuery(con, 'SELECT "Species", MIN("Sepal.Width") FROM iris GROUP BY "Species"')
 
+# we can use prepared statements to parameterize queries:
+dbGetQuery(con, 'SELECT COUNT(*) FROM iris WHERE "Sepal.Length" > ? AND "Species" = ?', 7, "virginica")
+
 # delete the table again
 dbRemoveTable(con, "iris")
 

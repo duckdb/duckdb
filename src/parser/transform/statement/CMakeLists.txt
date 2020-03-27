@@ -8,6 +8,7 @@ add_library_unity(duckdb_transformer_statement
                   transform_create_table.cpp
                   transform_create_view.cpp
                   transform_delete.cpp
+                  transform_explain.cpp
                   transform_drop.cpp
                   transform_insert.cpp
                   transform_pragma.cpp
@@ -17,7 +18,8 @@ add_library_unity(duckdb_transformer_statement
                   transform_prepare.cpp
                   transform_transaction.cpp
                   transform_update.cpp
-                  transform_create_sequence.cpp)
+                  transform_create_sequence.cpp
+                  transform_vacuum.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_transformer_statement>
     PARENT_SCOPE)

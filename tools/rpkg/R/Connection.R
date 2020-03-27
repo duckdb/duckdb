@@ -35,7 +35,7 @@ setMethod("dbIsValid", "duckdb_connection",
           function(dbObj, ...) {
             valid <- FALSE
             tryCatch ({
-              dbExecute(dbObj, SQL("SELECT 1"))
+              dbGetQuery(dbObj, SQL("SELECT 1"))
               valid <- TRUE
             }, error = function(c) {
             })
@@ -50,10 +50,11 @@ setMethod("dbDisconnect", "duckdb_connection",
             if (!dbIsValid(conn)) {
               warning("Connection already closed.", call. = FALSE)
             }
+            .Call(duckdb_disconnect_R, conn@conn_ref)
             if (shutdown) {
               duckdb_shutdown(conn@driver)
             }
-            .Call(duckdb_disconnect_R, conn@conn_ref)
+
             invisible(TRUE)
           })
 
@@ -61,40 +62,27 @@ setMethod("dbDisconnect", "duckdb_connection",
 #' @inheritParams DBI::dbSendQuery
 #' @export
 setMethod("dbSendQuery", c("duckdb_connection", "character"),
-          function(conn, statement, ...) {
+          function(conn, statement, ..., immediate=FALSE) {
             if (conn@debug) {
               cat("Q ", statement, "\n")
             }
-		    statement <- enc2utf8(statement)
-            resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
-            attr(resultset, "row.names") <-
-              c(NA_integer_, as.integer(-1 * length(resultset[[1]])))
-            class(resultset) <- "data.frame"
-            duckdb_result(
+		        statement <- enc2utf8(statement)
+            stmt_lst <- .Call(duckdb_prepare_R, conn@conn_ref, statement)
+
+            res <- duckdb_result(
               connection = conn,
-              statement = statement,
-              has_resultset = TRUE,
-              resultset = resultset
+              stmt_lst = stmt_lst
             )
+            params <- list(...)
+            if (length(params) == 1 && class(params[[1]])[[1]] == "list") {
+              params <- params[[1]]
+            }
+            if (length(params) > 0) {
+              dbBind(res, params)
+            }
+            return(res)
           })
 
-#' @rdname DBI
-#' @inheritParams DBI::dbSendStatement
-#' @export
-setMethod("dbSendStatement", c("duckdb_connection", "character"),
-          function(conn, statement, ...) {
-            if (conn@debug) {
-              cat("S ", statement, "\n")
-            }
-		    statement <- enc2utf8(statement)
-            resultset <- .Call(duckdb_query_R, conn@conn_ref, statement)
-            duckdb_result(
-              connection = conn,
-              statement = statement,
-              has_resultset = FALSE,
-              rows_affected = as.numeric(resultset[[1]][1])
-            )
-          })
 
 #' @rdname DBI
 #' @inheritParams DBI::dbDataType

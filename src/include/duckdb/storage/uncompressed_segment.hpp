@@ -68,7 +68,7 @@ public:
 
 	//! Update a set of row identifiers to the specified set of updated values
 	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
-	            row_t offset);
+	            idx_t count, row_t offset);
 
 	//! Rollback a previous update
 	virtual void RollbackUpdate(UpdateInfo *info) = 0;
@@ -89,7 +89,7 @@ public:
 
 protected:
 	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-	                    row_t *ids, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
+	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version

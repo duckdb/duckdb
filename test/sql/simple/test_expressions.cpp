@@ -98,7 +98,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 41}));
 	REQUIRE(CHECK_COLUMN(result, 2, {42, 44}));
 
-	result = con.Query("SELECT * FROM intest WHERE a IN (43, b)");
+	result = con.Query("SELECT * FROM intest WHERE a IN (43, b) ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 42}));
 	REQUIRE(CHECK_COLUMN(result, 2, {42, 42}));
@@ -108,7 +108,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {41}));
 	REQUIRE(CHECK_COLUMN(result, 2, {44}));
 
-	result = con.Query("SELECT * FROM intest WHERE a NOT IN (86, 103, 162)");
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (86, 103, 162) ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {42, 43, 44}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 42, 41}));
 	REQUIRE(CHECK_COLUMN(result, 2, {42, 42, 44}));
@@ -118,7 +118,7 @@ TEST_CASE("Complex Expressions", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 	REQUIRE(CHECK_COLUMN(result, 2, {}));
 
-	result = con.Query("SELECT * FROM intest WHERE a NOT IN (b)");
+	result = con.Query("SELECT * FROM intest WHERE a NOT IN (b) ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {43, 44}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 41}));
 	REQUIRE(CHECK_COLUMN(result, 2, {42, 44}));

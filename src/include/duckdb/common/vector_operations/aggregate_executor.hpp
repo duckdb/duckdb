@@ -17,176 +17,232 @@ namespace duckdb {
 class AggregateExecutor {
 private:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, STATE_TYPE **__restrict states, idx_t count,
-	                                    sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, STATE_TYPE **__restrict states, nullmask_t &nullmask,
+	                                 idx_t count) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
+			for (idx_t i = 0; i < count; i++) {
 				if (!nullmask[i]) {
 					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[i], idata, nullmask, i);
 				}
-			});
+			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
+			for (idx_t i = 0; i < count; i++) {
 				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[i], idata, nullmask, i);
-			});
+			}
+		}
+	}
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, STATE_TYPE **__restrict states,
+	                                    const SelectionVector &isel, const SelectionVector &ssel, nullmask_t &nullmask,
+	                                    idx_t count) {
+		if (OP::IgnoreNull() && nullmask.any()) {
+			// potential NULL values and NULL values are ignored
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = isel.get_index(i);
+				auto sidx = ssel.get_index(i);
+				if (!nullmask[idx]) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx], idata, nullmask, idx);
+				}
+			}
+		} else {
+			// quick path: no NULL values or NULL values are not ignored
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = isel.get_index(i);
+				auto sidx = ssel.get_index(i);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[sidx], idata, nullmask, idx);
+			}
 		}
 	}
 
-	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	template <class STATE_TYPE, class INPUT_TYPE, class OP, bool HAS_SEL_VECTOR>
 	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata, STATE_TYPE *__restrict state, idx_t count,
-	                                   sel_t *__restrict sel_vector, nullmask_t &nullmask) {
+	                                   nullmask_t &nullmask, const SelectionVector *__restrict sel_vector) {
 		if (OP::IgnoreNull() && nullmask.any()) {
 			// potential NULL values and NULL values are ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				if (!nullmask[i]) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, idata, nullmask, i);
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = HAS_SEL_VECTOR ? sel_vector->get_index(i) : i;
+				if (!nullmask[idx]) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, idata, nullmask, idx);
 				}
-			});
+			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, idata, nullmask, i);
-			});
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = HAS_SEL_VECTOR ? sel_vector->get_index(i) : i;
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, idata, nullmask, idx);
+			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata,
-	                                     STATE_TYPE **__restrict states, idx_t count, sel_t *__restrict sel_vector,
-	                                     nullmask_t &nullmask) {
-		if (OP::IgnoreNull() && nullmask.any()) {
+	                                     STATE_TYPE **__restrict states, idx_t count, const SelectionVector &asel,
+	                                     const SelectionVector &bsel, const SelectionVector &ssel,
+	                                     nullmask_t &anullmask, nullmask_t &bnullmask) {
+		if (OP::IgnoreNull() && (anullmask.any() || bnullmask.any())) {
 			// potential NULL values and NULL values are ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				if (!nullmask[i]) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[i], adata, bdata, nullmask, i);
+			for (idx_t i = 0; i < count; i++) {
+				auto aidx = asel.get_index(i);
+				auto bidx = bsel.get_index(i);
+				auto sidx = ssel.get_index(i);
+				if (!anullmask[aidx] && !bnullmask[bidx]) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], adata, bdata, anullmask,
+					                                                       bnullmask, aidx, bidx);
 				}
-			});
+			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[i], adata, bdata, nullmask, i);
-			});
+			for (idx_t i = 0; i < count; i++) {
+				auto aidx = asel.get_index(i);
+				auto bidx = bsel.get_index(i);
+				auto sidx = ssel.get_index(i);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], adata, bdata, anullmask, bnullmask,
+				                                                       aidx, bidx);
+			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata,
-	                                    STATE_TYPE *__restrict state, idx_t count, sel_t *__restrict sel_vector,
-	                                    nullmask_t &nullmask) {
-		if (OP::IgnoreNull() && nullmask.any()) {
+	                                    STATE_TYPE *__restrict state, idx_t count, const SelectionVector &asel,
+	                                    const SelectionVector &bsel, nullmask_t &anullmask, nullmask_t &bnullmask) {
+		if (OP::IgnoreNull() && (anullmask.any() || bnullmask.any())) {
 			// potential NULL values and NULL values are ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				if (!nullmask[i]) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, adata, bdata, nullmask, i);
+			for (idx_t i = 0; i < count; i++) {
+				auto aidx = asel.get_index(i);
+				auto bidx = bsel.get_index(i);
+				if (!anullmask[aidx] && !bnullmask[bidx]) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, adata, bdata, anullmask, bnullmask,
+					                                                       aidx, bidx);
 				}
-			});
+			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
-			VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, adata, bdata, nullmask, i);
-			});
+			for (idx_t i = 0; i < count; i++) {
+				auto aidx = asel.get_index(i);
+				auto bidx = bsel.get_index(i);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, adata, bdata, anullmask, bnullmask, aidx,
+				                                                       bidx);
+			}
 		}
 	}
 
 public:
-	template <class STATE_TYPE, class INPUT_TYPE, class OP> static void UnaryScatter(Vector &input, Vector &states) {
-		assert(states.vector_type == VectorType::FLAT_VECTOR);
-
-		auto sdata = (STATE_TYPE **)states.GetData();
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-			if (OP::IgnoreNull() && input.nullmask[0]) {
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void UnaryScatter(Vector &input, Vector &states, idx_t count) {
+		if (input.vector_type == VectorType::CONSTANT_VECTOR && states.vector_type == VectorType::CONSTANT_VECTOR) {
+			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 				// constant NULL input in function that ignores NULL values
 				return;
 			}
-			// regular constant NULL: get first state
-			assert(states.size() > 0);
-			auto state = sdata[states.sel_vector() ? states.sel_vector()[0] : 0];
-			auto idata = (INPUT_TYPE *)input.GetData();
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(state, idata, input.nullmask, input.size());
+			// regular constant: get first state
+			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*sdata, idata, ConstantVector::Nullmask(input),
+			                                                           count);
+		} else if (input.vector_type == VectorType::FLAT_VECTOR && states.vector_type == VectorType::FLAT_VECTOR) {
+			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, sdata, FlatVector::Nullmask(input), count);
 		} else {
-			input.Normalify();
-
-			auto idata = (INPUT_TYPE *)input.GetData();
-			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, sdata, input.size(), input.sel_vector(),
-			                                             input.nullmask);
+			VectorData idata, sdata;
+			input.Orrify(count, idata);
+			states.Orrify(count, sdata);
+			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, (STATE_TYPE **)sdata.data,
+			                                             *idata.sel, *sdata.sel, *idata.nullmask, count);
 		}
 	}
 
-	template <class STATE_TYPE, class INPUT_TYPE, class OP> static void UnaryUpdate(Vector &input, data_ptr_t state) {
-		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
-			if (OP::IgnoreNull() && input.nullmask[0]) {
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void UnaryUpdate(Vector &input, data_ptr_t state, idx_t count) {
+		switch (input.vector_type) {
+		case VectorType::CONSTANT_VECTOR: {
+			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 				return;
 			}
-			auto idata = (INPUT_TYPE *)input.GetData();
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>((STATE_TYPE *)state, idata, input.nullmask,
-			                                                           input.size());
-		} else {
-			input.Normalify();
-			auto idata = (INPUT_TYPE *)input.GetData();
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, (STATE_TYPE *)state, input.size(), input.sel_vector(),
-			                                            input.nullmask);
+			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>((STATE_TYPE *)state, idata,
+			                                                           ConstantVector::Nullmask(input), count);
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, false>(idata, (STATE_TYPE *)state, count,
+			                                                   FlatVector::Nullmask(input), nullptr);
+			break;
+		}
+		default: {
+			VectorData idata;
+			input.Orrify(count, idata);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP, true>((INPUT_TYPE *)idata.data, (STATE_TYPE *)state, count,
+			                                                  *idata.nullmask, idata.sel);
+			break;
+		}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryScatter(Vector &a, Vector &b, Vector &states) {
-		assert(states.vector_type == VectorType::FLAT_VECTOR);
+	static void BinaryScatter(Vector &a, Vector &b, Vector &states, idx_t count) {
+		VectorData adata, bdata, sdata;
 
-		a.Normalify();
-		b.Normalify();
+		a.Orrify(count, adata);
+		b.Orrify(count, bdata);
+		states.Orrify(count, sdata);
 
-		auto adata = (A_TYPE *)a.GetData();
-		auto bdata = (B_TYPE *)b.GetData();
-		auto sdata = (STATE_TYPE **)states.GetData();
-		nullmask_t combined_mask = a.nullmask | b.nullmask;
-		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(adata, bdata, sdata, a.size(), a.sel_vector(), combined_mask);
+		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, (B_TYPE *)bdata.data,
+		                                                  (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel,
+		                                                  *sdata.sel, *adata.nullmask, *bdata.nullmask);
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static void BinaryUpdate(Vector &a, Vector &b, data_ptr_t state) {
-		a.Normalify();
-		b.Normalify();
-		auto adata = (A_TYPE *)a.GetData();
-		auto bdata = (B_TYPE *)b.GetData();
-		nullmask_t combined_mask = a.nullmask | b.nullmask;
-		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(adata, bdata, (STATE_TYPE *)state, a.size(), a.sel_vector(),
-		                                                 combined_mask);
+	static void BinaryUpdate(Vector &a, Vector &b, data_ptr_t state, idx_t count) {
+		VectorData adata, bdata;
+
+		a.Orrify(count, adata);
+		b.Orrify(count, bdata);
+
+		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, (B_TYPE *)bdata.data,
+		                                                 (STATE_TYPE *)state, count, *adata.sel, *bdata.sel,
+		                                                 *adata.nullmask, *bdata.nullmask);
 	}
 
-	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target) {
-		assert(source.vector_type == VectorType::FLAT_VECTOR);
-		assert(target.vector_type == VectorType::FLAT_VECTOR);
-		auto sdata = (STATE_TYPE *)source.GetData();
-		auto tdata = (STATE_TYPE **)target.GetData();
+	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target, idx_t count) {
+		auto sdata = FlatVector::GetData<STATE_TYPE>(source);
+		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
-		VectorOperations::Exec(target.sel_vector(), target.size(),
-		                       [&](idx_t i, idx_t k) { OP::template Combine<STATE_TYPE, OP>(sdata[i], tdata[i]); });
+		for (idx_t i = 0; i < count; i++) {
+			OP::template Combine<STATE_TYPE, OP>(sdata[i], tdata[i]);
+		}
 	}
 
-	template <class STATE_TYPE, class RESULT_TYPE, class OP> static void Finalize(Vector &states, Vector &result) {
+	template <class STATE_TYPE, class RESULT_TYPE, class OP>
+	static void Finalize(Vector &states, Vector &result, idx_t count) {
 		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
 			result.vector_type = VectorType::CONSTANT_VECTOR;
 
-			auto sdata = (STATE_TYPE **)states.GetData();
-			auto rdata = (RESULT_TYPE *)result.GetData();
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[0], rdata, result.nullmask, 0);
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Nullmask(result), 0);
 		} else {
-			states.Normalify();
+			assert(states.vector_type == VectorType::FLAT_VECTOR);
 			result.vector_type = VectorType::FLAT_VECTOR;
 
-			auto sdata = (STATE_TYPE **)states.GetData();
-			auto rdata = (RESULT_TYPE *)result.GetData();
-			VectorOperations::Exec(result.sel_vector(), result.size(), [&](idx_t i, idx_t k) {
-				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, result.nullmask, i);
-			});
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+			for (idx_t i = 0; i < count; i++) {
+				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Nullmask(result),
+				                                               i);
+			}
 		}
 	}
 
-	template <class STATE_TYPE, class OP> static void Destroy(Vector &states) {
-		auto sdata = (STATE_TYPE **)states.GetData();
-		VectorOperations::Exec(states, [&](idx_t i, idx_t k) { OP::template Destroy<STATE_TYPE>(sdata[i]); });
+	template <class STATE_TYPE, class OP> static void Destroy(Vector &states, idx_t count) {
+		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+		for (idx_t i = 0; i < count; i++) {
+			OP::template Destroy<STATE_TYPE>(sdata[i]);
+		}
 	}
 };
 

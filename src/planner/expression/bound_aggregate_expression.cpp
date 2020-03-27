@@ -21,8 +21,8 @@ string BoundAggregateExpression::ToString() const {
 	result += ")";
 	return result;
 }
-uint64_t BoundAggregateExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundAggregateExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	result = CombineHash(result, duckdb::Hash(function.name.c_str()));
 	result = CombineHash(result, duckdb::Hash(distinct));
 	return result;

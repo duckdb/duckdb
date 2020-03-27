@@ -10,78 +10,80 @@ struct list_agg_state_t {
 	ChunkCollection *cc;
 };
 
-static idx_t list_payload_size() {
-	return sizeof(list_agg_state_t);
-}
+struct ListFunction {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->cc = nullptr;
+	}
 
-// NB: the result of this is copied around merrily, so just zero it for now
-static void list_initialize(data_ptr_t state) {
-	memset(state, 0, sizeof(list_agg_state_t));
-}
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		throw NotImplementedException("COMBINE not implemented for LIST");
+	}
 
-static void list_update(Vector inputs[], idx_t input_count, Vector &state) {
+	template <class STATE> static void Destroy(STATE *state) {
+		if (state->cc) {
+			delete state->cc;
+		}
+	}
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+static void list_update(Vector inputs[], idx_t input_count, Vector &state_vector, idx_t count) {
 	assert(input_count == 1);
-	inputs[0].Normalify();
-	auto states = (list_agg_state_t **)state.GetData();
+
+	auto &input = inputs[0];
+	VectorData sdata;
+	state_vector.Orrify(count, sdata);
 
 	DataChunk insert_chunk;
 
 	vector<TypeId> chunk_types;
-	chunk_types.push_back(inputs[0].type);
+	chunk_types.push_back(input.type);
 	insert_chunk.Initialize(chunk_types);
-	insert_chunk.data[0].Reference(inputs[0]);
-	insert_chunk.SetCardinality(1, insert_chunk.owned_sel_vector);
+	insert_chunk.SetCardinality(1);
 
-	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
-		if (!states[i]->cc) {
-			states[i]->cc = new ChunkCollection();
+	auto states = (list_agg_state_t **)sdata.data;
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states[sdata.sel->get_index(i)];
+		if (!state->cc) {
+			state->cc = new ChunkCollection();
 		}
-		assert(states[i]->cc);
-		insert_chunk.sel_vector[0] = i;
-		insert_chunk.Verify();
-		states[i]->cc->Append(insert_chunk);
-		states[i]->cc->Verify();
-	});
+		sel.set_index(0, i);
+		insert_chunk.data[0].Slice(input, sel, 1);
+		state->cc->Append(insert_chunk);
+	}
 }
 
-static void list_combine(Vector &state, Vector &combined) {
-	throw Exception("eek");
-	// TODO should be rather straightforward, copy vectors together.
-}
-
-static void list_destroy(Vector &state) {
-	auto states = (list_agg_state_t **)state.GetData();
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		if (states[i]->cc) {
-			delete states[i]->cc;
-		}
-	});
-}
-
-static void list_finalize(Vector &state, Vector &result) {
-	auto states = (list_agg_state_t **)state.GetData();
+static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
+	VectorData sdata;
+	state_vector.Orrify(count, sdata);
+	auto states = (list_agg_state_t **)sdata.data;
 
 	result.Initialize(TypeId::LIST);
-	auto list_struct_data = (list_entry_t *)result.GetData();
+	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	size_t total_len = 0;
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		assert(states[i]->cc);
-		auto &state_cc = *(states[i]->cc);
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states[sdata.sel->get_index(i)];
+		assert(state->cc);
+		auto &state_cc = *state->cc;
 		assert(state_cc.types.size() == 1);
 		list_struct_data[i].length = state_cc.count;
 		list_struct_data[i].offset = total_len;
 		total_len += state_cc.count;
-	});
+	}
 
 	auto list_child = make_unique<ChunkCollection>();
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto &state_cc = *(states[i]->cc);
+	for (idx_t i = 0; i < count; i++) {
+		auto state = states[sdata.sel->get_index(i)];
+		auto &state_cc = *state->cc;
 		assert(state_cc.chunks[0]->column_count() == 1);
 		list_child->Append(state_cc);
-	});
+	}
 	assert(list_child->count == total_len);
-	result.SetListEntry(move(list_child));
+	ListVector::SetEntry(result, move(list_child));
 }
 
 unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, SQLType &return_type) {
@@ -93,8 +95,10 @@ unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
-	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, list_payload_size, list_initialize, list_update,
-	                             list_combine, list_finalize, nullptr, list_bind, list_destroy);
+	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
+	                             AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update,
+	                             AggregateFunction::StateCombine<list_agg_state_t, ListFunction>, list_finalize,
+	                             nullptr, list_bind, AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
 	set.AddFunction(agg);
 }
 

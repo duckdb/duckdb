@@ -25,11 +25,11 @@ ChunkDeleteInfo::ChunkDeleteInfo(ChunkDeleteInfo &info, ChunkInfoType type)
 	}
 }
 
-idx_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, sel_t sel_vector[], idx_t max_count) {
+idx_t ChunkDeleteInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
 	idx_t count = 0;
 	for (idx_t i = 0; i < max_count; i++) {
 		if (!UseVersion(transaction, deleted[i])) {
-			sel_vector[count++] = i;
+			sel_vector.set_index(count++, i);
 		}
 	}
 	return count;
@@ -75,11 +75,11 @@ ChunkInsertInfo::ChunkInsertInfo(ChunkDeleteInfo &info) : ChunkDeleteInfo(info, 
 	}
 }
 
-idx_t ChunkInsertInfo::GetSelVector(Transaction &transaction, sel_t sel_vector[], idx_t max_count) {
+idx_t ChunkInsertInfo::GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) {
 	idx_t count = 0;
 	for (idx_t i = 0; i < max_count; i++) {
 		if (UseVersion(transaction, inserted[i]) && !UseVersion(transaction, deleted[i])) {
-			sel_vector[count++] = i;
+			sel_vector.set_index(count++, i);
 		}
 	}
 	return count;

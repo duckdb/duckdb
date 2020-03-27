@@ -87,13 +87,13 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		for (i = 0; i < state->child_chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
-		chunk.SetCardinality(state->child_chunk.size(), state->child_chunk.sel_vector);
+		chunk.SetCardinality(state->child_chunk.size());
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			for (; i < chunk.column_count(); i++) {
 				chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
-				chunk.data[i].nullmask[0] = true;
+				ConstantVector::SetNull(chunk.data[i], true);
 			}
 		}
 		return;
@@ -114,24 +114,21 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (!state->checked_found_match && state->lhs_found_match) {
 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
 				// non-matching tuples
+				SelectionVector sel(STANDARD_VECTOR_SIZE);
 				for (idx_t i = 0; i < state->child_chunk.size(); i++) {
 					if (!state->lhs_found_match[i]) {
-						chunk.owned_sel_vector[result_count++] = i;
+						sel.set_index(result_count++, i);
 					}
 				}
 				if (result_count > 0) {
 					// have to create the chunk, set the selection vector and count
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					idx_t i;
-					for (i = 0; i < state->child_chunk.column_count(); i++) {
-						chunk.data[i].Reference(state->child_chunk.data[i]);
-					}
+					chunk.Slice(state->child_chunk, sel, result_count);
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (; i < chunk.column_count(); i++) {
+					for (idx_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
 						chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
-						chunk.data[i].nullmask[0] = true;
+						ConstantVector::SetNull(chunk.data[i], true);
 					}
-					chunk.SetCardinality(result_count, chunk.owned_sel_vector);
 					state->checked_found_match = true;
 					return;
 				}
@@ -146,7 +143,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					return;
 				}
 			}
-			state->child_chunk.ClearSelectionVector();
+			state->child_chunk.Normalify();
 			state->left_position = 0;
 			state->right_position = 0;
 			if (state->lhs_found_match) {
@@ -170,20 +167,21 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		chunk.SetCardinality(rchunk.size());
 
 		// now perform the computation
-		result_count = state->executor.SelectExpression(chunk, chunk.owned_sel_vector);
+		SelectionVector match_sel(STANDARD_VECTOR_SIZE);
+		result_count = state->executor.SelectExpression(chunk, match_sel);
 		if (result_count > 0) {
 			// found a match!
 			// set the match flags in the LHS
 			if (state->lhs_found_match) {
 				state->lhs_found_match[state->left_position] = true;
 			}
-			chunk.SetCardinality(result_count, result_count == rchunk.size() ? nullptr : chunk.owned_sel_vector);
+			chunk.Slice(match_sel, result_count);
 
 			// set the match flags in the RHS
 			if (state->rhs_found_match) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE +
-					                       (chunk.sel_vector ? chunk.sel_vector[i] : i)] = true;
+					auto idx = match_sel.get_index(i);
+					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + idx] = true;
 				}
 			}
 		} else {

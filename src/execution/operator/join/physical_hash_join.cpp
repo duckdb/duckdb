@@ -100,7 +100,6 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 			return;
 		}
 		// remove any selection vectors
-		state->child_chunk.ClearSelectionVector();
 		if (hash_table->size() == 0) {
 			// empty hash table, special case
 			if (hash_table->join_type == JoinType::ANTI) {
@@ -125,12 +124,12 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 				// has NULL for every input entry
 				if (!hash_table->has_null) {
-					auto bool_result = (bool *)result_vector.GetData();
-					for (idx_t i = 0; i < result_vector.size(); i++) {
+					auto bool_result = FlatVector::GetData<bool>(result_vector);
+					for (idx_t i = 0; i < chunk.size(); i++) {
 						bool_result[i] = false;
 					}
 				} else {
-					result_vector.nullmask.set();
+					FlatVector::Nullmask(result_vector).set();
 				}
 				return;
 			} else if (hash_table->join_type == JoinType::LEFT || hash_table->join_type == JoinType::OUTER ||
@@ -144,7 +143,7 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 				// for the RHS
 				for (idx_t k = state->child_chunk.column_count(); k < chunk.column_count(); k++) {
 					chunk.data[k].vector_type = VectorType::CONSTANT_VECTOR;
-					chunk.data[k].nullmask[0] = true;
+					ConstantVector::SetNull(chunk.data[k], true);
 				}
 				return;
 			}

@@ -10,12 +10,12 @@ using namespace std;
 
 TEST_CASE("Basic serializer test", "[serializer]") {
 	BufferedSerializer serializer(4);
-	serializer.Write<sel_t>(33);
+	serializer.Write<int32_t>(33);
 	serializer.Write<uint64_t>(42);
 	auto data = serializer.GetData();
 
 	Deserializer source(data.data.get(), data.size);
-	REQUIRE_NOTHROW(source.Read<sel_t>() == 33);
+	REQUIRE_NOTHROW(source.Read<int32_t>() == 33);
 	REQUIRE_NOTHROW(source.Read<uint64_t>() == 42);
 }
 

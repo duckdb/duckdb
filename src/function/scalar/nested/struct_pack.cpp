@@ -9,27 +9,27 @@ using namespace std;
 
 namespace duckdb {
 
-static void struct_pack_fun(DataChunk &input, ExpressionState &state, Vector &result) {
+static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
 	// this should never happen if the binder below is sane
-	assert(input.column_count() == info.stype.child_type.size());
+	assert(args.column_count() == info.stype.child_type.size());
 
 	bool all_const = true;
-	for (size_t i = 0; i < input.column_count(); i++) {
-		if (input.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
+	for (size_t i = 0; i < args.column_count(); i++) {
+		if (args.data[i].vector_type != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
-		assert(input.data[i].type == GetInternalType(info.stype.child_type[i].second));
-		auto new_child = make_unique<Vector>(result.cardinality());
-		new_child->Reference(input.data[i]);
-		result.AddStructEntry(info.stype.child_type[i].first, move(new_child));
+		assert(args.data[i].type == GetInternalType(info.stype.child_type[i].second));
+		auto new_child = make_unique<Vector>();
+		new_child->Reference(args.data[i]);
+		StructVector::AddEntry(result, info.stype.child_type[i].first, move(new_child));
 	}
 	result.vector_type = all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 
-	result.Verify();
+	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {

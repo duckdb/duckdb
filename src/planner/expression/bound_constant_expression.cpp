@@ -22,8 +22,8 @@ bool BoundConstantExpression::Equals(const BaseExpression *other_) const {
 	return value == other->value;
 }
 
-uint64_t BoundConstantExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundConstantExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	return CombineHash(ValueOperations::Hash(value), result);
 }
 

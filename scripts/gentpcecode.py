@@ -29,10 +29,9 @@ for fp in [header, source]:
 
 header.write("""
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/appender.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"
@@ -41,14 +40,14 @@ header.write("""
 
 namespace TPCE {
 	class DuckDBLoaderFactory : public CBaseLoaderFactory {
-		duckdb::ClientContext *context;
+		duckdb::Connection &con;
 		std::string schema;
 		std::string suffix;
 
 	  public:
-		DuckDBLoaderFactory(duckdb::ClientContext *context, std::string schema,
+		DuckDBLoaderFactory(duckdb::Connection &con, std::string schema,
 		                    std::string suffix)
-		    : context(context), schema(schema), suffix(suffix) {
+		    : con(con), schema(schema), suffix(suffix) {
 		}
 
 		// Functions to create loader classes for individual tables.
@@ -102,64 +101,41 @@ using namespace std;
 
 namespace TPCE {
 struct tpce_append_information {
-	TableCatalogEntry *table;
-	DataChunk chunk;
-	ClientContext *context;
+	tpce_append_information(Connection &con, string schema, string table) :
+		appender(con, schema, table) {}
+
+	Appender appender;
 };
 
-static void append_value(DataChunk & chunk, size_t index,
-                         size_t & column, int32_t value) {
-	((int32_t *)chunk.data[column++].GetData())[index] = value;
+static void append_value(tpce_append_information &info, int32_t value) {
+	info.appender.Append<int32_t>(value);
 }
 
-static void append_bigint(DataChunk & chunk, size_t index,
-                          size_t & column, int64_t value) {
-	((int64_t *)chunk.data[column++].GetData())[index] = value;
+static void append_bigint(tpce_append_information &info, int64_t value) {
+	info.appender.Append<int64_t>(value);
 }
 
-static void append_string(DataChunk & chunk, size_t index,
-                          size_t & column, const char *value) {
-	chunk.data[column++].SetValue(index, Value(value));
+static void append_string(tpce_append_information &info, const char *value) {
+	info.appender.Append<Value>(Value(value));
 }
 
-static void append_double(DataChunk & chunk, size_t index,
-                          size_t & column, double value) {
-	((double *)chunk.data[column++].GetData())[index] = value;
+static void append_double(tpce_append_information &info, double value) {
+	info.appender.Append<double>(value);
 }
 
-static void append_bool(DataChunk & chunk, size_t index,
-                        size_t & column, bool value) {
-	((bool *)chunk.data[column++].GetData())[index] = value;
+static void append_bool(tpce_append_information &info, bool value) {
+	info.appender.Append<bool>(value);
 }
 
-static void append_timestamp(DataChunk & chunk, size_t index,
-                             size_t & column, CDateTime time) {
-	((timestamp_t *)chunk.data[column++].GetData())[index] =
-	    0; // Timestamp::FromString(time.ToStr(1));
+static void append_timestamp(tpce_append_information &info, CDateTime time) {
+	info.appender.Append<int64_t>(0); // Timestamp::FromString(time.ToStr(1));
 }
 
-void append_char(DataChunk & chunk, size_t index, size_t & column,
-                 char value) {
+void append_char(tpce_append_information &info, char value) {
 	char val[2];
 	val[0] = value;
 	val[1] = '\\0';
-	append_string(chunk, index, column, val);
-}
-
-static void append_to_append_info(tpce_append_information & info) {
-	auto &chunk = info.chunk;
-	auto &table = info.table;
-	if (chunk.column_count() == 0) {
-		// initalize the chunk
-		auto types = table->GetTypes();
-		chunk.Initialize(types);
-	} else if (chunk.size() >= STANDARD_VECTOR_SIZE) {
-		// flush the chunk
-		table->storage->Append(*table, *info.context, chunk);
-		// have to reset the chunk
-		chunk.Reset();
-	}
-	chunk.SetCardinality(chunk.size() + 1);
+	append_string(info, val);
 }
 
 template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
@@ -167,15 +143,12 @@ template <typename T> class DuckDBBaseLoader : public CBaseLoader<T> {
 	tpce_append_information info;
 
   public:
-	DuckDBBaseLoader(TableCatalogEntry *table, ClientContext *context) {
-		info.table = table;
-		info.context = context;
+	DuckDBBaseLoader(Connection &con, string schema, string table) :
+		info(con, schema, table) {
 	}
 
 	void FinishLoad() {
-		// append the remainder
-		info.table->storage->Append(*info.table, *info.context, info.chunk);
-		info.chunk.Reset();
+
 	}
 };
 
@@ -233,17 +206,14 @@ for table in tables.keys():
 	source.write("""
 class DuckDB${TABLENAME}Load : public DuckDBBaseLoader<${ROW_TYPE}> {
 public:
-	DuckDB${TABLENAME}Load(TableCatalogEntry *table, ClientContext *context) :
-		DuckDBBaseLoader(table, context) {
+	DuckDB${TABLENAME}Load(Connection &con, string schema, string table) :
+		DuckDBBaseLoader(con, schema, table) {
 
 	}
 
 	void WriteNextRecord(const ${ROW_TYPE} &next_record) {
-		auto &chunk = info.chunk;
-		append_to_append_info(info);
-		size_t index = chunk.size() - 1;
-		size_t column = 0;""".replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW'));
-	source.write("\n\n")
+		info.appender.BeginRow();""".replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW'));
+	source.write("\n")
 	collist = tables[table]
 	for i in range(len(collist)):
 		entry = collist[i]
@@ -267,10 +237,11 @@ public:
 		else:
 			print("Unknown type " + tpe)
 			exit(1)
-		source.write("\t\tappend_%s(chunk, index, column, next_record.%s);" % (funcname, name))
+		source.write("\t\tappend_%s(info, next_record.%s);" % (funcname, name))
 		if i != len(collist) - 1:
 			source.write("\n")
 	source.write("""
+		info.appender.EndRow();
 	}
 
 };""")
@@ -280,9 +251,7 @@ for table in tables.keys():
 	source.write("""
 CBaseLoader<${ROW_TYPE}> *
 DuckDBLoaderFactory::Create${TABLENAME}Loader() {
-	auto table = Catalog::GetCatalog(*context).GetEntry<TableCatalogEntry>(*context,
-	                                          schema, "${TABLEINDB}" + suffix);
-	return new DuckDB${TABLENAME}Load(table, context);
+	return new DuckDB${TABLENAME}Load(con, schema, "${TABLEINDB}" + suffix);
 }
 """.replace("${TABLENAME}", get_tablename(table)).replace("${ROW_TYPE}", table.upper().replace(' ', '_') + '_ROW').replace("${TABLEINDB}", table.replace(' ', '_')))
 

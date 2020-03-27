@@ -29,6 +29,7 @@ unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSQLStatement &
 	case StatementType::ALTER:
 	case StatementType::TRANSACTION:
 	case StatementType::PRAGMA:
+	case StatementType::VACUUM:
 		return CreatePlan((BoundSimpleStatement &)statement);
 	case StatementType::EXECUTE:
 		return CreatePlan((BoundExecuteStatement &)statement);

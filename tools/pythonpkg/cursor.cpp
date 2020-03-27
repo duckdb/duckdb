@@ -27,6 +27,9 @@ static int duckdb_cursor_init(duckdb_Cursor *self, PyObject *args, PyObject *kwa
 	self->reset = 0;
 	self->rowcount = -1L;
 
+	Py_INCREF(Py_None);
+    Py_XSETREF(self->description, Py_None);
+
 	self->initialized = 1;
 
 	return 0;
@@ -37,6 +40,7 @@ static void duckdb_cursor_dealloc(duckdb_Cursor *self) {
 	duckdb_cursor_close(self, NULL);
 
 	Py_XDECREF(self->connection);
+	Py_XDECREF(self->description);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -221,7 +225,10 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 	PyObject *parameters = NULL;
 	PyObject *second_argument = NULL;
 
-	bool need_transaction;
+	int numcols;
+	PyObject* descriptor;
+
+	bool need_transaction = false;
 
 	std::vector<duckdb::Value> params;
 	std::unique_ptr<duckdb::PreparedStatement> prep;
@@ -285,6 +292,10 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 			goto error;
 		}
 	}
+
+	/* reset description and rowcount */
+    Py_INCREF(Py_None);
+    Py_SETREF(self->description, Py_None);
 	self->rowcount = 0L;
 	self->reset = 0;
 
@@ -324,6 +335,29 @@ static PyObject *_duckdb_query_execute(duckdb_Cursor *self, int multiple, PyObje
 		self->result = std::unique_ptr<duckdb::MaterializedQueryResult>(
 		    static_cast<duckdb::MaterializedQueryResult *>(res.release()));
 		Py_XDECREF(parameters);
+
+		numcols = self->result->collection.column_count();;
+		if (self->description == Py_None && numcols > 0) {
+            Py_SETREF(self->description, PyTuple_New(numcols));
+            if (!self->description) {
+                goto error;
+            }
+            for (int i = 0; i < numcols; i++) {
+                descriptor = PyTuple_New(7);
+                if (!descriptor) {
+                    goto error;
+                }
+                PyTuple_SetItem(descriptor, 0, PyUnicode_FromString(self->result->names[i].c_str()));
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 1, Py_None);
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 2, Py_None);
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 3, Py_None);
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 4, Py_None);
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 5, Py_None);
+                Py_INCREF(Py_None); PyTuple_SetItem(descriptor, 6, Py_None);
+                PyTuple_SetItem(self->description, i, descriptor);
+            }
+        }
+
 		self->rowcount = self->result->collection.count;
 		self->closed = 0;
 		self->offset = 0;
@@ -479,26 +513,27 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 		if (chunk->size() == 0)
 			break;
 		for (size_t col_idx = 0; col_idx < ncol; col_idx++) {
-
 			auto duckdb_type = result->types[col_idx];
 			auto duckdb_type_size = duckdb::GetTypeIdSize(duckdb_type);
 
 			char *array_data = (char *)PyArray_DATA((PyArrayObject *)cols[col_idx].array);
 			bool *mask_data = (bool *)PyArray_DATA((PyArrayObject *)cols[col_idx].nullmask);
+			auto &nullmask = duckdb::FlatVector::Nullmask(chunk->data[col_idx]);
 
 			// collect null mask into numpy array for masked arrays
 			for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
-				mask_data[chunk_idx + offset] = chunk->data[col_idx].nullmask[chunk_idx];
+				mask_data[chunk_idx + offset] = nullmask[chunk_idx];
 				cols[col_idx].found_nil = cols[col_idx].found_nil || mask_data[chunk_idx + offset];
 			}
 
 			switch (duckdb_type) {
-			case duckdb::TypeId::VARCHAR:
+			case duckdb::TypeId::VARCHAR: {
+				auto str_data = duckdb::FlatVector::GetData<duckdb::string_t>(chunk->data[col_idx]);
 				for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 					assert(!chunk->data[col_idx].sel_vector);
 					PyObject *str_obj;
 					if (!mask_data[chunk_idx + offset]) {
-						str_obj = PyUnicode_FromString(((duckdb::string_t*)chunk->data[col_idx].GetData())[chunk_idx].GetData());
+						str_obj = PyUnicode_FromString(str_data[chunk_idx].GetData());
 					} else {
 						assert(cols[col_idx].found_nil);
 						str_obj = Py_None;
@@ -507,10 +542,11 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 					((PyObject **)array_data)[offset + chunk_idx] = str_obj;
 				}
 				break;
+			}
 			case duckdb::TypeId::INT64:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::TIMESTAMP) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * duckdb_type_size));
-					duckdb::timestamp_t *chunk_data_ptr = reinterpret_cast<int64_t *>(chunk->data[col_idx].GetData());
+					duckdb::timestamp_t *chunk_data_ptr = duckdb::FlatVector::GetData<duckdb::timestamp_t>(chunk->data[col_idx]);
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 						auto timestamp = chunk_data_ptr[chunk_idx];
@@ -522,18 +558,18 @@ PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self) {
 			case duckdb::TypeId::INT32:
 				if (result->sql_types[col_idx].id == duckdb::SQLTypeId::DATE) {
 					int64_t *array_data_ptr = reinterpret_cast<int64_t *>(array_data + (offset * 2 * duckdb_type_size));
-					duckdb::date_t *chunk_data_ptr = reinterpret_cast<int32_t *>(chunk->data[col_idx].GetData());
+					duckdb::date_t *chunk_data_ptr = duckdb::FlatVector::GetData<duckdb::date_t>(chunk->data[col_idx]);
 					for (size_t chunk_idx = 0; chunk_idx < chunk->size(); chunk_idx++) {
 						// array_data_ptr[chunk_idx] = duckdb::Timestamp::GetEpoch(chunk_data_ptr[chunk_idx]) * 1000;
 						auto date = chunk_data_ptr[chunk_idx];
 						array_data_ptr[chunk_idx] = duckdb::Date::Epoch(date);
 					}
 					break;
-				}    // else fall-through-to-default	
+				}    // else fall-through-to-default
 			default: // direct mapping types
 				// TODO need to assert the types
 				assert(duckdb::TypeIsConstantSize(duckdb_type));
-				memcpy(array_data + (offset * duckdb_type_size), chunk->data[col_idx].GetData(),
+				memcpy(array_data + (offset * duckdb_type_size), duckdb::FlatVector::GetData(chunk->data[col_idx]),
 				       duckdb_type_size * chunk->size());
 			}
 		}
@@ -737,6 +773,7 @@ static struct PyMemberDef cursor_members[] = {
     {"connection", T_OBJECT, offsetof(duckdb_Cursor, connection), READONLY},
     //    {"lastrowid", T_OBJECT, offsetof(pysqlite_Cursor, lastrowid), READONLY},
     {"rowcount", T_LONG, offsetof(duckdb_Cursor, rowcount), READONLY},
+	{"description", T_OBJECT, offsetof(duckdb_Cursor, description), READONLY},
     {NULL}};
 
 static const char cursor_doc[] = PyDoc_STR("DuckDB database cursor class.");

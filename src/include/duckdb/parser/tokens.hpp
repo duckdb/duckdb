@@ -28,6 +28,7 @@ class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
 class ExplainStatement;
+class VacuumStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node

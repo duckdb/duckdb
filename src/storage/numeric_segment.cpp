@@ -58,9 +58,13 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
+	auto source_nullmask = (nullmask_t *)(data + offset);
+	auto source_data = data + offset + sizeof(nullmask_t);
+
 	// fetch the nullmask and copy the data from the base table
-	result.nullmask = *((nullmask_t *)(data + offset));
-	memcpy(result.GetData(), data + offset + sizeof(nullmask_t), count * type_size);
+	result.vector_type = VectorType::FLAT_VECTOR;
+	FlatVector::SetNullmask(result, *source_nullmask);
+	memcpy(FlatVector::GetData(result), source_data, count * type_size);
 }
 
 void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
@@ -86,8 +90,8 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 	auto &nullmask = *((nullmask_t *)(data));
 	auto vector_ptr = data + sizeof(nullmask_t);
 
-	result.nullmask[result_idx] = nullmask[id_in_vector];
-	memcpy(result.GetData() + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
+	FlatVector::SetNull(result, result_idx, nullmask[id_in_vector]);
+	memcpy(FlatVector::GetData(result) + result_idx * type_size, vector_ptr + id_in_vector * type_size, type_size);
 	if (versions && versions[vector_index]) {
 		// version information: follow the version chain to find out if we need to load this tuple data from any other
 		// version
@@ -127,19 +131,19 @@ idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offse
 // Update
 //===--------------------------------------------------------------------===//
 void NumericSegment::Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
-                            row_t *ids, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
+                            row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) {
 	if (!node) {
 		auto handle = manager.Pin(block_id);
 
 		// create a new node in the undo buffer for this update
-		node = CreateUpdateInfo(column_data, transaction, ids, update.size(), vector_index, vector_offset, type_size);
+		node = CreateUpdateInfo(column_data, transaction, ids, count, vector_index, vector_offset, type_size);
 		// now move the original data into the UpdateInfo
 		update_function(stats, node, handle->node->buffer + vector_index * vector_size, update);
 	} else {
 		// node already exists for this transaction, we need to merge the new updates with the existing updates
 		auto handle = manager.Pin(block_id);
 
-		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids,
+		merge_update_function(stats, node, handle->node->buffer + vector_index * vector_size, update, ids, count,
 		                      vector_offset);
 	}
 }
@@ -168,50 +172,37 @@ template <class T> static void update_min_max(T value, T *__restrict min, T *__r
 }
 
 template <class T>
-static void append_loop_null(T *__restrict source, nullmask_t &result_nullmask, T *__restrict target,
-                             idx_t target_offset, idx_t offset, idx_t count, sel_t *__restrict sel_vector,
-                             nullmask_t &nullmask, T *__restrict min, T *__restrict max, bool &has_null) {
-	// null values, have to check the NULL values in the mask
-	VectorOperations::Exec(
-	    sel_vector, count + offset,
-	    [&](idx_t i, idx_t k) {
-		    if (nullmask[i]) {
-			    result_nullmask[k - offset + target_offset] = true;
-			    has_null = true;
-		    } else {
-			    update_min_max(source[i], min, max);
-			    target[k - offset + target_offset] = source[i];
-		    }
-	    },
-	    offset);
-}
-
-template <class T>
-static void append_loop_no_null(T *__restrict source, T *__restrict target, idx_t target_offset, idx_t offset,
-                                idx_t count, sel_t *__restrict sel_vector, T *__restrict min, T *__restrict max) {
-	VectorOperations::Exec(
-	    sel_vector, count + offset,
-	    [&](idx_t i, idx_t k) {
-		    update_min_max(source[i], min, max);
-		    target[k - offset + target_offset] = source[i];
-	    },
-	    offset);
-}
-
-template <class T>
 static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, Vector &source, idx_t offset,
                         idx_t count) {
-	assert(offset + count <= source.size());
-	auto ldata = (T *)source.GetData();
-	auto result_data = (T *)(target + sizeof(nullmask_t));
-	auto nullmask = (nullmask_t *)target;
+	auto &nullmask = *((nullmask_t *)target);
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
-	if (source.nullmask.any()) {
-		append_loop_null<T>(ldata, *nullmask, result_data, target_offset, offset, count, source.sel_vector(),
-		                    source.nullmask, min, max, stats.has_null);
+
+	VectorData adata;
+	source.Orrify(count, adata);
+
+	auto sdata = (T *)adata.data;
+	auto tdata = (T *)(target + sizeof(nullmask_t));
+	if (adata.nullmask->any()) {
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = adata.sel->get_index(offset + i);
+			auto target_idx = target_offset + i;
+			bool is_null = (*adata.nullmask)[source_idx];
+			if (is_null) {
+				nullmask[target_idx] = true;
+				stats.has_null = true;
+			} else {
+				update_min_max(sdata[source_idx], min, max);
+				tdata[target_idx] = sdata[source_idx];
+			}
+		}
 	} else {
-		append_loop_no_null<T>(ldata, result_data, target_offset, offset, count, source.sel_vector(), min, max);
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = adata.sel->get_index(offset + i);
+			auto target_idx = target_offset + i;
+			update_min_max(sdata[source_idx], min, max);
+			tdata[target_idx] = sdata[source_idx];
+		}
 	}
 }
 
@@ -269,15 +260,16 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 
 template <class T>
 static void update_loop(SegmentStatistics &stats, UpdateInfo *info, data_ptr_t base, Vector &update) {
-	auto update_data = (T *)update.GetData();
+	auto update_data = FlatVector::GetData<T>(update);
+	auto &update_nullmask = FlatVector::Nullmask(update);
 	auto nullmask = (nullmask_t *)base;
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto undo_data = (T *)info->tuple_data;
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 
-	if (update.nullmask.any() || nullmask->any()) {
-		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update.nullmask, info->N,
+	if (update_nullmask.any() || nullmask->any()) {
+		update_loop_null(undo_data, base_data, update_data, info->nullmask, *nullmask, update_nullmask, info->N,
 		                 info->tuples, min, max);
 	} else {
 		update_loop_no_null(undo_data, base_data, update_data, info->N, info->tuples, min, max);
@@ -309,11 +301,12 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 //===--------------------------------------------------------------------===//
 template <class T>
 static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t base, Vector &update, row_t *ids,
-                              idx_t vector_offset) {
+                              idx_t count, idx_t vector_offset) {
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (T *)(base + sizeof(nullmask_t));
 	auto info_data = (T *)node->tuple_data;
-	auto update_data = (T *)update.GetData();
+	auto update_data = FlatVector::GetData<T>(update);
+	auto &update_nullmask = FlatVector::Nullmask(update);
 
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];
@@ -326,7 +319,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto merge = [&](idx_t id, idx_t aidx, idx_t bidx, idx_t count) {
 		// new_id and old_id are the same:
 		// insert the new data into the base table
-		base_nullmask[id] = update.nullmask[aidx];
+		base_nullmask[id] = update_nullmask[aidx];
 		base_data[id] = update_data[aidx];
 		// insert the old data in the UpdateInfo
 		info_data[count] = old_data[bidx];
@@ -339,7 +332,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 		node->nullmask[id] = base_nullmask[id];
 
 		// and insert the update info into the base table
-		base_nullmask[id] = update.nullmask[aidx];
+		base_nullmask[id] = update_nullmask[aidx];
 		base_data[id] = update_data[aidx];
 
 		node->tuples[count] = id;
@@ -350,7 +343,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 		node->tuples[count] = id;
 	};
 	// perform the merge
-	node->N = merge_loop(ids, old_ids, update.size(), node->N, vector_offset, merge, pick_new, pick_old);
+	node->N = merge_loop(ids, old_ids, count, node->N, vector_offset, merge, pick_new, pick_old);
 }
 
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type) {
@@ -376,12 +369,13 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 // Update Fetch
 //===--------------------------------------------------------------------===//
 template <class T> static void update_info_fetch(Transaction &transaction, UpdateInfo *info, Vector &result) {
-	auto result_data = (T *)result.GetData();
+	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		for (idx_t i = 0; i < current->N; i++) {
 			result_data[current->tuples[i]] = info_data[i];
-			result.nullmask[current->tuples[i]] = current->nullmask[current->tuples[i]];
+			result_mask[current->tuples[i]] = current->nullmask[current->tuples[i]];
 		}
 	});
 }
@@ -412,7 +406,8 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 template <class T>
 static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t row_id, Vector &result,
                                idx_t result_idx) {
-	auto result_data = (T *)result.GetData();
+	auto result_data = FlatVector::GetData<T>(result);
+	auto &result_mask = FlatVector::Nullmask(result);
 	UpdateInfo::UpdatesForTransaction(info, transaction, [&](UpdateInfo *current) {
 		auto info_data = (T *)current->tuple_data;
 		// loop over the tuples in this UpdateInfo
@@ -420,7 +415,7 @@ static void update_info_append(Transaction &transaction, UpdateInfo *info, idx_t
 			if (current->tuples[i] == row_id) {
 				// found the relevant tuple
 				result_data[result_idx] = info_data[i];
-				result.nullmask[result_idx] = current->nullmask[current->tuples[i]];
+				result_mask[result_idx] = current->nullmask[current->tuples[i]];
 				break;
 			} else if (current->tuples[i] > row_id) {
 				// tuples are sorted: so if the current tuple is > row_id we will not find it anymore
