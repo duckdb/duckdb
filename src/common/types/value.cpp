@@ -558,14 +558,6 @@ Value Value::Deserialize(Deserializer &source) {
 	return new_value;
 }
 
-bool Value::IsUTF8String(const char *s) {
-	return Utf8Proc::IsValid(s);
-}
-
-bool Value::IsUTF8String(string_t s) {
-	return Utf8Proc::IsValid(s.GetData(), s.GetSize());
-}
-
 void Value::Print() {
 	Printer::Print(ToString());
 }

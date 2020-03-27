@@ -1,30 +1,26 @@
 #pragma once
 
 #include <string>
+#include <cassert>
 
 namespace duckdb {
+
+enum class UnicodeType {INVALID, ASCII, UNICODE};
+
+
 class Utf8Proc {
 public:
 
-	static bool IsValid(std::string s) {
-		return IsValid(s.c_str());
+	static UnicodeType Analyze(const char* s) {
+		return Analyze(s, std::strlen(s));
 	}
 
-	static bool IsValid(const char* s) {
-		assert(s);
-		return IsValid(s, strlen(s));
-	}
-	static bool IsValid(const char* s, size_t len);
-
-	static bool IsAscii(std::string s) {
-		return IsAscii(s.c_str());
+	static UnicodeType Analyze(std::string s) {
+		return Analyze(s.c_str(), s.size());
 	}
 
-	static bool IsAscii(const char* s) {
-		assert(s);
-		return IsAscii(s, strlen(s));
-	}
-	static bool IsAscii(const char* s, size_t len);
+	static UnicodeType Analyze(const char *s, size_t len);
+
 
 	static std::string Normalize(std::string s);
 

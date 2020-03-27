@@ -4,34 +4,31 @@
 using namespace duckdb;
 using namespace std;
 
-
-bool Utf8Proc::IsValid(const char* s, size_t len) {
-	assert(s);
-
-	auto string_position_ptr = (const utf8proc_uint8_t* ) s;
-	utf8proc_ssize_t codepoint_len;
-	utf8proc_int32_t codepoint;
-
-	while ((codepoint_len = utf8proc_iterate(string_position_ptr, len, &codepoint)) > 0) {
-		string_position_ptr += codepoint_len;
-		len -= codepoint_len;
-		if (!utf8proc_codepoint_valid(codepoint)) {
-			return false;
-		}
-	  }
-	return len == 0;
-};
-
-
-bool Utf8Proc::IsAscii(const char* s, size_t len) {
-	assert(s);
+UnicodeType Utf8Proc::Analyze(const char *s, size_t len) {
+	UnicodeType type = UnicodeType::ASCII;
+	char c;
 	for (size_t i = 0; i < len; i++) {
-		if (s[i] < 32 || s[i] > 126) {
-			return false;
-		}
+		c = s[i];
+		if ((c & 0x80) == 0)
+			continue;
+		type = UnicodeType::UNICODE;
+		if ((s[++i] & 0xC0) != 0x80)
+			return UnicodeType::INVALID;
+		if ((c & 0xE0) == 0xC0)
+			continue;
+		if ((s[++i] & 0xC0) != 0x80)
+			return UnicodeType::INVALID;
+		if ((c & 0xF0) == 0xE0)
+			continue;
+		if ((s[++i] & 0xC0) != 0x80)
+			return UnicodeType::INVALID;
+		if ((c & 0xF8) == 0xF0)
+			continue;
+		return UnicodeType::INVALID;
 	}
-	return true;
-};
+
+	return type;
+}
 
 
 std::string Utf8Proc::Normalize(std::string s) {
@@ -39,24 +36,28 @@ std::string Utf8Proc::Normalize(std::string s) {
 	auto res = std::string(normalized);
 	free(normalized);
 	return res;
-};
+}
+;
 
-char* Utf8Proc::Normalize(const char* s) {
+char* Utf8Proc::Normalize(const char *s) {
 	assert(s);
-	assert(Utf8Proc::IsValid(s));
-	return (char*) utf8proc_NFC((const utf8proc_uint8_t* )s);
-};
+	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
+	return (char*) utf8proc_NFC((const utf8proc_uint8_t*) s);
+}
+;
 
-char* Utf8Proc::Upper(const char* s, size_t len) {
+char* Utf8Proc::Upper(const char *s, size_t len) {
 	assert(s);
-	assert(Utf8Proc::IsValid(s));
+	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
 	return (char*) s;
 //	return (char*) utf8proc_tolower((const utf8proc_uint8_t* )s);
-};
+}
+;
 
-char* Utf8Proc::Lower(const char* s, size_t len) {
+char* Utf8Proc::Lower(const char *s, size_t len) {
 	assert(s);
-	assert(Utf8Proc::IsValid(s));
+	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
 	return (char*) s;
 //	return (char*) utf8proc_tolower((const utf8proc_uint8_t* )s);
-};
+}
+;

@@ -47,14 +47,16 @@ public:
 	Value(string_t val);
 	//! Create a VARCHAR value
 	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-		if (Utf8Proc::IsAscii(val)) {
+		auto utf_type = Utf8Proc::Analyze(val);
+		switch (utf_type) {
+		case UnicodeType::INVALID:
+			throw Exception("String value is not valid UTF8");
+		case UnicodeType::ASCII:
 			str_value = val;
-		} else {
-			if (Utf8Proc::IsValid(val)) {
-				str_value = Utf8Proc::Normalize(val);
-			} else {
-				throw Exception("String value is not valid UTF8");
-			}
+			break;
+		case UnicodeType::UNICODE:
+			str_value = Utf8Proc::Normalize(val);
+			break;
 		}
 	}
 
@@ -99,7 +101,6 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
-
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");

@@ -75,7 +75,8 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
 			// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
 			// in this case we don't push a range filter
-			if (range_success && (!Value::IsUTF8String(range_min.c_str()) || !Value::IsUTF8String(range_max.c_str()))) {
+			if (range_success && (Utf8Proc::Analyze(range_min) == UnicodeType::INVALID ||
+			                      Utf8Proc::Analyze(range_max) == UnicodeType::INVALID)) {
 				range_success = false;
 			}
 
