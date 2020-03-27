@@ -32,7 +32,7 @@ public:
 
 	static char* Upper(const char* s) {
 		assert(s);
-		return Upper(s, strlen(s));
+		return Upper(s, std::strlen(s));
 	}
 
 	static char* Upper(const char* s, size_t len);
@@ -43,7 +43,7 @@ public:
 
 	static char* Lower(const char* s) {
 		assert(s);
-		return Lower(s, strlen(s));
+		return Lower(s, std::strlen(s));
 	}
 
 	static char* Lower(const char* s, size_t len);
