@@ -339,6 +339,72 @@ string BenchmarkInfo() override {
 FINISH_BENCHMARK(StringPrefixPointer555)
 //-----------------------------------------------------------------------------
 
+//----------------------- PREFIX6 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix666, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix6(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX666 early out";
+}
+FINISH_BENCHMARK(StringPrefix666)
+
+DUCKDB_BENCHMARK(StringPrefixInlined666, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix6(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX666 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined666)
+
+DUCKDB_BENCHMARK(StringPrefixPointer666, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix6(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX666 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer666)
+//-----------------------------------------------------------------------------
+
+//----------------------- PREFIX6 benchmark ----------------------------------//
+DUCKDB_BENCHMARK(StringPrefix777, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+    return "SELECT prefix7(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX777 early out";
+}
+FINISH_BENCHMARK(StringPrefix777)
+
+DUCKDB_BENCHMARK(StringPrefixInlined777, "[string]")
+STRING_DATA_GEN_BODY(12)
+string GetQuery() override {
+    return "SELECT prefix7(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX777 inlined";
+}
+FINISH_BENCHMARK(StringPrefixInlined777)
+
+DUCKDB_BENCHMARK(StringPrefixPointer777, "[string]")
+STRING_DATA_GEN_BODY(20)
+string GetQuery() override {
+    return "SELECT prefix7(s1, 'a') FROM strings";
+}
+string BenchmarkInfo() override {
+    return "STRING PREFIX777 store pointer";
+}
+FINISH_BENCHMARK(StringPrefixPointer777)
+//-----------------------------------------------------------------------------
+
+
+
 //----------------------- PREFIX REGEX benchmark ----------------------------------//
 DUCKDB_BENCHMARK(StringPrefixRegEX, "[string]")
 STRING_DATA_GEN_BODY(4)

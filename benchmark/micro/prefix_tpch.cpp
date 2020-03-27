@@ -299,6 +299,123 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(PrefixLineitemPointer555)
 
+//----------------------------- PREFIX6 ----------------------------------------
+DUCKDB_BENCHMARK(PrefixLineitem666, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix6(l_shipinstruct, 'NONE')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix early out LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitem666)
+
+DUCKDB_BENCHMARK(PrefixLineitemInlined666, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix6(l_shipinstruct, 'COLLECT')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemInlined666)
+
+DUCKDB_BENCHMARK(PrefixLineitemPointer666, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix6(l_shipinstruct, 'DELIVER IN PERS')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemPointer666)
+
+
+//----------------------------- PREFIX7 ----------------------------------------
+DUCKDB_BENCHMARK(PrefixLineitem777, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix7(l_shipinstruct, 'NONE')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix early out LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitem777)
+
+DUCKDB_BENCHMARK(PrefixLineitemInlined777, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix7(l_shipinstruct, 'COLLECT')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemInlined777)
+
+DUCKDB_BENCHMARK(PrefixLineitemPointer777, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix7(l_shipinstruct, 'DELIVER IN PERS')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemPointer777)
+
 //-------------------------------- LIKE ---------------------------------------
 DUCKDB_BENCHMARK(PrefixLineitemLike, "[prefix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
