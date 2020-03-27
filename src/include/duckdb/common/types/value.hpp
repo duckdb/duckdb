@@ -47,10 +47,14 @@ public:
 	Value(string_t val);
 	//! Create a VARCHAR value
 	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-		if (IsUTF8String(val.c_str())) {
-			str_value = Utf8Proc::Normalize(val);
+		if (Utf8Proc::IsAscii(val)) {
+			str_value = val;
 		} else {
-			throw Exception("String value is not valid UTF8");
+			if (Utf8Proc::IsValid(val)) {
+				str_value = Utf8Proc::Normalize(val);
+			} else {
+				throw Exception("String value is not valid UTF8");
+			}
 		}
 	}
 

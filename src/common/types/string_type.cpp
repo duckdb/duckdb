@@ -7,12 +7,17 @@ void string_t::Verify() {
 	auto dataptr = GetData();
 	(void) dataptr;
 	assert(dataptr);
-	// check the data is a valid UTF8 string
-	assert(Value::IsUTF8String(*this));
-	// check that the data is a valid NFC UTF8 string
-	auto normalized = Utf8Proc::Normalize(dataptr);
-	assert(strcmp(dataptr, normalized) == 0);
-	free(normalized);
+	if (!Utf8Proc::IsAscii(dataptr, length)) {
+		// check the data is a valid UTF8 string
+		assert(Utf8Proc::IsValid(dataptr, length));
+#ifdef DEBUG
+		// check that the data is a valid NFC UTF8 string
+		auto normalized = Utf8Proc::Normalize(dataptr);
+		assert(strcmp(dataptr, normalized) == 0);
+		free(normalized);
+#endif
+
+	}
 	// verify that the string is null-terminated and that the length is correct
 	assert(strlen(dataptr) == length);
 	// verify that the prefix contains the first four characters of the string

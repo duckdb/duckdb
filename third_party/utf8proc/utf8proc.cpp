@@ -22,6 +22,18 @@ bool Utf8Proc::IsValid(const char* s, size_t len) {
 	return len == 0;
 };
 
+
+bool Utf8Proc::IsAscii(const char* s, size_t len) {
+	assert(s);
+	for (size_t i = 0; i < len; i++) {
+		if (s[i] < 32 || s[i] > 126) {
+			return false;
+		}
+	}
+	return true;
+};
+
+
 char* Utf8Proc::Normalize(const char* s) {
 	assert(s);
 	assert(Utf8Proc::IsValid(s));

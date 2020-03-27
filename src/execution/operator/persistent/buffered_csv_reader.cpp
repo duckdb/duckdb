@@ -573,11 +573,6 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
-			Vector nfc_strings;
-			nfc_strings.vector_type = VectorType::FLAT_VECTOR;
-			nfc_strings.Initialize(TypeId::VARCHAR);
-			FlatVector::SetNullmask(nfc_strings, FlatVector::Nullmask(parse_chunk.data[col_idx]));
-			auto nfc_data = FlatVector::GetData<string_t>(nfc_strings);
 
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
@@ -586,11 +581,11 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
 					auto s = parse_data[i];
 					if (Utf8Proc::IsAscii(s.GetData(), s.GetSize())) {
-						nfc_data[i] = StringVector::AddString(nfc_strings, s);
+						// do nothing
 					} else {
 						if (Utf8Proc::IsValid(s.GetData(), s.GetSize())) {
 							auto normie = Utf8Proc::Normalize(s.GetData());
-							nfc_data[i] = StringVector::AddString(nfc_strings, normie);
+							parse_data[i] = StringVector::AddString(parse_chunk.data[col_idx], normie);
 							free(normie);
 						} else {
 							throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
@@ -598,6 +593,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
+
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			// target type is not varchar: perform a cast
