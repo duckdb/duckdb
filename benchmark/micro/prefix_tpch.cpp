@@ -416,6 +416,66 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(PrefixLineitemPointer777)
 
+
+
+//----------------------------- PREFIX8 ----------------------------------------
+DUCKDB_BENCHMARK(PrefixLineitem888, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix8(l_shipinstruct, 'NONE')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix early out LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitem888)
+
+DUCKDB_BENCHMARK(PrefixLineitemInlined888, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix8(l_shipinstruct, 'COLLECT')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemInlined888)
+
+DUCKDB_BENCHMARK(PrefixLineitemPointer888, "[prefix_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override {
+    return "SELECT l_shipinstruct FROM lineitem WHERE prefix8(l_shipinstruct, 'DELIVER IN PERS')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Prefix inlined LineItem";
+}
+FINISH_BENCHMARK(PrefixLineitemPointer888)
+
 //-------------------------------- LIKE ---------------------------------------
 DUCKDB_BENCHMARK(PrefixLineitemLike, "[prefix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
