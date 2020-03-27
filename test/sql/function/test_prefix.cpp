@@ -62,12 +62,12 @@ TEST_CASE("Prefix test", "[function]") {
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
     }
 
-    SECTION("NULL string and prefix") {
+    SECTION("Empty string and prefix") {
         result = con.Query("SELECT prefix('', 'aaa')");
         REQUIRE(CHECK_COLUMN(result, 0, {false}));
 
         result = con.Query("SELECT prefix('aaa', '')");
-        REQUIRE(CHECK_COLUMN(result, 0, {false}));
+        REQUIRE(CHECK_COLUMN(result, 0, {true}));
     }
 
     SECTION("Prefix test with UTF8") {
@@ -116,55 +116,6 @@ TEST_CASE("Prefix test", "[function]") {
         result = con.Query("SELECT prefix(" + str_utf8 + ", 'two ñ three \xE2\x82\xA1 four \xF0\x9F\xA6\x86 end')");
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
         result = con.Query("SELECT prefix(" + str_utf8 + ", 'two ñ three ₡ four 🦆 end')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-    }
-
-    SECTION("Prefix2 test with UTF8") {
-        // átomo (atom)
-        result = con.Query("SELECT prefix2('\xc3\xa1tomo', '\xc3\xa1')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix('\xc3\xa1tomo', 'á')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('\xc3\xa1tomo', 'a')");
-        REQUIRE(CHECK_COLUMN(result, 0, {false}));
-
-        //olá mundo (hello world)
-        result = con.Query("SELECT prefix2('ol\xc3\xa1 mundo', 'ol\xc3\xa1')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('ol\xc3\xa1 mundo', 'olá')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('ol\xc3\xa1 mundo', 'ola')");
-        REQUIRE(CHECK_COLUMN(result, 0, {false}));
-
-        //ñeft
-        result = con.Query("SELECT prefix2('\xc3\xb1\x65\x66\x74', '\xc3\xb1')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('\xc3\xb1\x65\x66\x74', 'ñ')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('\xc3\xb1\x65\x66\x74', 'ñeft')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2('\xc3\xb1\x65\x66\x74', 'neft')");
-        REQUIRE(CHECK_COLUMN(result, 0, {false}));
-
-        // two ñ three ₡ four 🦆 end
-        string str_utf8 = "'two \xc3\xb1 three \xE2\x82\xA1 four \xF0\x9F\xA6\x86 end'";
-
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two \xc3\xb1')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two n')");
-        REQUIRE(CHECK_COLUMN(result, 0, {false}));
-
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ three')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ three \xE2\x82\xA1')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ three \xE2\x82\xA1 four \xF0\x9F\xA6\x86')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ three \xE2\x82\xA1 four \xF0\x9F\xA6\x86 end')");
-        REQUIRE(CHECK_COLUMN(result, 0, {true}));
-        result = con.Query("SELECT prefix2(" + str_utf8 + ", 'two ñ three ₡ four 🦆 end')");
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
     }
 }
