@@ -34,6 +34,13 @@ bool Utf8Proc::IsAscii(const char* s, size_t len) {
 };
 
 
+std::string Utf8Proc::Normalize(std::string s) {
+	auto normalized = Normalize(s.c_str());
+	auto res = std::string(normalized);
+	free(normalized);
+	return res;
+};
+
 char* Utf8Proc::Normalize(const char* s) {
 	assert(s);
 	assert(Utf8Proc::IsValid(s));

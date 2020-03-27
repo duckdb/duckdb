@@ -26,10 +26,7 @@ public:
 	}
 	static bool IsAscii(const char* s, size_t len);
 
-
-	static std::string Normalize(std::string s) {
-		return std::string(Normalize(s.c_str()));
-	}
+	static std::string Normalize(std::string s);
 
 	static char* Normalize(const char* s);
 
