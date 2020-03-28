@@ -39,6 +39,9 @@ void SQLiteBenchmark::Cleanup(BenchmarkState *state_) {
 
 string SQLiteBenchmark::Verify(BenchmarkState *state_) {
 	auto state = (SQLiteBenchmarkState *)state_;
+	if (!state->result) {
+		return "No result!";
+	}
 	return duckdb_benchmark->VerifyResult(state->result.get());
 }
 

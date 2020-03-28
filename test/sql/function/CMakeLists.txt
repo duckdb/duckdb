@@ -10,7 +10,8 @@ add_library_unity(
   test_regex.cpp
   test_stringfunctions.cpp
   test_trigo.cpp
-  test_instr.cpp)
+  test_instr.cpp
+  test_prefix.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_function>
     PARENT_SCOPE)

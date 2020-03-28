@@ -2,6 +2,8 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "utf8proc_wrapper.hpp"
+
 #include <cstring>
 
 using namespace duckdb;
@@ -13,11 +15,8 @@ StringHeap::StringHeap() : tail(nullptr) {
 }
 
 string_t StringHeap::AddString(const char *data, idx_t len) {
-#ifdef DEBUG
-	if (!Value::IsUTF8String(data)) {
-		throw Exception("String value is not valid UTF8");
-	}
-#endif
+	assert(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
+
 	auto insert_string = EmptyString(len);
 	auto insert_pos = insert_string.GetData();
 	memcpy(insert_pos, data, len);
