@@ -88,36 +88,6 @@ matrix:
 
 
 
-# old compilers
-
-    - os: linux
-      name: Clang 6
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      dist: xenial
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - clang-6.0
-      env:
-        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
-        - TREAT_WARNINGS_AS_ERRORS=1
-        - DISABLE_UNITY=1
-
-
-    - os: linux
-      name: GCC 4.9
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      addons:
-         apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9 binutils-2.26
-      env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
 
@@ -195,6 +165,38 @@ matrix:
             - ubuntu-toolchain-r-test
       script:
         - python3 scripts/test_vector_sizes.py
+
+
+# old compilers
+
+    - os: linux
+      name: Clang 6
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      dist: xenial
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - clang-6.0
+      env:
+        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
+        - TREAT_WARNINGS_AS_ERRORS=1
+        - DISABLE_UNITY=1
+
+
+    - os: linux
+      name: GCC 4.9
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      addons:
+         apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9 binutils-2.26
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
 
 # amalgamations
 
