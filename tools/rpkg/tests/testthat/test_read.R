@@ -48,7 +48,6 @@ test_that("read_csv_duckdb() works as expected", {
 	write.csv(iris, tf, row.names = FALSE)
 	read_csv_duckdb(con, tf, "iris", lower.case.names=T)
 	res <- dbReadTable(con, "iris")
-	print(res)
 	res$species <- as.factor(res$species)
 	iris_lc <- iris
 	names(iris_lc) <- tolower(names(iris))
