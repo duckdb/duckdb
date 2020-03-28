@@ -11,6 +11,8 @@
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "utf8proc_wrapper.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <queue>
@@ -573,16 +575,29 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
+
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
 			for (idx_t i = 0; i < parse_chunk.size(); i++) {
 				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
-					if (!Value::IsUTF8String(parse_data[i])) {
+					auto s = parse_data[i];
+					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+					switch (utf_type) {
+					case UnicodeType::INVALID:
 						throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+					case UnicodeType::ASCII:
+						break;
+					case UnicodeType::UNICODE: {
+						auto normie = Utf8Proc::Normalize(s.GetData());
+						parse_data[i] = StringVector::AddString(parse_chunk.data[col_idx], normie);
+						free(normie);
+						break;
+					}
 					}
 				}
 			}
+
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			// target type is not varchar: perform a cast
