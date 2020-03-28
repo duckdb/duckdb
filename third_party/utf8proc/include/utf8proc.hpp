@@ -27,26 +27,5 @@ public:
 
 	static char* Normalize(const char* s);
 
-	static std::string Upper(std::string s) {
-		return std::string(Upper(s.c_str(), s.size()));
-	}
-
-	static char* Upper(const char* s) {
-		assert(s);
-		return Upper(s, std::strlen(s));
-	}
-
-	static char* Upper(const char* s, size_t len);
-
-	static std::string Lower(std::string s) {
-		return std::string(Lower(s.c_str(), s.size()));
-	}
-
-	static char* Lower(const char* s) {
-		assert(s);
-		return Lower(s, std::strlen(s));
-	}
-
-	static char* Lower(const char* s, size_t len);
 };
 }

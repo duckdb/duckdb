@@ -46,18 +46,4 @@ char* Utf8Proc::Normalize(const char *s) {
 }
 ;
 
-char* Utf8Proc::Upper(const char *s, size_t len) {
-	assert(s);
-	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
-	return (char*) s;
-//	return (char*) utf8proc_tolower((const utf8proc_uint8_t* )s);
-}
-;
-
-char* Utf8Proc::Lower(const char *s, size_t len) {
-	assert(s);
-	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
-	return (char*) s;
-//	return (char*) utf8proc_tolower((const utf8proc_uint8_t* )s);
-}
 ;

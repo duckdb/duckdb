@@ -17,10 +17,26 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "utf8proc.hpp"
+
 using namespace duckdb;
 using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+}
+
+Value::Value(string val): type(TypeId::VARCHAR), is_null(false) {
+	auto utf_type = Utf8Proc::Analyze(val);
+	switch (utf_type) {
+	case UnicodeType::INVALID:
+		throw Exception("String value is not valid UTF8");
+	case UnicodeType::ASCII:
+		str_value = val;
+		break;
+	case UnicodeType::UNICODE:
+		str_value = Utf8Proc::Normalize(val);
+		break;
+	}
 }
 
 Value Value::MinimumValue(TypeId type) {

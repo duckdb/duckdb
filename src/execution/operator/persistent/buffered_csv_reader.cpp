@@ -11,6 +11,8 @@
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "utf8proc.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <queue>

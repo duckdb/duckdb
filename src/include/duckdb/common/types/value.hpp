@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-#include "utf8proc.hpp"
 
 #include <iosfwd>
 #include <memory.h>
@@ -46,19 +45,7 @@ public:
 	}
 	Value(string_t val);
 	//! Create a VARCHAR value
-	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-		auto utf_type = Utf8Proc::Analyze(val);
-		switch (utf_type) {
-		case UnicodeType::INVALID:
-			throw Exception("String value is not valid UTF8");
-		case UnicodeType::ASCII:
-			str_value = val;
-			break;
-		case UnicodeType::UNICODE:
-			str_value = Utf8Proc::Normalize(val);
-			break;
-		}
-	}
+	Value(string val);
 
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
