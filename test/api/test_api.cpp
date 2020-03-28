@@ -95,6 +95,19 @@ TEST_CASE("Test closing result after database is gone", "[api]") {
 	streaming_result.reset();
 }
 
+TEST_CASE("Test closing database with open prepared statements", "[api]") {
+	auto db = make_unique<DuckDB>(nullptr);
+	auto conn = make_unique<Connection>(*db);
+
+	auto p1 = conn->Prepare("CREATE TABLE a (i INTEGER)");
+	p1->Execute();
+	auto p2 = conn->Prepare("INSERT INTO a VALUES (42)");
+	p2->Execute();
+
+	db.reset();
+	conn.reset();
+}
+
 static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {

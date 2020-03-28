@@ -114,10 +114,13 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 
 unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sqlite, std::string query,
                                       volatile int &interrupt) {
+	if (!sqlite) {
+		return nullptr;
+	}
 	// prepare the SQL statement
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(sqlite, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-		return nullptr;
+		return make_unique<MaterializedQueryResult>(sqlite3_errmsg(sqlite));
 	}
 	int col_count = sqlite3_column_count(stmt);
 	vector<string> names;
