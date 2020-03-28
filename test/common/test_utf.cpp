@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/appender.hpp"
+#include "test_helpers.hpp"
 
 
 using namespace duckdb;
