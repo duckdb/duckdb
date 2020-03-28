@@ -6,7 +6,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "re2/re2.h"
 

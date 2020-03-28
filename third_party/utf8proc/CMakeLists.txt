@@ -1,7 +1,7 @@
 cmake_policy(SET CMP0063 NEW)
 include_directories(include)
 
-add_library(utf8proc STATIC utf8proc.c utf8proc.cpp)
+add_library(utf8proc STATIC utf8proc.cpp utf8proc_wrapper.cpp)
 
 
 install(TARGETS utf8proc

@@ -1,5 +1,6 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
