@@ -15,6 +15,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<RegexpFun>();
 	Register<SubstringFun>();
 	Register<InstrFun>();
+    Register<PrefixFun>();
 }
 
 } // namespace duckdb
