@@ -1,5 +1,4 @@
 #include "utf8proc.hpp"
-#define UTF8PROC_STATIC
 #include "utf8proc.h"
 
 using namespace duckdb;

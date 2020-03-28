@@ -53,6 +53,9 @@
 #ifndef UTF8PROC_H
 #define UTF8PROC_H
 
+// DuckDB change:
+#define UTF8PROC_STATIC
+
 /** @name API version
  *
  * The utf8proc API version MAJOR.MINOR.PATCH, following
