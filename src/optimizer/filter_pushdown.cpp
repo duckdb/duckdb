@@ -64,7 +64,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 		return FinishPushdown(move(op));
 	}
 }
-FilterResult FilterPushdown::PushFilters(){
+void FilterPushdown::PushFilters(){
     for (auto &f : filters) {
         auto result = combiner.AddFilter(move(f->filter));
         assert(result == FilterResult::SUCCESS);

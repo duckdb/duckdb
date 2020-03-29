@@ -75,7 +75,7 @@ private:
 	//! Generate filters from the current set of filters stored in the FilterCombiner
 	void GenerateFilters();
     //! if there are filters in this FilterPushdown node, push them into the combiner
-    FilterResult PushFilters();
+    void PushFilters();
 
 	FilterCombiner combiner;
 };

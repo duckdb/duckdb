@@ -213,8 +213,8 @@ void FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expr
                                 callback(move(comparison));
                             }
                         }
+                        equivalence_map.erase(filter_exp);
                     }
-                    equivalence_map.erase(filter_exp);
 				}
 			}
 		}

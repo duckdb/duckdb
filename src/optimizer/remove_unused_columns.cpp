@@ -133,6 +133,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		return;
 	}
 	case LogicalOperatorType::GET:
+        LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
 			auto &get = (LogicalGet &)op;
 			// table scan: figure out which columns are referenced
