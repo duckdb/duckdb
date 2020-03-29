@@ -99,6 +99,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::TRANSACTION:
 	case StatementType::EXPLAIN:
 	case StatementType::VACUUM:
+	case StatementType::RELATION:
 		CreatePlan(*statement);
 		break;
 	case StatementType::PRAGMA: {

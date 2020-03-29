@@ -46,6 +46,7 @@ public:
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
+	void AddGenericBinding(idx_t index, const string &alias, const vector<ColumnDefinition> &columns);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.

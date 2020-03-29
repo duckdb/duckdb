@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 struct PGNode;
 struct PGList;
@@ -26,6 +28,11 @@ public:
 	//! successful, the parsed statements will be stored in the statements
 	//! variable.
 	void ParseQuery(string query);
+
+	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
+	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);
+	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
+	static vector<OrderByNode> ParseOrderList(string select_list);
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

@@ -93,6 +93,16 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<str
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
 
+void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<ColumnDefinition> &columns) {
+	vector<string> names;
+	vector<SQLType> types;
+	for(auto &col : columns) {
+		names.push_back(col.name);
+		types.push_back(col.type);
+	}
+	AddGenericBinding(index, alias, move(names), move(types));
+}
+
 void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
 	auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
 

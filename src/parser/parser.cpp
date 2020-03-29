@@ -1,6 +1,8 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "postgres_parser.hpp"
 
 #include "parser/parser.hpp"
@@ -34,4 +36,40 @@ void Parser::ParseQuery(string query) {
 		auto &last_statement = statements.back();
 		last_statement->stmt_length = query.size() - last_statement->stmt_location;
 	}
+}
+
+vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_list) {
+	// construct a mock query prefixed with SELECT
+	string mock_query = "SELECT " + select_list;
+	// parse the query
+	Parser parser;
+	parser.ParseQuery(mock_query);
+	// check the statements
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+		throw ParserException("Expected a single SELECT statement");
+	}
+	auto &select = (SelectStatement&) *parser.statements[0];
+	if (select.node->type != QueryNodeType::SELECT_NODE) {
+		throw ParserException("Expected a single SELECT node");
+	}
+	auto &select_node = (SelectNode&) *select.node;
+	return move(select_node.select_list);
+}
+
+vector<OrderByNode> Parser::ParseOrderList(string select_list) {
+	// construct a mock query prefixed with SELECT
+	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
+	// parse the query
+	Parser parser;
+	parser.ParseQuery(mock_query);
+	// check the statements
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+		throw ParserException("Expected a single SELECT statement");
+	}
+	auto &select = (SelectStatement&) *parser.statements[0];
+	if (select.node->type != QueryNodeType::SELECT_NODE) {
+		throw ParserException("Expected a single SELECT node");
+	}
+	auto &select_node = (SelectNode&) *select.node;
+	return move(select_node.orders);
 }

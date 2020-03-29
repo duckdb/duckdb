@@ -21,6 +21,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/parser/statement/relation_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -150,6 +153,7 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 	execution_context.physical_plan->GetChunk(*this, *chunk, execution_context.physical_state.get());
 	return chunk;
 }
+
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
                                                                          unique_ptr<SQLStatement> statement) {
@@ -606,61 +610,21 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	return "";
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
-	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated || (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated)) {
-		return nullptr;
-	}
-	// check if we are on AutoCommit. In this case we should start a transaction
-	if (transaction.IsAutoCommit()) {
-		transaction.BeginTransaction();
-	}
-	unique_ptr<TableDescription> result;
-	try {
-		// obtain the table info
-		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name);
-		// write the table info to the result
-		result = make_unique<TableDescription>();
-		result->schema = schema_name;
-		result->table = table_name;
-		for (auto &column : table->columns) {
-			result->columns.push_back(ColumnDefinition(column.name, column.type));
-		}
-	} catch (...) {
-		// table not found!
-		result = nullptr;
-	}
-
-	if (transaction.IsAutoCommit()) {
-		transaction.Commit();
-	}
-	return result;
-}
-
-void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+template<class T>
+void ClientContext::RunFunctionInTransaction(T &&fun) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
-		throw Exception("Failed to append: database has been closed!");
+		throw Exception("Failed: database has been closed!");
 	}
 	if (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
-		throw Exception("Failed to append: transaction has been invalidated!");
+		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
 	try {
-		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
-		// verify that the table columns and types match up
-		if (description.columns.size() != table_entry->columns.size()) {
-			throw Exception("Failed to append: table entry has different number of columns!");
-		}
-		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].type != table_entry->columns[i].type) {
-				throw Exception("Failed to append: table entry has different number of columns!");
-			}
-		}
-		table_entry->storage->Append(*table_entry, *this, chunk);
+		fun();
 	} catch (Exception &ex) {
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
@@ -672,4 +636,62 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 	if (transaction.IsAutoCommit()) {
 		transaction.Commit();
 	}
+}
+
+unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
+	unique_ptr<TableDescription> result;
+	RunFunctionInTransaction([&]() {
+		// obtain the table info
+		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name);
+		// write the table info to the result
+		result = make_unique<TableDescription>();
+		result->schema = schema_name;
+		result->table = table_name;
+		for (auto &column : table->columns) {
+			result->columns.push_back(ColumnDefinition(column.name, column.type));
+		}
+	});
+	return result;
+}
+
+
+void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+	RunFunctionInTransaction([&]() {
+		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
+		// verify that the table columns and types match up
+		if (description.columns.size() != table_entry->columns.size()) {
+			throw Exception("Failed to append: table entry has different number of columns!");
+		}
+		for (idx_t i = 0; i < description.columns.size(); i++) {
+			if (description.columns[i].type != table_entry->columns[i].type) {
+				throw Exception("Failed to append: table entry has different number of columns!");
+			}
+		}
+		table_entry->storage->Append(*table_entry, *this, chunk);
+	});
+}
+
+void ClientContext::BindExpressions(const vector<ColumnDefinition> &input_columns, vector<unique_ptr<ParsedExpression>> expressions, vector<ColumnDefinition> &result_columns) {
+	RunFunctionInTransaction([&]() {
+		// bind the expressions
+		Binder binder(*this);
+		// add the input columns to the bind context
+		binder.bind_context.AddGenericBinding(0, "projection", input_columns);
+
+		WhereBinder expression_binder(binder, *this);
+		expression_binder.target_type.id = SQLTypeId::INVALID;
+
+		for(auto &expr : expressions) {
+			SQLType result_type;
+			auto bound_expression = expression_binder.Bind(expr, &result_type);
+			result_columns.push_back(ColumnDefinition(bound_expression->GetName(), result_type));
+		}
+	});
+}
+
+
+unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
+	string query;
+	auto relation_stmt = make_unique<RelationStatement>(relation);
+	return RunStatement(query, move(relation_stmt), false);
 }

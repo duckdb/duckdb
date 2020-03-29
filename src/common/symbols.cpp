@@ -14,6 +14,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/main/relation.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -140,7 +141,8 @@ template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
 template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
-template class std::unique_ptr<Relation>;
+template class std::unique_ptr<JoinRelation>;
+template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
 template class std::unique_ptr<PreparedStatementCatalogEntry>;
 template class std::unique_ptr<Binder>;

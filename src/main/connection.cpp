@@ -4,6 +4,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 
 using namespace duckdb;
@@ -90,4 +91,16 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
 	context->Append(description, chunk);
+}
+
+shared_ptr<Relation> Connection::Table(string table_name) {
+	return Table(DEFAULT_SCHEMA, move(table_name));
+}
+
+shared_ptr<Relation> Connection::Table(string schema_name, string table_name) {
+	auto table_info = TableInfo(schema_name, table_name);
+	if (!table_info) {
+		throw Exception("Table does not exist!");
+	}
+	return make_shared<TableRelation>(*context, move(table_info));
 }

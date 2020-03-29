@@ -37,6 +37,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return Bind((UpdateStatement &)statement);
+	case StatementType::RELATION:
+		return Bind((RelationStatement &)statement);
 	case StatementType::CREATE:
 		return Bind((CreateStatement &)statement);
 	case StatementType::DROP:

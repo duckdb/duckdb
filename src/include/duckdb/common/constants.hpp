@@ -19,9 +19,11 @@ namespace duckdb {
 //! inline std directives that we use frequently
 using std::move;
 using std::string;
+using std::shared_ptr;
 using std::unique_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::vector;
+using std::make_shared;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"

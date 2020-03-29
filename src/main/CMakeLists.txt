@@ -1,3 +1,4 @@
+add_subdirectory(relation)
 add_library_unity(duckdb_main
                   OBJECT
                   appender.cpp
@@ -9,6 +10,7 @@ add_library_unity(duckdb_main
                   materialized_query_result.cpp
                   prepared_statement.cpp
                   prepared_statement_data.cpp
+                  relation.cpp
                   query_profiler.cpp
                   query_result.cpp
                   stream_query_result.cpp)

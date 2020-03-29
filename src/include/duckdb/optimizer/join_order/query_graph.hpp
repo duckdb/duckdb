@@ -11,7 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/optimizer/join_order/relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
 
 #include <functional>
 
@@ -21,9 +21,9 @@ class LogicalOperator;
 
 struct FilterInfo {
 	idx_t filter_index;
-	RelationSet *left_set = nullptr;
-	RelationSet *right_set = nullptr;
-	RelationSet *set = nullptr;
+	JoinRelationSet *left_set = nullptr;
+	JoinRelationSet *right_set = nullptr;
+	JoinRelationSet *set = nullptr;
 };
 
 struct FilterNode {
@@ -32,7 +32,7 @@ struct FilterNode {
 };
 
 struct NeighborInfo {
-	RelationSet *neighbor;
+	JoinRelationSet *neighbor;
 	vector<FilterInfo *> filters;
 };
 
@@ -50,18 +50,18 @@ public:
 	void Print();
 
 	//! Create an edge in the edge_set
-	void CreateEdge(RelationSet *left, RelationSet *right, FilterInfo *info);
+	void CreateEdge(JoinRelationSet *left, JoinRelationSet *right, FilterInfo *info);
 	//! Returns a connection if there is an edge that connects these two sets, or nullptr otherwise
-	NeighborInfo *GetConnection(RelationSet *node, RelationSet *other);
+	NeighborInfo *GetConnection(JoinRelationSet *node, JoinRelationSet *other);
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
-	vector<idx_t> GetNeighbors(RelationSet *node, unordered_set<idx_t> &exclusion_set);
-	//! Enumerate all neighbors of a given RelationSet node
-	void EnumerateNeighbors(RelationSet *node, std::function<bool(NeighborInfo *)> callback);
+	vector<idx_t> GetNeighbors(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
+	//! Enumerate all neighbors of a given JoinRelationSet node
+	void EnumerateNeighbors(JoinRelationSet *node, std::function<bool(NeighborInfo *)> callback);
 
 private:
 	//! Get the QueryEdge of a specific node
-	QueryEdge *GetQueryEdge(RelationSet *left);
+	QueryEdge *GetQueryEdge(JoinRelationSet *left);
 
 	QueryEdge root;
 };

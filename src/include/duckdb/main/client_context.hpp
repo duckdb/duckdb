@@ -24,6 +24,7 @@ class Appender;
 class Catalog;
 class DuckDB;
 class PreparedStatementData;
+class Relation;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -86,6 +87,11 @@ public:
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	void Append(TableDescription &description, DataChunk &chunk);
+	//! Bind a number of expressions to the set of input columns, placing the output columns in the result_columns set
+	void BindExpressions(const vector<ColumnDefinition> &columns, vector<unique_ptr<ParsedExpression>> expressions, vector<ColumnDefinition> &result_columns);
+
+	//! Execute a relation
+	unique_ptr<QueryResult> Execute(shared_ptr<Relation> relation);
 
 	//! Prepare a query
 	unique_ptr<PreparedStatement> Prepare(string query);
@@ -125,6 +131,8 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
 
+	template<class T>
+	void RunFunctionInTransaction(T &&fun);
 private:
 	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)
