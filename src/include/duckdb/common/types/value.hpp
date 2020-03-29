@@ -45,13 +45,7 @@ public:
 	}
 	Value(string_t val);
 	//! Create a VARCHAR value
-	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-		if (IsUTF8String(val.c_str())) {
-			str_value = val;
-		} else {
-			throw Exception("String value is not valid UTF8");
-		}
-	}
+	Value(string val);
 
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
@@ -94,7 +88,6 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
-
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");

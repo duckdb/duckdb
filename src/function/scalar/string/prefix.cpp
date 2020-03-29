@@ -2,7 +2,6 @@
 #include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include <omp.h>
 
 using namespace std;
 
