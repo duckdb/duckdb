@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 #include <vector>
 #include "duckdb.hpp"
 
@@ -11,7 +12,7 @@ static SRC fetch_scalar(duckdb::Vector &src_vec, duckdb::idx_t offset) {
 }
 
 struct Result {
-	py::tuple fetchone() {
+	py::object fetchone() {
 		if (!result) {
 			throw std::runtime_error("result closed");
 		}
@@ -50,9 +51,6 @@ struct Result {
 	}
 
 	py::list fetchall() {
-		if (!result) {
-			throw std::runtime_error("result closed");
-		}
 		py::list res;
 		while (true) {
 			auto fres = fetchone();
@@ -63,6 +61,19 @@ struct Result {
 		}
 		return res;
 	}
+
+	py::array fetchnumpy() {
+		// FIXME this is just a dummy impl
+		// FIXME create masked arrays here
+		py::dict res;
+
+		py::array_t<double> a;
+		a.resize( { 1, 42 });
+		std::fill(a.mutable_data(), a.mutable_data() + a.size(), 42.);
+		res["a"] = a;
+		return a;
+	}
+
 	void close() {
 		result = nullptr;
 	}
@@ -73,9 +84,9 @@ struct Result {
 
 };
 
+//
 //PyObject *duckdb_cursor_getiter(duckdb_Cursor *self);
 //PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
-//PyObject *duckdb_cursor_fetchnumpy(duckdb_Cursor *self);
 //PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self);//
 
 struct Connection {
@@ -144,5 +155,6 @@ PYBIND11_MODULE(duckdb, m) {
 	py::class_<Result>(m, "DuckDBResult")
 	.def("fetchone", &Result::fetchone)
 	.def("fetchall", &Result::fetchall)
+	.def("fetchnumpy", &Result::fetchnumpy)
 	.def("close", &Result::close);
 }
