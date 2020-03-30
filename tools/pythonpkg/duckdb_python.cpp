@@ -62,16 +62,65 @@ struct Result {
 		return res;
 	}
 
-	py::array fetchnumpy() {
-		// FIXME this is just a dummy impl
-		// FIXME create masked arrays here
-		py::dict res;
+	template<class SRC>
+	static py::array fetch_column(duckdb::ChunkCollection &collection,
+			duckdb::idx_t column) {
+		py::array_t<SRC> out;
+		out.resize( { collection.count });
+		SRC *out_ptr = out.mutable_data();
 
-		py::array_t<double> a;
-		a.resize( { 1, 42 });
-		std::fill(a.mutable_data(), a.mutable_data() + a.size(), 42.);
-		res["a"] = a;
-		return a;
+		py::array_t<bool> nullmask;
+		nullmask.resize( { collection.count });
+		bool *nullmask_ptr = nullmask.mutable_data();
+
+		duckdb::idx_t out_offset = 0;
+		for (auto &data_chunk : collection.chunks) {
+			auto &src = data_chunk->data[column];
+			auto src_ptr = duckdb::FlatVector::GetData<SRC>(src);
+			auto &nullmask = duckdb::FlatVector::Nullmask(src);
+
+			for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
+				out_ptr[i + out_offset] = src_ptr[i];
+				nullmask_ptr[i + out_offset] = nullmask[i];
+			}
+			out_offset += data_chunk->size();
+		}
+		return py::module::import("numpy.ma").attr("masked_array")(out,
+				nullmask);;
+	}
+
+	py::dict fetchnumpy() {
+		if (!result) {
+			throw std::runtime_error("result closed");
+		}
+		duckdb::MaterializedQueryResult *mres = nullptr;
+		std::unique_ptr<duckdb::QueryResult> mat_res_holder;
+		if (result->type == duckdb::QueryResultType::STREAM_RESULT) {
+			mat_res_holder =
+					((duckdb::StreamQueryResult*) result.get())->Materialize();
+			mres = (duckdb::MaterializedQueryResult*) mat_res_holder.get();
+		} else {
+			mres = (duckdb::MaterializedQueryResult*) result.get();
+		}
+		assert(mres);
+
+		py::dict res;
+		for (duckdb::idx_t i = 0; i < mres->types.size(); i++) {
+			auto col_name = mres->names[i].c_str();
+			switch (mres->types[i]) {
+			case duckdb::TypeId::INT32:
+				res[col_name] = fetch_column<int32_t>(mres->collection, i);
+				break;
+			default:
+				throw std::runtime_error("unsupported type");
+			}
+		}
+		return res;
+	}
+
+	py::object fetchdf() {
+		return py::module::import("pandas").attr("DataFrame").attr("from_dict")(
+				fetchnumpy());
 	}
 
 	void close() {
@@ -156,5 +205,6 @@ PYBIND11_MODULE(duckdb, m) {
 	.def("fetchone", &Result::fetchone)
 	.def("fetchall", &Result::fetchall)
 	.def("fetchnumpy", &Result::fetchnumpy)
+	.def("fetchdf", &Result::fetchdf)
 	.def("close", &Result::close);
 }
