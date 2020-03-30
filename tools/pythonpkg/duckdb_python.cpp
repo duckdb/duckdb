@@ -62,37 +62,55 @@ struct Result {
 		return res;
 	}
 
-	template<class SRC>
-	static py::array fetch_column(duckdb::ChunkCollection &collection,
-			duckdb::idx_t column) {
-		py::array_t<SRC> out;
-		out.resize( { collection.count });
-		SRC *out_ptr = out.mutable_data();
 
-		py::array_t<bool> nullmask;
-		nullmask.resize( { collection.count });
-		bool *nullmask_ptr = nullmask.mutable_data();
+	static py::array fetch_string_column(duckdb::ChunkCollection &collection,
+			duckdb::idx_t column) {
+		// we cannot directly create an object numpy array
+		auto out_l = py::list(collection.count);
 
 		duckdb::idx_t out_offset = 0;
 		for (auto &data_chunk : collection.chunks) {
 			auto &src = data_chunk->data[column];
-			auto src_ptr = duckdb::FlatVector::GetData<SRC>(src);
+			auto src_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(src);
 			auto &nullmask = duckdb::FlatVector::Nullmask(src);
 
 			for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
-				out_ptr[i + out_offset] = src_ptr[i];
-				nullmask_ptr[i + out_offset] = nullmask[i];
+				if (nullmask[i]) {
+					continue;
+				}
+				out_l[i + out_offset] = py::str(src_ptr[i].GetData());
 			}
 			out_offset += data_chunk->size();
 		}
-		return py::module::import("numpy.ma").attr("masked_array")(out,
-				nullmask);;
+		return py::array(out_l);
 	}
+
+
+	template<class SRC, class TGT>
+	static py::array fetch_column(duckdb::ChunkCollection &collection,
+			duckdb::idx_t column) {
+		py::array_t<TGT> out;
+		out.resize( { collection.count });
+		TGT *out_ptr = out.mutable_data();
+
+		duckdb::idx_t out_offset = 0;
+		for (auto &data_chunk : collection.chunks) {
+			auto src_ptr = duckdb::FlatVector::GetData<SRC>(data_chunk->data[column]);
+			for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
+				// never mind the nullmask here, will be faster
+				out_ptr[i + out_offset] = (TGT) src_ptr[i];
+			}
+			out_offset += data_chunk->size();
+		}
+		return out;
+	}
+
 
 	py::dict fetchnumpy() {
 		if (!result) {
 			throw std::runtime_error("result closed");
 		}
+		// need to materialize the result if it was streamed because we need the count :/
 		duckdb::MaterializedQueryResult *mres = nullptr;
 		std::unique_ptr<duckdb::QueryResult> mat_res_holder;
 		if (result->type == duckdb::QueryResultType::STREAM_RESULT) {
@@ -105,15 +123,42 @@ struct Result {
 		assert(mres);
 
 		py::dict res;
-		for (duckdb::idx_t i = 0; i < mres->types.size(); i++) {
-			auto col_name = mres->names[i].c_str();
-			switch (mres->types[i]) {
+		for (duckdb::idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
+			// convert the actual payload
+			py::array col_res;
+			switch (mres->types[col_idx]) {
 			case duckdb::TypeId::INT32:
-				res[col_name] = fetch_column<int32_t>(mres->collection, i);
+				col_res = fetch_column<int32_t, int32_t>(mres->collection, col_idx);
 				break;
+			case duckdb::TypeId::DOUBLE:
+				col_res = fetch_column<double, double>(mres->collection, col_idx);
+				break;
+			case duckdb::TypeId::VARCHAR:
+				col_res = fetch_string_column(mres->collection, col_idx);
+				break;
+
 			default:
 				throw std::runtime_error("unsupported type");
 			}
+
+			// convert the nullmask
+			py::array_t<bool> nullmask;
+			nullmask.resize( { mres->collection.count });
+			bool *nullmask_ptr = nullmask.mutable_data();
+
+			duckdb::idx_t out_offset = 0;
+			for (auto &data_chunk : mres->collection.chunks) {
+				auto &src_nm = duckdb::FlatVector::Nullmask(data_chunk->data[col_idx]);
+				for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
+					nullmask_ptr[i + out_offset] = src_nm[i];
+				}
+				out_offset += data_chunk->size();
+			}
+
+			// create masked array and assign to output
+			auto masked_array = py::module::import("numpy.ma").attr("masked_array")(col_res,
+					nullmask);
+			res[mres->names[col_idx].c_str()] = masked_array;
 		}
 		return res;
 	}
