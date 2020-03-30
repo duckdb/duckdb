@@ -217,7 +217,6 @@ struct Result {
 
 };
 
-//
 //PyObject *duckdb_cursor_getiter(duckdb_Cursor *self);
 //PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
 //PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self);//
@@ -235,6 +234,69 @@ struct Connection {
 		}
 		return res;
 	}
+
+	py::object append(std::string name, py::object value) {
+		if (!connection) {
+			throw std::runtime_error("connection closed");
+		}
+
+		std::string schema, table;
+		duckdb::Catalog::ParseRangeVar(name, schema, table);
+		duckdb::Appender appender(*connection, schema, table);
+
+
+//		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
+//			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
+//			auto &append_chunk = appender.GetAppendChunk();
+//			for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
+//				auto &append_data = append_chunk.data[col_idx];
+//				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
+//
+//				switch (rtypes[col_idx]) {
+//				case RType::LOGICAL: {
+//					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+//					AppendColumnSegment<int, bool, RBooleanType>(data_ptr, append_data, current_count);
+//					break;
+//				}
+//				case RType::INTEGER: {
+//					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
+//					AppendColumnSegment<int, int, RIntegerType>(data_ptr, append_data, current_count);
+//					break;
+//				}
+//				case RType::NUMERIC: {
+//					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+//					AppendColumnSegment<double, double, RDoubleType>(data_ptr, append_data, current_count);
+//					break;
+//				}
+//				case RType::STRING:
+//					AppendStringSegment(coldata, append_data, row_idx, current_count);
+//					break;
+//				case RType::FACTOR:
+//					AppendFactor(coldata, append_data, row_idx, current_count);
+//					break;
+//				case RType::TIMESTAMP: {
+//					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+//					AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, append_data, current_count);
+//					break;
+//				}
+//				case RType::DATE: {
+//					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
+//					AppendColumnSegment<double, date_t, RDateType>(data_ptr, append_data, current_count);
+//					break;
+//				}
+//				default:
+//					throw;
+//				}
+//			}
+//			append_chunk.SetCardinality(current_count);
+//			appender.Flush();
+//		}
+//		appender.Close();
+
+
+		return py::none();
+	}
+
 
 	Connection* begin() {
 		execute("BEGIN TRANSACTION");
@@ -269,7 +331,7 @@ std::unique_ptr<Connection> connect(std::string database, bool read_only) {
 	auto res = duckdb::make_unique<Connection>();
 	res->database = duckdb::make_unique<duckdb::DuckDB>(database);
 	res->connection = duckdb::make_unique<duckdb::Connection>(
-			*res->database.get());
+			*res->database);
 
 	return res;
 }
@@ -283,6 +345,7 @@ PYBIND11_MODULE(duckdb, m) {
 	.def("commit", &Connection::commit)
 	.def("rollback", &Connection::rollback)
 	.def("execute", &Connection::execute)
+	.def("append", &Connection::append)
 	.def("close", &Connection::close);
 
 	py::class_<Result>(m, "DuckDBResult")
