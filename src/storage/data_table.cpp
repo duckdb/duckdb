@@ -91,7 +91,6 @@ bool DataTable::CheckZonemap(Transaction &transaction,  TableScanState &state , 
         switch (table_filter.comparison_type) {
         case ExpressionType::COMPARE_EQUAL:{
             auto constant = table_filter.constant.value_.integer;
-            auto aux = state.column_scans[table_filter.column_index].current->stats.minimum.get();
             int* min = (int*)state.column_scans[table_filter.column_index].current->stats.minimum.get();
             int* max = (int*)state.column_scans[table_filter.column_index].current->stats.maximum.get();
             if ( constant >= *min && constant <= *max){
