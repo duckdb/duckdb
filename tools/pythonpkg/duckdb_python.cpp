@@ -34,8 +34,32 @@ struct Result {
 			}
 			// TODO other types
 			switch (result->types[i]) {
+			case duckdb::TypeId::BOOL:
+				res[i] = fetch_scalar<bool>(current_chunk->data[i],
+						chunk_offset);
+				break;
+			case duckdb::TypeId::INT8:
+				res[i] = fetch_scalar<int8_t>(current_chunk->data[i],
+						chunk_offset);
+				break;
+			case duckdb::TypeId::INT16:
+				res[i] = fetch_scalar<int16_t>(current_chunk->data[i],
+						chunk_offset);
+				break;
 			case duckdb::TypeId::INT32:
 				res[i] = fetch_scalar<int32_t>(current_chunk->data[i],
+						chunk_offset);
+				break;
+			case duckdb::TypeId::INT64:
+				res[i] = fetch_scalar<int64_t>(current_chunk->data[i],
+						chunk_offset);
+				break;
+			case duckdb::TypeId::FLOAT:
+				res[i] = fetch_scalar<float>(current_chunk->data[i],
+						chunk_offset);
+				break;
+			case duckdb::TypeId::DOUBLE:
+				res[i] = fetch_scalar<double>(current_chunk->data[i],
 						chunk_offset);
 				break;
 			case duckdb::TypeId::VARCHAR:
@@ -47,7 +71,7 @@ struct Result {
 			}
 		}
 		chunk_offset++;
-		return res;
+		return std::move(res);
 	}
 
 	py::list fetchall() {
@@ -61,7 +85,6 @@ struct Result {
 		}
 		return res;
 	}
-
 
 	static py::array fetch_string_column(duckdb::ChunkCollection &collection,
 			duckdb::idx_t column) {
@@ -85,26 +108,25 @@ struct Result {
 		return py::array(out_l);
 	}
 
-
-	template<class SRC, class TGT>
+	template<class T>
 	static py::array fetch_column(duckdb::ChunkCollection &collection,
 			duckdb::idx_t column) {
-		py::array_t<TGT> out;
+		py::array_t<T> out;
 		out.resize( { collection.count });
-		TGT *out_ptr = out.mutable_data();
+		T *out_ptr = out.mutable_data();
 
 		duckdb::idx_t out_offset = 0;
 		for (auto &data_chunk : collection.chunks) {
-			auto src_ptr = duckdb::FlatVector::GetData<SRC>(data_chunk->data[column]);
+			auto src_ptr = duckdb::FlatVector::GetData<T>(
+					data_chunk->data[column]);
 			for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
 				// never mind the nullmask here, will be faster
-				out_ptr[i + out_offset] = (TGT) src_ptr[i];
+				out_ptr[i + out_offset] = (T) src_ptr[i];
 			}
 			out_offset += data_chunk->size();
 		}
-		return out;
+		return std::move(out);
 	}
-
 
 	py::dict fetchnumpy() {
 		if (!result) {
@@ -123,15 +145,31 @@ struct Result {
 		assert(mres);
 
 		py::dict res;
-		for (duckdb::idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
+		for (duckdb::idx_t col_idx = 0; col_idx < mres->types.size();
+				col_idx++) {
 			// convert the actual payload
 			py::array col_res;
 			switch (mres->types[col_idx]) {
+			case duckdb::TypeId::BOOL:
+				col_res = fetch_column<bool>(mres->collection, col_idx);
+				break;
+			case duckdb::TypeId::INT8:
+				col_res = fetch_column<int8_t>(mres->collection, col_idx);
+				break;
+			case duckdb::TypeId::INT16:
+				col_res = fetch_column<int16_t>(mres->collection, col_idx);
+				break;
 			case duckdb::TypeId::INT32:
-				col_res = fetch_column<int32_t, int32_t>(mres->collection, col_idx);
+				col_res = fetch_column<int32_t>(mres->collection, col_idx);
+				break;
+			case duckdb::TypeId::INT64:
+				col_res = fetch_column<int64_t>(mres->collection, col_idx);
+				break;
+			case duckdb::TypeId::FLOAT:
+				col_res = fetch_column<float>(mres->collection, col_idx);
 				break;
 			case duckdb::TypeId::DOUBLE:
-				col_res = fetch_column<double, double>(mres->collection, col_idx);
+				col_res = fetch_column<double>(mres->collection, col_idx);
 				break;
 			case duckdb::TypeId::VARCHAR:
 				col_res = fetch_string_column(mres->collection, col_idx);
@@ -148,7 +186,8 @@ struct Result {
 
 			duckdb::idx_t out_offset = 0;
 			for (auto &data_chunk : mres->collection.chunks) {
-				auto &src_nm = duckdb::FlatVector::Nullmask(data_chunk->data[col_idx]);
+				auto &src_nm = duckdb::FlatVector::Nullmask(
+						data_chunk->data[col_idx]);
 				for (duckdb::idx_t i = 0; i < data_chunk->size(); i++) {
 					nullmask_ptr[i + out_offset] = src_nm[i];
 				}
@@ -156,8 +195,8 @@ struct Result {
 			}
 
 			// create masked array and assign to output
-			auto masked_array = py::module::import("numpy.ma").attr("masked_array")(col_res,
-					nullmask);
+			auto masked_array = py::module::import("numpy.ma").attr(
+					"masked_array")(col_res, nullmask);
 			res[mres->names[col_idx].c_str()] = masked_array;
 		}
 		return res;
