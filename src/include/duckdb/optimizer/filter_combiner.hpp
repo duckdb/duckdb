@@ -13,6 +13,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <duckdb/storage/data_table.hpp>
 #include <functional>
 
 namespace duckdb {
@@ -36,7 +37,7 @@ public:
 
 	void GenerateFilters(std::function<void(unique_ptr<Expression> filter)> callback);
 	bool HasFilters();
-    void GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback);
+    vector<TableFilter> GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback);
 private:
 	FilterResult AddFilter(Expression *expr);
 

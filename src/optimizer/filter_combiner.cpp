@@ -6,7 +6,8 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 using namespace duckdb;
 using namespace std;
 
@@ -153,15 +154,19 @@ bool FilterCombiner::HasFilters() {
 }
 
 
-void FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback){
+vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback){
+    vector<TableFilter> tableFilters;
     //! First, we figure the filters that have constant expressions that we can push down to the table scan
     for (auto & constant_value: constant_values) {
 		if (constant_value.second.size() > 0) {
 			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
-				if (constant_value.second[i].comparison_type == ExpressionType::COMPARE_EQUAL) {
+				if (constant_value.second[i].comparison_type == ExpressionType::COMPARE_EQUAL && constant_value.second[i].constant.type == TypeId::INT32) {
                     //! Here we check if these filters are column references
                     auto filter_exp = equivalence_map.find(constant_value.first);
                     if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF){
+
+                        tableFilters.push_back(TableFilter(constant_value.second[i].constant,constant_value.second[i].comparison_type,
+						    static_cast<BoundColumnRefExpression*>(filter_exp->second[0])->binding.column_index));
                         auto equivalence_set = filter_exp->first;
                         auto &entries = filter_exp->second;
                         auto &constant_list = constant_values.find(equivalence_set)->second;
@@ -219,6 +224,7 @@ void FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expr
 			}
 		}
 	}
+    return tableFilters;
 }
 
 FilterResult FilterCombiner::AddFilter(Expression *expr) {

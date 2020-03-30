@@ -11,6 +11,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
+#include <duckdb/storage/data_table.hpp>
+
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
@@ -27,8 +29,9 @@ public:
 	idx_t table_index;
 	//! Bound column IDs
 	vector<column_t> column_ids;
-
-	string ParamsToString() const override;
+	//! Filters pushed down for table scan
+    vector<TableFilter> tableFilters;
+    string ParamsToString() const override;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

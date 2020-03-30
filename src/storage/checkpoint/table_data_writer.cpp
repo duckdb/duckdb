@@ -69,7 +69,8 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		table.storage->Scan(transaction, chunk, state);
+		vector<TableFilter> mock;
+		table.storage->Scan(transaction, chunk, state,mock);
 		if (chunk.size() == 0) {
 			break;
 		}

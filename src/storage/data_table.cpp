@@ -65,17 +65,17 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 	transaction.storage.InitializeScan(this, state.local_state);
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state) {
+void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector <TableFilter>&table_filters) {
 	// scan the persistent segments
 	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0,
-	                     persistent_manager)) {
+	                     persistent_manager, table_filters)) {
 		if (result.size() > 0) {
 			return;
 		}
 	}
 	// scan the transient segments
 	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row,
-	                     persistent_manager.max_row, transient_manager)) {
+	                     persistent_manager.max_row, transient_manager, table_filters)) {
 		if (result.size() > 0) {
 			return;
 		}
@@ -85,15 +85,66 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, state.column_ids, result);
 }
 
+
+bool DataTable::CheckZonemap(Transaction &transaction,  TableScanState &state , vector <TableFilter>&table_filters){
+//    for (auto & table_filter:table_filters){
+//        switch (table_filter.comparison_type) {
+//        case ExpressionType::COMPARE_EQUAL:{
+//            auto constant = table_filter.constant.value_.integer;
+//            auto aux = state.column_scans[table_filter.column_index].current->stats.minimum.get();
+//            int min = aux[0] << 24| (aux[1] << 16) | (aux[2] << 8) | (aux[3] << 4);
+//            aux = state.column_scans[table_filter.column_index].current->stats.maximum.get();
+//            int max = aux[0] << 24| (aux[1] << 16) | (aux[2] << 8) | (aux[3] << 4);
+//            if ( constant >= min && constant <= max){
+//                return true;
+//            }
+//            else{
+//				return  false;
+//            }
+//            break;
+//        }
+//        case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+//            SearchGreater(result_ids, state, true);
+//            break;
+//        case ExpressionType::COMPARE_GREATERTHAN:
+//            SearchGreater(result_ids, state, false);
+//            break;
+//        case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+//            SearchLess(result_ids, state, true);
+//            break;
+//        case ExpressionType::COMPARE_LESSTHAN:
+//            SearchLess(result_ids, state, false);
+//            break;
+//        default:
+//            throw NotImplementedException("Operation not implemented");
+//        }
+//    }
+    //! No filters to check
+    return true;
+}
+
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
-                              idx_t max_row, idx_t base_row, VersionManager &manager) {
+                              idx_t max_row, idx_t base_row, VersionManager &manager, vector <TableFilter>&table_filters) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
 	}
 	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
-	// first scan the version chunk manager to figure out which tuples to load for this transaction
+	//! first check the zonemap if we have to scan this partition
+    if (!CheckZonemap(transaction,state,table_filters)) {
+        //! nothing to scan for this vector, skip the entire vector
+        for (idx_t i = 0; i < state.column_ids.size(); i++) {
+            auto column = state.column_ids[i];
+            if (column != COLUMN_IDENTIFIER_ROW_ID) {
+                state.column_scans[i].Next();
+            }
+        }
+        current_row += STANDARD_VECTOR_SIZE;
+        return true;
+    }
+
+	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 	idx_t count = manager.GetSelVector(transaction, vector_offset, valid_sel, max_count);
 	if (count == 0) {

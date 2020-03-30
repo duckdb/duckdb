@@ -23,9 +23,9 @@ public:
 
 
 
-PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> filter)
+PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> filter, vector <TableFilter> tableFilters)
 : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
-column_ids(column_ids) {
+column_ids(column_ids), table_filters(tableFilters) {
     if (filter.size() > 1) {
         //! create a big AND out of the expressions
         auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
@@ -48,19 +48,20 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		table.InitializeScan(transaction, state->scan_offset, column_ids);
 		state->initialized = true;
 	}
-
-	table.Scan(transaction, chunk, state->scan_offset);
-	if (expression){
-        SelectionVector sel(STANDARD_VECTOR_SIZE);
-        idx_t initial_count = chunk.size();
-        idx_t result_count = state->executor.SelectExpression(chunk, sel);
-        if (result_count == initial_count) {
-            //! nothing was filtered: skip adding any selection vectors
-            return;
+    idx_t result_count = -1;
+    do{
+        table.Scan(transaction, chunk, state->scan_offset, table_filters);
+        if (expression){
+            SelectionVector sel(STANDARD_VECTOR_SIZE);
+            idx_t initial_count = chunk.size();
+            result_count = state->executor.SelectExpression(chunk, sel);
+            if (result_count == initial_count) {
+                //! Nothing was filtered: skip adding any selection vectors
+                return;
+            }
+            chunk.Slice(sel, result_count);
         }
-        chunk.Slice(sel, result_count);
-	}
-
+    } while (result_count == 0 && state->scan_offset.current_transient_row < state->scan_offset.max_transient_row);
 }
 
 

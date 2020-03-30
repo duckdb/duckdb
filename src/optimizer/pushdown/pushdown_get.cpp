@@ -11,9 +11,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
     auto &get = (LogicalGet &)*op;
     //! FIXME: We only need to skip if the index is in the column being filtered
     if (!get.table || get.table->storage->indexes.size() > 0){
-        // now push any existing filters
+        //! now push any existing filters
         if (filters.size() == 0) {
-            // no filters to push
+            //! no filters to push
             return op;
         }
         auto filter = make_unique<LogicalFilter>();
@@ -25,7 +25,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
     }
     PushFilters();
     vector<unique_ptr<Filter>> filtersToPushDown;
-    combiner.GenerateTableScanFilters([&](unique_ptr<Expression> filter) {
+    get.tableFilters  = combiner.GenerateTableScanFilters([&](unique_ptr<Expression> filter) {
       auto f = make_unique<Filter>();
       f->filter = move(filter);
       f->ExtractBindings();
