@@ -14,8 +14,8 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size) : type(type),
 }
 
 template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
-	*((T *)min) = std::numeric_limits<T>::max();
-	*((T *)max) = std::numeric_limits<T>::min();
+	*((T *)min) = std::numeric_limits<T>::min();
+	*((T *)max) = std::numeric_limits<T>::max();
 }
 
 void SegmentStatistics::Reset() {

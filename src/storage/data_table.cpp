@@ -87,22 +87,21 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 
 
 bool DataTable::CheckZonemap(Transaction &transaction,  TableScanState &state , vector <TableFilter>&table_filters){
-//    for (auto & table_filter:table_filters){
-//        switch (table_filter.comparison_type) {
-//        case ExpressionType::COMPARE_EQUAL:{
-//            auto constant = table_filter.constant.value_.integer;
-//            auto aux = state.column_scans[table_filter.column_index].current->stats.minimum.get();
-//            int min = aux[0] << 24| (aux[1] << 16) | (aux[2] << 8) | (aux[3] << 4);
-//            aux = state.column_scans[table_filter.column_index].current->stats.maximum.get();
-//            int max = aux[0] << 24| (aux[1] << 16) | (aux[2] << 8) | (aux[3] << 4);
-//            if ( constant >= min && constant <= max){
-//                return true;
-//            }
-//            else{
-//				return  false;
-//            }
-//            break;
-//        }
+    for (auto & table_filter:table_filters){
+        switch (table_filter.comparison_type) {
+        case ExpressionType::COMPARE_EQUAL:{
+            auto constant = table_filter.constant.value_.integer;
+            auto aux = state.column_scans[table_filter.column_index].current->stats.minimum.get();
+            int* min = (int*)state.column_scans[table_filter.column_index].current->stats.minimum.get();
+            int* max = (int*)state.column_scans[table_filter.column_index].current->stats.maximum.get();
+            if ( constant >= *min && constant <= *max){
+                return true;
+            }
+            else{
+				return  false;
+            }
+            break;
+        }
 //        case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 //            SearchGreater(result_ids, state, true);
 //            break;
@@ -115,10 +114,10 @@ bool DataTable::CheckZonemap(Transaction &transaction,  TableScanState &state , 
 //        case ExpressionType::COMPARE_LESSTHAN:
 //            SearchLess(result_ids, state, false);
 //            break;
-//        default:
-//            throw NotImplementedException("Operation not implemented");
-//        }
-//    }
+        default:
+            throw NotImplementedException("Operation not implemented");
+        }
+    }
     //! No filters to check
     return true;
 }
