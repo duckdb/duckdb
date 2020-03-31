@@ -11,8 +11,6 @@ namespace py = pybind11;
 using namespace duckdb;
 using namespace std;
 
-
-
 struct DuckDBPyResult {
 
 	template<class SRC>
@@ -356,20 +354,19 @@ struct PandasScanFunctionData: public TableFunctionData {
 
 };
 
-
-class PandasScanFunction: public TableFunction {
-public:
+struct PandasScanFunction: public TableFunction {
 	PandasScanFunction() :
 			TableFunction("pandas_scan", { SQLType::VARCHAR }, pandas_scan_bind,
 					pandas_scan_function, nullptr) {
-	};
-
+	}
+	;
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context,
 			vector<Value> inputs, vector<SQLType> &return_types,
 			vector<string> &names) {
 		// Hey, it works (TM)
-		py::handle df((PyObject*) stoul(inputs[0].GetValue<string>(), nullptr, 16));
+		py::handle df(
+				(PyObject*) stoul(inputs[0].GetValue<string>(), nullptr, 16));
 
 		auto df_names = py::list(df.attr("columns"));
 		auto df_types = py::list(df.attr("dtypes"));
@@ -397,8 +394,8 @@ public:
 	}
 
 	template<class T>
-	static void scan_pandas_column(py::array numpy_col, idx_t count, idx_t offset,
-			Vector &out) {
+	static void scan_pandas_column(py::array numpy_col, idx_t count,
+			idx_t offset, Vector &out) {
 		auto src_ptr = (T*) numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 
@@ -407,8 +404,8 @@ public:
 		}
 	}
 
-	static void pandas_scan_function(ClientContext &context, vector<Value> &input,
-			DataChunk &output, FunctionData *dataptr) {
+	static void pandas_scan_function(ClientContext &context,
+			vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 		auto &data = *((PandasScanFunctionData*) dataptr);
 
 		if (data.position >= data.row_count) {
@@ -434,16 +431,16 @@ public:
 						output.data[col_idx]);
 				break;
 			case TypeId::INT16:
-				scan_pandas_column<int16_t>(numpy_col, this_count, data.position,
-						output.data[col_idx]);
+				scan_pandas_column<int16_t>(numpy_col, this_count,
+						data.position, output.data[col_idx]);
 				break;
 			case TypeId::INT32:
-				scan_pandas_column<int32_t>(numpy_col, this_count, data.position,
-						output.data[col_idx]);
+				scan_pandas_column<int32_t>(numpy_col, this_count,
+						data.position, output.data[col_idx]);
 				break;
 			case TypeId::INT64:
-				scan_pandas_column<int64_t>(numpy_col, this_count, data.position,
-						output.data[col_idx]);
+				scan_pandas_column<int64_t>(numpy_col, this_count,
+						data.position, output.data[col_idx]);
 				break;
 			case TypeId::FLOAT:
 				scan_pandas_column<float>(numpy_col, this_count, data.position,
@@ -470,7 +467,6 @@ public:
 		}
 		data.position += this_count;
 	}
-
 
 };
 
