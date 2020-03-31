@@ -10,7 +10,8 @@ add_library_unity(
   regexp.cpp
   substring.cpp
   instr.cpp
-  prefix.cpp)
+  prefix.cpp
+  suffix.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
     PARENT_SCOPE)
