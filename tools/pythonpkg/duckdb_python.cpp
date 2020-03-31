@@ -115,44 +115,46 @@ struct DuckDBPyResult {
 		return res;
 	}
 
-	static py::array fetch_string_column(ChunkCollection &collection,
-			idx_t column) {
-		// we cannot directly create an object numpy array
-		auto out_l = py::list(collection.count);
+	// woo template magic
+	template<class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(
+			DUCKDB_T val) {
+		return (NUMPY_T) val;
+	}
+
+	template<> int64_t convert_value(timestamp_t timestamp) {
+		return Date::Epoch(Timestamp::GetDate(timestamp)) * 1000
+				+ (int64_t) (Timestamp::GetTime(timestamp));
+	}
+
+	template<> int64_t convert_value(date_t date) {
+		return Date::Epoch(date);
+	}
+
+	template<> py::str convert_value(string_t s) {
+		return py::str(s.GetData());
+	}
+
+	template<class DUCKDB_T, class NUMPY_T>
+	static py::array fetch_column(string numpy_type,
+			ChunkCollection &collection, idx_t column) {
+		auto out = py::array(py::dtype(numpy_type), collection.count);
+		auto out_ptr = (NUMPY_T*) out.mutable_data();
 
 		idx_t out_offset = 0;
 		for (auto &data_chunk : collection.chunks) {
 			auto &src = data_chunk->data[column];
-			auto src_ptr = FlatVector::GetData<string_t>(src);
+			auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
 			auto &nullmask = FlatVector::Nullmask(src);
-
 			for (idx_t i = 0; i < data_chunk->size(); i++) {
 				if (nullmask[i]) {
 					continue;
 				}
-				out_l[i + out_offset] = py::str(src_ptr[i].GetData());
+				out_ptr[i + out_offset] = convert_value<DUCKDB_T, NUMPY_T>(
+						src_ptr[i]);
 			}
 			out_offset += data_chunk->size();
 		}
-		return py::array(out_l);
-	}
-
-	template<class T>
-	static py::array fetch_column(ChunkCollection &collection, idx_t column) {
-		py::array_t<T> out;
-		out.resize( { collection.count });
-		T *out_ptr = out.mutable_data();
-
-		idx_t out_offset = 0;
-		for (auto &data_chunk : collection.chunks) {
-			auto src_ptr = FlatVector::GetData<T>(data_chunk->data[column]);
-			for (idx_t i = 0; i < data_chunk->size(); i++) {
-				// never mind the nullmask here, will be faster
-				out_ptr[i + out_offset] = (T) src_ptr[i];
-			}
-			out_offset += data_chunk->size();
-		}
-		return move(out);
+		return out;
 	}
 
 	py::dict fetchnumpy() {
@@ -176,28 +178,45 @@ struct DuckDBPyResult {
 			py::array col_res;
 			switch (mres->sql_types[col_idx].id) {
 			case SQLTypeId::BOOLEAN:
-				col_res = fetch_column<bool>(mres->collection, col_idx);
+				col_res = fetch_column<bool, bool>("bool", mres->collection,
+						col_idx);
 				break;
 			case SQLTypeId::TINYINT:
-				col_res = fetch_column<int8_t>(mres->collection, col_idx);
+				col_res = fetch_column<int8_t, int8_t>("int8", mres->collection,
+						col_idx);
 				break;
 			case SQLTypeId::SMALLINT:
-				col_res = fetch_column<int16_t>(mres->collection, col_idx);
+				col_res = fetch_column<int16_t, int16_t>("int16",
+						mres->collection, col_idx);
 				break;
 			case SQLTypeId::INTEGER:
-				col_res = fetch_column<int32_t>(mres->collection, col_idx);
+				col_res = fetch_column<int32_t, int32_t>("int32",
+						mres->collection, col_idx);
 				break;
 			case SQLTypeId::BIGINT:
-				col_res = fetch_column<int64_t>(mres->collection, col_idx);
+				col_res = fetch_column<int64_t, int64_t>("int64",
+						mres->collection, col_idx);
 				break;
 			case SQLTypeId::FLOAT:
-				col_res = fetch_column<float>(mres->collection, col_idx);
+				col_res = fetch_column<float, float>("float", mres->collection,
+						col_idx);
 				break;
 			case SQLTypeId::DOUBLE:
-				col_res = fetch_column<double>(mres->collection, col_idx);
+				col_res = fetch_column<double, double>("double",
+						mres->collection, col_idx);
 				break;
+			case SQLTypeId::TIMESTAMP:
+				col_res = fetch_column<timestamp_t, int64_t>("datetime64[ms]",
+						mres->collection, col_idx);
+				break;
+			case SQLTypeId::DATE:
+				col_res = fetch_column<date_t, int64_t>("datetime64[s]",
+						mres->collection, col_idx);
+				break;
+
 			case SQLTypeId::VARCHAR:
-				col_res = fetch_string_column(mres->collection, col_idx);
+				col_res = fetch_column<string_t, py::str>("object",
+						mres->collection, col_idx);
 				break;
 			default:
 				throw runtime_error(
@@ -370,7 +389,7 @@ struct PandasScanFunction: public TableFunction {
 
 		auto df_names = py::list(df.attr("columns"));
 		auto df_types = py::list(df.attr("dtypes"));
-
+		// TODO support masked arrays as well
 		// TODO support dicts of numpy arrays as well
 		if (py::len(df_names) == 0) {
 			throw runtime_error("need a dataframe with at least one column");
@@ -381,6 +400,9 @@ struct PandasScanFunction: public TableFunction {
 			SQLType duckdb_col_type;
 			if (col_type == "int64") {
 				duckdb_col_type = SQLType::BIGINT;
+			} else if (col_type == "float64") {
+				// this better be strings
+				duckdb_col_type = SQLType::DOUBLE;
 			} else if (col_type == "object") {
 				// this better be strings
 				duckdb_col_type = SQLType::VARCHAR;
@@ -472,7 +494,9 @@ struct PandasScanFunction: public TableFunction {
 
 static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	auto res = make_unique<DuckDBPyConnection>();
-	res->database = make_unique<DuckDB>(database);
+	DBConfig config;
+	if (read_only) config.access_mode = AccessMode::READ_ONLY;
+	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;
@@ -481,6 +505,9 @@ static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	context.transaction.BeginTransaction();
 	context.catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
+
+	res->execute("CREATE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+
 	return res;
 }
 
@@ -488,7 +515,7 @@ PYBIND11_MODULE(duckdb, m) {
 	m.def("connect", &connect, "some doc string", py::arg("database") = ":memory:", py::arg("read_only") = false );
 
 	py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
-	.def("cursor", &DuckDBPyConnection::cursor, "some doc string")
+	.def("cursor", &DuckDBPyConnection::cursor)
 	.def("begin", &DuckDBPyConnection::begin)
 	.def("commit", &DuckDBPyConnection::commit)
 	.def("rollback", &DuckDBPyConnection::rollback)
