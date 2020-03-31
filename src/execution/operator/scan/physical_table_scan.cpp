@@ -48,6 +48,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		table.InitializeScan(transaction, state->scan_offset, column_ids);
 		state->initialized = true;
 	}
+	//! Get max value
     idx_t result_count = -1;
     do{
         table.Scan(transaction, chunk, state->scan_offset, table_filters);

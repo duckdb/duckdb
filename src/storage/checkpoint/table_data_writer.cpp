@@ -138,7 +138,9 @@ void TableDataWriter::FlushSegment(idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointers[col_idx].push_back(data_pointer);
+	data_pointer.minimum = move(stats[col_idx]->minimum);
+    data_pointer.maximum = move(stats[col_idx]->maximum);
+	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
 }

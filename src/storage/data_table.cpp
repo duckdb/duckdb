@@ -92,13 +92,13 @@ template <class T> bool checkZonemap(TableScanState &state,  TableFilter& table_
         case ExpressionType::COMPARE_EQUAL:
 		    return constant >= *min && constant <= *max;
         case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-            return constant >=*max;
+            return constant <=*max;
         case ExpressionType::COMPARE_GREATERTHAN:
-            return constant >*max;
+            return constant <*max;
         case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-            return constant <=*min;
+            return constant >=*min;
         case ExpressionType::COMPARE_LESSTHAN:
-            return constant < *min;
+            return constant > *min;
     default:
             throw NotImplementedException("Operation not implemented");
     }

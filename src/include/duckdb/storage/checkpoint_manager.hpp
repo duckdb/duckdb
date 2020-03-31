@@ -21,13 +21,19 @@ class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 
-struct DataPointer {
-	double min;
-	double max;
-	uint64_t row_start;
-	uint64_t tuple_count;
-	block_id_t block_id;
-	uint32_t offset;
+class DataPointer {
+public:
+    DataPointer(){};
+    double min;
+    double max;
+    uint64_t row_start;
+    uint64_t tuple_count;
+    block_id_t block_id;
+    uint32_t offset;
+    //! The minimum value of the segment
+    unique_ptr<data_t[]> minimum;
+    //! The maximum value of the segment
+    unique_ptr<data_t[]> maximum;
 };
 
 //! CheckpointManager is responsible for checkpointing the database

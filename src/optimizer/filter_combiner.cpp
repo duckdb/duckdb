@@ -173,8 +173,8 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(
                     constant_value.second[i].constant.type == TypeId::DOUBLE)) {
                     //! Here we check if these filters are column references
                     auto filter_exp = equivalence_map.find(constant_value.first);
-                    if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF){
-
+                    string rowid = "rowid";
+                    if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF && filter_exp->second[0]->alias != rowid){
                         tableFilters.push_back(TableFilter(constant_value.second[i].constant,constant_value.second[i].comparison_type,
 						    static_cast<BoundColumnRefExpression*>(filter_exp->second[0])->binding.column_index));
                         auto equivalence_set = filter_exp->first;
