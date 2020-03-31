@@ -53,6 +53,12 @@ void ColumnScanState::Next() {
 	}
 }
 
+void ColumnScanState::NextSegment() {
+    current = (ColumnSegment *)current->next.get();
+    vector_index = 0;
+    initialized = false;
+}
+
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);
 	if (data.nodes.size() == 0) {

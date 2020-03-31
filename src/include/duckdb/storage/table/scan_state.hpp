@@ -47,6 +47,8 @@ struct ColumnScanState {
 public:
 	//! Move on to the next vector in the scan
 	void Next();
+	//! Move on to next segment
+	void NextSegment();
 };
 
 struct ColumnFetchState {

@@ -85,41 +85,83 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	transaction.storage.Scan(state.local_state, state.column_ids, result);
 }
 
-
-bool DataTable::CheckZonemap(Transaction &transaction,  TableScanState &state , vector <TableFilter>&table_filters){
-    for (auto & table_filter:table_filters){
-        switch (table_filter.comparison_type) {
-        case ExpressionType::COMPARE_EQUAL:{
-            auto constant = table_filter.constant.value_.integer;
-            int* min = (int*)state.column_scans[table_filter.column_index].current->stats.minimum.get();
-            int* max = (int*)state.column_scans[table_filter.column_index].current->stats.maximum.get();
-            if ( constant >= *min && constant <= *max){
-                return true;
-            }
-            else{
-				return  false;
-            }
-            break;
-        }
-//        case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-//            SearchGreater(result_ids, state, true);
-//            break;
-//        case ExpressionType::COMPARE_GREATERTHAN:
-//            SearchGreater(result_ids, state, false);
-//            break;
-//        case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-//            SearchLess(result_ids, state, true);
-//            break;
-//        case ExpressionType::COMPARE_LESSTHAN:
-//            SearchLess(result_ids, state, false);
-//            break;
-        default:
+template <class T> bool checkZonemap(TableScanState &state,  TableFilter& table_filter, T constant){
+    T *min = (T *)state.column_scans[table_filter.column_index].current->stats.minimum.get();
+    T *max = (T *)state.column_scans[table_filter.column_index].current->stats.maximum.get();
+    switch (table_filter.comparison_type) {
+        case ExpressionType::COMPARE_EQUAL:
+		    return constant >= *min && constant <= *max;
+        case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+            return constant >=*max;
+        case ExpressionType::COMPARE_GREATERTHAN:
+            return constant >*max;
+        case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+            return constant <=*min;
+        case ExpressionType::COMPARE_LESSTHAN:
+            return constant < *min;
+    default:
             throw NotImplementedException("Operation not implemented");
+    }
+}
+
+bool DataTable::CheckZonemap(TableScanState &state , vector <TableFilter>&table_filters, idx_t &current_row){
+    bool readSegment = true;
+    for (auto & table_filter:table_filters) {
+        switch (state.column_scans[table_filter.column_index].current->type) {
+            case TypeId::INT8:{
+                int8_t constant = table_filter.constant.value_.tinyint;
+                readSegment &= checkZonemap<int8_t>(state, table_filter, constant);
+                break;
+            }
+            case TypeId::INT16:{
+                int16_t constant = table_filter.constant.value_.smallint;
+                readSegment &= checkZonemap<int16_t>(state, table_filter, constant);
+                break;
+            }
+            case TypeId::INT32:{
+                int32_t constant = table_filter.constant.value_.integer;
+                readSegment &= checkZonemap<int32_t>(state, table_filter, constant);
+                break;
+            }
+            case TypeId::INT64:{
+                int64_t constant = table_filter.constant.value_.bigint;
+                readSegment &= checkZonemap<int64_t>(state, table_filter, constant);
+                break;
+            }
+            case TypeId::FLOAT:{
+                float constant = table_filter.constant.value_.float_;
+                readSegment &= checkZonemap<float>(state, table_filter, constant);
+                break;
+            }
+            case TypeId::DOUBLE:{
+                double constant = table_filter.constant.value_.double_;
+                readSegment &= checkZonemap<double>(state, table_filter, constant);
+                break;
+            }
+            default:
+                throw NotImplementedException("Unimplemented type for uncompressed segment");
+        }
+        if (!readSegment){
+            //! We can skip this partition
+            idx_t vectorsToSkip = ceil((double)(state.column_scans[table_filter.column_index].current->count + state.column_scans[table_filter.column_index].current->start - current_row)/STANDARD_VECTOR_SIZE);
+            for (idx_t i = 0; i < vectorsToSkip; ++i){
+                //! nothing to scan for this vector, skip the entire vector
+                for (idx_t j = 0; j < state.column_ids.size(); j++) {
+                    auto column = state.column_ids[j];
+                    if (column != COLUMN_IDENTIFIER_ROW_ID) {
+                        state.column_scans[j].Next();
+                    }
+                }
+                current_row += STANDARD_VECTOR_SIZE;
+            }
+            return false;
         }
     }
-    //! No filters to check
     return true;
 }
+
+
+
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
                               idx_t max_row, idx_t base_row, VersionManager &manager, vector <TableFilter>&table_filters) {
@@ -129,19 +171,10 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	}
 	idx_t max_count = std::min((idx_t)STANDARD_VECTOR_SIZE, max_row - current_row);
 	idx_t vector_offset = current_row / STANDARD_VECTOR_SIZE;
-	//! first check the zonemap if we have to scan this partition
-    if (!CheckZonemap(transaction,state,table_filters)) {
-        //! nothing to scan for this vector, skip the entire vector
-        for (idx_t i = 0; i < state.column_ids.size(); i++) {
-            auto column = state.column_ids[i];
-            if (column != COLUMN_IDENTIFIER_ROW_ID) {
-                state.column_scans[i].Next();
-            }
-        }
-        current_row += STANDARD_VECTOR_SIZE;
+    //! first check the zonemap if we have to scan this partition
+    if (!CheckZonemap(state,table_filters,current_row)){
         return true;
     }
-
 	// second, scan the version chunk manager to figure out which tuples to load for this transaction
 	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 	idx_t count = manager.GetSelVector(transaction, vector_offset, valid_sel, max_count);

@@ -160,7 +160,17 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(
     for (auto & constant_value: constant_values) {
 		if (constant_value.second.size() > 0) {
 			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
-				if (constant_value.second[i].comparison_type == ExpressionType::COMPARE_EQUAL && constant_value.second[i].constant.type == TypeId::INT32) {
+				if ((constant_value.second[i].comparison_type == ExpressionType::COMPARE_EQUAL ||
+                    constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+                    constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+                    constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+                    constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO
+                    ) && (constant_value.second[i].constant.type == TypeId::INT8 ||
+                    constant_value.second[i].constant.type == TypeId::INT16 ||
+                    constant_value.second[i].constant.type == TypeId::INT32 ||
+                    constant_value.second[i].constant.type == TypeId::INT64 ||
+                    constant_value.second[i].constant.type == TypeId::DECIMAL ||
+                    constant_value.second[i].constant.type == TypeId::DOUBLE)) {
                     //! Here we check if these filters are column references
                     auto filter_exp = equivalence_map.find(constant_value.first);
                     if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF){

@@ -43,20 +43,17 @@ TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer]") {
     Connection con(db);
 
     vector<int> input;
-    idx_t input_size = 10000;
+    idx_t input_size = 1000;
     REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer)"));
     for (idx_t i = 0; i < input_size; ++i){
         input.push_back(i);
     }
 //    random_shuffle(input.begin(),input.end());
-    for (idx_t i = 0; i < input_size/2; ++i){
+    for (idx_t i = 0; i < input_size; ++i){
         REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES("+ to_string(input[i])+ "," + to_string(input[i]) +  ")"));
     }
-    result = con.Query("SELECT i FROM integers where j = 8000 ");
-    for (idx_t i = input_size/2; i < input_size; ++i){
-        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES("+ to_string(input[i])+ "," + to_string(input[i]) +  ")"));
-    }
-    result = con.Query("SELECT i FROM integers where j = 8000 ");
-    REQUIRE(CHECK_COLUMN(result, 0, {8000}));
+
+    result = con.Query("SELECT i FROM integers where j = 99000 ");
+    REQUIRE(CHECK_COLUMN(result, 0, {99000}));
 
 }

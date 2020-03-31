@@ -123,7 +123,8 @@ private:
 
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
-    bool CheckZonemap(Transaction &transaction,  TableScanState &state, vector <TableFilter>&table_filters);
+
+    bool CheckZonemap(TableScanState &state, vector <TableFilter>&table_filters, idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
 	                   idx_t max_row, idx_t base_row, VersionManager &manager, vector <TableFilter>&table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,

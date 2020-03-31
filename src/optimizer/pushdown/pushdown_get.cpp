@@ -9,6 +9,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 
     assert(op->type == LogicalOperatorType::GET);
     auto &get = (LogicalGet &)*op;
+    if (get.tableFilters.size() > 0){
+        return op;
+    }
     //! FIXME: We only need to skip if the index is in the column being filtered
     if (!get.table || get.table->storage->indexes.size() > 0){
         //! now push any existing filters
@@ -33,7 +36,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
     });
 
     GenerateFilters();
-//    assert(get.expressions.size() == 0);
     for (auto&f : filtersToPushDown){
         get.expressions.push_back(move(f->filter));
     }
