@@ -11,10 +11,10 @@ using namespace std;
  *
  */
 TEST_CASE("Suffix test", "[function]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-	con.EnableQueryVerification();
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+    Connection con(db);
+    con.EnableQueryVerification();
 
     SECTION("Short string (4bytes)") {
         result = con.Query("SELECT suffix('abcd', 'd')");
@@ -29,7 +29,7 @@ TEST_CASE("Suffix test", "[function]") {
         REQUIRE(CHECK_COLUMN(result, 0, {false}));
     }
 
-    SECTION("Normal string (8bytes)") {
+    SECTION("Medium string (8bytes)") {
         result = con.Query("SELECT suffix('abcdefgh', 'h')");
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
         result = con.Query("SELECT suffix('abcdefgh', 'gh')");
@@ -72,7 +72,18 @@ TEST_CASE("Suffix test", "[function]") {
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
     }
 
-    SECTION("Prefix test with UTF8") {
+    SECTION("NULL string and suffix") {
+        result = con.Query("SELECT suffix(NULL, 'aaa')");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr)}));
+
+        result = con.Query("SELECT suffix('aaa', NULL)");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr)}));
+
+        result = con.Query("SELECT suffix(NULL, NULL)");
+        REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr)}));
+    }
+
+    SECTION("Suffix test with UTF8") {
         // inverse "átomo" (atom)
         result = con.Query("SELECT suffix('omot\xc3\xa1', '\xc3\xa1')");
         REQUIRE(CHECK_COLUMN(result, 0, {true}));
