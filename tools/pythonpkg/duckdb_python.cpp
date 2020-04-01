@@ -1,7 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 
+#include <unordered_map>
 #include <vector>
+
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
@@ -220,11 +222,11 @@ struct DuckDBPyResult {
 				break;
 			case SQLTypeId::FLOAT:
 				col_res = duckdb_py_convert::fetch_column_regular<float>(
-						"float", mres->collection, col_idx);
+						"float32", mres->collection, col_idx);
 				break;
 			case SQLTypeId::DOUBLE:
 				col_res = duckdb_py_convert::fetch_column_regular<double>(
-						"double", mres->collection, col_idx);
+						"float64", mres->collection, col_idx);
 				break;
 			case SQLTypeId::TIMESTAMP:
 				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t,
@@ -300,10 +302,6 @@ struct DuckDBPyResult {
 	unique_ptr<DataChunk> current_chunk;
 
 };
-
-//PyObject *duckdb_cursor_getiter(duckdb_Cursor *self);
-//PyObject *duckdb_cursor_iternext(duckdb_Cursor *self);
-//PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self);//
 
 struct DuckDBPyConnection {
 	DuckDBPyConnection* executemany(string query, py::object params =
@@ -390,8 +388,13 @@ struct DuckDBPyConnection {
 						+ "')");
 
 		// keep a reference
-		registered_dfs.push_back(value);
+		registered_dfs[name] = value;
 
+		return this;
+	}
+
+	DuckDBPyConnection* unregister_df(string name) {
+		registered_dfs[name] = py::none();
 		return this;
 	}
 
@@ -466,7 +469,7 @@ struct DuckDBPyConnection {
 
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	vector<py::object> registered_dfs;
+	unordered_map<string, py::object> registered_dfs;
 	unique_ptr<DuckDBPyResult> result;
 };
 
@@ -518,9 +521,12 @@ struct PandasScanFunction: public TableFunction {
 				duckdb_col_type = SQLType::INTEGER;
 			} else if (col_type == "int64") {
 				duckdb_col_type = SQLType::BIGINT;
+			} else if (col_type == "float32") {
+				duckdb_col_type = SQLType::FLOAT;
 			} else if (col_type == "float64") {
-				// this better be strings
 				duckdb_col_type = SQLType::DOUBLE;
+			} else if (col_type == "datetime64[ns]") {
+				duckdb_col_type = SQLType::TIMESTAMP;
 			} else if (col_type == "object") {
 				// this better be strings
 				duckdb_col_type = SQLType::VARCHAR;
@@ -558,7 +564,6 @@ struct PandasScanFunction: public TableFunction {
 		auto df_names = py::list(data.df.attr("columns"));
 		auto get_fun = data.df.attr("__getitem__");
 
-		// TODO TIMESTAMP and DATE and differing types with output schema
 		output.SetCardinality(this_count);
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(
@@ -593,14 +598,36 @@ struct PandasScanFunction: public TableFunction {
 				scan_pandas_column<double>(numpy_col, this_count, data.position,
 						output.data[col_idx]);
 				break;
+			case SQLTypeId::TIMESTAMP: {
+				auto src_ptr = (int64_t*) numpy_col.data();
+				auto tgt_ptr = (timestamp_t*) FlatVector::GetData(
+						output.data[col_idx]);
+
+				for (idx_t row = 0; row < this_count; row++) {
+					auto ms = src_ptr[row] / 1000000; // nanoseconds
+					auto ms_per_day = (int64_t) 60 * 60 * 24 * 1000;
+					date_t date = Date::EpochToDate(ms / 1000);
+					dtime_t time = (dtime_t) (ms % ms_per_day);
+					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
+					;
+				}
+				break;
+			}
+				break;
 			case SQLTypeId::VARCHAR: {
 				auto src_ptr = (py::object*) numpy_col.data();
 				auto tgt_ptr = (string_t*) FlatVector::GetData(
 						output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
+					auto val = src_ptr[row + data.position];
+
+					if (!py::isinstance < py::str > (val)) {
+						FlatVector::SetNull(output.data[col_idx], row, true);
+						continue;
+					}
 					tgt_ptr[row] = StringVector::AddString(output.data[col_idx],
-							src_ptr[row + data.position].cast<string>());
+							val.cast<string>());
 				}
 				break;
 			}
@@ -651,6 +678,7 @@ PYBIND11_MODULE(duckdb, m) {
 	.def("executemany", &DuckDBPyConnection::executemany, "some doc string for executemany", py::arg("query"), py::arg("parameters") = py::list())
 	.def("append", &DuckDBPyConnection::append, py::arg("table"), py::arg("value"))
 	.def("register", &DuckDBPyConnection::register_df, py::arg("name"), py::arg("value"))
+	.def("unregister", &DuckDBPyConnection::unregister_df, py::arg("name"))
 	.def("close", &DuckDBPyConnection::close)
 	.def("fetchone", &DuckDBPyConnection::fetchone)
 	.def("fetchall", &DuckDBPyConnection::fetchall)
