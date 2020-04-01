@@ -77,6 +77,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 
 	case CatalogType::INDEX:
 	case CatalogType::PREPARED_STATEMENT:
+	case CatalogType::AGGREGATE_FUNCTION:
+	case CatalogType::SCALAR_FUNCTION:
+	case CatalogType::TABLE_FUNCTION:
+
 		// do nothing, we log the query to recreate this
 		break;
 	default:
