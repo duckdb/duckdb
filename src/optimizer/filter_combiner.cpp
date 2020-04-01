@@ -171,7 +171,8 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(
                     constant_value.second[i].constant.type == TypeId::INT64 ||
                     constant_value.second[i].constant.type == TypeId::DECIMAL ||
                     constant_value.second[i].constant.type == TypeId::FLOAT ||
-                    constant_value.second[i].constant.type == TypeId::DOUBLE)) {
+                    constant_value.second[i].constant.type == TypeId::DOUBLE||
+                    constant_value.second[i].constant.type == TypeId::VARCHAR)) {
                     //! Here we check if these filters are column references
                     auto filter_exp = equivalence_map.find(constant_value.first);
                     string rowid = "rowid";

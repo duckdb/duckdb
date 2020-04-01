@@ -6,7 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
-
     assert(op->type == LogicalOperatorType::GET);
     auto &get = (LogicalGet &)*op;
     if (get.tableFilters.size() > 0){

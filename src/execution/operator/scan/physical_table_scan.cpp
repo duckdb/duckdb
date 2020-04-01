@@ -78,5 +78,4 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
     else{
         return make_unique<PhysicalTableScanOperatorState>();
     }
-
 }

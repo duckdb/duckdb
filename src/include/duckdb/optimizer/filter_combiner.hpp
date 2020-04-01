@@ -38,6 +38,7 @@ public:
 	void GenerateFilters(std::function<void(unique_ptr<Expression> filter)> callback);
 	bool HasFilters();
     vector<TableFilter> GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback);
+
 private:
 	FilterResult AddFilter(Expression *expr);
 
