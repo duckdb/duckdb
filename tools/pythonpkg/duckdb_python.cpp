@@ -409,14 +409,10 @@ struct DuckDBPyConnection {
 		auto res = make_unique<DuckDBPyConnection>();
 		res->database = database;
 		res->connection = make_unique<Connection>(*res->database);
-//		res->execute(
-//				"CREATE OR REPLACE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
-
 		return res;
 	}
 
 	// these should be functions on the result but well
-
 	py::tuple fetchone() {
 		if (!result) {
 			throw runtime_error("no open result set");
@@ -451,12 +447,14 @@ struct DuckDBPyConnection {
 };
 
 struct PandasScanFunctionData: public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count) :
-			df(df), row_count(row_count), position(0) {
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<SQLType> sql_types) :
+			df(df), row_count(row_count), sql_types(sql_types), position(0) {
 	}
 	py::handle df;
 	idx_t row_count;
+	vector<SQLType> sql_types;
 	idx_t position;
+
 
 };
 
@@ -500,7 +498,7 @@ struct PandasScanFunction: public TableFunction {
 			return_types.push_back(duckdb_col_type);
 		}
 		idx_t row_count = py::len(df.attr("__getitem__")(df_names[0]));
-		return make_unique<PandasScanFunctionData>(df, row_count);
+		return make_unique<PandasScanFunctionData>(df, row_count, return_types);
 	}
 
 	template<class T>
@@ -531,36 +529,37 @@ struct PandasScanFunction: public TableFunction {
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(
 					get_fun(df_names[col_idx]).attr("to_numpy")());
-			switch (output.GetTypes()[col_idx]) {
-			case TypeId::BOOL:
+
+			switch (data.sql_types[col_idx].id) {
+			case SQLTypeId::BOOLEAN:
 				scan_pandas_column<bool>(numpy_col, this_count, data.position,
 						output.data[col_idx]);
 				break;
-			case TypeId::INT8:
+			case SQLTypeId::TINYINT:
 				scan_pandas_column<int8_t>(numpy_col, this_count, data.position,
 						output.data[col_idx]);
 				break;
-			case TypeId::INT16:
+			case SQLTypeId::SMALLINT:
 				scan_pandas_column<int16_t>(numpy_col, this_count,
 						data.position, output.data[col_idx]);
 				break;
-			case TypeId::INT32:
+			case SQLTypeId::INTEGER:
 				scan_pandas_column<int32_t>(numpy_col, this_count,
 						data.position, output.data[col_idx]);
 				break;
-			case TypeId::INT64:
+			case SQLTypeId::BIGINT:
 				scan_pandas_column<int64_t>(numpy_col, this_count,
 						data.position, output.data[col_idx]);
 				break;
-			case TypeId::FLOAT:
+			case SQLTypeId::FLOAT:
 				scan_pandas_column<float>(numpy_col, this_count, data.position,
 						output.data[col_idx]);
 				break;
-			case TypeId::DOUBLE:
+			case SQLTypeId::DOUBLE:
 				scan_pandas_column<double>(numpy_col, this_count, data.position,
 						output.data[col_idx]);
 				break;
-			case TypeId::VARCHAR: {
+			case SQLTypeId::VARCHAR: {
 				auto src_ptr = (py::object*) numpy_col.data();
 				auto tgt_ptr = (string_t*) FlatVector::GetData(
 						output.data[col_idx]);
@@ -597,7 +596,7 @@ static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	context.transaction.Commit();
 
 	if (!read_only) {
-		res->execute("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+		res->connection->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
 	}
 
 	return res;
