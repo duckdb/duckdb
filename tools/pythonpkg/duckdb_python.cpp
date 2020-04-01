@@ -596,8 +596,9 @@ static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	context.catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
-//	res->execute(
-//			"CREATE OR REPLACE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+	if (!read_only) {
+		res->execute("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+	}
 
 	return res;
 }
