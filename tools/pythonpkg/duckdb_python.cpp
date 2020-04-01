@@ -12,48 +12,67 @@ using namespace duckdb;
 using namespace std;
 
 namespace duckdb_py_convert {
-	// woo template magic
-	template<class DUCKDB_T, class NUMPY_T> static NUMPY_T convert_value(
-			DUCKDB_T val) {
+
+struct RegularConvert {
+	template<class DUCKDB_T, class NUMPY_T>
+	static NUMPY_T convert_value(DUCKDB_T val) {
 		return (NUMPY_T) val;
 	}
+};
 
-	template<> int64_t convert_value(timestamp_t timestamp) {
-		return Date::Epoch(Timestamp::GetDate(timestamp)) * 1000
-				+ (int64_t) (Timestamp::GetTime(timestamp));
-	}
-
-	template<> int64_t convert_value(date_t date) {
-		return Date::Epoch(date);
-	}
-
-	template<> py::str convert_value(string_t s) {
-		return py::str(s.GetData());
-	}
-
+struct TimestampConvert {
 	template<class DUCKDB_T, class NUMPY_T>
-	static py::array fetch_column(string numpy_type,
-			ChunkCollection &collection, idx_t column) {
-		auto out = py::array(py::dtype(numpy_type), collection.count);
-		auto out_ptr = (NUMPY_T*) out.mutable_data();
-
-		idx_t out_offset = 0;
-		for (auto &data_chunk : collection.chunks) {
-			auto &src = data_chunk->data[column];
-			auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
-			auto &nullmask = FlatVector::Nullmask(src);
-			for (idx_t i = 0; i < data_chunk->size(); i++) {
-				if (nullmask[i]) {
-					continue;
-				}
-				out_ptr[i + out_offset] = convert_value<DUCKDB_T, NUMPY_T>(
-						src_ptr[i]);
-			}
-			out_offset += data_chunk->size();
-		}
-		return out;
+	static int64_t convert_value(timestamp_t val) {
+		return Date::Epoch(Timestamp::GetDate(val)) * 1000
+				+ (int64_t) (Timestamp::GetTime(val));
 	}
 };
+
+struct DateConvert {
+	template<class DUCKDB_T, class NUMPY_T>
+	static int64_t convert_value(date_t val) {
+		return Date::Epoch(val);
+	}
+};
+
+struct StringConvert {
+	template<class DUCKDB_T, class NUMPY_T>
+	static py::str convert_value(string_t val) {
+		return py::str(val.GetData());
+	}
+};
+
+template<class DUCKDB_T, class NUMPY_T, class CONVERT>
+static py::array fetch_column(string numpy_type, ChunkCollection &collection,
+		idx_t column) {
+	auto out = py::array(py::dtype(numpy_type), collection.count);
+	auto out_ptr = (NUMPY_T*) out.mutable_data();
+
+	idx_t out_offset = 0;
+	for (auto &data_chunk : collection.chunks) {
+		auto &src = data_chunk->data[column];
+		auto src_ptr = FlatVector::GetData<DUCKDB_T>(src);
+		auto &nullmask = FlatVector::Nullmask(src);
+		for (idx_t i = 0; i < data_chunk->size(); i++) {
+			if (nullmask[i]) {
+				continue;
+			}
+			out_ptr[i + out_offset] = CONVERT::template convert_value<DUCKDB_T,
+					NUMPY_T>(src_ptr[i]);
+		}
+		out_offset += data_chunk->size();
+	}
+	return out;
+}
+
+template<class T>
+static py::array fetch_column_regular(string numpy_type,
+		ChunkCollection &collection, idx_t column) {
+	return fetch_column<T, T, RegularConvert>(numpy_type, collection, column);
+}
+
+}
+;
 
 struct DuckDBPyResult {
 
@@ -159,8 +178,6 @@ struct DuckDBPyResult {
 		return res;
 	}
 
-
-
 	py::dict fetchnumpy() {
 		if (!result) {
 			throw runtime_error("result closed");
@@ -182,44 +199,47 @@ struct DuckDBPyResult {
 			py::array col_res;
 			switch (mres->sql_types[col_idx].id) {
 			case SQLTypeId::BOOLEAN:
-				col_res = duckdb_py_convert::fetch_column<bool, bool>("bool", mres->collection,
-						col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool",
+						mres->collection, col_idx);
 				break;
 			case SQLTypeId::TINYINT:
-				col_res = duckdb_py_convert::fetch_column<int8_t, int8_t>("int8", mres->collection,
-						col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<int8_t>(
+						"int8", mres->collection, col_idx);
 				break;
 			case SQLTypeId::SMALLINT:
-				col_res = duckdb_py_convert::fetch_column<int16_t, int16_t>("int16",
-						mres->collection, col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<int16_t>(
+						"int16", mres->collection, col_idx);
 				break;
 			case SQLTypeId::INTEGER:
-				col_res = duckdb_py_convert::fetch_column<int32_t, int32_t>("int32",
-						mres->collection, col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<int32_t>(
+						"int32", mres->collection, col_idx);
 				break;
 			case SQLTypeId::BIGINT:
-				col_res = duckdb_py_convert::fetch_column<int64_t, int64_t>("int64",
-						mres->collection, col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<int64_t>(
+						"int64", mres->collection, col_idx);
 				break;
 			case SQLTypeId::FLOAT:
-				col_res = duckdb_py_convert::fetch_column<float, float>("float", mres->collection,
-						col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<float>(
+						"float", mres->collection, col_idx);
 				break;
 			case SQLTypeId::DOUBLE:
-				col_res = duckdb_py_convert::fetch_column<double, double>("double",
-						mres->collection, col_idx);
+				col_res = duckdb_py_convert::fetch_column_regular<double>(
+						"double", mres->collection, col_idx);
 				break;
 			case SQLTypeId::TIMESTAMP:
-				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t>("datetime64[ms]",
+				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t,
+						duckdb_py_convert::TimestampConvert>("datetime64[ms]",
 						mres->collection, col_idx);
 				break;
 			case SQLTypeId::DATE:
-				col_res = duckdb_py_convert::fetch_column<date_t, int64_t>("datetime64[s]",
+				col_res = duckdb_py_convert::fetch_column<date_t, int64_t,
+						duckdb_py_convert::DateConvert>("datetime64[s]",
 						mres->collection, col_idx);
 				break;
 
 			case SQLTypeId::VARCHAR:
-				col_res = duckdb_py_convert::fetch_column<string_t, py::str>("object",
+				col_res = duckdb_py_convert::fetch_column<string_t, py::str,
+						duckdb_py_convert::StringConvert>("object",
 						mres->collection, col_idx);
 				break;
 			default:
@@ -451,14 +471,14 @@ struct DuckDBPyConnection {
 };
 
 struct PandasScanFunctionData: public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<SQLType> sql_types) :
+	PandasScanFunctionData(py::handle df, idx_t row_count,
+			vector<SQLType> sql_types) :
 			df(df), row_count(row_count), sql_types(sql_types), position(0) {
 	}
 	py::handle df;
 	idx_t row_count;
 	vector<SQLType> sql_types;
 	idx_t position;
-
 
 };
 
@@ -488,7 +508,15 @@ struct PandasScanFunction: public TableFunction {
 			names.push_back(string(py::str(df_names[col_idx])));
 			SQLType duckdb_col_type;
 			// TODO other types!
-			if (col_type == "int64") {
+			if (col_type == "bool") {
+				duckdb_col_type = SQLType::BOOLEAN;
+			} else if (col_type == "int8") {
+				duckdb_col_type = SQLType::TINYINT;
+			} else if (col_type == "int16") {
+				duckdb_col_type = SQLType::SMALLINT;
+			} else if (col_type == "int32") {
+				duckdb_col_type = SQLType::INTEGER;
+			} else if (col_type == "int64") {
 				duckdb_col_type = SQLType::BIGINT;
 			} else if (col_type == "float64") {
 				// this better be strings
@@ -508,6 +536,7 @@ struct PandasScanFunction: public TableFunction {
 	template<class T>
 	static void scan_pandas_column(py::array numpy_col, idx_t count,
 			idx_t offset, Vector &out) {
+
 		auto src_ptr = (T*) numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 
@@ -529,7 +558,7 @@ struct PandasScanFunction: public TableFunction {
 		auto df_names = py::list(data.df.attr("columns"));
 		auto get_fun = data.df.attr("__getitem__");
 
-		// TODO TIMESTAMP and DATE
+		// TODO TIMESTAMP and DATE and differing types with output schema
 		output.SetCardinality(this_count);
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(
@@ -576,7 +605,9 @@ struct PandasScanFunction: public TableFunction {
 				break;
 			}
 			default:
-				throw runtime_error("Unsupported type " + SQLTypeToString(data.sql_types[col_idx]));
+				throw runtime_error(
+						"Unsupported type "
+								+ SQLTypeToString(data.sql_types[col_idx]));
 			}
 		}
 		data.position += this_count;
@@ -601,7 +632,8 @@ static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	context.transaction.Commit();
 
 	if (!read_only) {
-		res->connection->Query("CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+		res->connection->Query(
+				"CREATE OR REPLACE VIEW sqlite_master AS SELECT * FROM sqlite_master()");
 	}
 
 	return res;
