@@ -17,7 +17,7 @@ namespace duckdb {
 
 class PersistentSegment : public ColumnSegment {
 public:
-	PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, TypeId type, idx_t start, idx_t count);
+	PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, TypeId type, idx_t start, idx_t count, uint64_t* stats_min, uint64_t* stats_max);
 
 	//! The buffer manager
 	BufferManager &manager;

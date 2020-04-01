@@ -138,8 +138,8 @@ void TableDataWriter::FlushSegment(idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.minimum = move(stats[col_idx]->minimum);
-    data_pointer.maximum = move(stats[col_idx]->maximum);
+    reinterpret_cast<uint64_t *>(&data_pointer.min_stats)[0] = *stats[col_idx]->minimum.get();
+    reinterpret_cast<uint64_t *>(&data_pointer.max_stats)[0] = *stats[col_idx]->maximum.get();
 	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
@@ -159,6 +159,8 @@ void TableDataWriter::WriteDataPointers() {
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
+            manager.tabledata_writer->Write<uint64_t*>(data_pointer.min_stats);
+            manager.tabledata_writer->Write<uint64_t*>(data_pointer.max_stats);
 		}
 	}
 }

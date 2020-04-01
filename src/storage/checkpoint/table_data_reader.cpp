@@ -35,10 +35,13 @@ void TableDataReader::ReadTableData() {
 			data_pointer.tuple_count = reader.Read<idx_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
-			// create a persistent segment
+			data_pointer.min_stats = reader.Read<uint64_t*>();
+            data_pointer.max_stats = reader.Read<uint64_t*>();
+
+            // create a persistent segment
 			auto segment = make_unique<PersistentSegment>(manager.buffer_manager, data_pointer.block_id,
 			                                              data_pointer.offset, GetInternalType(column.type),
-			                                              data_pointer.row_start, data_pointer.tuple_count);
+			                                              data_pointer.row_start, data_pointer.tuple_count, data_pointer.min_stats, data_pointer.max_stats);
 			info.data[col].push_back(move(segment));
 		}
 	}
