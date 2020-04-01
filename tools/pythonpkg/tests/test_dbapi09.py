@@ -7,7 +7,7 @@ import pandas
 class TestNumpyDate(object):
     def test_fetchall_date(self, duckdb_cursor):
         res = duckdb_cursor.execute("SELECT DATE '2020-01-10' as test_date").fetchall()
-        assert res == [[datetime.date(2020, 1, 10)]]
+        assert res == [(datetime.date(2020, 1, 10),)]
 
     def test_fetchnumpy_date(self, duckdb_cursor):
         res = duckdb_cursor.execute("SELECT DATE '2020-01-10' as test_date").fetchnumpy()

@@ -4,7 +4,7 @@
 class TestSimpleDBAPI(object):
 	def test_prepare(self, duckdb_cursor):
 		result = duckdb_cursor.execute('SELECT CAST(? AS INTEGER), CAST(? AS INTEGER)', ['42', '84']).fetchall()
-		assert result == [[42, 84]], "Incorrect result returned"
+		assert result == [(42, 84, )], "Incorrect result returned"
 
 		c = duckdb_cursor
 		
@@ -15,12 +15,12 @@ class TestSimpleDBAPI(object):
 
 		t = ('RHAT',)
 		result = c.execute('SELECT COUNT(*) FROM stocks WHERE symbol=?', t).fetchone()
-		assert result == [1]
+		assert result == (1,)
 
 
 		t = ['RHAT']
 		result = c.execute('SELECT COUNT(*) FROM stocks WHERE symbol=?', t).fetchone()
-		assert result == [1]
+		assert result == (1,)
 
 		# Larger example that inserts many records at a time
 		purchases = [('2006-03-28', 'BUY', 'IBM', 1000, 45.00),
@@ -30,4 +30,4 @@ class TestSimpleDBAPI(object):
 		c.executemany('INSERT INTO stocks VALUES (?,?,?,?,?)', purchases)
 
 		result = c.execute('SELECT count(*) FROM stocks').fetchone()
-		assert result == [4]
+		assert result == (4, )
