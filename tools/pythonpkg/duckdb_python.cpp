@@ -251,6 +251,22 @@ struct DuckDBPyResult {
 				fetchnumpy());
 	}
 
+	py::list description() {
+		py::list desc(result->names.size());
+		for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
+			py::tuple col_desc(7);
+			col_desc[0] = py::str(result->names[col_idx]);
+			col_desc[1] = py::none();
+			col_desc[2] = py::none();
+			col_desc[3] = py::none();
+			col_desc[4] = py::none();
+			col_desc[5] = py::none();
+			col_desc[6] = py::none();
+			desc[col_idx] = col_desc;
+		}
+		return desc;
+	}
+
 	void close() {
 		result = nullptr;
 	}
@@ -266,18 +282,70 @@ struct DuckDBPyResult {
 //PyObject *duckdb_cursor_fetchdf(duckdb_Cursor *self);//
 
 struct DuckDBPyConnection {
-	// TODO parameters
-	DuckDBPyConnection* execute(string query) {
+	DuckDBPyConnection* executemany(string query, py::object params =
+			py::list()) {
+		execute(query, params, true);
+		return this;
+	}
+
+	DuckDBPyConnection* execute(string query, py::object params = py::list(),
+			bool many = false) {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		}
 		result = nullptr;
-		auto res = make_unique<DuckDBPyResult>();
-		res->result = connection->Query(query);
-		if (!res->result->success) {
-			throw runtime_error(res->result->error);
+
+		auto prep = connection->Prepare(query);
+		if (!prep->success) {
+			throw runtime_error(prep->error);
 		}
-		result = move(res);
+
+		// this is a list of a list of parameters in executemany
+		py::list params_set;
+		if (!many) {
+			params_set = py::list(1);
+			params_set[0] = params;
+		} else {
+			params_set = params;
+		}
+
+		for (auto &single_query_params : params_set) {
+			vector<Value> args;
+			for (auto &ele : single_query_params) {
+
+				// TODO what happens with timestamps and dates here?
+				if (ele.is_none()) {
+					args.push_back(Value());
+				} else if (py::isinstance < py::bool_ > (ele)) {
+					args.push_back(Value::BOOLEAN(ele.cast<bool>()));
+				} else if (py::isinstance < py::int_ > (ele)) {
+					args.push_back(Value::BIGINT(ele.cast<int64_t>()));
+				} else if (py::isinstance < py::float_ > (ele)) {
+					args.push_back(Value::DOUBLE(ele.cast<double>()));
+				} else if (py::isinstance < py::str > (ele)) {
+					args.push_back(Value(ele.cast<string>()));
+				} else {
+					throw runtime_error(
+							"unknown param type "
+									+ py::str(ele.get_type()).cast<string>());
+				}
+			}
+			if (prep->n_param != py::len(single_query_params)) {
+				throw runtime_error(
+						"Prepared statments needs " + to_string(prep->n_param)
+								+ " parameters, "
+								+ to_string(py::len(single_query_params))
+								+ " given");
+			}
+			auto res = make_unique<DuckDBPyResult>();
+			res->result = prep->Execute(args);
+			if (!res->result->success) {
+				throw runtime_error(res->result->error);
+			}
+			if (!many) {
+				result = move(res);
+			}
+		}
 		return this;
 	}
 
@@ -309,6 +377,9 @@ struct DuckDBPyConnection {
 	}
 
 	DuckDBPyConnection* commit() {
+		if (connection->context->transaction.IsAutoCommit()) {
+			return this;
+		}
 		execute("COMMIT");
 		return this;
 	}
@@ -318,14 +389,30 @@ struct DuckDBPyConnection {
 		return this;
 	}
 
+	py::object getattr(py::str key) {
+		if (key.cast<string>() == "description") {
+			if (!result) {
+				throw runtime_error("no open result set");
+			}
+			return result->description();
+		}
+		return py::none();
+	}
+
 	void close() {
 		connection = nullptr;
 		database = nullptr;
 	}
 
 	// cursor() is stupid
-	DuckDBPyConnection* cursor() {
-		return this;
+	unique_ptr<DuckDBPyConnection> cursor() {
+		auto res = make_unique<DuckDBPyConnection>();
+		res->database = database;
+		res->connection = make_unique<Connection>(*res->database);
+//		res->execute(
+//				"CREATE OR REPLACE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+
+		return res;
 	}
 
 	// these should be functions on the result but well
@@ -357,7 +444,7 @@ struct DuckDBPyConnection {
 		return result->fetchdf();
 	}
 
-	unique_ptr<DuckDB> database;
+	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
 	vector<py::object> registered_dfs;
 	unique_ptr<DuckDBPyResult> result;
@@ -398,6 +485,7 @@ struct PandasScanFunction: public TableFunction {
 			auto col_type = string(py::str(df_types[col_idx]));
 			names.push_back(string(py::str(df_names[col_idx])));
 			SQLType duckdb_col_type;
+			// TODO other types!
 			if (col_type == "int64") {
 				duckdb_col_type = SQLType::BIGINT;
 			} else if (col_type == "float64") {
@@ -495,18 +583,21 @@ struct PandasScanFunction: public TableFunction {
 static unique_ptr<DuckDBPyConnection> connect(string database, bool read_only) {
 	auto res = make_unique<DuckDBPyConnection>();
 	DBConfig config;
-	if (read_only) config.access_mode = AccessMode::READ_ONLY;
+	if (read_only)
+		config.access_mode = AccessMode::READ_ONLY;
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
+
 	auto &context = *res->connection->context;
 	context.transaction.BeginTransaction();
 	context.catalog.CreateTableFunction(context, &info);
 	context.transaction.Commit();
 
-	res->execute("CREATE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
+//	res->execute(
+//			"CREATE OR REPLACE TEMPORARY VIEW sqlite_master AS SELECT * FROM sqlite_master()");
 
 	return res;
 }
@@ -519,14 +610,16 @@ PYBIND11_MODULE(duckdb, m) {
 	.def("begin", &DuckDBPyConnection::begin)
 	.def("commit", &DuckDBPyConnection::commit)
 	.def("rollback", &DuckDBPyConnection::rollback)
-	.def("execute", &DuckDBPyConnection::execute)
-	.def("append", &DuckDBPyConnection::append)
-	.def("register", &DuckDBPyConnection::register_df)
+	.def("execute", &DuckDBPyConnection::execute, "some doc string for execute", py::arg("query"), py::arg("parameters") = py::list(), py::arg("multiple_parameter_sets") = false)
+	.def("executemany", &DuckDBPyConnection::executemany, "some doc string for executemany", py::arg("query"), py::arg("parameters") = py::list())
+	.def("append", &DuckDBPyConnection::append, py::arg("table"), py::arg("value"))
+	.def("register", &DuckDBPyConnection::register_df, py::arg("name"), py::arg("value"))
 	.def("close", &DuckDBPyConnection::close)
 	.def("fetchone", &DuckDBPyConnection::fetchone)
 	.def("fetchall", &DuckDBPyConnection::fetchall)
 	.def("fetchnumpy", &DuckDBPyConnection::fetchnumpy)
-	.def("fetchdf", &DuckDBPyConnection::fetchdf);
+	.def("fetchdf", &DuckDBPyConnection::fetchdf)
+	.def("__getattr__", &DuckDBPyConnection::getattr);
 
 	PyDateTime_IMPORT;
 
