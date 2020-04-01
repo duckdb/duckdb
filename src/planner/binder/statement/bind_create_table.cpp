@@ -117,10 +117,12 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> i
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
 	if (base.query) {
 		// construct the result object
-		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*base.query));
+		auto query_obj = Bind(*base.query);
+		result->query = move(query_obj.plan);
+
 		// construct the set of columns based on the names and types of the query
-		auto &names = result->query->node->names;
-		auto &sql_types = result->query->node->types;
+		auto &names = query_obj.names;
+		auto &sql_types = query_obj.types;
 		assert(names.size() == sql_types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.push_back(ColumnDefinition(names[i], sql_types[i]));

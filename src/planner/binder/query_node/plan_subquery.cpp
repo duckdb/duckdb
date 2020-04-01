@@ -7,13 +7,14 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
@@ -266,14 +267,9 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	}
 }
 
-static unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
-                                           unique_ptr<LogicalOperator> &root);
-
-namespace duckdb {
-
 class RecursiveSubqueryPlanner : public LogicalOperatorVisitor {
 public:
-	RecursiveSubqueryPlanner(Binder &binder, ClientContext &context) : binder(binder), context(context) {
+	RecursiveSubqueryPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override {
 		if (op.children.size() > 0) {
@@ -287,43 +283,40 @@ public:
 	}
 
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override {
-		return PlanSubquery(binder, context, expr, root);
+		return binder.PlanSubquery(expr, root);
 	}
 
 private:
 	unique_ptr<LogicalOperator> root;
 	Binder &binder;
-	ClientContext &context;
 };
-} // namespace duckdb
 
-unique_ptr<Expression> PlanSubquery(Binder &binder, ClientContext &context, BoundSubqueryExpression &expr,
-                                    unique_ptr<LogicalOperator> &root) {
+unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root) {
 	assert(root);
 	// first we translate the QueryNode of the subquery into a logical plan
 	// note that we do not plan nested subqueries yet
-	LogicalPlanGenerator generator(*expr.binder, context);
-	generator.plan_subquery = false;
-	auto subquery_root = generator.CreatePlan(*expr.subquery);
+	Binder sub_binder(context);
+	sub_binder.plan_subquery = false;
+	auto subquery_root = sub_binder.CreatePlan(*expr.subquery);
 	assert(subquery_root);
 
 	// now we actually flatten the subquery
 	auto plan = move(subquery_root);
 	unique_ptr<Expression> result_expression;
 	if (!expr.IsCorrelated()) {
-		result_expression = PlanUncorrelatedSubquery(binder, expr, root, move(plan));
+		result_expression = PlanUncorrelatedSubquery(*this, expr, root, move(plan));
 	} else {
-		result_expression = PlanCorrelatedSubquery(binder, expr, root, move(plan));
+		result_expression = PlanCorrelatedSubquery(*this, expr, root, move(plan));
 	}
 	// finally, we recursively plan the nested subqueries (if there are any)
-	if (generator.has_unplanned_subqueries) {
-		RecursiveSubqueryPlanner plan(binder, context);
+	if (sub_binder.has_unplanned_subqueries) {
+		RecursiveSubqueryPlanner plan(*this);
 		plan.VisitOperator(*root);
 	}
 	return result_expression;
 }
 
-void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
+void Binder::PlanSubqueries(unique_ptr<Expression> *expr_ptr, unique_ptr<LogicalOperator> *root) {
 	auto &expr = **expr_ptr;
 
 	// first visit the children of the node, if any
@@ -343,6 +336,8 @@ void LogicalPlanGenerator::PlanSubqueries(unique_ptr<Expression> *expr_ptr, uniq
 			has_unplanned_subqueries = true;
 			return;
 		}
-		*expr_ptr = PlanSubquery(binder, context, subquery, *root);
+		*expr_ptr = PlanSubquery(subquery, *root);
 	}
 }
+
+} // namespace duckdb

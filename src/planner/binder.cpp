@@ -25,7 +25,7 @@ Binder::Binder(ClientContext &context, Binder *parent_)
 	}
 }
 
-unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
+BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:
 		return Bind((SelectStatement &)statement);
@@ -75,18 +75,18 @@ static int64_t BindConstant(Binder &binder, ClientContext &context, string claus
 	return limit_value;
 }
 
-unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
+unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = Bind((SelectNode &)node);
+		result = BindNode((SelectNode &)node);
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = Bind((RecursiveCTENode &)node);
+		result = BindNode((RecursiveCTENode &)node);
 		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
-		result = Bind((SetOperationNode &)node);
+		result = BindNode((SetOperationNode &)node);
 		break;
 	}
 	// DISTINCT ON select list
@@ -105,7 +105,32 @@ unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
 	return result;
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
+BoundStatement Binder::Bind(QueryNode &node) {
+	BoundStatement result;
+	// bind the node
+	auto bound_node = BindNode(node);
+
+	result.names = bound_node->names;
+	result.types = bound_node->types;
+
+	// and plan it
+	result.plan = CreatePlan(*bound_node);
+	return result;
+}
+
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE:
+		return CreatePlan((BoundSelectNode &)node);
+	case QueryNodeType::SET_OPERATION_NODE:
+		return CreatePlan((BoundSetOperationNode &)node);
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return CreatePlan((BoundRecursiveCTENode &)node);
+	default:
+		throw Exception("Unsupported bound query node type");
+	}
+}
+unique_ptr<LogicalOperator> Binder::Bind(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		return Bind((BaseTableRef &)ref);

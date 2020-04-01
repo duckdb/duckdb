@@ -3,7 +3,6 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 #include "duckdb/common/string_util.hpp"
 
@@ -81,8 +80,8 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	bindings[alias] = move(binding);
 }
 
-void BindContext::AddBaseTable(BoundBaseTableRef *bound, const string &alias) {
-	AddBinding(alias, make_unique<TableBinding>(alias, bound));
+void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEntry &table, LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, table, get, index));
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {

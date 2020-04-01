@@ -8,25 +8,26 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-TableBinding::TableBinding(const string &alias, BoundBaseTableRef *bound)
-    : Binding(BindingType::TABLE, alias, bound->bind_index), bound(bound) {
+TableBinding::TableBinding(const string &alias, TableCatalogEntry &table, LogicalGet &get, idx_t index)
+    : Binding(BindingType::TABLE, alias, index), table(table), get(get) {
 }
 
 bool TableBinding::HasMatchingBinding(const string &column_name) {
-	return bound->table->ColumnExists(column_name);
+	return table.ColumnExists(column_name);
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto entry = bound->table->name_map.find(colref.column_name);
-	if (entry == bound->table->name_map.end()) {
+	auto entry = table.name_map.find(colref.column_name);
+	if (entry == table.name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
 		                                     colref.table_name.c_str(), colref.column_name.c_str()));
 	}
+	auto col_index = entry->second;
 	// fetch the type of the column
 	SQLType col_type;
 	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
@@ -34,24 +35,24 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		col_type = SQLType::BIGINT;
 	} else {
 		// normal column: fetch type from base column
-		auto &col = bound->table->columns[entry->second];
+		auto &col = table.columns[col_index];
 		col_type = col.type;
 	}
-	auto &column_list = bound->bound_columns;
+
+	auto &column_ids = get.column_ids;
 	// check if the entry already exists in the column list for the table
 	ColumnBinding binding;
 
-	binding.column_index = column_list.size();
-	for (idx_t i = 0; i < column_list.size(); i++) {
-		auto &column = column_list[i];
-		if (column == colref.column_name) {
+	binding.column_index = column_ids.size();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		if (column_ids[i] == col_index) {
 			binding.column_index = i;
 			break;
 		}
 	}
-	if (binding.column_index == column_list.size()) {
+	if (binding.column_index == column_ids.size()) {
 		// column binding not found: add it to the list of bindings
-		column_list.push_back(colref.column_name);
+		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
 	return BindResult(
@@ -60,7 +61,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,
                                                 vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &column : bound->table->columns) {
+	for (auto &column : table.columns) {
 		string column_string = alias + "." + column.name;
 		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
 			continue;

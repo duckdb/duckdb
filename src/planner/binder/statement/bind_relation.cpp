@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-unique_ptr<BoundSQLStatement> Binder::Bind(RelationStatement &stmt) {
+BoundStatement Binder::Bind(RelationStatement &stmt) {
 	throw NotImplementedException("FIXME: bind relation stmt");
 }
 

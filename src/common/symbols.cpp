@@ -24,18 +24,16 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
-#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
-#include "duckdb/planner/statement/list.hpp"
-#include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -81,14 +79,6 @@ template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
 
 template class std::unique_ptr<Expression>;
-template class std::unique_ptr<BoundSQLStatement>;
-template class std::unique_ptr<BoundCopyStatement>;
-template class std::unique_ptr<BoundCreateStatement>;
-template class std::unique_ptr<BoundDeleteStatement>;
-template class std::unique_ptr<BoundExecuteStatement>;
-template class std::unique_ptr<BoundInsertStatement>;
-template class std::unique_ptr<BoundSelectStatement>;
-template class std::unique_ptr<BoundUpdateStatement>;
 template class std::unique_ptr<BoundQueryNode>;
 template class std::unique_ptr<BoundSelectNode>;
 template class std::unique_ptr<BoundSetOperationNode>;
@@ -107,12 +97,6 @@ template class std::unique_ptr<BoundReferenceExpression>;
 template class std::unique_ptr<BoundSubqueryExpression>;
 template class std::unique_ptr<BoundWindowExpression>;
 template class std::unique_ptr<CommonSubExpression>;
-template class std::unique_ptr<BoundTableRef>;
-template class std::unique_ptr<BoundBaseTableRef>;
-template class std::unique_ptr<BoundCrossProductRef>;
-template class std::unique_ptr<BoundJoinRef>;
-template class std::unique_ptr<BoundSubqueryRef>;
-template class std::unique_ptr<BoundTableFunction>;
 
 template class std::unique_ptr<CatalogEntry>;
 template class std::unique_ptr<BindContext>;

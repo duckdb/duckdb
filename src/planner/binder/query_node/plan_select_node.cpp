@@ -1,4 +1,4 @@
-#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
@@ -6,10 +6,10 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundSelectNode &statement) {
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
 	assert(statement.from_table);
-	root = CreatePlan(*statement.from_table);
+	root = move(statement.from_table);
 	assert(root);
 
 	if (statement.where_clause) {

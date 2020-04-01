@@ -16,10 +16,10 @@
 
 namespace duckdb {
 class BindContext;
-class BoundBaseTableRef;
 class BoundQueryNode;
 class ColumnRefExpression;
 class SubqueryRef;
+class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 
@@ -45,10 +45,10 @@ public:
 
 //! Represents a binding to a base table
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, BoundBaseTableRef *bound);
+	TableBinding(const string &alias, TableCatalogEntry &table, LogicalGet &get, idx_t index);
 
-	BoundBaseTableRef *bound;
-
+	TableCatalogEntry &table;
+	LogicalGet &get;
 public:
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;

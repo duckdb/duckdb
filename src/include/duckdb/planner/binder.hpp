@@ -14,10 +14,14 @@
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class ClientContext;
 class ExpressionBinder;
+class TableCatalogEntry;
+class ViewCatalogEntry;
+
 struct CreateInfo;
 struct BoundCreateInfo;
 
@@ -36,6 +40,12 @@ struct CorrelatedColumnInfo {
 	}
 };
 
+struct BoundStatement {
+	unique_ptr<LogicalOperator> plan;
+	vector<SQLType> types;
+	vector<string> names;
+};
+
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -43,6 +53,8 @@ struct CorrelatedColumnInfo {
   all expressions.
 */
 class Binder {
+	friend class ExpressionBinder;
+	friend class RecursiveSubqueryPlanner;
 public:
 	Binder(ClientContext &context, Binder *parent = nullptr);
 
@@ -59,10 +71,12 @@ public:
 	vector<BoundParameterExpression *> *parameters;
 	//! Whether or not the bound statement is read-only
 	bool read_only;
+	//! Whether or not the statement requires a valid transaction to run
+	bool requires_valid_transaction = true;
 
 public:
-	unique_ptr<BoundSQLStatement> Bind(SQLStatement &statement);
-	unique_ptr<BoundQueryNode> Bind(QueryNode &node);
+	BoundStatement Bind(SQLStatement &statement);
+	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateInfo> BindCreateInfo(unique_ptr<CreateInfo> info);
 
@@ -93,7 +107,10 @@ private:
 	vector<ExpressionBinder *> active_binders;
 	//! The count of bound_tables
 	idx_t bound_tables;
-
+	//! Whether or not the binder has any unplanned subqueries that still need to be planned
+	bool has_unplanned_subqueries = false;
+	//! Whether or not subqueries should be planned already
+	bool plan_subquery = true;
 private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
@@ -101,37 +118,58 @@ private:
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
 
-	unique_ptr<BoundSQLStatement> Bind(SelectStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(InsertStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CopyStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(DeleteStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(UpdateStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(CreateStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(ExecuteStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(DropStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(AlterTableStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(TransactionStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(PragmaStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(ExplainStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(VacuumStatement &stmt);
-	unique_ptr<BoundSQLStatement> Bind(RelationStatement &stmt);
+	BoundStatement Bind(SelectStatement &stmt);
+	BoundStatement Bind(InsertStatement &stmt);
+	BoundStatement Bind(CopyStatement &stmt);
+	BoundStatement Bind(DeleteStatement &stmt);
+	BoundStatement Bind(UpdateStatement &stmt);
+	BoundStatement Bind(CreateStatement &stmt);
+	BoundStatement Bind(ExecuteStatement &stmt);
+	BoundStatement Bind(DropStatement &stmt);
+	BoundStatement Bind(AlterTableStatement &stmt);
+	BoundStatement Bind(TransactionStatement &stmt);
+	BoundStatement Bind(PragmaStatement &stmt);
+	BoundStatement Bind(ExplainStatement &stmt);
+	BoundStatement Bind(VacuumStatement &stmt);
+	BoundStatement Bind(RelationStatement &stmt);
 
-	unique_ptr<BoundQueryNode> Bind(SelectNode &node);
-	unique_ptr<BoundQueryNode> Bind(SetOperationNode &node);
-	unique_ptr<BoundQueryNode> Bind(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
+	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
+	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
 
-	unique_ptr<BoundTableRef> Bind(TableRef &ref);
-	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
-	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
-	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
-	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
-	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
-	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
+	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
+	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
+
+	unique_ptr<LogicalOperator> Bind(TableRef &ref);
+	unique_ptr<LogicalOperator> Bind(BaseTableRef &ref);
+	unique_ptr<LogicalOperator> Bind(CrossProductRef &ref);
+	unique_ptr<LogicalOperator> Bind(JoinRef &ref);
+	unique_ptr<LogicalOperator> Bind(SubqueryRef &ref);
+	unique_ptr<LogicalOperator> Bind(TableFunctionRef &ref);
+	unique_ptr<LogicalOperator> Bind(EmptyTableRef &ref);
+	unique_ptr<LogicalOperator> Bind(ExpressionListRef &ref);
+
+	unique_ptr<LogicalOperator> BindTable(TableCatalogEntry &table, BaseTableRef &ref);
+	unique_ptr<LogicalOperator> BindView(ViewCatalogEntry &view, BaseTableRef &ref);
+	unique_ptr<LogicalOperator> BindTableOrView(BaseTableRef &ref);
+
+	BoundStatement BindCopyTo(CopyStatement &stmt);
+	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
 	unique_ptr<BoundCreateInfo> BindCreateIndexInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	unique_ptr<BoundCreateInfo> BindCreateViewInfo(unique_ptr<CreateInfo> info);
+
+
+	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
+	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
+
+	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<SQLType> &source_types, vector<SQLType> &target_types,
+	                                                       unique_ptr<LogicalOperator> op);
 };
 
 } // namespace duckdb

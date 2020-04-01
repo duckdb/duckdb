@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/parsed_data/bound_create_info.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -19,7 +19,7 @@ struct BoundCreateIndexInfo : public BoundCreateInfo {
 	}
 
 	//! The table to index
-	unique_ptr<BoundTableRef> table;
+	unique_ptr<TableRef> table;
 	//! Set of expressions to index by
 	vector<unique_ptr<Expression>> expressions;
 };

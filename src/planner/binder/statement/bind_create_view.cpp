@@ -14,7 +14,7 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateViewInfo(unique_ptr<CreateInfo> in
 	// note that we bind a copy and don't actually use the bind result
 	auto copy = base.query->Copy();
 	auto query_node = Bind(*copy);
-	if (base.aliases.size() > query_node->names.size()) {
+	if (base.aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
 	return result;

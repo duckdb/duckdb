@@ -1,17 +1,25 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
-	auto binder = make_unique<Binder>(context, this);
-	auto subquery = binder->Bind(*ref.subquery);
-	idx_t bind_index = subquery->GetRootIndex();
-	auto result = make_unique<BoundSubqueryRef>(move(binder), move(subquery));
+namespace duckdb {
 
-	bind_context.AddSubquery(bind_index, ref.alias, ref, *result->subquery);
-	MoveCorrelatedExpressions(*result->binder);
-	return move(result);
+unique_ptr<LogicalOperator> Binder::Bind(SubqueryRef &ref) {
+	Binder subquery_binder(context, this);
+	auto subquery = subquery_binder.BindNode(*ref.subquery);
+	idx_t bind_index = subquery->GetRootIndex();
+
+	bind_context.AddSubquery(bind_index, ref.alias, ref, *subquery);
+	MoveCorrelatedExpressions(subquery_binder);
+
+	subquery_binder.plan_subquery = plan_subquery;
+	auto subquery_plan = subquery_binder.CreatePlan(*subquery);
+	if (subquery_binder.has_unplanned_subqueries) {
+		has_unplanned_subqueries = true;
+	}
+	return subquery_plan;
+}
+
 }

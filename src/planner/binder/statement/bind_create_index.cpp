@@ -2,7 +2,6 @@
 #include "duckdb/planner/parsed_data/bound_create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 
@@ -11,8 +10,8 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateIndexInfo(unique_ptr<CreateInfo> i
 	auto result = make_unique<BoundCreateIndexInfo>(move(info));
 
 	// visit the table reference
-	result->table = Bind(*base.table);
-	if (result->table->type != TableReferenceType::BASE_TABLE) {
+	auto plan = Bind(*base.table);
+	if (plan->type != LogicalOperatorType::GET) {
 		throw BinderException("Cannot create index on a view!");
 	}
 	IndexBinder binder(*this, context);

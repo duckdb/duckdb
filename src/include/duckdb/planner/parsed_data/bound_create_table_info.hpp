@@ -11,9 +11,9 @@
 #include "duckdb/planner/parsed_data/bound_create_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
-#include "duckdb/planner/statement/bound_select_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -34,7 +34,7 @@ struct BoundCreateTableInfo : public BoundCreateInfo {
 	//! The existing table data on disk (if any)
 	unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data;
 	//! CREATE TABLE from QUERY
-	unique_ptr<BoundSelectStatement> query;
+	unique_ptr<LogicalOperator> query;
 
 	CreateTableInfo &Base() {
 		return (CreateTableInfo &)*base;

@@ -14,7 +14,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<BoundQueryNode> Binder::Bind(SelectNode &statement) {
+unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	auto result = make_unique<BoundSelectNode>();
 	result->projection_index = GenerateTableIndex();
 	result->group_index = GenerateTableIndex();

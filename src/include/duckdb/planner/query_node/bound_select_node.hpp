@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
 
 namespace duckdb {
@@ -23,7 +23,7 @@ public:
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
-	unique_ptr<BoundTableRef> from_table;
+	unique_ptr<LogicalOperator> from_table;
 	//! The WHERE clause
 	unique_ptr<Expression> where_clause;
 	//! list of groups

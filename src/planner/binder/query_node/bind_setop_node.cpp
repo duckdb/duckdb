@@ -56,7 +56,7 @@ static void GatherAliases(QueryNode &node, unordered_map<string, idx_t> &aliases
 	}
 }
 
-unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
+unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_unique<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
 
@@ -122,10 +122,10 @@ unique_ptr<BoundQueryNode> Binder::Bind(SetOperationNode &statement) {
 	}
 
 	result->left_binder = make_unique<Binder>(context, this);
-	result->left = result->left_binder->Bind(*statement.left);
+	result->left = result->left_binder->BindNode(*statement.left);
 
 	result->right_binder = make_unique<Binder>(context, this);
-	result->right = result->right_binder->Bind(*statement.right);
+	result->right = result->right_binder->BindNode(*statement.right);
 
 	result->names = result->left->names;
 

@@ -20,6 +20,7 @@
 #include "duckdb/planner/table_binding.hpp"
 
 namespace duckdb {
+class LogicalGet;
 class BoundQueryNode;
 
 //! The BindContext object keeps track of all the tables and columns that are
@@ -41,7 +42,7 @@ public:
 	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list, string relation_name = "");
 
 	//! Adds a base table with the given alias to the BindContext.
-	void AddBaseTable(BoundBaseTableRef *bound, const string &alias);
+	void AddBaseTable(idx_t index, const string &alias, TableCatalogEntry &table, LogicalGet &get);
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.

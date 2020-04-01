@@ -1,5 +1,5 @@
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/planner/logical_plan_generator.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -7,8 +7,7 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<LogicalOperator> LogicalPlanGenerator::VisitQueryNode(BoundQueryNode &node,
-                                                                 unique_ptr<LogicalOperator> root) {
+unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root) {
 	assert(root);
 	if (node.select_distinct) {
 		unique_ptr<LogicalDistinct> distinct = nullptr;

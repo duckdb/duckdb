@@ -11,21 +11,6 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Statements
-//===--------------------------------------------------------------------===//
-class BoundSQLStatement;
-
-class BoundCopyStatement;
-class BoundCreateStatement;
-class BoundDeleteStatement;
-class BoundExecuteStatement;
-class BoundExplainStatement;
-class BoundInsertStatement;
-class BoundSelectStatement;
-class BoundUpdateStatement;
-class BoundSimpleStatement;
-
-//===--------------------------------------------------------------------===//
 // Query Node
 //===--------------------------------------------------------------------===//
 class BoundQueryNode;
@@ -55,19 +40,5 @@ class BoundSubqueryExpression;
 class BoundUnnestExpression;
 class BoundWindowExpression;
 class CommonSubExpression;
-
-//===--------------------------------------------------------------------===//
-// TableRefs
-//===--------------------------------------------------------------------===//
-class BoundTableRef;
-
-class BoundBaseTableRef;
-class BoundCrossProductRef;
-class BoundJoinRef;
-class BoundSubqueryRef;
-class BoundTableFunction;
-class BoundEmptyTableRef;
-class BoundExpressionListRef;
-class BoundCTERef;
 
 } // namespace duckdb
