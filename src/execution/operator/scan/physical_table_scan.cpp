@@ -63,7 +63,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
             }
             chunk.Slice(sel, result_count);
         }
-    } while (result_count == 0 && state->scan_offset.current_transient_row < state->scan_offset.max_transient_row);
+    } while (result_count == 0);
 }
 
 

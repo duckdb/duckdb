@@ -154,7 +154,7 @@ bool FilterCombiner::HasFilters() {
 }
 
 
-vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback){
+vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expression> filter)> callback, vector<idx_t>& column_ids){
     vector<TableFilter> tableFilters;
     //! First, we figure the filters that have constant expressions that we can push down to the table scan
     for (auto & constant_value: constant_values) {
@@ -165,19 +165,14 @@ vector<TableFilter> FilterCombiner::GenerateTableScanFilters(std::function<void(
                     constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
                     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
                     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO
-                    ) && (constant_value.second[i].constant.type == TypeId::INT8 ||
-                    constant_value.second[i].constant.type == TypeId::INT16 ||
-                    constant_value.second[i].constant.type == TypeId::INT32 ||
-                    constant_value.second[i].constant.type == TypeId::INT64 ||
-                    constant_value.second[i].constant.type == TypeId::DECIMAL ||
-                    constant_value.second[i].constant.type == TypeId::FLOAT ||
-                    constant_value.second[i].constant.type == TypeId::DOUBLE||
-                    constant_value.second[i].constant.type == TypeId::VARCHAR)) {
+                    ) && TypeIsNumeric(constant_value.second[i].constant.type)) {
                     //! Here we check if these filters are column references
                     auto filter_exp = equivalence_map.find(constant_value.first);
-                    string rowid = "rowid";
-                    if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF && filter_exp->second[0]->alias != rowid){
+                    if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF){
                         auto filter_col_exp =  static_cast<BoundColumnRefExpression*>(filter_exp->second[0]);
+                        if (column_ids[filter_col_exp->binding.column_index] == COLUMN_IDENTIFIER_ROW_ID){
+                            break;
+                        }
                         tableFilters.push_back(TableFilter(constant_value.second[i].constant,constant_value.second[i].comparison_type,filter_col_exp->binding.column_index));
                         auto equivalence_set = filter_exp->first;
                         auto &entries = filter_exp->second;

@@ -145,13 +145,7 @@ bool DataTable::CheckZonemap(TableScanState &state , vector <TableFilter>&table_
             //! We can skip this partition
             idx_t vectorsToSkip = ceil((double)(state.column_scans[table_filter.column_index].current->count + state.column_scans[table_filter.column_index].current->start - current_row)/STANDARD_VECTOR_SIZE);
             for (idx_t i = 0; i < vectorsToSkip; ++i){
-                //! nothing to scan for this vector, skip the entire vector
-                for (idx_t j = 0; j < state.column_ids.size(); j++) {
-                    auto column = state.column_ids[j];
-                    if (column != COLUMN_IDENTIFIER_ROW_ID) {
-                        state.column_scans[j].Next();
-                    }
-                }
+                state.NextVector();
                 current_row += STANDARD_VECTOR_SIZE;
             }
             return false;
@@ -180,13 +174,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	idx_t count = manager.GetSelVector(transaction, vector_offset, valid_sel, max_count);
 	if (count == 0) {
 		// nothing to scan for this vector, skip the entire vector
-		for (idx_t i = 0; i < state.column_ids.size(); i++) {
-			auto column = state.column_ids[i];
-			if (column != COLUMN_IDENTIFIER_ROW_ID) {
-				state.column_scans[i].Next();
-			}
-		}
-		current_row += STANDARD_VECTOR_SIZE;
+        state.NextVector();
+        current_row += STANDARD_VECTOR_SIZE;
 		return true;
 	}
 

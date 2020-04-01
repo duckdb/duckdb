@@ -9,7 +9,7 @@ ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t 
       stats(type, type_size) {
 }
 
-ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count,uint64_t* stats_min, uint64_t* stats_max)
+ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count,data_t&  stats_min, data_t&  stats_max)
     : SegmentBase(start, count), type(type), type_size(GetTypeIdSize(type)), segment_type(segment_type),
       stats(type, type_size,stats_min,stats_max) {
 }
@@ -18,49 +18,45 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size) : type(type),
 	Reset();
 }
 
-template <class T> static void set_min_max(T min_value, T max_value,  T *__restrict min, T *__restrict max) {
-    *min = min_value;
-    *max = max_value;
+template <class T> static void set_min_max(data_t& min_value_p, data_t& max_value_p,  data_t& min_p, data_t& max_p) {
+    memcpy(&min_p,&min_value_p, sizeof(T));
+    memcpy(&max_p,&max_value_p, sizeof(T));
+
+//    auto min = (T *)min_p;
+//    auto max = (T *)max_p;
+//    auto min_value = (T *)min_value_p;
+//    auto max_value = (T *)max_value_p;
+//    *min = *min_value;
+//    *max = *max_value;
 }
 
-SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, uint64_t* stats_min, uint64_t* stats_max) : type(type), type_size(type_size){
+
+
+SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t& stats_min, data_t&  stats_max) : type(type), type_size(type_size){
     Reset();
     switch (type) {
     case TypeId::INT8:{
-        auto min = (int8_t *)minimum.get();
-        auto max = (int8_t *)maximum.get();
-        set_min_max<int8_t>((int8_t)(size_t)stats_min,(int8_t)(size_t)stats_max,min, max);
+        set_min_max<int8_t>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
-
     case TypeId::INT16:{
-        auto min = (int16_t *)minimum.get();
-        auto max = (int16_t *)maximum.get();
-        set_min_max<int16_t>((int16_t)(size_t)stats_min,(int16_t)(size_t)stats_max,min, max);
+        set_min_max<int16_t>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
     case TypeId::INT32:{
-        auto min = (int32_t *)minimum.get();
-        auto max = (int32_t *)maximum.get();
-        set_min_max<int32_t>((int32_t)(size_t)stats_min,(int32_t)(size_t)stats_max,min, max);
+        set_min_max<int32_t>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
     case TypeId::INT64:{
-        auto min = (int64_t *)minimum.get();
-        auto max = (int64_t *)maximum.get();
-        set_min_max<int64_t>((int64_t)stats_min,(int64_t)stats_max,min, max);
+        set_min_max<int64_t>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
     case TypeId::FLOAT:{
-        auto min = (float *)minimum.get();
-        auto max = (float *)maximum.get();
-        set_min_max<float>((float)(size_t)stats_min,(float)(size_t)stats_max,min, max);
+        set_min_max<float>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
     case TypeId::DOUBLE:{
-        auto min = (double *)minimum.get();
-        auto max = (double *)maximum.get();
-        set_min_max<double>((double)(size_t)stats_min,(double)(size_t)stats_max,min, max);
+        set_min_max<double>(stats_min,stats_max,*minimum.get(), *maximum.get());
         break;
     }
 

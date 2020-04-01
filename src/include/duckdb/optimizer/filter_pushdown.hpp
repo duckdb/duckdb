@@ -51,7 +51,7 @@ private:
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op
 	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
-	//! Push down a LocalGet op
+	//! Push down a LogicalGet op
     unique_ptr<LogicalOperator> PushdownGet(unique_ptr<LogicalOperator> op);
     // Pushdown an inner join
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
