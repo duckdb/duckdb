@@ -6,6 +6,8 @@
 
 #include <string.h>
 #include <ctype.h>
+#include <unordered_map>
+#include <algorithm>    // std::max
 
 using namespace std;
 
@@ -14,8 +16,10 @@ namespace duckdb {
 static int64_t instr(string_t haystack, string_t needle);
 
 static uint64_t instr_kmp(const string_t &str, const string_t &pattern);
-static vector<uint32_t> build_kmp_table(const string_t &pattern);
+static vector<uint32_t> BuildKPMTable(const string_t &pattern);
 
+static uint64_t instr_bm(const string_t &str, const string_t &pattern);
+static unordered_map<char, uint32_t> BuildBMTable(const string_t &pattern);
 
 struct InstrOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
@@ -26,6 +30,12 @@ struct InstrOperator {
 struct InstrKMPOperator {
     template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
         return instr_kmp(left, right);
+    }
+};
+
+struct InstrBMOperator {
+    template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+        return instr_bm(left, right);
     }
 };
 
@@ -66,7 +76,7 @@ uint64_t instr_kmp(const string_t &str, const string_t &pattern) {
 
     idx_t idx_patt = 0;
     idx_t idx_str = 0;
-    auto kmp_table = build_kmp_table(pattern);
+    auto kmp_table = BuildKPMTable(pattern);
 
     auto str_data = str.GetData();
     auto patt_data = pattern.GetData();
@@ -88,7 +98,7 @@ uint64_t instr_kmp(const string_t &str, const string_t &pattern) {
     return 0;
 }
 
-static vector<uint32_t> build_kmp_table(const string_t &pattern) {
+static vector<uint32_t> BuildKPMTable(const string_t &pattern) {
     auto patt_size = pattern.GetSize();
     auto patt_data = pattern.GetData();
     vector<uint32_t> table(patt_size);
@@ -110,6 +120,50 @@ static vector<uint32_t> build_kmp_table(const string_t &pattern) {
     return table;
 }
 
+static uint64_t instr_bm(const string_t &str, const string_t &pattern) {
+    auto str_size = str.GetSize();
+    auto patt_size = pattern.GetSize();
+    if(patt_size > str_size)
+        return 0;
+
+    auto bm_table = BuildBMTable(pattern);
+
+    auto str_data = str.GetData();
+    auto patt_data = pattern.GetData();
+    idx_t skip;
+    char patt_char, str_char;
+	for(idx_t idx_str = 0; idx_str <= (str_size - patt_size); idx_str += skip) {
+		skip = 0;
+		for(int idx_patt = patt_size - 1; idx_patt >= 0; --idx_patt) {
+			patt_char = patt_data[idx_patt];
+			str_char = str_data[idx_str + idx_patt];
+			if(patt_char != str_char) {
+				if(bm_table.find(str_char) != bm_table.end()) {
+					skip = bm_table[str_char];
+				} else {
+					skip = patt_size;
+				}
+				break;
+			}
+		}
+		if(skip == 0)
+			return idx_str + 1;
+	}
+	return 0;
+}
+
+static unordered_map<char, uint32_t> BuildBMTable(const string_t &pattern) {
+	unordered_map<char, uint32_t> table;
+	auto patt_data = pattern.GetData();
+	uint32_t size_patt = pattern.GetSize();
+	char ch;
+	for(uint32_t i = 0; i < size_patt; ++i) {
+		ch = patt_data[i];
+		table[ch] = std::max((uint32_t)1, size_patt - i - 1);
+	}
+	return table;
+}
+
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("instr",                              // name of the function
 	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
@@ -120,6 +174,12 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
                                    {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
                                    SQLType::BIGINT,                      // return type
                                    ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrKMPOperator, true>));
+
+    set.AddFunction(ScalarFunction("instr_bm",                              // name of the function
+                                   {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+                                   SQLType::BIGINT,                      // return type
+                                   ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrBMOperator, true>));
+
 }
 
 } // namespace duckdb
