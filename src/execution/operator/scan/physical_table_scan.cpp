@@ -51,6 +51,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	//! Get max value
     idx_t result_count = -1;
     do{
+        chunk.Reset();
         table.Scan(transaction, chunk, state->scan_offset, table_filters);
         if (expression){
             SelectionVector sel(STANDARD_VECTOR_SIZE);

@@ -37,13 +37,44 @@ TEST_CASE("Test Table Filter Push Down", "[filterpushdown-optimizer]") {
     REQUIRE(plan->children[0]->expressions.size() == 1);
 }
 
+TEST_CASE("Test Table Filter Push Down Multiple Filters", "[filterpushdown-optimizer]") {
+    ExpressionHelper helper;
+    auto &con = helper.con;
+    Binder binder(*con.context);
+    Optimizer opt(binder,*con.context);
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer, k integer )"));
+    //! Checking if Optimizer push predicates down
+    auto tree = helper.ParseLogicalTree("SELECT k FROM integers where j = 5 and i = 10 ");
+    FilterPushdown predicatePushdown(opt);
+    //! The generated plan should be Projection ->Get (2)
+    auto plan = predicatePushdown.Rewrite(move(tree));
+    REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+    REQUIRE(plan->children[0]->expressions.size()==2);
+}
+
+TEST_CASE("Test Table Filter All Data Types", "[filterpushdown-optimizer]") {
+    vector<string>data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real", "date", "timestamp"};
+    ExpressionHelper helper;
+    auto &con = helper.con;
+    Binder binder(*con.context);
+    Optimizer opt(binder,*con.context);
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer, k integer )"));
+    //! Checking if Optimizer push predicates down
+    auto tree = helper.ParseLogicalTree("SELECT k FROM integers where j = 5 and i = 10 ");
+    FilterPushdown predicatePushdown(opt);
+    //! The generated plan should be Projection ->Get (2)
+    auto plan = predicatePushdown.Rewrite(move(tree));
+    REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+    REQUIRE(plan->children[0]->expressions.size()==2);
+}
+
 TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer]") {
     unique_ptr<QueryResult> result;
     DuckDB db(nullptr);
     Connection con(db);
 
     vector<int> input;
-    idx_t input_size = 1000;
+    idx_t input_size = 100000;
     REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer)"));
     for (idx_t i = 0; i < input_size; ++i){
         input.push_back(i);
@@ -56,4 +87,30 @@ TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer]") {
     result = con.Query("SELECT i FROM integers where j = 99000 ");
     REQUIRE(CHECK_COLUMN(result, 0, {99000}));
 
+    result = con.Query("SELECT i FROM integers where j = 99000 and i = 20 ");
+    REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
+
+TEST_CASE("Test Table Filter Push Down Scaaan", "[filterpushdown-optimizer]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+    Connection con(db);
+
+    vector<int> input;
+    idx_t input_size = 100;
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer, k integer)"));
+    for (idx_t i = 0; i < input_size; ++i){
+        input.push_back(i);
+    }
+//    random_shuffle(input.begin(),input.end());
+    for (idx_t i = 0; i < input_size; ++i){
+        REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES("+ to_string(input[i])+ "," + to_string(input[i])+ "," + to_string(input[i])  +  ")"));
+    }
+
+    result = con.Query("SELECT i FROM integers where k = 99000 ");
+    REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+    result = con.Query("SELECT i FROM integers where j = 99000 and i = 20 ");
+    REQUIRE(CHECK_COLUMN(result, 0, {}));
 }

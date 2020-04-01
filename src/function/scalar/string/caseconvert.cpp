@@ -27,6 +27,7 @@ template <class OP> static void caseconvert_function(Vector &input, Vector &resu
 
 		auto target = StringVector::EmptyString(result, input_length);
 		strcase<OP>(input_data, input_length, target.GetData());
+		target.Finalize();
 		return target;
 	});
 }

@@ -35,7 +35,7 @@ typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 class TableFilter{
 public:
     TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index): constant(constant), comparison_type(comparison_type),
-    column_index(column_index){};
+                                                                                     column_index(column_index){};
 
     Value constant;
     ExpressionType comparison_type;

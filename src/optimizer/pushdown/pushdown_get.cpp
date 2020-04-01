@@ -34,6 +34,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
       f->ExtractBindings();
       filtersToPushDown.push_back(move(f));
     });
+    for (auto&f : get.tableFilters){
+        f.column_index = get.column_ids[f.column_index];
+    }
 
     GenerateFilters();
     for (auto&f : filtersToPushDown){
