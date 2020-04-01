@@ -331,11 +331,14 @@ struct DuckDBPyConnection {
 			params_set = params;
 		}
 
+		auto datetime_mod = py::module::import("datetime");
+		auto datetime_date = datetime_mod.attr("datetime");
+		auto datetime_datetime = datetime_mod.attr("date");
+
 		for (auto &single_query_params : params_set) {
 			vector<Value> args;
 			for (auto &ele : single_query_params) {
 
-				// TODO what happens with timestamps and dates here?
 				if (ele.is_none()) {
 					args.push_back(Value());
 				} else if (py::isinstance < py::bool_ > (ele)) {
@@ -346,6 +349,13 @@ struct DuckDBPyConnection {
 					args.push_back(Value::DOUBLE(ele.cast<double>()));
 				} else if (py::isinstance < py::str > (ele)) {
 					args.push_back(Value(ele.cast<string>()));
+				} else if (ele.get_type().is(datetime_date)) {
+					throw runtime_error("date parameters not supported yet :/");
+					//args.push_back(Value::DATE(1984, 4, 24));
+				} else if (ele.get_type().is(datetime_datetime)) {
+					throw runtime_error(
+							"datetime parameters not supported yet :/");
+					//args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
 				} else {
 					throw runtime_error(
 							"unknown param type "
@@ -510,7 +520,6 @@ struct PandasScanFunction: public TableFunction {
 			auto col_type = string(py::str(df_types[col_idx]));
 			names.push_back(string(py::str(df_names[col_idx])));
 			SQLType duckdb_col_type;
-			// TODO other types!
 			if (col_type == "bool") {
 				duckdb_col_type = SQLType::BOOLEAN;
 			} else if (col_type == "int8") {
