@@ -307,11 +307,11 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto info_data = (T *)node->tuple_data;
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
-    auto min = (T *)stats.minimum.get();
-    auto max = (T *)stats.maximum.get();
-    for (idx_t i = 0; i < count; i ++){
-        update_min_max<T>(update_data[i],min,max);
-    }
+	auto min = (T *)stats.minimum.get();
+	auto max = (T *)stats.maximum.get();
+	for (idx_t i = 0; i < count; i++) {
+		update_min_max<T>(update_data[i], min, max);
+	}
 
 	// first we copy the old update info into a temporary structure
 	sel_t old_ids[STANDARD_VECTOR_SIZE];

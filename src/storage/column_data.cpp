@@ -53,16 +53,15 @@ void ColumnScanState::Next() {
 	}
 }
 
-void TableScanState::NextVector(){
-    //! nothing to scan for this vector, skip the entire vector
-    for (idx_t j = 0; j < column_ids.size(); j++) {
-        auto column = column_ids[j];
-        if (column != COLUMN_IDENTIFIER_ROW_ID) {
-            column_scans[j].Next();
-        }
-    }
+void TableScanState::NextVector() {
+	//! nothing to scan for this vector, skip the entire vector
+	for (idx_t j = 0; j < column_ids.size(); j++) {
+		auto column = column_ids[j];
+		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+			column_scans[j].Next();
+		}
+	}
 }
-
 
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	lock_guard<mutex> tree_lock(data.node_lock);

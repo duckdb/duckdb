@@ -23,17 +23,17 @@ class ViewCatalogEntry;
 
 class DataPointer {
 public:
-    DataPointer(){};
-    double min;
-    double max;
-    uint64_t row_start;
-    uint64_t tuple_count;
-    block_id_t block_id;
-    uint32_t offset;
-    //! The minimum value of the segment
-    data_t  min_stats[8];
-    //! The maximum value of the segment
-    data_t max_stats[8];
+	DataPointer(){};
+	double min;
+	double max;
+	uint64_t row_start;
+	uint64_t tuple_count;
+	block_id_t block_id;
+	uint32_t offset;
+	//! The minimum value of the segment
+	data_t min_stats[8];
+	//! The maximum value of the segment
+	data_t max_stats[8];
 };
 
 //! CheckpointManager is responsible for checkpointing the database

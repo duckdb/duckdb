@@ -25,10 +25,6 @@ public:
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
-     void WriteArray(data_t &element) {
-        WriteData((const_data_ptr_t)&element, 8);
-    }
-
 	void WriteString(const string &val) {
 		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());
@@ -68,10 +64,6 @@ public:
 		ReadData((data_ptr_t)&value, sizeof(T));
 		return value;
 	}
-
-	void ReadArray(data_t& array) {
-        ReadData((data_ptr_t)&array, 8);
-    }
 
 	template <class T> void ReadList(vector<unique_ptr<T>> &list) {
 		auto select_count = Read<uint32_t>();

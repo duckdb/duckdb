@@ -36,7 +36,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		return op;
 	}
 	case LogicalOperatorType::GET:
-	    return PushdownGet(move(op));
+		return PushdownGet(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -64,15 +64,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 		return FinishPushdown(move(op));
 	}
 }
-void FilterPushdown::PushFilters(){
-    for (auto &f : filters) {
-        auto result = combiner.AddFilter(move(f->filter));
-        assert(result == FilterResult::SUCCESS);
-    }
-    filters.clear();
+void FilterPushdown::PushFilters() {
+	for (auto &f : filters) {
+		auto result = combiner.AddFilter(move(f->filter));
+		assert(result == FilterResult::SUCCESS);
+	}
+	filters.clear();
 }
 FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
-    PushFilters();
+	PushFilters();
 	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(expr));

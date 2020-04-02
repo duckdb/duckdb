@@ -12,15 +12,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.table) {
 		return make_unique<PhysicalDummyScan>(op.types);
 	} else {
-	    for (auto& tableFilter: op.tableFilters){
-	        for (idx_t i = 0; i < op.column_ids.size(); i ++){
-	            if (tableFilter.column_index == op.column_ids[i]){
-                    tableFilter.column_index = i;
-                    break;
-	            }
-	        }
-	    }
+		for (auto &tableFilter : op.tableFilters) {
+			for (idx_t i = 0; i < op.column_ids.size(); i++) {
+				if (tableFilter.column_index == op.column_ids[i]) {
+					tableFilter.column_index = i;
+					break;
+				}
+			}
+		}
 		dependencies.insert(op.table);
-		return make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids,move(op.expressions),move(op.tableFilters));
+		return make_unique<PhysicalTableScan>(op, *op.table, *op.table->storage, op.column_ids, move(op.expressions),
+		                                      move(op.tableFilters));
 	}
 }

@@ -64,14 +64,14 @@ struct LocalScanState {
 
 class TableScanState {
 public:
-    TableScanState(){};
+	TableScanState(){};
 	idx_t current_persistent_row, max_persistent_row;
 	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t offset;
 	vector<column_t> column_ids;
 	LocalScanState local_state;
-    void NextVector();
+	void NextVector();
 };
 
 class CreateIndexScanState : public TableScanState {

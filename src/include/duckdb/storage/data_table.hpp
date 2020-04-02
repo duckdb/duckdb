@@ -32,14 +32,13 @@ class Transaction;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
 //! TableFilter represents a filter pushed down into the table scan.
-class TableFilter{
+class TableFilter {
 public:
-    TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index): constant(constant), comparison_type(comparison_type),
-                                                                                     column_index(column_index){};
-    Value constant;
-    ExpressionType comparison_type;
-    idx_t column_index;
-
+	TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index)
+	    : constant(constant), comparison_type(comparison_type), column_index(column_index){};
+	Value constant;
+	ExpressionType comparison_type;
+	idx_t column_index;
 };
 
 //! DataTable represents a physical table on disk
@@ -67,7 +66,7 @@ public:
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector <TableFilter>&table_filters);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<TableFilter> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
@@ -123,9 +122,9 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
-    bool CheckZonemap(TableScanState &state, vector <TableFilter>&table_filters, idx_t &current_row);
+	bool CheckZonemap(TableScanState &state, vector<TableFilter> &table_filters, idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
-	                   idx_t max_row, idx_t base_row, VersionManager &manager, vector <TableFilter>&table_filters);
+	                   idx_t max_row, idx_t base_row, VersionManager &manager, vector<TableFilter> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
 	                     idx_t base_row);
 
