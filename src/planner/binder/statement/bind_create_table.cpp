@@ -111,10 +111,11 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 	}
 }
 
-unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
+	result->schema = BindSchema(*result->base);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -137,5 +138,5 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> i
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
-	return move(result);
+	return result;
 }

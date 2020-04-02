@@ -85,7 +85,8 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEnt
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
-	AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
+	AddGenericBinding(index, alias, subquery.names, subquery.types);
+	// AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
 }
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {

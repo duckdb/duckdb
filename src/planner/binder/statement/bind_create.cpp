@@ -3,98 +3,106 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/parsed_data/bound_create_index_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundStatement Binder::Bind(CreateStatement &stmt) {
-	BoundStatement result;
-
-	auto bound_info = BindCreateInfo(move(stmt.info));
-	switch (stmt.info->type) {
-	case CatalogType::SCHEMA:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(bound_info));
-		break;
-	case CatalogType::VIEW:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(bound_info));
-		break;
-	case CatalogType::SEQUENCE:
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(bound_info));
-		break;
-	case CatalogType::INDEX: {
-		auto &info = (BoundCreateIndexInfo &)*bound_info;
-		// first we visit the base table to create the root expression
-		auto root = Bind(*info.table);
-		// this gives us a logical table scan
-		// we take the required columns from here
-		assert(root->type == LogicalOperatorType::GET);
-		auto &get = (LogicalGet &)*root;
-		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(info.expressions),
-		                                       unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(info.base)));
-		break;
-	}
-	case CatalogType::TABLE: {
-		auto &info = (BoundCreateTableInfo &)*bound_info;
-		auto root = move(info.query);
-
-		// create the logical operator
-		auto create_table = make_unique<LogicalCreateTable>(
-		    info.schema, unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(move(bound_info)));
-		if (root) {
-			create_table->children.push_back(move(root));
-		}
-		result.plan = move(create_table);
-		break;
-	}
-	default:
-		throw Exception("Unrecognized type!");
-	}
-	return result;
-}
-
-unique_ptr<BoundCreateInfo> Binder::BindCreateInfo(unique_ptr<CreateInfo> info) {
-	unique_ptr<BoundCreateInfo> result;
-	if (info->schema == INVALID_SCHEMA) {
-		info->schema = info->temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+SchemaCatalogEntry* Binder::BindSchema(CreateInfo &info) {
+	if (info.schema == INVALID_SCHEMA) {
+		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
 	}
 
-	SchemaCatalogEntry *bound_schema = nullptr;
-	if (!info->temporary) {
+	if (!info.temporary) {
 		// non-temporary create: not read only
-		if (info->schema == TEMP_SCHEMA) {
+		if (info.schema == TEMP_SCHEMA) {
 			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
 		}
 		this->read_only = false;
 	} else {
-		if (info->schema != TEMP_SCHEMA) {
+		if (info.schema != TEMP_SCHEMA) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" schema", TEMP_SCHEMA);
 		}
 	}
-	if (info->type != CatalogType::SCHEMA) {
-		// fetch the schema in which we want to create the object
-		bound_schema = Catalog::GetCatalog(context).GetSchema(context, info->schema);
-		info->schema = bound_schema->name;
+	// fetch the schema in which we want to create the object
+	auto schema_obj = Catalog::GetCatalog(context).GetSchema(context, info.schema);
+	assert(schema_obj->type == CatalogType::SCHEMA);
+	info.schema = schema_obj->name;
+	return schema_obj;
+}
+
+BoundStatement Binder::Bind(CreateStatement &stmt) {
+	BoundStatement result;
+	result.names = {"Count"};
+	result.types = {SQLType::BIGINT};
+
+	auto catalog_type = stmt.info->type;
+	switch (catalog_type) {
+	case CatalogType::SCHEMA:
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SCHEMA, move(stmt.info));
+		break;
+	case CatalogType::VIEW: {
+		auto &base = (CreateViewInfo &)*stmt.info;
+		// bind the schema
+		auto schema = BindSchema(*stmt.info);
+
+		// bind the view as if it were a query so we can catch errors
+		// note that we bind a copy and don't actually use the bind result
+		auto copy = base.query->Copy();
+		auto query_node = Bind(*copy);
+		if (base.aliases.size() > query_node.names.size()) {
+			throw BinderException("More VIEW aliases than columns in query result");
+		}
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
+		break;
 	}
-	switch (info->type) {
-	case CatalogType::INDEX:
-		result = BindCreateIndexInfo(move(info));
+	case CatalogType::SEQUENCE: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_SEQUENCE, move(stmt.info), schema);
 		break;
-	case CatalogType::TABLE:
-		result = BindCreateTableInfo(move(info));
+	}
+	case CatalogType::INDEX: {
+		auto &base = (CreateIndexInfo &)*stmt.info;
+
+		// visit the table reference
+		auto plan = Bind(*base.table);
+		if (plan->type != LogicalOperatorType::GET) {
+			throw BinderException("Cannot create index on a view!");
+		}
+		auto &get = (LogicalGet &)*plan;
+		// bind the index expressions
+		vector<unique_ptr<Expression>> expressions;
+		IndexBinder binder(*this, context);
+		for (auto &expr : base.expressions) {
+			expressions.push_back(binder.Bind(expr));
+		}
+		// this gives us a logical table scan
+		// we take the required columns from here
+		// create the logical operator
+		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(expressions), unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
-	case CatalogType::VIEW:
-		result = BindCreateViewInfo(move(info));
-		break;
+	}
+	case CatalogType::TABLE: {
+		auto bound_info = BindCreateTableInfo(move(stmt.info));
+		auto root = move(bound_info->query);
+
+		// create the logical operator
+		auto create_table = make_unique<LogicalCreateTable>(bound_info->schema, move(bound_info));
+		if (root) {
+			create_table->children.push_back(move(root));
+		}
+		result.plan = move(create_table);
+		return result;
+	}
 	default:
-		result = make_unique<BoundCreateInfo>(move(info));
-		break;
+		throw Exception("Unrecognized type!");
 	}
-	result->schema = bound_schema;
 	return result;
 }

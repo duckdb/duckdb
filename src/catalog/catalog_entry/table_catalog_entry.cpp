@@ -111,7 +111,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
         // 	create_info->constraints[i] = constraints[i]->Copy();
         // }
         Binder binder(context);
-        auto bound_create_info = binder.BindCreateInfo(move(create_info));
+        auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
         return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
                                               storage);
 	}
@@ -208,6 +208,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
     }
 
     Binder binder(context);
-    auto bound_create_info = binder.BindCreateInfo(move(create_info));
+    auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
     return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }

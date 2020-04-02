@@ -642,7 +642,10 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 	unique_ptr<TableDescription> result;
 	RunFunctionInTransaction([&]() {
 		// obtain the table info
-		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name);
+		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
+		if (!table) {
+			return;
+		}
 		// write the table info to the result
 		result = make_unique<TableDescription>();
 		result->schema = schema_name;

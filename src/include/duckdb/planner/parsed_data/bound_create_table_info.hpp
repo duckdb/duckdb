@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/planner/parsed_data/bound_create_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -18,9 +17,14 @@
 namespace duckdb {
 class CatalogEntry;
 
-struct BoundCreateTableInfo : public BoundCreateInfo {
-	BoundCreateTableInfo(unique_ptr<CreateInfo> base) : BoundCreateInfo(move(base)) {
+struct BoundCreateTableInfo {
+	BoundCreateTableInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
 	}
+
+	//! The schema to create the table in
+	SchemaCatalogEntry *schema;
+	//! The base CreateInfo object
+	unique_ptr<CreateInfo> base;
 	//! The map of column names -> column index, used during binding
 	unordered_map<string, column_t> name_map;
 	//! List of constraints on the table

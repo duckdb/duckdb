@@ -49,6 +49,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	BoundStatement result;
+	result.types = {SQLType::BIGINT};
+	result.names = {"Count"};
 
 	assert(!stmt.info->table.empty());
 	// COPY FROM a file
@@ -63,9 +65,6 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	assert(insert_statement.plan->type == LogicalOperatorType::INSERT);
 
 	auto &bound_insert = (LogicalInsert&) *insert_statement.plan;
-
-	// get the set of expected columns from the insert statement; these types will be parsed from the CSV
-	result.types = bound_insert.expected_types;
 
 	auto table =
 		Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
@@ -95,7 +94,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		}
 	}
 	// now create the copy statement and set it as a child of the insert statement
-	auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), result.types);
+	auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), bound_insert.expected_types);
 	insert_statement.plan->children.push_back(move(copy));
 	result.plan = move(insert_statement.plan);
 	return result;

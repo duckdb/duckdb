@@ -23,7 +23,7 @@ class TableCatalogEntry;
 class ViewCatalogEntry;
 
 struct CreateInfo;
-struct BoundCreateInfo;
+struct BoundCreateTableInfo;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
@@ -78,7 +78,8 @@ public:
 	BoundStatement Bind(SQLStatement &statement);
 	BoundStatement Bind(QueryNode &node);
 
-	unique_ptr<BoundCreateInfo> BindCreateInfo(unique_ptr<CreateInfo> info);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
+	SchemaCatalogEntry* BindSchema(CreateInfo &info);
 
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
@@ -159,11 +160,6 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
-
-	unique_ptr<BoundCreateInfo> BindCreateIndexInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateInfo> BindCreateViewInfo(unique_ptr<CreateInfo> info);
-
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);

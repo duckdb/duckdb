@@ -10,7 +10,7 @@ LogicalGet::LogicalGet(idx_t table_index)
     : LogicalOperator(LogicalOperatorType::GET), table(nullptr), table_index(table_index) {
 }
 LogicalGet::LogicalGet(TableCatalogEntry *table, idx_t table_index) :
-	LogicalOperator(LogicalOperatorType::GET), table(table) {
+	LogicalOperator(LogicalOperatorType::GET), table(table), table_index(table_index) {
 
 }
 LogicalGet::LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids)
