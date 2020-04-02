@@ -2,6 +2,8 @@
 
 export(duckdb)
 export(duckdb_shutdown)
+export(duckdb_register)
+export(duckdb_unregister)
 export(src_duckdb)
 export(read_csv_duckdb)
 export(duckdb.read.csv)

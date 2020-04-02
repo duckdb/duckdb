@@ -12,6 +12,17 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
+duckdb_register <- function(conn, name, df) {
+  .Call(duckdb_register_R, conn@conn_ref, name, df)
+  invisible(TRUE)
+}
+
+duckdb_unregister <- function(conn, name) {
+  .Call(duckdb_unregister_R, conn@conn_ref, name)
+  invisible(TRUE)
+}
+
+
 #' @rdname DBI
 #' @export
 setClass(
