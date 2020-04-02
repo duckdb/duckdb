@@ -1590,8 +1590,6 @@ TEST_CASE("Test read CSV function with lineitem", "[copy]") {
 	REQUIRE_FAIL(con.Query("SELECT * FROM read_csv('" + lineitem_csv + "', '|', STRUCT_PACK(l_orderkey := 5))"));
 }
 
-
-
 TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -1600,14 +1598,13 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 	auto csv_path = GetCSVPath();
 	auto nfc_csv = fs.JoinPath(csv_path, "nfc.csv");
 
-	const char* nfc_content = "\xc3\xbc\n\x75\xcc\x88";
+	const char *nfc_content = "\xc3\xbc\n\x75\xcc\x88";
 
-	WriteBinary(nfc_csv, (const uint8_t *) nfc_content, strlen(nfc_content));
+	WriteBinary(nfc_csv, (const uint8_t *)nfc_content, strlen(nfc_content));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE nfcstrings (s STRING);"));
 	REQUIRE_NO_FAIL(con.Query("COPY nfcstrings FROM '" + nfc_csv + "';"));
 
 	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE s = '\xc3\xbc'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
-
 }

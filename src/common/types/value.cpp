@@ -19,14 +19,13 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
-Value::Value(string val): type(TypeId::VARCHAR), is_null(false) {
+Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
