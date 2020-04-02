@@ -28,6 +28,9 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	if (!table) {
 		return {ColumnBinding(INVALID_INDEX, 0)};
 	}
+	if (column_ids.size() == 0) {
+		return { ColumnBinding(table_index, 0)};
+	}
 	vector<ColumnBinding> result;
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		result.push_back(ColumnBinding(table_index, i));
@@ -37,10 +40,9 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 
 void LogicalGet::ResolveTypes() {
 	if (column_ids.size() == 0) {
-		types = {TypeId::INT32};
-	} else {
-		types = table->GetTypes(column_ids);
+		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
+	types = table->GetTypes(column_ids);
 }
 
 idx_t LogicalGet::EstimateCardinality() {

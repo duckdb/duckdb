@@ -18,8 +18,7 @@ using namespace std;
 
 namespace duckdb {
 
-static void BindExtraColumns(TableCatalogEntry &table, Binder &binder, ClientContext &context,
-                             LogicalUpdate &update, unordered_set<column_t> &bound_columns) {
+static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update, unordered_set<column_t> &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
@@ -41,19 +40,18 @@ static void BindExtraColumns(TableCatalogEntry &table, Binder &binder, ClientCon
 				continue;
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
-			update.columns.push_back(check_column_id);
-			UpdateBinder update_binder(binder, context);
 			auto &column = table.columns[check_column_id];
-			update_binder.target_type = column.type;
-			auto unbound_expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column.name, table.name);
-			auto bound_expr = update_binder.Bind(unbound_expr);
-			update.expressions.push_back(move(bound_expr));
+			auto col_type = GetInternalType(column.type);
+			// first add
+			update.expressions.push_back(make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(get.table_index, get.column_ids.size())));
+			get.column_ids.push_back(check_column_id);
+			update.columns.push_back(check_column_id);
 		}
 	}
 }
 
-static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, ClientContext &context,
-                                  LogicalUpdate &update) {
+static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
@@ -63,7 +61,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 		if (constraint->type == ConstraintType::CHECK) {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
 			// check constraint! check if we need to add any extra columns to the UPDATE clause
-			BindExtraColumns(table, binder, context, update, check.bound_columns);
+			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
 	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a
@@ -81,7 +79,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, Binder &binder, Clie
 		for (idx_t i = 0; i < table.storage->types.size(); i++) {
 			all_columns.insert(i);
 		}
-		BindExtraColumns(table, binder, context, update, all_columns);
+		BindExtraColumns(table, get, proj, update, all_columns);
 	}
 }
 
@@ -98,6 +96,10 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		// update of persistent table: not read only!
 		this->read_only = false;
 	}
+	auto update = make_unique<LogicalUpdate>(table);
+	// bind the default values
+	BindDefaultValues(table->columns, update->bound_defaults);
+
 	// project any additional columns required for the condition/expressions
 	if (stmt.condition) {
 		WhereBinder binder(*this, context);
@@ -112,7 +114,6 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	assert(stmt.columns.size() == stmt.expressions.size());
 
 	auto proj_index = GenerateTableIndex();
-	auto update = make_unique<LogicalUpdate>(table);
 	vector<unique_ptr<Expression>> projection_expressions;
 	for (idx_t i = 0; i < stmt.columns.size(); i++) {
 		auto &colname = stmt.columns[i];
@@ -140,17 +141,18 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 			projection_expressions.push_back(move(bound_expr));
 		}
 	}
-	BindUpdateConstraints(*table, *this, context, *update);
-	// bind the default values
-	BindDefaultValues(table->columns, update->bound_defaults);
-
-	// add the row id column to the projection list
-	projection_expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
-	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	// now create the projection
 	auto proj = make_unique<LogicalProjection>(proj_index, move(projection_expressions));
 	proj->AddChild(move(root));
+
+	// bind any extra columns necessary for CHECK constraints or indexes
+	BindUpdateConstraints(*table, get, *proj, *update);
+
+	// finally add the row id column to the projection list
+	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	    ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
+	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(move(proj));
 
