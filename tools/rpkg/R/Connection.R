@@ -13,12 +13,14 @@ duckdb_connection <- function(duckdb_driver, debug) {
 }
 
 duckdb_register <- function(conn, name, df) {
-  .Call(duckdb_register_R, conn@conn_ref, name, df)
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_register_R, conn@conn_ref, as.character(name), as.data.frame(df))
   invisible(TRUE)
 }
 
 duckdb_unregister <- function(conn, name) {
-  .Call(duckdb_unregister_R, conn@conn_ref, name)
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_unregister_R, conn@conn_ref, as.character(name))
   invisible(TRUE)
 }
 

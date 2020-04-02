@@ -47,13 +47,12 @@ test_that("various error cases for duckdb_register()", {
 	duckdb::duckdb_unregister(con, "my_df1")
 	expect_error(dbReadTable(con, "my_df1"))
 
-	expect_error(duckdb::duckdb_register(con, "my_df1", 42))
 	expect_error(duckdb::duckdb_register(1, "my_df1", iris))
-	expect_error(duckdb::duckdb_register(con, FALSE, iris))
 	expect_error(duckdb::duckdb_register(con, "", iris))
 	expect_error(duckdb::duckdb_unregister(1, "my_df1"))
 	expect_error(duckdb::duckdb_unregister(con, ""))
-	expect_error(duckdb::duckdb_unregister(con, FALSE))
-
 	dbDisconnect(con, shutdown=T)
+
+	expect_error(duckdb::duckdb_unregister(con, "my_df1"))
+
 })
