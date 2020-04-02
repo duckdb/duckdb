@@ -70,61 +70,6 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-SubqueryBinding::SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, idx_t index)
-    : Binding(BindingType::SUBQUERY, alias, index), subquery(subquery) {
-	if (ref.column_name_alias.size() > subquery.names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(),
-		                      (int64_t)subquery.names.size(), (int64_t)ref.column_name_alias.size());
-	}
-	idx_t i;
-	// use any provided aliases from the subquery
-	for (i = 0; i < ref.column_name_alias.size(); i++) {
-		auto &name = ref.column_name_alias[i];
-		AddName(name);
-	}
-	// if not enough aliases were provided, use the default names
-	for (; i < subquery.names.size(); i++) {
-		auto &name = subquery.names[i];
-		AddName(name);
-	}
-}
-
-void SubqueryBinding::AddName(string &name) {
-	if (name_map.find(name) != name_map.end()) {
-		throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
-	}
-	name_map[name] = names.size();
-	names.push_back(name);
-}
-
-bool SubqueryBinding::HasMatchingBinding(const string &column_name) {
-	auto entry = name_map.find(column_name);
-	return entry != name_map.end();
-}
-
-BindResult SubqueryBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto column_entry = name_map.find(colref.column_name);
-	if (column_entry == name_map.end()) {
-		return BindResult(StringUtil::Format("Subquery \"%s\" does not have a column named \"%s\"", alias.c_str(),
-		                                     colref.column_name.c_str()));
-	}
-	ColumnBinding binding;
-
-	binding.table_index = index;
-	binding.column_index = column_entry->second;
-	assert(column_entry->second < subquery.types.size());
-	SQLType sql_type = subquery.types[column_entry->second];
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
-}
-
-void SubqueryBinding::GenerateAllColumnExpressions(BindContext &context,
-                                                   vector<unique_ptr<ParsedExpression>> &select_list) {
-	for (auto &column_name : names) {
-		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
-	}
-}
-
 GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, idx_t index)
     : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
