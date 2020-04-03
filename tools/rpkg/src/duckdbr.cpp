@@ -855,94 +855,6 @@ SEXP duckdb_disconnect_R(SEXP connsexp) {
 	return R_NilValue;
 }
 
-SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
-	}
-
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
-		Rf_error("duckdb_append_R: Invalid connection");
-	}
-
-	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
-		Rf_error("duckdb_append_R: Need single string parameter for name");
-	}
-
-	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
-	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
-		Rf_error("duckdb_append_R: Need at least one-column data frame parameter for value");
-	}
-
-	try {
-		auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-		string schema, table;
-		Catalog::ParseRangeVar(name, schema, table);
-
-		Appender appender(*conn, schema, table);
-		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
-		vector<RType> rtypes;
-		for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
-			SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
-			rtypes.push_back(detect_rtype(coldata));
-		}
-
-		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
-			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
-			auto &append_chunk = appender.GetAppendChunk();
-			for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
-				auto &append_data = append_chunk.data[col_idx];
-				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
-
-				switch (rtypes[col_idx]) {
-				case RType::LOGICAL: {
-					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
-					AppendColumnSegment<int, bool, RBooleanType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::INTEGER: {
-					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
-					AppendColumnSegment<int, int, RIntegerType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::NUMERIC: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, double, RDoubleType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::STRING:
-					AppendStringSegment(coldata, append_data, row_idx, current_count);
-					break;
-				case RType::FACTOR:
-					AppendFactor(coldata, append_data, row_idx, current_count);
-					break;
-				case RType::TIMESTAMP: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::DATE: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, date_t, RDateType>(data_ptr, append_data, current_count);
-					break;
-				}
-				default:
-					throw;
-				}
-			}
-			append_chunk.SetCardinality(current_count);
-			appender.Flush();
-		}
-		appender.Close();
-	} catch (std::exception &ex) {
-		Rf_error("duckdb_append_R failed: %s", ex.what());
-	} catch (...) {
-		Rf_error("duckdb_append_R failed: unknown error");
-	}
-
-	return R_NilValue;
-}
-
 SEXP duckdb_ptr_to_str(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
 		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
@@ -968,7 +880,6 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_bind_R, 2),
                                             CALLDEF(duckdb_execute_R, 1),
                                             CALLDEF(duckdb_release_R, 1),
-                                            CALLDEF(duckdb_append_R, 3),
                                             CALLDEF(duckdb_register_R, 3),
                                             CALLDEF(duckdb_unregister_R, 2),
                                             CALLDEF(duckdb_disconnect_R, 1),
