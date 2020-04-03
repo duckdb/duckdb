@@ -51,15 +51,10 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
 		return nullptr;
 	}
-	throw NotImplementedException("FIXME: ParseExpression");
-	// Binder binder(*con.context);
-	// auto bound_statement = binder.Bind(*parser.statements[0]);
-	// auto &select_statement = (BoundSelectStatement &)*bound_statement;
-	// auto &select_node = (BoundSelectNode &)*select_statement.node;
-	// assert(select_node.type == QueryNodeType::SELECT_NODE);
-	// auto &select_list = select_node.select_list;
-
-	// return move(select_list[0]);
+	Binder binder(*con.context);
+	auto bound_statement = binder.Bind(*parser.statements[0]);
+	assert(bound_statement.plan->type == LogicalOperatorType::PROJECTION);
+	return move(bound_statement.plan->expressions[0]);
 }
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
