@@ -10,7 +10,7 @@ using namespace std;
 namespace duckdb {
 
 BoundStatement Binder::Bind(RelationStatement &stmt) {
-	throw NotImplementedException("FIXME: bind relation stmt");
+	return stmt.relation->Bind(*this);
 }
 
 } // namespace duckdb

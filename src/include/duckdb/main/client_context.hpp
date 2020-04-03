@@ -87,8 +87,8 @@ public:
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	void Append(TableDescription &description, DataChunk &chunk);
-	//! Bind a number of expressions to the set of input columns, placing the output columns in the result_columns set
-	void BindExpressions(const vector<ColumnDefinition> &columns, vector<unique_ptr<ParsedExpression>> expressions, vector<ColumnDefinition> &result_columns);
+	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns list with the set of returned columns
+	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
 	unique_ptr<QueryResult> Execute(shared_ptr<Relation> relation);

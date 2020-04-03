@@ -19,6 +19,8 @@ public:
 
 	unique_ptr<TableDescription> description;
 public:
+	unique_ptr<QueryResult> Execute() override;
+	BoundStatement Bind(Binder &binder) override;
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 };

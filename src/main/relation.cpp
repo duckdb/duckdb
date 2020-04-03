@@ -1,6 +1,7 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -32,7 +33,12 @@ shared_ptr<Relation> Relation::Project(vector<string> expressions, vector<string
 }
 
 shared_ptr<Relation> Relation::Filter(string expression) {
-	throw NotImplementedException("FIXME:");
+	// if there are multiple expressions, we AND them together
+	auto expression_list = Parser::ParseExpressionList(expression);
+	if (expression_list.size() != 1) {
+		throw ParserException("Expected a single expression as filter condition");
+	}
+	return make_shared<FilterRelation>(shared_from_this(), move(expression_list[0]));
 }
 
 shared_ptr<Relation> Relation::Limit(idx_t n, idx_t offset) {

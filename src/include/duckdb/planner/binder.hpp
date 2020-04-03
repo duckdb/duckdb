@@ -15,6 +15,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -38,12 +39,6 @@ struct CorrelatedColumnInfo {
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
 		return binding == rhs.binding;
 	}
-};
-
-struct BoundStatement {
-	unique_ptr<LogicalOperator> plan;
-	vector<SQLType> types;
-	vector<string> names;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -80,6 +75,9 @@ public:
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
 	SchemaCatalogEntry* BindSchema(CreateInfo &info);
+
+	unique_ptr<BoundTableRef> Bind(TableRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
 
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
@@ -145,7 +143,6 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
-	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
 	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
@@ -154,7 +151,6 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 
-	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);

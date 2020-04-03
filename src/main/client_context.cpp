@@ -674,20 +674,14 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 	});
 }
 
-void ClientContext::BindExpressions(const vector<ColumnDefinition> &input_columns, vector<unique_ptr<ParsedExpression>> expressions, vector<ColumnDefinition> &result_columns) {
+void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 	RunFunctionInTransaction([&]() {
 		// bind the expressions
 		Binder binder(*this);
-		// add the input columns to the bind context
-		binder.bind_context.AddGenericBinding(0, "projection", input_columns);
-
-		WhereBinder expression_binder(binder, *this);
-		expression_binder.target_type.id = SQLTypeId::INVALID;
-
-		for(auto &expr : expressions) {
-			SQLType result_type;
-			auto bound_expression = expression_binder.Bind(expr, &result_type);
-			result_columns.push_back(ColumnDefinition(bound_expression->GetName(), result_type));
+		auto result = relation.Bind(binder);
+		assert(result.names.size() == result.types.size());
+		for(idx_t i = 0; i < result.names.size(); i++) {
+			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
 		}
 	});
 }

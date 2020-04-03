@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/expression/star_expression.hpp
+// duckdb/parser/expression/table_star_expression.hpp
 //
 //
 //===----------------------------------------------------------------------===//

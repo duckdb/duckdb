@@ -16,7 +16,10 @@
 #include <memory>
 
 namespace duckdb {
+struct BoundStatement;
+
 class ClientContext;
+class Binder;
 class LogicalOperator;
 
 class Relation : public std::enable_shared_from_this<Relation> {
@@ -28,8 +31,9 @@ public:
 	RelationType type;
 public:
 	virtual const vector<ColumnDefinition> &Columns() = 0;
+	virtual BoundStatement Bind(Binder &binder) = 0;
 
-	unique_ptr<QueryResult> Execute();
+	virtual unique_ptr<QueryResult> Execute();
 	string ToString();
 	virtual string ToString(idx_t depth) = 0;
 
