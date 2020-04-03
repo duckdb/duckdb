@@ -50,36 +50,40 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {10, 30}));
 
 	// add a limit
-	// REQUIRE_NOTHROW(result = proj->Limit(1)->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	REQUIRE_NOTHROW(result = proj->Limit(1)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
-	// // and an offset
-	// REQUIRE_NOTHROW(result = proj->Limit(1, 1)->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {30}));
+	// and an offset
+	REQUIRE_NOTHROW(result = proj->Limit(1, 1)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {30}));
 
-	// // lets add some aliases
-	// REQUIRE_NOTHROW(proj = filter->Project("i + 1 AS a"));
-	// // we can check the column names
-	// REQUIRE(proj->Columns()[0].name == "a");
-	// REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
+	// lets add some aliases
+	REQUIRE_NOTHROW(proj = filter->Project("i + 1 AS a"));
+	REQUIRE_NOTHROW(result = proj->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	// we can check the column names
+	REQUIRE(proj->Columns()[0].name == "a");
+	REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
 
-	// // we can also alias like this
-	// REQUIRE_NOTHROW(proj = filter->Project("i + 1", "a"));
-	// // we can check the column names
-	// REQUIRE(proj->Columns()[0].name == "a");
-	// REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
+	// we can also alias like this
+	REQUIRE_NOTHROW(proj = filter->Project("i + 1", "a"));
+	REQUIRE_NOTHROW(result = proj->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	// we can check the column names
+	REQUIRE(proj->Columns()[0].name == "a");
+	REQUIRE(proj->Columns()[0].type == SQLType::INTEGER);
 
-	// // now we can use that column to perform additional projections
-	// REQUIRE_NOTHROW(result = proj->Project("a + 1")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	// now we can use that column to perform additional projections
+	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 5}));
 
-	// // we can also filter on this again
-	// REQUIRE_NOTHROW(result = proj->Filter("a=2")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	// we can also filter on this again
+	REQUIRE_NOTHROW(result = proj->Filter("a=2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
-	// // filters can also contain conjunctions
-	// REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	// filters can also contain conjunctions
+	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
 	// // now test ordering
 	// REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());

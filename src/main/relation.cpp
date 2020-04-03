@@ -2,6 +2,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -41,8 +42,8 @@ shared_ptr<Relation> Relation::Filter(string expression) {
 	return make_shared<FilterRelation>(shared_from_this(), move(expression_list[0]));
 }
 
-shared_ptr<Relation> Relation::Limit(idx_t n, idx_t offset) {
-	throw NotImplementedException("FIXME:");
+shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
+	return make_shared<LimitRelation>(shared_from_this(), limit, offset);
 }
 
 shared_ptr<Relation> Relation::Order(string expression) {

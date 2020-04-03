@@ -52,7 +52,7 @@ public:
 	shared_ptr<Relation> Filter(string expression);
 
 	// LIMIT
-	shared_ptr<Relation> Limit(idx_t n, idx_t offset = 0);
+	shared_ptr<Relation> Limit(int64_t n, int64_t offset = 0);
 
 	// ORDER
 	shared_ptr<Relation> Order(string expression);
