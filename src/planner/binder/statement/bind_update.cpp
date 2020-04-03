@@ -11,6 +11,7 @@
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 #include <algorithm>
 

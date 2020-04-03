@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 using namespace duckdb;
 using namespace std;

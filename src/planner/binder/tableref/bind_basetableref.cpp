@@ -5,6 +5,7 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 using namespace std;

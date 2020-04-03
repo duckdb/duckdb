@@ -2,6 +2,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
