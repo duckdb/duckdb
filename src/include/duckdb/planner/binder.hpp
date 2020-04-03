@@ -145,14 +145,24 @@ private:
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);
 
-	unique_ptr<LogicalOperator> Bind(TableRef &ref);
-	unique_ptr<LogicalOperator> Bind(BaseTableRef &ref);
-	unique_ptr<LogicalOperator> Bind(CrossProductRef &ref);
-	unique_ptr<LogicalOperator> Bind(JoinRef &ref);
-	unique_ptr<LogicalOperator> Bind(SubqueryRef &ref);
-	unique_ptr<LogicalOperator> Bind(TableFunctionRef &ref);
-	unique_ptr<LogicalOperator> Bind(EmptyTableRef &ref);
-	unique_ptr<LogicalOperator> Bind(ExpressionListRef &ref);
+	unique_ptr<BoundTableRef> Bind(TableRef &ref);
+	unique_ptr<BoundTableRef> Bind(BaseTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(CrossProductRef &ref);
+	unique_ptr<BoundTableRef> Bind(JoinRef &ref);
+	unique_ptr<BoundTableRef> Bind(SubqueryRef &ref);
+	unique_ptr<BoundTableRef> Bind(TableFunctionRef &ref);
+	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
+	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
+
+	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundJoinRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundSubqueryRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundTableFunction &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundEmptyTableRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundExpressionListRef &ref);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCTERef &ref);
 
 	unique_ptr<LogicalOperator> BindTable(TableCatalogEntry &table, BaseTableRef &ref);
 	unique_ptr<LogicalOperator> BindView(ViewCatalogEntry &view, BaseTableRef &ref);

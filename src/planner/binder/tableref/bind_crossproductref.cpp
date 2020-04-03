@@ -1,21 +1,13 @@
 #include "duckdb/parser/tableref/crossproductref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/tableref/bound_crossproductref.hpp"
 
+using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-
-unique_ptr<LogicalOperator> Binder::Bind(CrossProductRef &ref) {
-	auto cross_product = make_unique<LogicalCrossProduct>();
-
-	auto left = Bind(*ref.left);
-	auto right = Bind(*ref.right);
-
-	cross_product->AddChild(move(left));
-	cross_product->AddChild(move(right));
-
-	return move(cross_product);
-}
-
+unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
+	auto result = make_unique<BoundCrossProductRef>();
+	result->left = Bind(*ref.left);
+	result->right = Bind(*ref.right);
+	return move(result);
 }

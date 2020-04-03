@@ -9,7 +9,7 @@ using namespace std;
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
 	assert(statement.from_table);
-	root = move(statement.from_table);
+	root = CreatePlan(*statement.from_table);
 	assert(root);
 
 	if (statement.where_clause) {

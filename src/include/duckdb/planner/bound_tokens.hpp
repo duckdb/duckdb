@@ -41,4 +41,18 @@ class BoundUnnestExpression;
 class BoundWindowExpression;
 class CommonSubExpression;
 
+//===--------------------------------------------------------------------===//
+// TableRefs
+//===--------------------------------------------------------------------===//
+class BoundTableRef;
+
+class BoundBaseTableRef;
+class BoundCrossProductRef;
+class BoundJoinRef;
+class BoundSubqueryRef;
+class BoundTableFunction;
+class BoundEmptyTableRef;
+class BoundExpressionListRef;
+class BoundCTERef;
+
 } // namespace duckdb

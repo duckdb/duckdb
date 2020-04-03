@@ -12,11 +12,14 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	BoundStatement result;
 
 	// visit the table reference
-	auto root = Bind(*stmt.table);
-	auto &get = (LogicalGet &)*root;
-	if (root->type != LogicalOperatorType::GET && get.table) {
+	auto bound_table = Bind(*stmt.table);
+	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only delete from base table!");
 	}
+	auto root = CreatePlan(*bound_table);
+	auto &get = (LogicalGet &)*root;
+	assert(root->type == LogicalOperatorType::GET && get.table);
+
 	if (!get.table->temporary) {
 		// delete from persistent table: not read only!
 		this->read_only = false;

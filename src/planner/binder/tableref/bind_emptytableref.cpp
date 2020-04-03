@@ -1,13 +1,10 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 
+using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-
-unique_ptr<LogicalOperator> Binder::Bind(EmptyTableRef &ref) {
-	return make_unique<LogicalGet>(GenerateTableIndex());
-}
-
+unique_ptr<BoundTableRef> Binder::Bind(EmptyTableRef &ref) {
+	return make_unique<BoundEmptyTableRef>(GenerateTableIndex());
 }

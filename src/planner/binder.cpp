@@ -3,7 +3,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -130,7 +129,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 		throw Exception("Unsupported bound query node type");
 	}
 }
-unique_ptr<LogicalOperator> Binder::Bind(TableRef &ref) {
+unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
 		return Bind((BaseTableRef &)ref);
@@ -148,6 +147,29 @@ unique_ptr<LogicalOperator> Binder::Bind(TableRef &ref) {
 		return Bind((ExpressionListRef &)ref);
 	default:
 		throw Exception("Unknown table ref type");
+	}
+}
+
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
+		return CreatePlan((BoundBaseTableRef &)ref);
+	case TableReferenceType::SUBQUERY:
+		return CreatePlan((BoundSubqueryRef &)ref);
+	case TableReferenceType::JOIN:
+		return CreatePlan((BoundJoinRef &)ref);
+	case TableReferenceType::CROSS_PRODUCT:
+		return CreatePlan((BoundCrossProductRef &)ref);
+	case TableReferenceType::TABLE_FUNCTION:
+		return CreatePlan((BoundTableFunction &)ref);
+	case TableReferenceType::EMPTY:
+		return CreatePlan((BoundEmptyTableRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return CreatePlan((BoundExpressionListRef &)ref);
+	case TableReferenceType::CTE:
+		return CreatePlan((BoundCTERef &)ref);
+	default:
+		throw Exception("Unsupported bound table ref type type");
 	}
 }
 

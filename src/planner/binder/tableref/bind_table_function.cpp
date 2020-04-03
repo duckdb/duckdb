@@ -3,14 +3,13 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
-#include "duckdb/planner/operator/logical_table_function.hpp"
+#include "duckdb/planner/tableref/bound_table_function.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
+using namespace duckdb;
 using namespace std;
 
-namespace duckdb {
-
-unique_ptr<LogicalOperator> Binder::Bind(TableFunctionRef &ref) {
+unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto bind_index = GenerateTableIndex();
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
@@ -26,26 +25,20 @@ unique_ptr<LogicalOperator> Binder::Bind(TableFunctionRef &ref) {
 		                       fexpr->function_name.c_str(), (int)function->function.arguments.size(),
 		                       (int)fexpr->children.size());
 	}
-	vector<Value> parameters;
-	vector<SQLType> return_types;
-	vector<string> names;
+	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	// evalate the input parameters to the function
 	for (auto &child : fexpr->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		auto expr = binder.Bind(child);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
-		parameters.push_back(constant);
+		result->parameters.push_back(constant);
 	}
 	// perform the binding
-	auto bind_data = function->function.bind(context, parameters, return_types, names);
-	auto bind_name = ref.alias.empty() ? fexpr->function_name : ref.alias;
-	assert(return_types.size() == names.size());
-	assert(return_types.size() > 0);
+	result->bind_data = function->function.bind(context, result->parameters, result->return_types, result->names);
+	assert(result->return_types.size() == result->names.size());
+	assert(result->return_types.size() > 0);
 	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddGenericBinding(bind_index, bind_name, names, return_types);
-
-	return make_unique<LogicalTableFunction>(function, bind_index, move(bind_data), move(parameters),
-	                                         move(return_types), move(names));
-}
-
+	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,
+	                               result->return_types);
+	return move(result);
 }

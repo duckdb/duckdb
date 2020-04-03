@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"

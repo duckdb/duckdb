@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -142,33 +143,33 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	});
 }
 
-// void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
-//                                                    std::function<void(Expression &child)> callback) {
-// 	switch (ref.type) {
-// 	case TableReferenceType::CROSS_PRODUCT: {
-// 		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
-// 		EnumerateTableRefChildren(*bound_crossproduct.left, callback);
-// 		EnumerateTableRefChildren(*bound_crossproduct.right, callback);
-// 		break;
-// 	}
-// 	case TableReferenceType::JOIN: {
-// 		auto &bound_join = (BoundJoinRef &)ref;
-// 		EnumerateExpression(bound_join.condition, callback);
-// 		EnumerateTableRefChildren(*bound_join.left, callback);
-// 		EnumerateTableRefChildren(*bound_join.right, callback);
-// 		break;
-// 	}
-// 	case TableReferenceType::SUBQUERY: {
-// 		auto &bound_subquery = (BoundSubqueryRef &)ref;
-// 		EnumerateQueryNodeChildren(*bound_subquery.subquery, callback);
-// 		break;
-// 	}
-// 	default:
-// 		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
-// 		       ref.type == TableReferenceType::EMPTY);
-// 		break;
-// 	}
-// }
+void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
+                                                   std::function<void(Expression &child)> callback) {
+	switch (ref.type) {
+	case TableReferenceType::CROSS_PRODUCT: {
+		auto &bound_crossproduct = (BoundCrossProductRef &)ref;
+		EnumerateTableRefChildren(*bound_crossproduct.left, callback);
+		EnumerateTableRefChildren(*bound_crossproduct.right, callback);
+		break;
+	}
+	case TableReferenceType::JOIN: {
+		auto &bound_join = (BoundJoinRef &)ref;
+		EnumerateExpression(bound_join.condition, callback);
+		EnumerateTableRefChildren(*bound_join.left, callback);
+		EnumerateTableRefChildren(*bound_join.right, callback);
+		break;
+	}
+	case TableReferenceType::SUBQUERY: {
+		auto &bound_subquery = (BoundSubqueryRef &)ref;
+		EnumerateQueryNodeChildren(*bound_subquery.subquery, callback);
+		break;
+	}
+	default:
+		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
+		       ref.type == TableReferenceType::EMPTY);
+		break;
+	}
+}
 
 void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
                                                     std::function<void(Expression &child)> callback) {
@@ -197,8 +198,7 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 			EnumerateExpression(bound_select.windows[i], callback);
 		}
 		if (bound_select.from_table) {
-			throw NotImplementedException("FIXME: ");
-			// EnumerateTableRefChildren(*bound_select.from_table, callback);
+			EnumerateTableRefChildren(*bound_select.from_table, callback);
 		}
 		break;
 	}

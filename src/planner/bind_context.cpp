@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
 
 #include "duckdb/common/string_util.hpp"
 
@@ -86,6 +87,10 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEnt
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	vector<string> names;
+	if (ref.column_name_alias.size() > subquery.names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(),
+		                      (int64_t)subquery.names.size(), (int64_t)ref.column_name_alias.size());
+	}
 	// use any provided aliases from the subquery
 	for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
 		names.push_back(ref.column_name_alias[i]);

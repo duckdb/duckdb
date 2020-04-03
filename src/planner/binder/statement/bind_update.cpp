@@ -86,11 +86,14 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BoundStatement result;
 	// visit the table reference
-	auto root = Bind(*stmt.table);
-	auto &get = (LogicalGet &)*root;
-	if (root->type != LogicalOperatorType::GET && get.table) {
+	auto bound_table = Bind(*stmt.table);
+	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
+	auto root = CreatePlan(*bound_table);
+	auto &get = (LogicalGet &)*root;
+	assert(root->type == LogicalOperatorType::GET && get.table);
+
 	auto &table = get.table;
 	if (!table->temporary) {
 		// update of persistent table: not read only!

@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -72,17 +73,22 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = (CreateIndexInfo &)*stmt.info;
 
 		// visit the table reference
-		auto plan = Bind(*base.table);
-		if (plan->type != LogicalOperatorType::GET) {
-			throw BinderException("Cannot create index on a view!");
+		auto bound_table = Bind(*base.table);
+		if (bound_table->type != TableReferenceType::BASE_TABLE) {
+			throw BinderException("Can only delete from base table!");
 		}
-		auto &get = (LogicalGet &)*plan;
 		// bind the index expressions
 		vector<unique_ptr<Expression>> expressions;
 		IndexBinder binder(*this, context);
 		for (auto &expr : base.expressions) {
 			expressions.push_back(binder.Bind(expr));
 		}
+
+		auto plan = CreatePlan(*bound_table);
+		if (plan->type != LogicalOperatorType::GET) {
+			throw BinderException("Cannot create index on a view!");
+		}
+		auto &get = (LogicalGet &)*plan;
 		// this gives us a logical table scan
 		// we take the required columns from here
 		// create the logical operator
