@@ -166,7 +166,8 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
 				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-				    TypeIsNumeric(constant_value.second[i].constant.type)) {
+                    (TypeIsNumeric(constant_value.second[i].constant.type)|| constant_value.second[i].constant.type == TypeId::VARCHAR))
+                    {
 					//! Here we check if these filters are column references
 					auto filter_exp = equivalence_map.find(constant_value.first);
 					if (filter_exp->second.size() == 1 &&
@@ -241,6 +242,7 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 			}
 		}
 	}
+
 	return tableFilters;
 }
 

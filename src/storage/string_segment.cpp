@@ -281,7 +281,6 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
 	assert(data.type == TypeId::VARCHAR);
 	auto handle = manager.Pin(block_id);
-
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
 		// get the vector index of the vector to append to and see how many tuples we can append to that vector
@@ -310,6 +309,23 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 	}
 	return tuple_count - initial_count;
 }
+ static void update_min_max(string value, string *__restrict min, string *__restrict max) {
+    //! we can only fit 8 bytes, so we might need to trim our string
+    if (value.size() >= 8){
+        value = value.substr(0,7);
+
+    }
+    if (min->empty() && max->empty()){
+        *min = value;
+        *max = value;
+    }
+    if (value < *min) {
+        *min = value;
+    }
+    if (value > *max) {
+        *max = value;
+    }
+}
 
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
                                Vector &source, idx_t offset, idx_t count) {
@@ -319,6 +335,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 	auto sdata = (string_t *)adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
+    auto min = (string *)stats.minimum.get();
+    auto max = (string *)stats.maximum.get();
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -349,9 +367,10 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
+                //! Update min/max of column segment
+                update_min_max(sdata[source_idx].GetData(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
-
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - dictionary_offset;
 
@@ -364,12 +383,14 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				assert(string_length < std::numeric_limits<uint16_t>::max());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
-
+                //! Update min/max of column segment
+                update_min_max(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
 				uint16_t string_length_u16 = string_length;
 				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
 				// now write the actual string data into the dictionary
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
+
 			}
 			// place the dictionary offset into the set of vectors
 			result_data[target_idx] = dictionary_offset;
@@ -513,6 +534,11 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
+            auto min = (string *)stats.minimum.get();
+            auto max = (string *)stats.maximum.get();
+            for (idx_t i = 0; i < count; i++) {
+                update_min_max(strings[i].GetData(), min, max);
+            }
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;

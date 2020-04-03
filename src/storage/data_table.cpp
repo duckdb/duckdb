@@ -139,6 +139,11 @@ bool DataTable::CheckZonemap(TableScanState &state, vector<TableFilter> &table_f
 			readSegment &= checkZonemap<double>(state, table_filter, constant);
 			break;
 		}
+        case TypeId::VARCHAR: {
+            string constant = table_filter.constant.str_value;
+            readSegment &= checkZonemap<string>(state, table_filter, constant);
+            break;
+        }
 		default:
 			throw NotImplementedException("Unimplemented type for uncompressed segment");
 		}

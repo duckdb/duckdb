@@ -30,7 +30,7 @@ TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
 	tpch::dbgen(sf, db);
 
 	// test all the basic queries
-	for (idx_t i = 1; i <= 22; i++) {
+	for (idx_t i = 2; i <= 22; i++) {
 		result = con.Query(tpch::get_query(i));
 		COMPARE_CSV(result, tpch::get_answer(sf, i), true);
 	}
