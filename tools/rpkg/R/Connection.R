@@ -12,6 +12,19 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
+duckdb_register <- function(conn, name, df) {
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_register_R, conn@conn_ref, as.character(name), as.data.frame(df))
+  invisible(TRUE)
+}
+
+duckdb_unregister <- function(conn, name) {
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_unregister_R, conn@conn_ref, as.character(name))
+  invisible(TRUE)
+}
+
+
 #' @rdname DBI
 #' @export
 setClass(
@@ -92,6 +105,9 @@ setMethod("dbDataType", "duckdb_connection",
             dbDataType(dbObj@driver, obj, ...)
           })
 
+duckdb_random_string <- function(x) {
+	paste(sample(letters, 10, replace = TRUE), collapse="")
+}
 
 #' @rdname DBI
 #' @inheritParams DBI::dbWriteTable
@@ -156,9 +172,9 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
                 stop("Column name mismatch for append")
               }
               }
-            
+            table_name <- dbQuoteIdentifier(conn, name)
+
             if (!dbExistsTable(conn, name)) {
-              table_name <- dbQuoteIdentifier(conn, name)
               column_names <- dbQuoteIdentifier(conn, names(value))
               column_types <-
                 vapply(value, dbDataType, dbObj = conn, FUN.VALUE = "character")
@@ -192,8 +208,11 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
 				  levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
 				}
 			}
-            
-            .Call(duckdb_append_R, conn@conn_ref, name, value)
+			view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
+            on.exit(duckdb_unregister(conn, view_name))
+            duckdb_register(conn, view_name, value)
+            dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
+
             invisible(TRUE)
           })
 

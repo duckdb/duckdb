@@ -93,7 +93,8 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 
 static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Nullmask(result);	for (idx_t i = 0; i < count; i++) {
+	auto &result_mask = FlatVector::Nullmask(result);
+	for (idx_t i = 0; i < count; i++) {
 		SEXP val = STRING_ELT(coldata, row_idx + i);
 		if (val == NA_STRING) {
 			result_mask[i] = true;
@@ -450,18 +451,20 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
 				switch (result->sql_types[col_idx].id) {
 				case SQLTypeId::BOOLEAN:
-					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest),
+					                              dest_offset, NA_LOGICAL);
 					break;
 				case SQLTypeId::TINYINT:
-					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
+					                              dest_offset, NA_INTEGER);
 					break;
 				case SQLTypeId::SMALLINT:
-					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
-					                               NA_INTEGER);
+					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
+					                               dest_offset, NA_INTEGER);
 					break;
 				case SQLTypeId::INTEGER:
-					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
-					                               NA_INTEGER);
+					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
+					                               dest_offset, NA_INTEGER);
 					break;
 				case SQLTypeId::TIMESTAMP: {
 					auto &src_vec = chunk->data[col_idx];
@@ -523,14 +526,17 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					break;
 				}
 				case SQLTypeId::BIGINT:
-					vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest),
+					                             dest_offset, NA_REAL);
 					break;
 				case SQLTypeId::FLOAT:
-					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+					                           NA_REAL);
 					break;
 
 				case SQLTypeId::DOUBLE:
-					vector_to_r<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+					vector_to_r<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+					                            NA_REAL);
 					break;
 				case SQLTypeId::VARCHAR: {
 					auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
@@ -574,6 +580,120 @@ static SEXP duckdb_finalize_database_R(SEXP dbsexp) {
 	return R_NilValue;
 }
 
+struct DataFrameScanFunctionData : public TableFunctionData {
+	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
+	    : df(df), row_count(row_count), rtypes(rtypes), position(0) {
+	}
+	SEXP df;
+	idx_t row_count;
+	vector<RType> rtypes;
+	idx_t position;
+};
+
+struct DataFrameScanFunction : public TableFunction {
+	DataFrameScanFunction()
+	    : TableFunction("dataframe_scan", {SQLType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function, nullptr){};
+
+	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> inputs,
+	                                                    vector<SQLType> &return_types, vector<string> &names) {
+		// TODO have a better way to pass this pointer
+		SEXP df((SEXP)stoul(inputs[0].GetValue<string>(), nullptr, 16));
+
+		auto df_names = GET_NAMES(df);
+		vector<RType> rtypes;
+
+		for (idx_t col_idx = 0; col_idx < LENGTH(df); col_idx++) {
+			names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
+			SEXP coldata = VECTOR_ELT(df, col_idx);
+			rtypes.push_back(detect_rtype(coldata));
+			SQLType duckdb_col_type;
+			switch (rtypes[col_idx]) {
+			case RType::LOGICAL:
+				duckdb_col_type = SQLType::BOOLEAN;
+				break;
+			case RType::INTEGER:
+				duckdb_col_type = SQLType::INTEGER;
+				break;
+			case RType::NUMERIC:
+				duckdb_col_type = SQLType::DOUBLE;
+				break;
+			case RType::FACTOR:
+			case RType::STRING:
+				duckdb_col_type = SQLType::VARCHAR;
+				break;
+			case RType::TIMESTAMP:
+				duckdb_col_type = SQLType::TIMESTAMP;
+				break;
+			case RType::DATE:
+				duckdb_col_type = SQLType::DATE;
+				break;
+			default:
+				Rf_error("Unsupported column type for scan");
+			}
+			return_types.push_back(duckdb_col_type);
+		}
+
+		auto row_count = LENGTH(VECTOR_ELT(df, 0));
+		return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
+	}
+
+	static void dataframe_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
+	                                    FunctionData *dataptr) {
+		auto &data = *((DataFrameScanFunctionData *)dataptr);
+
+		if (data.position >= data.row_count) {
+			return;
+		}
+		idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - data.position);
+
+		output.SetCardinality(this_count);
+
+		// TODO this is quite similar to append, unify!
+		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
+			auto &v = output.data[col_idx];
+			SEXP coldata = VECTOR_ELT(data.df, col_idx);
+
+			switch (data.rtypes[col_idx]) {
+			case RType::LOGICAL: {
+				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::INTEGER: {
+				auto data_ptr = INTEGER_POINTER(coldata) + data.position;
+				AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::NUMERIC: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::STRING:
+				AppendStringSegment(coldata, v, data.position, this_count);
+				break;
+			case RType::FACTOR:
+				AppendFactor(coldata, v, data.position, this_count);
+				break;
+			case RType::TIMESTAMP: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
+				break;
+			}
+			case RType::DATE: {
+				auto data_ptr = NUMERIC_POINTER(coldata) + data.position;
+				AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
+				break;
+			}
+			default:
+				throw;
+			}
+		}
+
+		data.position += this_count;
+	}
+};
+
 SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	if (TYPEOF(dbdirsexp) != STRSXP || LENGTH(dbdirsexp) != 1) {
 		Rf_error("duckdb_startup_R: Need string parameter for dbdir");
@@ -600,6 +720,14 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	} catch (...) {
 		Rf_error("duckdb_startup_R: Failed to open database");
 	}
+
+	DataFrameScanFunction scan_fun;
+	CreateTableFunctionInfo info(scan_fun);
+	Connection conn(*dbaddr);
+	auto &context = *conn.context;
+	context.transaction.BeginTransaction();
+	context.catalog.CreateTableFunction(context, &info);
+	context.transaction.Commit();
 
 	SEXP dbsexp = PROTECT(R_MakeExternalPtr(dbaddr, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(dbsexp, (void (*)(SEXP))duckdb_finalize_database_R);
@@ -633,35 +761,8 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 	return R_NilValue;
 }
 
-SEXP duckdb_connect_R(SEXP dbsexp) {
-	if (TYPEOF(dbsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_connect_R: Need external pointer parameter");
-	}
-	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
-	if (!dbaddr) {
-		Rf_error("duckdb_connect_R: Invalid database reference");
-	}
+SEXP duckdb_register_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 
-	SEXP conn = PROTECT(R_MakeExternalPtr(new Connection(*dbaddr), R_NilValue, R_NilValue));
-	R_RegisterCFinalizer(conn, (void (*)(SEXP))duckdb_finalize_connection_R);
-	UNPROTECT(1);
-
-	return conn;
-}
-
-SEXP duckdb_disconnect_R(SEXP connsexp) {
-	if (TYPEOF(connsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_disconnect_R: Need external pointer parameter");
-	}
-	Connection *connaddr = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (connaddr) {
-		R_ClearExternalPtr(connsexp);
-		delete connaddr;
-	}
-	return R_NilValue;
-}
-
-SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
 	}
@@ -674,78 +775,83 @@ SEXP duckdb_append_R(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
 		Rf_error("duckdb_append_R: Need single string parameter for name");
 	}
+	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
 
 	if (TYPEOF(valuesexp) != VECSXP || LENGTH(valuesexp) < 1 ||
 	    strcmp("data.frame", CHAR(STRING_ELT(GET_CLASS(valuesexp), 0))) != 0) {
 		Rf_error("duckdb_append_R: Need at least one-column data frame parameter for value");
 	}
 
-	try {
-		auto name = string(CHAR(STRING_ELT(namesexp, 0)));
-		string schema, table;
-		Catalog::ParseRangeVar(name, schema, table);
+	auto key = install(("_registered_df_" + name).c_str());
+	setAttrib(connsexp, key, valuesexp);
 
-		Appender appender(*conn, schema, table);
-		auto nrows = LENGTH(VECTOR_ELT(valuesexp, 0));
-		vector<RType> rtypes;
-		for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
-			SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
-			rtypes.push_back(detect_rtype(coldata));
-		}
+	// TODO put it into a conn attr that contains a named list to keep from gc!
+	std::ostringstream address;
+	address << (void const *)valuesexp;
+	string pointer_str = address.str();
 
-		for (idx_t row_idx = 0; row_idx < nrows; row_idx += STANDARD_VECTOR_SIZE) {
-			idx_t current_count = std::min((idx_t)nrows - row_idx, (idx_t)STANDARD_VECTOR_SIZE);
-			auto &append_chunk = appender.GetAppendChunk();
-			for (idx_t col_idx = 0; col_idx < LENGTH(valuesexp); col_idx++) {
-				auto &append_data = append_chunk.data[col_idx];
-				SEXP coldata = VECTOR_ELT(valuesexp, col_idx);
+	// hack alert: put the pointer address into the function call as a string
+	auto res = conn->Query("CREATE OR REPLACE TEMPORARY VIEW \"" + name + "\" AS SELECT * FROM dataframe_scan('" +
+	                       pointer_str + "')");
+	if (!res->success) {
+		Rf_error(res->error.c_str());
+	}
+	return R_NilValue;
+}
 
-				switch (rtypes[col_idx]) {
-				case RType::LOGICAL: {
-					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
-					AppendColumnSegment<int, bool, RBooleanType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::INTEGER: {
-					auto data_ptr = INTEGER_POINTER(coldata) + row_idx;
-					AppendColumnSegment<int, int, RIntegerType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::NUMERIC: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, double, RDoubleType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::STRING:
-					AppendStringSegment(coldata, append_data, row_idx, current_count);
-					break;
-				case RType::FACTOR:
-					AppendFactor(coldata, append_data, row_idx, current_count);
-					break;
-				case RType::TIMESTAMP: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, append_data, current_count);
-					break;
-				}
-				case RType::DATE: {
-					auto data_ptr = NUMERIC_POINTER(coldata) + row_idx;
-					AppendColumnSegment<double, date_t, RDateType>(data_ptr, append_data, current_count);
-					break;
-				}
-				default:
-					throw;
-				}
-			}
-			append_chunk.SetCardinality(current_count);
-			appender.Flush();
-		}
-		appender.Close();
-	} catch (std::exception &ex) {
-		Rf_error("duckdb_append_R failed: %s", ex.what());
-	} catch (...) {
-		Rf_error("duckdb_append_R failed: unknown error");
+SEXP duckdb_unregister_R(SEXP connsexp, SEXP namesexp) {
+
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_append_R: Need external pointer parameter for connection");
 	}
 
+	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
+	if (!conn) {
+		Rf_error("duckdb_append_R: Invalid connection");
+	}
+
+	if (TYPEOF(namesexp) != STRSXP || LENGTH(namesexp) != 1) {
+		Rf_error("duckdb_append_R: Need single string parameter for name");
+	}
+	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+
+	auto key = install(("_registered_df_" + name).c_str());
+	setAttrib(connsexp, key, R_NilValue);
+
+	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
+	if (!res->success) {
+		Rf_error(res->error.c_str());
+	}
+
+	// TODO
+	return R_NilValue;
+}
+
+SEXP duckdb_connect_R(SEXP dbsexp) {
+	if (TYPEOF(dbsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_connect_R: Need external pointer parameter");
+	}
+	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
+	if (!dbaddr) {
+		Rf_error("duckdb_connect_R: Invalid database reference");
+	}
+
+	SEXP connsexp = PROTECT(R_MakeExternalPtr(new Connection(*dbaddr), R_NilValue, R_NilValue));
+	R_RegisterCFinalizer(connsexp, (void (*)(SEXP))duckdb_finalize_connection_R);
+	UNPROTECT(1);
+
+	return connsexp;
+}
+
+SEXP duckdb_disconnect_R(SEXP connsexp) {
+	if (TYPEOF(connsexp) != EXTPTRSXP) {
+		Rf_error("duckdb_disconnect_R: Need external pointer parameter");
+	}
+	Connection *connaddr = (Connection *)R_ExternalPtrAddr(connsexp);
+	if (connaddr) {
+		R_ClearExternalPtr(connsexp);
+		delete connaddr;
+	}
 	return R_NilValue;
 }
 
@@ -774,7 +880,8 @@ static const R_CallMethodDef R_CallDef[] = {CALLDEF(duckdb_startup_R, 2),
                                             CALLDEF(duckdb_bind_R, 2),
                                             CALLDEF(duckdb_execute_R, 1),
                                             CALLDEF(duckdb_release_R, 1),
-                                            CALLDEF(duckdb_append_R, 3),
+                                            CALLDEF(duckdb_register_R, 3),
+                                            CALLDEF(duckdb_unregister_R, 2),
                                             CALLDEF(duckdb_disconnect_R, 1),
                                             CALLDEF(duckdb_shutdown_R, 1),
                                             CALLDEF(duckdb_ptr_to_str, 1),
