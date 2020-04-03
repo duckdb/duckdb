@@ -63,7 +63,7 @@ public:
 	}
 
 	const char *GetPrefix() const {
-	    return prefix;
+		return prefix;
 	}
 
 	idx_t GetSize() const {

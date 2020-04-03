@@ -3,6 +3,7 @@ add_library_unity(duckdb_optimizer_pushdown
                   pushdown_aggregate.cpp
                   pushdown_cross_product.cpp
                   pushdown_filter.cpp
+                  pushdown_get.cpp
                   pushdown_inner_join.cpp
                   pushdown_left_join.cpp
                   pushdown_mark_join.cpp

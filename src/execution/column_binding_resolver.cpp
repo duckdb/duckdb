@@ -54,6 +54,11 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		bindings = LogicalOperator::GenerateColumnBindings(0, create_index.table.columns.size());
 		VisitOperatorExpressions(op);
 		return;
+	} else if (op.type == LogicalOperatorType::GET) {
+		//! We first need to update the current set of bindings and then visit operator expressions
+		bindings = op.GetColumnBindings();
+		VisitOperatorExpressions(op);
+		return;
 	}
 	// general case
 	// first visit the children of this operator

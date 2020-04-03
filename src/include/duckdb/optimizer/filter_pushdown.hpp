@@ -51,7 +51,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownProjection(unique_ptr<LogicalOperator> op);
 	//! Push down a LogicalSetOperation op
 	unique_ptr<LogicalOperator> PushdownSetOperation(unique_ptr<LogicalOperator> op);
-
+	//! Push down a LogicalGet op
+	unique_ptr<LogicalOperator> PushdownGet(unique_ptr<LogicalOperator> op);
 	// Pushdown an inner join
 	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                              unordered_set<idx_t> &right_bindings);
@@ -73,6 +74,8 @@ private:
 	FilterResult AddFilter(unique_ptr<Expression> expr);
 	//! Generate filters from the current set of filters stored in the FilterCombiner
 	void GenerateFilters();
+	//! if there are filters in this FilterPushdown node, push them into the combiner
+	void PushFilters();
 
 	FilterCombiner combiner;
 };

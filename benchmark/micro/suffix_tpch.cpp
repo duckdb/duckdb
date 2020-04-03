@@ -30,96 +30,96 @@ FINISH_BENCHMARK(SuffixLineitemShort)
 
 DUCKDB_BENCHMARK(SuffixLineitemMedium, "[suffix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_shipinstruct FROM lineitem WHERE suffix(l_shipinstruct, 'CK RETURN')";
+	return "SELECT l_shipinstruct FROM lineitem WHERE suffix(l_shipinstruct, 'CK RETURN')";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Medium Suffix LineItem";
+	return "Medium Suffix LineItem";
 }
 FINISH_BENCHMARK(SuffixLineitemMedium)
 
 DUCKDB_BENCHMARK(SuffixLineitemLong, "[suffix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_shipinstruct FROM lineitem WHERE suffix(l_shipinstruct, 'LIVER IN PERSON')";
+	return "SELECT l_shipinstruct FROM lineitem WHERE suffix(l_shipinstruct, 'LIVER IN PERSON')";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Long Suffix LineItem";
+	return "Long Suffix LineItem";
 }
 FINISH_BENCHMARK(SuffixLineitemLong)
 
 //-------------------------------- LIKE ---------------------------------------
 DUCKDB_BENCHMARK(SuffixLineitemLikeShort, "[suffix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-    return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%NONE'";
+	return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%NONE'";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Short Suffix LineItem LIKE";
+	return "Short Suffix LineItem LIKE";
 }
 FINISH_BENCHMARK(SuffixLineitemLikeShort)
 
 DUCKDB_BENCHMARK(SuffixLineitemLikeMedium, "[suffix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-    return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%CK RETURN'";
+	return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%CK RETURN'";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Medium Suffix LineItem LIKE";
+	return "Medium Suffix LineItem LIKE";
 }
 FINISH_BENCHMARK(SuffixLineitemLikeMedium)
 
 DUCKDB_BENCHMARK(SuffixLineitemLikeLong, "[suffix_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-    return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%LIVER IN PERSON'";
+	return "SELECT l_shipinstruct FROM lineitem WHERE l_shipinstruct LIKE '%LIVER IN PERSON'";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "LongSuffix LineItem LIKE";
+	return "LongSuffix LineItem LIKE";
 }
 FINISH_BENCHMARK(SuffixLineitemLikeLong)

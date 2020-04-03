@@ -126,7 +126,8 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 	case SQLTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<timestamp_t>(type);
 	case SQLTypeId::VARCHAR:
-		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t, FirstFunctionString>(type, type);
+		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
+		                                                   FirstFunctionString>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented type for FIRST aggregate");
 	}
