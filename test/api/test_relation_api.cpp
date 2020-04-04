@@ -168,6 +168,15 @@ TEST_CASE("Test view creation of relations", "[api]") {
 	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->SQL("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
+	// manually create views and query from them
+	result = con.Query("SELECT i+1 FROM integers UNION SELECT i+10 FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
+
+	tbl->Project("i + 1")->CreateView("test1");
+	tbl->Project("i + 10")->CreateView("test2");
+	result = con.Query("SELECT * FROM test1 UNION SELECT * FROM test2 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
+
 
 
 }
