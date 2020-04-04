@@ -1,6 +1,8 @@
 #include "duckdb/main/relation/limit_relation.hpp"
-#include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -8,13 +10,17 @@ LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_
 	Relation(child_p->context, RelationType::PROJECTION), limit(limit), offset(offset), child(move(child_p)) {
 }
 
-BoundStatement LimitRelation::Bind(Binder &binder) {
-	BoundStatement result = child->Bind(binder);
+unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
+	auto child_node = child->GetQueryNode();
 
-	auto limit_plan = make_unique<LogicalLimit>(limit, offset);
-	limit_plan->AddChild(move(result.plan));
-	result.plan = move(limit_plan);
-	return result;
+	auto result = make_unique<SelectNode>();
+	result->select_list.push_back(make_unique<StarExpression>());
+	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->limit = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(limit));
+	if (offset > 0) {
+		result->offset = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(offset));
+	}
+	return move(result);
 }
 
 const vector<ColumnDefinition> &LimitRelation::Columns() {

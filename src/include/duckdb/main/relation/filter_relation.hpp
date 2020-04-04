@@ -20,7 +20,8 @@ public:
 	unique_ptr<ParsedExpression> condition;
 	shared_ptr<Relation> child;
 public:
-	BoundStatement Bind(Binder &binder) override;
+	unique_ptr<QueryNode> GetQueryNode() override;
+
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 };

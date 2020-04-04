@@ -21,6 +21,7 @@ struct BoundStatement;
 class ClientContext;
 class Binder;
 class LogicalOperator;
+class QueryNode;
 
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
@@ -31,7 +32,9 @@ public:
 	RelationType type;
 public:
 	virtual const vector<ColumnDefinition> &Columns() = 0;
-	virtual BoundStatement Bind(Binder &binder) = 0;
+	virtual unique_ptr<QueryNode> GetQueryNode() = 0;
+	virtual BoundStatement Bind(Binder &binder);
+	string GetAlias();
 
 	unique_ptr<QueryResult> Execute();
 	string ToString();

@@ -1,9 +1,9 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/planner/expression_binder/relation_binder.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -14,29 +14,19 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
 	context.TryBindRelation(*this, dummy_columns);
 }
 
-BoundStatement OrderRelation::Bind(Binder &binder) {
-	auto result = child->Bind(binder);
+unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
+	auto child_node = child->GetQueryNode();
 
-	// now bind the expressions
-	RelationBinder expr_binder(binder, context, "ORDER");
-	vector<BoundOrderByNode> bound_orders;
+	auto result = make_unique<SelectNode>();
+	result->select_list.push_back(make_unique<StarExpression>());
+	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
 	for(idx_t i = 0; i < orders.size(); i++) {
-		auto expr = orders[i].expression->Copy();
-
-		SQLType result_type;
-		auto bound_expr = expr_binder.Bind(expr, &result_type);
-
-		BoundOrderByNode node;
-		node.expression = move(bound_expr);
+		OrderByNode node;
+		node.expression = orders[i].expression->Copy();
 		node.type = orders[i].type;
-		bound_orders.push_back(move(node));
+		result->orders.push_back(move(node));
 	}
-
-	// create the logical projection node
-	auto order = make_unique<LogicalOrder>(move(bound_orders));
-	order->AddChild(move(result.plan));
-	result.plan = move(order);
-	return result;
+	return move(result);
 }
 
 const vector<ColumnDefinition> &OrderRelation::Columns() {

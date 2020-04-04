@@ -1,7 +1,8 @@
 #include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/bound_statement.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
@@ -11,14 +12,14 @@ DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p) :
 	context.TryBindRelation(*this, dummy_columns);
 }
 
-BoundStatement DistinctRelation::Bind(Binder &binder) {
-	// bind the root node
-	BoundStatement result = child->Bind(binder);
+unique_ptr<QueryNode> DistinctRelation::GetQueryNode() {
+	auto child_node = child->GetQueryNode();
 
-	auto distinct = make_unique<LogicalDistinct>();
-	distinct->AddChild(move(result.plan));
-	result.plan = move(distinct);
-	return result;
+	auto result = make_unique<SelectNode>();
+	result->select_list.push_back(make_unique<StarExpression>());
+	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->select_distinct = true;
+	return move(result);
 }
 
 const vector<ColumnDefinition> &DistinctRelation::Columns() {

@@ -8,6 +8,8 @@
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -55,25 +57,34 @@ shared_ptr<Relation> Relation::Order(string expression) {
 }
 
 shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::UNION);
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::UNION);
 }
 
 shared_ptr<Relation> Relation::Except(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::EXCEPT);
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::EXCEPT);
 }
 
 shared_ptr<Relation> Relation::Intersect(shared_ptr<Relation> other) {
-	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::INTERSECT);
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::INTERSECT);
 }
 
 shared_ptr<Relation> Relation::Distinct() {
 	return make_shared<DistinctRelation>(shared_from_this());
 }
 
+string Relation::GetAlias() {
+	return "relation";
+}
+
 unique_ptr<QueryResult> Relation::Execute() {
 	// we push a SELECT * over the expression to force all the columns to be emitted
-	auto proj = this->Project("*");
-	return context.Execute(proj);
+	return context.Execute(shared_from_this());
+}
+
+BoundStatement Relation::Bind(Binder &binder) {
+	SelectStatement stmt;
+	stmt.node = GetQueryNode();
+	return binder.Bind((SQLStatement&)stmt);
 }
 
 void Relation::Head(idx_t limit) {

@@ -19,7 +19,8 @@ public:
 
 	unique_ptr<TableDescription> description;
 public:
-	BoundStatement Bind(Binder &binder) override;
+	unique_ptr<QueryNode> GetQueryNode() override;
+
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 };

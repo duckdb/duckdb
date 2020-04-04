@@ -9,19 +9,20 @@
 #pragma once
 
 #include "duckdb/main/relation.hpp"
-#include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/set_operation_type.hpp"
 
 namespace duckdb {
 
 class SetOpRelation : public Relation {
 public:
-	SetOpRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, LogicalOperatorType setop_type);
+	SetOpRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, SetOperationType setop_type);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
-	LogicalOperatorType setop_type;
+	SetOperationType setop_type;
 public:
-	BoundStatement Bind(Binder &binder) override;
+	unique_ptr<QueryNode> GetQueryNode() override;
+
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 };
