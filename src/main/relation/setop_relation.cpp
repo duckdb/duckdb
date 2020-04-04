@@ -55,10 +55,13 @@ string SetOpRelation::ToString(idx_t depth) {
 	switch(setop_type) {
 	case LogicalOperatorType::UNION:
 		str += "Union";
+		break;
 	case LogicalOperatorType::EXCEPT:
 		str += "Except";
+		break;
 	case LogicalOperatorType::INTERSECT:
 		str += "Intersect";
+		break;
 	default:
 		throw Exception("Unknown setop type");
 	}
