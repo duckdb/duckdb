@@ -85,15 +85,15 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
-	// // now test ordering
-	// REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	// now test ordering
+	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
 
-	// // top n
-	// REQUIRE_NOTHROW(result = proj->Order("a")->Limit(1)->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {2}));
-	// REQUIRE_NOTHROW(result = proj->Order("a DESC")->Limit(1)->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	// top n
+	REQUIRE_NOTHROW(result = proj->Order("a")->Limit(1)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Limit(1)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 }
 
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {

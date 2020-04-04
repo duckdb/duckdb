@@ -7,7 +7,7 @@
 namespace duckdb {
 
 FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p) :
-	Relation(child_p->context, RelationType::PROJECTION), condition(move(condition_p)), child(move(child_p)) {
+	Relation(child_p->context, RelationType::FILTER), condition(move(condition_p)), child(move(child_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }

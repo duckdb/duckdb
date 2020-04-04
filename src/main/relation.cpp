@@ -3,6 +3,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
+#include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -47,7 +48,8 @@ shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
 }
 
 shared_ptr<Relation> Relation::Order(string expression) {
-	throw NotImplementedException("FIXME:");
+	auto order_list = Parser::ParseOrderList(expression);
+	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
 }
 
 shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
