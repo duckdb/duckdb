@@ -121,6 +121,57 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 }
 
+TEST_CASE("Test view creation of relations", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> tbl, filter, proj, proj2;
+
+	// create some tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	// simple view creation
+	REQUIRE_NOTHROW(tbl = con.Table("integers"));
+	REQUIRE_NOTHROW(result = tbl->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// add a projection
+	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+
+	// multiple projections
+	proj = tbl->Project("i + 1", "i");
+	for(idx_t i = 0; i < 10; i++) {
+		proj = proj->Project("i + 1", "i");
+	}
+	REQUIRE_NOTHROW(result = proj->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
+	REQUIRE_NOTHROW(result = proj->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
+
+	// we can also use more complex SQL
+	REQUIRE_NOTHROW(result = proj->SQL("test", "SELECT SUM(t1.i) FROM test t1 JOIN test t2 ON t1.i=t2.i"));
+	REQUIRE(CHECK_COLUMN(result, 0, {39}));
+
+	// limit
+	REQUIRE_NOTHROW(result = tbl->Limit(1)->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	// order
+	REQUIRE_NOTHROW(result = tbl->Order("i DESC")->Limit(1)->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	// union
+	auto node = tbl->Order("i DESC")->Limit(1);
+	REQUIRE_NOTHROW(result = node->Union(node)->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3}));
+	// distinct
+	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->SQL("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+
+
+}
+
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {
 // 	DuckDB db(nullptr), db2(nullptr);
 // 	Connection con(db), con2(db);

@@ -26,6 +26,7 @@ enum class RelationType : uint8_t {
 	DISTINCT,
 	LIMIT,
 	ORDER,
+	CREATE_VIEW,
 	AGGREGATE
 };
 

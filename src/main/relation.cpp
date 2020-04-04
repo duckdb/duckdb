@@ -7,6 +7,7 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
+#include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
@@ -77,7 +78,6 @@ string Relation::GetAlias() {
 }
 
 unique_ptr<QueryResult> Relation::Execute() {
-	// we push a SELECT * over the expression to force all the columns to be emitted
 	return context.Execute(shared_from_this());
 }
 
@@ -92,8 +92,14 @@ void Relation::Head(idx_t limit) {
 	limit_node->Execute()->Print();
 }
 
-void Relation::CreateView(string name) {
-	throw NotImplementedException("FIXME:");
+void Relation::CreateView(string name, bool replace) {
+	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace);
+	view->Execute();
+}
+
+unique_ptr<QueryResult> Relation::SQL(string name, string sql) {
+	CreateView(name);
+	return context.Query(sql, false);
 }
 
 string Relation::ToString() {

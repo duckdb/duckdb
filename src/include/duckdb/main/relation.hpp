@@ -43,7 +43,8 @@ public:
 	void Print();
 	void Head(idx_t limit = 10);
 
-	void CreateView(string name);
+	void CreateView(string name, bool replace = true);
+	unique_ptr<QueryResult> SQL(string name, string sql);
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);
