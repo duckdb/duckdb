@@ -8,7 +8,7 @@ TEST_CASE("Test simple relation API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl, filter, proj;
+	shared_ptr<Relation> tbl, filter, proj, proj2;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -94,6 +94,31 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Limit(1)->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+
+	// test set operations
+	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE_NOTHROW(result = tbl->Except(tbl)->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE_NOTHROW(result = tbl->Intersect(tbl)->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE_NOTHROW(result = tbl->Except(tbl->Filter("i=2"))->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 3}));
+	REQUIRE_NOTHROW(result = tbl->Intersect(tbl->Filter("i=2"))->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// set operations with projections
+	REQUIRE_NOTHROW(proj = tbl->Project("i::TINYINT AS i, i::SMALLINT, i::BIGINT, i::VARCHAR"));
+	REQUIRE_NOTHROW(proj2 = tbl->Project("(i+10)::TINYINT, (i+10)::SMALLINT, (i+10)::BIGINT, (i+10)::VARCHAR"));
+	REQUIRE_NOTHROW(result = proj->Union(proj2)->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, 11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 11, 12, 13}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"1", "2", "3", "11", "12", "13"}));
+
+	// distinct
+	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 }
 
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {

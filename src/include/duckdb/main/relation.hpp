@@ -33,7 +33,7 @@ public:
 	virtual const vector<ColumnDefinition> &Columns() = 0;
 	virtual BoundStatement Bind(Binder &binder) = 0;
 
-	virtual unique_ptr<QueryResult> Execute();
+	unique_ptr<QueryResult> Execute();
 	string ToString();
 	virtual string ToString(idx_t depth) = 0;
 
@@ -57,9 +57,13 @@ public:
 	// ORDER
 	shared_ptr<Relation> Order(string expression);
 
-	// UNION
+	// SET operations
 	shared_ptr<Relation> Union(shared_ptr<Relation> other);
+	shared_ptr<Relation> Except(shared_ptr<Relation> other);
+	shared_ptr<Relation> Intersect(shared_ptr<Relation> other);
 
+	// DISTINCT operation
+	shared_ptr<Relation> Distinct();
 protected:
 	string RenderWhitespace(idx_t depth);
 };

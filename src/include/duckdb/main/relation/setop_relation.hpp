@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/limit_relation.hpp
+// duckdb/main/relation/setop_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,16 +9,17 @@
 #pragma once
 
 #include "duckdb/main/relation.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 
 namespace duckdb {
 
-class LimitRelation : public Relation {
+class SetOpRelation : public Relation {
 public:
-	LimitRelation(shared_ptr<Relation> child, int64_t limit, int64_t offset);
+	SetOpRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, LogicalOperatorType setop_type);
 
-	int64_t limit;
-	int64_t offset;
-	shared_ptr<Relation> child;
+	shared_ptr<Relation> left;
+	shared_ptr<Relation> right;
+	LogicalOperatorType setop_type;
 public:
 	BoundStatement Bind(Binder &binder) override;
 	const vector<ColumnDefinition> &Columns() override;

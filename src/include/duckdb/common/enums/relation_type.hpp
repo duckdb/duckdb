@@ -22,8 +22,8 @@ enum class RelationType : uint8_t {
 	FILTER,
 	CROSS_PRODUCT,
 	JOIN,
-	UNION,
-	EXCEPT,
+	SET_OPERATION,
+	DISTINCT,
 	LIMIT,
 	ORDER,
 	AGGREGATE

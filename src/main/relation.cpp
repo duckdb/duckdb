@@ -1,10 +1,12 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -53,11 +55,25 @@ shared_ptr<Relation> Relation::Order(string expression) {
 }
 
 shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
-	throw NotImplementedException("FIXME:");
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::UNION);
+}
+
+shared_ptr<Relation> Relation::Except(shared_ptr<Relation> other) {
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::EXCEPT);
+}
+
+shared_ptr<Relation> Relation::Intersect(shared_ptr<Relation> other) {
+	return make_shared<SetOpRelation>(shared_from_this(), move(other), LogicalOperatorType::INTERSECT);
+}
+
+shared_ptr<Relation> Relation::Distinct() {
+	return make_shared<DistinctRelation>(shared_from_this());
 }
 
 unique_ptr<QueryResult> Relation::Execute() {
-	return context.Execute(shared_from_this());
+	// we push a SELECT * over the expression to force all the columns to be emitted
+	auto proj = this->Project("*");
+	return context.Execute(proj);
 }
 
 void Relation::Head(idx_t limit) {

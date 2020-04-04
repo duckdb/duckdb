@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/limit_relation.hpp
+// duckdb/main/relation/distinct_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,12 +12,10 @@
 
 namespace duckdb {
 
-class LimitRelation : public Relation {
+class DistinctRelation : public Relation {
 public:
-	LimitRelation(shared_ptr<Relation> child, int64_t limit, int64_t offset);
+	DistinctRelation(shared_ptr<Relation> child);
 
-	int64_t limit;
-	int64_t offset;
 	shared_ptr<Relation> child;
 public:
 	BoundStatement Bind(Binder &binder) override;

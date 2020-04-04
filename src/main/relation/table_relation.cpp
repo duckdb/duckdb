@@ -29,12 +29,6 @@ BoundStatement TableRelation::Bind(Binder &binder) {
 	return result;
 }
 
-unique_ptr<QueryResult> TableRelation::Execute() {
-	// if we execute a table relation directly, we push a SELECT * over the expression to force all the columns to be emitted
-	auto proj = this->Project("*");
-	return proj->Execute();
-}
-
 const vector<ColumnDefinition> &TableRelation::Columns() {
 	return description->columns;
 }
