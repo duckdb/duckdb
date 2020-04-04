@@ -5,6 +5,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/relation/table_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 
 using namespace duckdb;
@@ -103,4 +104,13 @@ shared_ptr<Relation> Connection::Table(string schema_name, string table_name) {
 		throw Exception("Table does not exist!");
 	}
 	return make_shared<TableRelation>(*context, move(table_info));
+}
+
+shared_ptr<Relation> Connection::Values(vector<vector<Value>> values) {
+	vector<string> column_names;
+	return Values(move(values), move(column_names));
+}
+
+shared_ptr<Relation> Connection::Values(vector<vector<Value>> values, vector<string> column_names) {
+	return make_shared<ValueRelation>(*context, move(values), move(column_names));
 }

@@ -27,6 +27,9 @@ enum class RelationType : uint8_t {
 	LIMIT,
 	ORDER,
 	CREATE_VIEW,
+	CREATE_TABLE,
+	INSERT,
+	VALUE_LIST,
 	AGGREGATE
 };
 

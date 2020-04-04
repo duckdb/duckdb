@@ -73,16 +73,20 @@ public:
 	unique_ptr<TableDescription> TableInfo(string table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
-	//! Returns a relation that produces a table from this connection
-	shared_ptr<Relation> Table(string tname);
-	//! Returns a relation that produces a table from this connection
-	shared_ptr<Relation> Table(string schema_name, string table_name);
 
 	//! Extract a set of SQL statements from a specific query
 	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);
+
+	//! Returns a relation that produces a table from this connection
+	shared_ptr<Relation> Table(string tname);
+	//! Returns a relation that produces a table from this connection
+	shared_ptr<Relation> Table(string schema_name, string table_name);
+	//! Returns a relation that produces values
+	shared_ptr<Relation> Values(vector<vector<Value>> values);
+	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names);
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

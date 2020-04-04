@@ -3,10 +3,12 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb/main/relation/insert_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
+#include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -85,6 +87,24 @@ BoundStatement Relation::Bind(Binder &binder) {
 	SelectStatement stmt;
 	stmt.node = GetQueryNode();
 	return binder.Bind((SQLStatement&)stmt);
+}
+
+void Relation::Insert(string table_name) {
+	Insert(DEFAULT_SCHEMA, table_name);
+}
+
+void Relation::Insert(string schema_name, string table_name) {
+	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
+	insert->Execute();
+}
+
+void Relation::Create(string table_name) {
+	Create(DEFAULT_SCHEMA, table_name);
+}
+
+void Relation::Create(string schema_name, string table_name) {
+	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
+	create->Execute();
 }
 
 void Relation::Head(idx_t limit) {

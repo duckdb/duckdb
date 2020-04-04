@@ -85,6 +85,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		auto &node = (SelectNode &)*stmt.select_statement->node;
 		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
 			auto &expr_list = (ExpressionListRef &)*node.from_table;
+			expr_list.expected_types.resize(table->columns.size());
+			expr_list.expected_names.resize(table->columns.size());
+
 			assert(expr_list.values.size() > 0);
 			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,
 			                               table->name.c_str());
@@ -96,8 +99,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 				// set the expected types as the types for the INSERT statement
 				auto &column = table->columns[table_col_idx];
-				expr_list.expected_types.push_back(column.type);
-				expr_list.expected_names.push_back(column.name);
+				expr_list.expected_types[col_idx] = column.type;
+				expr_list.expected_names[col_idx] = column.name;
 
 				// now replace any DEFAULT values with the corresponding default expression
 				for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {

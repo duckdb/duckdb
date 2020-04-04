@@ -68,6 +68,14 @@ public:
 
 	// DISTINCT operation
 	shared_ptr<Relation> Distinct();
+
+	//! Insert the data from this relation into a table
+	void Insert(string table_name);
+	void Insert(string schema_name, string table_name);
+
+	//! Create a table and insert the data from this relation into that table
+	void Create(string table_name);
+	void Create(string schema_name, string table_name);
 protected:
 	string RenderWhitespace(idx_t depth);
 };

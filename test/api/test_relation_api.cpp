@@ -176,9 +176,35 @@ TEST_CASE("Test view creation of relations", "[api]") {
 	tbl->Project("i + 10")->CreateView("test2");
 	result = con.Query("SELECT * FROM test1 UNION SELECT * FROM test2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
+}
 
+TEST_CASE("Test table creations using the relation API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> values;
 
+	// create a table from a Values statement
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+	REQUIRE_NOTHROW(values->Create("integers"));
 
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	// insert from a set of values
+	REQUIRE_NOTHROW(con.Values({{4, 7}, {5, 8}})->Insert("integers"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4, 7, 8}));
+
+	// create a table from a query
+	REQUIRE_NOTHROW(con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
+
+	result = con.Query("SELECT * FROM new_values ORDER BY k");
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 }
 
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {
