@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/limit_relation.hpp
+// duckdb/main/relation/join_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,19 +12,22 @@
 
 namespace duckdb {
 
-class LimitRelation : public Relation {
+class JoinRelation : public Relation {
 public:
-	LimitRelation(shared_ptr<Relation> child, int64_t limit, int64_t offset);
+	JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, unique_ptr<ParsedExpression> condition, JoinType type);
 
-	int64_t limit;
-	int64_t offset;
-	shared_ptr<Relation> child;
+	shared_ptr<Relation> left;
+	shared_ptr<Relation> right;
+	unique_ptr<ParsedExpression> condition;
+	JoinType join_type;
+	vector<ColumnDefinition> columns;
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
-	string GetAlias() override;
+
+	unique_ptr<TableRef> GetTableRef() override;
 };
 
 } // namespace duckdb

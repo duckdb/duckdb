@@ -64,7 +64,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::PROJECTION) {
+	while (op->children.size() == 1 && (op->type != LogicalOperatorType::PROJECTION && op->type != LogicalOperatorType::EXPRESSION_GET)) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
@@ -133,7 +133,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
+	} else if (op->type == LogicalOperatorType::EXPRESSION_GET) {
+		// base table scan, add to set of relations
+		auto get = (LogicalExpressionGet *)op;
+		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		relation_mapping[get->table_index] = relations.size();
+		relations.push_back(move(relation));
+		return true;
+	}  else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		// table function call, add to set of relations
 		auto table_function = (LogicalTableFunction *)op;
 		auto relation = make_unique<JoinRelation>(&input_op, parent);

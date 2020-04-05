@@ -11,16 +11,18 @@ LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_
 }
 
 unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
-
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->from_table = child->GetTableRef();
 	result->limit = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(limit));
 	if (offset > 0) {
 		result->offset = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(offset));
 	}
 	return move(result);
+}
+
+string LimitRelation::GetAlias() {
+	return child->GetAlias();
 }
 
 const vector<ColumnDefinition> &LimitRelation::Columns() {

@@ -1,7 +1,6 @@
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
@@ -13,13 +12,15 @@ FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedEx
 }
 
 unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
-
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->from_table = child->GetTableRef();
 	result->where_clause = condition->Copy();
 	return move(result);
+}
+
+string FilterRelation::GetAlias() {
+	return child->GetAlias();
 }
 
 const vector<ColumnDefinition> &FilterRelation::Columns() {

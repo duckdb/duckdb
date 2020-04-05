@@ -20,14 +20,16 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p, vector<uniq
 }
 
 unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
-
 	auto result = make_unique<SelectNode>();
 	for(auto &expr : expressions) {
 		result->select_list.push_back(expr->Copy());
 	}
-	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->from_table = child->GetTableRef();
 	return move(result);
+}
+
+string ProjectionRelation::GetAlias() {
+	return child->GetAlias();
 }
 
 const vector<ColumnDefinition> &ProjectionRelation::Columns() {

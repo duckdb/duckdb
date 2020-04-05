@@ -23,6 +23,9 @@ public:
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
+	string GetAlias() override;
+
+	unique_ptr<TableRef> GetTableRef() override;
 
 	void Update(string update, string condition = string()) override;
 	void Delete(string condition = string()) override;

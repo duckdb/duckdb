@@ -86,7 +86,7 @@ public:
 	shared_ptr<Relation> Table(string schema_name, string table_name);
 	//! Returns a relation that produces values
 	shared_ptr<Relation> Values(vector<vector<Value>> values);
-	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names);
+	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names, string alias = "values");
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

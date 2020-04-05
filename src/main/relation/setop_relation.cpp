@@ -21,6 +21,10 @@ unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	return move(result);
 }
 
+string SetOpRelation::GetAlias() {
+	return left->GetAlias();
+}
+
 const vector<ColumnDefinition> &SetOpRelation::Columns() {
 	return left->Columns();
 }

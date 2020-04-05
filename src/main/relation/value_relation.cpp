@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values_p, vector<string> names) :
-	Relation(context, RelationType::VALUE_LIST), values(move(values_p)) {
+ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values_p, vector<string> names, string alias_p) :
+	Relation(context, RelationType::VALUE_LIST), values(move(values_p)), alias(move(alias_p)) {
 	if (values.size() == 0) {
 		// no values provided
 		return;
@@ -47,6 +47,11 @@ ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> value
 unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
+	result->from_table = GetTableRef();
+	return move(result);
+}
+
+unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	auto table_ref = make_unique<ExpressionListRef>();
 	// set the expected types/names
 	for(idx_t i = 0; i < columns.size(); i++) {
@@ -63,8 +68,11 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 		}
 		table_ref->values.push_back(move(expressions));
 	}
-	result->from_table = move(table_ref);
-	return move(result);
+	return move(table_ref);
+}
+
+string ValueRelation::GetAlias() {
+	return alias;
 }
 
 const vector<ColumnDefinition> &ValueRelation::Columns() {

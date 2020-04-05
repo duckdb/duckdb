@@ -111,6 +111,6 @@ shared_ptr<Relation> Connection::Values(vector<vector<Value>> values) {
 	return Values(move(values), move(column_names));
 }
 
-shared_ptr<Relation> Connection::Values(vector<vector<Value>> values, vector<string> column_names) {
-	return make_shared<ValueRelation>(*context, move(values), move(column_names));
+shared_ptr<Relation> Connection::Values(vector<vector<Value>> values, vector<string> column_names, string alias) {
+	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
 }

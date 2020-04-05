@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/enums/join_type.hpp"
 
 #include <memory>
 
@@ -22,6 +23,7 @@ class ClientContext;
 class Binder;
 class LogicalOperator;
 class QueryNode;
+class TableRef;
 
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
@@ -34,7 +36,7 @@ public:
 	virtual const vector<ColumnDefinition> &Columns() = 0;
 	virtual unique_ptr<QueryNode> GetQueryNode() = 0;
 	virtual BoundStatement Bind(Binder &binder);
-	string GetAlias();
+	virtual string GetAlias();
 
 	unique_ptr<QueryResult> Execute();
 	string ToString();
@@ -45,6 +47,8 @@ public:
 
 	shared_ptr<Relation> CreateView(string name, bool replace = true);
 	unique_ptr<QueryResult> SQL(string name, string sql);
+
+	virtual unique_ptr<TableRef> GetTableRef();
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);
@@ -60,6 +64,9 @@ public:
 
 	// ORDER
 	shared_ptr<Relation> Order(string expression);
+
+	// JOIN operation
+	shared_ptr<Relation> Join(shared_ptr<Relation> other, string condition, JoinType type);
 
 	// SET operations
 	shared_ptr<Relation> Union(shared_ptr<Relation> other);

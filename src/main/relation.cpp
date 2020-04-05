@@ -12,7 +12,9 @@
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/main/relation/join_relation.hpp"
 
 namespace duckdb {
 
@@ -59,6 +61,14 @@ shared_ptr<Relation> Relation::Order(string expression) {
 	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
 }
 
+shared_ptr<Relation> Relation::Join(shared_ptr<Relation> other, string condition, JoinType type) {
+	auto expression_list = Parser::ParseExpressionList(condition);
+	if (expression_list.size() != 1) {
+		throw ParserException("Expected a single expression as join condition");
+	}
+	return make_shared<JoinRelation>(shared_from_this(), other, move(expression_list[0]), type);
+}
+
 shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
 	return make_shared<SetOpRelation>(shared_from_this(), move(other), SetOperationType::UNION);
 }
@@ -77,6 +87,10 @@ shared_ptr<Relation> Relation::Distinct() {
 
 string Relation::GetAlias() {
 	return "relation";
+}
+
+unique_ptr<TableRef> Relation::GetTableRef() {
+	return make_unique<SubqueryRef>(GetQueryNode(), GetAlias());
 }
 
 unique_ptr<QueryResult> Relation::Execute() {

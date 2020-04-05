@@ -15,11 +15,9 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
-
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = make_unique<SubqueryRef>(move(child_node), child->GetAlias());
+	result->from_table = child->GetTableRef();
 	for(idx_t i = 0; i < orders.size(); i++) {
 		OrderByNode node;
 		node.expression = orders[i].expression->Copy();
@@ -27,6 +25,10 @@ unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
 		result->orders.push_back(move(node));
 	}
 	return move(result);
+}
+
+string OrderRelation::GetAlias() {
+	return child->GetAlias();
 }
 
 const vector<ColumnDefinition> &OrderRelation::Columns() {

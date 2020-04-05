@@ -8,7 +8,7 @@ TEST_CASE("Test simple relation API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl, filter, proj, proj2;
+	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -119,6 +119,20 @@ TEST_CASE("Test simple relation API", "[api]") {
 	// distinct
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// join
+	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
+	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id", JoinType::INNER)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {27, 8, 20}));
+
+	// projection after a join
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id", JoinType::INNER)->Project("v1.id+v2.id, j+k")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {37, 13, 24}));
 }
 
 TEST_CASE("Test view creation of relations", "[api]") {
@@ -228,6 +242,13 @@ TEST_CASE("Test table deletions and updates", "[api]") {
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 12}));
 }
+
+// TEST_CASE("Test CSV reading/writing from relations", "[api]") {
+// 	DuckDB db(nullptr);
+// 	Connection con(db);
+// 	unique_ptr<QueryResult> result;
+
+// }
 
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {
 // 	DuckDB db(nullptr), db2(nullptr);

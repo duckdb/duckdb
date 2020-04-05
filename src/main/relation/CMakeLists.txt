@@ -6,6 +6,7 @@ add_library_unity(duckdb_main_relation
 	distinct_relation.cpp
 	filter_relation.cpp
 	insert_relation.cpp
+	join_relation.cpp
 	limit_relation.cpp
 	order_relation.cpp
 	update_relation.cpp

@@ -16,11 +16,19 @@ TableRelation::TableRelation(ClientContext &context, unique_ptr<TableDescription
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
+	result->from_table = GetTableRef();
+	return move(result);
+}
+
+unique_ptr<TableRef> TableRelation::GetTableRef() {
 	auto table_ref = make_unique<BaseTableRef>();
 	table_ref->schema_name = description->schema;
 	table_ref->table_name = description->table;
-	result->from_table = move(table_ref);
-	return move(result);
+	return move(table_ref);
+}
+
+string TableRelation::GetAlias() {
+	return description->table;
 }
 
 const vector<ColumnDefinition> &TableRelation::Columns() {
