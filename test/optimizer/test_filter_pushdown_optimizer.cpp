@@ -92,6 +92,8 @@ TEST_CASE("Test Table Filter All Numeric Data Types", "[filterpushdown-optimizer
         plan = predicatePushdown.Rewrite(move(tree));
         REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
         REQUIRE(plan->children[0]->expressions.size() == 1);
+        REQUIRE_NO_FAIL(
+		    con.Query("DROP TABLE tablinho"));
 	}
 }
 
