@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "postgres_parser.hpp"
 
@@ -57,7 +58,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_l
 }
 
 vector<OrderByNode> Parser::ParseOrderList(string select_list) {
-	// construct a mock query prefixed with SELECT
+	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
 	// parse the query
 	Parser parser;
@@ -72,4 +73,19 @@ vector<OrderByNode> Parser::ParseOrderList(string select_list) {
 	}
 	auto &select_node = (SelectNode&) *select.node;
 	return move(select_node.orders);
+}
+
+void Parser::ParseUpdateList(string update_list, vector<string> &update_columns, vector<unique_ptr<ParsedExpression>> &expressions) {
+	// construct a mock query
+	string mock_query = "UPDATE tbl SET " + update_list;
+	// parse the query
+	Parser parser;
+	parser.ParseQuery(mock_query);
+	// check the statements
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE) {
+		throw ParserException("Expected a single SELECT statement");
+	}
+	auto &update = (UpdateStatement&) *parser.statements[0];
+	update_columns = move(update.columns);
+	expressions = move(update.expressions);
 }

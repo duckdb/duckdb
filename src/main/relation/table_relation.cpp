@@ -2,6 +2,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/main/relation/delete_relation.hpp"
+#include "duckdb/main/relation/update_relation.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -26,6 +29,33 @@ const vector<ColumnDefinition> &TableRelation::Columns() {
 
 string TableRelation::ToString(idx_t depth) {
 	return RenderWhitespace(depth) + "Scan Table [" + description->table + "]";
+}
+
+static unique_ptr<ParsedExpression> ParseCondition(string condition) {
+	if (!condition.empty()) {
+		auto expression_list = Parser::ParseExpressionList(condition);
+		if (expression_list.size() != 1) {
+			throw ParserException("Expected a single expression as filter condition");
+		}
+		return move(expression_list[0]);
+	} else {
+		return nullptr;
+	}
+}
+
+void TableRelation::Update(string update_list, string condition) {
+	vector<string> update_columns;
+	vector<unique_ptr<ParsedExpression>> expressions;
+	auto cond = ParseCondition(condition);
+	Parser::ParseUpdateList(update_list, update_columns, expressions);
+	auto update = make_shared<UpdateRelation>(context, move(cond), description->schema, description->table, move(update_columns), move(expressions));
+	update->Execute();
+}
+
+void TableRelation::Delete(string condition) {
+	auto cond = ParseCondition(condition);
+	auto del = make_shared<DeleteRelation>(context, move(cond), description->schema, description->table);
+	del->Execute();
 }
 
 }

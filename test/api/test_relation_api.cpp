@@ -207,6 +207,28 @@ TEST_CASE("Test table creations using the relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 }
 
+TEST_CASE("Test table deletions and updates", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	auto tbl = con.Table("integers");
+
+	// update
+	tbl->Update("i=i+10", "i=2");
+
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 12}));
+
+	tbl->Delete("i=3");
+
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 12}));
+}
+
 // TEST_CASE("We can mix statements from multiple databases", "[api]") {
 // 	DuckDB db(nullptr), db2(nullptr);
 // 	Connection con(db), con2(db);

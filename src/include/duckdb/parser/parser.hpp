@@ -33,6 +33,8 @@ public:
 	static vector<unique_ptr<ParsedExpression>> ParseExpressionList(string select_list);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
 	static vector<OrderByNode> ParseOrderList(string select_list);
+	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
+	static void ParseUpdateList(string update_list, vector<string> &update_columns, vector<unique_ptr<ParsedExpression>> &expressions);
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

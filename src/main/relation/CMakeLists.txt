@@ -2,11 +2,13 @@ add_library_unity(duckdb_main_relation
 	OBJECT
 	create_table_relation.cpp
 	create_view_relation.cpp
+	delete_relation.cpp
 	distinct_relation.cpp
 	filter_relation.cpp
 	insert_relation.cpp
 	limit_relation.cpp
 	order_relation.cpp
+	update_relation.cpp
 	projection_relation.cpp
 	setop_relation.cpp
 	table_relation.cpp

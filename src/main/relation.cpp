@@ -112,14 +112,23 @@ void Relation::Head(idx_t limit) {
 	limit_node->Execute()->Print();
 }
 
-void Relation::CreateView(string name, bool replace) {
+shared_ptr<Relation> Relation::CreateView(string name, bool replace) {
 	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace);
 	view->Execute();
+	return shared_from_this();
 }
 
 unique_ptr<QueryResult> Relation::SQL(string name, string sql) {
 	CreateView(name);
 	return context.Query(sql, false);
+}
+
+void Relation::Update(string update, string condition) {
+	throw Exception("UPDATE can only be used on base tables!");
+}
+
+void Relation::Delete(string condition) {
+	throw Exception("DELETE can only be used on base tables!");
 }
 
 string Relation::ToString() {

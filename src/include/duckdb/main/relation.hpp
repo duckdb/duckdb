@@ -43,7 +43,7 @@ public:
 	void Print();
 	void Head(idx_t limit = 10);
 
-	void CreateView(string name, bool replace = true);
+	shared_ptr<Relation> CreateView(string name, bool replace = true);
 	unique_ptr<QueryResult> SQL(string name, string sql);
 public:
 	// PROJECT
@@ -76,6 +76,11 @@ public:
 	//! Create a table and insert the data from this relation into that table
 	void Create(string table_name);
 	void Create(string schema_name, string table_name);
+
+	//! Update a table, can only be used on a TableRelation
+	virtual void Update(string update, string condition = string());
+	//! Delete from a table, can only be used on a TableRelation
+	virtual void Delete(string condition = string());
 protected:
 	string RenderWhitespace(idx_t depth);
 };

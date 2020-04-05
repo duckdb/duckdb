@@ -22,6 +22,7 @@ enum class RelationType : uint8_t {
 	FILTER,
 	CROSS_PRODUCT,
 	JOIN,
+	AGGREGATE,
 	SET_OPERATION,
 	DISTINCT,
 	LIMIT,
@@ -30,7 +31,8 @@ enum class RelationType : uint8_t {
 	CREATE_TABLE,
 	INSERT,
 	VALUE_LIST,
-	AGGREGATE
+	DELETE,
+	UPDATE
 };
 
 } // namespace duckdb
