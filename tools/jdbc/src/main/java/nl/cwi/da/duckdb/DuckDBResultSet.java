@@ -26,10 +26,10 @@ import java.util.Map;
 
 public class DuckDBResultSet implements ResultSet {
 	
-	private DuckDBResultSetMetaData meta = new DuckDBResultSetMetaData();
+	private DuckDBResultSetMetaData meta;
 	
 	public DuckDBResultSet(ByteBuffer result_ref) {
-		//meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
+		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
 	}
 
 	public boolean next() throws SQLException {

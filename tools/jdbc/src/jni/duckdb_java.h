@@ -79,6 +79,14 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1re
 JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta
   (JNIEnv *, jclass, jobject);
 
+/*
+ * Class:     nl_cwi_da_duckdb_DuckDBNative
+ * Method:    duckdb_jdbc_test
+ * Signature: (I[Ljava/lang/String;[Ljava/lang/String;)V
+ */
+JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1test
+  (JNIEnv *, jclass, jint, jobjectArray, jobjectArray);
+
 #ifdef __cplusplus
 }
 #endif
