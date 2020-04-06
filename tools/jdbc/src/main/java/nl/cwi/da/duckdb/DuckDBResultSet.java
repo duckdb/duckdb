@@ -27,18 +27,24 @@ import java.util.Map;
 public class DuckDBResultSet implements ResultSet {
 	
 	private DuckDBResultSetMetaData meta;
+	private ByteBuffer result_ref;
 	
 	public DuckDBResultSet(ByteBuffer result_ref) {
+		this.result_ref = result_ref;
 		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
 	}
 
 	public boolean next() throws SQLException {
+		DuckDBNative.duckdb_jdbc_fetch(result_ref);
+
 		// TODO Auto-generated method stub
 		return false;
 	}
 
 	public void close() throws SQLException {
-		// TODO Auto-generated method stub
+		System.out.println("ResultSet.close()");
+
+		DuckDBNative.duckdb_jdbc_free_result(result_ref);
 	}
 
 	public boolean wasNull() throws SQLException {

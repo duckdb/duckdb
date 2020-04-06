@@ -65,14 +65,6 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1release
 
 /*
  * Class:     nl_cwi_da_duckdb_DuckDBNative
- * Method:    duckdb_jdbc_free_result
- * Signature: (Ljava/nio/ByteBuffer;)V
- */
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result
-  (JNIEnv *, jclass, jobject);
-
-/*
- * Class:     nl_cwi_da_duckdb_DuckDBNative
  * Method:    duckdb_jdbc_meta
  * Signature: (Ljava/nio/ByteBuffer;)Lnl/cwi/da/duckdb/DuckDBResultSetMetaData;
  */
@@ -81,11 +73,19 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta
 
 /*
  * Class:     nl_cwi_da_duckdb_DuckDBNative
- * Method:    duckdb_jdbc_test
- * Signature: (I[Ljava/lang/String;[Ljava/lang/String;)V
+ * Method:    duckdb_jdbc_free_result
+ * Signature: (Ljava/nio/ByteBuffer;)V
  */
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1test
-  (JNIEnv *, jclass, jint, jobjectArray, jobjectArray);
+JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result
+  (JNIEnv *, jclass, jobject);
+
+/*
+ * Class:     nl_cwi_da_duckdb_DuckDBNative
+ * Method:    duckdb_jdbc_fetch
+ * Signature: (Ljava/nio/ByteBuffer;)V
+ */
+JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1fetch
+  (JNIEnv *, jclass, jobject);
 
 #ifdef __cplusplus
 }

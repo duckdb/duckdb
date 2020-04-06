@@ -102,7 +102,7 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1re
 JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta(
 		JNIEnv *env, jclass, jobject res_ref_buf) {
 	auto res_ref = (ResultHolder*) env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref) {
+	if (!res_ref || !res_ref->res) {
 		jclass Exception = env->FindClass("java/sql/SQLException");
 		env->ThrowNew(Exception, "Invalid result set");
 	}
@@ -125,5 +125,27 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta(
 
 	return env->NewObject(meta, meta_construct, column_count, name_array,
 			type_array);
+}
+
+JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1fetch
+  (JNIEnv *env, jclass, jobject res_ref_buf) {
+	auto res_ref = (ResultHolder*) env->GetDirectBufferAddress(res_ref_buf);
+	if (!res_ref) {
+		jclass Exception = env->FindClass("java/sql/SQLException");
+		env->ThrowNew(Exception, "Invalid result set");
+	}
+
+	auto data_chunk = res_ref->res->Fetch();
+	data_chunk->Print();
+
+	//
+//	auto col_array = (jobjectArray) env->NewObjectArray(data_chunk->column_count(),
+//			env->FindClass("java/lang/Object"), nullptr);
+//	for (idx_t col_idx = 0; col_idx < data_chunk->column_count(); col_idx++) {
+//		auto val_array = (jobjectArray) env->NewObjectArray(2,
+//				env->FindClass("java/lang/String"), env->NewStringUTF(""));
+//		env->SetObjectArrayElement(col_array, col_idx, val_array);
+//	}
+
 }
 

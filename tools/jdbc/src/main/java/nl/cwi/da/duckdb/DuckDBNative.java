@@ -7,7 +7,8 @@ public class DuckDBNative {
 		System.loadLibrary("duckdb_java");
 	}
 	
-	// We use ByteBuffer as a cheap way to pass pointers back and forth
+	// We use ByteBuffer-s as a hacky but cheap way to pass pointers back and forth
+	
 	// results db_ref database reference object
 	protected static native ByteBuffer duckdb_jdbc_startup(String path, boolean read_only);
 	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
@@ -21,11 +22,10 @@ public class DuckDBNative {
 	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 	
-	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer res_ref);
+	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
+	protected static native void duckdb_jdbc_fetch(ByteBuffer res_ref);
 
-	
-	protected static native void duckdb_jdbc_test(int a, String[] b, String[] c);
 
 	// TODO result fetching stuff
 }
