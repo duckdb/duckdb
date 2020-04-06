@@ -3,6 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 #include <string.h>
 #include <ctype.h>
@@ -13,10 +15,19 @@ using namespace std;
 
 namespace duckdb {
 
-static bool contains_instr(string_t haystack, string_t needle);
+ContainsKMPBindData::ContainsKMPBindData(unique_ptr<vector<uint32_t>> table, unique_ptr<string_t> pattern)
+    : kmp_table(move(table)), pattern(move(pattern)) {
+}
 
-static bool contains_kmp(const string_t &str, const string_t &pattern);
+ContainsKMPBindData::~ContainsKMPBindData() {
+}
+
+unique_ptr<FunctionData> ContainsKMPBindData::Copy() {
+	return make_unique<ContainsKMPBindData>(move(kmp_table), move(pattern));
+}
 static vector<uint32_t> BuildKPMTable(const string_t &pattern);
+
+static bool contains_instr(string_t haystack, string_t needle);
 
 static bool contains_bm(const string_t &str, const string_t &pattern);
 static unordered_map<char, uint32_t> BuildBMTable(const string_t &pattern);
@@ -25,12 +36,6 @@ struct ContainsOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		return contains_instr(left, right);
 	}
-};
-
-struct ContainsKMPOperator {
-    template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-        return contains_kmp(left, right);
-    }
 };
 
 struct ContainsBMOperator {
@@ -61,16 +66,18 @@ static bool contains_instr(string_t haystack, string_t needle) {
 	return false;
 }
 
-static bool contains_kmp(const string_t &str, const string_t &pattern) {
+static bool contains_kmp(const string_t &str, const string_t &pattern, vector<uint32_t> &kmp_table) {
     auto str_size = str.GetSize();
     auto patt_size = pattern.GetSize();
-    if(patt_size > str_size)
-        return 0;
+    if(patt_size > str_size) {
+        return false;
+    }
+    if(patt_size == 0) {
+    	return true;
+    }
 
     idx_t idx_patt = 0;
     idx_t idx_str = 0;
-    auto kmp_table = BuildKPMTable(pattern);
-
     auto str_data = str.GetData();
     auto patt_data = pattern.GetData();
 
@@ -78,8 +85,9 @@ static bool contains_kmp(const string_t &str, const string_t &pattern) {
         if(str_data[idx_str] == patt_data[idx_patt]) {
             ++idx_str;
             ++idx_patt;
-            if(idx_patt == patt_size)
+            if(idx_patt == patt_size) {
                 return true;
+            }
         } else {
             if(idx_patt > 0) {
                 idx_patt = kmp_table[idx_patt - 1];
@@ -89,6 +97,47 @@ static bool contains_kmp(const string_t &str, const string_t &pattern) {
         }
     }
     return false;
+}
+
+static void contains_kmp_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &strings = args.data[0];
+	auto &patterns = args.data[1];
+
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (ContainsKMPBindData &)*func_expr.bind_info;
+
+	RE2::Options options;
+	options.set_log_errors(false);
+
+	if (info.kmp_table) {
+		// FIXME: this should be a unary loop
+		UnaryExecutor::Execute<string_t, bool, true>(strings, result, args.size(), [&](string_t input) {
+			return contains_kmp(input, *info.pattern, *info.kmp_table);
+		});
+	} else {
+		BinaryExecutor::Execute<string_t, string_t, bool, true>(
+				strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
+			auto kmp_table = BuildKPMTable(pattern);
+			return contains_kmp(input, pattern, kmp_table);
+		});
+
+	}
+}
+
+static unique_ptr<FunctionData> contains_kmp_get_bind_function(BoundFunctionExpression &expr,
+                                                               ClientContext &context) {
+	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
+	assert(expr.children.size() == 2);
+	if (expr.children[1]->IsScalar()) {
+		Value pattern_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
+		if (!pattern_str.is_null && pattern_str.type == TypeId::VARCHAR) {
+			auto pattern = make_unique<string_t>(pattern_str.str_value);
+			auto table = BuildKPMTable(*pattern);
+			auto kmp_table = make_unique<vector<uint32_t>>(move(table));
+			return make_unique<ContainsKMPBindData>(move(kmp_table), move(pattern));
+		}
+	}
+	return make_unique<ContainsKMPBindData>(nullptr, nullptr);
 }
 
 static vector<uint32_t> BuildKPMTable(const string_t &pattern) {
@@ -116,8 +165,12 @@ static vector<uint32_t> BuildKPMTable(const string_t &pattern) {
 static bool contains_bm(const string_t &str, const string_t &pattern) {
     auto str_size = str.GetSize();
     auto patt_size = pattern.GetSize();
-    if(patt_size > str_size)
+    if(patt_size > str_size) {
         return 0;
+    }
+    if(patt_size == 0) {
+    	return true;
+    }
 
     auto bm_table = BuildBMTable(pattern);
 
@@ -163,10 +216,11 @@ void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
 								   SQLType::BOOLEAN,                      // return type
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>));
 
-    set.AddFunction(ScalarFunction("contains_kmp",                              // name of the function
-                                   {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-								   SQLType::BOOLEAN,                      // return type
-                                   ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsKMPOperator, true>));
+	set.AddFunction(ScalarFunction("contains_kmp",
+									{SQLType::VARCHAR, SQLType::VARCHAR},
+									SQLType::BOOLEAN,
+									contains_kmp_function, false, contains_kmp_get_bind_function));
+
 
     set.AddFunction(ScalarFunction("contains_bm",                              // name of the function
                                    {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list

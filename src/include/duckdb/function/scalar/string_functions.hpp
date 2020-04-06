@@ -73,6 +73,16 @@ struct ContainsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ContainsKMPBindData : public FunctionData {
+	ContainsKMPBindData(std::unique_ptr<vector<uint32_t>> table, std::unique_ptr<string_t> pattern);
+	~ContainsKMPBindData();
+
+	std::unique_ptr<vector<uint32_t>> kmp_table;
+	std::unique_ptr<string_t> pattern;
+
+	unique_ptr<FunctionData> Copy() override;
+};
+
 struct RegexpMatchesBindData : public FunctionData {
 	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
 	                      bool range_success);
