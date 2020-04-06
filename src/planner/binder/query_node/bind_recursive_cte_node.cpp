@@ -62,6 +62,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
+	if (statement.modifiers.size() > 0) {
+		throw Exception("FIXME: bind modifiers in recursive CTE");
+	}
 
 	return move(result);
 }

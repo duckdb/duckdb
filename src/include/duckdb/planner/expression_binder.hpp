@@ -55,7 +55,7 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
-	void BindTableNames(ParsedExpression &expr);
+	static void BindTableNames(Binder &binder, ParsedExpression &expr);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 

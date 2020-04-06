@@ -9,26 +9,13 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 
 enum QueryNodeType : uint8_t { SELECT_NODE = 1, SET_OPERATION_NODE = 2, BOUND_SUBQUERY_NODE = 3, RECURSIVE_CTE_NODE = 4 };
-
-//! Single node in ORDER BY statement
-struct OrderByNode {
-	OrderByNode() {
-	}
-	OrderByNode(OrderType type, unique_ptr<ParsedExpression> expression) : type(type), expression(move(expression)) {
-	}
-
-	//! Sort order, ASC or DESC
-	OrderType type;
-	//! Expression to order by
-	unique_ptr<ParsedExpression> expression;
-};
 
 class QueryNode {
 public:
@@ -39,17 +26,10 @@ public:
 
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
-	//! DISTINCT or not
-	bool select_distinct = false;
-	//! List of order nodes
-	vector<OrderByNode> orders;
-	//! LIMIT count
-	unique_ptr<ParsedExpression> limit;
-	//! OFFSET
-	unique_ptr<ParsedExpression> offset;
+	//! The set of result modifiers associated with this query node
+	vector<unique_ptr<ResultModifier>> modifiers;
 
 	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
-
 public:
 	virtual bool Equals(const QueryNode *other) const;
 

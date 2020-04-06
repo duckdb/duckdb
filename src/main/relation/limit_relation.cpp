@@ -1,7 +1,6 @@
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
@@ -11,14 +10,17 @@ LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_
 }
 
 unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = child->GetTableRef();
-	result->limit = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(limit));
-	if (offset > 0) {
-		result->offset = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(offset));
+	auto child_node = child->GetQueryNode();
+	auto limit_node = make_unique<LimitModifier>();
+	if (limit >= 0) {
+		limit_node->limit = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(limit));
 	}
-	return move(result);
+	if (offset > 0) {
+		limit_node->offset = make_unique<ConstantExpression>(SQLType::BIGINT, Value::BIGINT(offset));
+	}
+
+	child_node->modifiers.push_back(move(limit_node));
+	return child_node;
 }
 
 string LimitRelation::GetAlias() {

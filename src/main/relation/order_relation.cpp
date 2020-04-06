@@ -1,9 +1,6 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -15,16 +12,16 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
 }
 
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
-	result->from_table = child->GetTableRef();
+	auto child_node = child->GetQueryNode();
+	auto order_node = make_unique<OrderModifier>();
 	for(idx_t i = 0; i < orders.size(); i++) {
 		OrderByNode node;
 		node.expression = orders[i].expression->Copy();
 		node.type = orders[i].type;
-		result->orders.push_back(move(node));
+		order_node->orders.push_back(move(node));
 	}
-	return move(result);
+	child_node->modifiers.push_back(move(order_node));
+	return child_node;
 }
 
 string OrderRelation::GetAlias() {

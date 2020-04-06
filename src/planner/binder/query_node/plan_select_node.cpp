@@ -6,6 +6,13 @@
 using namespace duckdb;
 using namespace std;
 
+unique_ptr<LogicalOperator> Binder::PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root) {
+	PlanSubqueries(&condition, &root);
+	auto filter = make_unique<LogicalFilter>(move(condition));
+	filter->AddChild(move(root));
+	return move(filter);
+}
+
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	unique_ptr<LogicalOperator> root;
 	assert(statement.from_table);
@@ -13,10 +20,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	assert(root);
 
 	if (statement.where_clause) {
-		PlanSubqueries(&statement.where_clause, &root);
-		auto filter = make_unique<LogicalFilter>(move(statement.where_clause));
-		filter->AddChild(move(root));
-		root = move(filter);
+		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
 	if (statement.aggregates.size() > 0 || statement.groups.size() > 0) {

@@ -79,30 +79,25 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
                 throw Exception("Failed to transform recursive CTE children.");
             }
 
-            result->select_distinct = true;
+            bool select_distinct = true;
             switch (stmt->op) {
                 case PG_SETOP_UNION:
                     // We don't need a DISTINCT operation on top of a recursive UNION CTE.
-                    result->select_distinct = false;
+                    select_distinct = false;
                     break;
                 default:
                     throw Exception("Unexpected setop type for recursive CTE");
             }
             // if we compute the distinct result here, we do not have to do this in
             // the children. This saves a bunch of unnecessary DISTINCTs.
-            if (result->select_distinct) {
-                result->left->select_distinct = false;
-                result->right->select_distinct = false;
+            if (select_distinct) {
+                result->modifiers.push_back(make_unique<DistinctModifier>());
             }
             break;
         }
         default:
             // This CTE is not recursive. Fallback to regular query transformation.
             return TransformSelectNode((PGSelectStmt *)cte->ctequery);
-    }
-
-    if(!node->orders.empty()) {
-        throw Exception("ORDER BY in a recursive query is not implemented");
     }
 
     if (stmt->limitCount) {

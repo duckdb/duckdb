@@ -18,8 +18,11 @@
 #include "duckdb/planner/bound_statement.hpp"
 
 namespace duckdb {
+class BoundResultModifier;
 class ClientContext;
 class ExpressionBinder;
+class LimitModifier;
+class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 
@@ -166,6 +169,14 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
+
+	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &types, idx_t projection_index);
+	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
+	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
+	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
+
+	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);
 
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);

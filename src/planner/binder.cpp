@@ -1,11 +1,9 @@
 #include "duckdb/planner/binder.hpp"
 
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -60,20 +58,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	}
 }
 
-static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
-	ConstantBinder constant_binder(binder, context, clause);
-	auto bound_expr = constant_binder.Bind(expr);
-	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-	if (!TypeIsNumeric(value.type)) {
-		throw BinderException("LIMIT clause can only contain numeric constants!");
-	}
-	int64_t limit_value = value.GetValue<int64_t>();
-	if (limit_value < 0) {
-		throw BinderException("LIMIT must not be negative");
-	}
-	return limit_value;
-}
-
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
@@ -87,19 +71,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = BindNode((SetOperationNode &)node);
 		break;
-	}
-	// DISTINCT ON select list
-	result->select_distinct = node.select_distinct;
-	// bind the limit nodes
-	if (node.limit) {
-		result->limit = BindConstant(*this, context, "LIMIT clause", node.limit);
-		result->offset = 0;
-	}
-	if (node.offset) {
-		result->offset = BindConstant(*this, context, "OFFSET clause", node.offset);
-		if (!node.limit) {
-			result->limit = std::numeric_limits<int64_t>::max();
-		}
 	}
 	return result;
 }
