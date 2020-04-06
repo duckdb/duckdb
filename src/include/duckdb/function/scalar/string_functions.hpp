@@ -83,6 +83,17 @@ struct ContainsKMPBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override;
 };
 
+struct ContainsBMBindData : public FunctionData {
+	ContainsBMBindData(std::unique_ptr<unordered_map<char, uint32_t>> table, std::unique_ptr<string_t> pattern);
+	~ContainsBMBindData();
+
+	std::unique_ptr<unordered_map<char, uint32_t>> bm_table;
+	std::unique_ptr<string_t> pattern;
+
+	unique_ptr<FunctionData> Copy() override;
+};
+
+
 struct RegexpMatchesBindData : public FunctionData {
 	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
 	                      bool range_success);
