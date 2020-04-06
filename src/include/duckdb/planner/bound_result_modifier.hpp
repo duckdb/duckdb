@@ -58,12 +58,4 @@ public:
 	vector<unique_ptr<Expression>> target_distincts;
 };
 
-class BoundFilterModifier : public BoundResultModifier {
-public:
-	BoundFilterModifier() : BoundResultModifier(ResultModifierType::FILTER_MODIFIER) {}
-
-	//! FILTER
-	unique_ptr<Expression> filter;
-};
-
 }

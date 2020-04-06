@@ -1,6 +1,9 @@
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
@@ -11,11 +14,28 @@ FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedEx
 }
 
 unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
-	auto child_node = child->GetQueryNode();
-	auto filter_node = make_unique<FilterModifier>();
-	filter_node->filter = condition->Copy();
-	child_node->modifiers.push_back(move(filter_node));
-	return child_node;
+	auto child_ptr = child.get();
+	while(child_ptr->InheritsColumnBindings()) {
+		child_ptr = child_ptr->ChildRelation();
+	}
+	if (child_ptr->type == RelationType::JOIN) {
+		// child node is a join: push filter into WHERE clause of select node
+		auto child_node = child->GetQueryNode();
+		assert(child_node->type == QueryNodeType::SELECT_NODE);
+		auto &select_node = (SelectNode&) *child_node;
+		if (!select_node.where_clause) {
+			select_node.where_clause = condition->Copy();
+		} else {
+			select_node.where_clause = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(select_node.where_clause), condition->Copy());
+		}
+		return child_node;
+	} else {
+		auto result = make_unique<SelectNode>();
+		result->select_list.push_back(make_unique<StarExpression>());
+		result->from_table = child->GetTableRef();
+		result->where_clause = condition->Copy();
+		return move(result);
+	}
 }
 
 string FilterRelation::GetAlias() {

@@ -214,11 +214,6 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 				EnumerateExpression(order.expression, callback);
 			}
 			break;
-		case ResultModifierType::FILTER_MODIFIER: {
-			auto &filter = (BoundFilterModifier&) *node.modifiers[i];
-			EnumerateExpression(filter.filter, callback);
-			break;
-		}
 		default:
 			break;
 

@@ -20,12 +20,27 @@ ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p, vector<uniq
 }
 
 unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	for(auto &expr : expressions) {
-		result->select_list.push_back(expr->Copy());
+	auto child_ptr = child.get();
+	while(child_ptr->InheritsColumnBindings()) {
+		child_ptr = child_ptr->ChildRelation();
 	}
-	result->from_table = child->GetTableRef();
-	return move(result);
+	unique_ptr<QueryNode> result;
+	if (child_ptr->type == RelationType::JOIN) {
+		// child node is a join: push projection into the child query node
+		result = child->GetQueryNode();
+	} else {
+		// child node is not a join: create a new select node and push the child as a table reference
+		auto select = make_unique<SelectNode>();
+		select->from_table = child->GetTableRef();
+		result = move(select);
+	}
+	assert(result->type == QueryNodeType::SELECT_NODE);
+	auto &select_node = (SelectNode&) *result;
+	select_node.select_list.clear();
+	for(auto &expr : expressions) {
+		select_node.select_list.push_back(expr->Copy());
+	}
+	return result;
 }
 
 string ProjectionRelation::GetAlias() {

@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-enum ResultModifierType : uint8_t { LIMIT_MODIFIER = 1, ORDER_MODIFIER = 2, DISTINCT_MODIFIER = 3, FILTER_MODIFIER=4 };
+enum ResultModifierType : uint8_t { LIMIT_MODIFIER = 1, ORDER_MODIFIER = 2, DISTINCT_MODIFIER = 3 };
 
 //! A ResultModifier
 class ResultModifier {
@@ -82,19 +82,6 @@ public:
 
 	//! list of distinct on targets (if any)
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
-public:
-	bool Equals(const ResultModifier *other) const override;
-	unique_ptr<ResultModifier> Copy() override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
-};
-
-class FilterModifier : public ResultModifier {
-public:
-	FilterModifier() : ResultModifier(ResultModifierType::FILTER_MODIFIER) {}
-
-	//! FILTER
-	unique_ptr<ParsedExpression> filter;
 public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() override;

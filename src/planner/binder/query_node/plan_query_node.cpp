@@ -32,11 +32,6 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 			root = move(limit);
 			break;
 		}
-		case ResultModifierType::FILTER_MODIFIER: {
-			auto &bound = (BoundFilterModifier&) *mod;
-			root = PlanFilter(move(bound.filter), move(root));
-			break;
-		}
 		default:
 			throw BinderException("Unimplemented modifier type!");
 		}

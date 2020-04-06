@@ -100,13 +100,6 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit((LimitModifier&) *mod);
 			break;
-		case ResultModifierType::FILTER_MODIFIER: {
-			auto &filter = (FilterModifier&) *mod;
-			auto bound_filter = make_unique<BoundFilterModifier>();
-			bound_filter->filter = BindFilter(move(filter.filter));
-			bound_modifier = move(bound_filter);
-			break;
-		}
 		default:
 			throw Exception("Unsupported result modifier");
 		}
@@ -180,6 +173,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		}
 	}
 	statement.select_list = move(new_select_list);
+
+	for(auto &expr : statement.select_list) {
+		result->original_expressions.push_back(expr->Copy());
+	}
 
 	for (auto &entry : statement.select_list) {
 		result->names.push_back(entry->GetName());
@@ -256,8 +253,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		result->select_list.push_back(move(expr));
 		if (i < result->column_count) {
 			result->types.push_back(result_type);
-			internal_types.push_back(GetInternalType(result_type));
 		}
+		internal_types.push_back(GetInternalType(result_type));
 	}
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column

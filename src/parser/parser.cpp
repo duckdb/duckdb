@@ -72,7 +72,7 @@ vector<OrderByNode> Parser::ParseOrderList(string select_list) {
 		throw ParserException("Expected a single SELECT node");
 	}
 	auto &select_node = (SelectNode&) *select.node;
-	if (select_node.modifiers.size() != 0 || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
+	if (select_node.modifiers.size() == 0 || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
 		throw ParserException("Expected a single ORDER clause");
 	}
 	auto &order = (OrderModifier&) *select_node.modifiers[0];

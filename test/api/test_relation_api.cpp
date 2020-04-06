@@ -38,6 +38,8 @@ TEST_CASE("Test simple relation API", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 	}
 
+	result = con.Query("SELECT i+1 FROM (SELECT * FROM integers WHERE i <> 2) relation");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	// filter and projection
 	REQUIRE_NOTHROW(filter = tbl->Filter("i <> 2"));
 	REQUIRE_NOTHROW(proj = filter->Project("i + 1"));

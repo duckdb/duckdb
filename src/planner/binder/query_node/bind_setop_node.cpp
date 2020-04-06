@@ -6,26 +6,28 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-static void GatherAliases(QueryNode &node, unordered_map<string, idx_t> &aliases,
+namespace duckdb {
+
+static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &aliases,
                           expression_map_t<idx_t> &expressions) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
-		auto &setop = (SetOperationNode &)node;
+		auto &setop = (BoundSetOperationNode &)node;
 		GatherAliases(*setop.left, aliases, expressions);
 		GatherAliases(*setop.right, aliases, expressions);
 	} else {
 		// query node
 		assert(node.type == QueryNodeType::SELECT_NODE);
-		auto &select = (SelectNode &)node;
+		auto &select = (BoundSelectNode &)node;
 		// fill the alias lists
-		for (idx_t i = 0; i < select.select_list.size(); i++) {
-			auto &expr = select.select_list[i];
-			auto name = expr->GetName();
+		for(idx_t i = 0; i < select.names.size(); i++) {
+			auto &name = select.names[i];
+			auto &expr = select.original_expressions[i];
 			// first check if the alias is already in there
 			auto entry = aliases.find(name);
 			if (entry != aliases.end()) {
@@ -68,6 +70,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	result->setop_index = GenerateTableIndex();
 
+	result->left_binder = make_unique<Binder>(context, this);
+	result->left = result->left_binder->BindNode(*statement.left);
+
+	result->right_binder = make_unique<Binder>(context, this);
+	result->right = result->right_binder->BindNode(*statement.right);
+
 	if (statement.modifiers.size() > 0) {
 		// handle the ORDER BY/DISTINCT clauses
 		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
@@ -77,18 +85,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		// the ORDER BY
 		unordered_map<string, idx_t> alias_map;
 		expression_map_t<idx_t> expression_map;
-		GatherAliases(statement, alias_map, expression_map);
+		GatherAliases(*result, alias_map, expression_map);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
 		OrderBinder order_binder(result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
 		BindModifiers(order_binder, statement, *result);
 	}
-
-	result->left_binder = make_unique<Binder>(context, this);
-	result->left = result->left_binder->BindNode(*statement.left);
-
-	result->right_binder = make_unique<Binder>(context, this);
-	result->right = result->right_binder->BindNode(*statement.right);
 
 	result->names = result->left->names;
 
@@ -114,3 +116,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	BindModifierTypes(*result, internal_types, result->setop_index);
 	return move(result);
 }
+
+}
+

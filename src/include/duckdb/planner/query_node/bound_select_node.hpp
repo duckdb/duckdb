@@ -21,6 +21,9 @@ public:
 	BoundSelectNode() : BoundQueryNode(QueryNodeType::SELECT_NODE) {
 	}
 
+	//! The original unparsed expressions. This is exported after binding, because the binding might change the expressions (e.g. when a * clause is present)
+	vector<unique_ptr<ParsedExpression>> original_expressions;
+
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause

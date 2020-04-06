@@ -49,6 +49,13 @@ public:
 	unique_ptr<QueryResult> SQL(string name, string sql);
 
 	virtual unique_ptr<TableRef> GetTableRef();
+	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
+	virtual bool InheritsColumnBindings() {
+		return false;
+	}
+	virtual Relation* ChildRelation() {
+		return nullptr;
+	}
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);

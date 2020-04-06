@@ -24,8 +24,6 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
 		return OrderModifier::Deserialize(source);
 	case ResultModifierType::DISTINCT_MODIFIER:
 		return DistinctModifier::Deserialize(source);
-	case ResultModifierType::FILTER_MODIFIER:
-		return FilterModifier::Deserialize(source);
 	default:
 		return nullptr;
 	}
@@ -57,6 +55,7 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 }
 
 void LimitModifier::Serialize(Serializer &serializer) {
+	ResultModifier::Serialize(serializer);
 	serializer.WriteOptional(limit);
 	serializer.WriteOptional(offset);
 }
@@ -88,6 +87,7 @@ unique_ptr<ResultModifier> DistinctModifier::Copy() {
 }
 
 void DistinctModifier::Serialize(Serializer &serializer) {
+	ResultModifier::Serialize(serializer);
 	serializer.WriteList(distinct_on_targets);
 }
 
@@ -128,7 +128,8 @@ unique_ptr<ResultModifier> OrderModifier::Copy() {
 }
 
 void OrderModifier::Serialize(Serializer &serializer) {
-	serializer.Write<idx_t>(orders.size());
+	ResultModifier::Serialize(serializer);
+	serializer.Write<int64_t>(orders.size());
 	for(auto &order : orders) {
 		serializer.Write<OrderType>(order.type);
 		order.expression->Serialize(serializer);
@@ -137,37 +138,13 @@ void OrderModifier::Serialize(Serializer &serializer) {
 
 unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<OrderModifier>();
-	auto order_count = source.Read<idx_t>();
-	for(idx_t i = 0; i < order_count; i++) {
+	auto order_count = source.Read<int64_t>();
+	for(int64_t i = 0; i < order_count; i++) {
 		OrderByNode node;
 		node.type = source.Read<OrderType>();
 		node.expression = ParsedExpression::Deserialize(source);
 		mod->orders.push_back(move(node));
 	}
-	return move(mod);
-}
-
-bool FilterModifier::Equals(const ResultModifier *other_) const {
-	if (!ResultModifier::Equals(other_)) {
-		return false;
-	}
-	auto &other = (FilterModifier&) *other_;
-	return BaseExpression::Equals(filter.get(), other.filter.get());
-}
-
-unique_ptr<ResultModifier> FilterModifier::Copy() {
-	auto copy = make_unique<FilterModifier>();
-	copy->filter = filter->Copy();
-	return move(copy);
-}
-
-void FilterModifier::Serialize(Serializer &serializer) {
-	filter->Serialize(serializer);
-}
-
-unique_ptr<ResultModifier> FilterModifier::Deserialize(Deserializer &source) {
-	auto mod = make_unique<FilterModifier>();
-	mod->filter = ParsedExpression::Deserialize(source);
 	return move(mod);
 }
 

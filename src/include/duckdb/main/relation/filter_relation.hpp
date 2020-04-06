@@ -25,6 +25,12 @@ public:
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 	string GetAlias() override;
+	bool InheritsColumnBindings() override {
+		return true;
+	}
+	Relation* ChildRelation() override {
+		return child.get();
+	}
 };
 
 } // namespace duckdb
