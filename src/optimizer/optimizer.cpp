@@ -24,8 +24,8 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 
 #ifdef DEBUG

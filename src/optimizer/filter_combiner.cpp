@@ -160,25 +160,23 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (constant_value.second.size() > 0) {
-			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
-				if ((constant_value.second[i].comparison_type == ExpressionType::COMPARE_EQUAL ||
-				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-				     constant_value.second[i].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-                    (TypeIsNumeric(constant_value.second[i].constant.type)|| constant_value.second[i].constant.type == TypeId::VARCHAR))
-                    {
+//			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
+			    auto filter_exp = equivalence_map.end();
+				if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
+				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
+				    (TypeIsNumeric(constant_value.second[0].constant.type) ||
+				     constant_value.second[0].constant.type == TypeId::VARCHAR)) {
 					//! Here we check if these filters are column references
-					auto filter_exp = equivalence_map.find(constant_value.first);
+					filter_exp = equivalence_map.find(constant_value.first);
 					if (filter_exp->second.size() == 1 &&
 					    filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
 						auto filter_col_exp = static_cast<BoundColumnRefExpression *>(filter_exp->second[0]);
 						if (column_ids[filter_col_exp->binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
 							break;
 						}
-						tableFilters.push_back(TableFilter(constant_value.second[i].constant,
-						                                   constant_value.second[i].comparison_type,
-						                                   filter_col_exp->binding.column_index));
 						auto equivalence_set = filter_exp->first;
 						auto &entries = filter_exp->second;
 						auto &constant_list = constant_values.find(equivalence_set)->second;
@@ -191,18 +189,18 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 							}
 							// for each entry also create a comparison with each constant
 							int lower_index = -1, upper_index = -1;
-							bool lower_inclusive, upper_inclusive;
 							for (idx_t k = 0; k < constant_list.size(); k++) {
+							    tableFilters.push_back(TableFilter(constant_value.second[k].constant,
+						                                   constant_value.second[k].comparison_type,
+						                                   filter_col_exp->binding.column_index));
 								auto &info = constant_list[k];
 								if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
 								    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 									lower_index = k;
-									lower_inclusive =
-									    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+
 								} else if (info.comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 								           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 									upper_index = k;
-									upper_inclusive = info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 								} else {
 									auto constant = make_unique<BoundConstantExpression>(info.constant);
 									auto comparison = make_unique<BoundComparisonExpression>(
@@ -210,24 +208,15 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 									callback(move(comparison));
 								}
 							}
-							if (lower_index >= 0 && upper_index >= 0) {
-								// found both lower and upper index, create a BETWEEN expression
-								auto lower_constant =
-								    make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-								auto upper_constant =
-								    make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
-								auto between = make_unique<BoundBetweenExpression>(
-								    entries[i]->Copy(), move(lower_constant), move(upper_constant), lower_inclusive,
-								    upper_inclusive);
-								callback(move(between));
-							} else if (lower_index >= 0) {
+							 if (lower_index >= 0) {
 								// only lower index found, create simple comparison expression
 								auto constant =
 								    make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
 								auto comparison = make_unique<BoundComparisonExpression>(
 								    constant_list[lower_index].comparison_type, entries[i]->Copy(), move(constant));
 								callback(move(comparison));
-							} else if (upper_index >= 0) {
+							}
+							 if (upper_index >= 0) {
 								// only upper index found, create simple comparison expression
 								auto constant =
 								    make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
@@ -236,9 +225,10 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 								callback(move(comparison));
 							}
 						}
-						equivalence_map.erase(filter_exp);
+
 					}
-				}
+//				}
+				equivalence_map.erase(filter_exp);
 			}
 		}
 	}
@@ -263,11 +253,52 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		}
 	}
 	assert(!expr->IsFoldable());
-	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
-		// only comparisons supported for now
-		return FilterResult::UNSUPPORTED;
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN){
+        auto &comparison = (BoundBetweenExpression &)*expr;
+        //! check if one of the sides is a scalar value
+	    bool left_is_scalar = comparison.lower->IsFoldable();
+	    bool right_is_scalar = comparison.upper->IsFoldable();
+	    if (left_is_scalar || right_is_scalar) {
+		//! comparison with scalar
+		auto node = GetNode(comparison.input.get());
+		idx_t equivalence_set = GetEquivalenceSet(node);
+		auto scalar = comparison.lower.get();
+		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+		// create the ExpressionValueInformation
+		ExpressionValueInformation info;
+		if (comparison.lower_inclusive){
+		    info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		}else{
+		    info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+		}
+		info.constant = constant_value;
+
+		// get the current bucket of constant values
+		assert(constant_values.find(equivalence_set) != constant_values.end());
+		auto &info_list = constant_values.find(equivalence_set)->second;
+		// check the existing constant comparisons to see if we can do any pruning
+		AddConstantComparison(info_list, info);
+		scalar = comparison.upper.get();
+		constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+		// create the ExpressionValueInformation
+		if (comparison.upper_inclusive){
+		    info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		}else{
+		    info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+		}
+		info.constant = constant_value;
+
+		// get the current bucket of constant values
+		assert(constant_values.find(equivalence_set) != constant_values.end());
+		// check the existing constant comparisons to see if we can do any pruning
+		return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 	}
-	auto &comparison = (BoundComparisonExpression &)*expr;
+        comparison.Print();
+	}
+	else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON){
+	    auto &comparison = (BoundComparisonExpression &)*expr;
 	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
 	    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
 	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
@@ -336,6 +367,12 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		}
 	}
 	return FilterResult::SUCCESS;
+	}
+	else {
+		// only comparisons supported for now
+		return FilterResult::UNSUPPORTED;
+	}
+
 }
 
 static bool IsGreaterThan(ExpressionType type) {

@@ -105,18 +105,18 @@ template <class T> bool checkZonemap(TableScanState &state, TableFilter &table_f
 	}
 }
 
-bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const char* constant) {
+bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const char *constant) {
 	char *min = (char *)state.column_scans[table_filter.column_index].current->stats.minimum.get();
 	char *max = (char *)state.column_scans[table_filter.column_index].current->stats.maximum.get();
-	int min_comp = strcmp(min,constant);
-	int max_comp = strcmp(max,constant);
+	int min_comp = strcmp(min, constant);
+	int max_comp = strcmp(max, constant);
 	switch (table_filter.comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return min_comp <= 0 && max_comp >=0;
+		return min_comp <= 0 && max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return max_comp >=0;
+		return max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp >0;
+		return max_comp > 0;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return min_comp <= 0;
 	case ExpressionType::COMPARE_LESSTHAN:
@@ -160,11 +160,11 @@ bool DataTable::CheckZonemap(TableScanState &state, vector<TableFilter> &table_f
 			readSegment &= checkZonemap<double>(state, table_filter, constant);
 			break;
 		}
-        case TypeId::VARCHAR: {
-            auto constant = table_filter.constant.str_value.data();
-            readSegment &= checkZonemapString(state, table_filter, constant);
-            break;
-        }
+		case TypeId::VARCHAR: {
+			auto constant = table_filter.constant.str_value.data();
+			readSegment &= checkZonemapString(state, table_filter, constant);
+			break;
+		}
 		default:
 			throw NotImplementedException("Unimplemented type for uncompressed segment");
 		}

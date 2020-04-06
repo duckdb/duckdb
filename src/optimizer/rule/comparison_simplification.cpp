@@ -1,3 +1,4 @@
+#include <duckdb/planner/expression/list.hpp>
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
@@ -24,6 +25,15 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	if (constant_value.is_null) {
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
+	}
+	if(constant_expr->type == ExpressionType::OPERATOR_CAST){
+	    auto cast_expression = (BoundCastExpression*) constant_expr;
+	    auto child_expression = (BoundConstantExpression*) cast_expression->child.get();
+	    auto new_constant = child_expression->value.TryCastAs(cast_expression->source_type.id, cast_expression->target_type.id);
+	    //! turn this into a bount constant expression
+	    auto bound_const_expr = make_unique<BoundConstantExpression>(new_constant);
+	    //! We can try to cast the constant
+	    return bound_const_expr;
 	}
 	return nullptr;
 }

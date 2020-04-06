@@ -63,37 +63,36 @@ TEST_CASE("Test Table Filter All Numeric Data Types", "[filterpushdown-optimizer
 		    con.Query("CREATE TABLE tablinho(i " + data_type + " , j " + data_type + ", k " + data_type + " )"));
 		//! Checking if Optimizer push predicates down
 		auto tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j = CAST( 1 AS " + data_type + ")");
-        FilterPushdown predicatePushdown(opt);
-        //! The generated plan should be Projection ->Get (2)
-        auto plan = predicatePushdown.Rewrite(move(tree));
-        REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-        REQUIRE(plan->children[0]->expressions.size() == 1);
+		FilterPushdown predicatePushdown(opt);
+		//! The generated plan should be Projection ->Get (2)
+		auto plan = predicatePushdown.Rewrite(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
 
-        tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j > CAST( 1 AS " + data_type + ")");
-        //! The generated plan should be Projection ->Get (2)
-        plan = predicatePushdown.Rewrite(move(tree));
-        REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-        REQUIRE(plan->children[0]->expressions.size() == 1);
+		tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j > CAST( 1 AS " + data_type + ")");
+		//! The generated plan should be Projection ->Get (2)
+		plan = predicatePushdown.Rewrite(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
 
-        tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j >= CAST( 1 AS " + data_type + ")");
-        //! The generated plan should be Projection ->Get (2)
-        plan = predicatePushdown.Rewrite(move(tree));
-        REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-        REQUIRE(plan->children[0]->expressions.size() == 1);
+		tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j >= CAST( 1 AS " + data_type + ")");
+		//! The generated plan should be Projection ->Get (2)
+		plan = predicatePushdown.Rewrite(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
 
-        tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j < CAST( 1 AS " + data_type + ")");
-        //! The generated plan should be Projection ->Get (2)
-        plan = predicatePushdown.Rewrite(move(tree));
-        REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-        REQUIRE(plan->children[0]->expressions.size() == 1);
+		tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j < CAST( 1 AS " + data_type + ")");
+		//! The generated plan should be Projection ->Get (2)
+		plan = predicatePushdown.Rewrite(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
 
-        tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j <= CAST( 1 AS " + data_type + ")");
-        //! The generated plan should be Projection ->Get (2)
-        plan = predicatePushdown.Rewrite(move(tree));
-        REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-        REQUIRE(plan->children[0]->expressions.size() == 1);
-        REQUIRE_NO_FAIL(
-		    con.Query("DROP TABLE tablinho"));
+		tree = helper.ParseLogicalTree("SELECT k FROM tablinho where j <= CAST( 1 AS " + data_type + ")");
+		//! The generated plan should be Projection ->Get (2)
+		plan = predicatePushdown.Rewrite(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE tablinho"));
 	}
 }
 
@@ -113,19 +112,19 @@ TEST_CASE("Test Index vs Pushdown", "[filterpushdown-optimizer]") {
 	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
 }
 
- TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
-    ExpressionHelper helper;
-    auto &con = helper.con;
-    Binder binder(*con.context);
-    Optimizer opt(binder,*con.context);
-    REQUIRE_NO_FAIL(con.Query("CREATE TABLE tablinho(i varchar )"));
-    //! Checking if Optimizer push predicates down
-    auto tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
-    FilterPushdown predicatePushdown(opt);
-    //! The generated plan should be Projection ->Get (1)
-    auto plan = predicatePushdown.Rewrite(move(tree));
-    REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-    REQUIRE(plan->children[0]->expressions.size()==1);
+TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
+	ExpressionHelper helper;
+	auto &con = helper.con;
+	Binder binder(*con.context);
+	Optimizer opt(binder, *con.context);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tablinho(i varchar )"));
+	//! Checking if Optimizer push predicates down
+	auto tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
+	FilterPushdown predicatePushdown(opt);
+	//! The generated plan should be Projection ->Get (1)
+	auto plan = predicatePushdown.Rewrite(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
 }
 
 TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {
@@ -151,27 +150,50 @@ TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
 
+TEST_CASE("Test Table Filter Push Down Scan TPCQ6", "[filterpushdown-optimizer]") {
+	ExpressionHelper helper;
+	auto &con = helper.con;
+	Binder binder(*con.context);
+	Optimizer opt(binder, *con.context);
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE LINEITEM(L_ORDERKEY INTEGER NOT NULL, L_PARTKEY INTEGER NOT NULL,L_SUPPKEY  INTEGER "
+	              "NOT NULL, L_LINENUMBER  INTEGER NOT NULL,L_QUANTITY    DECIMAL(15,2) NOT NULL,L_EXTENDEDPRICE  "
+	              "DECIMAL(15,2) NOT NULL,  L_DISCOUNT    DECIMAL(15,2) NOT NULL, L_TAX  DECIMAL(15,2) NOT "
+	              "NULL,L_RETURNFLAG  CHAR(1) NOT NULL, L_LINESTATUS  CHAR(1) NOT NULL, L_SHIPDATE    DATE NOT NULL, "
+	              "L_COMMITDATE  DATE NOT NULL,L_RECEIPTDATE DATE NOT NULL, L_SHIPINSTRUCT CHAR(25) NOT NULL, "
+	              "L_SHIPMODE     CHAR(10) NOT NULL, L_COMMENT      VARCHAR(44) NOT NULL)"));
+
+	//! Checking if Optimizer push predicates down
+	auto tree = helper.ParseLogicalTree("select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24 ");
+	//! The generated plan should be Projection ->Aggregate_and_group_by->Get (5)
+	auto plan = opt.Optimize(move(tree));
+	REQUIRE(plan->type == LogicalOperatorType::PROJECTION);
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::AGGREGATE_AND_GROUP_BY);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 5);
+}
+
+
 TEST_CASE("Test Table Filter Push Down Scan String", "[filterpushdown-optimizer][.]") {
-    unique_ptr<QueryResult> result;
-    DuckDB db(nullptr);
-    Connection con(db);
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
 
-    vector<string> input {"pedro", "peter", "mark"};
-    idx_t input_size = 100000;
-    REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i varchar)"));
-    for (auto& value: input){
-        for (size_t i = 0; i < input_size; i ++ ){
-            con.Query("INSERT INTO strings VALUES('"+value+"')");
-        }
-    }
-    result = con.Query("SELECT count(i) FROM strings where i = 'pedro' ");
-    REQUIRE(CHECK_COLUMN(result, 0, {100000}));
-    con.Query("INSERT INTO strings VALUES('po')");
-    con.Query("INSERT INTO strings VALUES('stefan manegold')");
-    con.Query("INSERT INTO strings VALUES('tim k')");
-    con.Query("INSERT INTO strings VALUES('tim k')");
-    con.Query("update strings set i = 'zorro' where i = 'pedro'");
-    result = con.Query("SELECT count(i) FROM strings where i >= 'tim k' ");
-    REQUIRE(CHECK_COLUMN(result, 0, {100002}));
-
+	vector<string> input{"pedro", "peter", "mark"};
+	idx_t input_size = 100000;
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(i varchar)"));
+	for (auto &value : input) {
+		for (size_t i = 0; i < input_size; i++) {
+			con.Query("INSERT INTO strings VALUES('" + value + "')");
+		}
+	}
+	result = con.Query("SELECT count(i) FROM strings where i = 'pedro' ");
+	REQUIRE(CHECK_COLUMN(result, 0, {100000}));
+	con.Query("INSERT INTO strings VALUES('po')");
+	con.Query("INSERT INTO strings VALUES('stefan manegold')");
+	con.Query("INSERT INTO strings VALUES('tim k')");
+	con.Query("INSERT INTO strings VALUES('tim k')");
+	con.Query("update strings set i = 'zorro' where i = 'pedro'");
+	result = con.Query("SELECT count(i) FROM strings where i >= 'tim k' ");
+	REQUIRE(CHECK_COLUMN(result, 0, {100002}));
 }

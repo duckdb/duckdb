@@ -487,6 +487,15 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	return result.GetValue(0);
 }
 
+Value Value::TryCastAs(SQLType source_type, SQLType target_type) {
+    try{
+       return CastAs(source_type,target_type);
+    }
+    catch (const std::exception&){
+        return false;
+    }
+}
+
 Value Value::CastAs(TypeId target_type) const {
 	if (target_type == type) {
 		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
