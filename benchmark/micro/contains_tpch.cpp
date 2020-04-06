@@ -15,7 +15,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 11.5% of TPC-H SF 1
-	return "SELECT l_comment FROM lineitem WHERE contains_instr(l_comment, 'regular')";
+	return "SELECT COUNT(*) FROM lineitem WHERE contains_instr(l_comment, 'regular')";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -34,7 +34,7 @@ void Load(DuckDBBenchmarkState *state) override {
     tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_comment FROM lineitem WHERE contains_instr(l_comment, 'according')";
+    return "SELECT COUNT(*) FROM lineitem WHERE contains_instr(l_comment, 'according')";
 }
 string VerifyResult(QueryResult *result) override {
     if (!result->success) {
@@ -54,7 +54,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // ~19% of TPC-H SF 1
-	return "SELECT l_comment FROM lineitem WHERE contains_kmp(l_comment, 'regular')";
+	return "SELECT COUNT(*) FROM lineitem WHERE contains_kmp(l_comment, 'regular')";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -73,7 +73,7 @@ void Load(DuckDBBenchmarkState *state) override {
     tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_comment FROM lineitem WHERE contains_kmp(l_comment, 'according')";
+    return "SELECT COUNT(*) FROM lineitem WHERE contains_kmp(l_comment, 'according')";
 }
 string VerifyResult(QueryResult *result) override {
     if (!result->success) {
@@ -93,7 +93,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // ~19% of TPC-H SF 1
-	return "SELECT l_comment FROM lineitem WHERE contains_bm(l_comment, 'regular')";
+	return "SELECT COUNT(*) FROM lineitem WHERE contains_bm(l_comment, 'regular')";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -112,7 +112,7 @@ void Load(DuckDBBenchmarkState *state) override {
     tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_comment FROM lineitem WHERE contains_bm(l_comment, 'according')";
+    return "SELECT COUNT(*) FROM lineitem WHERE contains_bm(l_comment, 'according')";
 }
 string VerifyResult(QueryResult *result) override {
     if (!result->success) {
@@ -133,7 +133,7 @@ void Load(DuckDBBenchmarkState *state) override {
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // ~19% of TPC-H SF 1
-	return "SELECT l_comment FROM lineitem WHERE l_comment LIKE '%regular%')";
+	return "SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%regular%'";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -152,7 +152,7 @@ void Load(DuckDBBenchmarkState *state) override {
     tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT l_comment FROM lineitem WHERE l_comment LIKE '%according%')";
+    return "SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%according%'";
 }
 string VerifyResult(QueryResult *result) override {
     if (!result->success) {
