@@ -8,7 +8,7 @@ TEST_CASE("Test simple relation API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
-	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2;
+	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -123,16 +123,29 @@ TEST_CASE("Test simple relation API", "[api]") {
 	// join
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id", JoinType::INNER)->Execute());
+	REQUIRE_NOTHROW(v3 = con.Values({{1, 2}, {2, 6}, {3, 10}}, {"id", "k"}, "v3"));
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {27, 8, 20}));
 
 	// projection after a join
-	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id", JoinType::INNER)->Project("v1.id+v2.id, j+k")->Execute());
+	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id=v2.id")->Project("v1.id+v2.id, j+k")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {37, 13, 24}));
+
+	// chain multiple joins
+	auto multi_join = v1->Join(v2, "v1.id=v2.id")->Join(v3, "v1.id=v3.id");
+	REQUIRE_NOTHROW(result = multi_join->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 9}));
+
+	// multiple joins followed by a filter and a projection
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	// multiple joins followed by multiple filters
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")->Filter("v2.id < 3")->Filter("v3.id=2")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 }
 
 TEST_CASE("Test view creation of relations", "[api]") {

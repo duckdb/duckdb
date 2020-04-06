@@ -66,7 +66,7 @@ public:
 	shared_ptr<Relation> Order(string expression);
 
 	// JOIN operation
-	shared_ptr<Relation> Join(shared_ptr<Relation> other, string condition, JoinType type);
+	shared_ptr<Relation> Join(shared_ptr<Relation> other, string condition, JoinType type = JoinType::INNER);
 
 	// SET operations
 	shared_ptr<Relation> Union(shared_ptr<Relation> other);
