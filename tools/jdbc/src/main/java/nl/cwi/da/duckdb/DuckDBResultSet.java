@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -24,17 +25,11 @@ import java.util.Calendar;
 import java.util.Map;
 
 public class DuckDBResultSet implements ResultSet {
-
-	public DuckDBResultSet(DuckDBStatement duckDBStatement) {
-		// TODO Auto-generated constructor stub
-	}
-
-	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+	
+	private DuckDBResultSetMetaData meta = new DuckDBResultSetMetaData();
+	
+	public DuckDBResultSet(ByteBuffer result_ref) {
+		//meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
 	}
 
 	public boolean next() throws SQLException {
@@ -44,7 +39,6 @@ public class DuckDBResultSet implements ResultSet {
 
 	public void close() throws SQLException {
 		// TODO Auto-generated method stub
-
 	}
 
 	public boolean wasNull() throws SQLException {
@@ -209,7 +203,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public ResultSetMetaData getMetaData() throws SQLException {
-		return new DuckDBResultSetMetaData(this);
+		return meta;
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
@@ -821,6 +815,14 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+	
+	public <T> T unwrap(Class<T> iface) throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public boolean isWrapperFor(Class<?> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 

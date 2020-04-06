@@ -1,5 +1,6 @@
 package nl.cwi.da.duckdb;
 
+import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
@@ -9,6 +10,9 @@ import java.util.Properties;
 import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
+
+
+	
 	static {
 		try {
 			DriverManager.registerDriver(new DuckDBDriver());

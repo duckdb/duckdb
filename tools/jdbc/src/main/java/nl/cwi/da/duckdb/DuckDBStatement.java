@@ -20,8 +20,10 @@ public class DuckDBStatement implements Statement {
 	}
 	
 	public boolean execute(String sql) throws SQLException {
-		stmt_ref = DuckDBDatabase.duckdb_jdbc_prepare(conn.conn_ref, sql);
-		result = new DuckDBResultSet(this);
+		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
+		Object[] params = {};
+		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
+		result = new DuckDBResultSet(result_ref);
 		return true;
 	}
 
@@ -45,7 +47,7 @@ public class DuckDBStatement implements Statement {
 	}
 
 	public void close() throws SQLException {
-		DuckDBDatabase.duckdb_jdbc_release(stmt_ref);
+		DuckDBNative.duckdb_jdbc_release(stmt_ref);
 		stmt_ref = null;
 	}
 	

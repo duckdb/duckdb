@@ -25,7 +25,7 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	
 	public DuckDBConnection(DuckDBDatabase db) {
-		conn_ref = DuckDBDatabase.duckdb_jdbc_connect(db.db_ref);
+		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
 	}
 
 	public Statement createStatement() throws SQLException {
@@ -60,14 +60,13 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public void close() throws SQLException {
 		if (conn_ref != null) {
-			DuckDBDatabase.duckdb_jdbc_disconnect(conn_ref);
+			DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
 			conn_ref = null;
 		}
 	}
 
 	public boolean isClosed() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		return conn_ref == null;
 	}
 	
 	
@@ -110,10 +109,11 @@ public class DuckDBConnection implements java.sql.Connection {
 		// TODO Auto-generated method stub
 		return null;
 	}
+	
+	// maybe sometime
 
 	public void abort(Executor executor) throws SQLException {
-		// TODO Auto-generated method stub
-
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	// gunk
