@@ -178,12 +178,18 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	}
 	statement.select_list = move(new_select_list);
 
-	for(auto &expr : statement.select_list) {
+	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
+	unordered_map<string, idx_t> alias_map;
+	expression_map_t<idx_t> projection_map;
+	for (idx_t i = 0; i < statement.select_list.size(); i++) {
+		auto &expr = statement.select_list[i];
+		result->names.push_back(expr->GetName());
+		if (!expr->alias.empty()) {
+			alias_map[expr->alias] = i;
+		}
+		ExpressionBinder::BindTableNames(*this, *expr);
+		projection_map[expr.get()] = i;
 		result->original_expressions.push_back(expr->Copy());
-	}
-
-	for (auto &entry : statement.select_list) {
-		result->names.push_back(entry->GetName());
 	}
 	result->column_count = statement.select_list.size();
 
@@ -193,20 +199,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		result->where_clause = BindFilter(move(statement.where_clause));
 	}
 
-	// create a mapping of (alias -> index) and a mapping of (Expression -> index) for the SELECT list
-	unordered_map<string, idx_t> alias_map;
-	expression_map_t<idx_t> projection_map;
-	for (idx_t i = 0; i < statement.select_list.size(); i++) {
-		auto &expr = statement.select_list[i];
-		if (!expr->alias.empty()) {
-			alias_map[expr->alias] = i;
-		}
-		ExpressionBinder::BindTableNames(*this, *expr);
-		projection_map[expr.get()] = i;
-	}
-
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder(*this, result->projection_index, statement, alias_map, projection_map);
+	OrderBinder order_binder({this}, result->projection_index, statement, alias_map, projection_map);
 	BindModifiers(order_binder, statement, *result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;

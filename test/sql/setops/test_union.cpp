@@ -76,6 +76,29 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	result = con.Query("SELECT * FROM test UNION SELECT * FROM test2 ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+
+	// test union with/without table specifiers
+	result = con.Query("SELECT a FROM test UNION SELECT * FROM test2 ORDER BY test.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT a FROM test UNION SELECT b FROM test2 ORDER BY test2.b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT test.a FROM test UNION SELECT * FROM test2 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT test.a FROM test UNION SELECT test2.b FROM test2 ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+
+	// what about multiple set ops?
+	result = con.Query("SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY test.a, test2.b, t1.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	// and subqueries
+	result = con.Query("SELECT a FROM (SELECT * FROM test) bla UNION SELECT * FROM test2 ORDER BY bla.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	// what if we have cross products or joins
+	result = con.Query("SELECT t1.a, t2.a FROM test t1, test t2 WHERE t1.a=t2.a UNION SELECT b, b - 1 FROM test2 ORDER BY t1.a, t2.a, test2.b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 2, 3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 2, 2, 3, 3}));
 }
 
 TEST_CASE("Test union with nulls", "[setops]") {

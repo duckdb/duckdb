@@ -78,8 +78,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	if (statement.modifiers.size() > 0) {
 		// handle the ORDER BY/DISTINCT clauses
-		// NOTE: we handle the ORDER BY in SET OPERATIONS before binding the children
-		// we do so we can perform expression comparisons BEFORE type resolution/binding
 
 		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
 		// the ORDER BY
@@ -88,7 +86,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		GatherAliases(*result, alias_map, expression_map);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder(*this, result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
+		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
 		BindModifiers(order_binder, statement, *result);
 	}
 
