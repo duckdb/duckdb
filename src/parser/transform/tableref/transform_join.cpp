@@ -40,10 +40,6 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 		result->type = JoinType::OUTER;
 		break;
 	}
-	case PG_JOIN_RIGHT: {
-		result->type = JoinType::RIGHT;
-		break;
-	}
 	case PG_JOIN_SEMI: {
 		result->type = JoinType::SEMI;
 		break;
