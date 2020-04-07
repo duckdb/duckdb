@@ -491,7 +491,7 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
 	Value new_value;
 	try {
 		new_value = CastAs(source_type, target_type);
-	} catch ( Exception&) {
+	} catch (Exception &) {
 		return false;
 	}
 	type = new_value.type;

@@ -38,7 +38,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		auto new_constant = (BoundConstantExpression *)bound_const_expr->value.TryCastAs(
 		    cast_expression->target_type.id, cast_expression->source_type.id);
 		if (new_constant) {
-		    auto child_expression = move(cast_expression->child);
+			auto child_expression = move(cast_expression->child);
 			constant_expr->return_type = bound_const_expr->value.type;
 			//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
 			if (column_ref_left) {

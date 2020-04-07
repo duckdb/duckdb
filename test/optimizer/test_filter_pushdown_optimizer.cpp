@@ -120,11 +120,48 @@ TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tablinho(i varchar )"));
 	//! Checking if Optimizer push predicates down
 	auto tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
-	FilterPushdown predicatePushdown(opt);
 	//! The generated plan should be Projection ->Get (1)
-	auto plan = predicatePushdown.Rewrite(move(tree));
-	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	REQUIRE(plan->children[0]->expressions.size() == 1);
+		auto plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
+		//! The generated plan should be Projection ->Get (1)
+		plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i > 'bla' ");
+		//! The generated plan should be Projection ->Get (1)
+		plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i >= 'bla' ");
+		//! The generated plan should be Projection ->Get (1)
+		plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i < 'bla' ");
+		//! The generated plan should be Projection ->Get (1)
+		plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i <= 'bla' ");
+		//! The generated plan should be Projection ->Get (1)
+		plan = opt.Optimize(move(tree));
+		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+		REQUIRE(plan->children[0]->expressions.size() == 1);
+
+//	//	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i SIMILAR TO 'DE.*I.*ER.*' ");
+//	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like '%bla' ");
+//
+//	//! The generated plan should be Projection ->Get (1)
+//	auto plan = opt.Optimize(move(tree));
+//	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+//	REQUIRE(plan->children[0]->expressions.size() == 1);
 }
 
 TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {
@@ -167,8 +204,7 @@ TEST_CASE("Test Table Filter Push Down Scan TPCQ6", "[filterpushdown-optimizer]"
 	auto tree = helper.ParseLogicalTree(
 	    "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and "
 	    "l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24 ");
-	//	auto tree = helper.ParseLogicalTree("select sum(l_extendedprice) from lineitem where l_shipdate >= '1994-01-01'
-	//");
+
 	//! The generated plan should be Projection ->Aggregate_and_group_by->Get (5)
 	auto plan = opt.Optimize(move(tree));
 	REQUIRE(plan->type == LogicalOperatorType::PROJECTION);
