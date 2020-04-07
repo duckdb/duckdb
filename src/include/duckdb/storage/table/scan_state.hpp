@@ -62,18 +62,20 @@ struct LocalScanState {
 	idx_t last_chunk_count;
 };
 
-struct TableScanState {
-	virtual ~TableScanState() = default;
-
+class TableScanState {
+public:
+	TableScanState(){};
 	idx_t current_persistent_row, max_persistent_row;
 	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
 	idx_t offset;
 	vector<column_t> column_ids;
 	LocalScanState local_state;
+	void NextVector();
 };
 
-struct CreateIndexScanState : public TableScanState {
+class CreateIndexScanState : public TableScanState {
+public:
 	vector<unique_ptr<StorageLockKey>> locks;
 	std::unique_lock<std::mutex> append_lock;
 };

@@ -399,7 +399,8 @@ TEST_CASE("Test FIRST with non-inlined strings", "[aggregate]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(a INTEGER, b VARCHAR)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')"));
 
 	// non-grouped aggregate
 	result = con.Query("SELECT FIRST(b) FROM tbl WHERE a=2");

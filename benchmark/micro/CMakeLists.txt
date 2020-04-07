@@ -5,6 +5,7 @@ add_library(
   append.cpp
   bulkupdate.cpp
   cast.cpp
+        data_skipping.cpp
   groupby.cpp
   in.cpp
   multiplications.cpp

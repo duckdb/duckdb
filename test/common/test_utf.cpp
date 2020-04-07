@@ -3,7 +3,6 @@
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
-
 using namespace duckdb;
 using namespace std;
 
@@ -32,7 +31,6 @@ TEST_CASE("UTF8 error checking", "[utf8]") {
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf8\xa1\xa1\xa1\xa1")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xfc\xa1\xa1\xa1\xa1\xa1")));
 }
-
 
 TEST_CASE("UTF8 NFC tests", "[utf8]") {
 	// check NFC equivalence in Value API
@@ -71,6 +69,4 @@ TEST_CASE("UTF8 NFC tests", "[utf8]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	// also through CSV reader
-
-
 }

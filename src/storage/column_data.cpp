@@ -45,11 +45,25 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void ColumnScanState::Next() {
+    //! There is no column segment
+    if(!current){
+        return;
+    }
 	vector_index++;
 	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
 		current = (ColumnSegment *)current->next.get();
 		vector_index = 0;
 		initialized = false;
+	}
+}
+
+void TableScanState::NextVector() {
+	//! nothing to scan for this vector, skip the entire vector
+	for (idx_t j = 0; j < column_ids.size(); j++) {
+		auto column = column_ids[j];
+		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+			column_scans[j].Next();
+		}
 	}
 }
 
