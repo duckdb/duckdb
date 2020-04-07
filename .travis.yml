@@ -35,7 +35,7 @@ matrix:
         - pip install --user boto3
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb_cli
         - (cd examples/embedded-c; make)
@@ -57,7 +57,7 @@ matrix:
         - python3 -m pip install --user boto3
 
       script:
-        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
 
@@ -76,7 +76,7 @@ matrix:
         - choco install curl -y --force
 
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
