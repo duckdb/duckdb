@@ -8,6 +8,7 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
+#include "duckdb/main/relation/subquery_relation.hpp"
 #include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -83,6 +84,10 @@ shared_ptr<Relation> Relation::Intersect(shared_ptr<Relation> other) {
 
 shared_ptr<Relation> Relation::Distinct() {
 	return make_shared<DistinctRelation>(shared_from_this());
+}
+
+shared_ptr<Relation> Relation::Alias(string alias) {
+	return make_shared<SubqueryRelation>(shared_from_this(), alias);
 }
 
 string Relation::GetAlias() {

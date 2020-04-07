@@ -32,7 +32,8 @@ enum class RelationType : uint8_t {
 	INSERT,
 	VALUE_LIST,
 	DELETE,
-	UPDATE
+	UPDATE,
+	SUBQUERY
 };
 
 } // namespace duckdb

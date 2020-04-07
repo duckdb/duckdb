@@ -49,13 +49,6 @@ public:
 	unique_ptr<QueryResult> SQL(string name, string sql);
 
 	virtual unique_ptr<TableRef> GetTableRef();
-	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
-	virtual bool InheritsColumnBindings() {
-		return false;
-	}
-	virtual Relation* ChildRelation() {
-		return nullptr;
-	}
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);
@@ -83,6 +76,9 @@ public:
 	// DISTINCT operation
 	shared_ptr<Relation> Distinct();
 
+	// ALIAS
+	shared_ptr<Relation> Alias(string alias);
+
 	//! Insert the data from this relation into a table
 	void Insert(string table_name);
 	void Insert(string schema_name, string table_name);
@@ -95,6 +91,14 @@ public:
 	virtual void Update(string update, string condition = string());
 	//! Delete from a table, can only be used on a TableRelation
 	virtual void Delete(string condition = string());
+public:
+	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
+	virtual bool InheritsColumnBindings() {
+		return false;
+	}
+	virtual Relation* ChildRelation() {
+		return nullptr;
+	}
 protected:
 	string RenderWhitespace(idx_t depth);
 };

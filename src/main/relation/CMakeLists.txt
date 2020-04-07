@@ -12,6 +12,7 @@ add_library_unity(duckdb_main_relation
 	update_relation.cpp
 	projection_relation.cpp
 	setop_relation.cpp
+	subquery_relation.cpp
 	table_relation.cpp
 	value_relation.cpp)
 set(ALL_OBJECT_FILES

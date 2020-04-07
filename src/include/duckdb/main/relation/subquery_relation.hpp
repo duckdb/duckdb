@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/filter_relation.hpp
+// duckdb/main/relation/subquery_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,16 +9,15 @@
 #pragma once
 
 #include "duckdb/main/relation.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
-class FilterRelation : public Relation {
+class SubqueryRelation : public Relation {
 public:
-	FilterRelation(shared_ptr<Relation> child, unique_ptr<ParsedExpression> condition);
+	SubqueryRelation(shared_ptr<Relation> child, string alias);
 
-	unique_ptr<ParsedExpression> condition;
 	shared_ptr<Relation> child;
+	string alias;
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 
@@ -27,10 +26,10 @@ public:
 	string GetAlias() override;
 public:
 	bool InheritsColumnBindings() override {
-		return true;
+		return child->InheritsColumnBindings();
 	}
 	Relation* ChildRelation() override {
-		return child.get();
+		return child->ChildRelation();
 	}
 };
 

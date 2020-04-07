@@ -150,6 +150,102 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 }
 
+TEST_CASE("Test combinations of set operations", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> values;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+
+	// union between values
+	auto vunion = values->Union(values);
+	REQUIRE_NOTHROW(result = vunion->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 5, 5, 4, 4}));
+
+	// different ops after a union
+	// order and limit
+	REQUIRE_NOTHROW(result = vunion->Order("i")->Limit(1)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+	// multiple orders and limits
+	REQUIRE_NOTHROW(result = vunion->Order("i")->Limit(4)->Order("j")->Limit(2)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 5}));
+	// filter
+	REQUIRE_NOTHROW(result = vunion->Filter("i=1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10}));
+	// multiple filters
+	REQUIRE_NOTHROW(result = vunion->Filter("i<3")->Filter("j=5")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 5}));
+	// distinct
+	REQUIRE_NOTHROW(result = vunion->Distinct()->Order("j DESC")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	// multiple distincts followed by a top-n
+	REQUIRE_NOTHROW(result = vunion->Distinct()->Distinct()->Distinct()->Order("j DESC")->Limit(2)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5}));
+	// top-n followed by multiple distincts
+	REQUIRE_NOTHROW(result = vunion->Order("j DESC")->Limit(2)->Distinct()->Distinct()->Distinct()->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10}));
+
+	// multiple set ops
+	REQUIRE_NOTHROW(result = vunion->Union(vunion)->Distinct()->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE_NOTHROW(result = vunion->Intersect(vunion)->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 5, 5, 4, 4}));
+	REQUIRE_NOTHROW(result = vunion->Except(vunion)->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	REQUIRE(CHECK_COLUMN(result, 1, {}));
+
+	// error conditions in setops
+	// setop with column count mismatch
+	// setop with type mismatch
+	// setop with name mismatch
+
+}
+
+TEST_CASE("Test combinations of joins", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> values, vjoin;
+
+	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
+
+	auto v1 = values->Alias("v1");
+	auto v2 = values->Alias("v2");
+
+	// join on explicit join condition
+	vjoin = v1->Join(v2, "v1.i=v2.i");
+	REQUIRE_NOTHROW(result = vjoin->Order("v1.i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4}));
+
+	// implicit join
+	// vjoin = v1->Join(v2, "i");
+	// REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {10, 5, 4}));
+
+	// // implicit join on multiple columns
+	// vjoin = v1->Join(v2, "i, j");
+	// REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+}
+
+
 TEST_CASE("Test view creation of relations", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
