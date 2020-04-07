@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <unordered_map>
 #include <algorithm>    // std::max
+#include <cstring>
 
 using namespace std;
 
@@ -51,6 +52,14 @@ struct ContainsOperator {
 	}
 };
 
+static bool contains_strstr(const string_t &str, const string_t &pattern);
+
+struct ContainsSTRSTROperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		return contains_strstr(left, right);
+	}
+};
+
 static bool contains_instr(string_t haystack, string_t needle) {
 	// Getting information about the needle and the haystack
 	auto input_haystack = haystack.GetData();
@@ -71,6 +80,12 @@ static bool contains_instr(string_t haystack, string_t needle) {
 		}
 	}
 	return false;
+}
+
+static bool contains_strstr(const string_t &str, const string_t &pattern) {
+    auto str_data = str.GetData();
+    auto patt_data = pattern.GetData();
+	return (strstr(str_data , patt_data) != nullptr);
 }
 
 static bool contains_kmp(const string_t &str, const string_t &pattern, vector<uint32_t> &kmp_table) {
@@ -261,11 +276,15 @@ void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
 								   SQLType::BOOLEAN,                      // return type
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>));
 
+	set.AddFunction(ScalarFunction("contains_strstr",                              // name of the function
+	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+								   SQLType::BOOLEAN,                      // return type
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsSTRSTROperator, true>));
+
 	set.AddFunction(ScalarFunction("contains_kmp",
 									{SQLType::VARCHAR, SQLType::VARCHAR},
 									SQLType::BOOLEAN,
 									contains_kmp_function, false, contains_kmp_get_bind_function));
-
 
 	set.AddFunction(ScalarFunction("contains_bm",
 									{SQLType::VARCHAR, SQLType::VARCHAR},
