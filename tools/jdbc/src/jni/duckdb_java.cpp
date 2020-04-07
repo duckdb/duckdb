@@ -1,4 +1,4 @@
-#include "duckdb_java.h"
+#include "nl_cwi_da_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
 
 using namespace duckdb;
