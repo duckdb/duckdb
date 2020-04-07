@@ -164,8 +164,11 @@ TEST_CASE("Test Table Filter Push Down Scan TPCQ6", "[filterpushdown-optimizer]"
 	              "L_SHIPMODE     CHAR(10) NOT NULL, L_COMMENT      VARCHAR(44) NOT NULL)"));
 
 	//! Checking if Optimizer push predicates down
-	auto tree = helper.ParseLogicalTree("select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24 ");
-//	auto tree = helper.ParseLogicalTree("select sum(l_extendedprice) from lineitem where l_shipdate >= '1994-01-01' ");
+	auto tree = helper.ParseLogicalTree(
+	    "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and "
+	    "l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24 ");
+	//	auto tree = helper.ParseLogicalTree("select sum(l_extendedprice) from lineitem where l_shipdate >= '1994-01-01'
+	//");
 	//! The generated plan should be Projection ->Aggregate_and_group_by->Get (5)
 	auto plan = opt.Optimize(move(tree));
 	REQUIRE(plan->type == LogicalOperatorType::PROJECTION);
@@ -173,7 +176,6 @@ TEST_CASE("Test Table Filter Push Down Scan TPCQ6", "[filterpushdown-optimizer]"
 	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
 	REQUIRE(plan->children[0]->children[0]->expressions.size() == 5);
 }
-
 
 TEST_CASE("Test Table Filter Push Down Scan String", "[filterpushdown-optimizer][.]") {
 	unique_ptr<QueryResult> result;

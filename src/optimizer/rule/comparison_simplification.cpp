@@ -17,11 +17,11 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                            bool &changes_made) {
-    assert( bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
-	auto expr = (BoundComparisonExpression* )bindings[0];
-    auto constant_expr = bindings[1];
-    bool column_ref_left =  expr->left.get() != constant_expr;
-    auto column_ref_expr = !column_ref_left ? expr->right.get() : expr->left.get();
+	assert(bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
+	auto expr = (BoundComparisonExpression *)bindings[0];
+	auto constant_expr = bindings[1];
+	bool column_ref_left = expr->left.get() != constant_expr;
+	auto column_ref_expr = !column_ref_left ? expr->right.get() : expr->left.get();
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	assert(constant_expr->IsFoldable());
@@ -30,39 +30,23 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
 	}
-	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST){
-	    assert( constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT);
-	    //! Here we check if we can apply the expression on the constant side
-	    auto cast_expression = (BoundCastExpression*) column_ref_expr;
-	    auto bound_const_expr = (BoundConstantExpression*) constant_expr;
-	    auto new_constant = (BoundConstantExpression*) bound_const_expr->value.TryCastAs(cast_expression->target_type.id,cast_expression->source_type.id);
-	     auto child_expression =  move(cast_expression->child);
-	    if(new_constant){
-	        constant_expr->return_type = bound_const_expr->value.type;
-	       //! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-	       if (column_ref_left){
-	          expr->left = move(child_expression);
-	       }
-	       else{
-	            expr->right = move(child_expression);
-	       }
-	    }
-
+	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
+		assert(constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT);
+		//! Here we check if we can apply the expression on the constant side
+		auto cast_expression = (BoundCastExpression *)column_ref_expr;
+		auto bound_const_expr = (BoundConstantExpression *)constant_expr;
+		auto new_constant = (BoundConstantExpression *)bound_const_expr->value.TryCastAs(
+		    cast_expression->target_type.id, cast_expression->source_type.id);
+		if (new_constant) {
+		    auto child_expression = move(cast_expression->child);
+			constant_expr->return_type = bound_const_expr->value.type;
+			//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
+			if (column_ref_left) {
+				expr->left = move(child_expression);
+			} else {
+				expr->right = move(child_expression);
+			}
+		}
 	}
-//	if(constant_expr->type == ExpressionType::OPERATOR_CAST){
-//	    auto cast_expression = (BoundCastExpression*) constant_expr;
-//	    auto child_expression = (BoundConstantExpression*) cast_expression->child.get();
-//	    auto new_constant = child_expression->value.TryCastAs(cast_expression->source_type.id, cast_expression->target_type.id);
-//	    if(new_constant){
-//	        auto new_column_ref = ColumnRefExpression()
-//	       //! We can cast, now we change our column_ref_expression from an operator cast to a column reference
-//	       column_ref_expr
-//	    }
-
-//	    //! turn this into a bound constant expression
-//	    auto bound_const_expr = make_unique<BoundConstantExpression>(new_constant);
-//	    //! We can try to cast the constant
-//	    return bound_const_expr;
-//	}
 	return nullptr;
 }

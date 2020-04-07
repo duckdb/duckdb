@@ -160,75 +160,71 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
 		if (constant_value.second.size() > 0) {
-//			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
-			    auto filter_exp = equivalence_map.end();
-				if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
-				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-				     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
-				    (TypeIsNumeric(constant_value.second[0].constant.type) ||
-				     constant_value.second[0].constant.type == TypeId::VARCHAR)) {
-					//! Here we check if these filters are column references
-					filter_exp = equivalence_map.find(constant_value.first);
-					if (filter_exp->second.size() == 1 &&
-					    filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
-						auto filter_col_exp = static_cast<BoundColumnRefExpression *>(filter_exp->second[0]);
-						if (column_ids[filter_col_exp->binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
-							break;
-						}
-						auto equivalence_set = filter_exp->first;
-						auto &entries = filter_exp->second;
-						auto &constant_list = constant_values.find(equivalence_set)->second;
-						// for each entry generate an equality expression comparing to each other
-						for (idx_t i = 0; i < entries.size(); i++) {
-							for (idx_t k = i + 1; k < entries.size(); k++) {
-								auto comparison = make_unique<BoundComparisonExpression>(
-								    ExpressionType::COMPARE_EQUAL, entries[i]->Copy(), entries[k]->Copy());
-								callback(move(comparison));
-							}
-							// for each entry also create a comparison with each constant
-							int lower_index = -1, upper_index = -1;
-							for (idx_t k = 0; k < constant_list.size(); k++) {
-							    tableFilters.push_back(TableFilter(constant_value.second[k].constant,
-						                                   constant_value.second[k].comparison_type,
-						                                   filter_col_exp->binding.column_index));
-								auto &info = constant_list[k];
-								if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-								    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-									lower_index = k;
-
-								} else if (info.comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-								           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
-									upper_index = k;
-								} else {
-									auto constant = make_unique<BoundConstantExpression>(info.constant);
-									auto comparison = make_unique<BoundComparisonExpression>(
-									    info.comparison_type, entries[i]->Copy(), move(constant));
-									callback(move(comparison));
-								}
-							}
-							 if (lower_index >= 0) {
-								// only lower index found, create simple comparison expression
-								auto constant =
-								    make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-								auto comparison = make_unique<BoundComparisonExpression>(
-								    constant_list[lower_index].comparison_type, entries[i]->Copy(), move(constant));
-								callback(move(comparison));
-							}
-							 if (upper_index >= 0) {
-								// only upper index found, create simple comparison expression
-								auto constant =
-								    make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
-								auto comparison = make_unique<BoundComparisonExpression>(
-								    constant_list[upper_index].comparison_type, entries[i]->Copy(), move(constant));
-								callback(move(comparison));
-							}
-						}
-
+			//			for (idx_t i = 0; i < constant_value.second.size(); ++i) {
+			auto filter_exp = equivalence_map.end();
+			if ((constant_value.second[0].comparison_type == ExpressionType::COMPARE_EQUAL ||
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
+			    (TypeIsNumeric(constant_value.second[0].constant.type) ||
+			     constant_value.second[0].constant.type == TypeId::VARCHAR)) {
+				//! Here we check if these filters are column references
+				filter_exp = equivalence_map.find(constant_value.first);
+				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
+					auto filter_col_exp = static_cast<BoundColumnRefExpression *>(filter_exp->second[0]);
+					if (column_ids[filter_col_exp->binding.column_index] == COLUMN_IDENTIFIER_ROW_ID) {
+						break;
 					}
-//				}
-				equivalence_map.erase(filter_exp);
+					auto equivalence_set = filter_exp->first;
+					auto &entries = filter_exp->second;
+					auto &constant_list = constant_values.find(equivalence_set)->second;
+					// for each entry generate an equality expression comparing to each other
+					for (idx_t i = 0; i < entries.size(); i++) {
+						for (idx_t k = i + 1; k < entries.size(); k++) {
+							auto comparison = make_unique<BoundComparisonExpression>(
+							    ExpressionType::COMPARE_EQUAL, entries[i]->Copy(), entries[k]->Copy());
+							callback(move(comparison));
+						}
+						// for each entry also create a comparison with each constant
+						int lower_index = -1, upper_index = -1;
+						for (idx_t k = 0; k < constant_list.size(); k++) {
+							tableFilters.push_back(TableFilter(constant_value.second[k].constant,
+							                                   constant_value.second[k].comparison_type,
+							                                   filter_col_exp->binding.column_index));
+							auto &info = constant_list[k];
+							if (info.comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+							    info.comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+								lower_index = k;
+
+							} else if (info.comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+							           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+								upper_index = k;
+							} else {
+								auto constant = make_unique<BoundConstantExpression>(info.constant);
+								auto comparison = make_unique<BoundComparisonExpression>(
+								    info.comparison_type, entries[i]->Copy(), move(constant));
+								callback(move(comparison));
+							}
+						}
+						if (lower_index >= 0) {
+							// only lower index found, create simple comparison expression
+							auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
+							auto comparison = make_unique<BoundComparisonExpression>(
+							    constant_list[lower_index].comparison_type, entries[i]->Copy(), move(constant));
+							callback(move(comparison));
+						}
+						if (upper_index >= 0) {
+							// only upper index found, create simple comparison expression
+							auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+							auto comparison = make_unique<BoundComparisonExpression>(
+							    constant_list[upper_index].comparison_type, entries[i]->Copy(), move(constant));
+							callback(move(comparison));
+						}
+					}
+					equivalence_map.erase(filter_exp);
+				}
+				//				}
 			}
 		}
 	}
@@ -253,125 +249,123 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		}
 	}
 	assert(!expr->IsFoldable());
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN){
-        auto &comparison = (BoundBetweenExpression &)*expr;
-        //! check if one of the sides is a scalar value
-	    bool left_is_scalar = comparison.lower->IsFoldable();
-	    bool right_is_scalar = comparison.upper->IsFoldable();
-	    if (left_is_scalar || right_is_scalar) {
-		//! comparison with scalar
-		auto node = GetNode(comparison.input.get());
-		idx_t equivalence_set = GetEquivalenceSet(node);
-		auto scalar = comparison.lower.get();
-		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
+		auto &comparison = (BoundBetweenExpression &)*expr;
+		//! check if one of the sides is a scalar value
+		bool left_is_scalar = comparison.lower->IsFoldable();
+		bool right_is_scalar = comparison.upper->IsFoldable();
+		if (left_is_scalar || right_is_scalar) {
+			//! comparison with scalar
+			auto node = GetNode(comparison.input.get());
+			idx_t equivalence_set = GetEquivalenceSet(node);
+			auto scalar = comparison.lower.get();
+			auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
 
-		// create the ExpressionValueInformation
-		ExpressionValueInformation info;
-		if (comparison.lower_inclusive){
-		    info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-		}else{
-		    info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+			// create the ExpressionValueInformation
+			ExpressionValueInformation info;
+			if (comparison.lower_inclusive) {
+				info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+			} else {
+				info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+			}
+			info.constant = constant_value;
+
+			// get the current bucket of constant values
+			assert(constant_values.find(equivalence_set) != constant_values.end());
+			auto &info_list = constant_values.find(equivalence_set)->second;
+			// check the existing constant comparisons to see if we can do any pruning
+			AddConstantComparison(info_list, info);
+			scalar = comparison.upper.get();
+			constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+			// create the ExpressionValueInformation
+			if (comparison.upper_inclusive) {
+				info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+			} else {
+				info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+			}
+			info.constant = constant_value;
+
+			// get the current bucket of constant values
+			assert(constant_values.find(equivalence_set) != constant_values.end());
+			// check the existing constant comparisons to see if we can do any pruning
+			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 		}
-		info.constant = constant_value;
-
-		// get the current bucket of constant values
-		assert(constant_values.find(equivalence_set) != constant_values.end());
-		auto &info_list = constant_values.find(equivalence_set)->second;
-		// check the existing constant comparisons to see if we can do any pruning
-		AddConstantComparison(info_list, info);
-		scalar = comparison.upper.get();
-		constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
-
-		// create the ExpressionValueInformation
-		if (comparison.upper_inclusive){
-		    info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		}else{
-		    info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
-		}
-		info.constant = constant_value;
-
-		// get the current bucket of constant values
-		assert(constant_values.find(equivalence_set) != constant_values.end());
-		// check the existing constant comparisons to see if we can do any pruning
-		return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
-	}
-	}
-	else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON){
-	    auto &comparison = (BoundComparisonExpression &)*expr;
-	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
-	    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
-	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
-	    comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
-	    comparison.type != ExpressionType::COMPARE_EQUAL && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
-		// only support [>, >=, <, <=, ==] expressions
-		return FilterResult::UNSUPPORTED;
-	}
-	// check if one of the sides is a scalar value
-	bool left_is_scalar = comparison.left->IsFoldable();
-	bool right_is_scalar = comparison.right->IsFoldable();
-	if (left_is_scalar || right_is_scalar) {
-		// comparison with scalar
-		auto node = GetNode(left_is_scalar ? comparison.right.get() : comparison.left.get());
-		idx_t equivalence_set = GetEquivalenceSet(node);
-		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
-		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
-
-		// create the ExpressionValueInformation
-		ExpressionValueInformation info;
-		info.comparison_type = left_is_scalar ? FlipComparisionExpression(comparison.type) : comparison.type;
-		info.constant = constant_value;
-
-		// get the current bucket of constant values
-		assert(constant_values.find(equivalence_set) != constant_values.end());
-		auto &info_list = constant_values.find(equivalence_set)->second;
-		// check the existing constant comparisons to see if we can do any pruning
-		return AddConstantComparison(info_list, info);
-	} else {
-		// comparison between two non-scalars
-		// only handle comparisons for now
-		if (expr->type != ExpressionType::COMPARE_EQUAL) {
+	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comparison = (BoundComparisonExpression &)*expr;
+		if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
+		    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+		    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
+		    comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+		    comparison.type != ExpressionType::COMPARE_EQUAL && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
+			// only support [>, >=, <, <=, ==] expressions
 			return FilterResult::UNSUPPORTED;
 		}
-		// get the LHS and RHS nodes
-		auto left_node = GetNode(comparison.left.get());
-		auto right_node = GetNode(comparison.right.get());
-		// get the equivalence sets of the LHS and RHS
-		auto left_equivalence_set = GetEquivalenceSet(left_node);
-		auto right_equivalence_set = GetEquivalenceSet(right_node);
-		if (left_equivalence_set == right_equivalence_set) {
-			// this equality filter already exists, prune it
-			return FilterResult::SUCCESS;
-		}
-		// add the right bucket into the left bucket
-		assert(equivalence_map.find(left_equivalence_set) != equivalence_map.end());
-		assert(equivalence_map.find(right_equivalence_set) != equivalence_map.end());
+		// check if one of the sides is a scalar value
+		bool left_is_scalar = comparison.left->IsFoldable();
+		bool right_is_scalar = comparison.right->IsFoldable();
+		if (left_is_scalar || right_is_scalar) {
+			// comparison with scalar
+			auto node = GetNode(left_is_scalar ? comparison.right.get() : comparison.left.get());
+			idx_t equivalence_set = GetEquivalenceSet(node);
+			auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
+			auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
 
-		auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
-		auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
-		for (idx_t i = 0; i < right_bucket.size(); i++) {
-			// rewrite the equivalence set mapping for this node
-			equivalence_set_map[right_bucket[i]] = left_equivalence_set;
-			// add the node to the left bucket
-			left_bucket.push_back(right_bucket[i]);
-		}
-		// now add all constant values from the right bucket to the left bucket
-		assert(constant_values.find(left_equivalence_set) != constant_values.end());
-		assert(constant_values.find(right_equivalence_set) != constant_values.end());
-		auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
-		auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
-		for (idx_t i = 0; i < right_constant_bucket.size(); i++) {
-			if (AddConstantComparison(left_constant_bucket, right_constant_bucket[i]) == FilterResult::UNSATISFIABLE) {
-				return FilterResult::UNSATISFIABLE;
+			// create the ExpressionValueInformation
+			ExpressionValueInformation info;
+			info.comparison_type = left_is_scalar ? FlipComparisionExpression(comparison.type) : comparison.type;
+			info.constant = constant_value;
+
+			// get the current bucket of constant values
+			assert(constant_values.find(equivalence_set) != constant_values.end());
+			auto &info_list = constant_values.find(equivalence_set)->second;
+			// check the existing constant comparisons to see if we can do any pruning
+			return AddConstantComparison(info_list, info);
+		} else {
+			// comparison between two non-scalars
+			// only handle comparisons for now
+			if (expr->type != ExpressionType::COMPARE_EQUAL) {
+				return FilterResult::UNSUPPORTED;
+			}
+			// get the LHS and RHS nodes
+			auto left_node = GetNode(comparison.left.get());
+			auto right_node = GetNode(comparison.right.get());
+			// get the equivalence sets of the LHS and RHS
+			auto left_equivalence_set = GetEquivalenceSet(left_node);
+			auto right_equivalence_set = GetEquivalenceSet(right_node);
+			if (left_equivalence_set == right_equivalence_set) {
+				// this equality filter already exists, prune it
+				return FilterResult::SUCCESS;
+			}
+			// add the right bucket into the left bucket
+			assert(equivalence_map.find(left_equivalence_set) != equivalence_map.end());
+			assert(equivalence_map.find(right_equivalence_set) != equivalence_map.end());
+
+			auto &left_bucket = equivalence_map.find(left_equivalence_set)->second;
+			auto &right_bucket = equivalence_map.find(right_equivalence_set)->second;
+			for (idx_t i = 0; i < right_bucket.size(); i++) {
+				// rewrite the equivalence set mapping for this node
+				equivalence_set_map[right_bucket[i]] = left_equivalence_set;
+				// add the node to the left bucket
+				left_bucket.push_back(right_bucket[i]);
+			}
+			// now add all constant values from the right bucket to the left bucket
+			assert(constant_values.find(left_equivalence_set) != constant_values.end());
+			assert(constant_values.find(right_equivalence_set) != constant_values.end());
+			auto &left_constant_bucket = constant_values.find(left_equivalence_set)->second;
+			auto &right_constant_bucket = constant_values.find(right_equivalence_set)->second;
+			for (idx_t i = 0; i < right_constant_bucket.size(); i++) {
+				if (AddConstantComparison(left_constant_bucket, right_constant_bucket[i]) ==
+				    FilterResult::UNSATISFIABLE) {
+					return FilterResult::UNSATISFIABLE;
+				}
 			}
 		}
-	}
-	return FilterResult::SUCCESS;
-	}
-	else {
+		return FilterResult::SUCCESS;
+	} else {
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;
 	}
-
 }
 
 static bool IsGreaterThan(ExpressionType type) {
