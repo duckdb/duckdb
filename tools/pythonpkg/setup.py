@@ -68,7 +68,6 @@ setup(
     install_requires=[ # these versions are still available for Python 2, newer ones aren't
          'numpy>=1.14', 
          'pandas>=0.23',
-         'pybind11>=2.4'
     ],
     packages=['duckdb_query_graph'],
     include_package_data=True,
