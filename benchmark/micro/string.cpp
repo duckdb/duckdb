@@ -226,6 +226,28 @@ string BenchmarkInfo() override {
 FINISH_BENCHMARK(StringContainsNullBM)
 //-----------------------------------------------------------------------------
 
+//------------------------- CONTAINS STRSTR -----------------------------------------
+DUCKDB_BENCHMARK(StringContainsSTRSTR, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT CONTAINS_STRSTR(s1, 'h') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING CONTAINS STRSTR";
+}
+FINISH_BENCHMARK(StringContainsSTRSTR)
+
+DUCKDB_BENCHMARK(StringContainsNullSTRSTR, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT CONTAINS_STRSTR(s1, '') FROM strings";
+}
+string BenchmarkInfo() override {
+	return "STRING CONTAINS STRSTR";
+}
+FINISH_BENCHMARK(StringContainsNullSTRSTR)
+//-----------------------------------------------------------------------------
+
 DUCKDB_BENCHMARK(StringRegex, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {

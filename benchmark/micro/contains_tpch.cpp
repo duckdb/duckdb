@@ -125,6 +125,45 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(ContainsAccordingBM)
 
+//------------------------- CONTAINS STRSTR ------------------------------------
+DUCKDB_BENCHMARK(ContainsRegularSTRSTR, "[contains_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
+}
+string GetQuery() override { // ~19% of TPC-H SF 1
+	return "SELECT COUNT(*) FROM lineitem WHERE contains_strstr(l_comment, 'regular')";
+}
+string VerifyResult(QueryResult *result) override {
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
+}
+string BenchmarkInfo() override {
+	return "Contains word 'regular' in the l_comment";
+}
+FINISH_BENCHMARK(ContainsRegularSTRSTR)
+
+DUCKDB_BENCHMARK(ContainsAccordingSTRSTR, "[contains_tpch]")
+void Load(DuckDBBenchmarkState *state) override {
+    // load the data into the tpch schema
+    tpch::dbgen(SF, state->db);
+}
+string GetQuery() override { // 25% of TPC-H SF 1
+    return "SELECT COUNT(*) FROM lineitem WHERE contains_strstr(l_comment, 'according')";
+}
+string VerifyResult(QueryResult *result) override {
+    if (!result->success) {
+        return result->error;
+    }
+    return string();
+}
+string BenchmarkInfo() override {
+    return "Contains word 'according' in the l_comment";
+}
+FINISH_BENCHMARK(ContainsAccordingSTRSTR)
+
 //-------------------------------- LIKE ---------------------------------------
 
 DUCKDB_BENCHMARK(ContainsRegularLIKE, "[contains_tpch]")
