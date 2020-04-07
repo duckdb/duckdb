@@ -487,13 +487,21 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	return result.GetValue(0);
 }
 
-Value Value::TryCastAs(SQLType source_type, SQLType target_type) {
+bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+    Value new_value;
     try{
-       return CastAs(source_type,target_type);
+       new_value =  CastAs(source_type,target_type);
     }
     catch (const std::exception&){
         return false;
     }
+    type = new_value.type;
+    is_null = new_value.is_null;
+    value_ = new_value.value_;
+    str_value = new_value.str_value;
+    struct_value = new_value.struct_value;
+    list_value = new_value.list_value;
+    return true;
 }
 
 Value Value::CastAs(TypeId target_type) const {

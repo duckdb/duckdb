@@ -295,7 +295,6 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		// check the existing constant comparisons to see if we can do any pruning
 		return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 	}
-        comparison.Print();
 	}
 	else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON){
 	    auto &comparison = (BoundComparisonExpression &)*expr;

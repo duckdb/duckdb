@@ -111,7 +111,7 @@ public:
 	//! Cast this value to another type
 	Value CastAs(SQLType source_type, SQLType target_type);
     //! Tries to cast value to another type, throws exception if its not possible
-	Value TryCastAs(SQLType source_type, SQLType target_type);
+	bool TryCastAs(SQLType source_type, SQLType target_type);
 	//! The type of the value
 	TypeId type;
 	//! Whether or not the value is NULL
