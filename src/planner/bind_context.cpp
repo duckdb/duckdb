@@ -17,6 +17,13 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		if (binding->HasMatchingBinding(column_name)) {
+			// check if the binding is ignored
+			string total_binding = kv.first + "." + column_name;
+			if (hidden_columns.find(total_binding) == hidden_columns.end()) {
+				// ignored binding: continue
+				continue;
+			}
+
 			if (!result.empty()) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
@@ -24,6 +31,17 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 				                      column_name.c_str());
 			}
 			result = kv.first;
+		}
+	}
+	return result;
+}
+
+unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
+	unordered_set<string> result;
+	for (auto &kv : bindings) {
+		auto binding = kv.second.get();
+		if (binding->HasMatchingBinding(column_name)) {
+			result.insert(kv.first);
 		}
 	}
 	return result;

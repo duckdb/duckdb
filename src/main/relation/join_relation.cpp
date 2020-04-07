@@ -14,6 +14,15 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 	context.TryBindRelation(*this, this->columns);
 }
 
+JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, vector<string> using_columns_p, JoinType type) :
+	Relation(left_p->context, RelationType::JOIN), left(move(left_p)), right(move(right_p)), using_columns(move(using_columns_p)), join_type(type) {
+	if (&left->context != &right->context) {
+		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+	}
+	context.TryBindRelation(*this, this->columns);
+}
+
+
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
@@ -26,7 +35,10 @@ unique_ptr<TableRef> JoinRelation::GetTableRef() {
 	auto join_ref = make_unique<JoinRef>();
 	join_ref->left = left->GetTableRef();
 	join_ref->right = right->GetTableRef();
-	join_ref->condition = condition->Copy();
+	if (condition) {
+		join_ref->condition = condition->Copy();
+	}
+	join_ref->using_columns = using_columns;
 	join_ref->type = join_type;
 	return move(join_ref);
 }

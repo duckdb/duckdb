@@ -232,17 +232,17 @@ TEST_CASE("Test combinations of joins", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4}));
 
 	// implicit join
-	// vjoin = v1->Join(v2, "i");
-	// REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {10, 5, 4}));
+	vjoin = v1->Join(v2, "i");
+	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {10, 5, 4}));
 
-	// // implicit join on multiple columns
-	// vjoin = v1->Join(v2, "i, j");
-	// REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	// implicit join on multiple columns
+	vjoin = v1->Join(v2, "i, j");
+	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 }
 
 

@@ -15,10 +15,12 @@ namespace duckdb {
 class JoinRelation : public Relation {
 public:
 	JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, unique_ptr<ParsedExpression> condition, JoinType type);
+	JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns, JoinType type);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
 	unique_ptr<ParsedExpression> condition;
+	vector<string> using_columns;
 	JoinType join_type;
 	vector<ColumnDefinition> columns;
 public:

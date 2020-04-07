@@ -107,6 +107,10 @@ void GenericBinding::GenerateAllColumnExpressions(BindContext &context,
                                                   vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		assert(!column_name.empty());
+		string column_string = alias + "." + column_name;
+		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
+			continue;
+		}
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}
 }

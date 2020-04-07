@@ -345,34 +345,33 @@ TEST_CASE("Test USING joins", "[joins]") {
 
 	// USING join
 	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a) ORDER BY t2.b");
-	REQUIRE(result->success);
-
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
 
 	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(b) ORDER BY t2.c");
-	REQUIRE(result->success);
-
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 4}));
 
 	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a,b)");
-	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 
 	result = con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a,b,c)");
-	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 
+	// USING columns can be used without requiring a table specifier
+	result = con.Query("SELECT a+1 FROM t1 JOIN t2 USING(a) ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 2}));
+
 	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(a+b)"));
 	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(\"\")"));
 	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)"));
+	REQUIRE_FAIL(con.Query("SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(t1.a)"));
 
 	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b)");
 	REQUIRE(result->names.size() == 4);
@@ -387,20 +386,39 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
 	// multiple joins with using
-	// FIXME:
-	// result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b) JOIN t2 t2b USING (a,b);");
-	// REQUIRE(result->names.size() == 5);
-	// REQUIRE(result->names[0] == "a");
-	// REQUIRE(result->names[1] == "b");
-	// REQUIRE(result->names[2] == "c");
-	// REQUIRE(result->names[3] == "c");
-	// REQUIRE(result->names[4] == "c");
+	// single column
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b) ORDER BY 1,2,3,4,5,6,7;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 2, 2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2, 2, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3, 3, 4, 4}));
+	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 6, {3, 4, 3, 4}));
 
-	// REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {2}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {3}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {3}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(result->names.size() == 7);
+	REQUIRE(result->names[0] == "a");
+	REQUIRE(result->names[1] == "b");
+	REQUIRE(result->names[2] == "c");
+	REQUIRE(result->names[3] == "b");
+	REQUIRE(result->names[4] == "c");
+	REQUIRE(result->names[5] == "a");
+	REQUIRE(result->names[6] == "c");
+
+	// multi column
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b) JOIN t2 t2b USING (a,b);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+
+	REQUIRE(result->names.size() == 5);
+	REQUIRE(result->names[0] == "a");
+	REQUIRE(result->names[1] == "b");
+	REQUIRE(result->names[2] == "c");
+	REQUIRE(result->names[3] == "c");
+	REQUIRE(result->names[4] == "c");
 }
 
 TEST_CASE("Test joins with various columns that are only used in the join", "[joins]") {

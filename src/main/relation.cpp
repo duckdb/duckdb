@@ -15,6 +15,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 
 namespace duckdb {
@@ -64,10 +65,27 @@ shared_ptr<Relation> Relation::Order(string expression) {
 
 shared_ptr<Relation> Relation::Join(shared_ptr<Relation> other, string condition, JoinType type) {
 	auto expression_list = Parser::ParseExpressionList(condition);
-	if (expression_list.size() != 1) {
+	if (expression_list.size() == 0) {
 		throw ParserException("Expected a single expression as join condition");
 	}
-	return make_shared<JoinRelation>(shared_from_this(), other, move(expression_list[0]), type);
+	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
+		// multiple columns or single column ref: the condition is a USING list
+		vector<string> using_columns;
+		for(auto &expr : expression_list) {
+			if (expr->type != ExpressionType::COLUMN_REF) {
+				throw ParserException("Expected a single expression as join condition");
+			}
+			auto &colref = (ColumnRefExpression&) *expr;
+			if (!colref.table_name.empty()) {
+				throw ParserException("Expected empty table name for column in USING clause");
+			}
+			using_columns.push_back(colref.column_name);
+		}
+		return make_shared<JoinRelation>(shared_from_this(), other, move(using_columns), type);
+	} else {
+		// single expression that is not a column reference: use the expression as a join condition
+		return make_shared<JoinRelation>(shared_from_this(), other, move(expression_list[0]), type);
+	}
 }
 
 shared_ptr<Relation> Relation::Union(shared_ptr<Relation> other) {
