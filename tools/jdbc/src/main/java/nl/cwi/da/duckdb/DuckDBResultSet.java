@@ -435,8 +435,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int getType() throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		return ResultSet.TYPE_FORWARD_ONLY;
 	}
 
 	public int getConcurrency() throws SQLException {

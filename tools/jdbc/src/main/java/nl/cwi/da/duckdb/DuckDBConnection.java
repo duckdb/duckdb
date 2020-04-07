@@ -76,14 +76,47 @@ public class DuckDBConnection implements java.sql.Connection {
 		return true;
 	}
 
+	public SQLWarning getWarnings() throws SQLException {
+		return null;
+	}
+
+	public void clearWarnings() throws SQLException {
+	}
+	
+	public void setTransactionIsolation(int level) throws SQLException {
+		if (level > TRANSACTION_REPEATABLE_READ) {
+			throw new SQLFeatureNotSupportedException();
+		}
+	}
+
+	public int getTransactionIsolation() throws SQLException {
+		return TRANSACTION_REPEATABLE_READ;
+	}
+
+	public void setReadOnly(boolean readOnly) throws SQLException {
+		if (readOnly) {
+			throw new SQLFeatureNotSupportedException("Invidual connections can't be read-only");
+		}
+	}
+
+	public boolean isReadOnly() throws SQLException {
+		return false;
+	}
+	
 	// at some point we will implement this
 
 	public void setAutoCommit(boolean autoCommit) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (isClosed()) {
+			throw new SQLException("Invalid connection");
+		}
+		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, autoCommit);
 	}
 
 	public boolean getAutoCommit() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (isClosed()) {
+			throw new SQLException("Invalid connection");
+		}
+		return DuckDBNative.duckdb_jdbc_get_auto_commit(conn_ref);
 	}
 
 	public PreparedStatement prepareStatement(String sql) throws SQLException {
@@ -91,16 +124,10 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public DatabaseMetaData getMetaData() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return new DuckDBDatabaseMetaData(this);
 	}
 
-	public void setReadOnly(boolean readOnly) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
 
-	public boolean isReadOnly() throws SQLException {
-		return false;
-	}
 
 	public void setCatalog(String catalog) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
@@ -119,14 +146,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void abort(Executor executor) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public SQLWarning getWarnings() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public void clearWarnings() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -153,14 +172,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String nativeSQL(String sql) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public void setTransactionIsolation(int level) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public int getTransactionIsolation() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 

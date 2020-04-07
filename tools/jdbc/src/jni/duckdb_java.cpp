@@ -1,5 +1,6 @@
 #include "nl_cwi_da_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,6 +30,27 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1conne
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	auto conn = new Connection(*db_ref);
 	return env->NewDirectByteBuffer(conn, 0);
+}
+
+JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
+                                                                                          jobject conn_ref_buf,
+                                                                                          jboolean auto_commit) {
+	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_ref) {
+		jclass Exception = env->FindClass("java/sql/SQLException");
+		env->ThrowNew(Exception, "Invalid connection");
+	}
+	conn_ref->context->transaction.SetAutoCommit(auto_commit);
+}
+
+JNIEXPORT jboolean JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
+                                                                                              jobject conn_ref_buf) {
+	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_ref) {
+		jclass Exception = env->FindClass("java/sql/SQLException");
+		env->ThrowNew(Exception, "Invalid connection");
+	}
+	return conn_ref->context->transaction.IsAutoCommit();
 }
 
 JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,

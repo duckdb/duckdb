@@ -39,6 +39,10 @@ public class DuckDBNative {
 	// returns conn_ref connection reference object
 	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref);
 
+	protected static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit);
+
+	protected static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref);
+
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
 	// returns stmt_ref result reference object

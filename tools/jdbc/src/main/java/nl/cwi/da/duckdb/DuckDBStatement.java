@@ -59,6 +59,15 @@ public class DuckDBStatement implements Statement {
 	public Connection getConnection() throws SQLException {
 		return conn;
 	}
+	
+	public SQLWarning getWarnings() throws SQLException {
+		return null;
+	}
+
+	public void clearWarnings() throws SQLException {
+	}
+
+	
 
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
@@ -98,14 +107,6 @@ public class DuckDBStatement implements Statement {
 	}
 	
 	public void cancel() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public SQLWarning getWarnings() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public void clearWarnings() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
