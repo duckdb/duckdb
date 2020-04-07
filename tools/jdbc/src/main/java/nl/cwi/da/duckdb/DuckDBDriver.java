@@ -1,6 +1,5 @@
 package nl.cwi.da.duckdb;
 
-import java.nio.ByteBuffer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
@@ -11,8 +10,6 @@ import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
 
-
-	
 	static {
 		try {
 			DriverManager.registerDriver(new DuckDBDriver());
@@ -27,13 +24,10 @@ public class DuckDBDriver implements java.sql.Driver {
 	}
 
 	public boolean acceptsURL(String url) throws SQLException {
-		System.out.println(url);
-		return url.startsWith("jdbc:duckdb");
+		return url.startsWith("jdbc:duckdb:");
 	}
 
 	public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
-		System.out.println(url);
-
 		DriverPropertyInfo[] ret = {};
 		return ret; // no properties
 	}
@@ -47,7 +41,7 @@ public class DuckDBDriver implements java.sql.Driver {
 	}
 
 	public boolean jdbcCompliant() {
-		return true; // of course
+		return true; // of course!
 	}
 
 	public Logger getParentLogger() throws SQLFeatureNotSupportedException {

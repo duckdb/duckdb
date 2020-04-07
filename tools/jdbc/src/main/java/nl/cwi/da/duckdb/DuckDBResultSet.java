@@ -5,6 +5,7 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -25,71 +26,255 @@ import java.util.Calendar;
 import java.util.Map;
 
 public class DuckDBResultSet implements ResultSet {
-	
+
 	private DuckDBResultSetMetaData meta;
 	private ByteBuffer result_ref;
-	
+	private DuckDBVector[] current_chunk;
+	private int chunk_idx = 0;
+	private boolean finished = false;
+	private boolean was_null;
+
 	public DuckDBResultSet(ByteBuffer result_ref) {
 		this.result_ref = result_ref;
 		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
+		current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
+	}
+
+	public ResultSetMetaData getMetaData() throws SQLException {
+		return meta;
 	}
 
 	public boolean next() throws SQLException {
-		DuckDBNative.duckdb_jdbc_fetch(result_ref);
-
-		// TODO Auto-generated method stub
-		return false;
+		if (isClosed()) {
+			throw new SQLException("closed");
+		}
+		if (finished) {
+			return false;
+		}
+		chunk_idx++;
+		if (chunk_idx > current_chunk[0].length) {
+			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
+			chunk_idx = 0;
+		}
+		if (current_chunk.length == 0) {
+			finished = true;
+			return false;
+		}
+		return true;
 	}
 
 	public void close() throws SQLException {
-		System.out.println("ResultSet.close()");
+		if (result_ref != null) {
+			DuckDBNative.duckdb_jdbc_free_result(result_ref);
+			result_ref = null;
+		}
+	}
 
-		DuckDBNative.duckdb_jdbc_free_result(result_ref);
+	public boolean isClosed() throws SQLException {
+		return result_ref == null;
+	}
+
+	private void check(int columnIndex) throws SQLException {
+		if (columnIndex < 1 || columnIndex > meta.column_count) {
+			throw new SQLException("Column index out of bounds");
+		}
+		if (isClosed()) {
+			throw new SQLException("result set is closed");
+		}
+	}
+
+	public Object getObject(int columnIndex) throws SQLException {
+		switch (meta.column_types[columnIndex - 1]) {
+		case "BOOLEAN":
+			return getBoolean(columnIndex);
+		case "TINYINT":
+			return getByte(columnIndex);
+		case "SMALLINT":
+			return getShort(columnIndex);
+		case "INTEGER":
+			return getInt(columnIndex);
+		case "BIGINT":
+			return getLong(columnIndex);
+		case "FLOAT":
+			return getFloat(columnIndex);
+		case "DOUBLE":
+			return getDouble(columnIndex);
+		case "VARCHAR":
+			return getString(columnIndex);
+		default:
+			throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
+		}
 	}
 
 	public boolean wasNull() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		return was_null;
+	}
+
+	private boolean check_and_null(int columnIndex) throws SQLException {
+		check(columnIndex);
+		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		return was_null;
 	}
 
 	public String getString(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		if (check_and_null(columnIndex)) {
+			return "NULL";
+		}
+		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
+			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
+		}
+		return getObject(columnIndex).toString();
+	}
+
+	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
+		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
+		buf.order(ByteOrder.LITTLE_ENDIAN);
+		buf.position((chunk_idx - 1) * typeWidth);
+		return buf;
 	}
 
 	public boolean getBoolean(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		if (check_and_null(columnIndex)) {
+			return false;
+		}
+		if ("BOOLEAN".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 1).get() == 1;
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).byteValue() == 1;
+		}
+
+		return Boolean.parseBoolean(getObject(columnIndex).toString());
 	}
 
 	public byte getByte(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
+		if ("TINYINT".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 1).get();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).byteValue();
+		}
+		return Byte.parseByte(o.toString());
 	}
 
 	public short getShort(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
+		if ("SMALLINT".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 2).getShort();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).shortValue();
+		}
+		return Short.parseShort(o.toString());
 	}
 
 	public int getInt(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
+		if ("INTEGER".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 4).getInt();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).intValue();
+		}
+		return Integer.parseInt(o.toString());
 	}
 
 	public long getLong(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
+		if ("BIGINT".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 8).getLong();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).longValue();
+		}
+		return Long.parseLong(o.toString());
 	}
 
 	public float getFloat(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return Float.NaN;
+		}
+		if ("FLOAT".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 4).getFloat();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).floatValue();
+		}
+		return Float.parseFloat(o.toString());
 	}
 
 	public double getDouble(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		if (check_and_null(columnIndex)) {
+			return Double.NaN;
+		}
+		if ("DOUBLE".equals(meta.column_types[columnIndex - 1])) {
+			return getbuf(columnIndex, 8).getDouble();
+		}
+		Object o = getObject(columnIndex);
+		if (o instanceof Number) {
+			return ((Number) o).doubleValue();
+		}
+		return Double.parseDouble(o.toString());
+	}
+
+	public int findColumn(String columnLabel) throws SQLException {
+		for (int col_idx = 0; col_idx < meta.column_count; col_idx++) {
+			if (meta.column_names[col_idx].contentEquals(columnLabel)) {
+				return col_idx + 1;
+			}
+		}
+		throw new SQLException("Could not find column with label " + columnLabel);
+	}
+
+	public String getString(String columnLabel) throws SQLException {
+		return getString(findColumn(columnLabel));
+	}
+
+	public boolean getBoolean(String columnLabel) throws SQLException {
+		return getBoolean(findColumn(columnLabel));
+	}
+
+	public byte getByte(String columnLabel) throws SQLException {
+		return getByte(findColumn(columnLabel));
+	}
+
+	public short getShort(String columnLabel) throws SQLException {
+		return getShort(findColumn(columnLabel));
+	}
+
+	public int getInt(String columnLabel) throws SQLException {
+		return getInt(findColumn(columnLabel));
+	}
+
+	public long getLong(String columnLabel) throws SQLException {
+		return getLong(findColumn(columnLabel));
+	}
+
+	public float getFloat(String columnLabel) throws SQLException {
+		return getFloat(findColumn(columnLabel));
+	}
+
+	public double getDouble(String columnLabel) throws SQLException {
+		return getDouble(findColumn(columnLabel));
+	}
+
+	public Object getObject(String columnLabel) throws SQLException {
+		return getObject(findColumn(columnLabel));
 	}
 
 	public BigDecimal getBigDecimal(int columnIndex, int scale) throws SQLException {
@@ -122,46 +307,6 @@ public class DuckDBResultSet implements ResultSet {
 
 	public InputStream getBinaryStream(int columnIndex) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
-	}
-
-	public String getString(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	public boolean getBoolean(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	public byte getByte(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	public short getShort(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	public int getInt(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	public long getLong(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	public float getFloat(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	public double getDouble(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel, int scale) throws SQLException {
@@ -208,28 +353,8 @@ public class DuckDBResultSet implements ResultSet {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	public ResultSetMetaData getMetaData() throws SQLException {
-		return meta;
-	}
-
-	public Object getObject(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	public Object getObject(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	public int findColumn(String columnLabel) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
 	public Reader getCharacterStream(int columnIndex) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public Reader getCharacterStream(String columnLabel) throws SQLException {
@@ -245,23 +370,19 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public boolean isBeforeFirst() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean isAfterLast() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean isFirst() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean isLast() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public void beforeFirst() throws SQLException {
@@ -515,8 +636,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Statement getStatement() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public Object getObject(int columnIndex, Map<String, Class<?>> map) throws SQLException {
@@ -641,11 +761,6 @@ public class DuckDBResultSet implements ResultSet {
 
 	public int getHoldability() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
-	}
-
-	public boolean isClosed() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
 	}
 
 	public void updateNString(int columnIndex, String nString) throws SQLException {
@@ -823,7 +938,7 @@ public class DuckDBResultSet implements ResultSet {
 	public <T> T getObject(String columnLabel, Class<T> type) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
-	
+
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}

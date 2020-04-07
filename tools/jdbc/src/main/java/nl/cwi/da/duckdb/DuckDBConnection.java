@@ -8,6 +8,7 @@ import java.sql.Clob;
 import java.sql.DatabaseMetaData;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLClientInfoException;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -23,39 +24,27 @@ import java.util.concurrent.Executor;
 public class DuckDBConnection implements java.sql.Connection {
 	protected ByteBuffer conn_ref = null;
 
-	
 	public DuckDBConnection(DuckDBDatabase db) {
 		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
 	}
 
 	public Statement createStatement() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Connection was closed");
+		}
 		return new DuckDBStatement(this);
 	}
 
-	public PreparedStatement prepareStatement(String sql) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	
-
-	public void setAutoCommit(boolean autoCommit) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	public boolean getAutoCommit() throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
 	public void commit() throws SQLException {
-		// TODO Auto-generated method stub
-
+		Statement s = createStatement();
+		s.execute("COMMIT");
+		s.close();
 	}
 
 	public void rollback() throws SQLException {
-		// TODO Auto-generated method stub
-
+		Statement s = createStatement();
+		s.execute("ROLLBACK");
+		s.close();
 	}
 
 	public void close() throws SQLException {
@@ -68,56 +57,89 @@ public class DuckDBConnection implements java.sql.Connection {
 	public boolean isClosed() throws SQLException {
 		return conn_ref == null;
 	}
-	
-	
+
 	public boolean isValid(int timeout) throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		if (isClosed()) {
+			return false;
+		}
+		// run a query just to be sure
+		Statement s = createStatement();
+		ResultSet rs = s.executeQuery("SELECT 42");
+		if (!rs.next() || rs.getInt(1) != 42) {
+			rs.close();
+			s.close();
+			return false;
+		}
+		rs.close();
+		s.close();
+
+		return true;
 	}
 
+	// at some point we will implement this
+
+	public void setAutoCommit(boolean autoCommit) throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public boolean getAutoCommit() throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public PreparedStatement prepareStatement(String sql) throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
 
 	public DatabaseMetaData getMetaData() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public void setReadOnly(boolean readOnly) throws SQLException {
-		// TODO Auto-generated method stub
-
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean isReadOnly() throws SQLException {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	public void setCatalog(String catalog) throws SQLException {
-		// TODO Auto-generated method stub
-
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public String getCatalog() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
-	
+
 	public void setSchema(String schema) throws SQLException {
-		// TODO Auto-generated method stub
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public String getSchema() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
-	
-	// maybe sometime
 
 	public void abort(Executor executor) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	// gunk
-	
+	public SQLWarning getWarnings() throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public void clearWarnings() throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public Clob createClob() throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	public Blob createBlob() throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	// less likely to implement this stuff
+
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -139,14 +161,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public int getTransactionIsolation() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public SQLWarning getWarnings() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public void clearWarnings() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -222,15 +236,6 @@ public class DuckDBConnection implements java.sql.Connection {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	
-	public Clob createClob() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public Blob createBlob() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
 	public NClob createNClob() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -238,7 +243,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	public SQLXML createSQLXML() throws SQLException {
 		throw new SQLFeatureNotSupportedException(); // hell no
 	}
-
 
 	public void setClientInfo(String name, String value) throws SQLClientInfoException {
 		throw new SQLClientInfoException();

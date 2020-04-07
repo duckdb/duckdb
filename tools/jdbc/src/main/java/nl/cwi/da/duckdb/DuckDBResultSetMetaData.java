@@ -13,13 +13,9 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		this.column_types = column_types;
 	}
 
-	public DuckDBResultSetMetaData() {
-		// TODO Auto-generated constructor stub
-	}
-
-	private int column_count;
-	private String[] column_names;
-	private String[] column_types;
+	protected int column_count;
+	protected String[] column_names;
+	protected String[] column_types;
 
 	public int getColumnCount() throws SQLException {
 		return column_count;
@@ -33,7 +29,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		if (column > column_count) {
 			throw new SQLException("Column index out of bounds");
 		}
-		return column_names[column];
+		return column_names[column - 1];
 	}
 
 	public int getColumnType(int column) throws SQLException {
@@ -50,7 +46,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		if (column > column_count) {
 			throw new SQLException("Column index out of bounds");
 		}
-		return column_types[column];
+		return column_types[column - 1];
 	}
 
 	public boolean isReadOnly(int column) throws SQLException {
@@ -61,6 +57,18 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		return false;
 	}
 
+	public boolean isDefinitelyWritable(int column) throws SQLException {
+		return false;
+	}
+
+	public boolean isCaseSensitive(int column) throws SQLException {
+		return true;
+	}
+
+	public int isNullable(int column) throws SQLException {
+		return columnNullable;
+	}
+
 	public String getSchemaName(int column) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -69,19 +77,11 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	public boolean isCaseSensitive(int column) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
 	public boolean isSearchable(int column) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean isCurrency(int column) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public int isNullable(int column) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -109,10 +109,6 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	public boolean isDefinitelyWritable(int column) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
 	public String getColumnClassName(int column) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -124,5 +120,4 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
-
 }

@@ -13,7 +13,6 @@ public class DuckDBStatement implements Statement {
 	private DuckDBConnection conn;
 	private DuckDBResultSet result = null;
 	private ByteBuffer stmt_ref = null;
-
 	
 	public DuckDBStatement(DuckDBConnection conn) {
 		this.conn = conn;
@@ -47,8 +46,10 @@ public class DuckDBStatement implements Statement {
 	}
 
 	public void close() throws SQLException {
-		DuckDBNative.duckdb_jdbc_release(stmt_ref);
-		stmt_ref = null;
+		if (stmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(stmt_ref);
+			stmt_ref = null;
+		}
 	}
 	
 	public boolean isClosed() throws SQLException {
