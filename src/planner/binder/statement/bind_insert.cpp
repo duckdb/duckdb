@@ -85,8 +85,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		auto &node = (SelectNode &)*stmt.select_statement->node;
 		if (node.from_table->type == TableReferenceType::EXPRESSION_LIST) {
 			auto &expr_list = (ExpressionListRef &)*node.from_table;
-			expr_list.expected_types.resize(table->columns.size());
-			expr_list.expected_names.resize(table->columns.size());
+			expr_list.expected_types.resize(expected_columns);
+			expr_list.expected_names.resize(expected_columns);
 
 			assert(expr_list.values.size() > 0);
 			CheckInsertColumnCountMismatch(expected_columns, expr_list.values[0].size(), stmt.columns.size() != 0,

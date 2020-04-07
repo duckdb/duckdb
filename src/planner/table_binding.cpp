@@ -66,6 +66,7 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
 			continue;
 		}
+		assert(!column.name.empty());
 		select_list.push_back(make_unique<ColumnRefExpression>(column.name, alias));
 	}
 }
@@ -75,6 +76,7 @@ GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, ve
 	assert(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
+		assert(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
 		}
@@ -104,6 +106,7 @@ BindResult GenericBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 void GenericBinding::GenerateAllColumnExpressions(BindContext &context,
                                                   vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
+		assert(!column_name.empty());
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}
 }

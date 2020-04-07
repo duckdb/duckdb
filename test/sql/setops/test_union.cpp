@@ -70,6 +70,12 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	result = con.Query("(SELECT a FROM test ORDER BY a+1) UNION SELECT b FROM test2 ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->types.size() == 1);
+
+	// unions with SELECT * also allows orders
+	result = con.Query("SELECT * FROM test UNION SELECT * FROM test2 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT * FROM test UNION SELECT * FROM test2 ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 }
 
 TEST_CASE("Test union with nulls", "[setops]") {

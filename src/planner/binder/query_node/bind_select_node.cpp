@@ -121,6 +121,9 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &typ
 					auto &expr = distinct.target_distincts[i];
 					assert(expr->type == ExpressionType::BOUND_COLUMN_REF);
 					auto &bound_colref = (BoundColumnRefExpression &)*expr;
+					if (bound_colref.binding.column_index == INVALID_INDEX) {
+						throw BinderException("Ambiguous name in DISTINCT ON!");
+					}
 					assert(bound_colref.binding.column_index < types.size());
 					bound_colref.return_type = types[bound_colref.binding.column_index];
 				}
@@ -133,6 +136,9 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &typ
 				auto &expr = order.orders[i].expression;
 				assert(expr->type == ExpressionType::BOUND_COLUMN_REF);
 				auto &bound_colref = (BoundColumnRefExpression &)*expr;
+				if (bound_colref.binding.column_index == INVALID_INDEX) {
+					throw BinderException("Ambiguous name in ORDER BY!");
+				}
 				assert(bound_colref.binding.column_index < types.size());
 				bound_colref.return_type = types[bound_colref.binding.column_index];
 			}

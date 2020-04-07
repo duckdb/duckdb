@@ -34,10 +34,10 @@ bool LimitModifier::Equals(const ResultModifier *other_) const {
 		return false;
 	}
 	auto &other = (LimitModifier&) *other_;
-	if (BaseExpression::Equals(limit.get(), other.limit.get())) {
+	if (!BaseExpression::Equals(limit.get(), other.limit.get())) {
 		return false;
 	}
-	if (BaseExpression::Equals(offset.get(), other.offset.get())) {
+	if (!BaseExpression::Equals(offset.get(), other.offset.get())) {
 		return false;
 	}
 	return true;
