@@ -160,95 +160,29 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(StringInstrNull)
 
-//------------------------- CONTAINS INSTR -----------------------------------------
-DUCKDB_BENCHMARK(StringContainsINSTR, "[string]")
+//------------------------- CONTAINS  -----------------------------------------
+DUCKDB_BENCHMARK(StringContains, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {
-	return "SELECT CONTAINS_INSTR(s1, 'h') FROM strings";
+	return "SELECT CONTAINS(s1, 'h') FROM strings";
 }
 string BenchmarkInfo() override {
-	return "STRING CONTAINS INSTR";
+	return "STRING CONTAINS";
 }
-FINISH_BENCHMARK(StringContainsINSTR)
+FINISH_BENCHMARK(StringContains)
 
-DUCKDB_BENCHMARK(StringContainsNullINSTR, "[string]")
+DUCKDB_BENCHMARK(StringContainsNull, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {
-	return "SELECT CONTAINS_INSTR(s1, '') FROM strings";
+	return "SELECT CONTAINS(s1, '') FROM strings";
 }
 string BenchmarkInfo() override {
-	return "STRING CONTAINS INSTR";
+	return "STRING CONTAINS";
 }
-FINISH_BENCHMARK(StringContainsNullINSTR)
+FINISH_BENCHMARK(StringContainsNull)
 //-----------------------------------------------------------------------------
 
-//------------------------- CONTAINS KMP -----------------------------------------
-DUCKDB_BENCHMARK(StringContainsKMP, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_KMP(s1, 'h') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS KMP";
-}
-FINISH_BENCHMARK(StringContainsKMP)
-
-DUCKDB_BENCHMARK(StringContainsNullKMP, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_KMP(s1, '') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS KMP";
-}
-FINISH_BENCHMARK(StringContainsNullKMP)
-//-----------------------------------------------------------------------------
-
-//------------------------- CONTAINS BM -----------------------------------------
-DUCKDB_BENCHMARK(StringContainsBM, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_BM(s1, 'h') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS BM";
-}
-FINISH_BENCHMARK(StringContainsBM)
-
-DUCKDB_BENCHMARK(StringContainsNullBM, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_BM(s1, '') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS BM";
-}
-FINISH_BENCHMARK(StringContainsNullBM)
-//-----------------------------------------------------------------------------
-
-//------------------------- CONTAINS STRSTR -----------------------------------------
-DUCKDB_BENCHMARK(StringContainsSTRSTR, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_STRSTR(s1, 'h') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS STRSTR";
-}
-FINISH_BENCHMARK(StringContainsSTRSTR)
-
-DUCKDB_BENCHMARK(StringContainsNullSTRSTR, "[string]")
-STRING_DATA_GEN_BODY(4)
-string GetQuery() override {
-	return "SELECT CONTAINS_STRSTR(s1, '') FROM strings";
-}
-string BenchmarkInfo() override {
-	return "STRING CONTAINS STRSTR";
-}
-FINISH_BENCHMARK(StringContainsNullSTRSTR)
-//-----------------------------------------------------------------------------
-
-//------------------------- CONTAINS LIKE -----------------------------------------
+//------------------------- CONTAINS LIKE -------------------------------------
 DUCKDB_BENCHMARK(StringContainsLike, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {
@@ -259,7 +193,6 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(StringContainsLike)
 //-----------------------------------------------------------------------------
-
 
 DUCKDB_BENCHMARK(StringRegex, "[string]")
 STRING_DATA_GEN_BODY(4)
