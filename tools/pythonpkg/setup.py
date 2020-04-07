@@ -65,9 +65,6 @@ setup(
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
     long_description = '',
-    setup_requires=[
-          'pybind11>=2.4'
-    ],
     install_requires=[ # these versions are still available for Python 2, newer ones aren't
          'numpy>=1.14', 
          'pandas>=0.23',
