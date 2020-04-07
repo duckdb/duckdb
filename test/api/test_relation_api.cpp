@@ -243,6 +243,36 @@ TEST_CASE("Test combinations of joins", "[api]") {
 	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	// set ops involving joins
+	REQUIRE_NOTHROW(result = vjoin->Union(vjoin)->Distinct()->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	// do a bunch of joins in a loop
+	auto v1tmp = v1;
+	auto v2tmp = v2;
+	for(idx_t i = 0; i < 10; i++) {
+		REQUIRE_NOTHROW(v1tmp = v1tmp->Join(v2tmp->Alias(to_string(i)), "i, j"));
+	}
+	REQUIRE_NOTHROW(result = v1tmp->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	// now add on some projections and such
+	auto complex_join = v1tmp->Order("i")->Limit(2)->Order("i DESC")->Limit(1)->Project("i+1, j+1");
+	for(idx_t i = 0; i < 3; i++) {
+		REQUIRE_NOTHROW(result = complex_join->Execute());
+		REQUIRE(CHECK_COLUMN(result, 0, {3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {6}));
+	}
+
+	// create and query a view
+	REQUIRE_NOTHROW(complex_join->CreateView("test123"));
+	result = con.Query("SELECT * FROM test123");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {6}));
+
 }
 
 
