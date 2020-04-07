@@ -19,7 +19,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		if (binding->HasMatchingBinding(column_name)) {
 			// check if the binding is ignored
 			string total_binding = kv.first + "." + column_name;
-			if (hidden_columns.find(total_binding) == hidden_columns.end()) {
+			if (hidden_columns.find(total_binding) != hidden_columns.end()) {
 				// ignored binding: continue
 				continue;
 			}

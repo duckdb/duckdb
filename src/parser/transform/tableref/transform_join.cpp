@@ -7,21 +7,6 @@
 using namespace duckdb;
 using namespace std;
 
-static string get_tablename_union(TableRef *ref) {
-	switch (ref->type) {
-	case TableReferenceType::BASE_TABLE:
-		if (ref->alias.size() > 0) {
-			return ref->alias;
-		}
-		return ((BaseTableRef *)ref)->table_name;
-	case TableReferenceType::SUBQUERY:
-		assert(ref->alias.length() > 0);
-		return ref->alias;
-	default:
-		throw ParserException("Cannot get table name for USING");
-	}
-}
-
 unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	auto result = make_unique<JoinRef>();
 	switch (root->jointype) {
