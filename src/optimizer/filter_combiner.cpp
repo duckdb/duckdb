@@ -291,7 +291,8 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			// check the existing constant comparisons to see if we can do any pruning
 			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 		}
-	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+	}
+	else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		auto &comparison = (BoundComparisonExpression &)*expr;
 		if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
 		    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
@@ -362,10 +363,11 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			}
 		}
 		return FilterResult::SUCCESS;
-	} else {
+	}
+
 		// only comparisons supported for now
 		return FilterResult::UNSUPPORTED;
-	}
+
 }
 
 static bool IsGreaterThan(ExpressionType type) {

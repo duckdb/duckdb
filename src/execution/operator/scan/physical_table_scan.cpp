@@ -68,7 +68,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
-	return tableref.name;
+	return tableref.name + " " + expression->GetName();
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
