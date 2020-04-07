@@ -248,6 +248,19 @@ string BenchmarkInfo() override {
 FINISH_BENCHMARK(StringContainsNullSTRSTR)
 //-----------------------------------------------------------------------------
 
+//------------------------- CONTAINS LIKE -----------------------------------------
+DUCKDB_BENCHMARK(StringContainsLike, "[string]")
+STRING_DATA_GEN_BODY(4)
+string GetQuery() override {
+	return "SELECT s1 FROM strings WHERE s1 LIKE '%h%'";
+}
+string BenchmarkInfo() override {
+	return "STRING CONTAINS LIKE";
+}
+FINISH_BENCHMARK(StringContainsLike)
+//-----------------------------------------------------------------------------
+
+
 DUCKDB_BENCHMARK(StringRegex, "[string]")
 STRING_DATA_GEN_BODY(4)
 string GetQuery() override {
