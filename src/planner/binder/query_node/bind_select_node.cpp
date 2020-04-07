@@ -37,8 +37,6 @@ unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition
 }
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
-	ExpressionBinder::BindTableNames(*this, *expr);
-
 	// we treat the Distinct list as a order by
 	auto bound_expr = order_binder.Bind(move(expr));
 	if (!bound_expr) {
@@ -202,7 +200,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder(result->projection_index, statement, alias_map, projection_map);
+	OrderBinder order_binder(*this, result->projection_index, statement, alias_map, projection_map);
 	BindModifiers(order_binder, statement, *result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;

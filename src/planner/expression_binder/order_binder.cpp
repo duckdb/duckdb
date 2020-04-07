@@ -8,12 +8,12 @@ using namespace duckdb;
 using namespace std;
 
 
-OrderBinder::OrderBinder(idx_t projection_index, unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map, idx_t max_count)
-	: projection_index(projection_index), max_count(max_count), extra_list(nullptr), alias_map(alias_map), projection_map(projection_map) {
+OrderBinder::OrderBinder(Binder &binder, idx_t projection_index, unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map, idx_t max_count)
+	: binder(binder), projection_index(projection_index), max_count(max_count), extra_list(nullptr), alias_map(alias_map), projection_map(projection_map) {
 
 }
-OrderBinder::OrderBinder(idx_t projection_index, SelectNode &node, unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
-    : projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+OrderBinder::OrderBinder(Binder &binder, idx_t projection_index, SelectNode &node, unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
+    : binder(binder), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
 }
@@ -69,6 +69,8 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		break;
 	}
 	// general case
+	// first bind the table names of this entry
+	ExpressionBinder::BindTableNames(binder, *expr);
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = projection_map.find(expr.get());
 	if (entry != projection_map.end()) {

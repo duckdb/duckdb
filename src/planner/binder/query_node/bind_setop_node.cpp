@@ -88,7 +88,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		GatherAliases(*result, alias_map, expression_map);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder(result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
+		OrderBinder order_binder(*this, result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
 		BindModifiers(order_binder, statement, *result);
 	}
 
