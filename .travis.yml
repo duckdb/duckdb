@@ -43,8 +43,7 @@ matrix:
         - (cd examples/programmatic-querying; make)
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
-
+        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
 
     - os: osx
       name: Xcode 11.3
@@ -62,7 +61,7 @@ matrix:
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
 
       after_success:
-        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli
+        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: windows
@@ -81,7 +80,7 @@ matrix:
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
         - test/Release/unittest.exe
-        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe build/release/tools/jdbc/DuckDBJ.jar
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe
