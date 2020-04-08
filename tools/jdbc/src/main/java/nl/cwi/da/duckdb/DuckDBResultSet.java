@@ -70,7 +70,7 @@ public class DuckDBResultSet implements ResultSet {
 		chunk_idx++;
 		if (chunk_idx > current_chunk[0].length) {
 			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
-			chunk_idx = 0;
+			chunk_idx = 1;
 		}
 		if (current_chunk.length == 0) {
 			finished = true;

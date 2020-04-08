@@ -52,7 +52,7 @@ public class DuckDBStatement implements Statement {
 		if (stmt_ref != null) {
 			DuckDBNative.duckdb_jdbc_release(stmt_ref);
 			stmt_ref = null;
-		} 
+		}
 		conn = null;
 	}
 

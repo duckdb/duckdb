@@ -287,12 +287,67 @@ public class TestDuckDBJDBC {
 		stmt1.close();
 	}
 
+	public static void test_big_data() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		int rows = 10000;
+		stmt.execute("CREATE TABLE a (i iNTEGER)");
+		for (int i = 0; i < rows; i++) {
+			stmt.execute("INSERT INTO a VALUES (" + i + ")");
+		}
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT CAST(i AS SMALLINT), CAST(i AS INTEGER), CAST(i AS BIGINT), CAST(i AS FLOAT), CAST(i AS DOUBLE), CAST(i as STRING), NULL FROM a");
+		int count = 0;
+		while (rs.next()) {
+			for (int col = 1; col <= 6; col++) {
+				assertEquals(rs.getShort(col), (short) count);
+				assertFalse(rs.wasNull());
+				assertEquals(rs.getInt(col), (int) count);
+				assertFalse(rs.wasNull());
+				assertEquals(rs.getLong(col), (long) count);
+				assertFalse(rs.wasNull());
+				assertEquals(rs.getFloat(col), (float) count, 0.001);
+				assertFalse(rs.wasNull());
+				assertEquals(rs.getDouble(col), (double) count, 0.001);
+				assertFalse(rs.wasNull());
+				assertEquals(Double.parseDouble(rs.getString(col)), (double) count, 0.001);
+				assertFalse(rs.wasNull());
+				Object o = rs.getObject(col);
+				assertFalse(rs.wasNull());
+			}
+			short null_short = rs.getShort(7);
+			assertTrue(rs.wasNull());
+			int null_int = rs.getInt(7);
+			assertTrue(rs.wasNull());
+			long null_long = rs.getLong(7);
+			assertTrue(rs.wasNull());
+			float null_float = rs.getFloat(7);
+			assertTrue(rs.wasNull());
+			double null_double = rs.getDouble(7);
+			assertTrue(rs.wasNull());
+			String null_string = rs.getString(7);
+			assertTrue(rs.wasNull());
+			Object null_object = rs.getObject(7);
+			assertTrue(rs.wasNull());
+
+			count++;
+		}
+
+		assertEquals(rows, count);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		test_connection();
 		test_result();
 		test_empty_table();
 		test_broken_next();
 		test_multiple_connections();
+		test_big_data();
 		System.out.println("OK");
 	}
 }
