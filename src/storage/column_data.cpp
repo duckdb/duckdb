@@ -45,15 +45,16 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void ColumnScanState::Next() {
-    //! There is no column segment
-    if(!current){
-        return;
-    }
+	//! There is no column segment
+	if (!current) {
+		return;
+	}
 	vector_index++;
 	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
 		current = (ColumnSegment *)current->next.get();
 		vector_index = 0;
 		initialized = false;
+		segment_checked = false;
 	}
 }
 

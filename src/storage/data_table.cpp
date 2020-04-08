@@ -129,50 +129,55 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 bool DataTable::CheckZonemap(TableScanState &state, vector<TableFilter> &table_filters, idx_t &current_row) {
 	bool readSegment = true;
 	for (auto &table_filter : table_filters) {
-		switch (state.column_scans[table_filter.column_index].current->type) {
-		case TypeId::INT8: {
-			int8_t constant = table_filter.constant.value_.tinyint;
-			readSegment &= checkZonemap<int8_t>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::INT16: {
-			int16_t constant = table_filter.constant.value_.smallint;
-			readSegment &= checkZonemap<int16_t>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::INT32: {
-			int32_t constant = table_filter.constant.value_.integer;
-			readSegment &= checkZonemap<int32_t>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::INT64: {
-			int64_t constant = table_filter.constant.value_.bigint;
-			readSegment &= checkZonemap<int64_t>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::FLOAT: {
-			float constant = table_filter.constant.value_.float_;
-			readSegment &= checkZonemap<float>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::DOUBLE: {
-			double constant = table_filter.constant.value_.double_;
-			readSegment &= checkZonemap<double>(state, table_filter, constant);
-			break;
-		}
-		case TypeId::VARCHAR: {
-			//! we can only compare the first 7 bytes
-			size_t value_size = table_filter.constant.str_value.size() > 7 ? 7 : table_filter.constant.str_value.size();
-			string constant;
-			for (size_t i = 0; i < value_size; i++) {
-				constant += table_filter.constant.str_value[i];
+		if (!state.column_scans[table_filter.column_index].segment_checked) {
+			state.column_scans[table_filter.column_index].segment_checked = true;
+			switch (state.column_scans[table_filter.column_index].current->type) {
+			case TypeId::INT8: {
+				int8_t constant = table_filter.constant.value_.tinyint;
+				readSegment &= checkZonemap<int8_t>(state, table_filter, constant);
+				break;
 			}
-			readSegment &= checkZonemapString(state, table_filter, constant.c_str());
-			break;
+			case TypeId::INT16: {
+				int16_t constant = table_filter.constant.value_.smallint;
+				readSegment &= checkZonemap<int16_t>(state, table_filter, constant);
+				break;
+			}
+			case TypeId::INT32: {
+				int32_t constant = table_filter.constant.value_.integer;
+				readSegment &= checkZonemap<int32_t>(state, table_filter, constant);
+				break;
+			}
+			case TypeId::INT64: {
+				int64_t constant = table_filter.constant.value_.bigint;
+				readSegment &= checkZonemap<int64_t>(state, table_filter, constant);
+				break;
+			}
+			case TypeId::FLOAT: {
+				float constant = table_filter.constant.value_.float_;
+				readSegment &= checkZonemap<float>(state, table_filter, constant);
+				break;
+			}
+			case TypeId::DOUBLE: {
+				double constant = table_filter.constant.value_.double_;
+				readSegment &= checkZonemap<double>(state, table_filter, constant);
+				break;
+			}
+			case TypeId::VARCHAR: {
+				//! we can only compare the first 7 bytes
+				size_t value_size =
+				    table_filter.constant.str_value.size() > 7 ? 7 : table_filter.constant.str_value.size();
+				string constant;
+				for (size_t i = 0; i < value_size; i++) {
+					constant += table_filter.constant.str_value[i];
+				}
+				readSegment &= checkZonemapString(state, table_filter, constant.c_str());
+				break;
+			}
+			default:
+				throw NotImplementedException("Unimplemented type for uncompressed segment");
+			}
 		}
-		default:
-			throw NotImplementedException("Unimplemented type for uncompressed segment");
-		}
+
 		if (!readSegment) {
 			//! We can skip this partition
 			idx_t vectorsToSkip =

@@ -1,4 +1,3 @@
-#include <utf8proc_wrapper.hpp>
 #include "duckdb/optimizer/regex_range_filter.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -11,7 +10,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "re2/re2.h"
 
 using namespace duckdb;
 using namespace std;
