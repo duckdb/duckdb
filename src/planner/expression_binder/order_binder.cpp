@@ -3,10 +3,11 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder*> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map, idx_t max_count)
 	: binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr), alias_map(alias_map), projection_map(projection_map) {
@@ -92,4 +93,6 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(move(expr));
 	return result;
+}
+
 }

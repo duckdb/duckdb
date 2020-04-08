@@ -10,6 +10,7 @@
 
 #include "duckdb/main/relation.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 
