@@ -199,7 +199,7 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
 			break;
 		case TypeId::INT64:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
 			break;
 		case TypeId::FLOAT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));

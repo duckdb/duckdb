@@ -196,11 +196,33 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+	
+	public static void test_broken_next() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+	
+		stmt.execute("CREATE TABLE t0(c0 INT8, c1 VARCHAR)");
+		stmt.execute("INSERT INTO t0(c1, c0) VALUES (-315929644, 1), (-315929644, -315929644), (-634993846, -1981637379)");
+		stmt.execute("INSERT INTO t0(c0, c1) VALUES (-433000283, -433000283)");
+		stmt.execute("INSERT INTO t0(c0) VALUES (-995217820)");
+		stmt.execute("INSERT INTO t0(c1, c0) VALUES (-315929644, -315929644)");
+
+		ResultSet rs = stmt.executeQuery("SELECT c0 FROM t0");
+		while(rs.next()) {
+			assertTrue(!rs.getObject(1).equals(null));
+		}
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
 
 	public static void main(String[] args) throws Exception {
 		test_connection();
 		test_result();
 		test_empty_table();
+		test_broken_next();
 		System.out.println("OK");
 	}
 }
