@@ -49,6 +49,9 @@ public:
 	unique_ptr<QueryResult> SQL(string name, string sql);
 
 	virtual unique_ptr<TableRef> GetTableRef();
+	virtual bool IsReadOnly() {
+		return true;
+	}
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);

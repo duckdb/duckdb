@@ -686,9 +686,14 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	});
 }
 
-
 unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	string query;
+	if (query_verification_enabled && relation->IsReadOnly()) {
+		// verify read only statements by running a select statement
+		auto select = make_unique<SelectStatement>();
+		select->node = relation->GetQueryNode();
+		RunStatement(query, move(select), false);
+	}
 	auto relation_stmt = make_unique<RelationStatement>(relation);
 	return RunStatement(query, move(relation_stmt), false);
 }

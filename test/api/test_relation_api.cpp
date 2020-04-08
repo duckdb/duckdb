@@ -4,9 +4,10 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test simple relation API", "[api]") {
+TEST_CASE("Test simple relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
 
@@ -150,9 +151,10 @@ TEST_CASE("Test simple relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 }
 
-TEST_CASE("Test combinations of set operations", "[api]") {
+TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values;
 
@@ -212,9 +214,10 @@ TEST_CASE("Test combinations of set operations", "[api]") {
 
 }
 
-TEST_CASE("Test combinations of joins", "[api]") {
+TEST_CASE("Test combinations of joins", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values, vjoin;
 
@@ -276,9 +279,10 @@ TEST_CASE("Test combinations of joins", "[api]") {
 }
 
 
-TEST_CASE("Test view creation of relations", "[api]") {
+TEST_CASE("Test view creation of relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl, filter, proj, proj2;
 
@@ -333,9 +337,10 @@ TEST_CASE("Test view creation of relations", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
 }
 
-TEST_CASE("Test table creations using the relation API", "[api]") {
+TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values;
 
@@ -362,9 +367,10 @@ TEST_CASE("Test table creations using the relation API", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
 }
 
-TEST_CASE("Test table deletions and updates", "[api]") {
+TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
