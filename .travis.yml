@@ -74,8 +74,8 @@ matrix:
 
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - choco install javaruntime -y --force
-        - choco install curl -y --force
+        - choco install jdk8 -y --force
+        - refreshenv
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
