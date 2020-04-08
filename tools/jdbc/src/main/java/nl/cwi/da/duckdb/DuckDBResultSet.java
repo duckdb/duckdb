@@ -27,21 +27,27 @@ import java.util.Map;
 
 public class DuckDBResultSet implements ResultSet {
 
+	private DuckDBStatement stmt;
 	private DuckDBResultSetMetaData meta;
+
 	private ByteBuffer result_ref;
 	private DuckDBVector[] current_chunk;
 	private int chunk_idx = 0;
 	private boolean finished = false;
 	private boolean was_null;
 
-	public DuckDBResultSet(ByteBuffer result_ref) {
+	public DuckDBResultSet(DuckDBStatement stmt, ByteBuffer result_ref) {
+		this.stmt = stmt;
 		this.result_ref = result_ref;
 		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
 		current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
 		if (current_chunk.length == 0) {
 			finished = true;
 		}
+	}
 
+	public Statement getStatement() throws SQLException {
+		return stmt;
 	}
 
 	public ResultSetMetaData getMetaData() throws SQLException {
@@ -635,10 +641,6 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public void moveToCurrentRow() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
-	}
-
-	public Statement getStatement() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 

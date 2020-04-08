@@ -21,9 +21,9 @@ public class TestDuckDBJDBC {
 	private static void assertEquals(Object a, Object b) throws Exception {
 		assertTrue(a.equals(b));
 	}
-	
+
 	private static void assertEquals(double a, double b, double epsilon) throws Exception {
-		assertTrue(Math.abs(a-b) < epsilon);
+		assertTrue(Math.abs(a - b) < epsilon);
 	}
 
 	private static void fail() throws Exception {
@@ -167,7 +167,7 @@ public class TestDuckDBJDBC {
 
 		assertEquals(rs.getInt("b"), 4);
 		assertEquals(rs.getString("b"), "4.2");
-	assertEquals(rs.getDouble("b"), 4.2, 0.001);
+		assertEquals(rs.getDouble("b"), 4.2, 0.001);
 		assertTrue(rs.getObject("b").equals(new Double(4.2)));
 
 		assertFalse(rs.next());
@@ -196,20 +196,20 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
-	
+
 	public static void test_broken_next() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-	
 		stmt.execute("CREATE TABLE t0(c0 INT8, c1 VARCHAR)");
-		stmt.execute("INSERT INTO t0(c1, c0) VALUES (-315929644, 1), (-315929644, -315929644), (-634993846, -1981637379)");
+		stmt.execute(
+				"INSERT INTO t0(c1, c0) VALUES (-315929644, 1), (-315929644, -315929644), (-634993846, -1981637379)");
 		stmt.execute("INSERT INTO t0(c0, c1) VALUES (-433000283, -433000283)");
 		stmt.execute("INSERT INTO t0(c0) VALUES (-995217820)");
 		stmt.execute("INSERT INTO t0(c1, c0) VALUES (-315929644, -315929644)");
 
 		ResultSet rs = stmt.executeQuery("SELECT c0 FROM t0");
-		while(rs.next()) {
+		while (rs.next()) {
 			assertTrue(!rs.getObject(1).equals(null));
 		}
 
@@ -218,11 +218,81 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_multiple_connections() throws Exception {
+		Connection conn1 = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt1 = conn1.createStatement();
+		Connection conn2 = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt2 = conn2.createStatement();
+		Statement stmt3 = conn2.createStatement();
+
+		ResultSet rs1 = stmt1.executeQuery("SELECT 42");
+		assertTrue(rs1.next());
+		assertEquals(42, rs1.getInt(1));
+		rs1.close();
+
+		ResultSet rs2 = stmt2.executeQuery("SELECT 43");
+		assertTrue(rs2.next());
+		assertEquals(43, rs2.getInt(1));
+
+		ResultSet rs3 = stmt3.executeQuery("SELECT 44");
+		assertTrue(rs3.next());
+		assertEquals(44, rs3.getInt(1));
+		rs3.close();
+
+		// creative closing sequence should also work
+		stmt2.close();
+
+		rs3 = stmt3.executeQuery("SELECT 44");
+		assertTrue(rs3.next());
+		assertEquals(44, rs3.getInt(1));
+
+		stmt2.close();
+		rs2.close();
+		rs3.close();
+
+		System.gc();
+		System.gc();
+
+		// stmt1 still works
+		rs1 = stmt1.executeQuery("SELECT 42");
+		assertTrue(rs1.next());
+		assertEquals(42, rs1.getInt(1));
+		rs1.close();
+
+		// stmt3 still works
+		rs3 = stmt3.executeQuery("SELECT 42");
+		assertTrue(rs3.next());
+		assertEquals(42, rs3.getInt(1));
+		rs3.close();
+
+		conn2.close();
+
+		stmt3.close();
+
+		rs2 = null;
+		rs3 = null;
+		stmt2 = null;
+		stmt3 = null;
+		conn2 = null;
+
+		System.gc();
+		System.gc();
+
+		// stmt1 still works
+		rs1 = stmt1.executeQuery("SELECT 42");
+		assertTrue(rs1.next());
+		assertEquals(42, rs1.getInt(1));
+		rs1.close();
+		conn1.close();
+		stmt1.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		test_connection();
 		test_result();
 		test_empty_table();
 		test_broken_next();
+		test_multiple_connections();
 		System.out.println("OK");
 	}
 }

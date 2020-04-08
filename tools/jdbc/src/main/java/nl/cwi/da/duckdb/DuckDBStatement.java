@@ -13,16 +13,16 @@ public class DuckDBStatement implements Statement {
 	private DuckDBConnection conn;
 	private DuckDBResultSet result = null;
 	private ByteBuffer stmt_ref = null;
-	
+
 	public DuckDBStatement(DuckDBConnection conn) {
 		this.conn = conn;
 	}
-	
+
 	public boolean execute(String sql) throws SQLException {
 		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
 		Object[] params = {};
 		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-		result = new DuckDBResultSet(result_ref);
+		result = new DuckDBResultSet(this, result_ref);
 		return true;
 	}
 
@@ -32,7 +32,7 @@ public class DuckDBStatement implements Statement {
 		}
 		return result;
 	}
-	
+
 	public ResultSet executeQuery(String sql) throws SQLException {
 		execute(sql);
 		return getResultSet();
@@ -51,23 +51,21 @@ public class DuckDBStatement implements Statement {
 			stmt_ref = null;
 		}
 	}
-	
+
 	public boolean isClosed() throws SQLException {
 		return stmt_ref == null;
 	}
-	
+
 	public Connection getConnection() throws SQLException {
 		return conn;
 	}
-	
+
 	public SQLWarning getWarnings() throws SQLException {
 		return null;
 	}
 
 	public void clearWarnings() throws SQLException {
 	}
-
-	
 
 	public <T> T unwrap(Class<T> iface) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
@@ -77,7 +75,6 @@ public class DuckDBStatement implements Statement {
 		throw new SQLFeatureNotSupportedException();
 	}
 
-	
 	public int getMaxFieldSize() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -105,7 +102,7 @@ public class DuckDBStatement implements Statement {
 	public void setQueryTimeout(int seconds) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
-	
+
 	public void cancel() throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}

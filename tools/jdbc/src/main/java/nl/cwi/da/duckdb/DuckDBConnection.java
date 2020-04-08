@@ -23,9 +23,11 @@ import java.util.concurrent.Executor;
 
 public class DuckDBConnection implements java.sql.Connection {
 	protected ByteBuffer conn_ref = null;
+	protected DuckDBDatabase db;
 
 	public DuckDBConnection(DuckDBDatabase db) {
 		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
+		this.db = db;
 	}
 
 	public Statement createStatement() throws SQLException {
@@ -82,7 +84,7 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public void clearWarnings() throws SQLException {
 	}
-	
+
 	public void setTransactionIsolation(int level) throws SQLException {
 		if (level > TRANSACTION_REPEATABLE_READ) {
 			throw new SQLFeatureNotSupportedException();
@@ -102,7 +104,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	public boolean isReadOnly() throws SQLException {
 		return false;
 	}
-	
+
 	// at some point we will implement this
 
 	public void setAutoCommit(boolean autoCommit) throws SQLException {
@@ -126,8 +128,6 @@ public class DuckDBConnection implements java.sql.Connection {
 	public DatabaseMetaData getMetaData() throws SQLException {
 		return new DuckDBDatabaseMetaData(this);
 	}
-
-
 
 	public void setCatalog(String catalog) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
