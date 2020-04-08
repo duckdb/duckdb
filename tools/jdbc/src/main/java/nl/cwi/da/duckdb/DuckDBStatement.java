@@ -30,6 +30,9 @@ public class DuckDBStatement implements Statement {
 		if (result == null) {
 			throw new SQLException("No result set. execute() a query first");
 		}
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
+		}
 		return result;
 	}
 
@@ -49,7 +52,8 @@ public class DuckDBStatement implements Statement {
 		if (stmt_ref != null) {
 			DuckDBNative.duckdb_jdbc_release(stmt_ref);
 			stmt_ref = null;
-		}
+		} 
+		conn = null;
 	}
 
 	public boolean isClosed() throws SQLException {
@@ -57,6 +61,9 @@ public class DuckDBStatement implements Statement {
 	}
 
 	public Connection getConnection() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
+		}
 		return conn;
 	}
 

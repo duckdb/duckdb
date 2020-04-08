@@ -47,16 +47,22 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Statement getStatement() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("ResultSet was closed");
+		}
 		return stmt;
 	}
 
 	public ResultSetMetaData getMetaData() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("ResultSet was closed");
+		}
 		return meta;
 	}
 
 	public boolean next() throws SQLException {
 		if (isClosed()) {
-			throw new SQLException("closed");
+			throw new SQLException("ResultSet was closed");
 		}
 		if (finished) {
 			return false;
@@ -78,6 +84,9 @@ public class DuckDBResultSet implements ResultSet {
 			DuckDBNative.duckdb_jdbc_free_result(result_ref);
 			result_ref = null;
 		}
+		stmt = null;
+		meta = null;
+		current_chunk = null;
 	}
 
 	public boolean isClosed() throws SQLException {
@@ -85,12 +94,13 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	private void check(int columnIndex) throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("ResultSet was closed");
+		}
 		if (columnIndex < 1 || columnIndex > meta.column_count) {
 			throw new SQLException("Column index out of bounds");
 		}
-		if (isClosed()) {
-			throw new SQLException("result set is closed");
-		}
+
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
@@ -117,6 +127,9 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public boolean wasNull() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("ResultSet was closed");
+		}
 		return was_null;
 	}
 
@@ -243,6 +256,9 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int findColumn(String columnLabel) throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("ResultSet was closed");
+		}
 		for (int col_idx = 0; col_idx < meta.column_count; col_idx++) {
 			if (meta.column_names[col_idx].contentEquals(columnLabel)) {
 				return col_idx + 1;

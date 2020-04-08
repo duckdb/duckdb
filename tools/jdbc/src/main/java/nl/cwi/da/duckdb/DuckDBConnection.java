@@ -54,6 +54,7 @@ public class DuckDBConnection implements java.sql.Connection {
 			DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
 			conn_ref = null;
 		}
+		db = null;
 	}
 
 	public boolean isClosed() throws SQLException {
@@ -109,14 +110,14 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public void setAutoCommit(boolean autoCommit) throws SQLException {
 		if (isClosed()) {
-			throw new SQLException("Invalid connection");
+			throw new SQLException("Connection was closed");
 		}
 		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, autoCommit);
 	}
 
 	public boolean getAutoCommit() throws SQLException {
 		if (isClosed()) {
-			throw new SQLException("Invalid connection");
+			throw new SQLException("Connection was closed");
 		}
 		return DuckDBNative.duckdb_jdbc_get_auto_commit(conn_ref);
 	}
