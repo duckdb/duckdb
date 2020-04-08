@@ -18,7 +18,8 @@ add_library(
   window.cpp
   storage.cpp
   prefix_tpch.cpp
-  suffix_tpch.cpp)
+  suffix_tpch.cpp
+  contains_tpch.cpp)
 set(BENCHMARK_OBJECT_FILES
     ${BENCHMARK_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_benchmark_micro>
     PARENT_SCOPE)
