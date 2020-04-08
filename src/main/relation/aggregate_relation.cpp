@@ -11,6 +11,12 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p, vector<unique
 	context.TryBindRelation(*this, this->columns);
 }
 
+AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p, vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<unique_ptr<ParsedExpression>> groups_p) :
+	Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)), groups(move(groups_p)), child(move(child_p)) {
+	// bind the expressions
+	context.TryBindRelation(*this, this->columns);
+}
+
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	auto child_ptr = child.get();
 	while(child_ptr->InheritsColumnBindings()) {
@@ -28,7 +34,17 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	}
 	assert(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode&) *result;
-	select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+	if (groups.size() > 0) {
+		// explicit groups provided: use standard handling
+		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
+		select_node.groups.clear();
+		for(auto &group : groups) {
+			select_node.groups.push_back(group->Copy());
+		}
+	} else {
+		// no groups provided: automatically figure out groups (if any)
+		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
+	}
 	select_node.select_list.clear();
 	for(auto &expr : expressions) {
 		select_node.select_list.push_back(expr->Copy());

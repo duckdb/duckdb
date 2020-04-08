@@ -114,6 +114,12 @@ shared_ptr<Relation> Relation::Aggregate(string aggregate_list) {
 	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list));
 }
 
+shared_ptr<Relation> Relation::Aggregate(string aggregate_list, string group_list) {
+	auto expression_list = Parser::ParseExpressionList(aggregate_list);
+	auto groups = Parser::ParseExpressionList(group_list);
+	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list), move(groups));
+}
+
 string Relation::GetAlias() {
 	return "relation";
 }

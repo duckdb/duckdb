@@ -407,6 +407,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 
 	// perform some aggregates
 	auto tbl = con.Table("integers");
+
 	// ungrouped aggregate
 	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(i), SUM(j)")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
@@ -429,9 +430,50 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Aggregate("i+i AS i, SUM(j)")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
-	// we cannot combine non-aggregates with aggregates though
+	// we cannot combine non-aggregates with aggregates
 	REQUIRE_THROWS(result = tbl->Aggregate("i + SUM(j) AS i")->Order("1")->Execute());
 	REQUIRE_THROWS(result = tbl->Aggregate("i, i + SUM(j)")->Order("1")->Execute());
+	// group by multiple columns
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, j, SUM(i + j)")->Order("1, 2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 7, 6}));
+	REQUIRE(CHECK_COLUMN(result, 2, {6, 8, 8}));
+	// subqueries as groups
+	REQUIRE_NOTHROW(result = tbl->Aggregate("(SELECT i), SUM(i + j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {14, 8}));
+	// subqueries as aggregates
+	REQUIRE_NOTHROW(result = tbl->Aggregate("(SELECT i), (SELECT SUM(i + j))")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {14, 8}));
+	// constants without a grouping column
+	REQUIRE_NOTHROW(result = tbl->Aggregate("'hello', SUM(i + j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {22}));
+	// constants with a grouping column
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, 'hello', SUM(i + j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hello"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {14, 8}));
+	// aggregate with only non-aggregate columns becomes a distinct
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, j")->Order("1, 2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {5, 7, 6}));
+
+	// now test aggregates with explicit groups
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i", "i")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, SUM(j)", "i")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+	// explicit groups can be combined with aggregates
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, i+SUM(j)", "i")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {13, 8}));
+	// when using explicit groups, we cannot have non-explicit groups
+	REQUIRE_THROWS(tbl->Aggregate("j, i+SUM(j)", "i")->Order("1")->Execute());
 }
 
 // TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {

@@ -264,8 +264,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			result->types.push_back(result_type);
 		}
 		internal_types.push_back(GetInternalType(result_type));
-
-		select_binder.ResetBindings();
+		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+			select_binder.ResetBindings();
+		}
 	}
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column

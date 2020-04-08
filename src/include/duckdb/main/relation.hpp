@@ -81,6 +81,7 @@ public:
 
 	// AGGREGATES
 	shared_ptr<Relation> Aggregate(string aggregate_list);
+	shared_ptr<Relation> Aggregate(string aggregate_list, string group_list);
 
 	// ALIAS
 	shared_ptr<Relation> Alias(string alias);
