@@ -16,6 +16,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
 
@@ -34,7 +35,16 @@ shared_ptr<Relation> Relation::Project(string select_list, vector<string> aliase
 	return make_shared<ProjectionRelation>(shared_from_this(), move(expressions), move(aliases));
 }
 
-shared_ptr<Relation> Relation::Project(vector<string> expressions, vector<string> aliases) {
+shared_ptr<Relation> Relation::Project(vector<string> expressions) {
+	vector<string> aliases;
+	return Project(move(expressions), aliases);
+
+}
+
+static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(vector<string> expressions) {
+	if (expressions.size() == 0) {
+		throw ParserException("Zero expressions provided");
+	}
 	vector<unique_ptr<ParsedExpression>> result_list;
 	for(auto &expr : expressions) {
 		auto expression_list = Parser::ParseExpressionList(expr);
@@ -43,16 +53,33 @@ shared_ptr<Relation> Relation::Project(vector<string> expressions, vector<string
 		}
 		result_list.push_back(move(expression_list[0]));
 	}
+	return result_list;
+}
+
+shared_ptr<Relation> Relation::Project(vector<string> expressions, vector<string> aliases) {
+	auto result_list = StringListToExpressionList(move(expressions));
 	return make_shared<ProjectionRelation>(shared_from_this(), move(result_list), move(aliases));
 }
 
 shared_ptr<Relation> Relation::Filter(string expression) {
-	// if there are multiple expressions, we AND them together
 	auto expression_list = Parser::ParseExpressionList(expression);
 	if (expression_list.size() != 1) {
 		throw ParserException("Expected a single expression as filter condition");
 	}
 	return make_shared<FilterRelation>(shared_from_this(), move(expression_list[0]));
+}
+
+shared_ptr<Relation> Relation::Filter(vector<string> expressions) {
+	// if there are multiple expressions, we AND them together
+	auto expression_list = StringListToExpressionList(expressions);
+	if (expression_list.size() == 0) {
+		throw ParserException("Zero filter conditions provided");
+	}
+	auto expr = move(expression_list[0]);
+	for(idx_t i = 1; i < expression_list.size(); i++) {
+		expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expr), move(expression_list[i]));
+	}
+	return make_shared<FilterRelation>(shared_from_this(), move(expr));
 }
 
 shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
@@ -61,6 +88,21 @@ shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
 
 shared_ptr<Relation> Relation::Order(string expression) {
 	auto order_list = Parser::ParseOrderList(expression);
+	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
+}
+
+shared_ptr<Relation> Relation::Order(vector<string> expressions) {
+	if (expressions.size() == 0) {
+		throw ParserException("Zero ORDER BY expressions provided");
+	}
+	vector<OrderByNode> order_list;
+	for(auto &expression : expressions) {
+		auto inner_list = Parser::ParseOrderList(expression);
+		if (inner_list.size() != 1) {
+			throw ParserException("Expected a single ORDER BY expression in the expression list");
+		}
+		order_list.push_back(move(inner_list[0]));
+	}
 	return make_shared<OrderRelation>(shared_from_this(), move(order_list));
 }
 
@@ -118,6 +160,17 @@ shared_ptr<Relation> Relation::Aggregate(string aggregate_list, string group_lis
 	auto expression_list = Parser::ParseExpressionList(aggregate_list);
 	auto groups = Parser::ParseExpressionList(group_list);
 	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list), move(groups));
+}
+
+shared_ptr<Relation> Relation::Aggregate(vector<string> aggregates) {
+	auto aggregate_list = StringListToExpressionList(move(aggregates));
+	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list));
+}
+
+shared_ptr<Relation> Relation::Aggregate(vector<string> aggregates, vector<string> groups) {
+	auto aggregate_list = StringListToExpressionList(move(aggregates));
+	auto group_list = StringListToExpressionList(move(groups));
+	return make_shared<AggregateRelation>(shared_from_this(), move(aggregate_list), move(group_list));
 }
 
 string Relation::GetAlias() {

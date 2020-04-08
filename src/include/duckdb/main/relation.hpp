@@ -57,16 +57,19 @@ public:
 	shared_ptr<Relation> Project(string select_list);
 	shared_ptr<Relation> Project(string expression, string alias);
 	shared_ptr<Relation> Project(string select_list, vector<string> aliases);
+	shared_ptr<Relation> Project(vector<string> expressions);
 	shared_ptr<Relation> Project(vector<string> expressions, vector<string> aliases);
 
 	// FILTER
 	shared_ptr<Relation> Filter(string expression);
+	shared_ptr<Relation> Filter(vector<string> expressions);
 
 	// LIMIT
 	shared_ptr<Relation> Limit(int64_t n, int64_t offset = 0);
 
 	// ORDER
 	shared_ptr<Relation> Order(string expression);
+	shared_ptr<Relation> Order(vector<string> expressions);
 
 	// JOIN operation
 	shared_ptr<Relation> Join(shared_ptr<Relation> other, string condition, JoinType type = JoinType::INNER);
@@ -81,7 +84,9 @@ public:
 
 	// AGGREGATES
 	shared_ptr<Relation> Aggregate(string aggregate_list);
+	shared_ptr<Relation> Aggregate(vector<string> aggregates);
 	shared_ptr<Relation> Aggregate(string aggregate_list, string group_list);
+	shared_ptr<Relation> Aggregate(vector<string> aggregates, vector<string> groups);
 
 	// ALIAS
 	shared_ptr<Relation> Alias(string alias);
