@@ -411,10 +411,27 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(i), SUM(j)")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
+	// we cannot put aggregates in a Project clause
+	REQUIRE_THROWS(result = tbl->Project("SUM(i), SUM(j)")->Execute());
+	REQUIRE_THROWS(result = tbl->Project("i, SUM(j)")->Execute());
 	// implicitly grouped aggregate
-	// REQUIRE_NOTHROW(result = tbl->Aggregate("i, SUM(j)")->Order("i")->Execute());
-	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i, SUM(j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(j), i")->Order("2")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {12, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	// grouped aggregates can be expressions
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i+1 AS i, SUM(j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+	// they can also involve multiple columns
+	REQUIRE_NOTHROW(result = tbl->Aggregate("i+i AS i, SUM(j)")->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+	// we cannot combine non-aggregates with aggregates though
+	REQUIRE_THROWS(result = tbl->Aggregate("i + SUM(j) AS i")->Order("1")->Execute());
+	REQUIRE_THROWS(result = tbl->Aggregate("i, i + SUM(j)")->Order("1")->Execute());
 }
 
 // TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {

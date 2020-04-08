@@ -11,6 +11,8 @@ using namespace std;
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
+	this->bound_aggregate = true;
+
 	AggregateBinder aggregate_binder(binder, context);
 	string error;
 	for (idx_t i = 0; i < aggr.children.size(); i++) {

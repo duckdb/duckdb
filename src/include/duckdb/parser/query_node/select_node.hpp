@@ -15,10 +15,16 @@
 
 namespace duckdb {
 
+enum class AggregateHandling : uint8_t {
+	STANDARD_HANDLING,     // standard handling as in the SELECT clause
+	NO_AGGREGATES_ALLOWED, // no aggregates allowed: any aggregates in this node will result in an error
+	FORCE_AGGREGATES       // force aggregates: any non-aggregate select list entry will become a GROUP
+};
+
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
-	SelectNode() : QueryNode(QueryNodeType::SELECT_NODE) {
+	SelectNode() : QueryNode(QueryNodeType::SELECT_NODE), aggregate_handling(AggregateHandling::STANDARD_HANDLING) {
 	}
 
 	//! The projection list
@@ -31,6 +37,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> groups;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
+	//! Aggregate handling during binding
+	AggregateHandling aggregate_handling;
 
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return select_list;

@@ -28,6 +28,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	}
 	assert(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = (SelectNode&) *result;
+	select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 	select_node.select_list.clear();
 	for(auto &expr : expressions) {
 		select_node.select_list.push_back(expr->Copy());

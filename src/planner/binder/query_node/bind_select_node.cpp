@@ -248,19 +248,36 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		SQLType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
+		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.BoundColumns()) {
+			if (select_binder.BoundAggregates()) {
+				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+			}
+			// we are forcing aggregates, and the node has columns bound
+			// this entry becomes a group
+			auto group_type = expr->return_type;
+			auto group_ref = make_unique<BoundColumnRefExpression>(group_type, ColumnBinding(result->group_index, result->groups.size()));
+			result->groups.push_back(move(expr));
+			expr = move(group_ref);
+		}
 		result->select_list.push_back(move(expr));
 		if (i < result->column_count) {
 			result->types.push_back(result_type);
 		}
 		internal_types.push_back(GetInternalType(result_type));
+
+		select_binder.ResetBindings();
 	}
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
 	if (result->groups.size() > 0 || result->aggregates.size() > 0 || statement.having) {
-		if (select_binder.BoundColumns()) {
-			throw BinderException("column must appear in the GROUP BY clause or be used in an aggregate function");
+		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
+			throw BinderException("Aggregates cannot be present in a Project relation!");
+		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
+			if (select_binder.BoundColumns()) {
+				throw BinderException("column must appear in the GROUP BY clause or be used in an aggregate function");
+			}
 		}
 	}
 
