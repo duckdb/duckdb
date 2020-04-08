@@ -74,6 +74,7 @@ matrix:
 
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - choco install javaruntime -y --force
         - choco install curl -y --force
 
       script:
