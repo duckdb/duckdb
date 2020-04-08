@@ -38,6 +38,10 @@ public class DuckDBResultSet implements ResultSet {
 		this.result_ref = result_ref;
 		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
 		current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
+		if (current_chunk.length == 0) {
+			finished = true;
+		}
+
 	}
 
 	public ResultSetMetaData getMetaData() throws SQLException {

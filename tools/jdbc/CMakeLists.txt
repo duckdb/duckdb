@@ -12,7 +12,9 @@ include(UseJava)
 project(DuckDBJDummy NONE)
 
 file(GLOB JAVA_SRC_FILES src/main/java/nl/cwi/da/duckdb/*.java)
-add_jar(DuckDBJDummy ${JAVA_SRC_FILES} GENERATE_NATIVE_HEADERS duckdb-native)
+file(GLOB JAVA_TEST_FILES src/test/java/nl/cwi/da/duckdb/test/*.java)
+
+add_jar(DuckDBJDummy ${JAVA_SRC_FILES} ${JAVA_TEST_FILES} GENERATE_NATIVE_HEADERS duckdb-native)
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_link_libraries(duckdb_java duckdb-native duckdb_static)

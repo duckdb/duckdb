@@ -1,17 +1,34 @@
 package nl.cwi.da.duckdb.test;
 
-import static org.junit.Assert.*;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
 import java.sql.Statement;
 
-import org.junit.Test;
-
 public class TestDuckDBJDBC {
+
+	private static void assertTrue(boolean val) throws Exception {
+		if (!val) {
+			throw new Exception();
+		}
+	}
+
+	private static void assertFalse(boolean val) throws Exception {
+		assertTrue(!val);
+	}
+
+	private static void assertEquals(Object a, Object b) throws Exception {
+		assertTrue(a.equals(b));
+	}
+	
+	private static void assertEquals(double a, double b, double epsilon) throws Exception {
+		assertTrue(Math.abs(a-b) < epsilon);
+	}
+
+	private static void fail() throws Exception {
+		assertTrue(false);
+	}
 
 	static {
 		try {
@@ -21,8 +38,7 @@ public class TestDuckDBJDBC {
 		}
 	}
 
-	@Test
-	public void test_connection() throws SQLException {
+	public static void test_connection() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		assertTrue(conn.isValid(0));
 		assertFalse(conn.isClosed());
@@ -95,8 +111,7 @@ public class TestDuckDBJDBC {
 
 	}
 
-	@Test
-	public void test_result() throws SQLException {
+	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
@@ -152,7 +167,7 @@ public class TestDuckDBJDBC {
 
 		assertEquals(rs.getInt("b"), 4);
 		assertEquals(rs.getString("b"), "4.2");
-		assertEquals(rs.getDouble("b"), 4.2, 0.001);
+	assertEquals(rs.getDouble("b"), 4.2, 0.001);
 		assertTrue(rs.getObject("b").equals(new Double(4.2)));
 
 		assertFalse(rs.next());
@@ -161,5 +176,31 @@ public class TestDuckDBJDBC {
 
 		stmt.close();
 		conn.close();
+	}
+
+	public static void test_empty_table() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE a (i iNTEGER)");
+		ResultSet rs = stmt.executeQuery("SELECT * FROM a");
+		assertFalse(rs.next());
+
+		try {
+			rs.getObject(1);
+			fail();
+		} catch (Exception e) {
+		}
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void main(String[] args) throws Exception {
+		test_connection();
+		test_result();
+		test_empty_table();
+		System.out.println("OK");
 	}
 }
