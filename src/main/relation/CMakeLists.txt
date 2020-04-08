@@ -1,5 +1,6 @@
 add_library_unity(duckdb_main_relation
 	OBJECT
+	aggregate_relation.cpp
 	create_table_relation.cpp
 	create_view_relation.cpp
 	delete_relation.cpp

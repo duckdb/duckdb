@@ -1,6 +1,7 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/insert_relation.hpp"
@@ -106,6 +107,11 @@ shared_ptr<Relation> Relation::Distinct() {
 
 shared_ptr<Relation> Relation::Alias(string alias) {
 	return make_shared<SubqueryRelation>(shared_from_this(), alias);
+}
+
+shared_ptr<Relation> Relation::Aggregate(string aggregate_list) {
+	auto expression_list = Parser::ParseExpressionList(aggregate_list);
+	return make_shared<AggregateRelation>(shared_from_this(), move(expression_list));
 }
 
 string Relation::GetAlias() {

@@ -397,14 +397,49 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 12}));
 }
 
-// TEST_CASE("Test CSV reading/writing from relations", "[api]") {
+TEST_CASE("Test aggregates in relation API", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// create a table
+	REQUIRE_NOTHROW(con.Values("(1, 5), (2, 6), (1, 7)", {"i", "j"})->Create("integers"));
+
+	// perform some aggregates
+	auto tbl = con.Table("integers");
+	// ungrouped aggregate
+	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(i), SUM(j)")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {18}));
+	// implicitly grouped aggregate
+	// REQUIRE_NOTHROW(result = tbl->Aggregate("i, SUM(j)")->Order("i")->Execute());
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {12, 6}));
+}
+
+// TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 // 	DuckDB db(nullptr);
 // 	Connection con(db);
 // 	unique_ptr<QueryResult> result;
 
 // }
 
-// TEST_CASE("We can mix statements from multiple databases", "[api]") {
+
+// TEST_CASE("Test subqueries in relations", "[relation_api]") {
+// 	DuckDB db(nullptr);
+// 	Connection con(db);
+// 	unique_ptr<QueryResult> result;
+
+// }
+
+// TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
+// 	DuckDB db(nullptr);
+// 	Connection con(db);
+// 	unique_ptr<QueryResult> result;
+
+// }
+
+// TEST_CASE("We can mix statements from multiple databases", "[relation_api]") {
 // 	DuckDB db(nullptr), db2(nullptr);
 // 	Connection con(db), con2(db);
 // 	unique_ptr<QueryResult> result;

@@ -79,6 +79,9 @@ public:
 	// DISTINCT operation
 	shared_ptr<Relation> Distinct();
 
+	// AGGREGATES
+	shared_ptr<Relation> Aggregate(string aggregate_list);
+
 	// ALIAS
 	shared_ptr<Relation> Alias(string alias);
 
