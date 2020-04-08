@@ -20,9 +20,9 @@ add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native duckdb_static)
 set_target_properties(duckdb_java PROPERTIES SUFFIX ".so")
+set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
-add_custom_command(OUTPUT DuckDBJ.jar
-                   COMMAND zip -O DuckDBJ.jar -rv DuckDBJDummy.jar libduckdb_java.so)
+add_custom_command(OUTPUT DuckDBJ.jar DEPENDS duckdb_java DuckDBJDummy
+                   COMMAND zip -j -O DuckDBJ.jar -rv DuckDBJDummy.jar $<TARGET_FILE:duckdb_java>)
 
-add_custom_target(full_out ALL
-                  DEPENDS DuckDBJ.jar duckdb_java DuckDBJDummy)
+add_custom_target(jdbc ALL DEPENDS DuckDBJ.jar)
