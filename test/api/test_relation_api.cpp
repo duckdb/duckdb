@@ -120,7 +120,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"1", "2", "3", "11", "12", "13"}));
 
 	// distinct
-	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Execute());
+	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	// join
