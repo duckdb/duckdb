@@ -161,8 +161,13 @@ bool DataTable::CheckZonemap(TableScanState &state, vector<TableFilter> &table_f
 			break;
 		}
 		case TypeId::VARCHAR: {
-			auto constant = table_filter.constant.str_value.data();
-			readSegment &= checkZonemapString(state, table_filter, constant);
+			//! we can only compare the first 7 bytes
+			size_t value_size = table_filter.constant.str_value.size() > 7 ? 7 : table_filter.constant.str_value.size();
+			string constant;
+			for (size_t i = 0; i < value_size; i++) {
+				constant += table_filter.constant.str_value[i];
+			}
+			readSegment &= checkZonemapString(state, table_filter, constant.c_str());
 			break;
 		}
 		default:

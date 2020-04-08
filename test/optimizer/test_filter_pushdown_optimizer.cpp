@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression/common_subexpression.hpp"
 #include "expression_helper.hpp"
 #include "test_helpers.hpp"
-
+#include "duckdb/planner/operator/logical_get.hpp"
 #include <duckdb/optimizer/filter_pushdown.hpp>
 #include <duckdb/optimizer/optimizer.hpp>
 #include <vector>
@@ -121,47 +121,86 @@ TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
 	//! Checking if Optimizer push predicates down
 	auto tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
 	//! The generated plan should be Projection ->Get (1)
-		auto plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//		auto plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//
+	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
+	//		//! The generated plan should be Projection ->Get (1)
+	//		plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//
+	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i > 'bla' ");
+	//		//! The generated plan should be Projection ->Get (1)
+	//		plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//
+	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i >= 'bla' ");
+	//		//! The generated plan should be Projection ->Get (1)
+	//		plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//
+	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i < 'bla' ");
+	//		//! The generated plan should be Projection ->Get (1)
+	//		plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//
+	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i <= 'bla' ");
+	//		//! The generated plan should be Projection ->Get (1)
+	//		plan = opt.Optimize(move(tree));
+	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	//		REQUIRE(plan->children[0]->expressions.size() == 1);
 
-		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
-		//! The generated plan should be Projection ->Get (1)
-		plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like 'bla%' ");
 
-		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i > 'bla' ");
-		//! The generated plan should be Projection ->Get (1)
-		plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//! The generated plan should be Projection ->filter(1)->get(0,2)
+	auto plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->children[0]->expressions.size() == 0);
+	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 2);
 
-		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i >= 'bla' ");
-		//! The generated plan should be Projection ->Get (1)
-		plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like 'bla_bla' ");
 
-		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i < 'bla' ");
-		//! The generated plan should be Projection ->Get (1)
-		plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//! The generated plan should be Projection ->filter(1)->get(0,2)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->children[0]->expressions.size() == 0);
+	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 2);
 
-		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i <= 'bla' ");
-		//! The generated plan should be Projection ->Get (1)
-		plan = opt.Optimize(move(tree));
-		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-		REQUIRE(plan->children[0]->expressions.size() == 1);
+	//! The generated plan should be Projection ->filter(1)->get(0,1)
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like 'bla' ");
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->children[0]->expressions.size() == 0);
+	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 1);
 
-//	//	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i SIMILAR TO 'DE.*I.*ER.*' ");
-//	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like '%bla' ");
-//
-//	//! The generated plan should be Projection ->Get (1)
-//	auto plan = opt.Optimize(move(tree));
-//	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-//	REQUIRE(plan->children[0]->expressions.size() == 1);
+	//! The generated plan should be Projection ->filter(1)->get(0,0)
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like '%bla' ");
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->children[0]->expressions.size() == 0);
+	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 0);
+
+	//! The generated plan should be Projection ->filter(1)->get(0,0)
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like '_bla' ");
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->children[0]->expressions.size() == 0);
+	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 0);
 }
 
 TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {

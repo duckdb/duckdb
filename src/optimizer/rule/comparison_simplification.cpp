@@ -30,8 +30,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// comparison with constant NULL, return NULL
 		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
 	}
-	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST) {
-		assert(constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT);
+	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST &&
+	    constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
 		//! Here we check if we can apply the expression on the constant side
 		auto cast_expression = (BoundCastExpression *)column_ref_expr;
 		auto bound_const_expr = (BoundConstantExpression *)constant_expr;

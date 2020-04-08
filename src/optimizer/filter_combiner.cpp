@@ -224,7 +224,46 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 					}
 					equivalence_map.erase(filter_exp);
 				}
-				//				}
+			}
+		}
+	}
+	//! Here we look for LIKE filters with a prefix to use them  to skip partitions
+	for (auto &remaining_filter : remaining_filters) {
+		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
+			auto &func = (BoundFunctionExpression &)*remaining_filter;
+			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+				//! This is a like function.
+				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
+				string like_string = constant_value_expr.value.str_value;
+				auto const_value = constant_value_expr.value.Copy();
+				if (like_string[0] == '%' || like_string[0] == '_') {
+					//! We have no prefix so nothing to pushdown
+					break;
+				}
+				string prefix;
+				bool equality = true;
+				for (char const &c : like_string) {
+					if (c == '%' || c == '_') {
+						equality = false;
+						break;
+					}
+					prefix += c;
+				}
+				const_value.str_value = prefix;
+				if (equality) {
+					//! Here the like can be transformed to an equality query
+					tableFilters.push_back(
+					    TableFilter(const_value, ExpressionType::COMPARE_EQUAL, column_ref.binding.column_index));
+				} else {
+					//! Here the like must be transformed to a BOUND COMPARISON geq le
+					tableFilters.push_back(TableFilter(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+					                                   column_ref.binding.column_index));
+					const_value.str_value[const_value.str_value.size() - 1]++;
+					tableFilters.push_back(
+					    TableFilter(const_value, ExpressionType::COMPARE_LESSTHAN, column_ref.binding.column_index));
+				}
 			}
 		}
 	}

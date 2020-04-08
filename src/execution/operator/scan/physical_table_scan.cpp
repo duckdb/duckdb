@@ -68,11 +68,10 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
-    if (expression){
-        return tableref.name + " " + expression->GetName();
-    }
-	else{
-	    return tableref.name;
+	if (expression) {
+		return tableref.name + " " + expression->GetName();
+	} else {
+		return tableref.name;
 	}
 }
 
