@@ -114,7 +114,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		unordered_set<idx_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
-		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		for (idx_t it : bindings) {
 			relation_mapping[it] = relations.size();
 		}
@@ -129,21 +129,21 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	} else if (op->type == LogicalOperatorType::GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
-		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::EXPRESSION_GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalExpressionGet *)op;
-		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	}  else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		// table function call, add to set of relations
 		auto table_function = (LogicalTableFunction *)op;
-		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[table_function->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
@@ -153,7 +153,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		JoinOrderOptimizer optimizer;
 		op->children[0] = optimizer.Optimize(move(op->children[0]));
 		// projection, add to the set of relations
-		auto relation = make_unique<JoinRelation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[proj->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
@@ -445,7 +445,7 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 	}
 }
 
-static unique_ptr<LogicalOperator> ExtractJoinRelation(JoinRelation &rel) {
+static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
 	auto &children = rel.parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (children[i].get() == rel.op) {

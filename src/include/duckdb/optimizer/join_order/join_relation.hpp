@@ -16,13 +16,13 @@ namespace duckdb {
 class LogicalOperator;
 
 //! Represents a single relation and any metadata accompanying that relation
-struct JoinRelation {
+struct SingleJoinRelation {
 	LogicalOperator *op;
 	LogicalOperator *parent;
 
-	JoinRelation() {
+	SingleJoinRelation() {
 	}
-	JoinRelation(LogicalOperator *op, LogicalOperator *parent) : op(op), parent(parent) {
+	SingleJoinRelation(LogicalOperator *op, LogicalOperator *parent) : op(op), parent(parent) {
 	}
 };
 

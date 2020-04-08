@@ -125,7 +125,7 @@ template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
 template class std::unique_ptr<FilterInfo>;
 template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
-template class std::unique_ptr<JoinRelation>;
+template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
 template class std::unique_ptr<PreparedStatementCatalogEntry>;
