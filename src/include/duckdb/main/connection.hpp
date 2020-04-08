@@ -87,6 +87,8 @@ public:
 	//! Returns a relation that produces values
 	shared_ptr<Relation> Values(vector<vector<Value>> values);
 	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names, string alias = "values");
+	shared_ptr<Relation> Values(string values);
+	shared_ptr<Relation> Values(string values, vector<string> column_names, string alias = "values");
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

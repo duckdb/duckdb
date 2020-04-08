@@ -9,14 +9,17 @@
 #pragma once
 
 #include "duckdb/main/relation.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
 class ValueRelation : public Relation {
 public:
 	ValueRelation(ClientContext &context, vector<vector<Value>> values, vector<string> names, string alias = "values");
+	ValueRelation(ClientContext &context, string values, vector<string> names, string alias = "values");
 
-	vector<vector<Value>> values;
+	vector<vector<unique_ptr<ParsedExpression>>> expressions;
+	vector<string> names;
 	vector<ColumnDefinition> columns;
 	string alias;
 public:

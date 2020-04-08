@@ -4,6 +4,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "postgres_parser.hpp"
 
 #include "parser/parser.hpp"
@@ -92,4 +93,26 @@ void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
 	auto &update = (UpdateStatement&) *parser.statements[0];
 	update_columns = move(update.columns);
 	expressions = move(update.expressions);
+}
+
+vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string value_list) {
+	// construct a mock query
+	string mock_query = "VALUES " + value_list;
+	// parse the query
+	Parser parser;
+	parser.ParseQuery(mock_query);
+	// check the statements
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+		throw ParserException("Expected a single SELECT statement");
+	}
+	auto &select = (SelectStatement&) *parser.statements[0];
+	if (select.node->type != QueryNodeType::SELECT_NODE) {
+		throw ParserException("Expected a single SELECT node");
+	}
+	auto &select_node = (SelectNode&) *select.node;
+	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
+		throw ParserException("Expected a single VALUES statement");
+	}
+	auto &values_list = (ExpressionListRef&) *select_node.from_table;
+	return move(values_list.values);
 }

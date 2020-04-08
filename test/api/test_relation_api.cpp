@@ -156,7 +156,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
-	shared_ptr<Relation> values;
+	shared_ptr<Relation> values, v1, v2, v3;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
 
@@ -207,11 +207,15 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 	REQUIRE(CHECK_COLUMN(result, 1, {}));
 
-	// error conditions in setops
-	// setop with column count mismatch
-	// setop with type mismatch
-	// setop with name mismatch
+	// setops require the same amount of columns on both sides
+	REQUIRE_NOTHROW(v1 = con.Values("(1, 2), (3, 4)"));
+	REQUIRE_NOTHROW(v2 = con.Values("(1)"));
+	REQUIRE_THROWS(v1->Union(v2)->Execute());
 
+	// setops require the same types on both sides
+	REQUIRE_NOTHROW(v1 = con.Values("(DATE '1992-01-01', 2)"));
+	REQUIRE_NOTHROW(v2 = con.Values("(3.0, 'hello')"));
+	REQUIRE_FAIL(v1->Union(v2)->Execute());
 }
 
 TEST_CASE("Test combinations of joins", "[relation_api]") {
@@ -247,6 +251,11 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
 
+	// joining on a column that doesn't exist results in an error
+	REQUIRE_THROWS(v1->Join(v2, "blabla"));
+	// also with explicit join condition
+	REQUIRE_THROWS(v1->Join(v2, "v1.i=v2.blabla"));
+
 	// set ops involving joins
 	REQUIRE_NOTHROW(result = vjoin->Union(vjoin)->Distinct()->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
@@ -275,9 +284,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	result = con.Query("SELECT * FROM test123");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
-
 }
-
 
 TEST_CASE("Test view creation of relations", "[relation_api]") {
 	DuckDB db(nullptr);
