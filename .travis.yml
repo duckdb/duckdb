@@ -75,6 +75,7 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install jdk8 --version 8.0.211 -y --force
+        - choco install unzip -y --force
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1
@@ -87,9 +88,7 @@ matrix:
         - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe
-
-
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe build/release/tools/jdbc/DuckDBJ.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
