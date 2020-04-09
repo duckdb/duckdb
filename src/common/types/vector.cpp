@@ -152,7 +152,7 @@ void Vector::SetValue(idx_t index, Value val) {
 	}
 	switch (type) {
 	case TypeId::BOOL:
-		((int8_t *)data)[index] = newVal.value_.boolean;
+		((bool *)data)[index] = newVal.value_.boolean;
 		break;
 	case TypeId::INT8:
 		((int8_t *)data)[index] = newVal.value_.tinyint;
@@ -253,7 +253,7 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	switch (type) {
 	case TypeId::BOOL:
-		return Value::BOOLEAN(((int8_t *)data)[index]);
+		return Value::BOOLEAN(((bool *)data)[index]);
 	case TypeId::INT8:
 		return Value::TINYINT(((int8_t *)data)[index]);
 	case TypeId::INT16:
