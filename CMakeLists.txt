@@ -23,7 +23,7 @@ set(CMAKE_MACOSX_RPATH 1)
 
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
-    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
 endif()
 
 # Determine install paths
@@ -79,11 +79,11 @@ if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
 endif()
 
-SET(SUN FALSE)
+set(SUN FALSE)
 if(${CMAKE_SYSTEM_NAME} STREQUAL "SunOS")
   set(CXX_EXTRA "${CXX_EXTRA} -mimpure-text")
   add_definitions(-DSUN=1)
-  SET(SUN TRUE)
+  set(SUN TRUE)
 endif()
 
 execute_process(COMMAND git
@@ -95,14 +95,13 @@ execute_process(COMMAND git
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 
-
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
        FALSE)
 
-option(TREAT_WARNINGS_AS_ERRORS
-        "Treat warnings as errors"
-        FALSE)
+option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
+
+option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
@@ -133,17 +132,22 @@ if(NOT MSVC)
     message(WARNING "Please use a recent compiler for debug builds")
   endif()
 else()
-  set(
-    CMAKE_CXX_WINDOWS_FLAGS
-    "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
-    )
+  set(CMAKE_CXX_WINDOWS_FLAGS
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
   # remove warning from CXX flags
-  string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX
+         REPLACE "/W[0-4]"
+                 ""
+                 CMAKE_CXX_FLAGS
+                 "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS")
+  set(
+    CMAKE_CXX_FLAGS
+    "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
+    )
 endif()
 
 # todo use CHECK_CXX_COMPILER_FLAG(-fsanitize=address SUPPORTS_SANITIZER) etc.
@@ -165,6 +169,7 @@ include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
 include_directories(third_party/re2)
 include_directories(third_party/miniz)
+include_directories(third_party/utf8proc/include)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)

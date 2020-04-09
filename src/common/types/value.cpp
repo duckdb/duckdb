@@ -5,6 +5,8 @@
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
@@ -21,6 +23,20 @@ using namespace duckdb;
 using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+}
+
+Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	auto utf_type = Utf8Proc::Analyze(val);
+	switch (utf_type) {
+	case UnicodeType::INVALID:
+		throw Exception("String value is not valid UTF8");
+	case UnicodeType::ASCII:
+		str_value = val;
+		break;
+	case UnicodeType::UNICODE:
+		str_value = Utf8Proc::Normalize(val);
+		break;
+	}
 }
 
 Value Value::MinimumValue(TypeId type) {
@@ -556,40 +572,6 @@ Value Value::Deserialize(Deserializer &source) {
 		throw NotImplementedException("Value type not implemented for deserialization");
 	}
 	return new_value;
-}
-
-// adapted from MonetDB's str.c
-bool Value::IsUTF8String(const char *s) {
-	int c;
-
-	if (s == nullptr) {
-		return true;
-	}
-	if (*s == '\200' && s[1] == '\0') {
-		return true; /* str_nil */
-	}
-	while ((c = *s++) != '\0') {
-		if ((c & 0x80) == 0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xE0) == 0xC0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF0) == 0xE0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF8) == 0xF0)
-			continue;
-		return false;
-	}
-	return true;
-}
-
-bool Value::IsUTF8String(string_t s) {
-	return Value::IsUTF8String(s.GetData());
 }
 
 void Value::Print() {

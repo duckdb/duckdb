@@ -114,6 +114,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
 	// generate keys for the first input column
 	switch (input.data[0].type) {
+	case TypeId::BOOL:
+		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		break;
 	case TypeId::INT8:
 		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
@@ -141,6 +144,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	for (idx_t i = 1; i < input.column_count(); i++) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].type) {
+		case TypeId::BOOL:
+			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
+			break;
 		case TypeId::INT8:
 			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;

@@ -12,6 +12,19 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
+duckdb_register <- function(conn, name, df) {
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_register_R, conn@conn_ref, as.character(name), as.data.frame(df))
+  invisible(TRUE)
+}
+
+duckdb_unregister <- function(conn, name) {
+  stopifnot(dbIsValid(conn))
+  .Call(duckdb_unregister_R, conn@conn_ref, as.character(name))
+  invisible(TRUE)
+}
+
+
 #' @rdname DBI
 #' @export
 setClass(
@@ -92,6 +105,9 @@ setMethod("dbDataType", "duckdb_connection",
             dbDataType(dbObj@driver, obj, ...)
           })
 
+duckdb_random_string <- function(x) {
+	paste(sample(letters, 10, replace = TRUE), collapse="")
+}
 
 #' @rdname DBI
 #' @inheritParams DBI::dbWriteTable
@@ -156,9 +172,9 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
                 stop("Column name mismatch for append")
               }
               }
-            
+            table_name <- dbQuoteIdentifier(conn, name)
+
             if (!dbExistsTable(conn, name)) {
-              table_name <- dbQuoteIdentifier(conn, name)
               column_names <- dbQuoteIdentifier(conn, names(value))
               column_types <-
                 vapply(value, dbDataType, dbObj = conn, FUN.VALUE = "character")
@@ -192,8 +208,11 @@ setMethod("dbWriteTable", c("duckdb_connection", "character", "data.frame"),
 				  levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
 				}
 			}
-            
-            .Call(duckdb_append_R, conn@conn_ref, name, value)
+			view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
+            on.exit(duckdb_unregister(conn, view_name))
+            duckdb_register(conn, view_name, value)
+            dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
+
             invisible(TRUE)
           })
 
@@ -298,3 +317,55 @@ setMethod("dbRollback", "duckdb_connection",
             dbExecute(conn, SQL("ROLLBACK"))
             invisible(TRUE)
           })
+
+
+read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header=TRUE, na.strings="", nrow.check=500, 
+                                               delim=",", quote="\"", col.names=NULL, lower.case.names=FALSE, sep=delim, transaction=TRUE, ...){
+  
+  if (length(na.strings)>1) stop("na.strings must be of length 1")
+  if (!missing(sep)) delim <- sep
+
+  headers <- lapply(files, utils::read.csv, sep=delim, na.strings=na.strings, quote=quote, nrows=nrow.check, header=header, ...)
+  if (length(files)>1){
+    nn <- sapply(headers, ncol)
+    if (!all(nn==nn[1])) stop("Files have different numbers of columns")
+    nms <- sapply(headers, names)
+    if(!all(nms==nms[, 1])) stop("Files have different variable names")
+    types <- sapply(headers, function(df) sapply(df, dbDataType, dbObj=conn))
+    if(!all(types==types[, 1])) stop("Files have different variable types")
+  }
+  
+  if (transaction) {
+     dbBegin(conn)
+     on.exit(tryCatch(dbRollback(conn), error=function(e){}))
+  }
+
+  tablename <- dbQuoteIdentifier(conn, tablename)
+
+  if (!dbExistsTable(conn, tablename)) {
+    if(lower.case.names) names(headers[[1]]) <- tolower(names(headers[[1]]))
+    if(!is.null(col.names)) {
+      if (lower.case.names) {
+        warning("Ignoring lower.case.names parameter as overriding col.names are supplied.")
+      }
+      col.names <- as.character(col.names)
+      if (length(unique(col.names)) != length(names(headers[[1]]))) {
+        stop("You supplied ", length(unique(col.names)), " unique column names, but file has ", 
+          length(names(headers[[1]])), " columns.")
+      }
+      names(headers[[1]]) <-  col.names
+    }
+    dbWriteTable(conn, tablename, headers[[1]][FALSE, ,drop=FALSE])
+  }
+  
+  for(i in seq_along(files)) {
+    thefile <- dbQuoteString(conn, encodeString(normalizePath(files[i])))
+    dbExecute(conn, sprintf("COPY %s FROM %s (DELIMITER %s, QUOTE %s, HEADER %s, NULL %s)", tablename, thefile, dbQuoteString(conn, delim), dbQuoteString(conn,quote), tolower(header), dbQuoteString(conn, na.strings[1])))
+  }
+  dbGetQuery(conn, paste("SELECT COUNT(*) FROM", tablename))[[1]]
+ 
+  if (transaction) {
+    dbCommit(conn)
+    on.exit(NULL)
+  }
+}

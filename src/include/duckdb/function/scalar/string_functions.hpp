@@ -62,9 +62,16 @@ struct InstrFun {
 };
 
 struct PrefixFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct SuffixFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ContainsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
 
 struct RegexpMatchesBindData : public FunctionData {
 	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,

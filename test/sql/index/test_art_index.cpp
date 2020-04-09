@@ -1755,3 +1755,19 @@ TEST_CASE("Index Exceptions", "[art]") {
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(f)"));
 }
+
+TEST_CASE("More Index Exceptions (#496)", "[art]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOLEAN, c1 INT)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i0 ON t0(c1, c0)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES (0)"));
+	auto res = con.Query("SELECT * FROM t0");
+	REQUIRE(res->success);
+
+	REQUIRE(CHECK_COLUMN(res, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(res, 1, {0}));
+}

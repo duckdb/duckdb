@@ -11,7 +11,9 @@ add_library_unity(
   test_stringfunctions.cpp
   test_trigo.cpp
   test_instr.cpp
-  test_prefix.cpp)
+  test_prefix.cpp
+  test_suffix.cpp
+  test_contains.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_function>
     PARENT_SCOPE)

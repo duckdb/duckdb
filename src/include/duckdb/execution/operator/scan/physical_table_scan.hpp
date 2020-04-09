@@ -16,10 +16,8 @@ namespace duckdb {
 //! Represents a scan of a base table
 class PhysicalTableScan : public PhysicalOperator {
 public:
-	PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids)
-	    : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
-	      column_ids(column_ids) {
-	}
+	PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> column_ids,
+	                  vector<unique_ptr<Expression>> filter, vector<TableFilter> tableFilters);
 
 	//! The table to scan
 	TableCatalogEntry &tableref;
@@ -27,6 +25,11 @@ public:
 	DataTable &table;
 	//! The column ids to project
 	vector<column_t> column_ids;
+
+	//! The filter expression
+	unique_ptr<Expression> expression;
+	//! Filters pushed down to table scan
+	vector<TableFilter> table_filters;
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

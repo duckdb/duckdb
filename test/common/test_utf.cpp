@@ -1,5 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/appender.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,4 +30,43 @@ TEST_CASE("UTF8 error checking", "[utf8]") {
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf0\x28\x8c\x28")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xf8\xa1\xa1\xa1\xa1")));
 	REQUIRE_THROWS(a.SetValue(0, Value("\xfc\xa1\xa1\xa1\xa1\xa1")));
+}
+
+TEST_CASE("UTF8 NFC tests", "[utf8]") {
+	// check NFC equivalence in Value API
+	REQUIRE(Value("a") == Value("a"));
+	REQUIRE(Value("a") != Value("b"));
+	REQUIRE(Value("\xc3\xbc") == Value("\xc3\xbc"));
+	REQUIRE(Value("\xc3\xbc") == Value("\x75\xcc\x88"));
+
+	// also in SQL
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+
+	result = con.Query("SELECT 'a'='a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT '\xc3\xbc'='\xc3\xbc'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT '\xc3\xbc'='\x75\xcc\x88'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	// also through appenders
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings (s STRING)"));
+	Appender appender(con, DEFAULT_SCHEMA, "strings");
+	appender.BeginRow();
+	appender.Append("\x75\xcc\x88");
+	appender.EndRow();
+	appender.Close();
+
+	result = con.Query("SELECT s = '\xc3\xbc' FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT s = '\x75\xcc\x88' FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	// also through CSV reader
 }
