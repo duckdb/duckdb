@@ -31,43 +31,44 @@ unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> o
 			}
 			Value pattern_str = ExpressionExecutor::EvaluateScalar(*func.children[1]);
 			if (!pattern_str.is_null && pattern_str.type == TypeId::VARCHAR) {
-				string_t pattern = pattern_str.str_value;
-				auto patt_data = pattern.GetData();
-				auto patt_size = pattern.GetSize();
-				if( std::regex_match(patt_data, std::regex("[^%_]*[%]+")) ) {
+
+				string patt_str = string(((string_t)pattern_str.str_value).GetData());
+
+				if( std::regex_match(patt_str, std::regex("[^%_]*[%]+")) ) {
 					// Prefix LIKE pattern : [^%_]*[%]+, ignoring undescore
 					auto prefix_func = GetScalarFunction("prefix");
 					// replace LIKE by prefix function
 					func.function = prefix_func;
 
 					// removing "%" from the prefix pattern
-					patt_data[patt_size-1] = '\0';
+					patt_str.erase(std::remove(patt_str.begin(), patt_str.end(), '%'), patt_str.end());
+
 					auto &const_expr = (BoundConstantExpression &)*func.children[1].get();
 					// set the new pattern without "%"
-					const_expr.value = Value(patt_data);
-				} else if( std::regex_match(patt_data, std::regex("[%]+[^%_]*")) ) {
+					const_expr.value = Value(patt_str);
+				} else if( std::regex_match(patt_str, std::regex("[%]+[^%_]*")) ) {
 					// Suffix LIKE pattern: [%]+[^%_]*, ignoring undescore
 					auto suffix_func = GetScalarFunction("suffix");
 					// replace LIKE by suffix function
 					func.function = suffix_func;
 
 					// removing "%" from the suffix pattern
-					memmove(patt_data, (patt_data + 1), patt_size);
+					patt_str.erase(std::remove(patt_str.begin(), patt_str.end(), '%'), patt_str.end());
+
 					auto &const_expr = (BoundConstantExpression &)*func.children[1].get();
 					// set the new pattern without "%"
-					const_expr.value = Value(patt_data);
-				} else if( std::regex_match(patt_data, std::regex("[%]+[^%_]*[%]+")) ) {
+					const_expr.value = Value(patt_str);
+				} else if( std::regex_match(patt_str, std::regex("[%]+[^%_]*[%]+")) ) {
 					// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring undescore
 					auto contains_func = GetScalarFunction("contains");
 					func.function = contains_func;
 
-					// removing "%" at the end
-					patt_data[patt_size-1] = '\0';
-					// removing "%" at the beginning
-					memmove(patt_data, (patt_data + 1), patt_size - 1);
+					// removing "%" from the contains pattern
+					patt_str.erase(std::remove(patt_str.begin(), patt_str.end(), '%'), patt_str.end());
+
 					auto &const_expr = (BoundConstantExpression &)*func.children[1].get();
 					// set the new pattern without "%"
-					const_expr.value = Value(patt_data);
+					const_expr.value = Value(patt_str);
 				}
 			}
 		}
