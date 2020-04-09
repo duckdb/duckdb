@@ -63,9 +63,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &expr) {
 		assert(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = (BoundSubqueryRef&) *bound_child;
-		if (bound_subquery.subquery->names != view_catalog_entry->aliases) {
-			throw BinderException("Contents of view were altered: names don't match!");
-		}
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}

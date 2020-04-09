@@ -69,8 +69,9 @@ TEST_CASE("Test views with changing schema", "[views]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(k INTEGER)"));
 
-	// again querying the view fails: the names don't match anymore!
-	REQUIRE_FAIL(con.Query("SELECT * FROM v1"));
+	// this is fine: types still match, and the original names will be applied as alias!
+	result = con.Query("SELECT i FROM v1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
@@ -113,9 +114,9 @@ TEST_CASE("Test view creation with alias", "[views]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 (j, \"j2\") AS SELECT i,i+1 FROM t1"));
 	result = con.Query("SELECT j, j2 FROM v1");
-	REQUIRE(result->types.size() == 2);
 	REQUIRE(CHECK_COLUMN(result, 0, {41, 42, 43}));
 	REQUIRE(CHECK_COLUMN(result, 1, {42, 43, 44}));
+	REQUIRE(result->types.size() == 2);
 	REQUIRE_NO_FAIL(con.Query("DROP VIEW v1"));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 (j, \"j2\") AS SELECT i,i+1, i+2 FROM t1"));
