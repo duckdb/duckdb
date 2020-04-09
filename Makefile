@@ -56,6 +56,12 @@ amalgamation:
 	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
+jdbc:
+	mkdir -p build/jdbc && \
+	cd build/jdbc && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build .
+
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 
