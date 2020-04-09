@@ -15,8 +15,8 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	// SHOW and DESCRIBE are aliases
 	result = con.Query("SHOW TABLES");
 	REQUIRE(CHECK_COLUMN(result, 0, {"integers", "v1"}));
-	// result = con.Query("DESCRIBE TABLES");
-	// REQUIRE(CHECK_COLUMN(result, 0, {"integers", "v1"}));
+	result = con.Query("DESCRIBE TABLES");
+	REQUIRE(CHECK_COLUMN(result, 0, {"integers", "v1"}));
 	// internally they are equivalent to PRAGMA SHOW_TABLES();
 	result = con.Query("PRAGMA show_tables");
 	REQUIRE(CHECK_COLUMN(result, 0, {"integers", "v1"}));
@@ -40,12 +40,12 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {Value(), Value()}));
 
 	// we can also describe views
-	// result = con.Query("DESCRIBE v1");
-	// // Field | Type | Null | Key | Default | Extra
-	// REQUIRE(CHECK_COLUMN(result, 0, {"k"}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {"DATE"}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {"YES"}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 4, {"NULL"}));
-	// REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	result = con.Query("DESCRIBE v1");
+	// Field | Type | Null | Key | Default | Extra
+	REQUIRE(CHECK_COLUMN(result, 0, {"k"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"DATE"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"YES"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
 }
