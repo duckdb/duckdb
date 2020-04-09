@@ -399,6 +399,25 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_empty_prepare_bug500() throws Exception {
+		String fileContent = "CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE);\n"
+				+ "CREATE TABLE t1(c0 DOUBLE, PRIMARY KEY(c0));\n" + "INSERT INTO t0(c0) VALUES (0), (0), (0), (0);\n"
+				+ "INSERT INTO t0(c0) VALUES (NULL), (NULL);\n" + "INSERT INTO t1(c0) VALUES (0), (1);\n" + "\n"
+				+ "SELECT t0.c0 FROM t0, t1;";
+		Connection con = DriverManager.getConnection("jdbc:duckdb:");
+		for (String s : fileContent.split("\n")) {
+			try (Statement st = con.createStatement()) {
+				try {
+					st.execute(s);
+				} catch (Exception e) {
+					// e.printStackTrace();
+				}
+			}
+		}
+		con.close();
+
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
