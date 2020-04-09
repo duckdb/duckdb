@@ -55,6 +55,7 @@ public:
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
 
+	bool BindingIsHidden(const string &binding_name, const string &column_name);
 	unordered_set<string> hidden_columns;
 
 	//! Keep track of recursive CTE references

@@ -62,8 +62,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,
                                                 vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column : table.columns) {
-		string column_string = alias + "." + column.name;
-		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
+		if (context.BindingIsHidden(alias, column.name)) {
 			continue;
 		}
 		assert(!column.name.empty());
@@ -107,8 +106,7 @@ void GenericBinding::GenerateAllColumnExpressions(BindContext &context,
                                                   vector<unique_ptr<ParsedExpression>> &select_list) {
 	for (auto &column_name : names) {
 		assert(!column_name.empty());
-		string column_string = alias + "." + column_name;
-		if (context.hidden_columns.find(column_string) != context.hidden_columns.end()) {
+		if (context.BindingIsHidden(alias, column_name)) {
 			continue;
 		}
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));

@@ -385,15 +385,18 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
-	// multiple joins with using
-	// single column
-	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b) ORDER BY 1,2,3,4,5,6,7;");
+	// CONTROVERSIAL:
+	// we do not allow this because it is ambiguous: "b" can be bind to both "t1.b" or "t2.b" and this would give different results
+	// SQLite allows this, PostgreSQL does not
+	REQUIRE_FAIL(con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b);"));
+	// a chain with the same column name is allowed though!
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (a) ORDER BY 1, 2, 3, 4, 5, 6, 7");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 2, 2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {2, 2, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 4, {3, 3, 4, 4}));
-	REQUIRE(CHECK_COLUMN(result, 5, {1, 2, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 5, {2, 3, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 6, {3, 4, 3, 4}));
 
 	REQUIRE(result->names.size() == 7);
@@ -402,23 +405,67 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(result->names[2] == "c");
 	REQUIRE(result->names[3] == "b");
 	REQUIRE(result->names[4] == "c");
-	REQUIRE(result->names[5] == "a");
+	REQUIRE(result->names[5] == "b");
 	REQUIRE(result->names[6] == "c");
 
-	// multi column
-	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a,b) JOIN t2 t2b USING (a,b);");
+}
+
+TEST_CASE("Test chaining USING joins", "[joins]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1, 2)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (b INTEGER, c INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (2, 3)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t3 (c INTEGER, d INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t3 VALUES (3, 4)"));
+
+	// multiple joins with using
+	// single column
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING (b) JOIN t3 USING (c) ORDER BY 1, 2, 3, 4;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {4}));
+
+	REQUIRE(result->names.size() == 4);
+	REQUIRE(result->names[0] == "a");
+	REQUIRE(result->names[1] == "b");
+	REQUIRE(result->names[2] == "c");
+	REQUIRE(result->names[3] == "d");
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t2"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t3"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1 (a INTEGER, b INTEGER, c INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1, 2, 2)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2 (b INTEGER, c INTEGER, d INTEGER, e INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (2, 2, 3, 4)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t3 (d INTEGER, e INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t3 VALUES (3, 4)"));
+
+	// multi column
+	result = con.Query("SELECT * FROM t1 JOIN t2 USING (b, c) JOIN t3 USING (d, e);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2}));
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
-	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(CHECK_COLUMN(result, 4, {4}));
 
 	REQUIRE(result->names.size() == 5);
 	REQUIRE(result->names[0] == "a");
 	REQUIRE(result->names[1] == "b");
 	REQUIRE(result->names[2] == "c");
-	REQUIRE(result->names[3] == "c");
-	REQUIRE(result->names[4] == "c");
+	REQUIRE(result->names[3] == "d");
+	REQUIRE(result->names[4] == "e");
 }
 
 TEST_CASE("Test joins with various columns that are only used in the join", "[joins]") {

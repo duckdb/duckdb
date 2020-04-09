@@ -18,9 +18,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		auto binding = kv.second.get();
 		if (binding->HasMatchingBinding(column_name)) {
 			// check if the binding is ignored
-			string total_binding = kv.first + "." + column_name;
-			if (hidden_columns.find(total_binding) != hidden_columns.end()) {
-				// ignored binding: continue
+			if (BindingIsHidden(kv.first, column_name)) {
 				continue;
 			}
 
@@ -34,6 +32,11 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 		}
 	}
 	return result;
+}
+
+bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
+	string total_binding = binding_name + "." + column_name;
+	return hidden_columns.find(total_binding) != hidden_columns.end();
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {

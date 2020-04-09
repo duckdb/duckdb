@@ -15,6 +15,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	if (ref.using_columns.size() > 0) {
 		// USING columns
 		assert(!result->condition);
+		vector<string> left_join_bindings;
 		vector<unordered_set<string>> matching_left_bindings;
 
 		result->left = Bind(*ref.left);
@@ -24,21 +25,36 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			if (left_bindings.size() == 0) {
 				throw BinderException("Column \"%s\" does not exist on left side of join!", using_column.c_str());
 			}
+			// find the join binding
+			string left_binding;
+			for(auto &binding : left_bindings) {
+				if (!bind_context.BindingIsHidden(binding, using_column)) {
+					if (!left_binding.empty()) {
+						string error = "Column name \"" + using_column + "\" is ambiguous: it exists more than once on left side of join.\nCandidates:";
+						for(auto &binding : left_bindings) {
+							error += "\n\t" + binding + "." + using_column;
+						}
+						throw BinderException(error);
+					} else {
+						left_binding = binding;
+					}
+				}
+			}
+			left_join_bindings.push_back(left_binding);
 			matching_left_bindings.push_back(move(left_bindings));
 		}
 		result->right = Bind(*ref.right);
 		for(idx_t i = 0; i < ref.using_columns.size(); i++) {
 			auto &using_column = ref.using_columns[i];
 			auto &left_bindings = matching_left_bindings[i];
+			auto left_binding = left_join_bindings[i];
 
 			auto all_bindings = bind_context.GetMatchingBindings(using_column);
-			string left_binding;
 			string right_binding;
 			for(auto &binding : all_bindings) {
 				if (left_bindings.find(binding) == left_bindings.end()) {
+					assert(right_binding.empty());
 					right_binding = binding;
-				} else if (left_binding.empty()) {
-					left_binding = binding;
 				}
 			}
 			if (right_binding.empty()) {
