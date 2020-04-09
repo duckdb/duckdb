@@ -86,13 +86,13 @@ struct TernaryAnd {
 			// left is NULL:
 			// result is FALSE if right is false
 			// result is NULL if right is true
-			result = !right;
+			result = right;
 			return right;
 		} else if (right_null) {
 			// right is NULL:
 			// result is FALSE if left is false
 			// result is NULL if left is true
-			result = !left;
+			result = left;
 			return left;
 		} else {
 			// no NULL: perform the AND
