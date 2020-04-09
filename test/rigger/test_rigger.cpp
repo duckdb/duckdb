@@ -38,6 +38,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 3, {false}));
 		REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 		REQUIRE(CHECK_COLUMN(result, 5, {false}));
+		result = con.Query("SELECT * FROM pragma_table_info('t0');");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"c0"}));
+		REQUIRE(CHECK_COLUMN(result, 2, {"INTEGER"}));
+		REQUIRE(CHECK_COLUMN(result, 3, {false}));
+		REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 5, {false}));
 	}
 	SECTION("493") {
 		// SIMILAR TO results in an "Unknown error -1
