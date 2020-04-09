@@ -56,6 +56,10 @@ public class DuckDBStatement implements Statement {
 		conn = null;
 	}
 
+	protected void finalize() throws Throwable {
+		close();
+	}
+
 	public boolean isClosed() throws SQLException {
 		return stmt_ref == null;
 	}

@@ -1,5 +1,7 @@
 package nl.cwi.da.duckdb.test;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -341,13 +343,48 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_crash_bug496() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 BOOLEAN, c1 INT)");
+		stmt.execute("CREATE INDEX i0 ON t0(c1, c0)");
+		stmt.execute("INSERT INTO t0(c1) VALUES (0)");
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_tablepragma_bug491() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+
+		ResultSet rs = stmt.executeQuery("PRAGMA table_info('t0')");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getInt("cid"), 0);
+		assertEquals(rs.getString("name"), "c0");
+		assertEquals(rs.getString("type"), "INTEGER");
+		assertEquals(rs.getBoolean("notnull"), false);
+		assertEquals(rs.getString("dflt_value"), "NULL"); // a string?
+		assertEquals(rs.getBoolean("pk"), false);
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+
+	}
+
 	public static void main(String[] args) throws Exception {
-		test_connection();
-		test_result();
-		test_empty_table();
-		test_broken_next();
-		test_multiple_connections();
-		test_big_data();
+		// Woo I can do reflection too, take this, JUnit!
+		Method[] methods = TestDuckDBJDBC.class.getMethods();
+		for (Method m : methods) {
+			if (m.getName().startsWith("test_")) {
+				m.invoke(null);
+			}
+		}
 		System.out.println("OK");
 	}
 }

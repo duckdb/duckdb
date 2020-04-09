@@ -89,6 +89,10 @@ public class DuckDBResultSet implements ResultSet {
 		current_chunk = null;
 	}
 
+	protected void finalize() throws Throwable {
+		close();
+	}
+
 	public boolean isClosed() throws SQLException {
 		return result_ref == null;
 	}
