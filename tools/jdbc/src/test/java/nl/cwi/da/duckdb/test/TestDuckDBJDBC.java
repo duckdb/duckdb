@@ -375,6 +375,27 @@ public class TestDuckDBJDBC {
 		rs.close();
 		stmt.close();
 		conn.close();
+	}
+
+	public static void test_nulltruth_bug489() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+		stmt.execute("INSERT INTO t0(c0) VALUES (0)");
+
+		ResultSet rs = stmt.executeQuery("SELECT * FROM t0 WHERE NOT(NULL OR TRUE)");
+		assertFalse(rs.next());
+
+		rs = stmt.executeQuery("SELECT NOT(NULL OR TRUE)");
+		assertTrue(rs.next());
+		boolean res = rs.getBoolean(1);
+		assertEquals(res, false);
+		assertFalse(rs.wasNull());
+
+		rs.close();
+		stmt.close();
+		conn.close();
 
 	}
 

@@ -48,7 +48,7 @@ public class DuckDBStatement implements Statement {
 		return affected;
 	}
 
-	public void close() throws SQLException {
+	public synchronized void close() throws SQLException {
 		if (stmt_ref != null) {
 			DuckDBNative.duckdb_jdbc_release(stmt_ref);
 			stmt_ref = null;
