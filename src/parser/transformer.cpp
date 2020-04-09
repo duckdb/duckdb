@@ -72,7 +72,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 		return TransformExplain(stmt);
 	case T_PGVacuumStmt:
 		return TransformVacuum(stmt);
-
+	case T_PGVariableShowStmt:
+		return TransformShow(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}
