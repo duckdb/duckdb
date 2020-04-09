@@ -27,6 +27,8 @@ public:
 	unique_ptr<QueryNode> query;
 	//! The set of aliases associated with the view
 	vector<string> aliases;
+	//! The returned types of the view
+	vector<SQLType> types;
 
 public:
 	//! Serialize the meta information of the ViewCatalogEntry a serializer

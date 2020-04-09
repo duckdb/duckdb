@@ -36,6 +36,50 @@ TEST_CASE("Test view creation", "[views]") {
 	REQUIRE_FAIL(con.Query("CREATE VIEW v1 AS SELECT * FROM dontexist"));
 }
 
+TEST_CASE("Test views with changing schema", "[views]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create a table
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (41), (42), (43)"));
+	// create a view that queries that table
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT * FROM t1"));
+
+	result = con.Query("SELECT * FROM v1");
+	REQUIRE(CHECK_COLUMN(result, 0, {41, 42, 43}));
+
+	// now drop the table and create a table that has a different schema
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i DATE)"));
+
+	// querying the view fails because the column types don't match the expected types
+	REQUIRE_FAIL(con.Query("SELECT * FROM v1"));
+
+	// now drop the table and create one that has extra columns
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER, j INTEGER)"));
+
+	// again querying the view fails: there are extra columns present
+	REQUIRE_FAIL(con.Query("SELECT * FROM v1"));
+
+	// now drop the table and create one that has differently named columns
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(k INTEGER)"));
+
+	// again querying the view fails: the names don't match anymore!
+	REQUIRE_FAIL(con.Query("SELECT * FROM v1"));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
+
+	// now we can query again!
+	result = con.Query("SELECT * FROM v1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
 TEST_CASE("Test deleting/updating views", "[views]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
