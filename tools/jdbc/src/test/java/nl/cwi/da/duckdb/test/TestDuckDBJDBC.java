@@ -367,7 +367,8 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getString("name"), "c0");
 		assertEquals(rs.getString("type"), "INTEGER");
 		assertEquals(rs.getBoolean("notnull"), false);
-		assertEquals(rs.getString("dflt_value"), "NULL"); // a string?
+		rs.getObject("dflt_value");
+		assertTrue(rs.wasNull());
 		assertEquals(rs.getBoolean("pk"), false);
 
 		assertFalse(rs.next());
