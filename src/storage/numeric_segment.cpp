@@ -1,3 +1,4 @@
+#include <duckdb/common/operator/comparison_operators.hpp>
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -44,10 +45,98 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, idx_t row_st
 	}
 }
 
+template <class T, class OP>
+void Select(SelectionVector &sel, unsigned char *source, unsigned long size, Value &constant,
+            idx_t &approved_tuple_count) {
+	if (approved_tuple_count == 0) {
+		for (idx_t i = 0; i < size; i++) {
+			if (OP::Operation(((T *)source)[i], constant.value_.integer)) {
+				sel.set_index(approved_tuple_count++, i);
+			}
+		}
+	}
+};
+
+template <class OP>
+static void templated_select_operation(SelectionVector &sel, TypeId type, unsigned char *source, unsigned long size,
+                                       Value &constant, idx_t &approved_tuple_count) {
+	// the inplace loops take the result as the last parameter
+	switch (type) {
+		//	case TypeId::INT8:
+		//		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
+		//	case TypeId::INT16:
+		//		return BinaryExecutor::Select<int16_t, int16_t, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::INT32: {
+		Select<int32_t, OP>(sel, source, size, constant, approved_tuple_count);
+		break;
+	}
+
+		//	case TypeId::INT64:
+		//		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
+		//	case TypeId::FLOAT:
+		//		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
+		//	case TypeId::DOUBLE:
+		//		return BinaryExecutor::Select<double, double, OP>(left, right, sel, count, true_sel, false_sel);
+	default:
+		throw InvalidTypeException(type, "Invalid type for filter pushed down to table comparison");
+	}
+}
+
+void NumericSegment::FilterBaseData(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
+                                    idx_t &approved_tuple_count) {
+	auto vector_index = state.vector_index;
+	assert(vector_index < max_vector_count);
+	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+
+	// pin the buffer for this segment
+	auto handle = manager.Pin(block_id);
+	auto data = handle->node->buffer;
+
+	auto offset = vector_index * vector_size;
+
+	idx_t count = GetVectorCount(vector_index);
+	//	auto source_nullmask = (nullmask_t *)(data + offset);
+	auto source_data = data + offset + sizeof(nullmask_t);
+
+	if (tableFilter.size() == 1) {
+		switch (tableFilter[0].comparison_type) {
+		case ExpressionType::COMPARE_EQUAL: {
+			templated_select_operation<Equals>(sel, state.current->type, source_data, count, tableFilter[0].constant,
+			                                   approved_tuple_count);
+			break;
+		}
+		case ExpressionType::COMPARE_LESSTHAN: {
+			templated_select_operation<LessThan>(sel, state.current->type, source_data, count, tableFilter[0].constant,
+			                                     approved_tuple_count);
+			break;
+		}
+		case ExpressionType::COMPARE_GREATERTHAN: {
+			templated_select_operation<GreaterThan>(sel, state.current->type, source_data, count,
+			                                        tableFilter[0].constant, approved_tuple_count);
+			break;
+		}
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+			templated_select_operation<LessThanEquals>(sel, state.current->type, source_data, count,
+			                                           tableFilter[0].constant, approved_tuple_count);
+			break;
+		}
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+			templated_select_operation<GreaterThanEquals>(sel, state.current->type, source_data, count,
+			                                              tableFilter[0].constant, approved_tuple_count);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
+		}
+	} else {
+		assert(0);
+	}
+}
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
+void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result,
+                                   vector<TableFilter> &tableFilter) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 

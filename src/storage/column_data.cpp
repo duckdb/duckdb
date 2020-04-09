@@ -23,15 +23,26 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 }
 
-void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
+void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                      vector<TableFilter> &tableFilter) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	state.current->Scan(transaction, state, state.vector_index, result);
+	state.current->Scan(transaction, state, state.vector_index, result, tableFilter);
 	// move over to the next vector
 	state.Next();
+}
+
+void ColumnData::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
+                        SelectionVector &sel, idx_t &approved_tuple_count) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
+	// perform a scan of this segment
+	state.current->Select(transaction, state, tableFilter, sel, approved_tuple_count);
 }
 
 void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {

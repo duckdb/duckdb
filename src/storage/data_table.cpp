@@ -66,7 +66,7 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 }
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
-                     vector<TableFilter> &table_filters) {
+                     unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	// scan the persistent segments
 	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0,
 	                     persistent_manager, table_filters)) {
@@ -126,77 +126,81 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 	}
 }
 
-bool DataTable::CheckZonemap(TableScanState &state, vector<TableFilter> &table_filters, idx_t &current_row) {
+bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
+                             idx_t &current_row) {
 	bool readSegment = true;
 	for (auto &table_filter : table_filters) {
-		if (!state.column_scans[table_filter.column_index].segment_checked) {
-			state.column_scans[table_filter.column_index].segment_checked = true;
-			switch (state.column_scans[table_filter.column_index].current->type) {
-			case TypeId::INT8: {
-				int8_t constant = table_filter.constant.value_.tinyint;
-				readSegment &= checkZonemap<int8_t>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::INT16: {
-				int16_t constant = table_filter.constant.value_.smallint;
-				readSegment &= checkZonemap<int16_t>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::INT32: {
-				int32_t constant = table_filter.constant.value_.integer;
-				readSegment &= checkZonemap<int32_t>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::INT64: {
-				int64_t constant = table_filter.constant.value_.bigint;
-				readSegment &= checkZonemap<int64_t>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::FLOAT: {
-				float constant = table_filter.constant.value_.float_;
-				readSegment &= checkZonemap<float>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::DOUBLE: {
-				double constant = table_filter.constant.value_.double_;
-				readSegment &= checkZonemap<double>(state, table_filter, constant);
-				break;
-			}
-			case TypeId::VARCHAR: {
-				//! we can only compare the first 7 bytes
-				size_t value_size =
-				    table_filter.constant.str_value.size() > 7 ? 7 : table_filter.constant.str_value.size();
-				string constant;
-				for (size_t i = 0; i < value_size; i++) {
-					constant += table_filter.constant.str_value[i];
+		for (auto &predicate_constant : table_filter.second) {
+			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
+				state.column_scans[predicate_constant.column_index].segment_checked = true;
+				switch (state.column_scans[predicate_constant.column_index].current->type) {
+				case TypeId::INT8: {
+					int8_t constant = predicate_constant.constant.value_.tinyint;
+					readSegment &= checkZonemap<int8_t>(state, predicate_constant, constant);
+					break;
 				}
-				readSegment &= checkZonemapString(state, table_filter, constant.c_str());
-				break;
+				case TypeId::INT16: {
+					int16_t constant = predicate_constant.constant.value_.smallint;
+					readSegment &= checkZonemap<int16_t>(state, predicate_constant, constant);
+					break;
+				}
+				case TypeId::INT32: {
+					int32_t constant = predicate_constant.constant.value_.integer;
+					readSegment &= checkZonemap<int32_t>(state, predicate_constant, constant);
+					break;
+				}
+				case TypeId::INT64: {
+					int64_t constant = predicate_constant.constant.value_.bigint;
+					readSegment &= checkZonemap<int64_t>(state, predicate_constant, constant);
+					break;
+				}
+				case TypeId::FLOAT: {
+					float constant = predicate_constant.constant.value_.float_;
+					readSegment &= checkZonemap<float>(state, predicate_constant, constant);
+					break;
+				}
+				case TypeId::DOUBLE: {
+					double constant = predicate_constant.constant.value_.double_;
+					readSegment &= checkZonemap<double>(state, predicate_constant, constant);
+					break;
+				}
+				case TypeId::VARCHAR: {
+					//! we can only compare the first 7 bytes
+					size_t value_size = predicate_constant.constant.str_value.size() > 7
+					                        ? 7
+					                        : predicate_constant.constant.str_value.size();
+					string constant;
+					for (size_t i = 0; i < value_size; i++) {
+						constant += predicate_constant.constant.str_value[i];
+					}
+					readSegment &= checkZonemapString(state, predicate_constant, constant.c_str());
+					break;
+				}
+				default:
+					throw NotImplementedException("Unimplemented type for uncompressed segment");
+				}
 			}
-			default:
-				throw NotImplementedException("Unimplemented type for uncompressed segment");
+			if (!readSegment) {
+				//! We can skip this partition
+				idx_t vectorsToSkip =
+				    ceil((double)(state.column_scans[predicate_constant.column_index].current->count +
+				                  state.column_scans[predicate_constant.column_index].current->start - current_row) /
+				         STANDARD_VECTOR_SIZE);
+				for (idx_t i = 0; i < vectorsToSkip; ++i) {
+					state.NextVector();
+					current_row += STANDARD_VECTOR_SIZE;
+				}
+				return false;
 			}
-		}
-
-		if (!readSegment) {
-			//! We can skip this partition
-			idx_t vectorsToSkip =
-			    ceil((double)(state.column_scans[table_filter.column_index].current->count +
-			                  state.column_scans[table_filter.column_index].current->start - current_row) /
-			         STANDARD_VECTOR_SIZE);
-			for (idx_t i = 0; i < vectorsToSkip; ++i) {
-				state.NextVector();
-				current_row += STANDARD_VECTOR_SIZE;
-			}
-			return false;
 		}
 	}
+
 	return true;
 }
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
                               idx_t max_row, idx_t base_row, VersionManager &manager,
-                              vector<TableFilter> &table_filters) {
+                              unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -216,7 +220,13 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		current_row += STANDARD_VECTOR_SIZE;
 		return true;
 	}
-
+	//! If we have filters, we need to first scan the columns with filters and generate a selection vector.
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	idx_t approved_tuple_count = 0;
+	for (auto &table_filter : table_filters) {
+		columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first], table_filter.second,
+		                                   sel, approved_tuple_count);
+	}
 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
 		auto column = state.column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
@@ -225,7 +235,14 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
-			columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
+
+			auto column_filters = table_filters.find(column);
+			if (column_filters == table_filters.end()) {
+				vector<TableFilter> empty;
+				columns[column].Scan(transaction, state.column_scans[i], result.data[i], empty);
+			} else {
+				columns[column].Scan(transaction, state.column_scans[i], result.data[i], column_filters->second);
+			}
 		}
 	}
 	if (count == max_count) {

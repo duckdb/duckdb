@@ -64,9 +64,17 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 }
 
 //===--------------------------------------------------------------------===//
+// Filter base data
+//===--------------------------------------------------------------------===//
+void StringSegment::FilterBaseData(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
+                                   idx_t &approved_tuple_count) {
+	assert(0);
+}
+//===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-void StringSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
+void StringSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result,
+                                  vector<TableFilter> &table_filter) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto handle = state.primary_handle.get();
 	state.handles.clear();

@@ -1,4 +1,4 @@
-#include <duckdb/planner/expression/list.hpp>
+#include "duckdb/planner/expression/list.hpp"
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"

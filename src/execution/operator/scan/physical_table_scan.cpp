@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -24,9 +26,9 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
                                      vector<column_t> column_ids, vector<unique_ptr<Expression>> filter,
-                                     vector<TableFilter> tableFilters)
+                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
     : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
-      column_ids(column_ids), table_filters(tableFilters) {
+      column_ids(move(column_ids)), table_filters(move(table_filters)) {
 	if (filter.size() > 1) {
 		//! create a big AND out of the expressions
 		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
@@ -41,7 +43,7 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		return;
 	}
 	auto &transaction = Transaction::GetTransaction(context);

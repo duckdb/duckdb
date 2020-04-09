@@ -50,11 +50,14 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result);
+	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
+	          vector<TableFilter> &tableFilter);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
-
+	//! Executes the filters directly in the table's data
+	void Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
+	            SelectionVector &sel, idx_t &approved_tuple_count);
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
@@ -90,8 +93,12 @@ public:
 protected:
 	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
 	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
+	//! Executes the filters directly in the table's data
+	virtual void FilterBaseData(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
+	                            idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
-	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result,
+	                           vector<TableFilter> &tableFilter) = 0;
 	//! Fetch update data from an UpdateInfo version
 	virtual void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
 	                             Vector &result) = 0;

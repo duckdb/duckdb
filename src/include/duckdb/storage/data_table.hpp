@@ -66,7 +66,8 @@ public:
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	// from offset and store them in result. Offset is incremented with how many
 	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<TableFilter> &table_filters);
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
@@ -122,9 +123,11 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
-	bool CheckZonemap(TableScanState &state, vector<TableFilter> &table_filters, idx_t &current_row);
+	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
+	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
-	                   idx_t max_row, idx_t base_row, VersionManager &manager, vector<TableFilter> &table_filters);
+	                   idx_t max_row, idx_t base_row, VersionManager &manager,
+	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
 	                     idx_t base_row);
 

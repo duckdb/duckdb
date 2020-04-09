@@ -80,8 +80,10 @@ public:
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
-
-	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	void FilterBaseData(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
+	                    idx_t &approved_tuple_count) override;
+	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result,
+	                   vector<TableFilter> &table_filter) override;
 	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions,
 	                     Vector &result) override;
 

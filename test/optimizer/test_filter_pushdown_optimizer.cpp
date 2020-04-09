@@ -121,44 +121,44 @@ TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
 	//! Checking if Optimizer push predicates down
 	auto tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
 	//! The generated plan should be Projection ->Get (1)
-	//		auto plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
-	//
-	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
-	//		//! The generated plan should be Projection ->Get (1)
-	//		plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
-	//
-	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i > 'bla' ");
-	//		//! The generated plan should be Projection ->Get (1)
-	//		plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
-	//
-	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i >= 'bla' ");
-	//		//! The generated plan should be Projection ->Get (1)
-	//		plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
-	//
-	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i < 'bla' ");
-	//		//! The generated plan should be Projection ->Get (1)
-	//		plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
-	//
-	//		tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i <= 'bla' ");
-	//		//! The generated plan should be Projection ->Get (1)
-	//		plan = opt.Optimize(move(tree));
-	//		REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
-	//		REQUIRE(plan->children[0]->expressions.size() == 1);
+	auto plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i = 'bla' ");
+	//! The generated plan should be Projection ->Get (1)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i > 'bla' ");
+	//! The generated plan should be Projection ->Get (1)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i >= 'bla' ");
+	//! The generated plan should be Projection ->Get (1)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i < 'bla' ");
+	//! The generated plan should be Projection ->Get (1)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
+
+	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i <= 'bla' ");
+	//! The generated plan should be Projection ->Get (1)
+	plan = opt.Optimize(move(tree));
+	REQUIRE(plan->children[0]->type == LogicalOperatorType::GET);
+	REQUIRE(plan->children[0]->expressions.size() == 1);
 
 	tree = helper.ParseLogicalTree("SELECT i FROM tablinho where i like 'bla%' ");
 
 	//! The generated plan should be Projection ->filter(1)->get(0,2)
-	auto plan = opt.Optimize(move(tree));
+	plan = opt.Optimize(move(tree));
 	REQUIRE(plan->children[0]->type == LogicalOperatorType::FILTER);
 	REQUIRE(plan->children[0]->expressions.size() == 1);
 	REQUIRE(plan->children[0]->children[0]->type == LogicalOperatorType::GET);
@@ -209,7 +209,7 @@ TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer
 	Connection con(db);
 
 	vector<int> input;
-	idx_t input_size = 100000;
+	idx_t input_size = 100;
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer)"));
 	for (idx_t i = 0; i < input_size; ++i) {
 		input.push_back(i);
@@ -219,7 +219,7 @@ TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer
 		    con.Query("INSERT INTO integers VALUES(" + to_string(input[i]) + "," + to_string(input[i]) + ")"));
 	}
 
-	result = con.Query("SELECT i FROM integers where j = 99000 ");
+	result = con.Query("SELECT i FROM integers where j = 99 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
 
 	result = con.Query("SELECT i FROM integers where j = 99000 and i = 20 ");
