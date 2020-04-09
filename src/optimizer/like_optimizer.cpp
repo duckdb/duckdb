@@ -34,8 +34,8 @@ unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> o
 				string_t pattern = pattern_str.str_value;
 				auto patt_data = pattern.GetData();
 				auto patt_size = pattern.GetSize();
-				if( std::regex_match(patt_data, std::regex("[^%]+%")) ) {
-					// Prefix LIKE pattern : [^%]+%
+				if( std::regex_match(patt_data, std::regex("[^%_]*[%]+")) ) {
+					// Prefix LIKE pattern : [^%_]*[%]+, ignoring undescore
 					auto prefix_func = GetScalarFunction("prefix");
 					// replace LIKE by prefix function
 					func.function = prefix_func;
@@ -45,8 +45,8 @@ unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> o
 					auto &const_expr = (BoundConstantExpression &)*func.children[1].get();
 					// set the new pattern without "%"
 					const_expr.value = Value(patt_data);
-				} else if( std::regex_match(patt_data, std::regex("%[^%]+")) ) {
-					// Suffix LIKE pattern: %[^%]+
+				} else if( std::regex_match(patt_data, std::regex("[%]+[^%_]*")) ) {
+					// Suffix LIKE pattern: [%]+[^%_]*, ignoring undescore
 					auto suffix_func = GetScalarFunction("suffix");
 					// replace LIKE by suffix function
 					func.function = suffix_func;
@@ -56,8 +56,8 @@ unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> o
 					auto &const_expr = (BoundConstantExpression &)*func.children[1].get();
 					// set the new pattern without "%"
 					const_expr.value = Value(patt_data);
-				} else if( std::regex_match(patt_data, std::regex("%.+%")) ) {
-					// Contains LIKE pattern: %.+%
+				} else if( std::regex_match(patt_data, std::regex("[%]+[^%_]*[%]+")) ) {
+					// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring undescore
 					auto contains_func = GetScalarFunction("contains");
 					func.function = contains_func;
 
