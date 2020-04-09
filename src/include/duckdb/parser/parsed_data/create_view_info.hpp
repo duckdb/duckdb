@@ -21,8 +21,10 @@ struct CreateViewInfo : public CreateInfo {
 
 	//! Table name to insert to
 	string view_name;
-	//! Aliases of the
+	//! Aliases of the view
 	vector<string> aliases;
+	//! Return types
+	vector<SQLType> types;
 	//! The QueryNode of the view
 	unique_ptr<QueryNode> query;
 };
