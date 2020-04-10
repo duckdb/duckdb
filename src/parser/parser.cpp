@@ -91,7 +91,7 @@ void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
 	parser.ParseQuery(mock_query);
 	// check the statements
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE) {
-		throw ParserException("Expected a single SELECT statement");
+		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = (UpdateStatement &)*parser.statements[0];
 	update_columns = move(update.columns);

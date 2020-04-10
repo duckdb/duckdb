@@ -252,6 +252,11 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4}));
 
+	// aggregate on EXPLICIT join
+	REQUIRE_NOTHROW(result = vjoin->Aggregate("SUM(v1.i) + SUM(v2.i), SUM(v1.j) + SUM(v2.j)")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {12}));
+	REQUIRE(CHECK_COLUMN(result, 1, {38}));
+
 	// implicit join
 	vjoin = v1->Join(v2, "i");
 	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
@@ -264,6 +269,11 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
+	// aggregate on USING join
+	REQUIRE_NOTHROW(result = vjoin->Aggregate("SUM(i), SUM(j)")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {19}));
 
 	// joining on a column that doesn't exist results in an error
 	REQUIRE_THROWS(v1->Join(v2, "blabla"));
@@ -429,6 +439,9 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
+	// we cannot run update/delete on anything but base table relations
+	REQUIRE_THROWS(tbl->Limit(1)->Delete());
+	REQUIRE_THROWS(tbl->Limit(1)->Update("i=1"));
 }
 
 TEST_CASE("Test aggregates in relation API", "[relation_api]") {
@@ -514,6 +527,9 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	result = tbl->Aggregate("SUM(j) AS k")->Project("k+1 AS l")->Aggregate("SUM(l) AS m")->Project("m*2")->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {38}));
 
+	// aggregate after output modifiers
+	result = tbl->Order("i")->Limit(100)->Aggregate("SUM(j) AS k")->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {18}));
 }
 
 TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
@@ -611,21 +627,42 @@ TEST_CASE("Test interaction of relations with schema changes", "[relation_api]")
 	REQUIRE_NO_FAIL(tbl->Execute());
 }
 
-// TEST_CASE("We can mix statements from multiple databases", "[relation_api]") {
-// 	DuckDB db(nullptr), db2(nullptr);
-// 	Connection con(db), con2(db);
-// 	unique_ptr<QueryResult> result;
+TEST_CASE("Test junk SQL in expressions", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
 
-// 	// create some tables
-// 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-// 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
-// 	REQUIRE_NO_FAIL(con2.Query("CREATE TABLE integers(i INTEGER)"));
-// 	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (4, 5, 6)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
 
-// 	// we can combine tables from different databases
-// 	auto i1 = con.Table("integers");
-// 	auto i2 = con2.Table("integers");
+	auto tbl = con.Table("integers");
+	REQUIRE_THROWS(tbl->Filter("1=1; DELETE FROM tables;"));
+	REQUIRE_THROWS(tbl->Filter("1=1 UNION SELECT 42"));
+	REQUIRE_THROWS(tbl->Order("1 DESC; DELETE FROM tables;"));
+	REQUIRE_THROWS(tbl->Update("i=1; DELETE FROM TABLES"));
+	REQUIRE_THROWS(con.Values("(1, 1); SELECT 42"));
+	REQUIRE_THROWS(con.Values("(1, 1) UNION SELECT 42"));
+}
 
-// 	result = i2->Union(i1, "i")->Order("i")->Execute();
-// 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6}));
-// }
+TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") {
+	DuckDB db(nullptr), db2(nullptr);
+	Connection con(db), con2(db2);
+	unique_ptr<QueryResult> result;
+
+	// create some tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(con2.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con2.Query("INSERT INTO integers VALUES (4)"));
+
+	auto i1 = con.Table("integers");
+	auto i2 = con2.Table("integers");
+
+	// we cannot mix statements from different connections without a wrapper!
+	REQUIRE_THROWS(i2->Union(i1));
+	REQUIRE_THROWS(i2->Except(i1));
+	REQUIRE_THROWS(i2->Intersect(i1));
+	REQUIRE_THROWS(i2->Join(i1, "i"));
+
+	// FIXME: what about a wrapper to scan data from other databases/connections?
+}

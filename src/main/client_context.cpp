@@ -503,6 +503,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
+		// run the ToString, to verify that it doesn't crash
+		orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
 		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
