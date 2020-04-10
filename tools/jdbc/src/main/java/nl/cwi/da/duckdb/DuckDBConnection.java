@@ -48,8 +48,13 @@ public class DuckDBConnection implements java.sql.Connection {
 		s.execute("ROLLBACK");
 		s.close();
 	}
+	
+	protected void finalize() throws Throwable {
+		close();
+	}
 
-	public void close() throws SQLException {
+
+	public synchronized void close() throws SQLException {
 		if (conn_ref != null) {
 			DuckDBNative.duckdb_jdbc_disconnect(conn_ref);
 			conn_ref = null;

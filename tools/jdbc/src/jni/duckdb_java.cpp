@@ -210,6 +210,9 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 		case TypeId::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+				if (FlatVector::Nullmask(vec)[row_idx]) {
+					continue;
+				}
 				env->SetObjectArrayElement(
 				    varlen_data, row_idx, env->NewStringUTF(((string_t *)FlatVector::GetData(vec))[row_idx].GetData()));
 			}

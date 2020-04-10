@@ -19,6 +19,8 @@ public class DuckDBStatement implements Statement {
 	}
 
 	public boolean execute(String sql) throws SQLException {
+		result = null;
+		stmt_ref = null;
 		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
 		Object[] params = {};
 		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
@@ -48,12 +50,17 @@ public class DuckDBStatement implements Statement {
 		return affected;
 	}
 
-	public void close() throws SQLException {
+	public synchronized void close() throws SQLException {
 		if (stmt_ref != null) {
 			DuckDBNative.duckdb_jdbc_release(stmt_ref);
 			stmt_ref = null;
 		}
 		conn = null;
+		result = null;
+	}
+
+	protected void finalize() throws Throwable {
+		close();
 	}
 
 	public boolean isClosed() throws SQLException {
