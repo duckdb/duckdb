@@ -79,7 +79,7 @@ public class DuckDBResultSet implements ResultSet {
 		return true;
 	}
 
-	public void close() throws SQLException {
+	public synchronized void close() throws SQLException {
 		if (result_ref != null) {
 			DuckDBNative.duckdb_jdbc_free_result(result_ref);
 			result_ref = null;
@@ -87,6 +87,10 @@ public class DuckDBResultSet implements ResultSet {
 		stmt = null;
 		meta = null;
 		current_chunk = null;
+	}
+
+	protected void finalize() throws Throwable {
+		close();
 	}
 
 	public boolean isClosed() throws SQLException {

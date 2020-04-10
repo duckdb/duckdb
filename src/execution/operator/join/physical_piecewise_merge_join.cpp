@@ -285,6 +285,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;

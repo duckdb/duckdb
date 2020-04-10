@@ -62,7 +62,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias = view_catalog_entry->aliases;
 		// bind the child subquery
-		return Bind(subquery);
+		auto bound_child = Bind(subquery);
+		assert(bound_child->type == TableReferenceType::SUBQUERY);
+		// verify that the types and names match up with the expected types and names
+		auto &bound_subquery = (BoundSubqueryRef&) *bound_child;
+		if (bound_subquery.subquery->types != view_catalog_entry->types) {
+			throw BinderException("Contents of view were altered: types don't match!");
+		}
+		return bound_child;
 	}
 	default:
 		throw NotImplementedException("Catalog entry type");

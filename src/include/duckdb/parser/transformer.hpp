@@ -72,6 +72,7 @@ private:
 	unique_ptr<PragmaStatement> TransformPragma(PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(PGNode *node);
 	unique_ptr<VacuumStatement> TransformVacuum(PGNode *node);
+	unique_ptr<PragmaStatement> TransformShow(PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(PGNode *node);

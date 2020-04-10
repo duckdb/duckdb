@@ -1,5 +1,7 @@
 package nl.cwi.da.duckdb.test;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -341,13 +343,89 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_crash_bug496() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 BOOLEAN, c1 INT)");
+		stmt.execute("CREATE INDEX i0 ON t0(c1, c0)");
+		stmt.execute("INSERT INTO t0(c1) VALUES (0)");
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_tablepragma_bug491() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+
+		ResultSet rs = stmt.executeQuery("PRAGMA table_info('t0')");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getInt("cid"), 0);
+		assertEquals(rs.getString("name"), "c0");
+		assertEquals(rs.getString("type"), "INTEGER");
+		assertEquals(rs.getBoolean("notnull"), false);
+		rs.getObject("dflt_value");
+		assertTrue(rs.wasNull());
+		assertEquals(rs.getBoolean("pk"), false);
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_nulltruth_bug489() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+		stmt.execute("INSERT INTO t0(c0) VALUES (0)");
+
+		ResultSet rs = stmt.executeQuery("SELECT * FROM t0 WHERE NOT(NULL OR TRUE)");
+		assertFalse(rs.next());
+
+		rs = stmt.executeQuery("SELECT NOT(NULL OR TRUE)");
+		assertTrue(rs.next());
+		boolean res = rs.getBoolean(1);
+		assertEquals(res, false);
+		assertFalse(rs.wasNull());
+
+		rs.close();
+		stmt.close();
+		conn.close();
+
+	}
+
+	public static void test_empty_prepare_bug500() throws Exception {
+		String fileContent = "CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE);\n"
+				+ "CREATE TABLE t1(c0 DOUBLE, PRIMARY KEY(c0));\n" + "INSERT INTO t0(c0) VALUES (0), (0), (0), (0);\n"
+				+ "INSERT INTO t0(c0) VALUES (NULL), (NULL);\n" + "INSERT INTO t1(c0) VALUES (0), (1);\n" + "\n"
+				+ "SELECT t0.c0 FROM t0, t1;";
+		Connection con = DriverManager.getConnection("jdbc:duckdb:");
+		for (String s : fileContent.split("\n")) {
+			try (Statement st = con.createStatement()) {
+				try {
+					st.execute(s);
+				} catch (Exception e) {
+					// e.printStackTrace();
+				}
+			}
+		}
+		con.close();
+
+	}
+
 	public static void main(String[] args) throws Exception {
-		test_connection();
-		test_result();
-		test_empty_table();
-		test_broken_next();
-		test_multiple_connections();
-		test_big_data();
+		// Woo I can do reflection too, take this, JUnit!
+		Method[] methods = TestDuckDBJDBC.class.getMethods();
+		for (Method m : methods) {
+			if (m.getName().startsWith("test_")) {
+				m.invoke(null);
+			}
+		}
 		System.out.println("OK");
 	}
 }
