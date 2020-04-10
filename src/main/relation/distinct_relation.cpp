@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p) :
-	Relation(child_p->context, RelationType::DISTINCT), child(move(child_p)) {
+DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p)
+    : Relation(child_p->context, RelationType::DISTINCT), child(move(child_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }
@@ -26,7 +26,8 @@ const vector<ColumnDefinition> &DistinctRelation::Columns() {
 
 string DistinctRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Distinct\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

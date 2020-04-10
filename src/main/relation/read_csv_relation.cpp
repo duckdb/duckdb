@@ -9,8 +9,10 @@
 
 namespace duckdb {
 
-ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p, string alias_p) :
-	Relation(context, RelationType::READ_CSV), csv_file(move(csv_file_p)), alias(move(alias_p)), columns(move(columns_p)) {
+ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p,
+                                 string alias_p)
+    : Relation(context, RelationType::READ_CSV), csv_file(move(csv_file_p)), alias(move(alias_p)),
+      columns(move(columns_p)) {
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
@@ -32,7 +34,7 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 	children.push_back(make_unique<ConstantExpression>(SQLType::VARCHAR, Value(",")));
 	// parameters
 	child_list_t<Value> column_names;
-	for(idx_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		column_names.push_back(make_pair(columns[i].name, Value(SQLTypeToString(columns[i].type))));
 	}
 	children.push_back(make_unique<ConstantExpression>(SQLType::STRUCT, Value::STRUCT(move(column_names))));
@@ -52,4 +54,4 @@ string ReadCSVRelation::ToString(idx_t depth) {
 	return RenderWhitespace(depth) + "Read CSV [" + csv_file + "]";
 }
 
-}
+} // namespace duckdb

@@ -128,7 +128,7 @@ shared_ptr<Relation> Connection::Values(string values, vector<string> column_nam
 shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns) {
 	// parse columns
 	vector<ColumnDefinition> column_list;
-	for(auto &column : columns) {
+	for (auto &column : columns) {
 		auto col_list = Parser::ParseColumnList(column);
 		if (col_list.size() != 1) {
 			throw ParserException("Expected a singlec olumn definition");

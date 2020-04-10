@@ -49,6 +49,7 @@ struct TableBinding : public Binding {
 
 	TableCatalogEntry &table;
 	LogicalGet &get;
+
 public:
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;

@@ -19,10 +19,13 @@ enum ResultModifierType : uint8_t { LIMIT_MODIFIER = 1, ORDER_MODIFIER = 2, DIST
 //! A ResultModifier
 class ResultModifier {
 public:
-	ResultModifier(ResultModifierType type) : type(type){}
-	virtual ~ResultModifier(){}
+	ResultModifier(ResultModifierType type) : type(type) {
+	}
+	virtual ~ResultModifier() {
+	}
 
 	ResultModifierType type;
+
 public:
 	//! Returns true if the two result modifiers are equivalent
 	virtual bool Equals(const ResultModifier *other) const;
@@ -50,12 +53,14 @@ struct OrderByNode {
 
 class LimitModifier : public ResultModifier {
 public:
-	LimitModifier() : ResultModifier(ResultModifierType::LIMIT_MODIFIER) {}
+	LimitModifier() : ResultModifier(ResultModifierType::LIMIT_MODIFIER) {
+	}
 
 	//! LIMIT count
 	unique_ptr<ParsedExpression> limit;
 	//! OFFSET
 	unique_ptr<ParsedExpression> offset;
+
 public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() override;
@@ -65,10 +70,12 @@ public:
 
 class OrderModifier : public ResultModifier {
 public:
-	OrderModifier() : ResultModifier(ResultModifierType::ORDER_MODIFIER) {}
+	OrderModifier() : ResultModifier(ResultModifierType::ORDER_MODIFIER) {
+	}
 
 	//! List of order nodes
 	vector<OrderByNode> orders;
+
 public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() override;
@@ -78,10 +85,12 @@ public:
 
 class DistinctModifier : public ResultModifier {
 public:
-	DistinctModifier() : ResultModifier(ResultModifierType::DISTINCT_MODIFIER) {}
+	DistinctModifier() : ResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
+	}
 
 	//! list of distinct on targets (if any)
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
+
 public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() override;
@@ -89,4 +98,4 @@ public:
 	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 };
 
-}
+} // namespace duckdb

@@ -22,6 +22,7 @@ public:
 	vector<string> names;
 	vector<ColumnDefinition> columns;
 	string alias;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

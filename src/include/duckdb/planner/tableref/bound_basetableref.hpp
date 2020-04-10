@@ -17,8 +17,7 @@ class TableCatalogEntry;
 //! Represents a TableReference to a base table in the schema
 class BoundBaseTableRef : public BoundTableRef {
 public:
-	BoundBaseTableRef(unique_ptr<LogicalOperator> get)
-	    : BoundTableRef(TableReferenceType::BASE_TABLE), get(move(get)) {
+	BoundBaseTableRef(unique_ptr<LogicalOperator> get) : BoundTableRef(TableReferenceType::BASE_TABLE), get(move(get)) {
 	}
 
 	unique_ptr<LogicalOperator> get;

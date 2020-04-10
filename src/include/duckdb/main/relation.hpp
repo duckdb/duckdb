@@ -27,11 +27,14 @@ class TableRef;
 
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
-	Relation(ClientContext &context, RelationType type) : context(context), type(type) {}
-	virtual ~Relation(){}
+	Relation(ClientContext &context, RelationType type) : context(context), type(type) {
+	}
+	virtual ~Relation() {
+	}
 
 	ClientContext &context;
 	RelationType type;
+
 public:
 	virtual const vector<ColumnDefinition> &Columns() = 0;
 	virtual unique_ptr<QueryNode> GetQueryNode() = 0;
@@ -52,6 +55,7 @@ public:
 	virtual bool IsReadOnly() {
 		return true;
 	}
+
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);
@@ -106,14 +110,16 @@ public:
 	virtual void Update(string update, string condition = string());
 	//! Delete from a table, can only be used on a TableRelation
 	virtual void Delete(string condition = string());
+
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
 	virtual bool InheritsColumnBindings() {
 		return false;
 	}
-	virtual Relation* ChildRelation() {
+	virtual Relation *ChildRelation() {
 		return nullptr;
 	}
+
 protected:
 	string RenderWhitespace(idx_t depth);
 };

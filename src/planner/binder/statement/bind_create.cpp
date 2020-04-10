@@ -16,7 +16,7 @@
 using namespace duckdb;
 using namespace std;
 
-SchemaCatalogEntry* Binder::BindSchema(CreateInfo &info) {
+SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema == INVALID_SCHEMA) {
 		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
 	}
@@ -61,6 +61,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (base.aliases.size() > query_node.names.size()) {
 			throw BinderException("More VIEW aliases than columns in query result");
 		}
+		// fill up the aliases with the remaining names of the bound query
+		for (idx_t i = base.aliases.size(); i < query_node.names.size(); i++) {
+			base.aliases.push_back(query_node.names[i]);
+		}
+		base.types = query_node.types;
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::CREATE_VIEW, move(stmt.info), schema);
 		break;
 	}
@@ -92,7 +97,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// this gives us a logical table scan
 		// we take the required columns from here
 		// create the logical operator
-		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(expressions), unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
+		result.plan = make_unique<LogicalCreateIndex>(*get.table, get.column_ids, move(expressions),
+		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
 	}
 	case CatalogType::TABLE: {

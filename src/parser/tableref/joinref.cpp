@@ -13,7 +13,7 @@ bool JoinRef::Equals(const TableRef *other_) const {
 	if (using_columns.size() != other->using_columns.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < using_columns.size(); i++) {
+	for (idx_t i = 0; i < using_columns.size(); i++) {
 		if (using_columns[i] != other->using_columns[i]) {
 			return false;
 		}

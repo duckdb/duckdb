@@ -16,8 +16,10 @@ namespace duckdb {
 //! A ResultModifier
 class BoundResultModifier {
 public:
-	BoundResultModifier(ResultModifierType type) : type(type){}
-	virtual ~BoundResultModifier(){}
+	BoundResultModifier(ResultModifierType type) : type(type) {
+	}
+	virtual ~BoundResultModifier() {
+	}
 
 	ResultModifierType type;
 };
@@ -34,7 +36,8 @@ struct BoundOrderByNode {
 
 class BoundLimitModifier : public BoundResultModifier {
 public:
-	BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {}
+	BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {
+	}
 
 	//! LIMIT count
 	int64_t limit = -1;
@@ -44,7 +47,8 @@ public:
 
 class BoundOrderModifier : public BoundResultModifier {
 public:
-	BoundOrderModifier() : BoundResultModifier(ResultModifierType::ORDER_MODIFIER) {}
+	BoundOrderModifier() : BoundResultModifier(ResultModifierType::ORDER_MODIFIER) {
+	}
 
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
@@ -52,10 +56,11 @@ public:
 
 class BoundDistinctModifier : public BoundResultModifier {
 public:
-	BoundDistinctModifier() : BoundResultModifier(ResultModifierType::DISTINCT_MODIFIER) {}
+	BoundDistinctModifier() : BoundResultModifier(ResultModifierType::DISTINCT_MODIFIER) {
+	}
 
 	//! list of distinct on targets (if any)
 	vector<unique_ptr<Expression>> target_distincts;
 };
 
-}
+} // namespace duckdb

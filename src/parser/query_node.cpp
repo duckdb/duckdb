@@ -20,7 +20,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 	if (modifiers.size() != other->modifiers.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < modifiers.size(); i++) {
+	for (idx_t i = 0; i < modifiers.size(); i++) {
 		if (!modifiers[i]->Equals(other->modifiers[i].get())) {
 			return false;
 		}
@@ -29,7 +29,7 @@ bool QueryNode::Equals(const QueryNode *other) const {
 }
 
 void QueryNode::CopyProperties(QueryNode &other) {
-	for(auto &modifier : modifiers) {
+	for (auto &modifier : modifiers) {
 		other.modifiers.push_back(modifier->Copy());
 	}
 }
@@ -37,7 +37,7 @@ void QueryNode::CopyProperties(QueryNode &other) {
 void QueryNode::Serialize(Serializer &serializer) {
 	serializer.Write<QueryNodeType>(type);
 	serializer.Write<idx_t>(modifiers.size());
-	for(idx_t i = 0; i < modifiers.size(); i++) {
+	for (idx_t i = 0; i < modifiers.size(); i++) {
 		modifiers[i]->Serialize(serializer);
 	}
 }
@@ -47,7 +47,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &source) {
 	auto type = source.Read<QueryNodeType>();
 	auto modifier_count = source.Read<idx_t>();
 	vector<unique_ptr<ResultModifier>> modifiers;
-	for(idx_t i = 0; i < modifier_count; i++) {
+	for (idx_t i = 0; i < modifier_count; i++) {
 		modifiers.push_back(ResultModifier::Deserialize(source));
 	}
 	switch (type) {

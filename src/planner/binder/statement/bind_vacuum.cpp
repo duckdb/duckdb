@@ -14,5 +14,4 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	return result;
 }
 
-}
-
+} // namespace duckdb

@@ -7,26 +7,27 @@
 
 namespace duckdb {
 
-FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p) :
-	Relation(child_p->context, RelationType::FILTER), condition(move(condition_p)), child(move(child_p)) {
+FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p)
+    : Relation(child_p->context, RelationType::FILTER), condition(move(condition_p)), child(move(child_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }
 
 unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 	auto child_ptr = child.get();
-	while(child_ptr->InheritsColumnBindings()) {
+	while (child_ptr->InheritsColumnBindings()) {
 		child_ptr = child_ptr->ChildRelation();
 	}
 	if (child_ptr->type == RelationType::JOIN) {
 		// child node is a join: push filter into WHERE clause of select node
 		auto child_node = child->GetQueryNode();
 		assert(child_node->type == QueryNodeType::SELECT_NODE);
-		auto &select_node = (SelectNode&) *child_node;
+		auto &select_node = (SelectNode &)*child_node;
 		if (!select_node.where_clause) {
 			select_node.where_clause = condition->Copy();
 		} else {
-			select_node.where_clause = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(select_node.where_clause), condition->Copy());
+			select_node.where_clause = make_unique<ConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, move(select_node.where_clause), condition->Copy());
 		}
 		return child_node;
 	} else {
@@ -48,7 +49,8 @@ const vector<ColumnDefinition> &FilterRelation::Columns() {
 
 string FilterRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Filter [" + condition->ToString() + "]\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

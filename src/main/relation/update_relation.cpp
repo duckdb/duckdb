@@ -6,8 +6,11 @@
 
 namespace duckdb {
 
-UpdateRelation::UpdateRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p, string table_name_p, vector<string> update_columns_p, vector<unique_ptr<ParsedExpression>> expressions_p) :
-	Relation(context, RelationType::UPDATE), condition(move(condition_p)), schema_name(move(schema_name_p)), table_name(move(table_name_p)), update_columns(move(update_columns_p)), expressions(move(expressions_p))  {
+UpdateRelation::UpdateRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p,
+                               string table_name_p, vector<string> update_columns_p,
+                               vector<unique_ptr<ParsedExpression>> expressions_p)
+    : Relation(context, RelationType::UPDATE), condition(move(condition_p)), schema_name(move(schema_name_p)),
+      table_name(move(table_name_p)), update_columns(move(update_columns_p)), expressions(move(expressions_p)) {
 	assert(update_columns.size() == expressions.size());
 	context.TryBindRelation(*this, this->columns);
 }
@@ -25,10 +28,10 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	stmt.condition = condition ? condition->Copy() : nullptr;
 	stmt.table = move(basetable);
 	stmt.columns = update_columns;
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		stmt.expressions.push_back(expr->Copy());
 	}
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 const vector<ColumnDefinition> &UpdateRelation::Columns() {
@@ -37,7 +40,7 @@ const vector<ColumnDefinition> &UpdateRelation::Columns() {
 
 string UpdateRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "UPDATE " + table_name + " SET\n";
-	for(idx_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		str += update_columns[i] + " = " + expressions[i]->ToString() + "\n";
 	}
 	if (condition) {
@@ -46,4 +49,4 @@ string UpdateRelation::ToString(idx_t depth) {
 	return str;
 }
 
-}
+} // namespace duckdb

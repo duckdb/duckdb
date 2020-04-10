@@ -64,7 +64,8 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && (op->type != LogicalOperatorType::PROJECTION && op->type != LogicalOperatorType::EXPRESSION_GET)) {
+	while (op->children.size() == 1 &&
+	       (op->type != LogicalOperatorType::PROJECTION && op->type != LogicalOperatorType::EXPRESSION_GET)) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
@@ -140,7 +141,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
-	}  else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
+	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		// table function call, add to set of relations
 		auto table_function = (LogicalTableFunction *)op;
 		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
@@ -727,8 +728,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now use dynamic programming to figure out the optimal join order
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation function
-	// ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
 		auto node = set_manager.GetJoinRelation(i);

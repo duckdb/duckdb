@@ -386,8 +386,8 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 
 	// CONTROVERSIAL:
-	// we do not allow this because it is ambiguous: "b" can be bind to both "t1.b" or "t2.b" and this would give different results
-	// SQLite allows this, PostgreSQL does not
+	// we do not allow this because it is ambiguous: "b" can be bind to both "t1.b" or "t2.b" and this would give
+	// different results SQLite allows this, PostgreSQL does not
 	REQUIRE_FAIL(con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b);"));
 	// a chain with the same column name is allowed though!
 	result = con.Query("SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (a) ORDER BY 1, 2, 3, 4, 5, 6, 7");
@@ -407,7 +407,6 @@ TEST_CASE("Test USING joins", "[joins]") {
 	REQUIRE(result->names[4] == "c");
 	REQUIRE(result->names[5] == "b");
 	REQUIRE(result->names[6] == "c");
-
 }
 
 TEST_CASE("Test chaining USING joins", "[joins]") {

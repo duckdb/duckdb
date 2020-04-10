@@ -25,8 +25,8 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
-	result.names = { "Count" };
-	result.types = { SQLType::BIGINT };
+	result.names = {"Count"};
+	result.types = {SQLType::BIGINT};
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	assert(table);
@@ -121,7 +121,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// insert from select statement
 	// parse select statement and add to logical plan
 	auto root_select = Bind(*stmt.select_statement);
-	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), stmt.columns.size() != 0, table->name.c_str());
+	CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), stmt.columns.size() != 0,
+	                               table->name.c_str());
 
 	auto root = CastLogicalOperatorToTypes(root_select.types, insert->expected_types, move(root_select.plan));
 	insert->AddChild(move(root));

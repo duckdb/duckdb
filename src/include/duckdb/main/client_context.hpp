@@ -87,7 +87,8 @@ public:
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
 	void Append(TableDescription &description, DataChunk &chunk);
-	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns list with the set of returned columns
+	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
+	//! list with the set of returned columns
 	void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
@@ -131,8 +132,8 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(const string &query, unique_ptr<SQLStatement> statement,
 	                                             bool allow_stream_result);
 
-	template<class T>
-	void RunFunctionInTransaction(T &&fun);
+	template <class T> void RunFunctionInTransaction(T &&fun);
+
 private:
 	idx_t prepare_count = 0;
 	//! The currently opened StreamQueryResult (if any)

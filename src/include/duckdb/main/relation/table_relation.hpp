@@ -18,6 +18,7 @@ public:
 	TableRelation(ClientContext &context, unique_ptr<TableDescription> description);
 
 	unique_ptr<TableDescription> description;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

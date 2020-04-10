@@ -95,6 +95,7 @@ public:
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 

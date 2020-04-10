@@ -53,6 +53,7 @@ struct CorrelatedColumnInfo {
 class Binder {
 	friend class ExpressionBinder;
 	friend class RecursiveSubqueryPlanner;
+
 public:
 	Binder(ClientContext &context, Binder *parent = nullptr);
 
@@ -77,7 +78,7 @@ public:
 	BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	SchemaCatalogEntry* BindSchema(CreateInfo &info);
+	SchemaCatalogEntry *BindSchema(CreateInfo &info);
 
 	unique_ptr<BoundTableRef> Bind(TableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundTableRef &ref);
@@ -113,6 +114,7 @@ private:
 	bool has_unplanned_subqueries = false;
 	//! Whether or not subqueries should be planned already
 	bool plan_subquery = true;
+
 private:
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);

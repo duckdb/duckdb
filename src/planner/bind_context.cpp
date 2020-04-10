@@ -130,7 +130,7 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<str
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<ColumnDefinition> &columns) {
 	vector<string> names;
 	vector<SQLType> types;
-	for(auto &col : columns) {
+	for (auto &col : columns) {
 		names.push_back(col.name);
 		types.push_back(col.type);
 	}

@@ -7,8 +7,9 @@
 
 namespace duckdb {
 
-CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name) :
-	Relation(child_p->context, RelationType::CREATE_TABLE), child(move(child_p)), schema_name(move(schema_name)), table_name(move(table_name)) {
+CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
+    : Relation(child_p->context, RelationType::CREATE_TABLE), child(move(child_p)), schema_name(move(schema_name)),
+      table_name(move(table_name)) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -27,7 +28,7 @@ BoundStatement CreateTableRelation::Bind(Binder &binder) {
 	info->query = move(select);
 	info->on_conflict = OnCreateConflict::ERROR;
 	stmt.info = move(info);
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 const vector<ColumnDefinition> &CreateTableRelation::Columns() {
@@ -36,7 +37,8 @@ const vector<ColumnDefinition> &CreateTableRelation::Columns() {
 
 string CreateTableRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Create View\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

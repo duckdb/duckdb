@@ -4,8 +4,8 @@ using namespace std;
 
 namespace duckdb {
 
-RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op) :
-	ExpressionBinder(binder, context), op(move(op)) {
+RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op)
+    : ExpressionBinder(binder, context), op(move(op)) {
 }
 
 BindResult RelationBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
@@ -27,4 +27,4 @@ string RelationBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in " + op;
 }
 
-}
+} // namespace duckdb

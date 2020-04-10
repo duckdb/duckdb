@@ -64,11 +64,11 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 }
 
 void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result) {
-	for(auto &mod : statement.modifiers) {
+	for (auto &mod : statement.modifiers) {
 		unique_ptr<BoundResultModifier> bound_modifier;
-		switch(mod->type) {
+		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (DistinctModifier&) *mod;
+			auto &distinct = (DistinctModifier &)*mod;
 			auto bound_distinct = make_unique<BoundDistinctModifier>();
 			for (idx_t i = 0; i < distinct.distinct_on_targets.size(); i++) {
 				auto expr = BindOrderExpression(order_binder, move(distinct.distinct_on_targets[i]));
@@ -81,7 +81,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (OrderModifier&) *mod;
+			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
 			for (idx_t i = 0; i < order.orders.size(); i++) {
 				BoundOrderByNode node;
@@ -96,7 +96,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
-			bound_modifier = BindLimit((LimitModifier&) *mod);
+			bound_modifier = BindLimit((LimitModifier &)*mod);
 			break;
 		default:
 			throw Exception("Unsupported result modifier");
@@ -106,18 +106,19 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 }
 
 void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &types, idx_t projection_index) {
-	for(auto &bound_mod : result.modifiers) {
-		switch(bound_mod->type) {
+	for (auto &bound_mod : result.modifiers) {
+		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (BoundDistinctModifier&) *bound_mod;
+			auto &distinct = (BoundDistinctModifier &)*bound_mod;
 			if (distinct.target_distincts.size() == 0) {
 				// DISTINCT without a target: push references to the standard select list
-				for(idx_t i = 0; i < types.size(); i++) {
-					distinct.target_distincts.push_back(make_unique<BoundColumnRefExpression>(types[i], ColumnBinding(projection_index, i)));
+				for (idx_t i = 0; i < types.size(); i++) {
+					distinct.target_distincts.push_back(
+					    make_unique<BoundColumnRefExpression>(types[i], ColumnBinding(projection_index, i)));
 				}
 			} else {
 				// DISTINCT with target list: set types
-				for(idx_t i = 0; i < distinct.target_distincts.size(); i++) {
+				for (idx_t i = 0; i < distinct.target_distincts.size(); i++) {
 					auto &expr = distinct.target_distincts[i];
 					assert(expr->type == ExpressionType::BOUND_COLUMN_REF);
 					auto &bound_colref = (BoundColumnRefExpression &)*expr;
@@ -131,7 +132,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &typ
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (BoundOrderModifier&) *bound_mod;
+			auto &order = (BoundOrderModifier &)*bound_mod;
 			for (idx_t i = 0; i < order.orders.size(); i++) {
 				auto &expr = order.orders[i].expression;
 				assert(expr->type == ExpressionType::BOUND_COLUMN_REF);
@@ -255,7 +256,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
 			auto group_type = expr->return_type;
-			auto group_ref = make_unique<BoundColumnRefExpression>(group_type, ColumnBinding(result->group_index, result->groups.size()));
+			auto group_ref = make_unique<BoundColumnRefExpression>(
+			    group_type, ColumnBinding(result->group_index, result->groups.size()));
 			result->groups.push_back(move(expr));
 			expr = move(group_ref);
 		}
@@ -287,4 +289,4 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	return move(result);
 }
 
-}
+} // namespace duckdb

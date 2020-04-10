@@ -36,7 +36,8 @@ public:
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 		}
 		//! Create an intermediate node in the join tree
-		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
+		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
+		         idx_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
 		}
 	};

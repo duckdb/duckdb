@@ -16,12 +16,14 @@ namespace duckdb {
 class AggregateRelation : public Relation {
 public:
 	AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions);
-	AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions, vector<unique_ptr<ParsedExpression>> groups);
+	AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
+	                  vector<unique_ptr<ParsedExpression>> groups);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> groups;
 	vector<ColumnDefinition> columns;
 	shared_ptr<Relation> child;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

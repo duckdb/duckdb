@@ -52,11 +52,11 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_l
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement&) *parser.statements[0];
+	auto &select = (SelectStatement &)*parser.statements[0];
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode&) *select.node;
+	auto &select_node = (SelectNode &)*select.node;
 	return move(select_node.select_list);
 }
 
@@ -70,19 +70,20 @@ vector<OrderByNode> Parser::ParseOrderList(string select_list) {
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement&) *parser.statements[0];
+	auto &select = (SelectStatement &)*parser.statements[0];
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode&) *select.node;
+	auto &select_node = (SelectNode &)*select.node;
 	if (select_node.modifiers.size() == 0 || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER) {
 		throw ParserException("Expected a single ORDER clause");
 	}
-	auto &order = (OrderModifier&) *select_node.modifiers[0];
+	auto &order = (OrderModifier &)*select_node.modifiers[0];
 	return move(order.orders);
 }
 
-void Parser::ParseUpdateList(string update_list, vector<string> &update_columns, vector<unique_ptr<ParsedExpression>> &expressions) {
+void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
+                             vector<unique_ptr<ParsedExpression>> &expressions) {
 	// construct a mock query
 	string mock_query = "UPDATE tbl SET " + update_list;
 	// parse the query
@@ -92,7 +93,7 @@ void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &update = (UpdateStatement&) *parser.statements[0];
+	auto &update = (UpdateStatement &)*parser.statements[0];
 	update_columns = move(update.columns);
 	expressions = move(update.expressions);
 }
@@ -107,15 +108,15 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string valu
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
-	auto &select = (SelectStatement&) *parser.statements[0];
+	auto &select = (SelectStatement &)*parser.statements[0];
 	if (select.node->type != QueryNodeType::SELECT_NODE) {
 		throw ParserException("Expected a single SELECT node");
 	}
-	auto &select_node = (SelectNode&) *select.node;
+	auto &select_node = (SelectNode &)*select.node;
 	if (!select_node.from_table || select_node.from_table->type != TableReferenceType::EXPRESSION_LIST) {
 		throw ParserException("Expected a single VALUES statement");
 	}
-	auto &values_list = (ExpressionListRef&) *select_node.from_table;
+	auto &values_list = (ExpressionListRef &)*select_node.from_table;
 	return move(values_list.values);
 }
 
@@ -126,10 +127,10 @@ vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE) {
 		throw ParserException("Expected a single CREATE statement");
 	}
-	auto &create = (CreateStatement&) *parser.statements[0];
+	auto &create = (CreateStatement &)*parser.statements[0];
 	if (create.info->type != CatalogType::TABLE) {
 		throw ParserException("Expected a single CREATE TABLE statement");
 	}
-	auto &info = ((CreateTableInfo&) *create.info);
+	auto &info = ((CreateTableInfo &)*create.info);
 	return move(info.columns);
 }

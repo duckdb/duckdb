@@ -8,22 +8,24 @@
 
 namespace duckdb {
 
-ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values, vector<string> names_p, string alias_p) :
-	Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
+ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values, vector<string> names_p,
+                             string alias_p)
+    : Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
-	for(idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
+	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
-		for(idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			expressions.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(list[col_idx].type), list[col_idx]));
+		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
+			expressions.push_back(
+			    make_unique<ConstantExpression>(SQLTypeFromInternalType(list[col_idx].type), list[col_idx]));
 		}
 		this->expressions.push_back(move(expressions));
 	}
 	context.TryBindRelation(*this, this->columns);
 }
 
-ValueRelation::ValueRelation(ClientContext &context, string values_list, vector<string> names_p, string alias_p)  :
-	Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
+ValueRelation::ValueRelation(ClientContext &context, string values_list, vector<string> names_p, string alias_p)
+    : Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list);
 	context.TryBindRelation(*this, this->columns);
 }
@@ -40,20 +42,20 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	// set the expected types/names
 	if (columns.size() == 0) {
 		// no columns yet: only set up names
-		for(idx_t i = 0; i < names.size(); i++) {
+		for (idx_t i = 0; i < names.size(); i++) {
 			table_ref->expected_names.push_back(names[i]);
 		}
 	} else {
-		for(idx_t i = 0; i < columns.size(); i++) {
+		for (idx_t i = 0; i < columns.size(); i++) {
 			table_ref->expected_names.push_back(columns[i].name);
 			table_ref->expected_types.push_back(columns[i].type);
 			assert(names.size() == 0 || columns[i].name == names[i]);
 		}
 	}
 	// copy the expressions
-	for(auto &expr_list : expressions) {
+	for (auto &expr_list : expressions) {
 		vector<unique_ptr<ParsedExpression>> copied_list;
-		for(auto &expr : expr_list) {
+		for (auto &expr : expr_list) {
 			copied_list.push_back(expr->Copy());
 		}
 		table_ref->values.push_back(move(copied_list));
@@ -72,10 +74,10 @@ const vector<ColumnDefinition> &ValueRelation::Columns() {
 
 string ValueRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Values ";
-	for(idx_t row_idx = 0; row_idx < expressions.size(); row_idx++) {
+	for (idx_t row_idx = 0; row_idx < expressions.size(); row_idx++) {
 		auto &list = expressions[row_idx];
 		str += row_idx > 0 ? ", (" : "(";
-		for(idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
 			str += col_idx > 0 ? ", " : "";
 			str += list[col_idx]->ToString();
 		}
@@ -85,4 +87,4 @@ string ValueRelation::ToString(idx_t depth) {
 	return str;
 }
 
-}
+} // namespace duckdb

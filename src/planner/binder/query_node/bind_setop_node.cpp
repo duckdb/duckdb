@@ -25,7 +25,7 @@ static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &al
 		assert(node.type == QueryNodeType::SELECT_NODE);
 		auto &select = (BoundSelectNode &)node;
 		// fill the alias lists
-		for(idx_t i = 0; i < select.names.size(); i++) {
+		for (idx_t i = 0; i < select.names.size(); i++) {
 			auto &name = select.names[i];
 			auto &expr = select.original_expressions[i];
 			// first check if the alias is already in there
@@ -86,7 +86,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		GatherAliases(*result, alias_map, expression_map);
 
 		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index, alias_map, expression_map, statement.left->GetSelectList().size());
+		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
+		                         alias_map, expression_map, statement.left->GetSelectList().size());
 		BindModifiers(order_binder, statement, *result);
 	}
 
@@ -115,5 +116,4 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	return move(result);
 }
 
-}
-
+} // namespace duckdb

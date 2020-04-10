@@ -45,4 +45,4 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	return result;
 }
 
-}
+} // namespace duckdb

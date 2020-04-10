@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_t offset) :
-	Relation(child_p->context, RelationType::PROJECTION), limit(limit), offset(offset), child(move(child_p)) {
+LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_t offset)
+    : Relation(child_p->context, RelationType::PROJECTION), limit(limit), offset(offset), child(move(child_p)) {
 }
 
 unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
@@ -37,7 +37,8 @@ string LimitRelation::ToString(idx_t depth) {
 		str += " Offset " + std::to_string(offset);
 	}
 	str += "\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

@@ -64,10 +64,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto insert_statement = Bind(insert);
 	assert(insert_statement.plan->type == LogicalOperatorType::INSERT);
 
-	auto &bound_insert = (LogicalInsert&) *insert_statement.plan;
+	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 
-	auto table =
-		Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
+	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
 	// set all columns to false
 	idx_t column_count = stmt.info->select_list.empty() ? table->columns.size() : stmt.info->select_list.size();
 	stmt.info->force_not_null.resize(column_count, false);
@@ -82,7 +81,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 			}
 			if (bound_insert.column_index_map.size() > 0) {
 				auto it =
-					find(bound_insert.column_index_map.begin(), bound_insert.column_index_map.end(), entry->second);
+				    find(bound_insert.column_index_map.begin(), bound_insert.column_index_map.end(), entry->second);
 				if (it != bound_insert.column_index_map.end()) {
 					stmt.info->force_not_null[entry->second] = true;
 				} else {

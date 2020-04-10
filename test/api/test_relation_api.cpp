@@ -30,12 +30,14 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	// we can stack projections
-	REQUIRE_NOTHROW(result = tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
+	REQUIRE_NOTHROW(
+	    result =
+	        tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 6, 7}));
 
 	// we can execute the same projection multiple times
 	REQUIRE_NOTHROW(proj = tbl->Project("i + 1"));
-	for(idx_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NOTHROW(result = proj->Execute());
 		REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 	}
@@ -148,7 +150,11 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id=1")->Project("v1.id+v2.id+v3.id")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
-	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")->Filter("v2.id < 3")->Filter("v3.id=2")->Project("v1.id+v2.id+v3.id")->Execute());
+	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
+	                             ->Filter("v2.id < 3")
+	                             ->Filter("v3.id=2")
+	                             ->Project("v1.id+v2.id+v3.id")
+	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 }
 
@@ -265,7 +271,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	// do a bunch of joins in a loop
 	auto v1tmp = v1;
 	auto v2tmp = v2;
-	for(idx_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		REQUIRE_NOTHROW(v1tmp = v1tmp->Join(v2tmp->Alias(to_string(i)), "i, j"));
 	}
 	REQUIRE_NOTHROW(result = v1tmp->Order("i")->Execute());
@@ -274,7 +280,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 
 	// now add on some projections and such
 	auto complex_join = v1tmp->Order("i")->Limit(2)->Order("i DESC")->Limit(1)->Project("i+1, j+1");
-	for(idx_t i = 0; i < 3; i++) {
+	for (idx_t i = 0; i < 3; i++) {
 		REQUIRE_NOTHROW(result = complex_join->Execute());
 		REQUIRE(CHECK_COLUMN(result, 0, {3}));
 		REQUIRE(CHECK_COLUMN(result, 1, {6}));
@@ -309,7 +315,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 
 	// multiple projections
 	proj = tbl->Project("i + 1", "i");
-	for(idx_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 10; i++) {
 		proj = proj->Project("i + 1", "i");
 	}
 	REQUIRE_NOTHROW(result = proj->Execute());
@@ -368,7 +374,8 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4, 7, 8}));
 
 	// create a table from a query
-	REQUIRE_NOTHROW(con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
+	REQUIRE_NOTHROW(
+	    con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));

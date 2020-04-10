@@ -17,17 +17,19 @@ public:
 	DistinctRelation(shared_ptr<Relation> child);
 
 	shared_ptr<Relation> child;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 	string GetAlias() override;
+
 public:
 	bool InheritsColumnBindings() override {
 		return true;
 	}
-	Relation* ChildRelation() override {
+	Relation *ChildRelation() override {
 		return child.get();
 	}
 };

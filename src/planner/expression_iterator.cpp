@@ -203,20 +203,19 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		break;
 	}
 	for (idx_t i = 0; i < node.modifiers.size(); i++) {
-		switch(node.modifiers[i]->type) {
+		switch (node.modifiers[i]->type) {
 		case ResultModifierType::DISTINCT_MODIFIER:
-			for(auto &expr : ((BoundDistinctModifier&) *node.modifiers[i]).target_distincts) {
+			for (auto &expr : ((BoundDistinctModifier &)*node.modifiers[i]).target_distincts) {
 				EnumerateExpression(expr, callback);
 			}
 			break;
 		case ResultModifierType::ORDER_MODIFIER:
-			for(auto &order : ((BoundOrderModifier&) *node.modifiers[i]).orders) {
+			for (auto &order : ((BoundOrderModifier &)*node.modifiers[i]).orders) {
 				EnumerateExpression(order.expression, callback);
 			}
 			break;
 		default:
 			break;
-
 		}
 	}
 }

@@ -36,6 +36,7 @@ public:
 		this->bound_aggregate = false;
 		this->bound_columns = false;
 	}
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 

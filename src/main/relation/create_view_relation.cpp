@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name, bool replace) :
-	Relation(child_p->context, RelationType::CREATE_VIEW), child(move(child_p)), view_name(move(view_name)), replace(replace) {
+CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name, bool replace)
+    : Relation(child_p->context, RelationType::CREATE_VIEW), child(move(child_p)), view_name(move(view_name)),
+      replace(replace) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -22,7 +23,7 @@ BoundStatement CreateViewRelation::Bind(Binder &binder) {
 	info->view_name = view_name;
 	info->on_conflict = replace ? OnCreateConflict::REPLACE : OnCreateConflict::ERROR;
 	stmt.info = move(info);
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {
@@ -31,7 +32,8 @@ const vector<ColumnDefinition> &CreateViewRelation::Columns() {
 
 string CreateViewRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Create View\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

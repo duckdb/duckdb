@@ -9,8 +9,8 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<SQLType> &source_types,
-                                                                             vector<SQLType> &target_types,
-                                                                             unique_ptr<LogicalOperator> op) {
+                                                               vector<SQLType> &target_types,
+                                                               unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast
 	assert(source_types.size() == target_types.size());
@@ -69,7 +69,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	auto right_node = node.right_binder->CreatePlan(*node.right);
 
 	// check if there are any unplanned subqueries left in either child
-	has_unplanned_subqueries = node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
+	has_unplanned_subqueries =
+	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
 
 	// for both the left and right sides, cast them to the same types
 	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));

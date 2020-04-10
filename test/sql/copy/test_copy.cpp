@@ -1609,7 +1609,6 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
 }
 
-
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1625,5 +1624,4 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
 	result = csv_scan->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-
 }

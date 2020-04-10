@@ -154,7 +154,6 @@ unique_ptr<DataChunk> ClientContext::FetchInternal() {
 	return chunk;
 }
 
-
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
                                                                          unique_ptr<SQLStatement> statement) {
 	StatementType statement_type = statement->type;
@@ -610,8 +609,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	return "";
 }
 
-template<class T>
-void ClientContext::RunFunctionInTransaction(T &&fun) {
+template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
 		throw Exception("Failed: database has been closed!");
@@ -657,7 +655,6 @@ unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string
 	return result;
 }
 
-
 void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 	RunFunctionInTransaction([&]() {
 		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
@@ -680,7 +677,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 		Binder binder(*this);
 		auto result = relation.Bind(binder);
 		assert(result.names.size() == result.types.size());
-		for(idx_t i = 0; i < result.names.size(); i++) {
+		for (idx_t i = 0; i < result.names.size(); i++) {
 			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
 		}
 	});

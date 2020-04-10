@@ -29,8 +29,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			auto result = make_unique<BoundCTERef>(index, ctebinding->index);
 			auto b = (GenericBinding *)ctebinding;
 
-			bind_context.AddGenericBinding(index, ref.alias.empty() ? ref.table_name : ref.alias, b->names,
-			                               b->types);
+			bind_context.AddGenericBinding(index, ref.alias.empty() ? ref.table_name : ref.alias, b->names, b->types);
 			// Update references to CTE
 			auto cteref = bind_context.cte_references[ref.table_name];
 			(*cteref)++;
@@ -65,7 +64,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto bound_child = Bind(subquery);
 		assert(bound_child->type == TableReferenceType::SUBQUERY);
 		// verify that the types and names match up with the expected types and names
-		auto &bound_subquery = (BoundSubqueryRef&) *bound_child;
+		auto &bound_subquery = (BoundSubqueryRef &)*bound_child;
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}

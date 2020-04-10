@@ -15,11 +15,13 @@ namespace duckdb {
 
 class ProjectionRelation : public Relation {
 public:
-	ProjectionRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions, vector<string> aliases);
+	ProjectionRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
+	                   vector<string> aliases);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<ColumnDefinition> columns;
 	shared_ptr<Relation> child;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

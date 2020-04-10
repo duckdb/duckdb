@@ -19,7 +19,8 @@ using namespace std;
 
 namespace duckdb {
 
-static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update, unordered_set<column_t> &bound_columns) {
+static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+                             unordered_set<column_t> &bound_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
@@ -44,15 +45,18 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			auto &column = table.columns[check_column_id];
 			auto col_type = GetInternalType(column.type);
 			// first add
-			update.expressions.push_back(make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(proj.table_index, proj.expressions.size())));
-			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(get.table_index, get.column_ids.size())));
+			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
+			    col_type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			proj.expressions.push_back(
+			    make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id);
 			update.columns.push_back(check_column_id);
 		}
 	}
 }
 
-static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) {
+static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+                                  LogicalUpdate &update) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
@@ -153,8 +157,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	BindUpdateConstraints(*table, get, *proj, *update);
 
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
-	    ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
+	proj->expressions.push_back(
+	    make_unique<BoundColumnRefExpression>(ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result
@@ -166,4 +170,4 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	return result;
 }
 
-}
+} // namespace duckdb

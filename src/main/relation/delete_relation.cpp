@@ -6,8 +6,10 @@
 
 namespace duckdb {
 
-DeleteRelation::DeleteRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p, string table_name_p) :
-	Relation(context, RelationType::DELETE), condition(move(condition_p)), schema_name(move(schema_name_p)), table_name(move(table_name_p))  {
+DeleteRelation::DeleteRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p,
+                               string table_name_p)
+    : Relation(context, RelationType::DELETE), condition(move(condition_p)), schema_name(move(schema_name_p)),
+      table_name(move(table_name_p)) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -23,7 +25,7 @@ BoundStatement DeleteRelation::Bind(Binder &binder) {
 	DeleteStatement stmt;
 	stmt.condition = condition ? condition->Copy() : nullptr;
 	stmt.table = move(basetable);
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 const vector<ColumnDefinition> &DeleteRelation::Columns() {
@@ -38,4 +40,4 @@ string DeleteRelation::ToString(idx_t depth) {
 	return str;
 }
 
-}
+} // namespace duckdb

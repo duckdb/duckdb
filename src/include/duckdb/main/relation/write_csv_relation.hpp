@@ -19,6 +19,7 @@ public:
 	shared_ptr<Relation> child;
 	string csv_file;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	BoundStatement Bind(Binder &binder) override;

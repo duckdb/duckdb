@@ -20,6 +20,7 @@ public:
 	string schema_name;
 	string table_name;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	BoundStatement Bind(Binder &binder) override;

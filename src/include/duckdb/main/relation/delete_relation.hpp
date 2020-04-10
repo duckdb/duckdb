@@ -15,12 +15,14 @@ namespace duckdb {
 
 class DeleteRelation : public Relation {
 public:
-	DeleteRelation(ClientContext &context, unique_ptr<ParsedExpression> condition, string schema_name, string table_name);
+	DeleteRelation(ClientContext &context, unique_ptr<ParsedExpression> condition, string schema_name,
+	               string table_name);
 
 	vector<ColumnDefinition> columns;
 	unique_ptr<ParsedExpression> condition;
 	string schema_name;
 	string table_name;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	BoundStatement Bind(Binder &binder) override;

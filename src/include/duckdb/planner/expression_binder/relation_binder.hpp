@@ -18,6 +18,7 @@ public:
 	RelationBinder(Binder &binder, ClientContext &context, string op);
 
 	string op;
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 

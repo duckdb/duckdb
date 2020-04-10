@@ -7,8 +7,9 @@
 
 namespace duckdb {
 
-InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name) :
-	Relation(child_p->context, RelationType::INSERT), child(move(child_p)), schema_name(move(schema_name)), table_name(move(table_name)) {
+InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
+    : Relation(child_p->context, RelationType::INSERT), child(move(child_p)), schema_name(move(schema_name)),
+      table_name(move(table_name)) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -24,7 +25,7 @@ BoundStatement InsertRelation::Bind(Binder &binder) {
 	stmt.schema = schema_name;
 	stmt.table = table_name;
 	stmt.select_statement = move(select);
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 const vector<ColumnDefinition> &InsertRelation::Columns() {
@@ -33,7 +34,8 @@ const vector<ColumnDefinition> &InsertRelation::Columns() {
 
 string InsertRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Create View\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

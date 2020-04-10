@@ -19,6 +19,7 @@ public:
 	string csv_file;
 	string alias;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	const vector<ColumnDefinition> &Columns() override;

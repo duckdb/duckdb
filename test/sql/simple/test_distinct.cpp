@@ -149,7 +149,6 @@ TEST_CASE("Test DISTINCT ON", "[distinct]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 5}));
 
-
 	// out of bounds
 	REQUIRE_FAIL(con.Query("SELECT DISTINCT ON (2) i FROM integers"));
 }

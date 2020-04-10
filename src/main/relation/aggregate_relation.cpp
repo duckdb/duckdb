@@ -5,21 +5,25 @@
 
 namespace duckdb {
 
-AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p, vector<unique_ptr<ParsedExpression>> parsed_expressions) :
-	Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)), child(move(child_p)) {
+AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
+                                     vector<unique_ptr<ParsedExpression>> parsed_expressions)
+    : Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)), child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
 }
 
-AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p, vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<unique_ptr<ParsedExpression>> groups_p) :
-	Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)), groups(move(groups_p)), child(move(child_p)) {
+AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
+                                     vector<unique_ptr<ParsedExpression>> parsed_expressions,
+                                     vector<unique_ptr<ParsedExpression>> groups_p)
+    : Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)),
+      groups(move(groups_p)), child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	auto child_ptr = child.get();
-	while(child_ptr->InheritsColumnBindings()) {
+	while (child_ptr->InheritsColumnBindings()) {
 		child_ptr = child_ptr->ChildRelation();
 	}
 	unique_ptr<QueryNode> result;
@@ -33,12 +37,12 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		result = move(select);
 	}
 	assert(result->type == QueryNodeType::SELECT_NODE);
-	auto &select_node = (SelectNode&) *result;
+	auto &select_node = (SelectNode &)*result;
 	if (groups.size() > 0) {
 		// explicit groups provided: use standard handling
 		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups.clear();
-		for(auto &group : groups) {
+		for (auto &group : groups) {
 			select_node.groups.push_back(group->Copy());
 		}
 	} else {
@@ -46,7 +50,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 	}
 	select_node.select_list.clear();
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		select_node.select_list.push_back(expr->Copy());
 	}
 	return result;
@@ -62,14 +66,15 @@ const vector<ColumnDefinition> &AggregateRelation::Columns() {
 
 string AggregateRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Aggregate [";
-	for(idx_t i = 0; i < expressions.size(); i++) {
+	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (i != 0) {
 			str += ", ";
 		}
 		str += expressions[i]->ToString();
 	}
 	str += "]\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb

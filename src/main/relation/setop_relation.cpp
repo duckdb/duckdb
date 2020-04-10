@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, SetOperationType setop_type_p) :
-	Relation(left_p->context, RelationType::SET_OPERATION), left(move(left_p)), right(move(right_p)), setop_type(setop_type_p) {
+SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p, SetOperationType setop_type_p)
+    : Relation(left_p->context, RelationType::SET_OPERATION), left(move(left_p)), right(move(right_p)),
+      setop_type(setop_type_p) {
 	if (&left->context != &right->context) {
 		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
 	}
@@ -31,7 +32,7 @@ const vector<ColumnDefinition> &SetOpRelation::Columns() {
 
 string SetOpRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	switch(setop_type) {
+	switch (setop_type) {
 	case SetOperationType::UNION:
 		str += "Union";
 		break;
@@ -47,4 +48,4 @@ string SetOpRelation::ToString(idx_t depth) {
 	return str + "\n" + left->ToString(depth + 1) + right->ToString(depth + 1);
 }
 
-}
+} // namespace duckdb

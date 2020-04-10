@@ -58,7 +58,8 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 		result = con.Query("SELECT * FROM t0, t1 WHERE (t1.c1 = CAST(8366271098608253588 AS REAL));");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::FLOAT(8366271098608253588)}));
-		result = con.Query("SELECT * FROM t0, t1 WHERE (t1.c1 >= CAST(8366271098608253588 AS REAL) AND t1.c1 <= CAST(8366271098608253588 AS REAL));");
+		result = con.Query("SELECT * FROM t0, t1 WHERE (t1.c1 >= CAST(8366271098608253588 AS REAL) AND t1.c1 <= "
+		                   "CAST(8366271098608253588 AS REAL));");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::FLOAT(8366271098608253588)}));
 	}
@@ -80,12 +81,14 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE EXISTS (SELECT MIN(c0) OVER (), CUME_DIST() OVER () FROM t0);");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		result = con.Query("SELECT * FROM t0 WHERE EXISTS (SELECT MIN(c0) OVER (), CUME_DIST() OVER () FROM t0) BETWEEN 1 AND 1;");
+		result = con.Query(
+		    "SELECT * FROM t0 WHERE EXISTS (SELECT MIN(c0) OVER (), CUME_DIST() OVER () FROM t0) BETWEEN 1 AND 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
 	SECTION("#61 DISTINCT malfunctions for IS NULL") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 INTEGER, c1 INTEGER NOT NULL DEFAULT 1, c2 VARCHAR);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c2) VALUES (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c2) VALUES (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL), "
+		                          "(NULL), (NULL), (NULL), (NULL);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c2) VALUES ('a');"));
 		result = con.Query("SELECT DISTINCT * FROM t0 WHERE t0.c0 IS NULL ORDER BY 1, 2, 3;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value()}));
@@ -183,7 +186,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
 	}
 	SECTION("497") {
-		// Comparison of two boolean columns in different tables results in an error "Not implemented: Unimplemented type for sort"
+		// Comparison of two boolean columns in different tables results in an error "Not implemented: Unimplemented
+		// type for sort"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 BOOL);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));

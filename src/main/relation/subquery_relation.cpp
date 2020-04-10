@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-SubqueryRelation::SubqueryRelation(shared_ptr<Relation> child_p, string alias_p) :
-	Relation(child_p->context, RelationType::SUBQUERY), child(move(child_p)), alias(move(alias_p)) {
+SubqueryRelation::SubqueryRelation(shared_ptr<Relation> child_p, string alias_p)
+    : Relation(child_p->context, RelationType::SUBQUERY), child(move(child_p)), alias(move(alias_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }
@@ -25,4 +25,4 @@ string SubqueryRelation::ToString(idx_t depth) {
 	return child->ToString(depth);
 }
 
-}
+} // namespace duckdb

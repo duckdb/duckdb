@@ -8,9 +8,8 @@
 
 namespace duckdb {
 
-TableRelation::TableRelation(ClientContext &context, unique_ptr<TableDescription> description) :
-	Relation(context, RelationType::TABLE), description(move(description)) {
-
+TableRelation::TableRelation(ClientContext &context, unique_ptr<TableDescription> description)
+    : Relation(context, RelationType::TABLE), description(move(description)) {
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {
@@ -56,7 +55,8 @@ void TableRelation::Update(string update_list, string condition) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	auto cond = ParseCondition(condition);
 	Parser::ParseUpdateList(update_list, update_columns, expressions);
-	auto update = make_shared<UpdateRelation>(context, move(cond), description->schema, description->table, move(update_columns), move(expressions));
+	auto update = make_shared<UpdateRelation>(context, move(cond), description->schema, description->table,
+	                                          move(update_columns), move(expressions));
 	update->Execute();
 }
 
@@ -66,4 +66,4 @@ void TableRelation::Delete(string condition) {
 	del->Execute();
 }
 
-}
+} // namespace duckdb

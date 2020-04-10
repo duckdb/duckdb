@@ -39,7 +39,6 @@ shared_ptr<Relation> Relation::Project(string select_list, vector<string> aliase
 shared_ptr<Relation> Relation::Project(vector<string> expressions) {
 	vector<string> aliases;
 	return Project(move(expressions), aliases);
-
 }
 
 static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(vector<string> expressions) {
@@ -47,7 +46,7 @@ static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(vector<st
 		throw ParserException("Zero expressions provided");
 	}
 	vector<unique_ptr<ParsedExpression>> result_list;
-	for(auto &expr : expressions) {
+	for (auto &expr : expressions) {
 		auto expression_list = Parser::ParseExpressionList(expr);
 		if (expression_list.size() != 1) {
 			throw ParserException("Expected a single expression in the expression list");
@@ -77,8 +76,9 @@ shared_ptr<Relation> Relation::Filter(vector<string> expressions) {
 		throw ParserException("Zero filter conditions provided");
 	}
 	auto expr = move(expression_list[0]);
-	for(idx_t i = 1; i < expression_list.size(); i++) {
-		expr = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expr), move(expression_list[i]));
+	for (idx_t i = 1; i < expression_list.size(); i++) {
+		expr =
+		    make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expr), move(expression_list[i]));
 	}
 	return make_shared<FilterRelation>(shared_from_this(), move(expr));
 }
@@ -97,7 +97,7 @@ shared_ptr<Relation> Relation::Order(vector<string> expressions) {
 		throw ParserException("Zero ORDER BY expressions provided");
 	}
 	vector<OrderByNode> order_list;
-	for(auto &expression : expressions) {
+	for (auto &expression : expressions) {
 		auto inner_list = Parser::ParseOrderList(expression);
 		if (inner_list.size() != 1) {
 			throw ParserException("Expected a single ORDER BY expression in the expression list");
@@ -115,11 +115,11 @@ shared_ptr<Relation> Relation::Join(shared_ptr<Relation> other, string condition
 	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
 		vector<string> using_columns;
-		for(auto &expr : expression_list) {
+		for (auto &expr : expression_list) {
 			if (expr->type != ExpressionType::COLUMN_REF) {
 				throw ParserException("Expected a single expression as join condition");
 			}
-			auto &colref = (ColumnRefExpression&) *expr;
+			auto &colref = (ColumnRefExpression &)*expr;
 			if (!colref.table_name.empty()) {
 				throw ParserException("Expected empty table name for column in USING clause");
 			}
@@ -189,7 +189,7 @@ unique_ptr<QueryResult> Relation::Execute() {
 BoundStatement Relation::Bind(Binder &binder) {
 	SelectStatement stmt;
 	stmt.node = GetQueryNode();
-	return binder.Bind((SQLStatement&)stmt);
+	return binder.Bind((SQLStatement &)stmt);
 }
 
 void Relation::Insert(string table_name) {
@@ -250,7 +250,7 @@ string Relation::ToString() {
 	str += "-- Result Columns  --\n";
 	str += "---------------------\n";
 	auto &cols = Columns();
-	for(idx_t i = 0; i < cols.size(); i++) {
+	for (idx_t i = 0; i < cols.size(); i++) {
 		str += "- " + cols[i].name + " (" + SQLTypeToString(cols[i].type) + ")\n";
 	}
 	return str;
@@ -264,4 +264,4 @@ string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
 }
 
-}
+} // namespace duckdb

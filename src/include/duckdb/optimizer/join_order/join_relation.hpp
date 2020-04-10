@@ -39,7 +39,8 @@ struct JoinRelationSet {
 	static bool IsSubset(JoinRelationSet *super, JoinRelationSet *sub);
 };
 
-//! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to them
+//! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to
+//! them
 class JoinRelationSetManager {
 public:
 	//! Contains a node with a JoinRelationSet and child relations

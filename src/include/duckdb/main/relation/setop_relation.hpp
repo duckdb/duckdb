@@ -20,6 +20,7 @@ public:
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
 	SetOperationType setop_type;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 

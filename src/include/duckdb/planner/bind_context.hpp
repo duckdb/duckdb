@@ -30,7 +30,8 @@ public:
 	//! Given a column name, find the matching table it belongs to. Throws an
 	//! exception if no table has a column of the given name.
 	string GetMatchingBinding(const string &column_name);
-	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will return a list of all the matching ones
+	//! Like GetMatchingBinding, but instead of throwing an error if multiple tables have the same binding it will
+	//! return a list of all the matching ones
 	unordered_set<string> GetMatchingBindings(const string &column_name);
 
 	Binding *GetCTEBinding(const string &ctename);

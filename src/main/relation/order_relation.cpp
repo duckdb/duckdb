@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders) :
-	Relation(child_p->context, RelationType::ORDER), orders(move(orders)), child(move(child_p)) {
+OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
+    : Relation(child_p->context, RelationType::ORDER), orders(move(orders)), child(move(child_p)) {
 	// bind the expressions
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
@@ -14,7 +14,7 @@ OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> o
 unique_ptr<QueryNode> OrderRelation::GetQueryNode() {
 	auto child_node = child->GetQueryNode();
 	auto order_node = make_unique<OrderModifier>();
-	for(idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		OrderByNode node;
 		node.expression = orders[i].expression->Copy();
 		node.type = orders[i].type;
@@ -34,14 +34,15 @@ const vector<ColumnDefinition> &OrderRelation::Columns() {
 
 string OrderRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Order [";
-	for(idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		if (i != 0) {
 			str += ", ";
 		}
 		str += orders[i].expression->ToString() + (orders[i].type == OrderType::ASCENDING ? " ASC" : " DESC");
 	}
 	str += "]\n";
-	return str + child->ToString(depth + 1);;
+	return str + child->ToString(depth + 1);
+	;
 }
 
-}
+} // namespace duckdb
