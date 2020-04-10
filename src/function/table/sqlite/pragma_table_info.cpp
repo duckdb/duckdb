@@ -95,7 +95,7 @@ static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEnt
 		// return values:
 		// "cid", TypeId::INT32
 
-		output.SetValue(0, index, Value::INTEGER((int32_t) index));
+		output.SetValue(0, index, Value::INTEGER((int32_t)index));
 		// "name", TypeId::VARCHAR
 		output.SetValue(1, index, Value(name));
 		// "type", TypeId::VARCHAR
@@ -124,12 +124,12 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 		auto &catalog = Catalog::GetCatalog(context);
 		data.entry = catalog.GetEntry(context, CatalogType::TABLE, schema, table_name);
 	}
-	switch(data.entry->type) {
+	switch (data.entry->type) {
 	case CatalogType::TABLE:
-		pragma_table_info_table(data, (TableCatalogEntry*) data.entry, output);
+		pragma_table_info_table(data, (TableCatalogEntry *)data.entry, output);
 		break;
 	case CatalogType::VIEW:
-		pragma_table_info_view(data, (ViewCatalogEntry*) data.entry, output);
+		pragma_table_info_view(data, (ViewCatalogEntry *)data.entry, output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");

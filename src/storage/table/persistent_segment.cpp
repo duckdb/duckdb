@@ -34,10 +34,10 @@ void PersistentSegment::Scan(Transaction &transaction, ColumnScanState &state, i
 	data->Scan(transaction, state, vector_index, result);
 }
 
-void PersistentSegment::FilterScan(Transaction &transaction, ColumnScanState &state,  Vector &result,
-                        SelectionVector &sel, idx_t &approved_tuple_count) {
-    assert(0);
-//	data->Scan(transaction, state, vector_index, result);
+void PersistentSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                                   SelectionVector &sel, idx_t &approved_tuple_count) {
+	assert(0);
+	//	data->Scan(transaction, state, vector_index, result);
 }
 
 void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {

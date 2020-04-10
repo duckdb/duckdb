@@ -52,8 +52,8 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
 	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &approved_tuple_count);
+	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                idx_t &approved_tuple_count);
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
@@ -97,10 +97,10 @@ protected:
 	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
 	//! Executes the filters directly in the table's data
 	virtual void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-                        idx_t &approved_tuple_count) = 0;
+	                    idx_t &approved_tuple_count) = 0;
 	//! Fetch the base data and apply a filter to it
-	virtual void FilterFetchBaseData(Transaction &transaction, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &approved_tuple_count) = 0;
+	virtual void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                                 idx_t &approved_tuple_count) = 0;
 	//! Fetch base table data
 	virtual void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
 	//! Fetch update data from an UpdateInfo version

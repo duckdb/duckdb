@@ -113,8 +113,8 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 	FlatVector::SetNullmask(result, base_nullmask);
 }
 
-void StringSegment::FilterFetchBaseData(Transaction &transaction, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &approved_tuple_count){
+void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+                                        idx_t &approved_tuple_count) {
 	assert(0);
 }
 

@@ -41,7 +41,8 @@ public:
 	//! Scan the next vector from the column
 	void Scan(Transaction &transaction, ColumnScanState &state, Vector &result);
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count);
+	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                idx_t &approved_tuple_count);
 	//! Scan the next vector from the column, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result);
 	//! Executes the filters directly in the table's data

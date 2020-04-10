@@ -52,21 +52,21 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		state->initialized = true;
 	}
 	//! Get max value
-	idx_t result_count = -1;
-	do {
-		chunk.Reset();
-		table.Scan(transaction, chunk, state->scan_offset, table_filters);
-		if (expression) {
-			SelectionVector sel(STANDARD_VECTOR_SIZE);
-			idx_t initial_count = chunk.size();
-			result_count = state->executor.SelectExpression(chunk, sel);
-			if (result_count == initial_count) {
-				//! Nothing was filtered: skip adding any selection vectors
-				return;
-			}
-			chunk.Slice(sel, result_count);
-		}
-	} while (result_count == 0);
+	//	idx_t result_count = -1;
+	//	do {
+	chunk.Reset();
+	table.Scan(transaction, chunk, state->scan_offset, table_filters);
+	//		if (expression) {
+	//			SelectionVector sel(STANDARD_VECTOR_SIZE);
+	//			idx_t initial_count = chunk.size();
+	//			result_count = state->executor.SelectExpression(chunk, sel);
+	//			if (result_count == initial_count) {
+	//				//! Nothing was filtered: skip adding any selection vectors
+	//				return;
+	//			}
+	//			chunk.Slice(sel, result_count);
+	//		}
+	//	} while (result_count == 0);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {

@@ -46,37 +46,119 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, idx_t row_st
 }
 
 template <class T, class OP>
-void Select(SelectionVector &sel, unsigned char *source, unsigned long size, Value &constant,
-            idx_t &approved_tuple_count) {
+void Select(SelectionVector &sel, unsigned char *source, unsigned long size, T constant, idx_t &approved_tuple_count) {
 	if (approved_tuple_count == 0) {
+		//! This is the first filter we are applying, we need to scan the full vector
 		for (idx_t i = 0; i < size; i++) {
-			if (OP::Operation(((T *)source)[i], constant.value_.integer)) {
+			if (OP::Operation(((T *)source)[i], constant)) {
 				sel.set_index(approved_tuple_count++, i);
 			}
 		}
+	} else {
+		//! We already applied at least one filter, we only need to check the selection vector
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			if (!OP::Operation(((T *)source)[sel.get_index(i)], constant)) {
+				sel.swap(i, approved_tuple_count - 1);
+				approved_tuple_count--;
+				i--;
+			}
+		}
 	}
-};
+}
+
+template <class T, class OPL, class OPR>
+void Select(SelectionVector &sel, unsigned char *source, unsigned long size, T constantLeft, T constantRight,
+            idx_t &approved_tuple_count) {
+	if (approved_tuple_count == 0) {
+		//! This is the first filter we are applying, we need to scan the full vector
+		for (idx_t i = 0; i < size; i++) {
+			if (OPL::Operation(((T *)source)[i], constantLeft) && OPR::Operation(((T *)source)[i], constantRight)) {
+				sel.set_index(approved_tuple_count++, i);
+			}
+		}
+	} else {
+		//! We already applied at least one filter, we only need to check the selection vector
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			if (!(OPL::Operation(((T *)source)[sel.get_index(i)], constantLeft) &&
+			      OPR::Operation(((T *)source)[sel.get_index(i)], constantRight))) {
+				sel.swap(i, approved_tuple_count - 1);
+				approved_tuple_count--;
+				i--;
+			}
+		}
+	}
+}
 
 template <class OP>
 static void templated_select_operation(SelectionVector &sel, TypeId type, unsigned char *source, unsigned long size,
                                        Value &constant, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
-		//	case TypeId::INT8:
-		//		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);
-		//	case TypeId::INT16:
-		//		return BinaryExecutor::Select<int16_t, int16_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case TypeId::INT32: {
-		Select<int32_t, OP>(sel, source, size, constant, approved_tuple_count);
+	case TypeId::INT8: {
+		Select<int8_t, OP>(sel, source, size, constant.value_.tinyint, approved_tuple_count);
 		break;
 	}
+	case TypeId::INT16: {
+		Select<int16_t, OP>(sel, source, size, constant.value_.smallint, approved_tuple_count);
+		break;
+	}
+	case TypeId::INT32: {
+		Select<int32_t, OP>(sel, source, size, constant.value_.integer, approved_tuple_count);
+		break;
+	}
+	case TypeId::INT64: {
+		Select<int64_t, OP>(sel, source, size, constant.value_.bigint, approved_tuple_count);
+		break;
+	}
+	case TypeId::FLOAT: {
+		Select<float, OP>(sel, source, size, constant.value_.float_, approved_tuple_count);
+		break;
+	}
+	case TypeId::DOUBLE: {
+		Select<double, OP>(sel, source, size, constant.value_.double_, approved_tuple_count);
+		break;
+	}
+	default:
+		throw InvalidTypeException(type, "Invalid type for filter pushed down to table comparison");
+	}
+}
 
-		//	case TypeId::INT64:
-		//		return BinaryExecutor::Select<int64_t, int64_t, OP>(left, right, sel, count, true_sel, false_sel);
-		//	case TypeId::FLOAT:
-		//		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
-		//	case TypeId::DOUBLE:
-		//		return BinaryExecutor::Select<double, double, OP>(left, right, sel, count, true_sel, false_sel);
+template <class OPL, class OPR>
+static void templated_select_operation_between(SelectionVector &sel, TypeId type, unsigned char *source,
+                                               unsigned long size, Value &constantLeft, Value &constantRight,
+                                               idx_t &approved_tuple_count) {
+	// the inplace loops take the result as the last parameter
+	switch (type) {
+	case TypeId::INT8: {
+		Select<int8_t, OPL, OPR>(sel, source, size, constantLeft.value_.tinyint, constantRight.value_.tinyint,
+		                         approved_tuple_count);
+		break;
+	}
+	case TypeId::INT16: {
+		Select<int16_t, OPL, OPR>(sel, source, size, constantLeft.value_.smallint, constantRight.value_.tinyint,
+		                          approved_tuple_count);
+		break;
+	}
+	case TypeId::INT32: {
+		Select<int32_t, OPL, OPR>(sel, source, size, constantLeft.value_.integer, constantRight.value_.tinyint,
+		                          approved_tuple_count);
+		break;
+	}
+	case TypeId::INT64: {
+		Select<int64_t, OPL, OPR>(sel, source, size, constantLeft.value_.bigint, constantRight.value_.tinyint,
+		                          approved_tuple_count);
+		break;
+	}
+	case TypeId::FLOAT: {
+		Select<float, OPL, OPR>(sel, source, size, constantLeft.value_.float_, constantRight.value_.tinyint,
+		                        approved_tuple_count);
+		break;
+	}
+	case TypeId::DOUBLE: {
+		Select<double, OPL, OPR>(sel, source, size, constantLeft.value_.double_, constantRight.value_.tinyint,
+		                         approved_tuple_count);
+		break;
+	}
 	default:
 		throw InvalidTypeException(type, "Invalid type for filter pushed down to table comparison");
 	}
@@ -95,7 +177,6 @@ void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFi
 	auto offset = vector_index * vector_size;
 
 	idx_t count = GetVectorCount(vector_index);
-	//	auto source_nullmask = (nullmask_t *)(data + offset);
 	auto source_data = data + offset + sizeof(nullmask_t);
 
 	if (tableFilter.size() == 1) {
@@ -129,7 +210,34 @@ void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFi
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		assert(0);
+		assert(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+		assert(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+
+		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+				templated_select_operation_between<GreaterThan, LessThan>(
+				    sel, state.current->type, source_data, count, tableFilter[0].constant, tableFilter[1].constant,
+				    approved_tuple_count);
+			} else {
+				templated_select_operation_between<GreaterThan, LessThanEquals>(
+				    sel, state.current->type, source_data, count, tableFilter[0].constant, tableFilter[1].constant,
+				    approved_tuple_count);
+			}
+		} else {
+			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+				templated_select_operation_between<GreaterThanEquals, LessThan>(
+				    sel, state.current->type, source_data, count, tableFilter[0].constant, tableFilter[1].constant,
+				    approved_tuple_count);
+			} else {
+				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
+				    sel, state.current->type, source_data, count, tableFilter[0].constant, tableFilter[1].constant,
+				    approved_tuple_count);
+			}
+		}
+
+		//		assert(0);
 	}
 }
 //===--------------------------------------------------------------------===//
@@ -160,9 +268,29 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 	fetch_from_update_info(transaction, version, result);
 }
 
-void NumericSegment::FilterFetchBaseData(Transaction &transaction, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &approved_tuple_count){
-    assert(0);
+void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+                                         idx_t &approved_tuple_count) {
+	auto vector_index = state.vector_index;
+	assert(vector_index < max_vector_count);
+	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+
+	// pin the buffer for this segment
+	auto handle = manager.Pin(block_id);
+	auto data = handle->node->buffer;
+
+	auto offset = vector_index * vector_size;
+
+	auto source_nullmask = (nullmask_t *)(data + offset);
+	auto source_data = data + offset + sizeof(nullmask_t);
+	// fetch the nullmask and copy the data from the base table
+	result.vector_type = VectorType::FLAT_VECTOR;
+	FlatVector::SetNullmask(result, *source_nullmask);
+	auto result_data = FlatVector::GetData(result);
+	for (size_t i = 0; i < approved_tuple_count; i++) {
+		auto cur_source = source_data + sel.get_index(i) * type_size;
+		memcpy(result_data, cur_source, type_size);
+		result_data += type_size;
+	}
 }
 
 //===--------------------------------------------------------------------===//

@@ -67,6 +67,5 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 5, {false, false}));
 
-
 	REQUIRE_FAIL(con.Query("PRAGMA table_info('nonexistant_table');"));
 }
