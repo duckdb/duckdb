@@ -12,7 +12,7 @@ WriteCSVRelation::WriteCSVRelation(shared_ptr<Relation> child_p, string csv_file
 }
 
 unique_ptr<QueryNode> WriteCSVRelation::GetQueryNode() {
-	throw Exception("Cannot create a query node from a WriteCSVRelation!");
+	throw InternalException("Cannot create a query node from a WriteCSVRelation!");
 }
 
 BoundStatement WriteCSVRelation::Bind(Binder &binder) {
@@ -32,7 +32,6 @@ const vector<ColumnDefinition> &WriteCSVRelation::Columns() {
 string WriteCSVRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Write To CSV [" + csv_file + "]\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

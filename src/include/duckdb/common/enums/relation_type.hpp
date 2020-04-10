@@ -20,6 +20,7 @@ enum class RelationType : uint8_t {
 	TABLE,
 	PROJECTION,
 	FILTER,
+	EXPLAIN,
 	CROSS_PRODUCT,
 	JOIN,
 	AGGREGATE,

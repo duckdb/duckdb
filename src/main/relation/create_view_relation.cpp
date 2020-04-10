@@ -13,7 +13,7 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view
 }
 
 unique_ptr<QueryNode> CreateViewRelation::GetQueryNode() {
-	throw Exception("Cannot create a query node from a CreateViewRelation!");
+	throw InternalException("Cannot create a query node from a CreateViewRelation!");
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
@@ -33,7 +33,6 @@ const vector<ColumnDefinition> &CreateViewRelation::Columns() {
 string CreateViewRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Create View\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

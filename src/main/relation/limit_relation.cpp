@@ -38,7 +38,6 @@ string LimitRelation::ToString(idx_t depth) {
 	}
 	str += "\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

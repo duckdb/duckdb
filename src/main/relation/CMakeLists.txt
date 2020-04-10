@@ -5,6 +5,7 @@ add_library_unity(duckdb_main_relation
                   create_view_relation.cpp
                   delete_relation.cpp
                   distinct_relation.cpp
+                  explain_relation.cpp
                   filter_relation.cpp
                   insert_relation.cpp
                   join_relation.cpp

@@ -3,6 +3,7 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
+#include "duckdb/main/relation/explain_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
 #include "duckdb/main/relation/insert_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
@@ -226,9 +227,18 @@ shared_ptr<Relation> Relation::CreateView(string name, bool replace) {
 	return shared_from_this();
 }
 
-unique_ptr<QueryResult> Relation::SQL(string name, string sql) {
-	CreateView(name);
+unique_ptr<QueryResult> Relation::Query(string sql) {
 	return context.Query(sql, false);
+}
+
+unique_ptr<QueryResult> Relation::Query(string name, string sql) {
+	CreateView(name);
+	return Query(sql);
+}
+
+unique_ptr<QueryResult> Relation::Explain() {
+	auto explain = make_shared<ExplainRelation>(shared_from_this());
+	return explain->Execute();
 }
 
 void Relation::Update(string update, string condition) {

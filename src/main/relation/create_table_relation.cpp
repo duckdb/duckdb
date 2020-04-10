@@ -14,7 +14,7 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
 }
 
 unique_ptr<QueryNode> CreateTableRelation::GetQueryNode() {
-	throw Exception("Cannot create a query node from a CreateTableRelation!");
+	throw InternalException("Cannot create a query node from a CreateTableRelation!");
 }
 
 BoundStatement CreateTableRelation::Bind(Binder &binder) {
@@ -38,7 +38,6 @@ const vector<ColumnDefinition> &CreateTableRelation::Columns() {
 string CreateTableRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Create View\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

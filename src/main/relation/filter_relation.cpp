@@ -50,7 +50,6 @@ const vector<ColumnDefinition> &FilterRelation::Columns() {
 string FilterRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth) + "Filter [" + condition->ToString() + "]\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

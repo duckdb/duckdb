@@ -33,9 +33,8 @@ const vector<ColumnDefinition> &InsertRelation::Columns() {
 }
 
 string InsertRelation::ToString(idx_t depth) {
-	string str = RenderWhitespace(depth) + "Create View\n";
+	string str = RenderWhitespace(depth) + "Insert\n";
 	return str + child->ToString(depth + 1);
-	;
 }
 
 } // namespace duckdb

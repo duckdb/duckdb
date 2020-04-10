@@ -91,6 +91,10 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = proj->Filter("a=2 OR a=4")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
+	// alias
+	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Alias("bla")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 5}));
+
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
@@ -156,6 +160,9 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	                             ->Project("v1.id+v2.id+v3.id")
 	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
+
+	// test explain
+	REQUIRE_NO_FAIL(multi_join->Explain());
 }
 
 TEST_CASE("Test combinations of set operations", "[relation_api]") {
@@ -271,7 +278,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	// do a bunch of joins in a loop
 	auto v1tmp = v1;
 	auto v2tmp = v2;
-	for (idx_t i = 0; i < 10; i++) {
+	for (idx_t i = 0; i < 4; i++) {
 		REQUIRE_NOTHROW(v1tmp = v1tmp->Join(v2tmp->Alias(to_string(i)), "i, j"));
 	}
 	REQUIRE_NOTHROW(result = v1tmp->Order("i")->Execute());
@@ -291,6 +298,15 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	result = con.Query("SELECT * FROM test123");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
+
+	// joins of tables that have output modifiers attached to them (limit, order by, distinct)
+	auto v1_modified = v1->Limit(100)->Order("1")->Distinct()->Filter("i<1000");
+	auto v2_modified = v2->Limit(100)->Order("1")->Distinct()->Filter("i<1000");
+	vjoin = v1_modified->Join(v2_modified, "i, j");
+	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+
 }
 
 TEST_CASE("Test view creation of relations", "[relation_api]") {
@@ -306,11 +322,11 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 
 	// simple view creation
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
-	REQUIRE_NOTHROW(result = tbl->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	// add a projection
-	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
 	// multiple projections
@@ -320,25 +336,25 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	}
 	REQUIRE_NOTHROW(result = proj->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
-	REQUIRE_NOTHROW(result = proj->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = proj->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 13, 14}));
 
 	// we can also use more complex SQL
-	REQUIRE_NOTHROW(result = proj->SQL("test", "SELECT SUM(t1.i) FROM test t1 JOIN test t2 ON t1.i=t2.i"));
+	REQUIRE_NOTHROW(result = proj->Query("test", "SELECT SUM(t1.i) FROM test t1 JOIN test t2 ON t1.i=t2.i"));
 	REQUIRE(CHECK_COLUMN(result, 0, {39}));
 
 	// limit
-	REQUIRE_NOTHROW(result = tbl->Limit(1)->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Limit(1)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// order
-	REQUIRE_NOTHROW(result = tbl->Order("i DESC")->Limit(1)->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = tbl->Order("i DESC")->Limit(1)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// union
 	auto node = tbl->Order("i DESC")->Limit(1);
-	REQUIRE_NOTHROW(result = node->Union(node)->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = node->Union(node)->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3}));
 	// distinct
-	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->SQL("test", "SELECT * FROM test"));
+	REQUIRE_NOTHROW(result = node->Union(node)->Distinct()->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// manually create views and query from them
@@ -399,10 +415,20 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 12}));
 
+	// we can only have a single expression in the condition liset
+	REQUIRE_THROWS(tbl->Update("i=1", "i=3,i<100"));
+
 	tbl->Delete("i=3");
 
 	result = con.Query("SELECT * FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 12}));
+
+	// delete without condition
+	tbl->Delete();
+
+	result = con.Query("SELECT * FROM integers ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
 }
 
 TEST_CASE("Test aggregates in relation API", "[relation_api]") {
@@ -482,6 +508,12 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {13, 8}));
 	// when using explicit groups, we cannot have non-explicit groups
 	REQUIRE_THROWS(tbl->Aggregate("j, i+SUM(j)", "i")->Order("1")->Execute());
+
+	// project -> aggregate -> project -> aggregate
+	// SUM(j) = 18 -> 18 + 1 = 19 -> 19 * 2 = 38
+	result = tbl->Aggregate("SUM(j) AS k")->Project("k+1 AS l")->Aggregate("SUM(l) AS m")->Project("m*2")->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {38}));
+
 }
 
 TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
@@ -553,6 +585,30 @@ TEST_CASE("Test interaction of relations with schema changes", "[relation_api]")
 
 	// this results in a binding error!
 	REQUIRE_FAIL(tbl_scan->Execute());
+
+	// now what if we run a query that still binds successfully, but changes result?
+	auto tbl = con.Table("integers");
+	REQUIRE_NO_FAIL(tbl->Execute());
+
+	// add extra columns
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR, j VARCHAR)"));
+	REQUIRE_FAIL(tbl->Execute());
+
+	// change type of column
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i DATE)"));
+	REQUIRE_FAIL(tbl->Execute());
+
+	// different name also results in an error
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(k VARCHAR)"));
+	REQUIRE_FAIL(tbl->Execute());
+
+	// but once we go back to the original table it works again!
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR)"));
+	REQUIRE_NO_FAIL(tbl->Execute());
 }
 
 // TEST_CASE("We can mix statements from multiple databases", "[relation_api]") {

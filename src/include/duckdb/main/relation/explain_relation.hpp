@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/relation/create_view_relation.hpp
+// duckdb/main/relation/explain_relation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,13 +12,11 @@
 
 namespace duckdb {
 
-class CreateViewRelation : public Relation {
+class ExplainRelation : public Relation {
 public:
-	CreateViewRelation(shared_ptr<Relation> child, string view_name, bool replace);
+	ExplainRelation(shared_ptr<Relation> child);
 
 	shared_ptr<Relation> child;
-	string view_name;
-	bool replace;
 	vector<ColumnDefinition> columns;
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;

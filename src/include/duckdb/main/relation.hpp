@@ -49,13 +49,16 @@ public:
 	void Head(idx_t limit = 10);
 
 	shared_ptr<Relation> CreateView(string name, bool replace = true);
-	unique_ptr<QueryResult> SQL(string name, string sql);
+	unique_ptr<QueryResult> Query(string sql);
+	unique_ptr<QueryResult> Query(string name, string sql);
+
+	//! Explain the query plan of this relation
+	unique_ptr<QueryResult> Explain();
 
 	virtual unique_ptr<TableRef> GetTableRef();
 	virtual bool IsReadOnly() {
 		return true;
 	}
-
 public:
 	// PROJECT
 	shared_ptr<Relation> Project(string select_list);
@@ -110,7 +113,6 @@ public:
 	virtual void Update(string update, string condition = string());
 	//! Delete from a table, can only be used on a TableRelation
 	virtual void Delete(string condition = string());
-
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
 	virtual bool InheritsColumnBindings() {

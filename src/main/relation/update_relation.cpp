@@ -16,7 +16,7 @@ UpdateRelation::UpdateRelation(ClientContext &context, unique_ptr<ParsedExpressi
 }
 
 unique_ptr<QueryNode> UpdateRelation::GetQueryNode() {
-	throw Exception("Cannot create a query node from a UpdateRelation!");
+	throw InternalException("Cannot create a query node from a UpdateRelation!");
 }
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {

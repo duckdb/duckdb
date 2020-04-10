@@ -685,12 +685,44 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 
 unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	string query;
-	if (query_verification_enabled && relation->IsReadOnly()) {
-		// verify read only statements by running a select statement
-		auto select = make_unique<SelectStatement>();
-		select->node = relation->GetQueryNode();
-		RunStatement(query, move(select), false);
+	if (query_verification_enabled) {
+		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
+		relation->ToString();
+		if (relation->IsReadOnly()) {
+			// verify read only statements by running a select statement
+			auto select = make_unique<SelectStatement>();
+			select->node = relation->GetQueryNode();
+			RunStatement(query, move(select), false);
+		}
 	}
+	auto &expected_columns = relation->Columns();
 	auto relation_stmt = make_unique<RelationStatement>(relation);
-	return RunStatement(query, move(relation_stmt), false);
+	auto result = RunStatement(query, move(relation_stmt), false);
+	// verify that the result types and result names of the query match the expected result types/names
+	if (result->types.size() == expected_columns.size()) {
+		bool mismatch = false;
+		for(idx_t i = 0; i < result->types.size(); i++) {
+			if (result->sql_types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
+				mismatch = true;
+				break;
+			}
+		}
+		if (!mismatch) {
+			// all is as expected: return the result
+			return result;
+		}
+	}
+	// result mismatch
+	string err_str = "Result mismatch in query!\nExpected the following columns: ";
+	for(idx_t i = 0; i < expected_columns.size(); i++) {
+		err_str += i == 0 ? "[" : ", ";
+		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
+	}
+	err_str += "]\nBut result contained the following: ";
+	for(idx_t i = 0; i < result->types.size(); i++) {
+		err_str += i == 0 ? "[" : ", ";
+		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
+	}
+	err_str += "]";
+	return make_unique<MaterializedQueryResult>(err_str);
 }
