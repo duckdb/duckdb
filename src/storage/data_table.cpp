@@ -220,31 +220,46 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		current_row += STANDARD_VECTOR_SIZE;
 		return true;
 	}
-	//! If we have filters, we need to first scan the columns with filters and generate a selection vector.
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t approved_tuple_count = 0;
-	for (auto &table_filter : table_filters) {
-		columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first], table_filter.second,
-		                                   sel, approved_tuple_count);
-	}
-	for (idx_t i = 0; i < state.column_ids.size(); i++) {
-		auto column = state.column_ids[i];
-		if (column == COLUMN_IDENTIFIER_ROW_ID) {
-			// scan row id
-			assert(result.data[i].type == ROW_TYPE);
-			result.data[i].Sequence(base_row + current_row, 1);
-		} else {
-			// scan actual base column
+	//! If we have filters
+//	if (!table_filters.empty()){
+//	    SelectionVector sel(STANDARD_VECTOR_SIZE);
+//        idx_t approved_tuple_count = 0;
+//        //! First, we scan the columns with filters and generate a selection vector.
+//        for (auto &table_filter : table_filters) {
+//            columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first], table_filter.second,
+//                                               sel, approved_tuple_count);
+//            if (approved_tuple_count == 0){
+//                break;
+//            }
+//        }
+        //! Now we use the selection vector to fetch data from the table.
+//        for (idx_t i = 0; i < state.column_ids.size(); i++) {
+//            auto column = state.column_ids[i];
+//            if (column == COLUMN_IDENTIFIER_ROW_ID) {
+//                assert(0);
+//                // scan row id
+////                assert(result.data[i].type == ROW_TYPE);
+////                result.data[i].Sequence(base_row + current_row, 1);
+//            }
+//            else {
+//                    columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,approved_tuple_count);
+//            }
+//        }
+//	}
+//	else {
+        for (idx_t i = 0; i < state.column_ids.size(); i++) {
+            auto column = state.column_ids[i];
+            if (column == COLUMN_IDENTIFIER_ROW_ID) {
+                // scan row id
+                assert(result.data[i].type == ROW_TYPE);
+                result.data[i].Sequence(base_row + current_row, 1);
+            }
+            else {
+                    columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
 
-			auto column_filters = table_filters.find(column);
-			if (column_filters == table_filters.end()) {
-				vector<TableFilter> empty;
-				columns[column].Scan(transaction, state.column_scans[i], result.data[i], empty);
-			} else {
-				columns[column].Scan(transaction, state.column_scans[i], result.data[i], column_filters->second);
-			}
-		}
-	}
+            }
+        }
+//    }
 	if (count == max_count) {
 		// no deleted tuples
 		result.SetCardinality(count);

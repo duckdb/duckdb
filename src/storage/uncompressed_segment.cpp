@@ -118,9 +118,8 @@ UpdateInfo *UncompressedSegment::CreateUpdateInfo(ColumnData &column_data, Trans
 
 void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
-	vector<TableFilter> empty;
 	InitializeScan(state);
-	FetchBaseData(state, vector_index, result, empty);
+	FetchBaseData(state, vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -131,7 +130,7 @@ void UncompressedSegment::Select(Transaction &transaction, ColumnScanState &stat
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
-	FilterBaseData(state, tableFilter, sel, approved_tuple_count);
+    Select(state, tableFilter, sel, approved_tuple_count);
 	//	if (versions && versions[state.vector_index]) {
 	//		// if there are any versions, check if we need to overwrite the data with the versioned data
 	//		FetchUpdateData(state, transaction, versions[state.vector_index]);
@@ -141,20 +140,30 @@ void UncompressedSegment::Select(Transaction &transaction, ColumnScanState &stat
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
-                               vector<TableFilter> &tableFilter) {
+void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
 	auto read_lock = lock.GetSharedLock();
 
 	// first fetch the data from the base table
-	FetchBaseData(state, vector_index, result, tableFilter);
+	FetchBaseData(state, vector_index, result);
 	if (versions && versions[vector_index]) {
 		// if there are any versions, check if we need to overwrite the data with the versioned data
 		FetchUpdateData(state, transaction, versions[vector_index], result);
 	}
 }
 
+void UncompressedSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &approved_tuple_count) {
+	auto read_lock = lock.GetSharedLock();
+	assert(0);
+	// first fetch the data from the base table
+//	FetchBaseData(state, vector_index, result);
+//	if (versions && versions[vector_index]) {
+//		// if there are any versions, check if we need to overwrite the data with the versioned data
+//		FetchUpdateData(state, transaction, versions[vector_index], result);
+//	}
+}
+
 void UncompressedSegment::IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result) {
-	vector<TableFilter> empty;
 	if (vector_index == 0) {
 		// vector_index = 0, obtain a shared lock on the segment that we keep until the index scan is complete
 		state.locks.push_back(lock.GetSharedLock());
@@ -162,7 +171,7 @@ void UncompressedSegment::IndexScan(ColumnScanState &state, idx_t vector_index, 
 	if (versions && versions[vector_index]) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	FetchBaseData(state, vector_index, result, empty);
+	FetchBaseData(state, vector_index, result);
 }
 
 //===--------------------------------------------------------------------===//

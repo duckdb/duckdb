@@ -32,10 +32,12 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state) override;
 	//! Scan one vector from this transient segment
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
-	          vector<TableFilter> &table_filter) override;
+	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result) override;
+			//! Scan the next vector from the column and apply a selection vector to filter the data
+	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &approved_tuple_count) override;
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
 	            SelectionVector &sel, idx_t &approved_tuple_count) override;

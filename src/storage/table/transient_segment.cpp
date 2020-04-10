@@ -22,9 +22,14 @@ void TransientSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
-                            vector<TableFilter> &tableFilter) {
-	data->Scan(transaction, state, vector_index, result, tableFilter);
+void TransientSegment::Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) {
+	data->Scan(transaction, state, vector_index, result);
+}
+
+void TransientSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &approved_tuple_count) {
+    assert(0);
+//	data->Scan(transaction, state, vector_index, result);
 }
 
 void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {

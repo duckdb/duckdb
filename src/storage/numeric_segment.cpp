@@ -82,8 +82,8 @@ static void templated_select_operation(SelectionVector &sel, TypeId type, unsign
 	}
 }
 
-void NumericSegment::FilterBaseData(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-                                    idx_t &approved_tuple_count) {
+void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
+                            idx_t &approved_tuple_count) {
 	auto vector_index = state.vector_index;
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -135,8 +135,7 @@ void NumericSegment::FilterBaseData(ColumnScanState &state, vector<TableFilter> 
 //===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result,
-                                   vector<TableFilter> &tableFilter) {
+void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
 
@@ -159,6 +158,11 @@ void NumericSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, V
 void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *version,
                                      Vector &result) {
 	fetch_from_update_info(transaction, version, result);
+}
+
+void NumericSegment::FilterFetchBaseData(Transaction &transaction, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &approved_tuple_count){
+    assert(0);
 }
 
 //===--------------------------------------------------------------------===//

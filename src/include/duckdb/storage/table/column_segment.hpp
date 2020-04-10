@@ -68,8 +68,10 @@ public:
 public:
 	virtual void InitializeScan(ColumnScanState &state) = 0;
 	//! Scan one vector from this segment
-	virtual void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
-	                  vector<TableFilter> &tableFilter) = 0;
+	virtual void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result) = 0;
+		//! Scan the next vector from the column and apply a selection vector to filter the data
+	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &approved_tuple_count) = 0;
 	//! Scan one vector from this segment, throwing an exception if there are any outstanding updates
 	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
 	//! Executes filter in this column

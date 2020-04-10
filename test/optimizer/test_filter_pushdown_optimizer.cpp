@@ -203,28 +203,28 @@ TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
 	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 0);
 }
 
-TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	vector<int> input;
-	idx_t input_size = 100;
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer)"));
-	for (idx_t i = 0; i < input_size; ++i) {
-		input.push_back(i);
-	}
-	for (idx_t i = 0; i < input_size; ++i) {
-		REQUIRE_NO_FAIL(
-		    con.Query("INSERT INTO integers VALUES(" + to_string(input[i]) + "," + to_string(input[i]) + ")"));
-	}
-
-	result = con.Query("SELECT i FROM integers where j = 99 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
-
-	result = con.Query("SELECT i FROM integers where j = 99000 and i = 20 ");
-	REQUIRE(CHECK_COLUMN(result, 0, {}));
-}
+//TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {
+//	unique_ptr<QueryResult> result;
+//	DuckDB db(nullptr);
+//	Connection con(db);
+//
+//	vector<int> input;
+//	idx_t input_size = 100;
+//	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer)"));
+//	for (idx_t i = 0; i < input_size; ++i) {
+//		input.push_back(i);
+//	}
+//	for (idx_t i = 0; i < input_size; ++i) {
+//		REQUIRE_NO_FAIL(
+//		    con.Query("INSERT INTO integers VALUES(" + to_string(input[i]) + "," + to_string(input[i]) + ")"));
+//	}
+//
+//	result = con.Query("SELECT i FROM integers where j = 99 ");
+//	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
+//
+//	result = con.Query("SELECT i FROM integers where j = 99000 and i = 20 ");
+//	REQUIRE(CHECK_COLUMN(result, 0, {}));
+//}
 
 TEST_CASE("Test Table Filter Push Down Scan TPCQ6", "[filterpushdown-optimizer]") {
 	ExpressionHelper helper;
