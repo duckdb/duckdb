@@ -483,20 +483,76 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 
 // }
 
+TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con1(db), con2(db);
+	unique_ptr<QueryResult> result;
 
-// TEST_CASE("Test subqueries in relations", "[relation_api]") {
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-// 	unique_ptr<QueryResult> result;
+	con1.BeginTransaction();
+	con2.BeginTransaction();
 
-// }
+	// create a table in con1
+	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create("integers"));
 
-// TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-// 	unique_ptr<QueryResult> result;
+	// con1 can see it, but con2 can't see it yet
+	REQUIRE_NOTHROW(con1.Table("integers"));
+	REQUIRE_THROWS(con2.Table("integers"));
 
-// }
+	// we can also rollback
+	con1.Rollback();
+
+	REQUIRE_THROWS(con1.Table("integers"));
+	REQUIRE_THROWS(con2.Table("integers"));
+
+	// recreate the table, this time in auto-commit mode
+	REQUIRE_NOTHROW(con1.Values("(1), (2), (3)")->Create("integers"));
+
+	// con2 still can't see it, because it is in its own transaction
+	REQUIRE_NOTHROW(con1.Table("integers"));
+	REQUIRE_THROWS(con2.Table("integers"));
+
+	// after con2 commits, both can see the table
+	con2.Commit();
+
+	REQUIRE_NOTHROW(con1.Table("integers"));
+	REQUIRE_NOTHROW(con2.Table("integers"));
+}
+
+TEST_CASE("Test interaction of relations with schema changes", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// create some tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	// create a table scan of the integers table
+	auto tbl_scan = con.Table("integers")->Project("i+1")->Order("1");
+	REQUIRE_NOTHROW(result = tbl_scan->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+
+	// now drop the table
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+
+	// the scan now fails, because the table is dropped!
+	REQUIRE_FAIL(tbl_scan->Execute());
+
+	// if we recreate the table, it works again
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	REQUIRE_NOTHROW(result = tbl_scan->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+
+	// but what if we recreate an incompatible table?
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ('hello')"));
+
+	// this results in a binding error!
+	REQUIRE_FAIL(tbl_scan->Execute());
+}
 
 // TEST_CASE("We can mix statements from multiple databases", "[relation_api]") {
 // 	DuckDB db(nullptr), db2(nullptr);

@@ -90,6 +90,9 @@ public:
 	shared_ptr<Relation> Values(string values);
 	shared_ptr<Relation> Values(string values, vector<string> column_names, string alias = "values");
 
+	void BeginTransaction();
+	void Commit();
+	void Rollback();
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 

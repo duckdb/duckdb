@@ -123,3 +123,24 @@ shared_ptr<Relation> Connection::Values(string values) {
 shared_ptr<Relation> Connection::Values(string values, vector<string> column_names, string alias) {
 	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
 }
+
+void Connection::BeginTransaction() {
+	auto result = Query("BEGIN TRANSACTION");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+}
+
+void Connection::Commit() {
+	auto result = Query("COMMIT");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+}
+
+void Connection::Rollback() {
+	auto result = Query("ROLLBACK");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+}
