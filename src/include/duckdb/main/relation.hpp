@@ -99,6 +99,9 @@ public:
 	void Create(string table_name);
 	void Create(string schema_name, string table_name);
 
+	//! Write a relation to a CSV file
+	void WriteCSV(string csv_file);
+
 	//! Update a table, can only be used on a TableRelation
 	virtual void Update(string update, string condition = string());
 	//! Delete from a table, can only be used on a TableRelation

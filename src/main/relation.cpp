@@ -12,6 +12,7 @@
 #include "duckdb/main/relation/subquery_relation.hpp"
 #include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
+#include "duckdb/main/relation/write_csv_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
@@ -207,6 +208,11 @@ void Relation::Create(string table_name) {
 void Relation::Create(string schema_name, string table_name) {
 	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
 	create->Execute();
+}
+
+void Relation::WriteCSV(string csv_file) {
+	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
+	write_csv->Execute();
 }
 
 void Relation::Head(idx_t limit) {

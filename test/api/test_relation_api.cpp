@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/file_system.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -475,13 +476,6 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	// when using explicit groups, we cannot have non-explicit groups
 	REQUIRE_THROWS(tbl->Aggregate("j, i+SUM(j)", "i")->Order("1")->Execute());
 }
-
-// TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
-// 	DuckDB db(nullptr);
-// 	Connection con(db);
-// 	unique_ptr<QueryResult> result;
-
-// }
 
 TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
 	DuckDB db(nullptr);

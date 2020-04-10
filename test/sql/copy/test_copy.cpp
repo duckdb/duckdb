@@ -1608,3 +1608,22 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE s = '\xc3\xbc'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
 }
+
+
+TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// write a bunch of values to a CSV
+	auto csv_path = GetCSVPath();
+	auto csv_file = fs.JoinPath(csv_path, "relationtest.csv");
+
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
+
+	// now scan the CSV file
+	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
+	result = csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+}

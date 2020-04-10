@@ -89,6 +89,8 @@ public:
 	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names, string alias = "values");
 	shared_ptr<Relation> Values(string values);
 	shared_ptr<Relation> Values(string values, vector<string> column_names, string alias = "values");
+	//! Reads CSV file
+	shared_ptr<Relation> ReadCSV(string csv_file, vector<string> columns);
 
 	void BeginTransaction();
 	void Commit();

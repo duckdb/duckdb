@@ -33,6 +33,8 @@ enum class RelationType : uint8_t {
 	VALUE_LIST,
 	DELETE,
 	UPDATE,
+	WRITE_CSV,
+	READ_CSV,
 	SUBQUERY
 };
 

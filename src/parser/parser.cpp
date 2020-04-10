@@ -1,6 +1,8 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -115,4 +117,19 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string valu
 	}
 	auto &values_list = (ExpressionListRef&) *select_node.from_table;
 	return move(values_list.values);
+}
+
+vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
+	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
+	Parser parser;
+	parser.ParseQuery(mock_query);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE) {
+		throw ParserException("Expected a single CREATE statement");
+	}
+	auto &create = (CreateStatement&) *parser.statements[0];
+	if (create.info->type != CatalogType::TABLE) {
+		throw ParserException("Expected a single CREATE TABLE statement");
+	}
+	auto &info = ((CreateTableInfo&) *create.info);
+	return move(info.columns);
 }

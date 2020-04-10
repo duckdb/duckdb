@@ -4,6 +4,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
 #include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -122,6 +123,19 @@ shared_ptr<Relation> Connection::Values(string values) {
 
 shared_ptr<Relation> Connection::Values(string values, vector<string> column_names, string alias) {
 	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
+}
+
+shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns) {
+	// parse columns
+	vector<ColumnDefinition> column_list;
+	for(auto &column : columns) {
+		auto col_list = Parser::ParseColumnList(column);
+		if (col_list.size() != 1) {
+			throw ParserException("Expected a singlec olumn definition");
+		}
+		column_list.push_back(move(col_list[0]));
+	}
+	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
 }
 
 void Connection::BeginTransaction() {
