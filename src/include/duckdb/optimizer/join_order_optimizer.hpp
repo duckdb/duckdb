@@ -11,7 +11,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
-#include "duckdb/optimizer/join_order/relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -24,7 +24,7 @@ class JoinOrderOptimizer {
 public:
 	//! Represents a node in the join plan
 	struct JoinNode {
-		RelationSet *set;
+		JoinRelationSet *set;
 		NeighborInfo *info;
 		idx_t cardinality;
 		idx_t cost;
@@ -32,11 +32,12 @@ public:
 		JoinNode *right;
 
 		//! Create a leaf node in the join tree
-		JoinNode(RelationSet *set, idx_t cardinality)
+		JoinNode(JoinRelationSet *set, idx_t cardinality)
 		    : set(set), info(nullptr), cardinality(cardinality), cost(cardinality), left(nullptr), right(nullptr) {
 		}
 		//! Create an intermediate node in the join tree
-		JoinNode(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality, idx_t cost)
+		JoinNode(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right, idx_t cardinality,
+		         idx_t cost)
 		    : set(set), info(info), cardinality(cardinality), cost(cost), left(left), right(right) {
 		}
 	};
@@ -49,15 +50,15 @@ private:
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
 	//! Set of all relations considered in the join optimizer
-	vector<unique_ptr<Relation>> relations;
+	vector<unique_ptr<SingleJoinRelation>> relations;
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
-	//! A structure holding all the created RelationSet objects
-	RelationSetManager set_manager;
+	//! A structure holding all the created JoinRelationSet objects
+	JoinRelationSetManager set_manager;
 	//! The set of edges used in the join optimizer
 	QueryGraph query_graph;
-	//! The optimal join plan found for the specific RelationSet*
-	unordered_map<RelationSet *, unique_ptr<JoinNode>> plans;
+	//! The optimal join plan found for the specific JoinRelationSet*
+	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 	//! The set of filters extracted from the query graph
 	vector<unique_ptr<Expression>> filters;
 	//! The set of filter infos created from the extracted filters
@@ -75,16 +76,16 @@ private:
 	                          LogicalOperator *parent = nullptr);
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode *EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
+	JoinNode *EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info);
+	bool TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info);
 
-	bool EnumerateCmpRecursive(RelationSet *left, RelationSet *right, unordered_set<idx_t> exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right, unordered_set<idx_t> exclusion_set);
 	//! Emit a relation set node
-	bool EmitCSG(RelationSet *node);
+	bool EmitCSG(JoinRelationSet *node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(RelationSet *node, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set);
 	//! Rewrite a logical query plan given the join plan
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode *node);
 	//! Generate cross product edges inside the side
@@ -98,7 +99,7 @@ private:
 	void SolveJoinOrderApproximately();
 
 	unique_ptr<LogicalOperator> ResolveJoinConditions(unique_ptr<LogicalOperator> op);
-	std::pair<RelationSet *, unique_ptr<LogicalOperator>>
+	std::pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 	GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node);
 };
 

@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
 
 #include "duckdb/common/string_util.hpp"
 
@@ -17,6 +17,11 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
 		if (binding->HasMatchingBinding(column_name)) {
+			// check if the binding is ignored
+			if (BindingIsHidden(kv.first, column_name)) {
+				continue;
+			}
+
 			if (!result.empty()) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
@@ -24,6 +29,22 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 				                      column_name.c_str());
 			}
 			result = kv.first;
+		}
+	}
+	return result;
+}
+
+bool BindContext::BindingIsHidden(const string &binding_name, const string &column_name) {
+	string total_binding = binding_name + "." + column_name;
+	return hidden_columns.find(total_binding) != hidden_columns.end();
+}
+
+unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
+	unordered_set<string> result;
+	for (auto &kv : bindings) {
+		auto binding = kv.second.get();
+		if (binding->HasMatchingBinding(column_name)) {
+			result.insert(kv.first);
 		}
 	}
 	return result;
@@ -81,12 +102,25 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	bindings[alias] = move(binding);
 }
 
-void BindContext::AddBaseTable(BoundBaseTableRef *bound, const string &alias) {
-	AddBinding(alias, make_unique<TableBinding>(alias, bound));
+void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEntry &table, LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, table, get, index));
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
-	AddBinding(alias, make_unique<SubqueryBinding>(alias, ref, subquery, index));
+	vector<string> names;
+	if (ref.column_name_alias.size() > subquery.names.size()) {
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(),
+		                      (int64_t)subquery.names.size(), (int64_t)ref.column_name_alias.size());
+	}
+	// use any provided aliases from the subquery
+	for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
+		names.push_back(ref.column_name_alias[i]);
+	}
+	// if not enough aliases were provided, use the default names for remaining columns
+	for (idx_t i = ref.column_name_alias.size(); i < subquery.names.size(); i++) {
+		names.push_back(subquery.names[i]);
+	}
+	AddGenericBinding(index, alias, names, subquery.types);
 }
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {

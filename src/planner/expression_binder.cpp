@@ -1,7 +1,5 @@
 #include "duckdb/planner/expression_binder.hpp"
 
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -72,7 +70,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	bool success = false;
 	while (active_binders.size() > 0) {
 		auto &next_binder = active_binders.back();
-		next_binder->BindTableNames(*expr);
+		ExpressionBinder::BindTableNames(next_binder->binder, *expr);
 		auto bind_result = next_binder->Bind(&expr, depth);
 		if (bind_result.empty()) {
 			success = true;
@@ -163,7 +161,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	}
 }
 
-void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
+void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
@@ -172,5 +170,5 @@ void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BindTableNames((ParsedExpression &)child); });
+	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child); });
 }

@@ -9,8 +9,9 @@
 #pragma once
 
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,10 @@ class BoundSelectNode : public BoundQueryNode {
 public:
 	BoundSelectNode() : BoundQueryNode(QueryNodeType::SELECT_NODE) {
 	}
+
+	//! The original unparsed expressions. This is exported after binding, because the binding might change the
+	//! expressions (e.g. when a * clause is present)
+	vector<unique_ptr<ParsedExpression>> original_expressions;
 
 	//! The projection list
 	vector<unique_ptr<Expression>> select_list;

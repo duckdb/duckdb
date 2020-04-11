@@ -15,7 +15,7 @@ namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
 public:
-	SubqueryRef(unique_ptr<QueryNode> subquery);
+	SubqueryRef(unique_ptr<QueryNode> subquery, string alias = string());
 
 	//! The subquery
 	unique_ptr<QueryNode> subquery;

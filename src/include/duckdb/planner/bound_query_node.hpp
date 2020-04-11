@@ -8,21 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/enums/order_type.hpp"
-#include "duckdb/parser/query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
-
-struct BoundOrderByNode {
-	BoundOrderByNode() {
-	}
-	BoundOrderByNode(OrderType type, unique_ptr<Expression> expression) : type(type), expression(move(expression)) {
-	}
-
-	OrderType type;
-	unique_ptr<Expression> expression;
-};
 
 //! Bound equivalent of QueryNode
 class BoundQueryNode {
@@ -34,16 +24,8 @@ public:
 
 	//! The type of the query node, either SetOperation or Select
 	QueryNodeType type;
-	//! DISTINCT or not
-	bool select_distinct = false;
-	//! List of order nodes
-	vector<BoundOrderByNode> orders;
-	//! List of target nodes for DISTINCT ON
-	vector<unique_ptr<Expression>> target_distincts;
-	//! LIMIT count
-	int64_t limit = -1;
-	//! OFFSET
-	int64_t offset = -1;
+	//! The result modifiers that should be applied to this query node
+	vector<unique_ptr<BoundResultModifier>> modifiers;
 
 	//! The names returned by this QueryNode.
 	vector<string> names;

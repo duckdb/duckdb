@@ -1,12 +1,9 @@
 #include "duckdb/planner/binder.hpp"
 
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,7 +22,7 @@ Binder::Binder(ClientContext &context, Binder *parent_)
 	}
 }
 
-unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
+BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT:
 		return Bind((SelectStatement &)statement);
@@ -37,6 +34,8 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 		return Bind((DeleteStatement &)statement);
 	case StatementType::UPDATE:
 		return Bind((UpdateStatement &)statement);
+	case StatementType::RELATION:
+		return Bind((RelationStatement &)statement);
 	case StatementType::CREATE:
 		return Bind((CreateStatement &)statement);
 	case StatementType::DROP:
@@ -59,50 +58,48 @@ unique_ptr<BoundSQLStatement> Binder::Bind(SQLStatement &statement) {
 	}
 }
 
-static int64_t BindConstant(Binder &binder, ClientContext &context, string clause, unique_ptr<ParsedExpression> &expr) {
-	ConstantBinder constant_binder(binder, context, clause);
-	auto bound_expr = constant_binder.Bind(expr);
-	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-	if (!TypeIsNumeric(value.type)) {
-		throw BinderException("LIMIT clause can only contain numeric constants!");
-	}
-	int64_t limit_value = value.GetValue<int64_t>();
-	if (limit_value < 0) {
-		throw BinderException("LIMIT must not be negative");
-	}
-	return limit_value;
-}
-
-unique_ptr<BoundQueryNode> Binder::Bind(QueryNode &node) {
+unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		result = Bind((SelectNode &)node);
+		result = BindNode((SelectNode &)node);
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = Bind((RecursiveCTENode &)node);
+		result = BindNode((RecursiveCTENode &)node);
 		break;
 	default:
 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
-		result = Bind((SetOperationNode &)node);
+		result = BindNode((SetOperationNode &)node);
 		break;
-	}
-	// DISTINCT ON select list
-	result->select_distinct = node.select_distinct;
-	// bind the limit nodes
-	if (node.limit) {
-		result->limit = BindConstant(*this, context, "LIMIT clause", node.limit);
-		result->offset = 0;
-	}
-	if (node.offset) {
-		result->offset = BindConstant(*this, context, "OFFSET clause", node.offset);
-		if (!node.limit) {
-			result->limit = std::numeric_limits<int64_t>::max();
-		}
 	}
 	return result;
 }
 
+BoundStatement Binder::Bind(QueryNode &node) {
+	BoundStatement result;
+	// bind the node
+	auto bound_node = BindNode(node);
+
+	result.names = bound_node->names;
+	result.types = bound_node->types;
+
+	// and plan it
+	result.plan = CreatePlan(*bound_node);
+	return result;
+}
+
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE:
+		return CreatePlan((BoundSelectNode &)node);
+	case QueryNodeType::SET_OPERATION_NODE:
+		return CreatePlan((BoundSetOperationNode &)node);
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return CreatePlan((BoundRecursiveCTENode &)node);
+	default:
+		throw Exception("Unsupported bound query node type");
+	}
+}
 unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE:
@@ -121,6 +118,29 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		return Bind((ExpressionListRef &)ref);
 	default:
 		throw Exception("Unknown table ref type");
+	}
+}
+
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
+		return CreatePlan((BoundBaseTableRef &)ref);
+	case TableReferenceType::SUBQUERY:
+		return CreatePlan((BoundSubqueryRef &)ref);
+	case TableReferenceType::JOIN:
+		return CreatePlan((BoundJoinRef &)ref);
+	case TableReferenceType::CROSS_PRODUCT:
+		return CreatePlan((BoundCrossProductRef &)ref);
+	case TableReferenceType::TABLE_FUNCTION:
+		return CreatePlan((BoundTableFunction &)ref);
+	case TableReferenceType::EMPTY:
+		return CreatePlan((BoundEmptyTableRef &)ref);
+	case TableReferenceType::EXPRESSION_LIST:
+		return CreatePlan((BoundExpressionListRef &)ref);
+	case TableReferenceType::CTE:
+		return CreatePlan((BoundCTERef &)ref);
+	default:
+		throw Exception("Unsupported bound table ref type type");
 	}
 }
 

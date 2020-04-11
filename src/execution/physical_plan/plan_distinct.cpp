@@ -36,10 +36,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	for (auto &target : distinct_targets) {
 		groups.push_back(move(target));
 	}
-	// we need the projection to fetch the select_list
-	auto &child_projection = (PhysicalProjection &)*child;
 	// we need to create one aggregate per column in the select_list
-	for (idx_t i = 0; i < child_projection.select_list.size(); ++i) {
+	for (idx_t i = 0; i < types.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
 		auto first_aggregate = make_unique<BoundAggregateExpression>(

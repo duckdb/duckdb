@@ -18,6 +18,7 @@ add_library_unity(duckdb_parser
                   parsed_expression_iterator.cpp
                   parser.cpp
                   query_node.cpp
+                  result_modifier.cpp
                   tableref.cpp
                   transformer.cpp)
 set(ALL_OBJECT_FILES

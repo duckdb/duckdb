@@ -29,6 +29,7 @@ class ExecuteStatement;
 class PragmaStatement;
 class ExplainStatement;
 class VacuumStatement;
+class RelationStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
