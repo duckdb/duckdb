@@ -46,7 +46,6 @@ public class TestDuckDBJDBC {
 		assertFalse(conn.isClosed());
 
 		Statement stmt = conn.createStatement();
-		assertTrue(stmt.isClosed()); // no query yet
 
 		ResultSet rs = stmt.executeQuery("SELECT 42 as a");
 		assertFalse(stmt.isClosed());

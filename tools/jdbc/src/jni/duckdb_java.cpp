@@ -233,3 +233,18 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 
 	return vec_array;
 }
+
+JNIEXPORT jint JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
+	return STANDARD_VECTOR_SIZE;
+}
+
+JNIEXPORT jstring JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1type(JNIEnv *env, jclass,
+                                                                                         jobject stmt_ref_buf) {
+
+	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
+	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
+		jclass Exception = env->FindClass("java/sql/SQLException");
+		env->ThrowNew(Exception, "Invalid statement");
+	}
+	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->type).c_str());
+}

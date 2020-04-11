@@ -34,7 +34,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (isClosed()) {
 			throw new SQLException("Connection was closed");
 		}
-		return new DuckDBStatement(this);
+		return new DuckDBPreparedStatement(this);
 	}
 
 	public void commit() throws SQLException {
@@ -128,7 +128,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public PreparedStatement prepareStatement(String sql) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return new DuckDBPreparedStatement(this, sql);
 	}
 
 	public DatabaseMetaData getMetaData() throws SQLException {

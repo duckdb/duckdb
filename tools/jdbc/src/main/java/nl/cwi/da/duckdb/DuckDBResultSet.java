@@ -27,7 +27,7 @@ import java.util.Map;
 
 public class DuckDBResultSet implements ResultSet {
 
-	private DuckDBStatement stmt;
+	private DuckDBPreparedStatement stmt;
 	private DuckDBResultSetMetaData meta;
 
 	private ByteBuffer result_ref;
@@ -36,7 +36,7 @@ public class DuckDBResultSet implements ResultSet {
 	private boolean finished = false;
 	private boolean was_null;
 
-	public DuckDBResultSet(DuckDBStatement stmt, ByteBuffer result_ref) {
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, ByteBuffer result_ref) {
 		this.stmt = stmt;
 		this.result_ref = result_ref;
 		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
@@ -461,7 +461,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int getFetchSize() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return DuckDBNative.duckdb_jdbc_fetch_size();
 	}
 
 	public int getType() throws SQLException {
