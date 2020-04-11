@@ -68,8 +68,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		select_result = null;
 		update_result = 0;
 		
-		System.out.println(sql);
-
 		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
 		meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
 		params = new Object[meta.param_count];
