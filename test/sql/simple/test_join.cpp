@@ -24,6 +24,9 @@ TEST_CASE("Test basic joins of tables", "[joins]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 2}));
 		REQUIRE(CHECK_COLUMN(result, 2, {10, 20, 30}));
 	}
+	SECTION("ambiguous reference to column") {
+		REQUIRE_FAIL(con.Query("SELECT b FROM test, test2 WHERE test.b > test2.b;"));
+	}
 	SECTION("simple cross product + multiple join conditions") {
 		result = con.Query("SELECT a, test.b, c FROM test, test2 WHERE test.b=test2.b AND test.a-1=test2.c");
 		REQUIRE(CHECK_COLUMN(result, 0, {11}));
@@ -437,6 +440,11 @@ TEST_CASE("Test chaining USING joins", "[joins]") {
 	REQUIRE(result->names[1] == "b");
 	REQUIRE(result->names[2] == "c");
 	REQUIRE(result->names[3] == "d");
+
+	// column does not exist on left side of join
+	REQUIRE_FAIL(con.Query("SELECT * FROM t1 JOIN t2 USING (c)"));
+	// column does not exist on right side of join
+	REQUIRE_FAIL(con.Query("SELECT * FROM t1 JOIN t2 USING (a)"));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE t1"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE t2"));

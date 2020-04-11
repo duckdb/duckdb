@@ -316,7 +316,6 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	REQUIRE_NOTHROW(result = vjoin->Order("i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
-
 }
 
 TEST_CASE("Test view creation of relations", "[relation_api]") {

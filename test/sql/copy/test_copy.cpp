@@ -1615,8 +1615,7 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	unique_ptr<QueryResult> result;
 
 	// write a bunch of values to a CSV
-	auto csv_path = GetCSVPath();
-	auto csv_file = fs.JoinPath(csv_path, "relationtest.csv");
+	auto csv_file = TestCreatePath("relationtest.csv");
 
 	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
 
@@ -1624,4 +1623,6 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
 	result = csv_scan->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
 }
