@@ -255,13 +255,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("513") {
 		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
-		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
-		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
-		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
-		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
-		// result = con.Query("SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		// REQUIRE(CHECK_COLUMN(result, 1, {0}));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	}
 	SECTION("514") {
 		// Incorrect result after an INSERT violates a UNIQUE constraint
@@ -273,6 +273,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		// verify correct behavior here too when we have multiple nodes
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (2);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (3);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0(c0) VALUES (2);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	}
 	SECTION("515") {
 		// Query with a negative shift predicate yields an incorrect result
