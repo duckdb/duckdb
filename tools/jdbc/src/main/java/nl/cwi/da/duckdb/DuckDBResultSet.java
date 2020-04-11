@@ -36,10 +36,10 @@ public class DuckDBResultSet implements ResultSet {
 	private boolean finished = false;
 	private boolean was_null;
 
-	public DuckDBResultSet(DuckDBPreparedStatement stmt, ByteBuffer result_ref) {
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref) {
 		this.stmt = stmt;
 		this.result_ref = result_ref;
-		meta = DuckDBNative.duckdb_jdbc_meta(result_ref);
+		this.meta = meta;
 		current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
 		if (current_chunk.length == 0) {
 			finished = true;
@@ -432,8 +432,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int getRow() throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	public boolean absolute(int row) throws SQLException {

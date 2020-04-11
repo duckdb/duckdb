@@ -23,19 +23,17 @@ import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.List;
 
 public class DuckDBPreparedStatement implements PreparedStatement {
 	private DuckDBConnection conn;
-	
-	private ByteBuffer stmt_ref;
-	private DuckDBResultSet select_result ;
-	private int update_result;
-	private boolean is_update;
-	private List<Object> params = new ArrayList<Object>();
 
+	private ByteBuffer stmt_ref = null;
+	private DuckDBResultSet select_result = null;
+	private int update_result = 0;
+	private boolean is_update = false;
+	private Object[] params = null;
+	private DuckDBResultSetMetaData meta = null;
 
 	public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
 		if (conn == null) {
@@ -64,15 +62,22 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		}
 
 		stmt_ref = null;
+		meta = null;
+		params = null;
+		
 		select_result = null;
 		update_result = 0;
-		params.clear();
 		
+		System.out.println(sql);
+
 		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
+		meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
+		params = new Object[meta.param_count];
+		// TODO add query type to meta
 		String query_type = DuckDBNative.duckdb_jdbc_prepare_type(stmt_ref);
 		is_update = !query_type.equals("SELECT") && !query_type.equals("PRAGMA");
 	}
-	
+
 	@Override
 	public boolean execute() throws SQLException {
 		if (isClosed()) {
@@ -81,12 +86,36 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (stmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
-		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params.toArray());
-		select_result = new DuckDBResultSet(this, result_ref);
+		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
+		select_result = new DuckDBResultSet(this, meta, result_ref);
 
 		return !is_update;
 	}
-	
+
+	@Override
+	public ResultSet executeQuery() throws SQLException {
+		if (is_update) {
+			throw new SQLException("executeQuery() can only be used with SELECT queries");
+		}
+		execute();
+		return getResultSet();
+	}
+
+	@Override
+	public int executeUpdate() throws SQLException {
+		if (!is_update) {
+			throw new SQLException("executeUpdate() cannot be used with SELECT queries");
+		}
+		execute();
+		update_result = 0;
+		if (select_result.next()) {
+			update_result = select_result.getInt(1);
+		}
+		select_result.close();
+
+		return update_result;
+	}
+
 	@Override
 	public boolean execute(String sql) throws SQLException {
 		prepare(sql);
@@ -96,27 +125,93 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public ResultSet executeQuery(String sql) throws SQLException {
 		prepare(sql);
-		if (is_update) {
-			throw new SQLException("executeQuery() can only be used with SELECT queries");
-		}
-		execute();
-		return getResultSet();
+		return executeQuery();
 	}
 
 	@Override
 	public int executeUpdate(String sql) throws SQLException {
 		prepare(sql);
-		
-		if (!is_update) {
-			throw new SQLException("executeUpdate() cannot be used with SELECT queries");
+		return executeUpdate();
+	}
+
+	@Override
+	public ResultSetMetaData getMetaData() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
 		}
-		execute();
-		
-		select_result.next();
-		update_result = select_result.getInt(1);
-		select_result.close();
-		
-		return update_result;
+		if (stmt_ref == null || select_result == null) {
+			throw new SQLException("Prepare and execute something first");
+		}
+		return select_result.getMetaData();
+	}
+
+	@Override
+	public ParameterMetaData getParameterMetaData() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
+		}
+		if (stmt_ref == null) {
+			throw new SQLException("Prepare something first");
+		}
+		return new DuckDBParameterMetaData(meta);
+	}
+
+	@Override
+	public void setObject(int parameterIndex, Object x) throws SQLException {
+		if (parameterIndex < 1 || parameterIndex > getParameterMetaData().getParameterCount()) {
+			throw new SQLException("Parameter index out of bounds");
+		}
+		params[parameterIndex - 1] = x;
+	}
+
+	@Override
+	public void setNull(int parameterIndex, int sqlType) throws SQLException {
+		setObject(parameterIndex, null);
+	}
+
+	@Override
+	public void setBoolean(int parameterIndex, boolean x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setByte(int parameterIndex, byte x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setShort(int parameterIndex, short x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setInt(int parameterIndex, int x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setLong(int parameterIndex, long x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setFloat(int parameterIndex, float x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setDouble(int parameterIndex, double x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void setString(int parameterIndex, String x) throws SQLException {
+		setObject(parameterIndex, x);
+	}
+
+	@Override
+	public void clearParameters() throws SQLException {
+		params = new Object[getParameterMetaData().getParameterCount()];
 	}
 
 	@Override
@@ -169,7 +264,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void cancel() throws SQLException {
-		// TODO at some point
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -186,7 +280,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	public void setCursorName(String name) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
-
 
 	@Override
 	public ResultSet getResultSet() throws SQLException {
@@ -337,78 +430,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	}
 
 	@Override
-	public ResultSet executeQuery() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public int executeUpdate() throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public void setNull(int parameterIndex, int sqlType) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setBoolean(int parameterIndex, boolean x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setByte(int parameterIndex, byte x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setShort(int parameterIndex, short x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setInt(int parameterIndex, int x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setLong(int parameterIndex, long x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setFloat(int parameterIndex, float x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setDouble(int parameterIndex, double x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setString(int parameterIndex, String x) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
 	public void setBytes(int parameterIndex, byte[] x) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
@@ -444,21 +465,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	}
 
 	@Override
-	public void clearParameters() throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
 	public void setObject(int parameterIndex, Object x, int targetSqlType) throws SQLException {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void setObject(int parameterIndex, Object x) throws SQLException {
-		// TODO Auto-generated method stub
-
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
@@ -468,6 +476,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setCharacterStream(int parameterIndex, Reader reader, int length) throws SQLException {
+		throw new SQLFeatureNotSupportedException();
+	}
+
+	@Override
+	public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -489,12 +502,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public void setArray(int parameterIndex, Array x) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
-	}
-
-	@Override
-	public ResultSetMetaData getMetaData() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 	@Override
@@ -520,12 +527,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public void setURL(int parameterIndex, URL x) throws SQLException {
 		throw new SQLFeatureNotSupportedException();
-	}
-
-	@Override
-	public ParameterMetaData getParameterMetaData() throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
 	}
 
 	@Override
