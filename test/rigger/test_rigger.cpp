@@ -85,7 +85,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// INSERT results in an error "Not implemented: Cannot create data from this type"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOLEAN, c1 INT, PRIMARY KEY(c0, c1));"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1, c0) VALUES (0, 0);"));
-		result = con.Query("SELECT * t0;");
+		result = con.Query("SELECT * FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {false}));
 		REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	}
