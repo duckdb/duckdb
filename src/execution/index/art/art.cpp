@@ -20,6 +20,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 		is_little_endian = false;
 	}
 	switch (types[0]) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 	case TypeId::INT16:
 	case TypeId::INT32:

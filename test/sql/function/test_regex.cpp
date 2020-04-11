@@ -23,6 +23,11 @@ TEST_CASE("regex search test", "[regex]") {
 	// partial matches okay
 	result = con.Query("SELECT regexp_matches('asdf', 'sd')");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	// full match requires entire match
+	result = con.Query("SELECT regexp_full_match('asdf', 'sd')");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.Query("SELECT regexp_full_match('asdf', '.sd.')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 
 	result = con.Query("SELECT regexp_matches('asdf', '^sdf$')");
 	REQUIRE(CHECK_COLUMN(result, 0, {false}));
