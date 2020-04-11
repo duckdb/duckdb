@@ -18,13 +18,16 @@ idx_t Node48::GetChildPos(uint8_t k) {
 	}
 }
 
-idx_t Node48::GetChildGreaterEqual(uint8_t k) {
+idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = k; pos < 256; pos++) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
+			if (pos == k) {
+				equal = true;
+			}
 			return pos;
 		}
 	}
-	return Node::GetChildGreaterEqual(k);
+	return Node::GetChildGreaterEqual(k, equal);
 }
 
 idx_t Node48::GetNextPos(idx_t pos) {

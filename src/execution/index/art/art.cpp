@@ -535,6 +535,7 @@ bool ART::IteratorNext(Iterator &it) {
 //===--------------------------------------------------------------------===//
 bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	it.depth = 0;
+	bool equal = false;
 	if (!n) {
 		return false;
 	}
@@ -545,7 +546,11 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		auto &top = it.stack[it.depth];
 		top.node = node;
 		it.depth++;
-
+		if (!equal) {
+			while (node->type != NodeType::NLeaf) {
+				node = node->GetChild(node->GetMin())->get();
+			}
+		}
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf node: check if it is bigger or equal than the current key
 			auto leaf = static_cast<Leaf *>(node);
@@ -596,13 +601,14 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		// prefix matches, search inside the child for the key
 		depth += node->prefix_length;
 
-		top.pos = node->GetChildGreaterEqual(key[depth]);
-
+		top.pos = node->GetChildGreaterEqual(key[depth], equal);
 		if (top.pos == INVALID_INDEX) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
 		node = node->GetChild(top.pos)->get();
+		//! This means all children of this node qualify as geq
+
 		depth++;
 	}
 }
