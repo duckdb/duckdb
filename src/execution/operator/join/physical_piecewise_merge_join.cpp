@@ -282,7 +282,7 @@ idx_t FilterNullsAndNaNs(VectorData &vdata, idx_t count, SelectionVector &not_nu
 	idx_t not_null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx] && (!isnan(data[idx]))) {
+		if (!(*vdata.nullmask)[idx] && (!std::isnan(data[idx]))) {
 			not_null.set_index(not_null_count++, i);
 		}
 	}
