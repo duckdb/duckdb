@@ -25,6 +25,8 @@ public:
 
 	idx_t left_tuple;
 	idx_t right_tuple;
+
+	unique_ptr<bool[]> left_found_match;
 };
 
 PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -197,7 +199,6 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		}
 		return;
 	}
-
 	if ((type == JoinType::INNER || type == JoinType::LEFT) &&
 	    state->right_chunk >= state->right_chunks.chunks.size()) {
 		return;
@@ -214,6 +215,27 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				// we exhausted all right chunks!
 				// move to the next left chunk
 				do {
+					if (type == JoinType::LEFT) {
+						// left join: before we move to the next chunk, see if we need to output any vectors that didn't have a match found
+						if (state->left_found_match) {
+							SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
+							idx_t remaining_count = 0;
+							for(idx_t i = 0; i < state->child_chunk.size(); i++) {
+								if (!state->left_found_match[i]) {
+									remaining_sel.set_index(remaining_count++, i);
+								}
+							}
+							state->left_found_match.reset();
+							chunk.Slice(state->child_chunk, remaining_sel, remaining_count);
+							for (idx_t idx = state->child_chunk.column_count(); idx < chunk.column_count(); idx++) {
+								chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+								ConstantVector::SetNull(chunk.data[idx], true);
+							}
+						} else {
+							state->left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+							memset(state->left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+						}
+					}
 					children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 					if (state->child_chunk.size() == 0) {
 						return;
@@ -271,6 +293,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 
 		// now perform the join
 		switch (type) {
+		case JoinType::LEFT:
 		case JoinType::INNER: {
 			SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
 			idx_t match_count =
@@ -283,6 +306,11 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			}
 			// we have matching tuples!
 			// construct the result
+			if (state->left_found_match) {
+				for(idx_t i = 0; i < match_count; i++) {
+					state->left_found_match[lvector.get_index(i)] = true;
+				}
+			}
 			chunk.Slice(state->child_chunk, lvector, match_count);
 			chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 			break;
