@@ -65,7 +65,7 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftLeftOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return left << right;
+		return right < 0 ? 0 : left << right;
 	}
 };
 
@@ -83,7 +83,7 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftRightOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return left >> right;
+		return right < 0 ? 0 : left >> right;
 	}
 };
 
