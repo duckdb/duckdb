@@ -32,15 +32,16 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		}
 		// checks distinct clause
 		if (stmt->distinctClause != NULL) {
-			result->select_distinct = true;
+			auto modifier = make_unique<DistinctModifier>();
 			// checks distinct on clause
 			auto target = reinterpret_cast<PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
-				if (!TransformExpressionList(stmt->distinctClause, result->distinct_on_targets)) {
+				if (!TransformExpressionList(stmt->distinctClause, modifier->distinct_on_targets)) {
 					throw Exception("Failed to transform expression list from DISTINCT ON.");
 				}
 			}
+			result->modifiers.push_back(move(modifier));
 		}
 		// from table
 		// group by
@@ -61,10 +62,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 			throw Exception("Failed to transform setop children.");
 		}
 
-		result->select_distinct = true;
+		bool select_distinct = true;
 		switch (stmt->op) {
 		case PG_SETOP_UNION:
-			result->select_distinct = !stmt->all;
+			select_distinct = !stmt->all;
 			result->setop_type = SetOperationType::UNION;
 			break;
 		case PG_SETOP_EXCEPT:
@@ -76,11 +77,8 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 		default:
 			throw Exception("Unexpected setop type");
 		}
-		// if we compute the distinct result here, we do not have to do this in
-		// the children. This saves a bunch of unnecessary DISTINCTs.
-		if (result->select_distinct) {
-			result->left->select_distinct = false;
-			result->right->select_distinct = false;
+		if (select_distinct) {
+			result->modifiers.push_back(make_unique<DistinctModifier>());
 		}
 		break;
 	}
@@ -89,12 +87,22 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	}
 	// transform the common properties
 	// both the set operations and the regular select can have an ORDER BY/LIMIT attached to them
-	TransformOrderBy(stmt->sortClause, node->orders);
-	if (stmt->limitCount) {
-		node->limit = TransformExpression(stmt->limitCount);
+	vector<OrderByNode> orders;
+	TransformOrderBy(stmt->sortClause, orders);
+	if (orders.size() > 0) {
+		auto order_modifier = make_unique<OrderModifier>();
+		order_modifier->orders = move(orders);
+		node->modifiers.push_back(move(order_modifier));
 	}
-	if (stmt->limitOffset) {
-		node->offset = TransformExpression(stmt->limitOffset);
+	if (stmt->limitCount || stmt->limitOffset) {
+		auto limit_modifier = make_unique<LimitModifier>();
+		if (stmt->limitCount) {
+			limit_modifier->limit = TransformExpression(stmt->limitCount);
+		}
+		if (stmt->limitOffset) {
+			limit_modifier->offset = TransformExpression(stmt->limitOffset);
+		}
+		node->modifiers.push_back(move(limit_modifier));
 	}
 	return node;
 }

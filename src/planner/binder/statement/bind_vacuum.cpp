@@ -1,13 +1,17 @@
-#include "duckdb/parser/statement/vacuum_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/statement/bound_simple_statement.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/statement/vacuum_statement.hpp"
+#include "duckdb/planner/operator/logical_simple.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-unique_ptr<BoundSQLStatement> Binder::Bind(VacuumStatement &stmt) {
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
+namespace duckdb {
+
+BoundStatement Binder::Bind(VacuumStatement &stmt) {
+	BoundStatement result;
+	result.names = {"Success"};
+	result.types = {SQLType::BOOLEAN};
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::VACUUM, move(stmt.info));
+	return result;
 }
+
+} // namespace duckdb

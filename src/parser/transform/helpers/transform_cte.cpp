@@ -37,13 +37,14 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 			throw Exception("A CTE needs a SELECT");
 		}
 
-        unique_ptr<QueryNode> cte_select;
+		unique_ptr<QueryNode> cte_select;
 
-		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings otherwise.
-		if(cte->cterecursive || de_with_clause->recursive) {
-		    cte_select = TransformRecursiveCTE(cte);
+		// CTE transformation can either result in inlining for non recursive CTEs, or in recursive CTE bindings
+		// otherwise.
+		if (cte->cterecursive || de_with_clause->recursive) {
+			cte_select = TransformRecursiveCTE(cte);
 		} else {
-		    cte_select = TransformSelectNode((PGSelectStmt *)cte->ctequery);
+			cte_select = TransformSelectNode((PGSelectStmt *)cte->ctequery);
 		}
 
 		if (!cte_select) {
@@ -61,56 +62,51 @@ void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &se
 }
 
 unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte) {
-    auto stmt = (PGSelectStmt *)cte->ctequery;
+	auto stmt = (PGSelectStmt *)cte->ctequery;
 
-    unique_ptr<QueryNode> node;
-    switch (stmt->op) {
-        case PG_SETOP_UNION:
-        case PG_SETOP_EXCEPT:
-        case PG_SETOP_INTERSECT: {
-            node = make_unique<RecursiveCTENode>();
-            auto result = (RecursiveCTENode *)node.get();
-            result->ctename = string(cte->ctename);
-            result->union_all = stmt->all;
-            result->left = TransformSelectNode(stmt->larg);
-            result->right = TransformSelectNode(stmt->rarg);
+	unique_ptr<QueryNode> node;
+	switch (stmt->op) {
+	case PG_SETOP_UNION:
+	case PG_SETOP_EXCEPT:
+	case PG_SETOP_INTERSECT: {
+		node = make_unique<RecursiveCTENode>();
+		auto result = (RecursiveCTENode *)node.get();
+		result->ctename = string(cte->ctename);
+		result->union_all = stmt->all;
+		result->left = TransformSelectNode(stmt->larg);
+		result->right = TransformSelectNode(stmt->rarg);
 
-            if (!result->left || !result->right) {
-                throw Exception("Failed to transform recursive CTE children.");
-            }
+		if (!result->left || !result->right) {
+			throw Exception("Failed to transform recursive CTE children.");
+		}
 
-            result->select_distinct = true;
-            switch (stmt->op) {
-                case PG_SETOP_UNION:
-                    // We don't need a DISTINCT operation on top of a recursive UNION CTE.
-                    result->select_distinct = false;
-                    break;
-                default:
-                    throw Exception("Unexpected setop type for recursive CTE");
-            }
-            // if we compute the distinct result here, we do not have to do this in
-            // the children. This saves a bunch of unnecessary DISTINCTs.
-            if (result->select_distinct) {
-                result->left->select_distinct = false;
-                result->right->select_distinct = false;
-            }
-            break;
-        }
-        default:
-            // This CTE is not recursive. Fallback to regular query transformation.
-            return TransformSelectNode((PGSelectStmt *)cte->ctequery);
-    }
+		bool select_distinct = true;
+		switch (stmt->op) {
+		case PG_SETOP_UNION:
+			// We don't need a DISTINCT operation on top of a recursive UNION CTE.
+			select_distinct = false;
+			break;
+		default:
+			throw Exception("Unexpected setop type for recursive CTE");
+		}
+		// if we compute the distinct result here, we do not have to do this in
+		// the children. This saves a bunch of unnecessary DISTINCTs.
+		if (select_distinct) {
+			result->modifiers.push_back(make_unique<DistinctModifier>());
+		}
+		break;
+	}
+	default:
+		// This CTE is not recursive. Fallback to regular query transformation.
+		return TransformSelectNode((PGSelectStmt *)cte->ctequery);
+	}
 
-    if(!node->orders.empty()) {
-        throw Exception("ORDER BY in a recursive query is not implemented");
-    }
+	if (stmt->limitCount) {
+		throw Exception("LIMIT in a recursive query is not implemented");
+	}
 
-    if (stmt->limitCount) {
-        throw Exception("LIMIT in a recursive query is not implemented");
-    }
-
-    if (stmt->limitOffset) {
-        throw Exception("OFFSET in a recursive query is not implemented");
-    }
-    return node;
+	if (stmt->limitOffset) {
+		throw Exception("OFFSET in a recursive query is not implemented");
+	}
+	return node;
 }

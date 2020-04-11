@@ -8,6 +8,7 @@ add_library_unity(duckdb_expression_binders
                   index_binder.cpp
                   insert_binder.cpp
                   order_binder.cpp
+                  relation_binder.cpp
                   select_binder.cpp
                   update_binder.cpp
                   where_binder.cpp)

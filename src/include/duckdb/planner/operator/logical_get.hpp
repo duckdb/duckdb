@@ -19,6 +19,7 @@ namespace duckdb {
 class LogicalGet : public LogicalOperator {
 public:
 	LogicalGet(idx_t table_index);
+	LogicalGet(TableCatalogEntry *table, idx_t table_index);
 	LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids);
 
 	idx_t EstimateCardinality() override;

@@ -6,13 +6,8 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/bound_sql_statement.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/logical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_prepare.hpp"
-#include "duckdb/planner/statement/bound_execute_statement.hpp"
-#include "duckdb/planner/statement/bound_select_statement.hpp"
-#include "duckdb/planner/statement/bound_simple_statement.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
@@ -24,25 +19,6 @@ using namespace std;
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
 }
 
-bool Planner::StatementRequiresValidTransaction(BoundSQLStatement &statement) {
-	switch (statement.type) {
-	case StatementType::DROP: {
-		// dropping prepared statements also does not require a valid transaction
-		auto &drop_info = (DropInfo &)(*((BoundSimpleStatement &)statement).info);
-		return drop_info.type == CatalogType::PREPARED_STATEMENT;
-	}
-	case StatementType::PREPARE:
-	case StatementType::TRANSACTION:
-		// prepare and transaction statements can be executed without valid transaction
-		return false;
-	case StatementType::EXECUTE:
-		// execute statement: look into the to-be-executed statement
-		return ((BoundExecuteStatement &)statement).prepared->requires_valid_transaction;
-	default:
-		return true;
-	}
-}
-
 void Planner::CreatePlan(SQLStatement &statement) {
 	vector<BoundParameterExpression *> bound_parameters;
 
@@ -52,18 +28,19 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto bound_statement = binder.Bind(statement);
 	context.profiler.EndPhase();
 
-	VerifyQuery(*bound_statement);
+	// VerifyQuery(*bound_statement);
 
 	this->read_only = binder.read_only;
-	this->requires_valid_transaction = StatementRequiresValidTransaction(*bound_statement);
-	this->names = bound_statement->GetNames();
-	this->sql_types = bound_statement->GetTypes();
+	this->requires_valid_transaction = binder.requires_valid_transaction;
+	this->names = bound_statement.names;
+	this->sql_types = bound_statement.types;
+	this->plan = move(bound_statement.plan);
 
 	// now create a logical query plan from the query
-	context.profiler.StartPhase("logical_planner");
-	LogicalPlanGenerator logical_planner(binder, context);
-	this->plan = logical_planner.CreatePlan(*bound_statement);
-	context.profiler.EndPhase();
+	// context.profiler.StartPhase("logical_planner");
+	// LogicalPlanGenerator logical_planner(binder, context);
+	// this->plan = logical_planner.CreatePlan(*bound_statement);
+	// context.profiler.EndPhase();
 
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
@@ -99,6 +76,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::TRANSACTION:
 	case StatementType::EXPLAIN:
 	case StatementType::VACUUM:
+	case StatementType::RELATION:
 		CreatePlan(*statement);
 		break;
 	case StatementType::PRAGMA: {
@@ -142,68 +120,68 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 }
 
-void Planner::VerifyQuery(BoundSQLStatement &statement) {
-	if (!context.query_verification_enabled) {
-		return;
-	}
-	if (statement.type != StatementType::SELECT) {
-		return;
-	}
-	auto &select = (BoundSelectStatement &)statement;
-	VerifyNode(*select.node);
-}
+// void Planner::VerifyQuery(BoundSQLStatement &statement) {
+// 	if (!context.query_verification_enabled) {
+// 		return;
+// 	}
+// 	if (statement.type != StatementType::SELECT) {
+// 		return;
+// 	}
+// 	auto &select = (BoundSelectStatement &)statement;
+// 	VerifyNode(*select.node);
+// }
 
-void Planner::VerifyNode(BoundQueryNode &node) {
-	if (node.type == QueryNodeType::SELECT_NODE) {
-		auto &select_node = (BoundSelectNode &)node;
-		vector<unique_ptr<Expression>> copies;
-		for (auto &expr : select_node.select_list) {
-			VerifyExpression(*expr, copies);
-		}
-		if (select_node.where_clause) {
-			VerifyExpression(*select_node.where_clause, copies);
-		}
-		for (auto &expr : select_node.groups) {
-			VerifyExpression(*expr, copies);
-		}
-		if (select_node.having) {
-			VerifyExpression(*select_node.having, copies);
-		}
-		for (auto &aggr : select_node.aggregates) {
-			VerifyExpression(*aggr, copies);
-		}
-		for (auto &window : select_node.windows) {
-			VerifyExpression(*window, copies);
-		}
+// void Planner::VerifyNode(BoundQueryNode &node) {
+// 	if (node.type == QueryNodeType::SELECT_NODE) {
+// 		auto &select_node = (BoundSelectNode &)node;
+// 		vector<unique_ptr<Expression>> copies;
+// 		for (auto &expr : select_node.select_list) {
+// 			VerifyExpression(*expr, copies);
+// 		}
+// 		if (select_node.where_clause) {
+// 			VerifyExpression(*select_node.where_clause, copies);
+// 		}
+// 		for (auto &expr : select_node.groups) {
+// 			VerifyExpression(*expr, copies);
+// 		}
+// 		if (select_node.having) {
+// 			VerifyExpression(*select_node.having, copies);
+// 		}
+// 		for (auto &aggr : select_node.aggregates) {
+// 			VerifyExpression(*aggr, copies);
+// 		}
+// 		for (auto &window : select_node.windows) {
+// 			VerifyExpression(*window, copies);
+// 		}
 
-		// double loop to verify that (in)equality of hashes
-		for (idx_t i = 0; i < copies.size(); i++) {
-			auto outer_hash = copies[i]->Hash();
-			for (idx_t j = 0; j < copies.size(); j++) {
-				auto inner_hash = copies[j]->Hash();
-				if (outer_hash != inner_hash) {
-					// if hashes are not equivalent the expressions should not be equivalent
-					assert(!Expression::Equals(copies[i].get(), copies[j].get()));
-				}
-			}
-		}
-	} else {
-		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
-		auto &setop_node = (BoundSetOperationNode &)node;
-		VerifyNode(*setop_node.left);
-		VerifyNode(*setop_node.right);
-	}
-}
+// 		// double loop to verify that (in)equality of hashes
+// 		for (idx_t i = 0; i < copies.size(); i++) {
+// 			auto outer_hash = copies[i]->Hash();
+// 			for (idx_t j = 0; j < copies.size(); j++) {
+// 				auto inner_hash = copies[j]->Hash();
+// 				if (outer_hash != inner_hash) {
+// 					// if hashes are not equivalent the expressions should not be equivalent
+// 					assert(!Expression::Equals(copies[i].get(), copies[j].get()));
+// 				}
+// 			}
+// 		}
+// 	} else {
+// 		assert(node.type == QueryNodeType::SET_OPERATION_NODE);
+// 		auto &setop_node = (BoundSetOperationNode &)node;
+// 		VerifyNode(*setop_node.left);
+// 		VerifyNode(*setop_node.right);
+// 	}
+// }
 
-void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies) {
-	if (expr.HasSubquery()) {
-		// can't copy subqueries
-		return;
-	}
-	// verify that the copy of expressions works
-	auto copy = expr.Copy();
-	// copy should have identical hash and identical equality function
-	assert(copy->Hash() == expr.Hash());
-	assert(Expression::Equals(copy.get(), &expr));
-	copies.push_back(move(copy));
-}
+// void Planner::VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies) {
+// 	if (expr.HasSubquery()) {
+// 		// can't copy subqueries
+// 		return;
+// 	}
+// 	// verify that the copy of expressions works
+// 	auto copy = expr.Copy();
+// 	// copy should have identical hash and identical equality function
+// 	assert(copy->Hash() == expr.Hash());
+// 	assert(Expression::Equals(copy.get(), &expr));
+// 	copies.push_back(move(copy));
+// }

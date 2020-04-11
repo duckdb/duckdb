@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_tableref.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -16,15 +17,9 @@ class TableCatalogEntry;
 //! Represents a TableReference to a base table in the schema
 class BoundBaseTableRef : public BoundTableRef {
 public:
-	BoundBaseTableRef(TableCatalogEntry *table, idx_t bind_index)
-	    : BoundTableRef(TableReferenceType::BASE_TABLE), table(table), bind_index(bind_index) {
+	BoundBaseTableRef(unique_ptr<LogicalOperator> get) : BoundTableRef(TableReferenceType::BASE_TABLE), get(move(get)) {
 	}
 
-	//! The referenced table
-	TableCatalogEntry *table;
-	//! The set of columns bound to this base table reference
-	vector<string> bound_columns;
-	//! The index in the bind context
-	idx_t bind_index;
+	unique_ptr<LogicalOperator> get;
 };
 } // namespace duckdb
