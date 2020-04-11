@@ -17,6 +17,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELIM_GET";
 	case LogicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
+	case LogicalOperatorType::EXPRESSION_GET:
+		return "EXPRESSION_GET";
 	case LogicalOperatorType::ANY_JOIN:
 		return "ANY_JOIN";
 	case LogicalOperatorType::COMPARISON_JOIN:

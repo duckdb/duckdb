@@ -4,6 +4,9 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation/read_csv_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 
 using namespace duckdb;
@@ -90,4 +93,68 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(string query) {
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
 	context->Append(description, chunk);
+}
+
+shared_ptr<Relation> Connection::Table(string table_name) {
+	return Table(DEFAULT_SCHEMA, move(table_name));
+}
+
+shared_ptr<Relation> Connection::Table(string schema_name, string table_name) {
+	auto table_info = TableInfo(schema_name, table_name);
+	if (!table_info) {
+		throw Exception("Table does not exist!");
+	}
+	return make_shared<TableRelation>(*context, move(table_info));
+}
+
+shared_ptr<Relation> Connection::Values(vector<vector<Value>> values) {
+	vector<string> column_names;
+	return Values(move(values), move(column_names));
+}
+
+shared_ptr<Relation> Connection::Values(vector<vector<Value>> values, vector<string> column_names, string alias) {
+	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
+}
+
+shared_ptr<Relation> Connection::Values(string values) {
+	vector<string> column_names;
+	return Values(move(values), move(column_names));
+}
+
+shared_ptr<Relation> Connection::Values(string values, vector<string> column_names, string alias) {
+	return make_shared<ValueRelation>(*context, move(values), move(column_names), alias);
+}
+
+shared_ptr<Relation> Connection::ReadCSV(string csv_file, vector<string> columns) {
+	// parse columns
+	vector<ColumnDefinition> column_list;
+	for (auto &column : columns) {
+		auto col_list = Parser::ParseColumnList(column);
+		if (col_list.size() != 1) {
+			throw ParserException("Expected a singlec olumn definition");
+		}
+		column_list.push_back(move(col_list[0]));
+	}
+	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
+}
+
+void Connection::BeginTransaction() {
+	auto result = Query("BEGIN TRANSACTION");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+}
+
+void Connection::Commit() {
+	auto result = Query("COMMIT");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
+}
+
+void Connection::Rollback() {
+	auto result = Query("ROLLBACK");
+	if (!result->success) {
+		throw Exception(result->error);
+	}
 }

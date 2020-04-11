@@ -391,7 +391,7 @@ TEST_CASE("Prepare all types of statements", "[prepared]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	string csv_path = TestCreatePath("csv_files");
+	string csv_path = TestCreatePath("prepared_files");
 	if (db.file_system->DirectoryExists(csv_path)) {
 		db.file_system->RemoveDirectory(csv_path);
 	}

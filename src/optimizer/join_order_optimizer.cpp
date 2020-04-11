@@ -64,7 +64,8 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<LogicalOperator *> &filter_operators,
                                               LogicalOperator *parent) {
 	LogicalOperator *op = &input_op;
-	while (op->children.size() == 1 && op->type != LogicalOperatorType::PROJECTION) {
+	while (op->children.size() == 1 &&
+	       (op->type != LogicalOperatorType::PROJECTION && op->type != LogicalOperatorType::EXPRESSION_GET)) {
 		if (op->type == LogicalOperatorType::FILTER) {
 			// extract join conditions from filter
 			filter_operators.push_back(op);
@@ -114,7 +115,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		unordered_set<idx_t> bindings;
 		LogicalJoin::GetTableReferences(*op, bindings);
 		// now create the relation that refers to all these bindings
-		auto relation = make_unique<Relation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		for (idx_t it : bindings) {
 			relation_mapping[it] = relations.size();
 		}
@@ -129,14 +130,21 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 	} else if (op->type == LogicalOperatorType::GET) {
 		// base table scan, add to set of relations
 		auto get = (LogicalGet *)op;
-		auto relation = make_unique<Relation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
+		relation_mapping[get->table_index] = relations.size();
+		relations.push_back(move(relation));
+		return true;
+	} else if (op->type == LogicalOperatorType::EXPRESSION_GET) {
+		// base table scan, add to set of relations
+		auto get = (LogicalExpressionGet *)op;
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[get->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
 	} else if (op->type == LogicalOperatorType::TABLE_FUNCTION) {
 		// table function call, add to set of relations
 		auto table_function = (LogicalTableFunction *)op;
-		auto relation = make_unique<Relation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[table_function->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
@@ -146,7 +154,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		JoinOrderOptimizer optimizer;
 		op->children[0] = optimizer.Optimize(move(op->children[0]));
 		// projection, add to the set of relations
-		auto relation = make_unique<Relation>(&input_op, parent);
+		auto relation = make_unique<SingleJoinRelation>(&input_op, parent);
 		relation_mapping[proj->table_index] = relations.size();
 		relations.push_back(move(relation));
 		return true;
@@ -155,14 +163,14 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 }
 
 //! Update the exclusion set with all entries in the subgraph
-static void UpdateExclusionSet(RelationSet *node, unordered_set<idx_t> &exclusion_set) {
+static void UpdateExclusionSet(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	for (idx_t i = 0; i < node->count; i++) {
 		exclusion_set.insert(node->relations[i]);
 	}
 }
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
-static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right) {
+static unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *info, JoinNode *left, JoinNode *right) {
 	// for the hash join we want the right side (build side) to have the smallest cardinality
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
@@ -186,7 +194,7 @@ static unique_ptr<JoinNode> CreateJoinTree(RelationSet *set, NeighborInfo *info,
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 }
 
-JoinNode *JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
+JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	// get the left and right join plans
 	auto &left_plan = plans[left];
 	auto &right_plan = plans[right];
@@ -204,7 +212,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(RelationSet *left, RelationSet *right, Ne
 	return entry->second.get();
 }
 
-bool JoinOrderOptimizer::TryEmitPair(RelationSet *left, RelationSet *right, NeighborInfo *info) {
+bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right, NeighborInfo *info) {
 	pairs++;
 	if (pairs >= 2000) {
 		// when the amount of pairs gets too large we exit the dynamic programming and resort to a greedy algorithm
@@ -216,7 +224,7 @@ bool JoinOrderOptimizer::TryEmitPair(RelationSet *left, RelationSet *right, Neig
 	return true;
 }
 
-bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
+bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
 	unordered_set<idx_t> exclusion_set;
 	for (idx_t i = 0; i < node->relations[0]; i++) {
@@ -233,7 +241,7 @@ bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
-		auto neighbor_relation = set_manager.GetRelation(neighbor);
+		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto connection = query_graph.GetConnection(node, neighbor_relation);
 		if (connection) {
 			if (!TryEmitPair(node, neighbor_relation, connection)) {
@@ -247,17 +255,17 @@ bool JoinOrderOptimizer::EmitCSG(RelationSet *node) {
 	return true;
 }
 
-bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *right,
+bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelationSet *right,
                                                unordered_set<idx_t> exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.size() == 0) {
 		return true;
 	}
-	vector<RelationSet *> union_sets;
+	vector<JoinRelationSet *> union_sets;
 	union_sets.resize(neighbors.size());
 	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto neighbor = set_manager.GetRelation(neighbors[i]);
+		auto neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto combined_set = set_manager.Union(right, neighbor);
 		if (plans.find(combined_set) != plans.end()) {
@@ -282,17 +290,17 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(RelationSet *left, RelationSet *r
 	return true;
 }
 
-bool JoinOrderOptimizer::EnumerateCSGRecursive(RelationSet *node, unordered_set<idx_t> &exclusion_set) {
+bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_set<idx_t> &exclusion_set) {
 	// find neighbors of S under the exlusion set
 	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.size() == 0) {
 		return true;
 	}
 	// now first emit the connected subgraphs of the neighbors
-	vector<RelationSet *> union_sets;
+	vector<JoinRelationSet *> union_sets;
 	union_sets.resize(neighbors.size());
 	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto neighbor = set_manager.GetRelation(neighbors[i]);
+		auto neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto new_set = set_manager.Union(node, neighbor);
 		if (plans.find(new_set) != plans.end()) {
@@ -319,7 +327,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	// we enumerate over all the possible pairs in the neighborhood
 	for (idx_t i = relations.size(); i > 0; i--) {
 		// for every node in the set, we consider it as the start node once
-		auto start_node = set_manager.GetRelation(i - 1);
+		auto start_node = set_manager.GetJoinRelation(i - 1);
 		// emit the start node
 		if (!EmitCSG(start_node)) {
 			return false;
@@ -341,9 +349,9 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
-	vector<RelationSet *> T;
+	vector<JoinRelationSet *> T;
 	for (idx_t i = 0; i < relations.size(); i++) {
-		T.push_back(set_manager.GetRelation(i));
+		T.push_back(set_manager.GetJoinRelation(i));
 	}
 	while (T.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
@@ -427,10 +435,10 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 	// generate a set of cross products to combine the currently available plans into a full join plan
 	// we create edges between every relation with a high cost
 	for (idx_t i = 0; i < relations.size(); i++) {
-		auto left = set_manager.GetRelation(i);
+		auto left = set_manager.GetJoinRelation(i);
 		for (idx_t j = 0; j < relations.size(); j++) {
 			if (i != j) {
-				auto right = set_manager.GetRelation(j);
+				auto right = set_manager.GetJoinRelation(j);
 				query_graph.CreateEdge(left, right, nullptr);
 				query_graph.CreateEdge(right, left, nullptr);
 			}
@@ -438,7 +446,7 @@ void JoinOrderOptimizer::GenerateCrossProducts() {
 	}
 }
 
-static unique_ptr<LogicalOperator> ExtractRelation(Relation &rel) {
+static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
 	auto &children = rel.parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
 		if (children[i].get() == rel.op) {
@@ -451,10 +459,10 @@ static unique_ptr<LogicalOperator> ExtractRelation(Relation &rel) {
 	throw Exception("Could not find relation in parent node (?)");
 }
 
-pair<RelationSet *, unique_ptr<LogicalOperator>>
+pair<JoinRelationSet *, unique_ptr<LogicalOperator>>
 JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode *node) {
-	RelationSet *left_node = nullptr, *right_node = nullptr;
-	RelationSet *result_relation;
+	JoinRelationSet *left_node = nullptr, *right_node = nullptr;
+	JoinRelationSet *result_relation;
 	unique_ptr<LogicalOperator> result_operator;
 	if (node->left && node->right) {
 		// generate the left and right children
@@ -478,15 +486,15 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				assert(filters[f->filter_index]);
 				auto condition = move(filters[f->filter_index]);
 				// now create the actual join condition
-				assert((RelationSet::IsSubset(left.first, f->left_set) &&
-				        RelationSet::IsSubset(right.first, f->right_set)) ||
-				       (RelationSet::IsSubset(left.first, f->right_set) &&
-				        RelationSet::IsSubset(right.first, f->left_set)));
+				assert((JoinRelationSet::IsSubset(left.first, f->left_set) &&
+				        JoinRelationSet::IsSubset(right.first, f->right_set)) ||
+				       (JoinRelationSet::IsSubset(left.first, f->right_set) &&
+				        JoinRelationSet::IsSubset(right.first, f->left_set)));
 				JoinCondition cond;
 				assert(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = (BoundComparisonExpression &)*condition;
 				// we need to figure out which side is which by looking at the relations available to us
-				bool invert = RelationSet::IsSubset(left.first, f->left_set) ? false : true;
+				bool invert = JoinRelationSet::IsSubset(left.first, f->left_set) ? false : true;
 				cond.left = !invert ? move(comparison.left) : move(comparison.right);
 				cond.right = !invert ? move(comparison.right) : move(comparison.left);
 				cond.comparison = condition->type;
@@ -518,7 +526,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 		if (filters[info->filter_index]) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info->set->count > 0 && RelationSet::IsSubset(result_relation, info->set)) {
+			if (info->set->count > 0 && JoinRelationSet::IsSubset(result_relation, info->set)) {
 				auto filter = move(filters[info->filter_index]);
 				// if it is, we can push the filter
 				// we can push it either into a join or as a filter
@@ -532,11 +540,11 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				// check if the nodes can be split up into left/right
 				bool found_subset = false;
 				bool invert = false;
-				if (RelationSet::IsSubset(left_node, info->left_set) &&
-				    RelationSet::IsSubset(right_node, info->right_set)) {
+				if (JoinRelationSet::IsSubset(left_node, info->left_set) &&
+				    JoinRelationSet::IsSubset(right_node, info->right_set)) {
 					found_subset = true;
-				} else if (RelationSet::IsSubset(right_node, info->left_set) &&
-				           RelationSet::IsSubset(left_node, info->right_set)) {
+				} else if (JoinRelationSet::IsSubset(right_node, info->left_set) &&
+				           JoinRelationSet::IsSubset(left_node, info->right_set)) {
 					invert = true;
 					found_subset = true;
 				}
@@ -592,7 +600,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOp
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
 	for (idx_t i = 0; i < relations.size(); i++) {
-		extracted_relations.push_back(ExtractRelation(*relations[i]));
+		extracted_relations.push_back(ExtractJoinRelation(*relations[i]));
 	}
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
@@ -681,7 +689,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// first extract the relation set for the entire filter
 		unordered_set<idx_t> bindings;
 		ExtractBindings(*filter, bindings);
-		filter_info->set = set_manager.GetRelation(bindings);
+		filter_info->set = set_manager.GetJoinRelation(bindings);
 		filter_info->filter_index = i;
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
@@ -693,8 +701,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 			if (left_bindings.size() > 0 && right_bindings.size() > 0) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = set_manager.GetRelation(left_bindings);
-				filter_info->right_set = set_manager.GetRelation(right_bindings);
+				filter_info->left_set = set_manager.GetJoinRelation(left_bindings);
+				filter_info->right_set = set_manager.GetJoinRelation(right_bindings);
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
@@ -720,11 +728,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	}
 	// now use dynamic programming to figure out the optimal join order
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
-	// nodes of the join tree NOTE: we can just use pointers to RelationSet* here because the GetRelation function
-	// ensures that a unique combination of relations will have a unique RelationSet object.
+	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &rel = *relations[i];
-		auto node = set_manager.GetRelation(i);
+		auto node = set_manager.GetJoinRelation(i);
 		plans[node] = make_unique<JoinNode>(node, rel.op->EstimateCardinality());
 	}
 	// now we perform the actual dynamic programming to compute the final result
@@ -735,7 +743,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	for (idx_t i = 0; i < relations.size(); i++) {
 		bindings.insert(i);
 	}
-	auto total_relation = set_manager.GetRelation(bindings);
+	auto total_relation = set_manager.GetJoinRelation(bindings);
 	auto final_plan = plans.find(total_relation);
 	if (final_plan == plans.end()) {
 		// could not find the final plan

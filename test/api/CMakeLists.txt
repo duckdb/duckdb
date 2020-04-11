@@ -7,6 +7,7 @@ if(NOT WIN32)
                     test_prepared_api.cpp
                     test_table_info.cpp
                     test_appender_api.cpp
+                    test_relation_api.cpp
                     test_query_profiler.cpp
                     test_dbdir.cpp)
 else()
@@ -17,6 +18,7 @@ else()
                     test_prepared_api.cpp
                     test_table_info.cpp
                     test_appender_api.cpp
+                    test_relation_api.cpp
                     test_query_profiler.cpp
                     test_dbdir.cpp)
 endif()

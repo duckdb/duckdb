@@ -40,6 +40,8 @@ string StatementTypeToString(StatementType type) {
 		return "PRAGMA";
 	case StatementType::VACUUM:
 		return "VACUUM";
+	case StatementType::RELATION:
+		return "RELATION";
 	default:
 		return "INVALID";
 	}

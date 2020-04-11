@@ -29,6 +29,14 @@ class SelectBinder : public ExpressionBinder {
 public:
 	SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
+	bool BoundAggregates() {
+		return bound_aggregate;
+	}
+	void ResetBindings() {
+		this->bound_aggregate = false;
+		this->bound_columns = false;
+	}
+
 protected:
 	BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false) override;
 
@@ -37,6 +45,7 @@ protected:
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth) override;
 
 	bool inside_window;
+	bool bound_aggregate = false;
 
 	BoundSelectNode &node;
 	BoundGroupInformation &info;

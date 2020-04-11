@@ -11,6 +11,8 @@ using namespace std;
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
+	this->bound_aggregate = true;
+
 	AggregateBinder aggregate_binder(binder, context);
 	string error;
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
@@ -56,17 +58,16 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	bound_function.CastToFunctionArguments(children, types);
 
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(bound_function.return_type), bound_function, aggr.distinct);
+	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(bound_function.return_type), bound_function,
+	                                                       aggr.distinct);
 	aggregate->children = move(children);
 	aggregate->arguments = arguments;
 
 	auto return_type = bound_function.return_type;
 
-
 	if (bound_function.bind) {
 		aggregate->bind_info = bound_function.bind(*aggregate, context, return_type);
 	}
-
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
