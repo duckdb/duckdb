@@ -103,6 +103,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("SELECT * FROM t1 JOIN t0 ON t1.c0 < t1.c0 - t0.c0 WHERE t0.c0 <= t1.c0;"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM t1 JOIN t0 ON t0.c0 + t1.c0 < t1.c0 - t0.c0;"));
 	}
 	SECTION("507") {
 		// Creating an empty table results in a crash
