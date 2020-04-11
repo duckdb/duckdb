@@ -38,8 +38,7 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 	SECTION("#8 Query with RIGHT JOIN causes a server panic") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0(c0) AS SELECT 0 FROM t0 ORDER BY -t0.c0;"));
-		// FIXME: right join not supported
-		REQUIRE_FAIL(con.Query("SELECT * FROM v0 RIGHT JOIN t0 ON false;"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM v0 RIGHT JOIN t0 ON false;"));
 	}
 	// SQLite
 	SECTION("#15 './' LIKE './' does not match") {
