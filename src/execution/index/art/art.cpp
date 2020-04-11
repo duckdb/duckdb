@@ -549,6 +549,9 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
 				node = node->GetChild(node->GetMin())->get();
+				auto &c_top = it.stack[it.depth];
+				c_top.node = node;
+				it.depth++;
 			}
 		}
 		if (node->type == NodeType::NLeaf) {

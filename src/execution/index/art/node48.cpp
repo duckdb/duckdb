@@ -23,6 +23,8 @@ idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
 			if (pos == k) {
 				equal = true;
+			} else {
+				equal = false;
 			}
 			return pos;
 		}

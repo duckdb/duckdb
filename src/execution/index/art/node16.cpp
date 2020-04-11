@@ -25,7 +25,10 @@ idx_t Node16::GetChildGreaterEqual(uint8_t k, bool &equal) {
 		if (key[pos] >= k) {
 			if (key[pos] == k) {
 				equal = true;
+			} else {
+				equal = false;
 			}
+
 			return pos;
 		}
 	}
