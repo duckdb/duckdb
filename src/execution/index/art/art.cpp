@@ -401,6 +401,8 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
+	case TypeId::BOOL:
+		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
 	case TypeId::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
 	case TypeId::INT16:
