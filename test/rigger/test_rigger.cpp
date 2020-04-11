@@ -253,4 +253,76 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 NOT SIMILAR TO 0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
 	}
+	SECTION("513") {
+		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
+		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		// result = con.Query("SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0;");
+		// REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		// REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	}
+	SECTION("514") {
+		// Incorrect result after an INSERT violates a UNIQUE constraint
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE UNIQUE INDEX i0 ON t0(c0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	}
+	SECTION("515") {
+		// Query with a negative shift predicate yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT8, c1 DOUBLE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c1, c0) VALUES (1, 1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE NOT (t1.c0<<-1);");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+		REQUIRE(CHECK_COLUMN(result, 2, {0}));
+		result = con.Query("SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE (t1.c0<<-1);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+		REQUIRE(CHECK_COLUMN(result, 2, {}));
+		result = con.Query("SELECT NOT (t1.c0<<-1) FROM t1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
+	}
+	SECTION("516") {
+		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for index"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("517") {
+		// Query with an AND predicate, NOT and comparison yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		result = con.Query("SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("518") {
+		// Query using the LN() function does not terminate
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		result = con.Query("SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
 }
