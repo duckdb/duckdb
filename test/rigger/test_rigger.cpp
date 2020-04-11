@@ -106,7 +106,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("507") {
 		// Creating an empty table results in a crash
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0();"));
+		REQUIRE_FAIL(con.Query("CREATE TABLE t0();"));
 	}
 	SECTION("508") {
 		// LEFT JOIN on column with NULL value results in a segmentation fault
