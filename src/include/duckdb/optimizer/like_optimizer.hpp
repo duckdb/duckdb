@@ -20,10 +20,11 @@ public:
 	LikeOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 	}
 	Optimizer &optimizer;
-	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> node);
 
 private:
+	//! Transform a LIKE in optimized scalar functions such as prefix, suffix, and contains
+	unique_ptr<LogicalOperator> ApplyLikeOptimizations(unique_ptr<LogicalOperator> op);
 	ScalarFunction GetScalarFunction(string func_name);
 };
 

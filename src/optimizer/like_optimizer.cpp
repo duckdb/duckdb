@@ -19,10 +19,18 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> op) {
-	if (op->type != LogicalOperatorType::FILTER) {
-		return op;
+	if (op->type == LogicalOperatorType::FILTER) {
+		return ApplyLikeOptimizations(move(op));
 	}
+	//fixme it's failing -> /home/tkepe/git/duckdb/test/sql/simple/test_like.cpp
+	for (auto &child : op->children) {
+		child = Rewrite(move(child));
+	}
+	return op;
+}
 
+//! Transform a LIKE in optimized scalar functions such as prefix, suffix, and contains
+unique_ptr<LogicalOperator> LikeOptimizer::ApplyLikeOptimizations(unique_ptr<LogicalOperator> op) {
 	for (auto &expr : op->expressions) {
 		if (expr->type == ExpressionType::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*expr.get();
@@ -76,6 +84,7 @@ unique_ptr<LogicalOperator> LikeOptimizer::Rewrite(unique_ptr<LogicalOperator> o
 
 	return op;
 }
+
 /**
  * \brief This method finds the builtin function from the catalog
  * \param func_name The function name
