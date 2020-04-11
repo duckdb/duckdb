@@ -403,6 +403,11 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// set up the scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 
+	if (join_type != JoinType::INNER) {
+		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	}
+
 	// first prepare the keys for probing
 	const SelectionVector *current_sel;
 	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector);
@@ -416,11 +421,6 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 
 	// now initialize the pointers of the scan structure based on the hashes
 	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
-
-	if (join_type != JoinType::INNER) {
-		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	}
 
 	// create the selection vector linking to only non-empty entries
 	idx_t count = 0;
