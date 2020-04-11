@@ -74,28 +74,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 				// successfully created the join condition
 				continue;
 			}
-		} else if (expr->type == ExpressionType::OPERATOR_NOT) {
-			auto &not_expr = (BoundOperatorExpression &)*expr;
-			assert(not_expr.children.size() == 1);
-			ExpressionType child_type = not_expr.children[0]->GetExpressionType();
-			// the condition is ON NOT (EXPRESSION)
-			// we can transform this to remove the NOT if the child is a Comparison
-			// e.g.:
-			// ON NOT (X = 3) can be turned into ON (X <> 3)
-			// ON NOT (X > 3) can be turned into ON (X <= 3)
-			// for non-comparison operators here we just push the filter
-			if (child_type >= ExpressionType::COMPARE_EQUAL &&
-			    child_type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
-				// switcheroo the child condition
-				// our join needs to compare explicit left and right sides. So we
-				// invert the condition to express NOT, this way we can still use
-				// equi-joins
-				not_expr.children[0]->type = NegateComparisionExpression(child_type);
-				if (CreateJoinCondition(*not_expr.children[0], left_bindings, right_bindings, conditions)) {
-					// successfully created the join condition
-					continue;
-				}
-			}
 		}
 		arbitrary_expressions.push_back(move(expr));
 	}
