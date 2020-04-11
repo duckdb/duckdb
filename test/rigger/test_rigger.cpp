@@ -324,12 +324,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
-		result = con.Query("SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0) < 0);");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		result = con.Query("SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0), (0), (1), (-1);"));
+		result = con.Query("SELECT LN(t1.c0) FROM t0, t1 WHERE LN(t1.c0) < t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
-		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT t1.c0, LN(t1.c0) FROM t1 ORDER BY t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1, 0, 0, 1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 0}));
 	}
 }

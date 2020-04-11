@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cmath>
 
-using namespace duckdb;
 using namespace std;
 
 namespace duckdb {
@@ -162,6 +161,37 @@ void PowFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 //===--------------------------------------------------------------------===//
+// Unary wrappers to turn values < 0 or <= 0 into NULL
+//===--------------------------------------------------------------------===//
+struct UnaryNegativeWrapper {
+	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
+		if (input < 0) {
+			nullmask[idx] = true;
+			return 0;
+		} else {
+			return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
+		}
+	}
+};
+
+struct UnaryZeroOrNegativeWrapper {
+	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
+		if (input <= 0) {
+			nullmask[idx] = true;
+			return 0;
+		} else {
+			return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
+		}
+	}
+};
+
+template <class T, class OP, class OPWRAPPER>
+static void UnaryScalarFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
+	UnaryExecutor::Execute<T, T, OP, true, OPWRAPPER>(input.data[0], result, input.size());
+}
+//===--------------------------------------------------------------------===//
 // sqrt
 //===--------------------------------------------------------------------===//
 struct SqrtOperator {
@@ -172,12 +202,27 @@ struct SqrtOperator {
 
 void SqrtFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("sqrt", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, SqrtOperator>));
+	                               UnaryScalarFunctionWrapper<double, SqrtOperator, UnaryNegativeWrapper>));
+}
+
+//===--------------------------------------------------------------------===//
+// cbrt
+//===--------------------------------------------------------------------===//
+struct CbRtOperator {
+	template <class TA, class TR> static inline TR Operation(TA left) {
+		return cbrt(left);
+	}
+};
+
+void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("cbrt", {SQLType::DOUBLE}, SQLType::DOUBLE,
+	                               ScalarFunction::UnaryFunction<double, double, CbRtOperator>));
 }
 
 //===--------------------------------------------------------------------===//
 // ln
 //===--------------------------------------------------------------------===//
+
 struct LnOperator {
 	template <class TA, class TR> static inline TR Operation(TA left) {
 		return log(left);
@@ -186,7 +231,7 @@ struct LnOperator {
 
 void LnFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("ln", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, LnOperator>));
+	                               UnaryScalarFunctionWrapper<double, LnOperator, UnaryZeroOrNegativeWrapper>));
 }
 
 //===--------------------------------------------------------------------===//
@@ -200,7 +245,7 @@ struct Log10Operator {
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction log_function("log10", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                            ScalarFunction::UnaryFunction<double, double, Log10Operator>);
+	                               UnaryScalarFunctionWrapper<double, Log10Operator, UnaryZeroOrNegativeWrapper>);
 	set.AddFunction(log_function);
 	// "log" is an alias for "log10"
 	log_function.name = "log";
@@ -218,21 +263,7 @@ struct Log2Operator {
 
 void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("log2", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, Log2Operator>));
-}
-
-//===--------------------------------------------------------------------===//
-// cbrt
-//===--------------------------------------------------------------------===//
-struct CbRtOperator {
-	template <class TA, class TR> static inline TR Operation(TA left) {
-		return cbrt(left);
-	}
-};
-
-void CbrtFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("cbrt", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               ScalarFunction::UnaryFunction<double, double, CbRtOperator>));
+	                               UnaryScalarFunctionWrapper<double, Log2Operator, UnaryZeroOrNegativeWrapper>));
 }
 
 //===--------------------------------------------------------------------===//
