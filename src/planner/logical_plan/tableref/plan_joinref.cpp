@@ -143,6 +143,10 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 unique_ptr<LogicalOperator> LogicalPlanGenerator::CreatePlan(BoundJoinRef &ref) {
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
+	if (ref.type == JoinType::RIGHT) {
+		ref.type = JoinType::LEFT;
+		std::swap(left, right);
+	}
 
 	if (ref.type == JoinType::INNER) {
 		// inner join, generate a cross product + filter
