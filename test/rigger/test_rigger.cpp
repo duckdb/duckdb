@@ -123,10 +123,14 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// SIMILAR TO results in an incorrect result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-10);"));
+		result = con.Query("SELECT '-10' SIMILAR TO '0';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT t0.c0 SIMILAR TO 0 FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT t0.c0 NOT SIMILAR TO 0 FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 NOT SIMILAR TO 0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
-		result = con.Query("SELECT t0.c0 SIMILAR TO 0;");
-		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	}
 
 
