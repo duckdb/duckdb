@@ -381,7 +381,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1), (1);"));
 		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL) WHERE t0.c0 NOT IN (t1.c0);");
-		REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL);");
 		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 	}
