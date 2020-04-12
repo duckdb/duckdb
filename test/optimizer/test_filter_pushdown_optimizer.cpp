@@ -53,7 +53,7 @@ TEST_CASE("Test Table Filter Push Down Multiple Filters", "[filterpushdown-optim
 }
 
 TEST_CASE("Test Table Filter All Numeric Data Types", "[filterpushdown-optimizer]") {
-	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real", "date"};
+	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real"};
 	ExpressionHelper helper;
 	auto &con = helper.con;
 	Binder binder(*con.context);
