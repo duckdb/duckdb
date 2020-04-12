@@ -369,7 +369,9 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (0), (0);"));
 		result = con.Query("SELECT * FROM t1, t2, t0 WHERE CONCAT(t1.c0) OR t0.c0;");
-		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 2, {-1.0, -1.0}));
 	}
 	SECTION("527") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
