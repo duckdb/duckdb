@@ -111,7 +111,7 @@ struct RoundOperator {
 			TA next = input * 10;
 			TA next_modifier = modifier * 10;
 			if (std::isinf(next) || std::isinf(next_modifier)) {
-				break;
+				return input;
 			}
 			modifier = next_modifier;
 			input = next;
