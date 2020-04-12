@@ -331,4 +331,46 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-1, 0, 0, 1}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 0}));
 	}
+	SECTION("521") {
+		// ROUND() evaluates to -nan
+		result = con.Query("SELECT ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0.1}));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 > ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 <= ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	}
+	SECTION("522") {
+		// Casting a large number to REAL and multiplying it with zero results in -nan
+		REQUIRE_FAIL(con.Query("SELECT 1e100::real*0;"));
+		// REQUIRE(CHECK_COLUMN(result, 0, {0.1}));
+
+	}
+	SECTION("523") {
+		// The trigonometric functions can result in -nan
+		REQUIRE_FAIL(con.Query("SELECT SIN(1e1000);"));
+	}
+	SECTION("525") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 FLOAT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (1);"));
+		con.Query("explain SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;")->Print();
+		result = con.Query("SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1.0}));
+	}
+	SECTION("526") {
+		// Query that uses the CONCAT() function and OR expression crashes
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 REAL);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT2);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (-1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (0), (0);"));
+		result = con.Query("SELECT * FROM t1, t2, t0 WHERE CONCAT(t1.c0) OR t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+
 }
