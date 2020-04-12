@@ -406,10 +406,10 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_FAIL(con.Query("INSERT INTO t0 VALUES (-10000000);"));
 		REQUIRE_FAIL(con.Query("SELECT (-10000000)::DATE;"));
 	}
-	SECTION("534") {
+	SECTION("533") {
 		// Overflow when casting from REAL to INT results in "Invalid TypeId -1"
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
-		REQUIRE_FAIL(con.Query("INSERT INTO t0 VALUES (-10000000);"));
-		REQUIRE_FAIL(con.Query("SELECT (-10000000)::DATE;"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 REAL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (10000000000);"));
+		REQUIRE_FAIL(con.Query("SELECT t0.c0 ::INT FROM t0;"));
 	}
 }
