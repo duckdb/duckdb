@@ -371,5 +371,25 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t1, t2, t0 WHERE CONCAT(t1.c0) OR t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+	SECTION("527") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1), (1);"));
+		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL) WHERE t0.c0 NOT IN (t1.c0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 1}));
+		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+	}
+	SECTION("528") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0.1);"));
+		result = con.Query("SELECT * FROM t0 WHERE REGEXP_MATCHES(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0.1"}));
+		result = con.Query("SELECT * FROM t0 WHERE NOT REGEXP_MATCHES(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT REGEXP_MATCHES(t0.c0, '1') FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	}
 
 }
