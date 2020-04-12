@@ -69,6 +69,8 @@ public:
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
+	static Value DATE(date_t date);
+	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified date
 	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
@@ -115,6 +117,10 @@ public:
 	TypeId type;
 	//! Whether or not the value is NULL
 	bool is_null;
+
+	SQLType GetSQLType() {
+		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
+	}
 
 	//! The value of the object, if it is of a constant size Type
 	union Val {
@@ -179,6 +185,8 @@ public:
 	void Print();
 
 private:
+	SQLType sql_type = SQLType(SQLTypeId::INVALID);
+private:
 	template <class T> T GetValueInternal();
 	//! Templated helper function for casting
 	template <class DST, class OP> static DST _cast(const Value &v);
@@ -201,6 +209,7 @@ template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(string_t value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
+template <> Value Value::CreateValue(Value value);
 
 template <> bool Value::GetValue();
 template <> int8_t Value::GetValue();

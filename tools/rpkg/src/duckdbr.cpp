@@ -357,7 +357,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		}
 		case RType::DATE: {
 			auto d_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::INTEGER(RDateType::Convert(d_val));
+			val = Value::DATE(RDateType::Convert(d_val));
 			val.is_null = RDateType::IsNull(d_val);
 			break;
 		}

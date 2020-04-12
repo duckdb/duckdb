@@ -31,12 +31,10 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
 
 	TransformExpressionList(stmt->params, result->values);
 	for (auto &expr : result->values) {
-		if (expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT &&
-		    expr->GetExpressionType() != ExpressionType::VALUE_NULL) {
+		if (!expr->IsScalar()) {
 			throw Exception("Only scalar parameters or NULL supported for EXECUTE");
 		}
 	}
-
 	return result;
 }
 

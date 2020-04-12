@@ -157,6 +157,28 @@ TEST_CASE("PREPARE for INSERT", "[prepared]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE c"));
 }
 
+TEST_CASE("PREPARE for INSERT with dates", "[prepared]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// prepared DATE insert
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dates(d DATE)"));
+	REQUIRE_NO_FAIL(con.Query("PREPARE s1 AS INSERT INTO dates VALUES ($1)"));
+	REQUIRE_NO_FAIL(con.Query("EXECUTE s1 (DATE '1992-01-01')"));
+
+	result = con.Query("SELECT * FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 1)}));
+
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM dates"));
+
+	auto prepared = con.Prepare("INSERT INTO dates VALUES ($1)");
+	REQUIRE_NO_FAIL(prepared->Execute(Value::DATE(1992, 1, 3)));
+
+	result = con.Query("SELECT * FROM dates");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 1, 3)}));
+}
+
 TEST_CASE("PREPARE for DELETE/UPDATE", "[prepared]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
