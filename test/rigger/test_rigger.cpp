@@ -394,6 +394,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 		result = con.Query("SELECT REGEXP_MATCHES(t0.c0, '1') FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+		result = con.Query("SELECT * FROM t0 WHERE REGEXP_FULL_MATCH(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0 WHERE NOT REGEXP_FULL_MATCH(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0.1"}));
+		result = con.Query("SELECT REGEXP_FULL_MATCH(t0.c0, '1') FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
 	}
 
 }
