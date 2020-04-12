@@ -236,8 +236,6 @@ void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFi
 				    approved_tuple_count);
 			}
 		}
-
-		//		assert(0);
 	}
 }
 //===--------------------------------------------------------------------===//
@@ -279,18 +277,24 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	auto data = handle->node->buffer;
 
 	auto offset = vector_index * vector_size;
-
-	auto source_nullmask = (nullmask_t *)(data + offset);
+	auto &source_nullmask = *((nullmask_t *)data + offset);
 	auto source_data = data + offset + sizeof(nullmask_t);
 	// fetch the nullmask and copy the data from the base table
 	result.vector_type = VectorType::FLAT_VECTOR;
-	FlatVector::SetNullmask(result, *source_nullmask);
 	auto result_data = FlatVector::GetData(result);
+	nullmask_t result_nullmask;
+
 	for (size_t i = 0; i < approved_tuple_count; i++) {
-		auto cur_source = source_data + sel.get_index(i) * type_size;
-		memcpy(result_data, cur_source, type_size);
-		result_data += type_size;
+		if (source_nullmask[sel.get_index(i)]) {
+			result_nullmask.set(i, true);
+		} else {
+			result_nullmask.set(i, false);
+			auto cur_source = source_data + sel.get_index(i) * type_size;
+			memcpy(result_data, cur_source, type_size);
+			result_data += type_size;
+		}
 	}
+	FlatVector::SetNullmask(result, result_nullmask);
 }
 
 //===--------------------------------------------------------------------===//

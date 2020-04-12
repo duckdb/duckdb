@@ -239,10 +239,11 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		for (idx_t i = 0; i < state.column_ids.size(); i++) {
 			auto column = state.column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				assert(0);
-				// scan row id
-				//                assert(result.data[i].type == ROW_TYPE);
-				//                result.data[i].Sequence(base_row + current_row, 1);
+				assert(result.data[i].type == TypeId::INT64);
+				auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+				for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+					result_data[sel_idx] = base_row + sel.get_index(sel_idx);
+				}
 			} else {
 				columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
 				                           approved_tuple_count);

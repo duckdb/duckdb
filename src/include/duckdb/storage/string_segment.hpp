@@ -130,6 +130,68 @@ private:
 		return Storage::BLOCK_SIZE - dictionary_offset - max_vector_count * vector_size;
 	}
 
+	template <class OP>
+	void Select_String(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
+	                   unsigned long size, const string &constant, idx_t &approved_tuple_count) {
+		if (approved_tuple_count == 0) {
+			//! This is the first filter we are applying, we need to scan the full vector
+			for (idx_t i = 0; i < size; i++) {
+				//			if (update_idx < info.count && info.ids[update_idx] == i) {
+				//				// use update info
+				//				result_data[i] = ReadString(state.handles, info.block_ids[update_idx],
+				//info.offsets[update_idx]); 				update_idx++; 			} else {
+				// use base table info
+				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[i]);
+				if (OP::Operation(data_str.GetString(), constant)) {
+					sel.set_index(approved_tuple_count++, i);
+				}
+				//			}
+			}
+			//		for (idx_t i = 0; i < size; i++) {
+			//			if (OP::Operation(((string *)source)[i], constant)) {
+			//				sel.set_index(approved_tuple_count++, i);
+			//			}
+			//		}
+		} else {
+			//! We already applied at least one filter, we only need to check the selection vector
+			for (idx_t i = 0; i < approved_tuple_count; i++) {
+				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[sel.get_index(i)]);
+				if (!OP::Operation(data_str.GetString(), constant)) {
+					sel.swap(i, approved_tuple_count - 1);
+					approved_tuple_count--;
+					i--;
+				}
+			}
+		}
+	}
+
+	template <class OPL, class OPR>
+	void Select_String_Between(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
+	                           SelectionVector &sel, unsigned long size, string constantLeft, string constantRight,
+	                           idx_t &approved_tuple_count) {
+		if (approved_tuple_count == 0) {
+			//! This is the first filter we are applying, we need to scan the full vector
+			for (idx_t i = 0; i < size; i++) {
+				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[i]);
+				if (OPL::Operation(data_str.GetString(), constantLeft) &&
+				    OPR::Operation(data_str.GetString(), constantRight)) {
+					sel.set_index(approved_tuple_count++, i);
+				}
+			}
+		} else {
+			//! We already applied at least one filter, we only need to check the selection vector
+			for (idx_t i = 0; i < approved_tuple_count; i++) {
+				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[sel.get_index(i)]);
+				if (!(OPL::Operation(data_str.GetString(), constantLeft) &&
+				      OPR::Operation(data_str.GetString(), constantRight))) {
+					sel.swap(i, approved_tuple_count - 1);
+					approved_tuple_count--;
+					i--;
+				}
+			}
+		}
+	}
+
 private:
 	//! The max string size that is allowed within a block. Strings bigger than this will be labeled as a BIG STRING and
 	//! offloaded to the overflow blocks.
