@@ -44,6 +44,7 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 
 		auto target = StringVector::EmptyString(result, input_length);
 		strreverse(input_data, input_length, target.GetData());
+		target.Finalize();
 		return target;
 	});
 }

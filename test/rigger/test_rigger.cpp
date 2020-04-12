@@ -421,4 +421,12 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {"0"}));
 		REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	}
+	SECTION("535") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-515965088);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (-5.15965088E8);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i0 ON t0(c0);"));
+		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0, REVERSE(t0.c0) ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-515965088, 1}));
+	}
 }
