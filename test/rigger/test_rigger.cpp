@@ -357,7 +357,6 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 FLOAT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (0);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (1);"));
-		con.Query("explain SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;")->Print();
 		result = con.Query("SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {1.0}));
 	}
