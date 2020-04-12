@@ -230,3 +230,25 @@ TEST_CASE("Power test", "[function]") {
 	result = con.Query("select power(b, a) from powerme");
 	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
 }
+
+TEST_CASE("Test invalid input for math functions", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// any invalid input in math functions results in a NULL
+	// sqrt of negative number
+	result = con.Query("SELECT SQRT(-1), SQRT(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+
+	// log of value <= 0
+	result = con.Query("SELECT LN(-1), LN(0), LOG10(-1), LOG10(0), LOG2(-1), LOG2(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+}
