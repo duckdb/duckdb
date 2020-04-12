@@ -106,17 +106,12 @@ struct RoundOperator {
 		if (precision < 0) {
 			precision = 0;
 		}
-		TA modifier = 1;
-		for(TB i = 0; i < precision; i++) {
-			TA next = input * 10;
-			TA next_modifier = modifier * 10;
-			if (std::isinf(next) || std::isinf(next_modifier)) {
-				return input;
-			}
-			modifier = next_modifier;
-			input = next;
+		double modifier = pow(10, precision);
+		double rounded_value = (round(input * modifier)) / modifier;
+		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
+			return input;
 		}
-		return round(input) / modifier;
+		return rounded_value;
 	}
 };
 
