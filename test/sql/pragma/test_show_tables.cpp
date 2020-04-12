@@ -27,7 +27,7 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"INTEGER", "INTEGER"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"YES", "YES"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value()}));
-	REQUIRE(CHECK_COLUMN(result, 4, {"NULL", "NULL"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 5, {Value(), Value()}));
 	// equivalent to PRAGMA SHOW('integers')
 	result = con.Query("PRAGMA SHOW('integers')");
@@ -36,7 +36,7 @@ TEST_CASE("Test SHOW/DESCRIBE tables", "[pragma]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"INTEGER", "INTEGER"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"YES", "YES"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value()}));
-	REQUIRE(CHECK_COLUMN(result, 4, {"NULL", "NULL"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 5, {Value(), Value()}));
 
 	// we can also describe views

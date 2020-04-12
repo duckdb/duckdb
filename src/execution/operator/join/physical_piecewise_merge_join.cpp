@@ -228,7 +228,7 @@ static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx
 			i++;
 		}
 
-		while (i <= j && OP::Operation(data[dpivot_idx], data[sel.get_index(result.get_index(j))])) {
+		while (i <= j && !OP::Operation(data[sel.get_index(result.get_index(j))], data[dpivot_idx])) {
 			j--;
 		}
 
@@ -265,6 +265,30 @@ static void templated_quicksort(VectorData &vdata, const SelectionVector &not_nu
 	templated_quicksort<T, duckdb::LessThanEquals>((T *)vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
+idx_t FilterNulls(VectorData &vdata, idx_t count, SelectionVector &not_null) {
+	idx_t not_null_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!(*vdata.nullmask)[idx]) {
+			not_null.set_index(not_null_count++, i);
+		}
+	}
+	return not_null_count;
+}
+
+template<class T>
+idx_t FilterNullsAndNaNs(VectorData &vdata, idx_t count, SelectionVector &not_null) {
+	auto data = (T *) vdata.data;
+	idx_t not_null_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!(*vdata.nullmask)[idx] && (!std::isnan(data[idx]))) {
+			not_null.set_index(not_null_count++, i);
+		}
+	}
+	return not_null_count;
+}
+
 void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	if (count == 0) {
 		order.count = 0;
@@ -274,17 +298,23 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	auto &vdata = order.vdata;
 
 	// first filter out all the non-null values
-	idx_t not_null_count = 0;
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx]) {
-			not_null.set_index(not_null_count++, i);
-		}
+	idx_t not_null_count;
+	switch(vector.type) {
+	case TypeId::FLOAT:
+		not_null_count = FilterNullsAndNaNs<float>(vdata, count, not_null);
+		break;
+	case TypeId::DOUBLE:
+		not_null_count = FilterNullsAndNaNs<double>(vdata, count, not_null);
+		break;
+	default:
+		not_null_count = FilterNulls(vdata, count, not_null);
+		break;
 	}
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;

@@ -35,7 +35,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		auto subquery_binder = make_unique<Binder>(context, &binder);
 		// the subquery may refer to CTEs from the parent query
 		subquery_binder->CTE_bindings = binder.CTE_bindings;
-		auto bound_node = subquery_binder->Bind(*expr.subquery);
+		auto bound_node = subquery_binder->BindNode(*expr.subquery);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];

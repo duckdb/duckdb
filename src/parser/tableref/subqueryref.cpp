@@ -5,8 +5,9 @@
 using namespace duckdb;
 using namespace std;
 
-SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_)
-    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {
+SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_p, string alias_p)
+    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
+	this->alias = alias_p;
 }
 
 bool SubqueryRef::Equals(const TableRef *other_) const {
@@ -18,8 +19,7 @@ bool SubqueryRef::Equals(const TableRef *other_) const {
 }
 
 unique_ptr<TableRef> SubqueryRef::Copy() {
-	auto copy = make_unique<SubqueryRef>(subquery->Copy());
-	copy->alias = alias;
+	auto copy = make_unique<SubqueryRef>(subquery->Copy(), alias);
 	copy->column_name_alias = column_name_alias;
 	return move(copy);
 }

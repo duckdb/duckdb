@@ -369,6 +369,9 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 			// get the LHS and RHS nodes
 			auto left_node = GetNode(comparison.left.get());
 			auto right_node = GetNode(comparison.right.get());
+					if (BaseExpression::Equals(left_node, right_node)) {
+			return FilterResult::UNSUPPORTED;
+		}
 			// get the equivalence sets of the LHS and RHS
 			auto left_equivalence_set = GetEquivalenceSet(left_node);
 			auto right_equivalence_set = GetEquivalenceSet(right_node);
@@ -403,9 +406,6 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 		return FilterResult::SUCCESS;
 	}
 
-	// only comparisons supported for now
-	return FilterResult::UNSUPPORTED;
-}
 
 static bool IsGreaterThan(ExpressionType type) {
 	return type == ExpressionType::COMPARE_GREATERTHAN || type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;

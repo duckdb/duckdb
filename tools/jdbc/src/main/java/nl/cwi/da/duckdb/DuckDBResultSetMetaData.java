@@ -7,12 +7,14 @@ import java.sql.Types;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
-	public DuckDBResultSetMetaData(int column_count, String[] column_names, String[] column_types) {
+	public DuckDBResultSetMetaData(int param_count, int column_count, String[] column_names, String[] column_types) {
+		this.param_count = param_count;
 		this.column_count = column_count;
 		this.column_names = column_names;
 		this.column_types = column_types;
 	}
 
+	protected int param_count;
 	protected int column_count;
 	protected String[] column_names;
 	protected String[] column_types;

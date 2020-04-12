@@ -69,8 +69,8 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		// FIXME: look at constraints
 		output.SetValue(3, index, Value::BOOLEAN(false));
 		// "dflt_value", TypeId::VARCHAR
-		string def_value = column.default_value ? column.default_value->ToString() : "NULL";
-		output.SetValue(4, index, Value(def_value));
+		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
+		output.SetValue(4, index, def_value);
 		// "pk", TypeId::BOOL
 		// FIXME: look at constraints
 		output.SetValue(5, index, Value::BOOLEAN(false));

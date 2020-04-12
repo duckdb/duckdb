@@ -23,7 +23,7 @@ TEST_CASE("Test table_info pragma", "[pragma]") {
 	// NOT NULL
 	REQUIRE(CHECK_COLUMN(result, 3, {false, false}));
 	// DEFAULT VALUE
-	REQUIRE(CHECK_COLUMN(result, 4, {"1 + 3", "NULL"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"1 + 3", Value()}));
 	// PRIMARY KEY
 	REQUIRE(CHECK_COLUMN(result, 5, {false, false}));
 

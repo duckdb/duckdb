@@ -48,14 +48,36 @@ public class DuckDBNative {
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, String query);
 
-	// returns res_ref result reference object
-	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
+	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref);
 
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 
-	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer res_ref);
+	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref);
+
+	
+	// returns res_ref result reference object
+	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
+
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
+	
+	protected static native int duckdb_jdbc_fetch_size();
+
+	
+	protected static native boolean foo0();
+	protected static native byte foo1();
+	protected static native short foo2();
+	protected static native int foo3();
+	protected static native long foo4();
+	protected static native float foo5();
+	protected static native double foo6();
+	protected static native String foo7();
+
+
+
+
+
+
 }

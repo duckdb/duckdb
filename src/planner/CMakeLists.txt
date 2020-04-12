@@ -1,7 +1,6 @@
 add_subdirectory(expression)
 add_subdirectory(binder)
 add_subdirectory(expression_binder)
-add_subdirectory(logical_plan)
 add_subdirectory(operator)
 add_subdirectory(subquery)
 
@@ -13,7 +12,6 @@ add_library_unity(duckdb_planner
                   expression_binder.cpp
                   joinside.cpp
                   logical_operator.cpp
-                  logical_plan_generator.cpp
                   pragma_handler.cpp
                   binder.cpp
                   bind_context.cpp
