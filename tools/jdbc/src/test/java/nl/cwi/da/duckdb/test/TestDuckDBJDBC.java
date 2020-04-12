@@ -1,9 +1,9 @@
 package nl.cwi.da.duckdb.test;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
@@ -46,7 +46,6 @@ public class TestDuckDBJDBC {
 		assertFalse(conn.isClosed());
 
 		Statement stmt = conn.createStatement();
-		assertTrue(stmt.isClosed()); // no query yet
 
 		ResultSet rs = stmt.executeQuery("SELECT 42 as a");
 		assertFalse(stmt.isClosed());
@@ -418,14 +417,207 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_prepare_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT CAST(? AS BOOLEAN) c1, CAST(? AS TINYINT) c2, CAST(? AS SMALLINT) c3, CAST(? AS INTEGER) c4, CAST(? AS BIGINT) c5, CAST(? AS FLOAT) c6, CAST(? AS DOUBLE) c7, CAST(? AS STRING) c8");
+		ps.setBoolean(1, true);
+		ps.setByte(2, (byte) 42);
+		ps.setShort(3, (short) 43);
+		ps.setInt(4, 44);
+		ps.setLong(5, (long) 45);
+		ps.setFloat(6, (float) 4.6);
+		ps.setDouble(7, (double) 4.7);
+		ps.setString(8, "four eight");
+
+		ResultSet rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), true);
+		assertEquals(rs.getByte(2), (byte) 42);
+		assertEquals(rs.getShort(3), (short) 43);
+		assertEquals(rs.getInt(4), 44);
+		assertEquals(rs.getLong(5), (long) 45);
+		assertEquals(rs.getFloat(6), 4.6, 0.001);
+		assertEquals(rs.getDouble(7), 4.7, 0.001);
+		assertEquals(rs.getString(8), "four eight");
+		rs.close();
+
+		ps.setBoolean(1, false);
+		ps.setByte(2, (byte) 82);
+		ps.setShort(3, (short) 83);
+		ps.setInt(4, 84);
+		ps.setLong(5, (long) 85);
+		ps.setFloat(6, (float) 8.6);
+		ps.setDouble(7, (double) 8.7);
+		ps.setString(8, "eight eight");
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), false);
+		assertEquals(rs.getByte(2), (byte) 82);
+		assertEquals(rs.getShort(3), (short) 83);
+		assertEquals(rs.getInt(4), 84);
+		assertEquals(rs.getLong(5), (long) 85);
+		assertEquals(rs.getFloat(6), 8.6, 0.001);
+		assertEquals(rs.getDouble(7), 8.7, 0.001);
+		assertEquals(rs.getString(8), "eight eight");
+		rs.close();
+
+		ps.setObject(1, false);
+		ps.setObject(2, (byte) 82);
+		ps.setObject(3, (short) 83);
+		ps.setObject(4, 84);
+		ps.setObject(5, (long) 85);
+		ps.setObject(6, (float) 8.6);
+		ps.setObject(7, (double) 8.7);
+		ps.setObject(8, "eight eight");
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), false);
+		assertEquals(rs.getByte(2), (byte) 82);
+		assertEquals(rs.getShort(3), (short) 83);
+		assertEquals(rs.getInt(4), 84);
+		assertEquals(rs.getLong(5), (long) 85);
+		assertEquals(rs.getFloat(6), 8.6, 0.001);
+		assertEquals(rs.getDouble(7), 8.7, 0.001);
+		assertEquals(rs.getString(8), "eight eight");
+
+		ps.setNull(1, 0);
+		ps.setNull(2, 0);
+		ps.setNull(3, 0);
+		ps.setNull(4, 0);
+		ps.setNull(5, 0);
+		ps.setNull(6, 0);
+		ps.setNull(7, 0);
+		ps.setNull(8, 0);
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		rs.getObject(1);
+		assertTrue(rs.wasNull());
+		rs.getObject(2);
+		assertTrue(rs.wasNull());
+		rs.getObject(3);
+		assertTrue(rs.wasNull());
+		rs.getObject(4);
+		assertTrue(rs.wasNull());
+		rs.getObject(5);
+		assertTrue(rs.wasNull());
+		rs.getObject(6);
+		assertTrue(rs.wasNull());
+		rs.getObject(7);
+		assertTrue(rs.wasNull());
+		rs.getObject(8);
+		assertTrue(rs.wasNull());
+
+		rs.close();
+		ps.close();
+
+		conn.createStatement()
+				.executeUpdate("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
+		PreparedStatement pStmt1 = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)");
+		for (int j = 1; j <= 10; j++) {
+			String sTypeDesc = "Type-" + j;
+			int newType = j;
+			pStmt1.setInt(1, newType);
+			pStmt1.setString(2, sTypeDesc);
+			pStmt1.executeUpdate();
+		}
+		pStmt1.close();
+
+		/*
+		 * conn.createStatement()
+		 * .executeUpdate("create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )"
+		 * );
+		 * 
+		 * 
+		 * PreparedStatement pStmt =
+		 * conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)"); for (int i
+		 * = 1; i <= 10; i++) { // Perform the insert(s) int newKey = i; String newName
+		 * = "xx" + "-" + i; float newPrice = i + (float) .00; int newType = i % 5; if
+		 * (newType == 0) newType = 5; pStmt.setInt(1, newKey); pStmt.setString(2,
+		 * newName); pStmt.setFloat(3, newPrice); pStmt.setInt(4, newType);
+		 * pStmt.executeUpdate(); }
+		 * 
+		 * pStmt.close();
+		 */
+		conn.close();
+
+	}
+
+	public static void test_prepare_insert() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		conn.createStatement()
+				.executeUpdate("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
+		PreparedStatement pStmt1 = conn.prepareStatement("insert into ctstable1 values(?, ?)");
+		for (int j = 1; j <= 10; j++) {
+			String sTypeDesc = "Type-" + j;
+			int newType = j;
+			pStmt1.setInt(1, newType);
+			pStmt1.setString(2, sTypeDesc);
+			int count = pStmt1.executeUpdate();
+			assertEquals(count, 1);
+		}
+		pStmt1.close();
+		
+		conn.createStatement().executeUpdate(
+				"create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
+
+		PreparedStatement pStmt = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)");
+		for (int i = 1; i <= 10; i++) {
+			// Perform the insert(s)
+			int newKey = i;
+			String newName = "xx" + "-" + i;
+			float newPrice = i + (float) .00;
+			int newType = i % 5;
+			if (newType == 0)
+				newType = 5;
+			pStmt.setInt(1, newKey);
+			pStmt.setString(2, newName);
+			pStmt.setFloat(3, newPrice);
+			pStmt.setInt(4, newType);
+			pStmt.executeUpdate();
+		}
+
+		pStmt.close();
+		
+		
+	
+		
+      Statement stmt = conn.createStatement();
+      ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+      assertTrue(rs.next());
+      assertEquals(rs.getInt(1), 10);
+      rs.close();
+      
+      stmt.executeUpdate("DELETE FROM ctstable1");
+      
+      rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+      assertTrue(rs.next());
+      assertEquals(rs.getInt(1), 0);
+      rs.close();
+      
+      stmt.close();
+      
+      
+	      
+
+		conn.close();
+
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				m.invoke(null);
+				// m.invoke(null);
 			}
 		}
+		test_prepare_insert();
 		System.out.println("OK");
 	}
 }

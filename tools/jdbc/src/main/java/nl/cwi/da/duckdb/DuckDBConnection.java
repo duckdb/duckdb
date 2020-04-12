@@ -27,6 +27,7 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public DuckDBConnection(DuckDBDatabase db) {
 		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
+		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, true);
 		this.db = db;
 	}
 
@@ -34,7 +35,7 @@ public class DuckDBConnection implements java.sql.Connection {
 		if (isClosed()) {
 			throw new SQLException("Connection was closed");
 		}
-		return new DuckDBStatement(this);
+		return new DuckDBPreparedStatement(this);
 	}
 
 	public void commit() throws SQLException {
@@ -48,11 +49,10 @@ public class DuckDBConnection implements java.sql.Connection {
 		s.execute("ROLLBACK");
 		s.close();
 	}
-	
+
 	protected void finalize() throws Throwable {
 		close();
 	}
-
 
 	public synchronized void close() throws SQLException {
 		if (conn_ref != null) {
@@ -128,7 +128,10 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public PreparedStatement prepareStatement(String sql) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (isClosed()) {
+			throw new SQLException("Connection was closed");
+		}
+		return new DuckDBPreparedStatement(this, sql);
 	}
 
 	public DatabaseMetaData getMetaData() throws SQLException {
