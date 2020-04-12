@@ -47,7 +47,7 @@ struct MaxOperation : public NumericMinMaxBase {
 
 struct StringMinMaxBase : public MinMaxBase {
 	template <class STATE> static void Destroy(STATE *state) {
-		if (IsNullValue<STATE>(*state) && !state->IsInlined()) {
+		if (!state->IsInlined()) {
 			delete[] state->GetData();
 		}
 	}
