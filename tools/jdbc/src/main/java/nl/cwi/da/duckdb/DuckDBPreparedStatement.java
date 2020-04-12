@@ -281,11 +281,31 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public ResultSet getResultSet() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
+		}
+		if (stmt_ref == null) {
+			throw new SQLException("Prepare something first");
+		}
+
+		if (is_update) {
+			return null;
+		}
 		return select_result;
 	}
 
 	@Override
 	public int getUpdateCount() throws SQLException {
+		if (isClosed()) {
+			throw new SQLException("Statement was closed");
+		}
+		if (stmt_ref == null) {
+			throw new SQLException("Prepare something first");
+		}
+
+		if (!is_update) {
+			return -1;
+		}
 		return update_result;
 	}
 
@@ -316,12 +336,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public int getResultSetConcurrency() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.CONCUR_READ_ONLY;
 	}
 
 	@Override
 	public int getResultSetType() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.TYPE_FORWARD_ONLY;
 	}
 
 	@Override

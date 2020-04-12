@@ -448,15 +448,17 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public void setFetchDirection(int direction) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (direction != ResultSet.FETCH_FORWARD && direction != ResultSet.FETCH_UNKNOWN) {
+			throw new SQLFeatureNotSupportedException();
+		}
 	}
 
 	public int getFetchDirection() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.FETCH_FORWARD;
 	}
 
 	public void setFetchSize(int rows) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		// whatevs
 	}
 
 	public int getFetchSize() throws SQLException {
@@ -468,7 +470,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int getConcurrency() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.CONCUR_READ_ONLY;
 	}
 
 	public boolean rowUpdated() throws SQLException {
