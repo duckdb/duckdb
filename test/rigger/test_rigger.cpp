@@ -400,4 +400,16 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT REGEXP_FULL_MATCH(t0.c0, '1') FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {false}));
 	}
+	SECTION("531") {
+		// SELECT on DATE column with a large negative value results in a "double free or corruption"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0 VALUES (-10000000);"));
+		REQUIRE_FAIL(con.Query("SELECT (-10000000)::DATE;"));
+	}
+	SECTION("534") {
+		// Overflow when casting from REAL to INT results in "Invalid TypeId -1"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0 VALUES (-10000000);"));
+		REQUIRE_FAIL(con.Query("SELECT (-10000000)::DATE;"));
+	}
 }
