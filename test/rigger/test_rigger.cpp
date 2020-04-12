@@ -345,7 +345,6 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	SECTION("522") {
 		// Casting a large number to REAL and multiplying it with zero results in -nan
 		// REQUIRE_FAIL(con.Query("SELECT 1e100::real*0;"));
-
 	}
 	SECTION("523") {
 		// The trigonometric functions can result in -nan
@@ -401,5 +400,4 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT REGEXP_FULL_MATCH(t0.c0, '1') FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {false}));
 	}
-
 }
