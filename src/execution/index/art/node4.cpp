@@ -17,13 +17,18 @@ idx_t Node4::GetChildPos(uint8_t k) {
 	return Node::GetChildPos(k);
 }
 
-idx_t Node4::GetChildGreaterEqual(uint8_t k) {
+idx_t Node4::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] >= k) {
+			if (key[pos] == k) {
+				equal = true;
+			} else {
+				equal = false;
+			}
 			return pos;
 		}
 	}
-	return Node::GetChildGreaterEqual(k);
+	return Node::GetChildGreaterEqual(k, equal);
 }
 
 idx_t Node4::GetMin() {

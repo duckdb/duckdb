@@ -172,17 +172,17 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	}
 	SECTION("495") {
-		// Comparison on UNIQUE NUMERIC column causes a query to omit a row in the result set
-		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC UNIQUE);"));
-		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1163404482), (0), (488566);"));
-		// result = con.Query("SELECT * FROM t0 WHERE c0 > 0.1 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE c0 >= 0.1 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE 0.1 < c0 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE 0.1 <= c0 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		//		 Comparison on UNIQUE NUMERIC column causes a query to omit a row in the result set
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1163404482), (0), (488566);"));
+		result = con.Query("SELECT * FROM t0 WHERE c0 > 0.1 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE c0 >= 0.1 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE 0.1 < c0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE 0.1 <= c0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
 	}
 	SECTION("497") {
 		// Comparison of two boolean columns in different tables results in an error "Not implemented: Unimplemented
