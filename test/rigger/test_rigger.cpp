@@ -412,4 +412,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (10000000000);"));
 		REQUIRE_FAIL(con.Query("SELECT t0.c0 ::INT FROM t0;"));
 	}
+	SECTION("534") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=0;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0, c1) VALUES (0, 0);"));
+		result = con.Query("SELECT * FROM t0 WHERE 1 > c1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	}
 }
