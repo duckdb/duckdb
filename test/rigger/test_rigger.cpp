@@ -429,4 +429,15 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0, REVERSE(t0.c0) ORDER BY 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {-515965088, 1}));
 	}
+	SECTION("536") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0.9201898334673894), (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"0", "0.9201898334673894"}));
+	}
 }

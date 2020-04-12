@@ -183,7 +183,6 @@ public:
 		return out;
 	}
 	void Print();
-
 private:
 	SQLType sql_type = SQLType(SQLTypeId::INVALID);
 private:

@@ -22,7 +22,14 @@ struct MinMaxBase : public StandardDistributiveFunction {
 	}
 };
 
-struct MinOperation : public MinMaxBase {
+struct NumericMinMaxBase : public MinMaxBase {
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
+		*state = input;
+	}
+};
+
+struct MinOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
 			*state = input;
@@ -30,7 +37,7 @@ struct MinOperation : public MinMaxBase {
 	}
 };
 
-struct MaxOperation : public MinMaxBase {
+struct MaxOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, *state)) {
 			*state = input;
@@ -38,19 +45,66 @@ struct MaxOperation : public MinMaxBase {
 	}
 };
 
+struct StringMinMaxBase : public MinMaxBase {
+	template <class STATE> static void Destroy(STATE *state) {
+		if (IsNullValue<STATE>(*state) && !state->IsInlined()) {
+			delete[] state->GetData();
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
+		if (input.IsInlined()) {
+			*state = input;
+		} else {
+			// non-inlined string, need to allocate space for it
+			auto len = input.GetSize();
+			auto ptr = new char[len + 1];
+			memcpy(ptr, input.GetData(), len + 1);
+
+			*state = string_t(ptr, len);
+		}
+	}
+};
+
+struct MinOperationString : public StringMinMaxBase {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
+			Assign(state, input);
+		}
+	}
+};
+
+struct MaxOperationString : public StringMinMaxBase {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		if (GreaterThan::Operation<INPUT_TYPE>(input, *state)) {
+			Assign(state, input);
+		}
+	}
+};
+
+template<class OP, class OP_STRING>
+static void AddMinMaxOperator(AggregateFunctionSet &set) {
+	for (auto type : SQLType::ALL_TYPES) {
+		if (type.id == SQLTypeId::VARCHAR) {
+			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<string_t, string_t, string_t, OP_STRING>(SQLType::VARCHAR, SQLType::VARCHAR));
+		} else {
+			set.AddFunction(AggregateFunction::GetUnaryAggregate<OP>(type));
+		}
+	}
+}
+
 void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
-	for (auto type : SQLType::ALL_TYPES) {
-		min.AddFunction(AggregateFunction::GetUnaryAggregate<MinOperation>(type));
-	}
+	AddMinMaxOperator<MinOperation, MinOperationString>(min);
 	set.AddFunction(min);
 }
 
 void MaxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet max("max");
-	for (auto type : SQLType::ALL_TYPES) {
-		max.AddFunction(AggregateFunction::GetUnaryAggregate<MaxOperation>(type));
-	}
+	AddMinMaxOperator<MaxOperation, MaxOperationString>(max);
 	set.AddFunction(max);
 }
 
