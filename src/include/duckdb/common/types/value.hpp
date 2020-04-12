@@ -183,8 +183,10 @@ public:
 		return out;
 	}
 	void Print();
+
 private:
 	SQLType sql_type = SQLType(SQLTypeId::INVALID);
+
 private:
 	template <class T> T GetValueInternal();
 	//! Templated helper function for casting
