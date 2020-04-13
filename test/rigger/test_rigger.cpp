@@ -478,4 +478,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM v0 ORDER BY 'a';");
 		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
+	SECTION("547") {
+		// Query with SIMILAR TO results in "Assertion `strlen(dataptr) == length' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 SIMILAR TO '.';");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0"}));
+	}
 }
