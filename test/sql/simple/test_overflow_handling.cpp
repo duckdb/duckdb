@@ -70,13 +70,21 @@ TEST_CASE("Test handling of overflows in float/double", "[overflowhandling]") {
 
 	// out of range constants are not accepted
 	REQUIRE_FAIL(con.Query("SELECT 1e1000"));
-	// check on cast to REAL
+	// overflow on cast from double to real results in an error
 	REQUIRE_FAIL(con.Query("SELECT 1e308::REAL"));
 
-	// overflow in SUM/AVG
+	// overflow in SUM/AVG results in an error
 	REQUIRE_FAIL(con.Query("SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)"));
 	REQUIRE_FAIL(con.Query("SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)"));
 
+	// overflow in arithmetic as well
+	REQUIRE_FAIL(con.Query("SELECT 1e308+1e308"));
+	REQUIRE_FAIL(con.Query("SELECT 1e308*2"));
+	REQUIRE_FAIL(con.Query("SELECT -1e308-1e308"));
+	REQUIRE_FAIL(con.Query("SELECT 1e308/0.1"));
 
-
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL+2e38::REAL"));
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL*2"));
+	REQUIRE_FAIL(con.Query("SELECT -2e38::REAL-2e38::REAL"));
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL/0.1::REAL"));
 }

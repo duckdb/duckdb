@@ -9,6 +9,22 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
+template <> float AddOperator::Operation(float left, float right) {
+	auto result = left + right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in addition of float!");
+	}
+	return result;
+}
+
+template <> double AddOperator::Operation(double left, double right) {
+	auto result = left + right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in addition of double!");
+	}
+	return result;
+}
+
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
@@ -31,6 +47,22 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+template <> float SubtractOperator::Operation(float left, float right) {
+	auto result = left - right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in subtraction of float!");
+	}
+	return result;
+}
+
+template <> double SubtractOperator::Operation(double left, double right) {
+	auto result = left - right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in subtraction of double!");
+	}
+	return result;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
@@ -53,6 +85,22 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
+template <> float MultiplyOperator::Operation(float left, float right) {
+	auto result = left * right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in multiplication of float!");
+	}
+	return result;
+}
+
+template <> double MultiplyOperator::Operation(double left, double right) {
+	auto result = left * right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in multiplication of double!");
+	}
+	return result;
+}
+
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
@@ -65,6 +113,22 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // / [divide]
 //===--------------------------------------------------------------------===//
+template <> float DivideOperator::Operation(float left, float right) {
+	auto result = left / right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in division of float!");
+	}
+	return result;
+}
+
+template <> double DivideOperator::Operation(double left, double right) {
+	auto result = left / right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in division of double!");
+	}
+	return result;
+}
+
 struct BinaryZeroIsNullWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
