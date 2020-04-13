@@ -32,7 +32,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	private DuckDBResultSet select_result = null;
 	private int update_result = 0;
 	private boolean is_update = false;
-	private Object[] params = null;
+	private Object[] params = new Object[0];
 	private DuckDBResultSetMetaData meta = null;
 
 	public DuckDBPreparedStatement(DuckDBConnection conn) throws SQLException {
@@ -70,7 +70,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		
 		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
 		meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
-		params = new Object[meta.param_count];
+		params = new Object[0];
 		// TODO add query type to meta
 		String query_type = DuckDBNative.duckdb_jdbc_prepare_type(stmt_ref);
 		is_update = !query_type.equals("SELECT") && !query_type.equals("PRAGMA");
@@ -159,6 +159,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (parameterIndex < 1 || parameterIndex > getParameterMetaData().getParameterCount()) {
 			throw new SQLException("Parameter index out of bounds");
 		}
+		if (params.length == 0) {
+			params = new Object[getParameterMetaData().getParameterCount()];
+		}
 		params[parameterIndex - 1] = x;
 	}
 
@@ -209,7 +212,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void clearParameters() throws SQLException {
-		params = new Object[getParameterMetaData().getParameterCount()];
+		params = new Object[0];
 	}
 
 	@Override

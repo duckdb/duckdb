@@ -144,7 +144,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1execu
 				continue;
 			} else if (env->IsInstanceOf(param, long_class)) {
 				duckdb_params.push_back(
-				    Value::BIGINT(env->CallIntMethod(param, env->GetMethodID(long_class, "longValue", "()J"))));
+				    Value::BIGINT(env->CallLongMethod(param, env->GetMethodID(long_class, "longValue", "()J"))));
 				continue;
 			} else if (env->IsInstanceOf(param, float_class)) {
 				duckdb_params.push_back(
