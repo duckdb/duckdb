@@ -344,11 +344,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("522") {
 		// Casting a large number to REAL and multiplying it with zero results in -nan
-		// REQUIRE_FAIL(con.Query("SELECT 1e100::real*0;"));
+		REQUIRE_FAIL(con.Query("SELECT 1e100::real*0;"));
 	}
 	SECTION("523") {
 		// The trigonometric functions can result in -nan
-		// REQUIRE_FAIL(con.Query("SELECT SIN(1e1000);"));
+		REQUIRE_FAIL(con.Query("SELECT SIN(1e1000);"));
 	}
 	SECTION("525") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));

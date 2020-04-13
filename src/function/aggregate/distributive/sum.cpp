@@ -27,7 +27,22 @@ struct SumOperation : public StandardDistributiveFunction {
 		}
 		*state += input[0] * count;
 	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		nullmask[idx] = IsNullValue<T>(*state);
+		target[idx] = *state;
+	}
 };
+
+template <>
+void SumOperation::Finalize(Vector &result, double *state, double *target, nullmask_t &nullmask, idx_t idx) {
+	if (!Value::DoubleIsValid(*state)) {
+		throw OutOfRangeException("SUM is out of range!");
+	}
+	nullmask[idx] = IsNullValue<double>(*state);
+	target[idx] = *state;
+}
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");

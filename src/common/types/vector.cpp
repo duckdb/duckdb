@@ -615,6 +615,30 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			break;
 		}
 	}
+	if (type == TypeId::DOUBLE) {
+		// verify that there are no INF or NAN values
+		switch (vector_type) {
+		case VectorType::CONSTANT_VECTOR: {
+			auto dbl = ConstantVector::GetData<double>(*this);
+			if (!ConstantVector::IsNull(*this)) {
+				assert(Value::DoubleIsValid(*dbl));
+			}
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto doubles = FlatVector::GetData<double>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel.get_index(i);
+				if (!nullmask[oidx]) {
+					assert(Value::DoubleIsValid(doubles[oidx]));
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
 
 	if (type == TypeId::STRUCT) {
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {

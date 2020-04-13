@@ -61,3 +61,33 @@ TEST_CASE("Test handling of overflows in basic types", "[overflowhandling]") {
 	result = con.Query("SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1");
 	REQUIRE(CHECK_COLUMN(result, 0, {200}));
 }
+
+TEST_CASE("Test handling of overflows in float/double", "[overflowhandling]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// out of range constants are not accepted
+	REQUIRE_FAIL(con.Query("SELECT 1e1000"));
+	// overflow on cast from double to real results in an error
+	REQUIRE_FAIL(con.Query("SELECT 1e308::REAL"));
+	// test string casts
+	REQUIRE_FAIL(con.Query("SELECT '1e1000'::DOUBLE"));
+	REQUIRE_FAIL(con.Query("SELECT '1e100'::REAL"));
+
+	// overflow in SUM/AVG results in an error
+	REQUIRE_FAIL(con.Query("SELECT SUM(i) FROM (VALUES (1e308), (1e308)) tbl(i)"));
+	REQUIRE_FAIL(con.Query("SELECT AVG(i) FROM (VALUES (1e308), (1e308)) tbl(i)"));
+
+	// overflow in arithmetic as well
+	REQUIRE_FAIL(con.Query("SELECT 1e308+1e308"));
+	REQUIRE_FAIL(con.Query("SELECT 1e308*2"));
+	REQUIRE_FAIL(con.Query("SELECT -1e308-1e308"));
+	REQUIRE_FAIL(con.Query("SELECT 1e308/0.1"));
+
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL+2e38::REAL"));
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL*2"));
+	REQUIRE_FAIL(con.Query("SELECT -2e38::REAL-2e38::REAL"));
+	REQUIRE_FAIL(con.Query("SELECT 2e38::REAL/0.1::REAL"));
+}

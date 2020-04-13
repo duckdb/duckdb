@@ -28,12 +28,6 @@ struct StandardDistributiveFunction {
 		}
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		nullmask[idx] = IsNullValue<T>(*state);
-		target[idx] = *state;
-	}
-
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
 		if (IsNullValue<STATE>(source)) {
 			// source is NULL, nothing to do
