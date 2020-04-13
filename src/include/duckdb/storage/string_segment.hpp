@@ -173,7 +173,7 @@ private:
 					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
 				}
 
-				if (!(*source_nullmask)[valid_sel.get_index(i)] && OP::Operation(data_str, constant)) {
+				if (!(*source_nullmask)[src_idx] && OP::Operation(data_str, constant)) {
 					sel.set_index(approved_tuple_count++, src_idx);
 				}
 			}
@@ -197,7 +197,7 @@ private:
 				} else {
 					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
 				}
-				if (!(*source_nullmask)[sel.get_index(i)] && !OP::Operation(data_str, constant)) {
+				if (!(*source_nullmask)[src_idx] && !OP::Operation(data_str, constant)) {
 					sel.swap(i, approved_tuple_count - 1);
 					approved_tuple_count--;
 					i--;
@@ -213,7 +213,6 @@ private:
 	                           unsigned long size, bool use_valid_sel, size_t vector_index) {
 		if (approved_tuple_count == 0) {
 			//! This is the first filter we are applying, we need to scan the full vector
-			for (idx_t i = 0; i < size; i++) {
 				idx_t update_idx = 0;
 
 				//! This is the first filter we are applying, we need to scan the full vector
@@ -242,7 +241,7 @@ private:
 						sel.set_index(approved_tuple_count++, i);
 					}
 				}
-			}
+
 		} else {
 			idx_t update_idx = 0;
 
