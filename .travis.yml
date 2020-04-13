@@ -409,6 +409,7 @@ matrix:
       before_install:
         - sudo apt-get update > /dev/null
         - sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
+        - sudo update-java-alternatives --set /usr/lib/jvm/java-8-openjdk-amd64
         - java -version
 
       script:
@@ -417,7 +418,6 @@ matrix:
         - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/DuckDBJ.jar test)
-
 
     - os: linux
       name: R Package

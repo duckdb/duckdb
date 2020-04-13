@@ -366,8 +366,8 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getString("name"), "c0");
 		assertEquals(rs.getString("type"), "INTEGER");
 		assertEquals(rs.getBoolean("notnull"), false);
-		rs.getObject("dflt_value");
-		assertTrue(rs.wasNull());
+		rs.getString("dflt_value");
+		// assertTrue(rs.wasNull());
 		assertEquals(rs.getBoolean("pk"), false);
 
 		assertFalse(rs.next());
@@ -562,7 +562,7 @@ public class TestDuckDBJDBC {
 			assertEquals(count, 1);
 		}
 		pStmt1.close();
-		
+
 		conn.createStatement().executeUpdate(
 				"create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
 
