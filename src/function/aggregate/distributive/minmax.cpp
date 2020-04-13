@@ -15,7 +15,7 @@ struct MinMaxBase : public StandardDistributiveFunction {
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (IsNullValue<INPUT_TYPE>(*state)) {
-			*state = input[0];
+			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
@@ -66,6 +66,15 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 	}
 };
+
+template <>
+void StandardDistributiveFunction::Finalize(Vector &result, string_t *state, string_t *target, nullmask_t &nullmask, idx_t idx) {
+	if (IsNullValue<string_t>(*state)) {
+		nullmask[idx] = true;
+	} else {
+		target[idx] = StringVector::AddString(result, *state);
+	}
+}
 
 struct MinOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
