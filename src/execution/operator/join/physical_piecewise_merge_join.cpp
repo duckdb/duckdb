@@ -265,30 +265,6 @@ static void templated_quicksort(VectorData &vdata, const SelectionVector &not_nu
 	templated_quicksort<T, duckdb::LessThanEquals>((T *)vdata.data, *vdata.sel, not_null_sel, not_null_count, result);
 }
 
-idx_t FilterNulls(VectorData &vdata, idx_t count, SelectionVector &not_null) {
-	idx_t not_null_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx]) {
-			not_null.set_index(not_null_count++, i);
-		}
-	}
-	return not_null_count;
-}
-
-template<class T>
-idx_t FilterNullsAndNaNs(VectorData &vdata, idx_t count, SelectionVector &not_null) {
-	auto data = (T *) vdata.data;
-	idx_t not_null_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!(*vdata.nullmask)[idx] && (!std::isnan(data[idx]))) {
-			not_null.set_index(not_null_count++, i);
-		}
-	}
-	return not_null_count;
-}
-
 void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	if (count == 0) {
 		order.count = 0;
@@ -299,18 +275,14 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 
 	// first filter out all the non-null values
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
-	idx_t not_null_count;
-	switch(vector.type) {
-	case TypeId::FLOAT:
-		not_null_count = FilterNullsAndNaNs<float>(vdata, count, not_null);
-		break;
-	case TypeId::DOUBLE:
-		not_null_count = FilterNullsAndNaNs<double>(vdata, count, not_null);
-		break;
-	default:
-		not_null_count = FilterNulls(vdata, count, not_null);
-		break;
+	idx_t not_null_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!(*vdata.nullmask)[idx]) {
+			not_null.set_index(not_null_count++, i);
+		}
 	}
+
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
