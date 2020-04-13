@@ -237,6 +237,9 @@ TEST_CASE("Test invalid input for math functions", "[function]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	// out of range constants are not accepted
+	REQUIRE_FAIL(con.Query("SELECT 1e1000"));
+
 	// any invalid input in math functions results in a NULL
 	// sqrt of negative number
 	result = con.Query("SELECT SQRT(-1), SQRT(0)");

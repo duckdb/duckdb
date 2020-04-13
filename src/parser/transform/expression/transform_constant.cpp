@@ -29,6 +29,9 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(PGValue val) {
 		} else {
 			// could not cast to bigint: cast to double
 			double dbl_value = Cast::Operation<string_t, double>(string_t(val.val.str));
+			if (std::isnan(dbl_value) || std::isinf(dbl_value)) {
+				throw ParserException("Double value \"%s\" is out of range!", val.val.str);
+			}
 			return make_unique<ConstantExpression>(SQLType::DOUBLE, Value::DOUBLE(dbl_value));
 		}
 	}
