@@ -50,9 +50,11 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-#ifdef DEBUG
 	context->query_verification_enabled = true;
-#endif
+}
+
+void Connection::DisableQueryVerification() {
+	context->query_verification_enabled = false;
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(string query) {

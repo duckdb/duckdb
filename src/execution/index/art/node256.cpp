@@ -14,9 +14,14 @@ idx_t Node256::GetChildPos(uint8_t k) {
 	}
 }
 
-idx_t Node256::GetChildGreaterEqual(uint8_t k) {
+idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = k; pos < 256; pos++) {
 		if (child[pos]) {
+			if (pos == k) {
+				equal = true;
+			} else {
+				equal = false;
+			}
 			return pos;
 		}
 	}

@@ -29,8 +29,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	    stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_NOOP) {
 		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
 	}
-
-	assert(stmt->tableElts);
+	if (!stmt->tableElts) {
+		throw ParserException("Table must have at least one column!");
+	}
 
 	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
 		auto node = reinterpret_cast<PGNode *>(c->data.ptr_value);

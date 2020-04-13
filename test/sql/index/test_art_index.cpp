@@ -1746,13 +1746,8 @@ TEST_CASE("Index Exceptions", "[art]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i integer, j integer, k BOOLEAN)"));
 
 	REQUIRE_FAIL(con.Query("CREATE INDEX ON integers(i)"));
-
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(i COLLATE \"de_DE\")"));
-
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers using blabla(i)"));
-
-	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(k)"));
-
 	REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON integers(f)"));
 }
 

@@ -513,3 +513,35 @@ TEST_CASE("Test joins with various columns that are only used in the join", "[jo
 	result = con.Query("SELECT (TRUE OR a1.a=a2.b) FROM test a1, test a2 WHERE a1.a=11 AND a2.a>=10");
 	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true}));
 }
+
+TEST_CASE("Test joins with comparisons involving both sides of the join", "[joins]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	// create tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (4, 1), (2, 2)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2 (b INTEGER, c INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 2), (3, 0)"));
+
+	result = con.Query("SELECT * FROM test JOIN test2 ON test.a+test2.c=test.b+test2.b");
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
+
+	result = con.Query("SELECT * FROM test LEFT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), 0}));
+
+	result = con.Query("SELECT * FROM test RIGHT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2, 0}));
+}

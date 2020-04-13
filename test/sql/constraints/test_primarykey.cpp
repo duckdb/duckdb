@@ -449,3 +449,19 @@ TEST_CASE("PRIMARY KEY constraint on multiple string columns with overlapping va
 	//! this should  work since it won't cause a duplicate
 	REQUIRE_NO_FAIL(con.Query("UPDATE tst SET b='hell' WHERE b='hel'"));
 }
+
+TEST_CASE("Multi-column boolean PRIMARY KEY constraint", "[constraints]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j BOOLEAN, PRIMARY KEY(i, j))"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, false), (1, true), (2, false)"));
+	// duplicate value!
+	REQUIRE_FAIL(con.Query("INSERT INTO integers VALUES (1, false)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (2, true)"));
+
+	result = con.Query("SELECT * FROM integers ORDER BY 1, 2");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, true, false, true}));
+}

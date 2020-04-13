@@ -19,7 +19,7 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *sta
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, sel, count, child);
-	if (child.type == expr.return_type) {
+	if (expr.source_type == expr.target_type) {
 		// NOP cast
 		result.Reference(child);
 	} else {

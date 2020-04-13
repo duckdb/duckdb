@@ -149,7 +149,7 @@ public class DuckDBResultSet implements ResultSet {
 
 	public String getString(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
-			return "NULL";
+			return null;
 		}
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];

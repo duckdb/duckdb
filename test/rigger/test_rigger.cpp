@@ -38,8 +38,7 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 	SECTION("#8 Query with RIGHT JOIN causes a server panic") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0(c0) AS SELECT 0 FROM t0 ORDER BY -t0.c0;"));
-		// FIXME: right join not supported
-		REQUIRE_FAIL(con.Query("SELECT * FROM v0 RIGHT JOIN t0 ON false;"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM v0 RIGHT JOIN t0 ON false;"));
 	}
 	// SQLite
 	SECTION("#15 './' LIKE './' does not match") {
@@ -173,17 +172,17 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	}
 	SECTION("495") {
-		// Comparison on UNIQUE NUMERIC column causes a query to omit a row in the result set
-		// REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC UNIQUE);"));
-		// REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1163404482), (0), (488566);"));
-		// result = con.Query("SELECT * FROM t0 WHERE c0 > 0.1 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE c0 >= 0.1 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE 0.1 < c0 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
-		// result = con.Query("SELECT * FROM t0 WHERE 0.1 <= c0 ORDER BY 1;");
-		// REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		//		 Comparison on UNIQUE NUMERIC column causes a query to omit a row in the result set
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1163404482), (0), (488566);"));
+		result = con.Query("SELECT * FROM t0 WHERE c0 > 0.1 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE c0 >= 0.1 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE 0.1 < c0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
+		result = con.Query("SELECT * FROM t0 WHERE 0.1 <= c0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {488566, 1163404482}));
 	}
 	SECTION("497") {
 		// Comparison of two boolean columns in different tables results in an error "Not implemented: Unimplemented
@@ -194,5 +193,251 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT t0.c0 FROM t0, t1 WHERE t1.c0 < t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("503") {
+		// RIGHT JOIN with a predicate that compares two integer columns results in an "Unhandled type" error
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 ON t0.c0!=t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+	}
+	SECTION("504") {
+		// INSERT results in an error "Not implemented: Cannot create data from this type"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOLEAN, c1 INT, PRIMARY KEY(c0, c1));"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1, c0) VALUES (0, 0);"));
+		result = con.Query("SELECT * FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	}
+	SECTION("505") {
+		// A RIGHT JOIN unexpectedly fetches rows
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c1 BOOLEAN);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
+		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 on true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+	}
+	SECTION("506") {
+		// Query results in an error "INTERNAL: Failed to bind column reference "c0" [5.0] (bindings: [6.0])"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM t1 JOIN t0 ON t1.c0 < t1.c0 - t0.c0 WHERE t0.c0 <= t1.c0;"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM t1 JOIN t0 ON t0.c0 + t1.c0 < t1.c0 - t0.c0;"));
+	}
+	SECTION("507") {
+		// Creating an empty table results in a crash
+		REQUIRE_FAIL(con.Query("CREATE TABLE t0();"));
+	}
+	SECTION("508") {
+		// LEFT JOIN on column with NULL value results in a segmentation fault
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (NULL);"));
+		result = con.Query("SELECT * FROM t1 LEFT JOIN t0 ON t0.c0=t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	}
+	SECTION("510") {
+		// SIMILAR TO results in an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-10);"));
+		result = con.Query("SELECT '-10' SIMILAR TO '0';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT t0.c0 SIMILAR TO 0 FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT t0.c0 NOT SIMILAR TO 0 FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true}));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 NOT SIMILAR TO 0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
+	}
+	SECTION("513") {
+		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	}
+	SECTION("514") {
+		// Incorrect result after an INSERT violates a UNIQUE constraint
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE UNIQUE INDEX i0 ON t0(c0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+		// verify correct behavior here too when we have multiple nodes
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (2);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (3);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0(c0) VALUES (2);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = 2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+	}
+	SECTION("515") {
+		// Query with a negative shift predicate yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT8, c1 DOUBLE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c1, c0) VALUES (1, 1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE NOT (t1.c0<<-1);");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1}));
+		REQUIRE(CHECK_COLUMN(result, 2, {0}));
+		result = con.Query("SELECT * FROM t1 JOIN t0 ON t1.c1 WHERE (t1.c0<<-1);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+		REQUIRE(CHECK_COLUMN(result, 2, {}));
+		result = con.Query("SELECT NOT (t1.c0<<-1) FROM t1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
+	}
+	SECTION("516") {
+		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for index"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("517") {
+		// Query with an AND predicate, NOT and comparison yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t1, t0 WHERE NOT ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		result = con.Query("SELECT * FROM t1, t0 WHERE ((t1.c0 AND t0.c0) < 0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("518") {
+		// Query using the LN() function does not terminate
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0), (0), (1), (-1);"));
+		result = con.Query("SELECT LN(t1.c0) FROM t0, t1 WHERE LN(t1.c0) < t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT t1.c0, LN(t1.c0) FROM t1 ORDER BY t1.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1, 0, 0, 1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 0}));
+	}
+	SECTION("521") {
+		// ROUND() evaluates to -nan
+		result = con.Query("SELECT ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0.1}));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 > ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 <= ROUND(0.1, 1000);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	}
+	SECTION("522") {
+		// Casting a large number to REAL and multiplying it with zero results in -nan
+		// REQUIRE_FAIL(con.Query("SELECT 1e100::real*0;"));
+	}
+	SECTION("523") {
+		// The trigonometric functions can result in -nan
+		// REQUIRE_FAIL(con.Query("SELECT SIN(1e1000);"));
+	}
+	SECTION("525") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 FLOAT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (1);"));
+		result = con.Query("SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1.0}));
+	}
+	SECTION("526") {
+		// Query that uses the CONCAT() function and OR expression crashes
+		// FIXME: #398
+		con.DisableQueryVerification();
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 REAL);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT2);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (-1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t2 VALUES (0), (0);"));
+		result = con.Query("SELECT * FROM t1, t2, t0 WHERE CONCAT(t1.c0) OR t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 2, {-1.0, -1.0}));
+	}
+	SECTION("527") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (1), (1);"));
+		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL) WHERE t0.c0 NOT IN (t1.c0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+		result = con.Query("SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL);");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+	}
+	SECTION("528") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0.1);"));
+		result = con.Query("SELECT * FROM t0 WHERE REGEXP_MATCHES(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0.1"}));
+		result = con.Query("SELECT * FROM t0 WHERE NOT REGEXP_MATCHES(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT REGEXP_MATCHES(t0.c0, '1') FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+		result = con.Query("SELECT * FROM t0 WHERE REGEXP_FULL_MATCH(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0 WHERE NOT REGEXP_FULL_MATCH(t0.c0, '1');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0.1"}));
+		result = con.Query("SELECT REGEXP_FULL_MATCH(t0.c0, '1') FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	}
+	SECTION("531") {
+		// SELECT on DATE column with a large negative value results in a "double free or corruption"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0 VALUES (-10000000);"));
+		REQUIRE_FAIL(con.Query("SELECT (-10000000)::DATE;"));
+	}
+	SECTION("533") {
+		// Overflow when casting from REAL to INT results in "Invalid TypeId -1"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 REAL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (10000000000);"));
+		REQUIRE_FAIL(con.Query("SELECT t0.c0 ::INT FROM t0;"));
+	}
+	SECTION("534") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE UNIQUE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=0;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0, c1) VALUES (0, 0);"));
+		result = con.Query("SELECT * FROM t0 WHERE 1 > c1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"0"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	}
+	SECTION("535") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-515965088);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (-5.15965088E8);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i0 ON t0(c0);"));
+		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0, REVERSE(t0.c0) ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-515965088, 1}));
+	}
+	SECTION("536") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0.9201898334673894), (0);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"0", "0.9201898334673894"}));
 	}
 }
