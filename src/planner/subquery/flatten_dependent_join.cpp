@@ -303,7 +303,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		setop.column_count += correlated_columns.size();
 		return plan;
 	}
-	case LogicalOperatorType::PRUNE_COLUMNS:
 	case LogicalOperatorType::DISTINCT:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;

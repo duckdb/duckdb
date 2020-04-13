@@ -411,23 +411,23 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 2 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 10, 15, 20, 25, 30, 35, 30, 24}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 1 preceding) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 1, 3, 5, 7, 9, 11, 13, 15}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 1 following and 3 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 9, 12, 15, 18, 21, 24, 17, 9, Value()}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 1 following) "
 	                   "su FROM tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 6, 10, 15, 21, 28, 36, 45, 45}));
+	REQUIRE(result->types.size() == 1);
 }
 
 TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
@@ -516,7 +516,6 @@ TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window
 	result =
 	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
 	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
-	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 
@@ -524,7 +523,6 @@ TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window
 	result =
 	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
 	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY w) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
-	REQUIRE(result->success);
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 
@@ -533,8 +531,6 @@ TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window
 	result =
 	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
 	              "zzz67 FROM (SELECT * FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
-	REQUIRE(result->success);
-
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
 }
