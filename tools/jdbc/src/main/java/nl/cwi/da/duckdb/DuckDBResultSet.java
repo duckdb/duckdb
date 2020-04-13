@@ -108,8 +108,8 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
-		check(columnIndex);
-		if (current_chunk[columnIndex - 1].nullmask[chunk_idx - 1]) {
+		check_and_null(columnIndex);
+		if (was_null) {
 			return null;
 		}
 		switch (meta.column_types[columnIndex - 1]) {
