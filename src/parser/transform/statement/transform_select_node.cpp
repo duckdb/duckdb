@@ -26,7 +26,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 
 				auto it = window_clauses.find(window_name);
 				if (it != window_clauses.end()) {
-					throw Exception("A window specification needs an unique name");
+					throw ParserException("window \"%s\" is already defined", window_name.c_str());
 				}
 				window_clauses[window_name] = window_def;
 			}
