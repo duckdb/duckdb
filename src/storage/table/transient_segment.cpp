@@ -35,10 +35,10 @@ void TransientSegment::IndexScan(ColumnScanState &state, Vector &result) {
 	data->IndexScan(state, state.vector_index, result);
 }
 
-void TransientSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
+bool TransientSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
                               SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count,
-                              idx_t count) {
-	data->Select(transaction, state, tableFilter, sel, valid_sel, approved_tuple_count, count);
+                              idx_t count, bool use_valid_sel) {
+	return data->Select(transaction, state, tableFilter, sel, valid_sel, approved_tuple_count, count, use_valid_sel);
 }
 
 void TransientSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {

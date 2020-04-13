@@ -125,19 +125,17 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-void UncompressedSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
+bool UncompressedSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
                                  SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count,
-                                 idx_t count) {
+                                 idx_t count, bool use_valid_sel) {
 	auto read_lock = lock.GetSharedLock();
-
-	// first select the data from the base table
-	Select(state, tableFilter, sel, valid_sel, approved_tuple_count, count);
 	if (versions && versions[state.vector_index]) {
-		assert(0);
-		//		    Vector result;
-		//			// if there are any versions, check if we need to overwrite the data with the versioned data
-		//			FetchUpdateData(state, transaction, versions[state.vector_index],result);
+		// TODO: We don't handle updates for filter selection during data fetching
+		return true;
 	}
+	//! Select the data from the base table
+	Select(state, tableFilter, sel, valid_sel, approved_tuple_count, count, use_valid_sel);
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -157,12 +155,7 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 void UncompressedSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
                                      SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto read_lock = lock.GetSharedLock();
-	// first fetch the data from the base table
 	FilterFetchBaseData(state, result, sel, approved_tuple_count);
-	//	if (versions && versions[vector_index]) {
-	//		// if there are any versions, check if we need to overwrite the data with the versioned data
-	//		FetchUpdateData(state, transaction, versions[vector_index], result);
-	//	}
 }
 
 void UncompressedSegment::IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result) {

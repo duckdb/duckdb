@@ -65,25 +65,27 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 	transaction.storage.InitializeScan(this, state.local_state);
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+bool DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+	bool applyFilters = false;
 	// scan the persistent segments
 	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0,
-	                     persistent_manager, table_filters)) {
+	                     persistent_manager, table_filters, applyFilters)) {
 		if (result.size() > 0) {
-			return;
+			return applyFilters;
 		}
 	}
 	// scan the transient segments
 	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row,
-	                     persistent_manager.max_row, transient_manager, table_filters)) {
+	                     persistent_manager.max_row, transient_manager, table_filters, applyFilters)) {
 		if (result.size() > 0) {
-			return;
+			return applyFilters;
 		}
 	}
 
 	// scan the transaction-local segments
 	transaction.storage.Scan(state.local_state, state.column_ids, result);
+	return true;
 }
 
 template <class T> bool checkZonemap(TableScanState &state, TableFilter &table_filter, T constant) {
@@ -200,7 +202,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
                               idx_t max_row, idx_t base_row, VersionManager &manager,
-                              unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+                              unordered_map<idx_t, vector<TableFilter>> &table_filters, bool &apply_filter) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -220,14 +222,19 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		current_row += STANDARD_VECTOR_SIZE;
 		return true;
 	}
+	bool use_valid_sel = count != max_count;
 	//! If we have filters
-	if (!table_filters.empty()) {
+	if (!table_filters.empty() && !apply_filter) {
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
 		idx_t approved_tuple_count = 0;
 		//! First, we scan the columns with filters and generate a selection vector.
 		for (auto &table_filter : table_filters) {
-			columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first], table_filter.second,
-			                                   sel, valid_sel, approved_tuple_count, count);
+			apply_filter = columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first],
+			                                                  table_filter.second, sel, valid_sel, approved_tuple_count,
+			                                                  count, use_valid_sel);
+			if (apply_filter) {
+				break;
+			}
 			if (approved_tuple_count == 0) {
 				//! nothing to scan for this vector, skip the entire vector
 				state.NextVector();
@@ -235,23 +242,26 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				return true;
 			}
 		}
-		//! Now we use the selection vector to fetch data from the table.
-		for (idx_t i = 0; i < state.column_ids.size(); i++) {
-			auto column = state.column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				assert(result.data[i].type == TypeId::INT64);
-				auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
-				for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-					result_data[sel_idx] = base_row + sel.get_index(sel_idx);
+		if (!apply_filter) {
+			//! Now we use the selection vector to fetch data from the table.
+			for (idx_t i = 0; i < state.column_ids.size(); i++) {
+				auto column = state.column_ids[i];
+				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+					assert(result.data[i].type == TypeId::INT64);
+					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+						result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
+					}
+				} else {
+					columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
+					                           approved_tuple_count);
 				}
-			} else {
-				columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
-				                           approved_tuple_count);
 			}
+			result.SetCardinality(approved_tuple_count);
 		}
-		result.SetCardinality(approved_tuple_count);
+	}
 
-	} else {
+	if (apply_filter || table_filters.empty()) {
 		for (idx_t i = 0; i < state.column_ids.size(); i++) {
 			auto column = state.column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {

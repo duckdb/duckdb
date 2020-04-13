@@ -64,9 +64,10 @@ public:
 	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
 	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
-	// from offset and store them in result. Offset is incremented with how many
-	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+	//! from offset and store them in result. Offset is incremented with how many
+	//! elements were returned.
+	//! Returns true if all pushed down filters were executed during data fetching
+	bool Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
 	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
@@ -127,7 +128,7 @@ private:
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
 	                   idx_t max_row, idx_t base_row, VersionManager &manager,
-	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	                   unordered_map<idx_t, vector<TableFilter>> &table_filters, bool &apply_filter);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
 	                     idx_t base_row);
 

@@ -42,7 +42,6 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 }
 void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
-
 	if (column_ids.empty()) {
 		return;
 	}
@@ -53,7 +52,19 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	}
 
 	chunk.Reset();
-	table.Scan(transaction, chunk, state->scan_offset, table_filters);
+	//! In case of updates or scans in the transaction itself we fall back to executing the filter after fetching the
+	//! data
+	bool applyFilters = table.Scan(transaction, chunk, state->scan_offset, table_filters);
+	if (applyFilters && expression) {
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		idx_t initial_count = chunk.size();
+		idx_t result_count = state->executor.SelectExpression(chunk, sel);
+		if (result_count == initial_count) {
+			//! Nothing was filtered: skip adding any selection vectors
+			return;
+		}
+		chunk.Slice(sel, result_count);
+	}
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {

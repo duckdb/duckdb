@@ -29,11 +29,14 @@ struct StringBlock {
 struct string_location_t {
 	string_location_t(block_id_t block_id, int32_t offset) : block_id(block_id), offset(offset) {
 	}
+
 	string_location_t() {
 	}
+
 	bool IsValid() {
 		return offset < Storage::BLOCK_SIZE && (block_id == INVALID_BLOCK || block_id >= MAXIMUM_BLOCK);
 	}
+
 	block_id_t block_id;
 	int32_t offset;
 };
@@ -50,6 +53,7 @@ typedef unique_ptr<StringUpdateInfo> string_update_info_t;
 class StringSegment : public UncompressedSegment {
 public:
 	StringSegment(BufferManager &manager, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
+
 	~StringSegment() override;
 
 	//! The current dictionary offset
@@ -80,11 +84,15 @@ public:
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
+
 	void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count) override;
+	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel) override;
+
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+
 	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions,
 	                     Vector &result) override;
+
 	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;
 
@@ -96,7 +104,9 @@ private:
 	void FetchBaseData(ColumnScanState &state, data_ptr_t base_data, idx_t vector_index, Vector &result, idx_t count);
 
 	string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
+
 	string_t FetchString(buffer_handle_set_t &handles, data_ptr_t baseptr, string_location_t location);
+
 	//! Fetch a single string from the dictionary and returns it, potentially pins a buffer manager page and adds it to
 	//! the set of pinned pages
 	string_t FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset);
@@ -106,12 +116,15 @@ private:
 	                          string_location_t result[]);
 
 	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset);
+
 	string_t ReadString(buffer_handle_set_t &handles, block_id_t block, int32_t offset);
+
 	string_t ReadString(data_ptr_t target, int32_t offset);
 
 	void WriteStringMemory(string_t string, block_id_t &result_block, int32_t &result_offset);
 
 	void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
+
 	void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
 	//! Expand the string segment, adding an additional maximum vector to the segment
@@ -119,6 +132,7 @@ private:
 
 	string_update_info_t CreateStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
 	                                        idx_t vector_offset);
+
 	string_update_info_t MergeStringUpdate(SegmentStatistics &stats, Vector &update, row_t *ids, idx_t count,
 	                                       idx_t vector_offset, StringUpdateInfo &update_info);
 
@@ -132,31 +146,58 @@ private:
 
 	template <class OP>
 	void Select_String(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                   unsigned long size, const string &constant, idx_t &approved_tuple_count) {
+	                   SelectionVector &valid_sel, const string &constant, idx_t &approved_tuple_count,
+	                   unsigned long size, nullmask_t *source_nullmask, bool use_valid_sel, size_t vector_index) {
 		if (approved_tuple_count == 0) {
+			idx_t update_idx = 0;
+
 			//! This is the first filter we are applying, we need to scan the full vector
 			for (idx_t i = 0; i < size; i++) {
-				//			if (update_idx < info.count && info.ids[update_idx] == i) {
-				//				// use update info
-				//				result_data[i] = ReadString(state.handles, info.block_ids[update_idx],
-				// info.offsets[update_idx]); 				update_idx++; 			} else {
-				// use base table info
-				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[i]);
-				if (OP::Operation(data_str.GetString(), constant)) {
-					sel.set_index(approved_tuple_count++, i);
+				idx_t src_idx;
+				if (use_valid_sel) {
+					src_idx = valid_sel.get_index(i);
+				} else {
+					src_idx = i;
 				}
-				//			}
+				string data_str;
+				if (string_updates && string_updates[vector_index]) {
+					auto &info = *string_updates[vector_index];
+					if (update_idx < info.count && info.ids[update_idx] == i) {
+						data_str =
+						    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+						update_idx++;
+					} else {
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					}
+				} else {
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+				}
+
+				if (!(*source_nullmask)[valid_sel.get_index(i)] && OP::Operation(data_str, constant)) {
+					sel.set_index(approved_tuple_count++, src_idx);
+				}
 			}
-			//		for (idx_t i = 0; i < size; i++) {
-			//			if (OP::Operation(((string *)source)[i], constant)) {
-			//				sel.set_index(approved_tuple_count++, i);
-			//			}
-			//		}
 		} else {
 			//! We already applied at least one filter, we only need to check the selection vector
+			idx_t update_idx = 0;
+
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[sel.get_index(i)]);
-				if (!OP::Operation(data_str.GetString(), constant)) {
+				string data_str;
+				idx_t src_idx = sel.get_index(i);
+				if (string_updates && string_updates[vector_index]) {
+					auto &info = *string_updates[vector_index];
+
+					if (update_idx < info.count && info.ids[update_idx] == i) {
+						data_str =
+						    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+						update_idx++;
+					} else {
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					}
+				} else {
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+				}
+				if (!(*source_nullmask)[sel.get_index(i)] && !OP::Operation(data_str, constant)) {
 					sel.swap(i, approved_tuple_count - 1);
 					approved_tuple_count--;
 					i--;
@@ -167,23 +208,63 @@ private:
 
 	template <class OPL, class OPR>
 	void Select_String_Between(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
-	                           SelectionVector &sel, unsigned long size, string constantLeft, string constantRight,
-	                           idx_t &approved_tuple_count) {
+	                           SelectionVector &sel, SelectionVector &valid_sel, string constantLeft,
+	                           string constantRight, idx_t &approved_tuple_count, nullmask_t *source_nullmask,
+	                           unsigned long size, bool use_valid_sel, size_t vector_index) {
 		if (approved_tuple_count == 0) {
 			//! This is the first filter we are applying, we need to scan the full vector
 			for (idx_t i = 0; i < size; i++) {
-				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[i]);
-				if (OPL::Operation(data_str.GetString(), constantLeft) &&
-				    OPR::Operation(data_str.GetString(), constantRight)) {
-					sel.set_index(approved_tuple_count++, i);
+				idx_t update_idx = 0;
+
+				//! This is the first filter we are applying, we need to scan the full vector
+				for (idx_t i = 0; i < size; i++) {
+					idx_t src_idx;
+					if (use_valid_sel) {
+						src_idx = valid_sel.get_index(i);
+					} else {
+						src_idx = i;
+					}
+					string data_str;
+					if (string_updates && string_updates[vector_index]) {
+						auto &info = *string_updates[vector_index];
+						if (update_idx < info.count && info.ids[update_idx] == i) {
+							data_str =
+							    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+							update_idx++;
+						} else {
+							data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+						}
+					} else {
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					}
+					if (!(*source_nullmask)[src_idx] && OPL::Operation(data_str, constantLeft) &&
+					    OPR::Operation(data_str, constantRight)) {
+						sel.set_index(approved_tuple_count++, i);
+					}
 				}
 			}
 		} else {
+			idx_t update_idx = 0;
+
 			//! We already applied at least one filter, we only need to check the selection vector
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[sel.get_index(i)]);
-				if (!(OPL::Operation(data_str.GetString(), constantLeft) &&
-				      OPR::Operation(data_str.GetString(), constantRight))) {
+				string data_str;
+				idx_t src_idx = sel.get_index(i);
+				if (string_updates && string_updates[vector_index]) {
+					auto &info = *string_updates[vector_index];
+
+					if (update_idx < info.count && info.ids[update_idx] == i) {
+						data_str =
+						    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+						update_idx++;
+					} else {
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					}
+				} else {
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+				}
+				if (!(*source_nullmask)[sel.get_index(i)] &&
+				    !(OPL::Operation(data_str, constantLeft) && OPR::Operation(data_str, constantRight))) {
 					sel.swap(i, approved_tuple_count - 1);
 					approved_tuple_count--;
 					i--;
