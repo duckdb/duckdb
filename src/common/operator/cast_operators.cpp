@@ -339,6 +339,19 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
+template<class T>
+bool CheckDoubleValidity(T value);
+
+template<>
+bool CheckDoubleValidity(float value) {
+	return Value::FloatIsValid(value);
+}
+
+template<>
+bool CheckDoubleValidity(double value) {
+	return Value::DoubleIsValid(value);
+}
+
 template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	if (!*buf) {
 		return false;
@@ -351,10 +364,18 @@ template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 
 	result = 0;
 	if (!negative) {
-		return DoubleCastLoop<T, false>(buf, result);
+		if (!DoubleCastLoop<T, false>(buf, result)) {
+			return false;
+		}
 	} else {
-		return DoubleCastLoop<T, true>(buf, result);
+		if (!DoubleCastLoop<T, true>(buf, result)) {
+			return false;
+		}
 	}
+	if (!CheckDoubleValidity<T>(result)) {
+		return false;
+	}
+	return true;
 }
 
 template <> bool TryCast::Operation(string_t input, float &result) {
