@@ -72,6 +72,12 @@ template <> bool TryCast::Operation(double input, int64_t &result);
 template <> int64_t Cast::Operation(float input);
 template <> int64_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
+// Double -> float casts
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(double input, float &result);
+
+template <> float Cast::Operation(double input);
+//===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(string_t input, bool &result);

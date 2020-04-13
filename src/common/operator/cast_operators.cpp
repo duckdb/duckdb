@@ -135,6 +135,26 @@ template <> int64_t Cast::Operation(double input) {
 }
 
 //===--------------------------------------------------------------------===//
+// Double -> float casts
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(double input, float &result) {
+	auto res = (float) input;
+	if (std::isnan(res) || std::isinf(res)) {
+		return false;
+	}
+	result = res;
+	return true;
+}
+
+template <> float Cast::Operation(double input) {
+	float result;
+	if (!TryCast::Operation(input, result)) {
+		throw ValueOutOfRangeException(input, GetTypeId<double>(), GetTypeId<float>());
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // Cast String -> Numeric
 //===--------------------------------------------------------------------===//
 template <class T> static T try_cast_string(string_t input) {
