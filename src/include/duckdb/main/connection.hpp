@@ -51,6 +51,7 @@ public:
 
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();
+	void DisableQueryVerification();
 
 	//! Issues a query to the database and returns a QueryResult. This result can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The result can be stepped through with calls to Fetch(). Note that there can only be

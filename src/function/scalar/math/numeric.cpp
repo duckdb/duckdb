@@ -106,8 +106,12 @@ struct RoundOperator {
 		if (precision < 0) {
 			precision = 0;
 		}
-		TA modifier = pow(10, precision);
-		return (round(input * modifier)) / modifier;
+		double modifier = pow(10, precision);
+		double rounded_value = (round(input * modifier)) / modifier;
+		if (std::isinf(rounded_value) || std::isnan(rounded_value)) {
+			return input;
+		}
+		return rounded_value;
 	}
 };
 

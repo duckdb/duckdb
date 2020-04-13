@@ -10,6 +10,11 @@ using namespace std;
 namespace duckdb {
 
 struct SumOperation : public StandardDistributiveFunction {
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
+		*state = input;
+	}
+
 	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		*state += input;
 	}
