@@ -5,7 +5,8 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root) {
-	auto subquery = TransformSelectNode((PGSelectStmt *)root->subquery);
+	Transformer subquery_transformer(this);
+	auto subquery = subquery_transformer.TransformSelectNode((PGSelectStmt *)root->subquery);
 	if (!subquery) {
 		return nullptr;
 	}
