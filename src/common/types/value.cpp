@@ -144,7 +144,18 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+bool Value::FloatIsValid(float value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
+bool Value::DoubleIsValid(double value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
 Value Value::FLOAT(float value) {
+	if (!Value::FloatIsValid(value)) {
+		throw OutOfRangeException("Invalid float value %f", value);
+	}
 	Value result(TypeId::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -152,6 +163,9 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
+	if (!Value::DoubleIsValid(value)) {
+		throw OutOfRangeException("Invalid double value %f", value);
+	}
 	Value result(TypeId::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;

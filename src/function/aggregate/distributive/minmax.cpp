@@ -20,6 +20,12 @@ struct MinMaxBase : public StandardDistributiveFunction {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
 	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		nullmask[idx] = IsNullValue<T>(*state);
+		target[idx] = *state;
+	}
 };
 
 struct NumericMinMaxBase : public MinMaxBase {
