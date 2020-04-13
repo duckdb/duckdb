@@ -181,7 +181,7 @@ TEST_CASE("Test Index vs Pushdown", "[filterpushdown-optimizer]") {
 //    DeleteDatabase(storage_database);
 //}
 
-TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer]") {
+TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

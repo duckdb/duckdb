@@ -374,6 +374,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 2, {-1.0, -1.0}));
 	}
 	SECTION("527") {
+		// Query with JOIN and WHERE condition unexpectedly fetches a value not present in the table
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
@@ -384,6 +385,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 	}
 	SECTION("528") {
+		// Incorrect result for query that uses REGEXP_MATCHES()
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0.1);"));
 		result = con.Query("SELECT * FROM t0 WHERE REGEXP_MATCHES(t0.c0, '1');");
@@ -413,6 +415,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_FAIL(con.Query("SELECT t0.c0 ::INT FROM t0;"));
 	}
 	SECTION("534") {
+		// UPDATE causes subsequent query to segfault
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE UNIQUE);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL);"));
 		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=0;"));
@@ -422,6 +425,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	}
 	SECTION("535") {
+		// GROUP BY clause results in non-deterministic result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 NUMERIC);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-515965088);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (1), (-5.15965088E8);"));
@@ -430,6 +434,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-515965088, 1}));
 	}
 	SECTION("536") {
+		// Nondeterministic clause when using an UNION query and HAVING clause
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES (0.9201898334673894), (0);"));
@@ -439,5 +444,38 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
 		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"0", "0.9201898334673894"}));
+	}
+	SECTION("537") {
+		// Fetching from table and view results in a crash
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0 AS SELECT 0, 1 FROM t0 ORDER BY t0.c0;"));
+		result = con.Query("SELECT t0.c0 FROM t0, v0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("538") {
+		// Incorrect result for predicate with shift on a BIGINT column
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BIGINT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		result = con.Query("SELECT t0.c0 AND (t0.c0<<64) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {false, false}));
+
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 AND (t0.c0<<64);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("540") {
+		// Nested MAX() results in nondeterministic result or double free
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES ('aaaaaaaaaaaa');"));
+		result = con.Query("SELECT MAX(agg0) FROM (SELECT MAX(t0.c0) AS agg0 FROM t0) as s0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"aaaaaaaaaaaa"}));
+	}
+	SECTION("544") {
+		// SELECT on view with text constant in ORDER BY crashes
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0(c0) AS SELECT 1 FROM t0;"));
+		result = con.Query("SELECT * FROM v0 ORDER BY 'a';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	}
 }

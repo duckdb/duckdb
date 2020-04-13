@@ -65,8 +65,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case LogicalOperatorType::TABLE_FUNCTION:
 		return "TABLE_FUNCTION";
 	case LogicalOperatorType::CREATE_INDEX:

@@ -61,9 +61,12 @@ public:
 	//! Unnest expression
 	vector<unique_ptr<Expression>> unnests;
 
+	//! Index of pruned node
+	idx_t prune_index;
+	bool need_prune = false;
 public:
 	idx_t GetRootIndex() override {
-		return projection_index;
+		return need_prune ? prune_index : projection_index;
 	}
 };
 }; // namespace duckdb

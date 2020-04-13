@@ -65,7 +65,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTableFunction &expr);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalPruneColumns &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
