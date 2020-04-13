@@ -47,9 +47,6 @@ struct StandardDistributiveFunction {
 	}
 };
 
-template <>
-void StandardDistributiveFunction::Finalize(Vector &result, string_t *state, string_t *target, nullmask_t &nullmask, idx_t idx);
-
 struct CountStarFun {
 	static AggregateFunction GetFunction();
 
