@@ -35,6 +35,7 @@ public:
 	idx_t ParamCount() {
 		return parent ? parent->ParamCount() : prepared_statement_parameter_index;
 	}
+
 private:
 	Transformer *parent;
 	//! The current prepared statement parameter index
@@ -49,6 +50,7 @@ private:
 			this->prepared_statement_parameter_index = new_count;
 		}
 	}
+
 private:
 	//! Transforms a Postgres statement into a single SQL statement
 	unique_ptr<SQLStatement> TransformStatement(PGNode *stmt);
