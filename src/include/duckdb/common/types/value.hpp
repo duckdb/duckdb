@@ -172,8 +172,8 @@ public:
 	bool operator<=(const int64_t &rhs) const;
 	bool operator>=(const int64_t &rhs) const;
 
-	static bool IsUTF8String(const char *s);
-	static bool IsUTF8String(string_t s);
+	static bool FloatIsValid(float value);
+	static bool DoubleIsValid(double value);
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	static bool ValuesAreEqual(Value result_value, Value value);
