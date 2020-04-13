@@ -65,7 +65,7 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 template<class T>
 bool ShiftInRange(T shift) {
-	return shift > 0 && shift < (T)(sizeof(T) * 8);
+	return shift >= 0 && shift < (T)(sizeof(T) * 8);
 }
 
 struct BitwiseShiftLeftOperator {
