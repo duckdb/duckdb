@@ -71,15 +71,6 @@ struct StringMinMaxBase : public MinMaxBase {
 			*state = string_t(ptr, len);
 		}
 	}
-};
-
-struct MinOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
-			Assign(state, input);
-		}
-	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
@@ -87,6 +78,15 @@ struct MinOperationString : public StringMinMaxBase {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = StringVector::AddString(result, *state);
+		}
+	}
+};
+
+struct MinOperationString : public StringMinMaxBase {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE *state, INPUT_TYPE input) {
+		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
+			Assign(state, input);
 		}
 	}
 };
