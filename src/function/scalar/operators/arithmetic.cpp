@@ -6,6 +6,27 @@ using namespace std;
 
 namespace duckdb {
 
+template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType type) {
+	switch (type.id) {
+	case SQLTypeId::TINYINT:
+		return ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+	case SQLTypeId::SMALLINT:
+		return ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+	case SQLTypeId::INTEGER:
+		return ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+	case SQLTypeId::BIGINT:
+		return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+	case SQLTypeId::FLOAT:
+		return ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+	case SQLTypeId::DOUBLE:
+		return ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+	case SQLTypeId::DECIMAL:
+		return ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
@@ -30,13 +51,13 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	// binary add function adds two numbers together
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::INTEGER, SQLType::DATE}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
@@ -68,12 +89,12 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
@@ -105,7 +126,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
