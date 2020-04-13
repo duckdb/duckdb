@@ -470,4 +470,12 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT MAX(agg0) FROM (SELECT MAX(t0.c0) AS agg0 FROM t0) as s0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"aaaaaaaaaaaa"}));
 	}
+	SECTION("544") {
+		// SELECT on view with text constant in ORDER BY crashes
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0(c0) AS SELECT 1 FROM t0;"));
+		result = con.Query("SELECT * FROM v0 ORDER BY 'a';");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	}
 }

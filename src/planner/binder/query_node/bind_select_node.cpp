@@ -92,7 +92,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				}
 				bound_order->orders.push_back(move(node));
 			}
-			bound_modifier = move(bound_order);
+			if (bound_order->orders.size() > 0) {
+				bound_modifier = move(bound_order);
+			}
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
@@ -101,7 +103,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		default:
 			throw Exception("Unsupported result modifier");
 		}
-		result.modifiers.push_back(move(bound_modifier));
+		if (bound_modifier) {
+			result.modifiers.push_back(move(bound_modifier));
+		}
 	}
 }
 
