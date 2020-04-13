@@ -81,7 +81,7 @@ protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
 	void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-	            idx_t &approved_tuple_count) override;
+	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count) override;
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions,
 	                     Vector &result) override;
@@ -139,7 +139,7 @@ private:
 				//			if (update_idx < info.count && info.ids[update_idx] == i) {
 				//				// use update info
 				//				result_data[i] = ReadString(state.handles, info.block_ids[update_idx],
-				//info.offsets[update_idx]); 				update_idx++; 			} else {
+				// info.offsets[update_idx]); 				update_idx++; 			} else {
 				// use base table info
 				auto data_str = FetchStringFromDict(handles, baseptr, dict_offset[i]);
 				if (OP::Operation(data_str.GetString(), constant)) {

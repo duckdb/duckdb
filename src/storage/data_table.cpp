@@ -227,7 +227,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		//! First, we scan the columns with filters and generate a selection vector.
 		for (auto &table_filter : table_filters) {
 			columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first], table_filter.second,
-			                                   sel, approved_tuple_count);
+			                                   sel, valid_sel, approved_tuple_count, count);
 			if (approved_tuple_count == 0) {
 				//! nothing to scan for this vector, skip the entire vector
 				state.NextVector();

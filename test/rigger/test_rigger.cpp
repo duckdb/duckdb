@@ -254,7 +254,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
 	}
 	SECTION("513") {
-		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
+		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop
+		// join!"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
@@ -300,7 +301,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
 	}
 	SECTION("516") {
-		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for index"
+		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for
+		// index"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL UNIQUE);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");

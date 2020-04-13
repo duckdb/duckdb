@@ -714,7 +714,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 						continue;
 						// the sets are not disjoint, we create two sets of edges
 						// auto left_difference = set_manager.Difference(filter_info->left_set, filter_info->right_set);
-						// auto right_difference = set_manager.Difference(filter_info->right_set, filter_info->left_set);
+						// auto right_difference = set_manager.Difference(filter_info->right_set,
+						// filter_info->left_set);
 						// // -> LEFT <-> RIGHT \ LEFT
 						// query_graph.CreateEdge(filter_info->left_set, right_difference, filter_info);
 						// query_graph.CreateEdge(right_difference, filter_info->left_set, filter_info);

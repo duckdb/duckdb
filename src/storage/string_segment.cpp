@@ -67,7 +67,7 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 // Filter base data
 //===--------------------------------------------------------------------===//
 void StringSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-                           idx_t &approved_tuple_count) {
+                           SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count) {
 	auto vector_index = state.vector_index;
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -78,7 +78,7 @@ void StringSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFil
 	//
 	//	auto offset = vector_index * vector_size;
 	//
-	idx_t count = GetVectorCount(vector_index);
+	//	idx_t count = GetVectorCount(vector_index);
 	//	auto source_data = data + offset + sizeof(nullmask_t);
 
 	auto handle = state.primary_handle.get();

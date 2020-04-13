@@ -245,7 +245,7 @@ struct Log10Operator {
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction log_function("log10", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                               UnaryScalarFunctionWrapper<double, Log10Operator, UnaryZeroOrNegativeWrapper>);
+	                            UnaryScalarFunctionWrapper<double, Log10Operator, UnaryZeroOrNegativeWrapper>);
 	set.AddFunction(log_function);
 	// "log" is an alias for "log10"
 	log_function.name = "log";

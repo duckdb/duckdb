@@ -45,7 +45,8 @@ void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void PersistentSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
-                               SelectionVector &sel, idx_t &approved_tuple_count) {
+                               SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count,
+                               idx_t count) {
 	assert(0);
 }
 

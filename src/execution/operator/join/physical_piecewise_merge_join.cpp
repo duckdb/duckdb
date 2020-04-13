@@ -276,9 +276,8 @@ idx_t FilterNulls(VectorData &vdata, idx_t count, SelectionVector &not_null) {
 	return not_null_count;
 }
 
-template<class T>
-idx_t FilterNullsAndNaNs(VectorData &vdata, idx_t count, SelectionVector &not_null) {
-	auto data = (T *) vdata.data;
+template <class T> idx_t FilterNullsAndNaNs(VectorData &vdata, idx_t count, SelectionVector &not_null) {
+	auto data = (T *)vdata.data;
 	idx_t not_null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -300,7 +299,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	// first filter out all the non-null values
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
 	idx_t not_null_count;
-	switch(vector.type) {
+	switch (vector.type) {
 	case TypeId::FLOAT:
 		not_null_count = FilterNullsAndNaNs<float>(vdata, count, not_null);
 		break;

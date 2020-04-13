@@ -59,7 +59,7 @@ public:
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Executes the filters directly in the table's data
 	void Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
-	            SelectionVector &sel, idx_t &approved_tuple_count);
+	            SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count);
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);
 	//! Fetch a single value and append it to the vector
@@ -97,7 +97,7 @@ protected:
 	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;
 	//! Executes the filters directly in the table's data
 	virtual void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-	                    idx_t &approved_tuple_count) = 0;
+	                    SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count) = 0;
 	//! Fetch the base data and apply a filter to it
 	virtual void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                                 idx_t &approved_tuple_count) = 0;
