@@ -462,6 +462,9 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public void setFetchSize(int rows) throws SQLException {
+		if (rows < 0) {
+			throw new SQLException("Fetch size has to be >= 0");
+		}
 		// whatevs
 	}
 
