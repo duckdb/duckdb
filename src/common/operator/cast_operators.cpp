@@ -138,7 +138,7 @@ template <> int64_t Cast::Operation(double input) {
 // Double -> float casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(double input, float &result) {
-	auto res = (float) input;
+	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
 	}
@@ -339,16 +339,13 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
-template<class T>
-bool CheckDoubleValidity(T value);
+template <class T> bool CheckDoubleValidity(T value);
 
-template<>
-bool CheckDoubleValidity(float value) {
+template <> bool CheckDoubleValidity(float value) {
 	return Value::FloatIsValid(value);
 }
 
-template<>
-bool CheckDoubleValidity(double value) {
+template <> bool CheckDoubleValidity(double value) {
 	return Value::DoubleIsValid(value);
 }
 

@@ -46,8 +46,11 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, idx_t row_st
 }
 
 template <class T, class OP>
-void Select(SelectionVector &sel, SelectionVector &valid_sel, unsigned char *source, nullmask_t *source_mask,
-            unsigned long size, T constant, idx_t &approved_tuple_count, bool use_valid_sel) {
+void Select(SelectionVector &sel, Vector &result, SelectionVector &valid_sel, unsigned char *source,
+            nullmask_t *source_mask, unsigned long size, T constant, idx_t &approved_tuple_count, bool use_valid_sel) {
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData(result);
+
 	if (approved_tuple_count == 0) {
 		//! This is the first filter we are applying, we need to scan the full vector
 		for (idx_t i = 0; i < size; i++) {
@@ -58,25 +61,31 @@ void Select(SelectionVector &sel, SelectionVector &valid_sel, unsigned char *sou
 				src_idx = i;
 			}
 			if (!(*source_mask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant)) {
+				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 				sel.set_index(approved_tuple_count++, src_idx);
 			}
 		}
 	} else {
 		//! We already applied at least one filter, we only need to check the selection vector
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
-			if (!(*source_mask)[sel.get_index(i)] && !OP::Operation(((T *)source)[sel.get_index(i)], constant)) {
+			idx_t src_idx = sel.get_index(i);
+			if (!(*source_mask)[src_idx] && !OP::Operation(((T *)source)[src_idx], constant)) {
 				sel.swap(i, approved_tuple_count - 1);
 				approved_tuple_count--;
 				i--;
+			} else {
+				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 			}
 		}
 	}
 }
 
 template <class T, class OPL, class OPR>
-void Select(SelectionVector &sel, SelectionVector &valid_sel, unsigned char *source, nullmask_t *source_mask,
-            unsigned long size, const T constantLeft, const T constantRight, idx_t &approved_tuple_count,
-            bool use_valid_sel) {
+void Select(SelectionVector &sel, Vector &result, SelectionVector &valid_sel, unsigned char *source,
+            nullmask_t *source_mask, unsigned long size, const T constantLeft, const T constantRight,
+            idx_t &approved_tuple_count, bool use_valid_sel) {
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData(result);
 	if (approved_tuple_count == 0) {
 		//! This is the first filter we are applying, we need to scan the full vector
 		for (idx_t i = 0; i < size; i++) {
@@ -88,57 +97,61 @@ void Select(SelectionVector &sel, SelectionVector &valid_sel, unsigned char *sou
 			}
 			if (!(*source_mask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
 			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
+				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 				sel.set_index(approved_tuple_count++, src_idx);
 			}
 		}
 	} else {
 		//! We already applied at least one filter, we only need to check the selection vector
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			idx_t src_idx = sel.get_index(i);
 			if (!(*source_mask)[sel.get_index(i)] &&
 			    !(OPL::Operation(((T *)source)[sel.get_index(i)], constantLeft) &&
 			      OPR::Operation(((T *)source)[sel.get_index(i)], constantRight))) {
 				sel.swap(i, approved_tuple_count - 1);
 				approved_tuple_count--;
 				i--;
+			} else {
+				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
 			}
 		}
 	}
 }
 
 template <class OP>
-static void templated_select_operation(SelectionVector &sel, TypeId type, unsigned char *source,
+static void templated_select_operation(SelectionVector &sel, Vector &result, TypeId type, unsigned char *source,
                                        nullmask_t *source_mask, SelectionVector &valid_sel, unsigned long size,
                                        Value &constant, idx_t &approved_tuple_count, bool use_valid_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case TypeId::INT8: {
-		Select<int8_t, OP>(sel, valid_sel, source, source_mask, size, constant.value_.tinyint, approved_tuple_count,
-		                   use_valid_sel);
+		Select<int8_t, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.tinyint,
+		                   approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT16: {
-		Select<int16_t, OP>(sel, valid_sel, source, source_mask, size, constant.value_.smallint, approved_tuple_count,
-		                    use_valid_sel);
+		Select<int16_t, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.smallint,
+		                    approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT32: {
-		Select<int32_t, OP>(sel, valid_sel, source, source_mask, size, constant.value_.integer, approved_tuple_count,
-		                    use_valid_sel);
+		Select<int32_t, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.integer,
+		                    approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT64: {
-		Select<int64_t, OP>(sel, valid_sel, source, source_mask, size, constant.value_.bigint, approved_tuple_count,
-		                    use_valid_sel);
+		Select<int64_t, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.bigint,
+		                    approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::FLOAT: {
-		Select<float, OP>(sel, valid_sel, source, source_mask, size, constant.value_.float_, approved_tuple_count,
-		                  use_valid_sel);
+		Select<float, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.float_,
+		                  approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::DOUBLE: {
-		Select<double, OP>(sel, valid_sel, source, source_mask, size, constant.value_.double_, approved_tuple_count,
-		                   use_valid_sel);
+		Select<double, OP>(sel, result, valid_sel, source, source_mask, size, constant.value_.double_,
+		                   approved_tuple_count, use_valid_sel);
 		break;
 	}
 	default:
@@ -147,39 +160,39 @@ static void templated_select_operation(SelectionVector &sel, TypeId type, unsign
 }
 
 template <class OPL, class OPR>
-static void templated_select_operation_between(SelectionVector &sel, TypeId type, unsigned char *source,
+static void templated_select_operation_between(SelectionVector &sel, Vector &result, TypeId type, unsigned char *source,
                                                nullmask_t *source_mask, SelectionVector &valid_sel, unsigned long size,
                                                Value &constantLeft, Value &constantRight, idx_t &approved_tuple_count,
                                                bool use_valid_sel) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case TypeId::INT8: {
-		Select<int8_t, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.tinyint,
+		Select<int8_t, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.tinyint,
 		                         constantRight.value_.tinyint, approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT16: {
-		Select<int16_t, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.smallint,
+		Select<int16_t, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.smallint,
 		                          constantRight.value_.smallint, approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT32: {
-		Select<int32_t, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.integer,
+		Select<int32_t, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.integer,
 		                          constantRight.value_.integer, approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::INT64: {
-		Select<int64_t, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.bigint,
+		Select<int64_t, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.bigint,
 		                          constantRight.value_.bigint, approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::FLOAT: {
-		Select<float, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.float_,
+		Select<float, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.float_,
 		                        constantRight.value_.float_, approved_tuple_count, use_valid_sel);
 		break;
 	}
 	case TypeId::DOUBLE: {
-		Select<double, OPL, OPR>(sel, valid_sel, source, source_mask, size, constantLeft.value_.double_,
+		Select<double, OPL, OPR>(sel, result, valid_sel, source, source_mask, size, constantLeft.value_.double_,
 		                         constantRight.value_.double_, approved_tuple_count, use_valid_sel);
 		break;
 	}
@@ -188,8 +201,9 @@ static void templated_select_operation_between(SelectionVector &sel, TypeId type
 	}
 }
 
-void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-                            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel) {
+void NumericSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, SelectionVector &valid_sel,
+                            idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+                            vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -206,30 +220,32 @@ void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFi
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			templated_select_operation<Equals>(sel, state.current->type, source_data, source_nullmask, valid_sel, count,
-			                                   tableFilter[0].constant, approved_tuple_count, use_valid_sel);
+			templated_select_operation<Equals>(sel, result, state.current->type, source_data, source_nullmask,
+			                                   valid_sel, count, tableFilter[0].constant, approved_tuple_count,
+			                                   use_valid_sel);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			templated_select_operation<LessThan>(sel, state.current->type, source_data, source_nullmask, valid_sel,
-			                                     count, tableFilter[0].constant, approved_tuple_count, use_valid_sel);
+			templated_select_operation<LessThan>(sel, result, state.current->type, source_data, source_nullmask,
+			                                     valid_sel, count, tableFilter[0].constant, approved_tuple_count,
+			                                     use_valid_sel);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			templated_select_operation<GreaterThan>(sel, state.current->type, source_data, source_nullmask, valid_sel,
-			                                        count, tableFilter[0].constant, approved_tuple_count,
+			templated_select_operation<GreaterThan>(sel, result, state.current->type, source_data, source_nullmask,
+			                                        valid_sel, count, tableFilter[0].constant, approved_tuple_count,
 			                                        use_valid_sel);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			templated_select_operation<LessThanEquals>(sel, state.current->type, source_data, source_nullmask,
+			templated_select_operation<LessThanEquals>(sel, result, state.current->type, source_data, source_nullmask,
 			                                           valid_sel, count, tableFilter[0].constant, approved_tuple_count,
 			                                           use_valid_sel);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			templated_select_operation<GreaterThanEquals>(sel, state.current->type, source_data, source_nullmask,
-			                                              valid_sel, count, tableFilter[0].constant,
+			templated_select_operation<GreaterThanEquals>(sel, result, state.current->type, source_data,
+			                                              source_nullmask, valid_sel, count, tableFilter[0].constant,
 			                                              approved_tuple_count, use_valid_sel);
 			break;
 		}
@@ -245,22 +261,22 @@ void NumericSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFi
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThan, LessThan>(
-				    sel, state.current->type, source_data, source_nullmask, valid_sel, count, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count, use_valid_sel);
+				    sel, result, state.current->type, source_data, source_nullmask, valid_sel, count,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count, use_valid_sel);
 			} else {
 				templated_select_operation_between<GreaterThan, LessThanEquals>(
-				    sel, state.current->type, source_data, source_nullmask, valid_sel, count, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count, use_valid_sel);
+				    sel, result, state.current->type, source_data, source_nullmask, valid_sel, count,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count, use_valid_sel);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				templated_select_operation_between<GreaterThanEquals, LessThan>(
-				    sel, state.current->type, source_data, source_nullmask, valid_sel, count, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count, use_valid_sel);
+				    sel, result, state.current->type, source_data, source_nullmask, valid_sel, count,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count, use_valid_sel);
 			} else {
 				templated_select_operation_between<GreaterThanEquals, LessThanEquals>(
-				    sel, state.current->type, source_data, source_nullmask, valid_sel, count, tableFilter[0].constant,
-				    tableFilter[1].constant, approved_tuple_count, use_valid_sel);
+				    sel, result, state.current->type, source_data, source_nullmask, valid_sel, count,
+				    tableFilter[0].constant, tableFilter[1].constant, approved_tuple_count, use_valid_sel);
 			}
 		}
 	}

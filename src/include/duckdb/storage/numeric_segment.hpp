@@ -35,8 +35,9 @@ public:
 protected:
 	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
-	void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel) override;
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, SelectionVector &valid_sel,
+	            idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+	            vector<TableFilter> &tableFilter) override;
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                         idx_t &approved_tuple_count) override;

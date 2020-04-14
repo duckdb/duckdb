@@ -36,12 +36,12 @@ public:
 	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result) override;
 	//! Scan the next vector from the column and apply a selection vector to filter the data
-	virtual void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                        idx_t &approved_tuple_count) override;
+	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                idx_t &approved_tuple_count) override;
 	//! Executes the filters directly in the table's data
-	bool Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
-	            SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count,
-	            bool use_valid_sel) override;
+	bool Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+	            vector<TableFilter> &tableFilter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 	//! Fetch a value of the specific row id and append it to the result

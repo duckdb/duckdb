@@ -85,8 +85,9 @@ protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
 
-	void Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel) override;
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, SelectionVector &valid_sel,
+	            idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+	            vector<TableFilter> &tableFilter) override;
 
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
 
@@ -145,9 +146,13 @@ private:
 	}
 
 	template <class OP>
-	void Select_String(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset, SelectionVector &sel,
-	                   SelectionVector &valid_sel, const string &constant, idx_t &approved_tuple_count,
-	                   unsigned long size, nullmask_t *source_nullmask, bool use_valid_sel, size_t vector_index) {
+	void Select_String(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+	                   SelectionVector &sel, SelectionVector &valid_sel, const string &constant,
+	                   idx_t &approved_tuple_count, unsigned long size, nullmask_t *source_nullmask, bool use_valid_sel,
+	                   size_t vector_index) {
+		auto result_data = FlatVector::GetData<string_t>(result);
+		FlatVector::SetNullmask(result, *source_nullmask);
+		string_t data_str;
 		if (approved_tuple_count == 0) {
 			idx_t update_idx = 0;
 
@@ -159,21 +164,21 @@ private:
 				} else {
 					src_idx = i;
 				}
-				string data_str;
+
 				if (string_updates && string_updates[vector_index]) {
 					auto &info = *string_updates[vector_index];
-					if (update_idx < info.count && info.ids[update_idx] == i) {
-						data_str =
-						    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+					if (update_idx < info.count && info.ids[update_idx] == src_idx) {
+						data_str = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
 						update_idx++;
 					} else {
-						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
 					}
 				} else {
-					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
 				}
 
-				if (!(*source_nullmask)[src_idx] && OP::Operation(data_str, constant)) {
+				if (!(*source_nullmask)[src_idx] && OP::Operation(data_str.GetString(), constant)) {
+					result_data[src_idx] = data_str;
 					sel.set_index(approved_tuple_count++, src_idx);
 				}
 			}
@@ -182,7 +187,6 @@ private:
 			idx_t update_idx = 0;
 
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				string data_str;
 				idx_t src_idx = sel.get_index(i);
 				if (string_updates && string_updates[vector_index]) {
 					auto &info = *string_updates[vector_index];
@@ -197,76 +201,81 @@ private:
 				} else {
 					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
 				}
-				if (!(*source_nullmask)[src_idx] && !OP::Operation(data_str, constant)) {
+				if (!(*source_nullmask)[src_idx] && !OP::Operation(data_str.GetString(), constant)) {
 					sel.swap(i, approved_tuple_count - 1);
 					approved_tuple_count--;
 					i--;
+				} else {
+					result_data[src_idx] = data_str;
 				}
 			}
 		}
 	}
 
 	template <class OPL, class OPR>
-	void Select_String_Between(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
+	void Select_String_Between(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                           SelectionVector &sel, SelectionVector &valid_sel, string constantLeft,
 	                           string constantRight, idx_t &approved_tuple_count, nullmask_t *source_nullmask,
 	                           unsigned long size, bool use_valid_sel, size_t vector_index) {
+		auto result_data = FlatVector::GetData<string_t>(result);
+		FlatVector::SetNullmask(result, *source_nullmask);
+		string_t data_str;
 		if (approved_tuple_count == 0) {
 			//! This is the first filter we are applying, we need to scan the full vector
-				idx_t update_idx = 0;
+			idx_t update_idx = 0;
 
-				//! This is the first filter we are applying, we need to scan the full vector
-				for (idx_t i = 0; i < size; i++) {
-					idx_t src_idx;
-					if (use_valid_sel) {
-						src_idx = valid_sel.get_index(i);
-					} else {
-						src_idx = i;
-					}
-					string data_str;
-					if (string_updates && string_updates[vector_index]) {
-						auto &info = *string_updates[vector_index];
-						if (update_idx < info.count && info.ids[update_idx] == i) {
-							data_str =
-							    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
-							update_idx++;
-						} else {
-							data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
-						}
-					} else {
-						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
-					}
-					if (!(*source_nullmask)[src_idx] && OPL::Operation(data_str, constantLeft) &&
-					    OPR::Operation(data_str, constantRight)) {
-						sel.set_index(approved_tuple_count++, i);
-					}
+			//! This is the first filter we are applying, we need to scan the full vector
+			for (idx_t i = 0; i < size; i++) {
+				idx_t src_idx;
+				if (use_valid_sel) {
+					src_idx = valid_sel.get_index(i);
+				} else {
+					src_idx = i;
 				}
+
+				if (string_updates && string_updates[vector_index]) {
+					auto &info = *string_updates[vector_index];
+					if (update_idx < info.count && info.ids[update_idx] == i) {
+						data_str = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
+						update_idx++;
+					} else {
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+					}
+				} else {
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+				}
+				if (!(*source_nullmask)[src_idx] && OPL::Operation(data_str.GetString(), constantLeft) &&
+				    OPR::Operation(data_str.GetString(), constantRight)) {
+					result_data[src_idx] = data_str;
+					sel.set_index(approved_tuple_count++, src_idx);
+				}
+			}
 
 		} else {
 			idx_t update_idx = 0;
 
 			//! We already applied at least one filter, we only need to check the selection vector
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
-				string data_str;
 				idx_t src_idx = sel.get_index(i);
 				if (string_updates && string_updates[vector_index]) {
 					auto &info = *string_updates[vector_index];
 
 					if (update_idx < info.count && info.ids[update_idx] == i) {
-						data_str =
-						    ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]).GetString();
+						data_str = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
 						update_idx++;
 					} else {
-						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+						data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
 					}
 				} else {
-					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]).GetString();
+					data_str = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
 				}
-				if (!(*source_nullmask)[sel.get_index(i)] &&
-				    !(OPL::Operation(data_str, constantLeft) && OPR::Operation(data_str, constantRight))) {
+				if (!(*source_nullmask)[src_idx] && !(OPL::Operation(data_str.GetString(), constantLeft) &&
+				                                      OPR::Operation(data_str.GetString(), constantRight))) {
 					sel.swap(i, approved_tuple_count - 1);
 					approved_tuple_count--;
 					i--;
+				} else {
+					result_data[src_idx] = data_str;
 				}
 			}
 		}

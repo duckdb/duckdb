@@ -125,16 +125,16 @@ void UncompressedSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vect
 //===--------------------------------------------------------------------===//
 // Filter
 //===--------------------------------------------------------------------===//
-bool UncompressedSegment::Select(Transaction &transaction, ColumnScanState &state, vector<TableFilter> &tableFilter,
+bool UncompressedSegment::Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilter,
                                  SelectionVector &sel, SelectionVector &valid_sel, idx_t &approved_tuple_count,
-                                 idx_t count, bool use_valid_sel) {
+                                 idx_t count, bool use_valid_sel, ColumnScanState &state) {
 	auto read_lock = lock.GetSharedLock();
 	if (versions && versions[state.vector_index]) {
 		// TODO: We don't handle updates for filter selection during data fetching
 		return true;
 	}
 	//! Select the data from the base table
-	Select(state, tableFilter, sel, valid_sel, approved_tuple_count, count, use_valid_sel);
+	Select(state, result, sel, valid_sel, approved_tuple_count, count, use_valid_sel, tableFilter);
 	return false;
 }
 

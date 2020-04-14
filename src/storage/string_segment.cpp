@@ -66,8 +66,9 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Filter base data
 //===--------------------------------------------------------------------===//
-void StringSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFilter, SelectionVector &sel,
-                           SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t count, bool use_valid_sel) {
+void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, SelectionVector &valid_sel,
+                           idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+                           vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
 	assert(vector_index < max_vector_count);
 	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
@@ -83,30 +84,31 @@ void StringSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFil
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			Select_String<Equals>(state.handles, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
-			                      approved_tuple_count, count, base_nullmask, use_valid_sel, vector_index);
+			Select_String<Equals>(state.handles, result, baseptr, base_data, sel, valid_sel,
+			                      tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
+			                      use_valid_sel, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			Select_String<LessThan>(state.handles, baseptr, base_data, sel, valid_sel,
+			Select_String<LessThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
 			                        tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
 			                        use_valid_sel, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			Select_String<GreaterThan>(state.handles, baseptr, base_data, sel, valid_sel,
+			Select_String<GreaterThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
 			                           tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
 			                           use_valid_sel, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			Select_String<LessThanEquals>(state.handles, baseptr, base_data, sel, valid_sel,
+			Select_String<LessThanEquals>(state.handles, result, baseptr, base_data, sel, valid_sel,
 			                              tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
 			                              use_valid_sel, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			Select_String<GreaterThanEquals>(state.handles, baseptr, base_data, sel, valid_sel,
+			Select_String<GreaterThanEquals>(state.handles, result, baseptr, base_data, sel, valid_sel,
 			                                 tableFilter[0].constant.str_value, approved_tuple_count, count,
 			                                 base_nullmask, use_valid_sel, vector_index);
 
@@ -123,25 +125,25 @@ void StringSegment::Select(ColumnScanState &state, vector<TableFilter> &tableFil
 
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(state.handles, baseptr, base_data, sel, valid_sel,
+				Select_String_Between<GreaterThan, LessThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
 				                                             tableFilter[0].constant.str_value,
 				                                             tableFilter[1].constant.str_value, approved_tuple_count,
 				                                             base_nullmask, count, use_valid_sel, vector_index);
 			} else {
 				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
+				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
 				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
 				    vector_index);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
+				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
 				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
 				    vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
+				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
 				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
 				    vector_index);
 			}
@@ -202,6 +204,7 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 
 	auto &base_nullmask = *((nullmask_t *)base);
 	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<string_t>(result);
 	nullmask_t result_nullmask;
 	for (idx_t i = 0; i < approved_tuple_count; i++) {

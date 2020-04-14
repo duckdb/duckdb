@@ -135,6 +135,9 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 		for (auto &predicate_constant : table_filter.second) {
 			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
 				state.column_scans[predicate_constant.column_index].segment_checked = true;
+				if (!state.column_scans[predicate_constant.column_index].current) {
+					return true;
+				}
 				switch (state.column_scans[predicate_constant.column_index].current->type) {
 				case TypeId::INT8: {
 					int8_t constant = predicate_constant.constant.value_.tinyint;
@@ -227,34 +230,38 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	if (!table_filters.empty() && !apply_filter) {
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
 		idx_t approved_tuple_count = 0;
-		//! First, we scan the columns with filters and generate a selection vector.
+		//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 		for (auto &table_filter : table_filters) {
-			apply_filter = columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first],
-			                                                  table_filter.second, sel, valid_sel, approved_tuple_count,
-			                                                  count, use_valid_sel);
+			apply_filter = columns[table_filter.first].Select(
+			    transaction, state.column_scans[table_filter.first], result.data[table_filter.first], sel, valid_sel,
+			    approved_tuple_count, count, use_valid_sel, table_filter.second);
 			if (apply_filter) {
 				break;
 			}
-			if (approved_tuple_count == 0) {
-				//! nothing to scan for this vector, skip the entire vector
-				state.NextVector();
-				current_row += STANDARD_VECTOR_SIZE;
-				return true;
-			}
+			//			if (approved_tuple_count == 0) {
+			//				//! nothing to scan for this vector, skip the entire vector
+			//				state.NextVector();
+			//				current_row += STANDARD_VECTOR_SIZE;
+			//				return true;
+			//			}
 		}
 		if (!apply_filter) {
-			//! Now we use the selection vector to fetch data from the table.
+			result.Slice(sel, approved_tuple_count);
+			//! Now we use the selection vector to fetch data for the other columns.
 			for (idx_t i = 0; i < state.column_ids.size(); i++) {
-				auto column = state.column_ids[i];
-				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[i].type == TypeId::INT64);
-					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
-					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-						result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
+				if (table_filters.find(i) == table_filters.end()) {
+					auto column = state.column_ids[i];
+					if (column == COLUMN_IDENTIFIER_ROW_ID) {
+						assert(result.data[i].type == TypeId::INT64);
+						result.data[i].vector_type = VectorType::FLAT_VECTOR;
+						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+							result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
+						}
+					} else {
+						columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
+						                           approved_tuple_count);
 					}
-				} else {
-					columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
-					                           approved_tuple_count);
 				}
 			}
 			result.SetCardinality(approved_tuple_count);

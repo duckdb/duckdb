@@ -23,8 +23,7 @@ struct MinMaxBase : public StandardDistributiveFunction {
 };
 
 struct NumericMinMaxBase : public MinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
 		*state = input;
 	}
 
@@ -58,8 +57,7 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
 		if (input.IsInlined()) {
 			*state = input;
 		} else {
@@ -83,8 +81,7 @@ struct StringMinMaxBase : public MinMaxBase {
 };
 
 struct MinOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (LessThan::Operation<INPUT_TYPE>(input, *state)) {
 			Assign(state, input);
 		}
@@ -92,19 +89,18 @@ struct MinOperationString : public StringMinMaxBase {
 };
 
 struct MaxOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
+	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, *state)) {
 			Assign(state, input);
 		}
 	}
 };
 
-template<class OP, class OP_STRING>
-static void AddMinMaxOperator(AggregateFunctionSet &set) {
+template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : SQLType::ALL_TYPES) {
 		if (type.id == SQLTypeId::VARCHAR) {
-			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<string_t, string_t, string_t, OP_STRING>(SQLType::VARCHAR, SQLType::VARCHAR));
+			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<string_t, string_t, string_t, OP_STRING>(
+			    SQLType::VARCHAR, SQLType::VARCHAR));
 		} else {
 			set.AddFunction(AggregateFunction::GetUnaryAggregate<OP>(type));
 		}

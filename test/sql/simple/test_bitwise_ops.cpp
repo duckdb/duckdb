@@ -48,12 +48,14 @@ TEST_CASE("Test scalar bitwise ops", "[bitop]") {
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 
 	// out of range shifts return 0
-	result = con.Query("SELECT 1::TINYINT << -1::TINYINT, 1::TINYINT >> -1::TINYINT, 1::TINYINT << 12::TINYINT, 1::TINYINT >> 12::TINYINT");
+	result = con.Query("SELECT 1::TINYINT << -1::TINYINT, 1::TINYINT >> -1::TINYINT, 1::TINYINT << 12::TINYINT, "
+	                   "1::TINYINT >> 12::TINYINT");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0}));
-	result = con.Query("SELECT 1::SMALLINT << -1::SMALLINT, 1::SMALLINT >> -1::SMALLINT, 1::SMALLINT << 20::SMALLINT, 1::SMALLINT >> 20::SMALLINT");
+	result = con.Query("SELECT 1::SMALLINT << -1::SMALLINT, 1::SMALLINT >> -1::SMALLINT, 1::SMALLINT << 20::SMALLINT, "
+	                   "1::SMALLINT >> 20::SMALLINT");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));
@@ -63,7 +65,8 @@ TEST_CASE("Test scalar bitwise ops", "[bitop]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));
 	REQUIRE(CHECK_COLUMN(result, 3, {0}));
-	result = con.Query("SELECT 1::BIGINT << -1::BIGINT, 1::BIGINT >> -1::BIGINT, 1::BIGINT << 1000::BIGINT, 1::BIGINT >> 1000::BIGINT");
+	result = con.Query("SELECT 1::BIGINT << -1::BIGINT, 1::BIGINT >> -1::BIGINT, 1::BIGINT << 1000::BIGINT, 1::BIGINT "
+	                   ">> 1000::BIGINT");
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {0}));
 	REQUIRE(CHECK_COLUMN(result, 2, {0}));

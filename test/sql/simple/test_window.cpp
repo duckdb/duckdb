@@ -23,7 +23,9 @@ TEST_CASE("Most scalar window functions", "[window]") {
 	REQUIRE_FAIL(con.Query("SELECT avg(42) over (order by row_number() over ())"));
 	// distinct aggregates not supported for window functions
 	REQUIRE_FAIL(con.Query("SELECT COUNT(DISTINCT 42) OVER ()"));
-	REQUIRE_FAIL(con.Query("WITH t AS (SELECT col0 AS a, col1 AS b FROM (VALUES(1,2),(1,1),(1,2),(2,1),(2,1),(2,2),(2,3),(2,4)) v) SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) FROM t;"));
+	REQUIRE_FAIL(
+	    con.Query("WITH t AS (SELECT col0 AS a, col1 AS b FROM (VALUES(1,2),(1,1),(1,2),(2,1),(2,1),(2,2),(2,3),(2,4)) "
+	              "v) SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) FROM t;"));
 }
 
 TEST_CASE("Most basic window function", "[window]") {
@@ -562,36 +564,44 @@ TEST_CASE("Test binding of named window functions in CTEs", "[window]") {
 	con.EnableQueryVerification();
 
 	// named window clause
-	result = con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);");
+	result = con.Query(
+	    "select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
 
 	// named window clause in CTE
-	result = con.Query("with subquery as (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) select * from subquery;");
+	result = con.Query("with subquery as (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) "
+	                   "window named_window as (order by i)) select * from subquery;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
 
 	// named window clause in subquery
-	result = con.Query("select * from (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) t1;");
+	result = con.Query("select * from (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window "
+	                   "named_window as (order by i)) t1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
 
 	// named window clause in view
-	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS select i, lag(i) over named_window from (values (1), (2), (3)) as t "
+	                          "(i) window named_window as (order by i);"));
 
 	result = con.Query("select * from v1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
 
 	// same window clause name multiple times but in different subqueries
-	result = con.Query("SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t1, (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t2 ORDER BY 1, 2, 3, 4;");
+	result = con.Query("SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window "
+	                   "named_window AS ( ORDER BY i)) t1, (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), "
+	                   "(3)) AS t (i) window named_window AS ( ORDER BY i)) t2 ORDER BY 1, 2, 3, 4;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 1, 1, 1, 2, 2, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), 1, 2, Value(), 1, 2, Value(), 1, 2}));
 
 	// we cannot use named window specifications of the main query inside CTEs
-	REQUIRE_FAIL(con.Query("WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);"));
+	REQUIRE_FAIL(con.Query("WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t "
+	                       "(i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);"));
 	// duplicate window clause name
-	REQUIRE_FAIL(con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);"));
+	REQUIRE_FAIL(con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window "
+	                       "named_window as (order by i), named_window as (order by j);"));
 }
