@@ -404,7 +404,7 @@ matrix:
     - os: linux
       dist: xenial
       name: JDBC Compliance
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       env:
         - JAVA_HOME='/usr/lib/jvm/java-8-openjdk-amd64'
