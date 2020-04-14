@@ -150,6 +150,8 @@ private:
 	                   SelectionVector &sel, SelectionVector &valid_sel, const string &constant,
 	                   idx_t &approved_tuple_count, unsigned long size, nullmask_t *source_nullmask, bool use_valid_sel,
 	                   size_t vector_index) {
+	    	result.vector_type = VectorType::FLAT_VECTOR;
+
 		auto result_data = FlatVector::GetData<string_t>(result);
 		FlatVector::SetNullmask(result, *source_nullmask);
 		string_t data_str;
@@ -217,6 +219,8 @@ private:
 	                           SelectionVector &sel, SelectionVector &valid_sel, string constantLeft,
 	                           string constantRight, idx_t &approved_tuple_count, nullmask_t *source_nullmask,
 	                           unsigned long size, bool use_valid_sel, size_t vector_index) {
+	    	result.vector_type = VectorType::FLAT_VECTOR;
+
 		auto result_data = FlatVector::GetData<string_t>(result);
 		FlatVector::SetNullmask(result, *source_nullmask);
 		string_t data_str;
