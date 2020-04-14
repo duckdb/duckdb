@@ -94,7 +94,7 @@ void ParquetFile::initialize(string filename) {
 		throw runtime_error("Need at least one column in the file");
 	}
 	if (file_meta_data.schema[0].num_children
-			!= file_meta_data.schema.size() - 1) {
+			!= (int32_t) (file_meta_data.schema.size() - 1)) {
 		throw runtime_error("Only flat tables are supported (no nesting)");
 	}
 
@@ -150,7 +150,7 @@ public:
 
 	/// Gets a batch of values.  Returns the number of decoded elements.
 	template<typename T>
-	inline int GetBatch(T *values, int batch_size) {
+	inline int GetBatch(T *values, uint32_t batch_size) {
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
@@ -218,12 +218,12 @@ public:
 					out += repeat_batch;
 					values_read += repeat_batch;
 				} else if (literal_count_ > 0) {
-					int literal_batch = std::min(
+					uint32_t literal_batch = std::min(
 							batch_size - values_read - remaining_nulls,
 							static_cast<uint32_t>(literal_count_));
 
 					// Decode the literals
-					constexpr int kBufferSize = 1024;
+					constexpr uint32_t kBufferSize = 1024;
 					T indices[kBufferSize];
 					literal_batch = std::min(literal_batch, kBufferSize);
 					auto actual_read = BitUnpack<T>(indices, literal_batch);
@@ -451,7 +451,7 @@ public:
 							- 1].get();
 			dict = new Dictionary<char*>(dict_size);
 
-			for (int32_t dict_index = 0; dict_index < dict_size; dict_index++) {
+			for (uint64_t dict_index = 0; dict_index < dict_size; dict_index++) {
 				uint32_t str_len;
 				memcpy(&str_len, page_buf_ptr, sizeof(str_len));
 				page_buf_ptr += sizeof(str_len);
@@ -548,7 +548,7 @@ public:
 	void scan_data_page_plain(ResultColumn &result_col) {
 		// TODO compute null count while getting the def levels already?
 		uint32_t null_count = 0;
-		for (uint32_t i = 0; i < page_header.data_page_header.num_values; i++) {
+		for (int32_t i = 0; i < page_header.data_page_header.num_values; i++) {
 			if (!defined_ptr[i]) {
 				null_count++;
 			}
@@ -679,7 +679,7 @@ public:
 					enc_length);
 
 			uint32_t null_count = 0;
-			for (uint32_t i = 0; i < num_values; i++) {
+			for (int32_t i = 0; i < num_values; i++) {
 				if (!defined_ptr[i]) {
 					null_count++;
 				}
