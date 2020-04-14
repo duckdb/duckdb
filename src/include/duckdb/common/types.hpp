@@ -273,6 +273,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {
 		return TypeId::POINTER;
+	} else if (std::is_same<T, float>()) {
+		return TypeId::FLOAT;
 	} else if (std::is_same<T, double>()) {
 		return TypeId::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {

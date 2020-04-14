@@ -83,7 +83,6 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS,
 	PREPARE,
 	EXECUTE,
 	VACUUM

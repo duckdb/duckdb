@@ -53,7 +53,7 @@ TEST_CASE("Test Table Filter Push Down Multiple Filters", "[filterpushdown-optim
 }
 
 TEST_CASE("Test Table Filter All Numeric Data Types", "[filterpushdown-optimizer]") {
-	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real", "date"};
+	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real"};
 	ExpressionHelper helper;
 	auto &con = helper.con;
 	Binder binder(*con.context);
@@ -203,7 +203,7 @@ TEST_CASE("Test Table Filter Push Down String", "[filterpushdown-optimizer]") {
 	REQUIRE(((LogicalGet *)plan->children[0]->children[0].get())->tableFilters.size() == 0);
 }
 
-TEST_CASE("Test Table Filter Push Down Scan Integer", "[filterpushdown-optimizer]") {
+TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

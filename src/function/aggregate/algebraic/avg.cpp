@@ -37,7 +37,9 @@ struct AverageFunction {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (state->count == 0) {
+		if (!Value::DoubleIsValid(state->sum)) {
+			throw OutOfRangeException("AVG is out of range!");
+		} else if (state->count == 0) {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->sum / state->count;

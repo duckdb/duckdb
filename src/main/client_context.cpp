@@ -298,7 +298,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
 	for (auto &val : values) {
-		execute->values.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(val.type), val));
+		execute->values.push_back(make_unique<ConstantExpression>(val.GetSQLType(), val));
 	}
 
 	return RunStatement(query, move(execute), allow_stream_result);

@@ -6,21 +6,58 @@ using namespace std;
 
 namespace duckdb {
 
+template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType type) {
+	switch (type.id) {
+	case SQLTypeId::TINYINT:
+		return ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+	case SQLTypeId::SMALLINT:
+		return ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+	case SQLTypeId::INTEGER:
+		return ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+	case SQLTypeId::BIGINT:
+		return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+	case SQLTypeId::FLOAT:
+		return ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+	case SQLTypeId::DOUBLE:
+		return ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+	case SQLTypeId::DECIMAL:
+		return ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // + [add]
 //===--------------------------------------------------------------------===//
+template <> float AddOperator::Operation(float left, float right) {
+	auto result = left + right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in addition of float!");
+	}
+	return result;
+}
+
+template <> double AddOperator::Operation(double left, double right) {
+	auto result = left + right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in addition of double!");
+	}
+	return result;
+}
+
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<AddOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::INTEGER, SQLType::DATE}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
@@ -31,17 +68,33 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+template <> float SubtractOperator::Operation(float left, float right) {
+	auto result = left - right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in subtraction of float!");
+	}
+	return result;
+}
+
+template <> double SubtractOperator::Operation(double left, double right) {
+	auto result = left - right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in subtraction of double!");
+	}
+	return result;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
-	                                     ScalarFunction::GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
@@ -53,11 +106,27 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // * [multiply]
 //===--------------------------------------------------------------------===//
+template <> float MultiplyOperator::Operation(float left, float right) {
+	auto result = left * right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in multiplication of float!");
+	}
+	return result;
+}
+
+template <> double MultiplyOperator::Operation(double left, double right) {
+	auto result = left * right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in multiplication of double!");
+	}
+	return result;
+}
+
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(
-		    ScalarFunction({type, type}, type, ScalarFunction::GetScalarBinaryFunction<MultiplyOperator>(type)));
+		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
 	set.AddFunction(functions);
 }
@@ -65,6 +134,22 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // / [divide]
 //===--------------------------------------------------------------------===//
+template <> float DivideOperator::Operation(float left, float right) {
+	auto result = left / right;
+	if (!Value::FloatIsValid(result)) {
+		throw OutOfRangeException("Overflow in division of float!");
+	}
+	return result;
+}
+
+template <> double DivideOperator::Operation(double left, double right) {
+	auto result = left / right;
+	if (!Value::DoubleIsValid(result)) {
+		throw OutOfRangeException("Overflow in division of double!");
+	}
+	return result;
+}
+
 struct BinaryZeroIsNullWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {

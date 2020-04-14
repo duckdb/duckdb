@@ -117,6 +117,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(Expression &expr
 
 void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
                                  Vector &result) {
+	if (count == 0) {
+		return;
+	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((BoundBetweenExpression &)expr, state, sel, count, result);
@@ -156,6 +159,9 @@ void ExpressionExecutor::Execute(Expression &expr, ExpressionState *state, const
 
 idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	if (count == 0) {
+		return 0;
+	}
 	assert(true_sel || false_sel);
 	assert(expr.return_type == TypeId::BOOL);
 	switch (expr.expression_class) {
