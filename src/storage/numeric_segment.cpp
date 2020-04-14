@@ -1,4 +1,4 @@
-#include <duckdb/common/operator/comparison_operators.hpp>
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
