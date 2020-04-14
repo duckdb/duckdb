@@ -144,7 +144,18 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+bool Value::FloatIsValid(float value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
+bool Value::DoubleIsValid(double value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
 Value Value::FLOAT(float value) {
+	if (!Value::FloatIsValid(value)) {
+		throw OutOfRangeException("Invalid float value %f", value);
+	}
 	Value result(TypeId::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -152,6 +163,9 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
+	if (!Value::DoubleIsValid(value)) {
+		throw OutOfRangeException("Invalid double value %f", value);
+	}
 	Value result(TypeId::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
@@ -172,24 +186,40 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
+Value Value::DATE(date_t date) {
+	auto val = Value::INTEGER(date);
+	val.sql_type = SQLType::DATE;
+	return val;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
-	return Value::INTEGER(Date::FromDate(year, month, day));
+	auto val = Value::INTEGER(Date::FromDate(year, month, day));
+	val.sql_type = SQLType::DATE;
+	return val;
 }
 
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIME;
+	return val;
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
-	return Value::BIGINT(timestamp);
+	auto val = Value::BIGINT(timestamp);
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
-	return Value::BIGINT(Timestamp::FromDatetime(date, time));
+	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::STRUCT(child_list_t<Value> values) {
@@ -249,6 +279,9 @@ template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
+template <> Value Value::CreateValue(Value value) {
+	return value;
+}
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//

@@ -17,6 +17,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELIM_GET";
 	case LogicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
+	case LogicalOperatorType::EXPRESSION_GET:
+		return "EXPRESSION_GET";
 	case LogicalOperatorType::ANY_JOIN:
 		return "ANY_JOIN";
 	case LogicalOperatorType::COMPARISON_JOIN:
@@ -63,8 +65,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case LogicalOperatorType::TABLE_FUNCTION:
 		return "TABLE_FUNCTION";
 	case LogicalOperatorType::CREATE_INDEX:

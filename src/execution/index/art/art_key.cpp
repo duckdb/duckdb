@@ -79,6 +79,12 @@ uint64_t Key::EncodeDouble(double x) {
 Key::Key(unique_ptr<data_t[]> data, idx_t len) : len(len), data(move(data)) {
 }
 
+template <> unique_ptr<data_t[]> Key::CreateData(bool value, bool is_little_endian) {
+	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
+	data[0] = value ? 1 : 0;
+	return data;
+}
+
 template <> unique_ptr<data_t[]> Key::CreateData(int8_t value, bool is_little_endian) {
 	auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
 	reinterpret_cast<uint8_t *>(data.get())[0] = value;

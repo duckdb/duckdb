@@ -253,24 +253,23 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 			}
 		});
 	}
-	if (!found_data) {
-		// there was no updated version to be fetched: fetch the base version instead
-		if (string_updates && string_updates[vector_index]) {
-			// there are updates: check if we should use them
-			auto &info = *string_updates[vector_index];
-			for (idx_t i = 0; i < info.count; i++) {
-				if (info.ids[i] == id_in_vector) {
-					// use the update
-					result_data[result_idx] = ReadString(state.handles, info.block_ids[i], info.offsets[i]);
-					break;
-				} else if (info.ids[i] > id_in_vector) {
-					break;
-				}
+	if (!found_data && string_updates && string_updates[vector_index]) {
+		// there are updates: check if we should use them
+		auto &info = *string_updates[vector_index];
+		for (idx_t i = 0; i < info.count; i++) {
+			if (info.ids[i] == id_in_vector) {
+				// use the update
+				result_data[result_idx] = ReadString(state.handles, info.block_ids[i], info.offsets[i]);
+				found_data = true;
+				break;
+			} else if (info.ids[i] > id_in_vector) {
+				break;
 			}
-		} else {
-			// no version was found yet: fetch base table version
-			result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]);
 		}
+	}
+	if (!found_data) {
+		// no version was found yet: fetch base table version
+		result_data[result_idx] = FetchStringFromDict(state.handles, baseptr, base_data[id_in_vector]);
 	}
 	result_mask[result_idx] = base_nullmask[id_in_vector];
 }

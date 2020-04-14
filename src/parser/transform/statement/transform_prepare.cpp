@@ -17,7 +17,7 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
 	auto result = make_unique<PrepareStatement>();
 	result->name = string(stmt->name);
 	result->statement = TransformStatement(stmt->query);
-	prepared_statement_parameter_index = 0;
+	SetParamCount(0);
 
 	return result;
 }
@@ -31,12 +31,10 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
 
 	TransformExpressionList(stmt->params, result->values);
 	for (auto &expr : result->values) {
-		if (expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT &&
-		    expr->GetExpressionType() != ExpressionType::VALUE_NULL) {
+		if (!expr->IsScalar()) {
 			throw Exception("Only scalar parameters or NULL supported for EXECUTE");
 		}
 	}
-
 	return result;
 }
 

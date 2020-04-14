@@ -16,10 +16,10 @@
 
 namespace duckdb {
 class BindContext;
-class BoundBaseTableRef;
 class BoundQueryNode;
 class ColumnRefExpression;
 class SubqueryRef;
+class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 
@@ -45,33 +45,15 @@ public:
 
 //! Represents a binding to a base table
 struct TableBinding : public Binding {
-	TableBinding(const string &alias, BoundBaseTableRef *bound);
+	TableBinding(const string &alias, TableCatalogEntry &table, LogicalGet &get, idx_t index);
 
-	BoundBaseTableRef *bound;
-
-public:
-	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-};
-
-//! Represents a binding to a subquery
-struct SubqueryBinding : public Binding {
-	SubqueryBinding(const string &alias, SubqueryRef &ref, BoundQueryNode &subquery, idx_t index);
-
-	BoundQueryNode &subquery;
-	//! Column names of the subquery
-	vector<string> names;
-	//! Name -> index for the names
-	unordered_map<string, uint64_t> name_map;
+	TableCatalogEntry &table;
+	LogicalGet &get;
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-
-private:
-	void AddName(string &name);
 };
 
 //! Represents a generic binding with types and names

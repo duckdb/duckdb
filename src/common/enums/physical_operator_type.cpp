@@ -74,8 +74,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UPDATE";
 	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
-	case PhysicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::TABLE_FUNCTION:

@@ -13,16 +13,8 @@ bool SelectNode::Equals(const QueryNode *other_) const {
 	}
 	auto other = (SelectNode *)other_;
 
-	// first check counts of all lists and such
-	if (select_distinct != other->select_distinct || orders.size() != other->orders.size()) {
-		return false;
-	}
 	// SELECT
 	if (!ExpressionUtil::ListEquals(select_list, other->select_list)) {
-		return false;
-	}
-	// DISTINCT ON
-	if (!ExpressionUtil::ListEquals(distinct_on_targets, other->distinct_on_targets)) {
 		return false;
 	}
 	// FROM
@@ -57,10 +49,6 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	for (auto &child : select_list) {
 		result->select_list.push_back(child->Copy());
 	}
-	// distinct on
-	for (auto &target : distinct_on_targets) {
-		result->distinct_on_targets.push_back(target->Copy());
-	}
 	result->from_table = from_table ? from_table->Copy() : nullptr;
 	result->where_clause = where_clause ? where_clause->Copy() : nullptr;
 	// groups
@@ -76,8 +64,6 @@ void SelectNode::Serialize(Serializer &serializer) {
 	QueryNode::Serialize(serializer);
 	// select_list
 	serializer.WriteList(select_list);
-	// distinct on
-	serializer.WriteList(distinct_on_targets);
 	// from clause
 	serializer.WriteOptional(from_table);
 	// where_clause
@@ -91,8 +77,6 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectNode>();
 	// select_list
 	source.ReadList<ParsedExpression>(result->select_list);
-	// distinct on
-	source.ReadList<ParsedExpression>(result->distinct_on_targets);
 	// from clause
 	result->from_table = source.ReadOptional<TableRef>();
 	// where_clause

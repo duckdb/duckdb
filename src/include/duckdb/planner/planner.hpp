@@ -38,10 +38,10 @@ public:
 private:
 	void CreatePlan(SQLStatement &statement);
 
-	void VerifyQuery(BoundSQLStatement &statement);
-	void VerifyNode(BoundQueryNode &statement);
-	void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
+	// void VerifyQuery(BoundSQLStatement &statement);
+	// void VerifyNode(BoundQueryNode &statement);
+	// void VerifyExpression(Expression &expr, vector<unique_ptr<Expression>> &copies);
 
-	bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
+	// bool StatementRequiresValidTransaction(BoundSQLStatement &statement);
 };
 } // namespace duckdb

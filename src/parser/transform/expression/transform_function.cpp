@@ -153,7 +153,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		if (window_spec->name) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
 			if (it == window_clauses.end()) {
-				throw Exception("Could not find named window specification");
+				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
 			window_spec = it->second;
 			assert(window_spec);

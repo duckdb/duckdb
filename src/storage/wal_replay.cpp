@@ -158,7 +158,7 @@ void ReplayState::ReplayCreateTable() {
 
 	// bind the constraints to the table again
 	Binder binder(context);
-	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
+	auto bound_info = binder.BindCreateTableInfo(move(info));
 
 	db.catalog->CreateTable(context, bound_info.get());
 }

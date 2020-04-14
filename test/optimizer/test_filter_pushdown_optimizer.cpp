@@ -53,7 +53,7 @@ TEST_CASE("Test Table Filter Push Down Multiple Filters", "[filterpushdown-optim
 }
 
 TEST_CASE("Test Table Filter All Numeric Data Types", "[filterpushdown-optimizer]") {
-	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real", "date"};
+	vector<string> data_types{"tinyint", "smallint", "integer", "bigint", "numeric", "real"};
 	ExpressionHelper helper;
 	auto &con = helper.con;
 	Binder binder(*con.context);
@@ -181,7 +181,7 @@ TEST_CASE("Test Index vs Pushdown", "[filterpushdown-optimizer]") {
 //    DeleteDatabase(storage_database);
 //}
 
-TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer]") {
+TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

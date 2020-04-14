@@ -54,10 +54,13 @@ TEST_CASE("Test scalar SIMILAR TO statement", "[similar]") {
 	result = connection.Query("SELECT 'aaa' !~ 'bbb'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
+	// similar to must match entire expression
 	result = connection.Query("SELECT 'aaa' ~ '^a'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+	result = connection.Query("SELECT 'aaa' ~ '^a+'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = connection.Query("SELECT 'aaa' ~ '(a|b)'");
+	result = connection.Query("SELECT 'aaa' ~ '(a|b)*'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = connection.Query("SELECT 'abc' ~ '^(b|c)'");

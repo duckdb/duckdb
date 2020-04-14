@@ -12,7 +12,8 @@ using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
 	query = move(info->query);
-	aliases = info->aliases;
+	this->aliases = info->aliases;
+	this->types = info->types;
 	this->temporary = info->temporary;
 }
 
@@ -27,8 +28,12 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	query->Serialize(serializer);
 	assert(aliases.size() <= numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)aliases.size());
-	for (auto &s : aliases) {
-		serializer.WriteString(s);
+	for (auto &alias : aliases) {
+		serializer.WriteString(alias);
+	}
+	serializer.Write<uint32_t>((uint32_t)types.size());
+	for (auto &sql_type : types) {
+		sql_type.Serialize(serializer);
 	}
 }
 
@@ -40,6 +45,10 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	auto alias_count = source.Read<uint32_t>();
 	for (uint32_t i = 0; i < alias_count; i++) {
 		info->aliases.push_back(source.Read<string>());
+	}
+	auto type_count = source.Read<uint32_t>();
+	for (uint32_t i = 0; i < type_count; i++) {
+		info->types.push_back(SQLType::Deserialize(source));
 	}
 	return info;
 }

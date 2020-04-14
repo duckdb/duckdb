@@ -11,11 +11,11 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 	switch (op.type) {
 	case LogicalOperatorType::CREATE_SEQUENCE:
-		return make_unique<PhysicalCreateSequence>(unique_ptr_cast<ParseInfo, CreateSequenceInfo>(move(op.info->base)));
+		return make_unique<PhysicalCreateSequence>(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(move(op.info)));
 	case LogicalOperatorType::CREATE_VIEW:
-		return make_unique<PhysicalCreateView>(unique_ptr_cast<ParseInfo, CreateViewInfo>(move(op.info->base)));
+		return make_unique<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(move(op.info)));
 	case LogicalOperatorType::CREATE_SCHEMA:
-		return make_unique<PhysicalCreateSchema>(unique_ptr_cast<ParseInfo, CreateSchemaInfo>(move(op.info->base)));
+		return make_unique<PhysicalCreateSchema>(unique_ptr_cast<CreateInfo, CreateSchemaInfo>(move(op.info)));
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple create");
 	}

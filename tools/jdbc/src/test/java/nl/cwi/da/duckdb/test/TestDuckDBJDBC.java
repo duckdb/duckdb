@@ -1,7 +1,9 @@
 package nl.cwi.da.duckdb.test;
 
+import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
@@ -22,6 +24,11 @@ public class TestDuckDBJDBC {
 		assertTrue(a.equals(b));
 	}
 
+	private static void assertNull(Object a) throws Exception {
+		assertTrue(a == null);
+	}
+
+	
 	private static void assertEquals(double a, double b, double epsilon) throws Exception {
 		assertTrue(Math.abs(a - b) < epsilon);
 	}
@@ -44,7 +51,6 @@ public class TestDuckDBJDBC {
 		assertFalse(conn.isClosed());
 
 		Statement stmt = conn.createStatement();
-		assertTrue(stmt.isClosed()); // no query yet
 
 		ResultSet rs = stmt.executeQuery("SELECT 42 as a");
 		assertFalse(stmt.isClosed());
@@ -341,13 +347,247 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_crash_bug496() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 BOOLEAN, c1 INT)");
+		stmt.execute("CREATE INDEX i0 ON t0(c1, c0)");
+		stmt.execute("INSERT INTO t0(c1) VALUES (0)");
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_tablepragma_bug491() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+
+		ResultSet rs = stmt.executeQuery("PRAGMA table_info('t0')");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getInt("cid"), 0);
+		assertEquals(rs.getString("name"), "c0");
+		assertEquals(rs.getString("type"), "INTEGER");
+		assertEquals(rs.getBoolean("notnull"), false);
+		rs.getString("dflt_value");
+		// assertTrue(rs.wasNull());
+		assertEquals(rs.getBoolean("pk"), false);
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_nulltruth_bug489() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE t0(c0 INT)");
+		stmt.execute("INSERT INTO t0(c0) VALUES (0)");
+
+		ResultSet rs = stmt.executeQuery("SELECT * FROM t0 WHERE NOT(NULL OR TRUE)");
+		assertFalse(rs.next());
+
+		rs = stmt.executeQuery("SELECT NOT(NULL OR TRUE)");
+		assertTrue(rs.next());
+		boolean res = rs.getBoolean(1);
+		assertEquals(res, false);
+		assertFalse(rs.wasNull());
+
+		rs.close();
+		stmt.close();
+		conn.close();
+
+	}
+
+	public static void test_empty_prepare_bug500() throws Exception {
+		String fileContent = "CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE);\n"
+				+ "CREATE TABLE t1(c0 DOUBLE, PRIMARY KEY(c0));\n" + "INSERT INTO t0(c0) VALUES (0), (0), (0), (0);\n"
+				+ "INSERT INTO t0(c0) VALUES (NULL), (NULL);\n" + "INSERT INTO t1(c0) VALUES (0), (1);\n" + "\n"
+				+ "SELECT t0.c0 FROM t0, t1;";
+		Connection con = DriverManager.getConnection("jdbc:duckdb:");
+		for (String s : fileContent.split("\n")) {
+			try (Statement st = con.createStatement()) {
+				try {
+					st.execute(s);
+				} catch (Exception e) {
+					// e.printStackTrace();
+				}
+			}
+		}
+		con.close();
+
+	}
+
+	public static void test_borked_string_bug539() throws Exception {
+		Connection con = DriverManager.getConnection("jdbc:duckdb:");
+		Statement s = con.createStatement();
+		s.executeUpdate("CREATE TABLE t0 (c0 VARCHAR)");
+		String q = String.format("INSERT INTO t0 VALUES('%c')", 55995);
+		s.executeUpdate(q);
+		s.close();
+		con.close();
+	}
+
+	public static void test_prepare_types() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		PreparedStatement ps = conn.prepareStatement(
+				"SELECT CAST(? AS BOOLEAN) c1, CAST(? AS TINYINT) c2, CAST(? AS SMALLINT) c3, CAST(? AS INTEGER) c4, CAST(? AS BIGINT) c5, CAST(? AS FLOAT) c6, CAST(? AS DOUBLE) c7, CAST(? AS STRING) c8");
+		ps.setBoolean(1, true);
+		ps.setByte(2, (byte) 42);
+		ps.setShort(3, (short) 43);
+		ps.setInt(4, 44);
+		ps.setLong(5, (long) 45);
+		ps.setFloat(6, (float) 4.6);
+		ps.setDouble(7, (double) 4.7);
+		ps.setString(8, "four eight");
+
+		ResultSet rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), true);
+		assertEquals(rs.getByte(2), (byte) 42);
+		assertEquals(rs.getShort(3), (short) 43);
+		assertEquals(rs.getInt(4), 44);
+		assertEquals(rs.getLong(5), (long) 45);
+		assertEquals(rs.getFloat(6), 4.6, 0.001);
+		assertEquals(rs.getDouble(7), 4.7, 0.001);
+		assertEquals(rs.getString(8), "four eight");
+		rs.close();
+
+		ps.setBoolean(1, false);
+		ps.setByte(2, (byte) 82);
+		ps.setShort(3, (short) 83);
+		ps.setInt(4, 84);
+		ps.setLong(5, (long) 85);
+		ps.setFloat(6, (float) 8.6);
+		ps.setDouble(7, (double) 8.7);
+		ps.setString(8, "eight eight");
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), false);
+		assertEquals(rs.getByte(2), (byte) 82);
+		assertEquals(rs.getShort(3), (short) 83);
+		assertEquals(rs.getInt(4), 84);
+		assertEquals(rs.getLong(5), (long) 85);
+		assertEquals(rs.getFloat(6), 8.6, 0.001);
+		assertEquals(rs.getDouble(7), 8.7, 0.001);
+		assertEquals(rs.getString(8), "eight eight");
+		rs.close();
+
+		ps.setObject(1, false);
+		ps.setObject(2, (byte) 82);
+		ps.setObject(3, (short) 83);
+		ps.setObject(4, 84);
+		ps.setObject(5, (long) 85);
+		ps.setObject(6, (float) 8.6);
+		ps.setObject(7, (double) 8.7);
+		ps.setObject(8, "eight eight");
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(rs.getBoolean(1), false);
+		assertEquals(rs.getByte(2), (byte) 82);
+		assertEquals(rs.getShort(3), (short) 83);
+		assertEquals(rs.getInt(4), 84);
+		assertEquals(rs.getLong(5), (long) 85);
+		assertEquals(rs.getFloat(6), 8.6, 0.001);
+		assertEquals(rs.getDouble(7), 8.7, 0.001);
+		assertEquals(rs.getString(8), "eight eight");
+
+		ps.setNull(1, 0);
+		ps.setNull(2, 0);
+		ps.setNull(3, 0);
+		ps.setNull(4, 0);
+		ps.setNull(5, 0);
+		ps.setNull(6, 0);
+		ps.setNull(7, 0);
+		ps.setNull(8, 0);
+
+		rs = ps.executeQuery();
+		assertTrue(rs.next());
+		assertEquals(8, rs.getMetaData().getColumnCount());
+		for (int c = 1; c <= rs.getMetaData().getColumnCount(); c++) {
+			assertNull(rs.getObject(c));
+			assertTrue(rs.wasNull());
+			assertNull(rs.getString(c));
+			assertTrue(rs.wasNull());
+		}
+
+		rs.close();
+		ps.close();
+		conn.close();
+	}
+
+	public static void test_prepare_insert() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+
+		conn.createStatement()
+				.executeUpdate("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
+		PreparedStatement pStmt1 = conn.prepareStatement("insert into ctstable1 values(?, ?)");
+		for (int j = 1; j <= 10; j++) {
+			String sTypeDesc = "Type-" + j;
+			int newType = j;
+			pStmt1.setInt(1, newType);
+			pStmt1.setString(2, sTypeDesc);
+			int count = pStmt1.executeUpdate();
+			assertEquals(count, 1);
+		}
+		pStmt1.close();
+
+		conn.createStatement().executeUpdate(
+				"create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
+
+		PreparedStatement pStmt = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)");
+		for (int i = 1; i <= 10; i++) {
+			// Perform the insert(s)
+			int newKey = i;
+			String newName = "xx" + "-" + i;
+			float newPrice = i + (float) .00;
+			int newType = i % 5;
+			if (newType == 0)
+				newType = 5;
+			pStmt.setInt(1, newKey);
+			pStmt.setString(2, newName);
+			pStmt.setFloat(3, newPrice);
+			pStmt.setInt(4, newType);
+			pStmt.executeUpdate();
+		}
+
+		pStmt.close();
+
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+		assertTrue(rs.next());
+		assertEquals(rs.getInt(1), 10);
+		rs.close();
+
+		stmt.executeUpdate("DELETE FROM ctstable1");
+
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+		assertTrue(rs.next());
+		assertEquals(rs.getInt(1), 0);
+		rs.close();
+
+		stmt.close();
+
+		conn.close();
+
+	}
+
 	public static void main(String[] args) throws Exception {
-		test_connection();
-		test_result();
-		test_empty_table();
-		test_broken_next();
-		test_multiple_connections();
-		test_big_data();
+				
+		// Woo I can do reflection too, take this, JUnit!
+		Method[] methods = TestDuckDBJDBC.class.getMethods();
+		for (Method m : methods) {
+			if (m.getName().startsWith("test_")) {
+				m.invoke(null);
+			}
+		}
 		System.out.println("OK");
 	}
 }

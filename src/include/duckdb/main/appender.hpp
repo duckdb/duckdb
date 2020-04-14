@@ -96,6 +96,7 @@ template <> void Appender::Append(int8_t value);
 template <> void Appender::Append(int16_t value);
 template <> void Appender::Append(int32_t value);
 template <> void Appender::Append(int64_t value);
+template <> void Appender::Append(float value);
 template <> void Appender::Append(double value);
 template <> void Appender::Append(const char *value);
 template <> void Appender::Append(Value value);

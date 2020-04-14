@@ -10,6 +10,11 @@ using namespace std;
 namespace duckdb {
 
 struct SumOperation : public StandardDistributiveFunction {
+	template <class INPUT_TYPE, class STATE>
+	static void Assign(STATE *state, INPUT_TYPE input) {
+		*state = input;
+	}
+
 	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
 		*state += input;
 	}
@@ -22,7 +27,22 @@ struct SumOperation : public StandardDistributiveFunction {
 		}
 		*state += input[0] * count;
 	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		nullmask[idx] = IsNullValue<T>(*state);
+		target[idx] = *state;
+	}
 };
+
+template <>
+void SumOperation::Finalize(Vector &result, double *state, double *target, nullmask_t &nullmask, idx_t idx) {
+	if (!Value::DoubleIsValid(*state)) {
+		throw OutOfRangeException("SUM is out of range!");
+	}
+	nullmask[idx] = IsNullValue<double>(*state);
+	target[idx] = *state;
+}
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");

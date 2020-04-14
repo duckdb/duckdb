@@ -152,7 +152,7 @@ void Vector::SetValue(idx_t index, Value val) {
 	}
 	switch (type) {
 	case TypeId::BOOL:
-		((int8_t *)data)[index] = newVal.value_.boolean;
+		((bool *)data)[index] = newVal.value_.boolean;
 		break;
 	case TypeId::INT8:
 		((int8_t *)data)[index] = newVal.value_.tinyint;
@@ -253,7 +253,7 @@ Value Vector::GetValue(idx_t index) const {
 	}
 	switch (type) {
 	case TypeId::BOOL:
-		return Value::BOOLEAN(((int8_t *)data)[index]);
+		return Value::BOOLEAN(((bool *)data)[index]);
 	case TypeId::INT8:
 		return Value::TINYINT(((int8_t *)data)[index]);
 	case TypeId::INT16:
@@ -607,6 +607,30 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto oidx = sel.get_index(i);
 				if (!nullmask[oidx]) {
 					strings[oidx].Verify();
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	if (type == TypeId::DOUBLE) {
+		// verify that there are no INF or NAN values
+		switch (vector_type) {
+		case VectorType::CONSTANT_VECTOR: {
+			auto dbl = ConstantVector::GetData<double>(*this);
+			if (!ConstantVector::IsNull(*this)) {
+				assert(Value::DoubleIsValid(*dbl));
+			}
+			break;
+		}
+		case VectorType::FLAT_VECTOR: {
+			auto doubles = FlatVector::GetData<double>(*this);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel.get_index(i);
+				if (!nullmask[oidx]) {
+					assert(Value::DoubleIsValid(doubles[oidx]));
 				}
 			}
 			break;

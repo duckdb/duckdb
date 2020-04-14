@@ -24,7 +24,6 @@ TEST_CASE("Test projection bindings for ORDER BY", "[projection-binding-order-by
 	auto &con = helper.con;
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i INTEGER, j INTEGER)"));
 
-	REQUIRE(projection_matches("SELECT i FROM a ORDER BY j", {Op::PRUNE_COLUMNS, Op::ORDER_BY}, 2));
 	REQUIRE(projection_matches("SELECT i FROM a ORDER BY i", {Op::ORDER_BY}, 1));
 	REQUIRE(projection_matches("SELECT a.i FROM a ORDER BY i", {Op::ORDER_BY}, 1));
 	REQUIRE(projection_matches("SELECT i FROM a ORDER BY a.i", {Op::ORDER_BY}, 1));

@@ -228,7 +228,7 @@ static void templated_quicksort_inplace(T *data, const SelectionVector &sel, idx
 			i++;
 		}
 
-		while (i <= j && OP::Operation(data[dpivot_idx], data[sel.get_index(result.get_index(j))])) {
+		while (i <= j && !OP::Operation(data[sel.get_index(result.get_index(j))], data[dpivot_idx])) {
 			j--;
 		}
 
@@ -274,17 +274,19 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	auto &vdata = order.vdata;
 
 	// first filter out all the non-null values
-	idx_t not_null_count = 0;
 	SelectionVector not_null(STANDARD_VECTOR_SIZE);
+	idx_t not_null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx]) {
 			not_null.set_index(not_null_count++, i);
 		}
 	}
+
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
 	switch (vector.type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);
 		break;

@@ -21,6 +21,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/relation.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/parser/statement/relation_statement.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -295,7 +298,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
 	for (auto &val : values) {
-		execute->values.push_back(make_unique<ConstantExpression>(SQLTypeFromInternalType(val.type), val));
+		execute->values.push_back(make_unique<ConstantExpression>(val.GetSQLType(), val));
 	}
 
 	return RunStatement(query, move(execute), allow_stream_result);
@@ -500,6 +503,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto &cp_expr_list = copied_stmt->node->GetSelectList();
 	assert(orig_expr_list.size() == de_expr_list.size() && cp_expr_list.size() == de_expr_list.size());
 	for (idx_t i = 0; i < orig_expr_list.size(); i++) {
+		// run the ToString, to verify that it doesn't crash
+		orig_expr_list[i]->ToString();
 		// check that the expressions are equivalent
 		assert(orig_expr_list[i]->Equals(de_expr_list[i].get()));
 		assert(orig_expr_list[i]->Equals(cp_expr_list[i].get()));
@@ -606,61 +611,20 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	return "";
 }
 
-unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
-	lock_guard<mutex> client_guard(context_lock);
-	if (is_invalidated || (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated)) {
-		return nullptr;
-	}
-	// check if we are on AutoCommit. In this case we should start a transaction
-	if (transaction.IsAutoCommit()) {
-		transaction.BeginTransaction();
-	}
-	unique_ptr<TableDescription> result;
-	try {
-		// obtain the table info
-		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name);
-		// write the table info to the result
-		result = make_unique<TableDescription>();
-		result->schema = schema_name;
-		result->table = table_name;
-		for (auto &column : table->columns) {
-			result->columns.push_back(ColumnDefinition(column.name, column.type));
-		}
-	} catch (...) {
-		// table not found!
-		result = nullptr;
-	}
-
-	if (transaction.IsAutoCommit()) {
-		transaction.Commit();
-	}
-	return result;
-}
-
-void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
-		throw Exception("Failed to append: database has been closed!");
+		throw Exception("Failed: database has been closed!");
 	}
 	if (transaction.HasActiveTransaction() && transaction.ActiveTransaction().is_invalidated) {
-		throw Exception("Failed to append: transaction has been invalidated!");
+		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
 	try {
-		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
-		// verify that the table columns and types match up
-		if (description.columns.size() != table_entry->columns.size()) {
-			throw Exception("Failed to append: table entry has different number of columns!");
-		}
-		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].type != table_entry->columns[i].type) {
-				throw Exception("Failed to append: table entry has different number of columns!");
-			}
-		}
-		table_entry->storage->Append(*table_entry, *this, chunk);
+		fun();
 	} catch (Exception &ex) {
 		if (transaction.IsAutoCommit()) {
 			transaction.Rollback();
@@ -672,4 +636,95 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 	if (transaction.IsAutoCommit()) {
 		transaction.Commit();
 	}
+}
+
+unique_ptr<TableDescription> ClientContext::TableInfo(string schema_name, string table_name) {
+	unique_ptr<TableDescription> result;
+	RunFunctionInTransaction([&]() {
+		// obtain the table info
+		auto table = db.catalog->GetEntry<TableCatalogEntry>(*this, schema_name, table_name, true);
+		if (!table) {
+			return;
+		}
+		// write the table info to the result
+		result = make_unique<TableDescription>();
+		result->schema = schema_name;
+		result->table = table_name;
+		for (auto &column : table->columns) {
+			result->columns.push_back(ColumnDefinition(column.name, column.type));
+		}
+	});
+	return result;
+}
+
+void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+	RunFunctionInTransaction([&]() {
+		auto table_entry = db.catalog->GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
+		// verify that the table columns and types match up
+		if (description.columns.size() != table_entry->columns.size()) {
+			throw Exception("Failed to append: table entry has different number of columns!");
+		}
+		for (idx_t i = 0; i < description.columns.size(); i++) {
+			if (description.columns[i].type != table_entry->columns[i].type) {
+				throw Exception("Failed to append: table entry has different number of columns!");
+			}
+		}
+		table_entry->storage->Append(*table_entry, *this, chunk);
+	});
+}
+
+void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
+	RunFunctionInTransaction([&]() {
+		// bind the expressions
+		Binder binder(*this);
+		auto result = relation.Bind(binder);
+		assert(result.names.size() == result.types.size());
+		for (idx_t i = 0; i < result.names.size(); i++) {
+			result_columns.push_back(ColumnDefinition(result.names[i], result.types[i]));
+		}
+	});
+}
+
+unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
+	string query;
+	if (query_verification_enabled) {
+		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
+		relation->ToString();
+		if (relation->IsReadOnly()) {
+			// verify read only statements by running a select statement
+			auto select = make_unique<SelectStatement>();
+			select->node = relation->GetQueryNode();
+			RunStatement(query, move(select), false);
+		}
+	}
+	auto &expected_columns = relation->Columns();
+	auto relation_stmt = make_unique<RelationStatement>(relation);
+	auto result = RunStatement(query, move(relation_stmt), false);
+	// verify that the result types and result names of the query match the expected result types/names
+	if (result->types.size() == expected_columns.size()) {
+		bool mismatch = false;
+		for(idx_t i = 0; i < result->types.size(); i++) {
+			if (result->sql_types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
+				mismatch = true;
+				break;
+			}
+		}
+		if (!mismatch) {
+			// all is as expected: return the result
+			return result;
+		}
+	}
+	// result mismatch
+	string err_str = "Result mismatch in query!\nExpected the following columns: ";
+	for(idx_t i = 0; i < expected_columns.size(); i++) {
+		err_str += i == 0 ? "[" : ", ";
+		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
+	}
+	err_str += "]\nBut result contained the following: ";
+	for(idx_t i = 0; i < result->types.size(); i++) {
+		err_str += i == 0 ? "[" : ", ";
+		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
+	}
+	err_str += "]";
+	return make_unique<MaterializedQueryResult>(err_str);
 }

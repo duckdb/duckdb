@@ -8,21 +8,20 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 
 public class DuckDBDatabaseMetaData implements DatabaseMetaData {
-
-	public DuckDBDatabaseMetaData(DuckDBConnection duckDBConnection) {
-		// TODO Auto-generated constructor stub
+	DuckDBConnection conn;
+	
+	public DuckDBDatabaseMetaData(DuckDBConnection conn) {
+		this.conn = conn;
 	}
 
 	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
 	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		// TODO Auto-generated method stub
-		return false;
+		throw new SQLFeatureNotSupportedException();
 	}
 
 	@Override
@@ -37,7 +36,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 
 	@Override
 	public String getURL() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return conn.db.url;
 	}
 
 	@Override

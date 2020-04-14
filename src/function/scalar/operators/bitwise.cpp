@@ -63,9 +63,14 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
+template<class T>
+bool ShiftInRange(T shift) {
+	return shift >= 0 && shift < (T)(sizeof(T) * 8);
+}
+
 struct BitwiseShiftLeftOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return left << right;
+	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB shift) {
+		return ShiftInRange(shift) ? input << shift : 0;
 	}
 };
 
@@ -82,8 +87,8 @@ void LeftShiftFun::RegisterFunction(BuiltinFunctions &set) {
 // >> [bitwise_right_shift]
 //===--------------------------------------------------------------------===//
 struct BitwiseShiftRightOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return left >> right;
+	template <class TA, class TB, class TR> static inline TR Operation(TA input, TB shift) {
+		return ShiftInRange(shift) ? input >> shift : 0;
 	}
 };
 

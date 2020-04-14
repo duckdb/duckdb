@@ -20,6 +20,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 		is_little_endian = false;
 	}
 	switch (types[0]) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 	case TypeId::INT16:
 	case TypeId::INT32:
@@ -346,8 +347,6 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(tree, *keys[i], 0, row_identifiers[i]);
-		// assert that the entry was erased properly
-		assert(!is_unique || Lookup(tree, *keys[i], 0) == nullptr);
 	}
 }
 
@@ -359,7 +358,11 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
 		if (ART::LeafMatches(node.get(), key, depth)) {
-			node.reset();
+			auto leaf = static_cast<Leaf *>(node.get());
+			leaf->Remove(row_id);
+			if (leaf->num_elements == 0) {
+				node.reset();
+			}
 		}
 		return;
 	}
@@ -380,11 +383,9 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
 			// Leaf found, remove entry
 			auto leaf = static_cast<Leaf *>(child_ref.get());
-			if (leaf->num_elements > 1) {
-				// leaf has multiple rows: remove the row from the leaf
-				leaf->Remove(row_id);
-			} else {
-				// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
+			leaf->Remove(row_id);
+			if (leaf->num_elements == 0) {
+				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
 				Node::Erase(*this, node, pos);
 			}
 		} else {
@@ -400,6 +401,8 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
+	case TypeId::BOOL:
+		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
 	case TypeId::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
 	case TypeId::INT16:
@@ -534,6 +537,7 @@ bool ART::IteratorNext(Iterator &it) {
 //===--------------------------------------------------------------------===//
 bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	it.depth = 0;
+	bool equal = false;
 	if (!n) {
 		return false;
 	}
@@ -544,7 +548,14 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		auto &top = it.stack[it.depth];
 		top.node = node;
 		it.depth++;
-
+		if (!equal) {
+			while (node->type != NodeType::NLeaf) {
+				node = node->GetChild(node->GetMin())->get();
+				auto &c_top = it.stack[it.depth];
+				c_top.node = node;
+				it.depth++;
+			}
+		}
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf node: check if it is bigger or equal than the current key
 			auto leaf = static_cast<Leaf *>(node);
@@ -595,13 +606,14 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		// prefix matches, search inside the child for the key
 		depth += node->prefix_length;
 
-		top.pos = node->GetChildGreaterEqual(key[depth]);
-
+		top.pos = node->GetChildGreaterEqual(key[depth], equal);
 		if (top.pos == INVALID_INDEX) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
 		node = node->GetChild(top.pos)->get();
+		//! This means all children of this node qualify as geq
+
 		depth++;
 	}
 }

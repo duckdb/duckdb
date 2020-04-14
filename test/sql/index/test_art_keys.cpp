@@ -150,6 +150,16 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	TestKeys(keys);
 
 	keys.clear();
+
+	keys.push_back(Key::CreateKey<double>(0, is_little_endian));
+	keys.push_back(Key::CreateKey<double>(0.1, is_little_endian));
+	keys.push_back(Key::CreateKey<double>(488566, is_little_endian));
+	keys.push_back(Key::CreateKey<double>(1163404482, is_little_endian));
+
+	TestKeys(keys);
+
+	keys.clear();
+
 }
 
 TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]") {

@@ -6,7 +6,6 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 #include "duckdb/execution/operator/helper/physical_pragma.hpp"
 #include "duckdb/execution/operator/helper/physical_prepare.hpp"
-#include "duckdb/execution/operator/helper/physical_prune_columns.hpp"
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
 #include "duckdb/execution/operator/helper/physical_vacuum.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"

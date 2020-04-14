@@ -22,16 +22,10 @@ struct StandardDistributiveFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (IsNullValue<INPUT_TYPE>(*state)) {
-			*state = input[idx];
+			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
 		}
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		nullmask[idx] = IsNullValue<T>(*state);
-		target[idx] = *state;
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {

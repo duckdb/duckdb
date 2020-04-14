@@ -40,6 +40,9 @@ def tf():
 # basic test
 test('select \'asdf\' as a;', out='asdf')
 
+# test pragma
+test("CREATE TABLE t0(c0 INT);PRAGMA table_info('t0');", out='0|c0|INTEGER|false||false')
+
 datafile = tf()
 print("42\n84",  file=open(datafile, 'w'))
 test('''
