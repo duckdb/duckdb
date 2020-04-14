@@ -18,4 +18,7 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(sqlsmith)
   add_subdirectory(sqlite)
   add_subdirectory(tpce-tool)
+
 endif()
+
+add_subdirectory(miniparquet)
