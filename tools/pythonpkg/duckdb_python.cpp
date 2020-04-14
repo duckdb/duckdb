@@ -271,10 +271,13 @@ struct DuckDBPyResult {
 	unique_ptr<DataChunk> current_chunk;
 };
 
-
 struct DuckDBPyRelation {
 
 	DuckDBPyRelation(shared_ptr<Relation> rel) : rel(rel) {
+	}
+
+	unique_ptr<DuckDBPyRelation> project(string expr) {
+		return make_unique<DuckDBPyRelation>(rel->Project(expr));
 	}
 
 	unique_ptr<DuckDBPyRelation> filter(string expr) {
@@ -285,16 +288,53 @@ struct DuckDBPyRelation {
 		return make_unique<DuckDBPyRelation>(rel->Limit(n));
 	}
 
-	unique_ptr<DuckDBPyRelation> project(string expr) {
-		return make_unique<DuckDBPyRelation>(rel->Project(expr));
-	}
-
 	unique_ptr<DuckDBPyRelation> order(string expr) {
-			return make_unique<DuckDBPyRelation>(rel->Order(expr));
-		}
+		return make_unique<DuckDBPyRelation>(rel->Order(expr));
+	}
 
 	unique_ptr<DuckDBPyRelation> aggregate(string expr) {
 		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
+	}
+
+	unique_ptr<DuckDBPyRelation> distinct() {
+		return make_unique<DuckDBPyRelation>(rel->Distinct());
+	}
+
+	py::object to_df() {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Execute();
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res->fetchdf();
+	}
+
+	unique_ptr<DuckDBPyRelation> union_(DuckDBPyRelation *other) {
+		return make_unique<DuckDBPyRelation>(rel->Union(other->rel));
+	}
+
+	unique_ptr<DuckDBPyRelation> except(DuckDBPyRelation *other) {
+		return make_unique<DuckDBPyRelation>(rel->Except(other->rel));
+	}
+
+	unique_ptr<DuckDBPyRelation> intersect(DuckDBPyRelation *other) {
+		return make_unique<DuckDBPyRelation>(rel->Intersect(other->rel));
+	}
+
+	unique_ptr<DuckDBPyRelation> join(DuckDBPyRelation *other, string condition) {
+		return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition));
+	}
+
+	void write_csv(string file) {
+		rel->WriteCSV(file);
+	}
+
+	void insert(string table) {
+		rel->Insert(table);
+	}
+
+	void create(string table) {
+		rel->Create(table);
 	}
 
 	string print() {
@@ -655,7 +695,7 @@ PYBIND11_MODULE(duckdb, m) {
 	py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
 	    .def("cursor", &DuckDBPyConnection::cursor)
 	    .def("begin", &DuckDBPyConnection::begin)
-	    .def("table", &DuckDBPyConnection::table,  "some doc string for table", py::arg("tname"))
+	    .def("table", &DuckDBPyConnection::table, "some doc string for table", py::arg("tname"))
 	    .def("commit", &DuckDBPyConnection::commit)
 	    .def("rollback", &DuckDBPyConnection::rollback)
 	    .def("execute", &DuckDBPyConnection::execute, "some doc string for execute", py::arg("query"),
@@ -672,14 +712,23 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchdf", &DuckDBPyConnection::fetchdf)
 	    .def("__getattr__", &DuckDBPyConnection::getattr);
 
-
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
-    .def("filter", &DuckDBPyRelation::filter)
-    .def("limit", &DuckDBPyRelation::limit)
-    .def("project", &DuckDBPyRelation::project)
-    .def("order", &DuckDBPyRelation::order)
-    .def("aggregate", &DuckDBPyRelation::aggregate)
-    .def("__str__", &DuckDBPyRelation::print);
+	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
+	    .def("project", &DuckDBPyRelation::project, "some doc string for project", py::arg("project_expr"))
+	    .def("order", &DuckDBPyRelation::order, "some doc string for order", py::arg("order_expr"))
+	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"))
+	    .def("union", &DuckDBPyRelation::union_, "some doc string for union", py::arg("other_rel"))
+	    .def("except", &DuckDBPyRelation::except, "some doc string for except", py::arg("other_rel"))
+	    .def("intersect", &DuckDBPyRelation::intersect, "some doc string for intersect", py::arg("other_rel"))
+	    .def("join", &DuckDBPyRelation::join, "some doc string for join", py::arg("other_rel"),
+	         py::arg("join_condition"))
+	    .def("distinct", &DuckDBPyRelation::distinct, "some doc string for distinct")
+	    .def("limit", &DuckDBPyRelation::limit, "some doc string for limit", py::arg("n"))
+	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
+	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("table_name"))
+	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
+	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")
+	    .def("__str__", &DuckDBPyRelation::print);
 
 	PyDateTime_IMPORT;
 }
