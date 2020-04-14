@@ -85,7 +85,6 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS,
 	EXPLAIN,
 	EMPTY_RESULT,
 	EXECUTE,

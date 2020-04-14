@@ -15,16 +15,10 @@ struct MinMaxBase : public StandardDistributiveFunction {
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (IsNullValue<INPUT_TYPE>(*state)) {
-			*state = input[0];
+			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
-	}
-
-	template <class T, class STATE>
-	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		nullmask[idx] = IsNullValue<T>(*state);
-		target[idx] = *state;
 	}
 };
 
@@ -32,6 +26,12 @@ struct NumericMinMaxBase : public MinMaxBase {
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE *state, INPUT_TYPE input) {
 		*state = input;
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		nullmask[idx] = IsNullValue<T>(*state);
+		target[idx] = *state;
 	}
 };
 
@@ -69,6 +69,15 @@ struct StringMinMaxBase : public MinMaxBase {
 			memcpy(ptr, input.GetData(), len + 1);
 
 			*state = string_t(ptr, len);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (IsNullValue<string_t>(*state)) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = StringVector::AddString(result, *state);
 		}
 	}
 };

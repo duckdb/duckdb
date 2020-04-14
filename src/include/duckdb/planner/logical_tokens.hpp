@@ -41,7 +41,6 @@ class LogicalLimit;
 class LogicalOrder;
 class LogicalPrepare;
 class LogicalProjection;
-class LogicalPruneColumns;
 class LogicalRecursiveCTE;
 class LogicalSetOperation;
 class LogicalSimple;

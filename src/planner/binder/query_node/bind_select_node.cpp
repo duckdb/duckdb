@@ -92,7 +92,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				}
 				bound_order->orders.push_back(move(node));
 			}
-			bound_modifier = move(bound_order);
+			if (bound_order->orders.size() > 0) {
+				bound_modifier = move(bound_order);
+			}
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
@@ -101,7 +103,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		default:
 			throw Exception("Unsupported result modifier");
 		}
-		result.modifiers.push_back(move(bound_modifier));
+		if (bound_modifier) {
+			result.modifiers.push_back(move(bound_modifier));
+		}
 	}
 }
 
@@ -158,6 +162,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	result->aggregate_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
 	result->unnest_index = GenerateTableIndex();
+	result->prune_index = GenerateTableIndex();
 
 	// first bind the FROM table statement
 	result->from_table = Bind(*statement.from_table);
@@ -270,6 +275,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			select_binder.ResetBindings();
 		}
 	}
+	result->need_prune = result->select_list.size() > result->column_count;
+
 	// in the normal select binder, we bind columns as if there is no aggregation
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
