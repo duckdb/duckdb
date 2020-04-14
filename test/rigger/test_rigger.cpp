@@ -503,10 +503,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("549") {
 		// Nested CASE expression results in Assertion `other.auxiliary->type == VectorBufferType::STRING_BUFFER' failed
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT); "));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (NULL), (0), (1); "));
-		result = con.Query("SELECT * FROM t0 WHERE CASE WHEN c0 THEN 0 ELSE CASE '0.1' WHEN c0 THEN '' END END;");
-		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE_FAIL(con.Query("SELECT * FROM t0 WHERE CASE WHEN c0 THEN 0 ELSE CASE '0.1' WHEN c0 THEN '' END END;"));
+		result = con.Query("SELECT CASE WHEN c0 THEN 0 ELSE (CASE '0' WHEN c0 THEN '0.6' END) END FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), "0.6", "0"}));
 	}
 	SECTION("552") {
 		// RIGHT JOIN results in Assertion `filter->expressions.size() == 1'
