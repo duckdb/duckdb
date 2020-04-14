@@ -34,7 +34,7 @@ void Parser::ParseQuery(string query) {
 	// SQLStatements
 	Transformer transformer;
 	transformer.TransformParseTree(parser.parse_tree, statements);
-	n_prepared_parameters = transformer.prepared_statement_parameter_index;
+	n_prepared_parameters = transformer.ParamCount();
 
 	if (statements.size() > 0) {
 		auto &last_statement = statements.back();

@@ -4,16 +4,34 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	unique_ptr<QueryNode> node;
+
 	switch (stmt->op) {
 	case PG_SETOP_NONE: {
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
+
+		if (stmt->windowClause) {
+			for (auto window_ele = stmt->windowClause->head; window_ele != NULL; window_ele = window_ele->next) {
+				auto window_def = reinterpret_cast<PGWindowDef *>(window_ele->data.ptr_value);
+				assert(window_def);
+				assert(window_def->name);
+				auto window_name = StringUtil::Lower(string(window_def->name));
+
+				auto it = window_clauses.find(window_name);
+				if (it != window_clauses.end()) {
+					throw ParserException("window \"%s\" is already defined", window_name.c_str());
+				}
+				window_clauses[window_name] = window_def;
+			}
+		}
+
 		// do this early so the value lists also have a `FROM`
 		if (stmt->valuesLists) {
 			// VALUES list, create an ExpressionList
