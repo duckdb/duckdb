@@ -14,7 +14,6 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/optimizer/like_optimizer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,6 +27,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -64,11 +64,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	context.profiler.StartPhase("in_clause");
 	InClauseRewriter rewriter(*this);
 	plan = rewriter.Rewrite(move(plan));
-	context.profiler.EndPhase();
-
-	context.profiler.StartPhase("like");
-	LikeOptimizer like_op(*this);
-	plan = like_op.Rewrite(move(plan));
 	context.profiler.EndPhase();
 
 	// then we perform the join ordering optimization
