@@ -402,6 +402,25 @@ matrix:
 
 
     - os: linux
+      dist: xenial
+      name: JDBC Compliance
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      env:
+        - JAVA_HOME='/usr/lib/jvm/java-8-openjdk-amd64'
+
+      before_install:
+        - sudo apt-get update > /dev/null
+        - sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
+
+      script:
+        - mkdir -p build/release
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - git clone https://github.com/cwida/jdbccts.git
+        - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/DuckDBJ.jar test)
+
+    - os: linux
       name: R Package
 
       dist: xenial

@@ -32,7 +32,7 @@ public class DuckDBNative {
 	 */
 
 	// results db_ref database reference object
-	protected static native ByteBuffer duckdb_jdbc_startup(String path, boolean read_only);
+	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only);
 
 	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
@@ -46,7 +46,7 @@ public class DuckDBNative {
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
 	// returns stmt_ref result reference object
-	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, String query);
+	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query);
 
 	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref);
 
@@ -64,20 +64,4 @@ public class DuckDBNative {
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
 	
 	protected static native int duckdb_jdbc_fetch_size();
-
-	
-	protected static native boolean foo0();
-	protected static native byte foo1();
-	protected static native short foo2();
-	protected static native int foo3();
-	protected static native long foo4();
-	protected static native float foo5();
-	protected static native double foo6();
-	protected static native String foo7();
-
-
-
-
-
-
 }

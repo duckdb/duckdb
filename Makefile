@@ -62,6 +62,12 @@ jdbc:
 	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
+jdbcdebug:
+	mkdir -p build/jdbcdebug && \
+	cd build/jdbcdebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DENABLE_SANITIZER=FALSE -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 

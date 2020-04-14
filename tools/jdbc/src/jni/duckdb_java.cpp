@@ -5,14 +5,25 @@
 using namespace duckdb;
 using namespace std;
 
+static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
+	auto len = env->GetArrayLength(ba_j);
+	string ret;
+	ret.resize(len);
+
+	jbyte *bytes = (jbyte *)env->GetByteArrayElements(ba_j, NULL);
+
+	for (idx_t i = 0; i < len; i++) {
+		ret[i] = bytes[i];
+	}
+	env->ReleaseByteArrayElements(ba_j, bytes, 0);
+
+	return ret;
+}
+
 JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass,
-                                                                                   jstring database_j,
+                                                                                   jbyteArray database_j,
                                                                                    jboolean read_only) {
-
-	auto *database_c = env->GetStringUTFChars(database_j, 0);
-	auto database = string(database_c);
-	env->ReleaseStringUTFChars(database_j, database_c);
-
+	auto database = byte_array_to_string(env, database_j);
 	auto db = new DuckDB(database);
 	return env->NewDirectByteBuffer(db, 0);
 }
@@ -65,18 +76,18 @@ struct StatementHolder {
 	unique_ptr<PreparedStatement> stmt;
 };
 
+#include "utf8proc_wrapper.hpp"
+
 JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass,
                                                                                    jobject conn_ref_buf,
-                                                                                   jstring query_j) {
+                                                                                   jbyteArray query_j) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
 		jclass Exception = env->FindClass("java/sql/SQLException");
 		env->ThrowNew(Exception, "Invalid connection");
 	}
 
-	auto *query_c = env->GetStringUTFChars(query_j, 0);
-	auto query = string(query_c);
-	env->ReleaseStringUTFChars(query_j, query_c);
+	auto query = byte_array_to_string(env, query_j);
 
 	auto stmt_ref = new StatementHolder();
 	stmt_ref->stmt = conn_ref->Prepare(query);
@@ -144,7 +155,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1execu
 				continue;
 			} else if (env->IsInstanceOf(param, long_class)) {
 				duckdb_params.push_back(
-				    Value::BIGINT(env->CallIntMethod(param, env->GetMethodID(long_class, "longValue", "()J"))));
+				    Value::BIGINT(env->CallLongMethod(param, env->GetMethodID(long_class, "longValue", "()J"))));
 				continue;
 			} else if (env->IsInstanceOf(param, float_class)) {
 				duckdb_params.push_back(

@@ -108,6 +108,10 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
+		check_and_null(columnIndex);
+		if (was_null) {
+			return null;
+		}
 		switch (meta.column_types[columnIndex - 1]) {
 		case "BOOLEAN":
 			return getBoolean(columnIndex);
@@ -145,7 +149,7 @@ public class DuckDBResultSet implements ResultSet {
 
 	public String getString(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
-			return "NULL";
+			return null;
 		}
 		if ("VARCHAR".equals(meta.column_types[columnIndex - 1])) {
 			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
@@ -448,15 +452,20 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public void setFetchDirection(int direction) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (direction != ResultSet.FETCH_FORWARD && direction != ResultSet.FETCH_UNKNOWN) {
+			throw new SQLFeatureNotSupportedException();
+		}
 	}
 
 	public int getFetchDirection() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.FETCH_FORWARD;
 	}
 
 	public void setFetchSize(int rows) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		if (rows < 0) {
+			throw new SQLException("Fetch size has to be >= 0");
+		}
+		// whatevs
 	}
 
 	public int getFetchSize() throws SQLException {
@@ -468,7 +477,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public int getConcurrency() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return ResultSet.CONCUR_READ_ONLY;
 	}
 
 	public boolean rowUpdated() throws SQLException {
