@@ -5,6 +5,7 @@ import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -69,7 +70,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		select_result = null;
 		update_result = 0;
 
-		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql);
+		stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
 		meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
 		params = new Object[0];
 		// TODO add query type to meta
@@ -494,6 +495,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		}
 		switch (targetSqlType) {
 		case Types.BOOLEAN:
+		case Types.BIT:
 			if (x instanceof Boolean) {
 				setObject(parameterIndex, x);
 			} else if (x instanceof Number) {

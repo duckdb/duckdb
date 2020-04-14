@@ -1,6 +1,7 @@
 package nl.cwi.da.duckdb;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 
 public class DuckDBDatabase {
@@ -16,7 +17,7 @@ public class DuckDBDatabase {
 		if (db_dir.length() == 0) {
 			db_dir = ":memory:";
 		}
-		db_ref = DuckDBNative.duckdb_jdbc_startup(db_dir, false);
+		db_ref = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), false);
 	}
 	
 	protected synchronized void finalize() throws Throwable {

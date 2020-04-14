@@ -422,7 +422,7 @@ public class TestDuckDBJDBC {
 
 	}
 
-	public static void xx_test_borked_string_bug539() throws Exception {
+	public static void test_borked_string_bug539() throws Exception {
 		Connection con = DriverManager.getConnection("jdbc:duckdb:");
 		Statement s = con.createStatement();
 		s.executeUpdate("CREATE TABLE t0 (c0 VARCHAR)");
@@ -580,6 +580,7 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void main(String[] args) throws Exception {
+				
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
 		for (Method m : methods) {
