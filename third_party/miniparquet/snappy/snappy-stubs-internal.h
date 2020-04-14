@@ -116,7 +116,7 @@
 namespace snappy {
 
 static const uint32 kuint32max = static_cast<uint32>(0xFFFFFFFF);
-static const int64 kint64max = static_cast<int64>(0x7FFFFFFFFFFFFFFFLL);
+//static const int64 kint64max = static_cast<int64>(0x7FFFFFFFFFFFFFFFLL);
 
 
 // HM: Always use aligned load to keep ourselves out of trouble. Sorry.
