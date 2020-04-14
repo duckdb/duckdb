@@ -271,6 +271,41 @@ struct DuckDBPyResult {
 	unique_ptr<DataChunk> current_chunk;
 };
 
+
+struct DuckDBPyRelation {
+
+	DuckDBPyRelation(shared_ptr<Relation> rel) : rel(rel) {
+	}
+
+	unique_ptr<DuckDBPyRelation> filter(string expr) {
+		return make_unique<DuckDBPyRelation>(rel->Filter(expr));
+	}
+
+	unique_ptr<DuckDBPyRelation> limit(int64_t n) {
+		return make_unique<DuckDBPyRelation>(rel->Limit(n));
+	}
+
+	unique_ptr<DuckDBPyRelation> project(string expr) {
+		return make_unique<DuckDBPyRelation>(rel->Project(expr));
+	}
+
+	unique_ptr<DuckDBPyRelation> order(string expr) {
+			return make_unique<DuckDBPyRelation>(rel->Order(expr));
+		}
+
+	unique_ptr<DuckDBPyRelation> aggregate(string expr) {
+		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
+	}
+
+	string print() {
+		rel->Print();
+		rel->Limit(10)->Execute()->Print();
+		return "";
+	}
+
+	shared_ptr<Relation> rel;
+};
+
 struct DuckDBPyConnection {
 	DuckDBPyConnection *executemany(string query, py::object params = py::list()) {
 		execute(query, params, true);
@@ -359,6 +394,13 @@ struct DuckDBPyConnection {
 		registered_dfs[name] = value;
 
 		return this;
+	}
+
+	unique_ptr<DuckDBPyRelation> table(string tname) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		}
+		return make_unique<DuckDBPyRelation>(connection->Table(tname));
 	}
 
 	DuckDBPyConnection *unregister_df(string name) {
@@ -613,6 +655,7 @@ PYBIND11_MODULE(duckdb, m) {
 	py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
 	    .def("cursor", &DuckDBPyConnection::cursor)
 	    .def("begin", &DuckDBPyConnection::begin)
+	    .def("table", &DuckDBPyConnection::table,  "some doc string for table", py::arg("tname"))
 	    .def("commit", &DuckDBPyConnection::commit)
 	    .def("rollback", &DuckDBPyConnection::rollback)
 	    .def("execute", &DuckDBPyConnection::execute, "some doc string for execute", py::arg("query"),
@@ -628,6 +671,15 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchnumpy", &DuckDBPyConnection::fetchnumpy)
 	    .def("fetchdf", &DuckDBPyConnection::fetchdf)
 	    .def("__getattr__", &DuckDBPyConnection::getattr);
+
+
+	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
+    .def("filter", &DuckDBPyRelation::filter)
+    .def("limit", &DuckDBPyRelation::limit)
+    .def("project", &DuckDBPyRelation::project)
+    .def("order", &DuckDBPyRelation::order)
+    .def("aggregate", &DuckDBPyRelation::aggregate)
+    .def("__str__", &DuckDBPyRelation::print);
 
 	PyDateTime_IMPORT;
 }
