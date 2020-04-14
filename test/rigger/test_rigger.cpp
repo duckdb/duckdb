@@ -470,6 +470,22 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT MAX(agg0) FROM (SELECT MAX(t0.c0) AS agg0 FROM t0) as s0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"aaaaaaaaaaaa"}));
 	}
+	SECTION("543") {
+		// Unexpected result for SUM() upon overflow
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c1 BIGINT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES (2);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES (9223372036854775807);"));
+		result = con.Query("SELECT SUM(t0.c1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {9223372036854775809.0}));
+
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE t0;"));
+
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c1 BIGINT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES (1);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES (9223372036854775807);"));
+		result = con.Query("SELECT SUM(t0.c1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {9223372036854775808.0}));
+	}
 	SECTION("544") {
 		// SELECT on view with text constant in ORDER BY crashes
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
@@ -485,4 +501,19 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 SIMILAR TO '.';");
 		REQUIRE(CHECK_COLUMN(result, 0, {"0"}));
 	}
+	SECTION("549") {
+		// Nested CASE expression results in Assertion `other.auxiliary->type == VectorBufferType::STRING_BUFFER' failed
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT); "));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (NULL), (0), (1); "));
+		result = con.Query("SELECT * FROM t0 WHERE CASE WHEN c0 THEN 0 ELSE CASE '0.1' WHEN c0 THEN '' END END;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("552") {
+		// RIGHT JOIN results in Assertion `filter->expressions.size() == 1'
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
+		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 ON 0 WHERE t0.c0 OR t1.c0 BETWEEN t0.c0 AND 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+
 }
