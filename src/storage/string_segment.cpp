@@ -68,8 +68,21 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Filter base data
 //===--------------------------------------------------------------------===//
-void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, SelectionVector &valid_sel,
-                           idx_t &approved_tuple_count, idx_t count, bool use_valid_sel,
+void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &handles, data_ptr_t baseptr,
+                                int32_t *dict_offset, idx_t src_idx, idx_t &update_idx, size_t vector_index) {
+	if (string_updates && string_updates[vector_index]) {
+		auto &info = *string_updates[vector_index];
+		if (update_idx < info.count && info.ids[update_idx] == src_idx) {
+			result_data[src_idx] = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
+			update_idx++;
+		} else {
+			result_data[src_idx] = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+		}
+	} else {
+		result_data[src_idx] = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+	}
+}
+void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
                            vector<TableFilter> &tableFilter) {
 	auto vector_index = state.vector_index;
 	assert(vector_index < max_vector_count);
@@ -86,33 +99,31 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 	if (tableFilter.size() == 1) {
 		switch (tableFilter[0].comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
-			Select_String<Equals>(state.handles, result, baseptr, base_data, sel, valid_sel,
-			                      tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
-			                      use_valid_sel, vector_index);
+			Select_String<Equals>(state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                      approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHAN: {
-			Select_String<LessThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
-			                        tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
-			                        use_valid_sel, vector_index);
+			Select_String<LessThan>(state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                        approved_tuple_count, base_nullmask, vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHAN: {
-			Select_String<GreaterThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
-			                           tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
-			                           use_valid_sel, vector_index);
+			Select_String<GreaterThan>(state.handles, result, baseptr, base_data, sel,
+			                           tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                           vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-			Select_String<LessThanEquals>(state.handles, result, baseptr, base_data, sel, valid_sel,
-			                              tableFilter[0].constant.str_value, approved_tuple_count, count, base_nullmask,
-			                              use_valid_sel, vector_index);
+			Select_String<LessThanEquals>(state.handles, result, baseptr, base_data, sel,
+			                              tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                              vector_index);
 			break;
 		}
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
-			Select_String<GreaterThanEquals>(state.handles, result, baseptr, base_data, sel, valid_sel,
-			                                 tableFilter[0].constant.str_value, approved_tuple_count, count,
-			                                 base_nullmask, use_valid_sel, vector_index);
+			Select_String<GreaterThanEquals>(state.handles, result, baseptr, base_data, sel,
+			                                 tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                                 vector_index);
 
 			break;
 		}
@@ -127,27 +138,23 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 
 		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(state.handles, result, baseptr, base_data, sel, valid_sel,
-				                                             tableFilter[0].constant.str_value,
-				                                             tableFilter[1].constant.str_value, approved_tuple_count,
-				                                             base_nullmask, count, use_valid_sel, vector_index);
+				Select_String_Between<GreaterThan, LessThan>(
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
-				    vector_index);
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
 			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
-				    vector_index);
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, valid_sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, count, use_valid_sel,
-				    vector_index);
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}

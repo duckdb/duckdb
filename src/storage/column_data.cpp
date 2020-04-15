@@ -47,15 +47,13 @@ void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Ve
 }
 
 bool ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-                        SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t &count, bool use_valid_sel,
-                        vector<TableFilter> &tableFilter) {
+                        idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
 	// perform a scan of this segment
-	auto filter_exc = state.current->Select(transaction, state, result, sel, valid_sel, approved_tuple_count, count,
-	                                        use_valid_sel, tableFilter);
+	auto filter_exc = state.current->Select(transaction, state, result, sel, approved_tuple_count, tableFilter);
 	// move over to the next vector
 	if (!filter_exc) {
 		state.Next();

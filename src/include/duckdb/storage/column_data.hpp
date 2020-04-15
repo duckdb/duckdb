@@ -47,8 +47,7 @@ public:
 	void IndexScan(ColumnScanState &state, Vector &result);
 	//! Executes the filters directly in the table's data
 	bool Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	            SelectionVector &valid_sel, idx_t &approved_tuple_count, idx_t &count, bool use_valid_sel,
-	            vector<TableFilter> &tableFilter);
+	            idx_t &approved_tuple_count, vector<TableFilter> &tableFilter);
 	//! Initialize an appending phase for this column
 	void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
