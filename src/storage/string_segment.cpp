@@ -3,6 +3,8 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 using namespace std;

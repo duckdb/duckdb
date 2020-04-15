@@ -218,7 +218,8 @@ TEST_CASE("Test mix of updates and deletes with storage", "[storage]") {
 		for (size_t i = 0; i < 1000; i++) {
 			REQUIRE_NO_FAIL(con.Query("UPDATE test SET b=b+1 WHERE a=11"));
 		}
-		REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE a=12"));
+		result = con.Query("DELETE FROM test WHERE a=12");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 		REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	}
 	// reload the database from disk

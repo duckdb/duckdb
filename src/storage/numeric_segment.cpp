@@ -6,7 +6,7 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/storage/data_table.hpp"
 using namespace duckdb;
 using namespace std;
 
@@ -16,7 +16,6 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(TypeId type);
 static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId type);
 static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction(TypeId type);
-
 NumericSegment::NumericSegment(BufferManager &manager, TypeId type, idx_t row_start, block_id_t block)
     : UncompressedSegment(manager, type, row_start) {
 	// set up the different functions for this type of segment
