@@ -556,8 +556,9 @@ public:
 
 		switch (result_col.col->type) {
 		case Type::BOOLEAN: {
-			// uargh, but unfortunately neccessary because sometimes bool values are > 1
+			// some say this is bit packed.
 			bool *result_arr = (bool*) result_col.data.ptr;
+			int byte_pos = 0;
 			for (int32_t val_offset = 0;
 					val_offset < page_header.data_page_header.num_values;
 					val_offset++) {
@@ -565,10 +566,13 @@ public:
 				if (!defined_ptr[val_offset]) {
 					continue;
 				}
-
 				auto row_idx = page_start_row + val_offset;
-				result_arr[row_idx] = ((int8_t*) page_buf_ptr != 0);
-				page_buf_ptr += sizeof(int8_t);
+				result_arr[row_idx] = (*page_buf_ptr >> byte_pos)  & 1;
+				byte_pos++;
+				if (byte_pos == 8) {
+					byte_pos = 0;
+					page_buf_ptr++;
+				}
 			}
 
 		}
