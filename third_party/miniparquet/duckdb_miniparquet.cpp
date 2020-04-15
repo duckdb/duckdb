@@ -71,7 +71,7 @@ struct ParquetScanFunction : public TableFunction {
 		}
 
 
-		return res;
+		return move(res);
 	}
 
 	template <class T> static void scan_parquet_column(ResultColumn& parquet_col, idx_t count, idx_t offset, Vector &out) {
@@ -137,7 +137,7 @@ struct ParquetScanFunction : public TableFunction {
 			case SQLTypeId::TIMESTAMP: {
 				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
 				for (idx_t row = 0; row < this_count; row++) {
-					auto impala_ns = impala_timestamp_to_nanoseconds(((Int96*) col.data.ptr)[row]);
+					auto impala_ns = impala_timestamp_to_nanoseconds(((Int96*) col.data.ptr)[row + data.position]);
 
 					auto ms = impala_ns / 1000000; // nanoseconds
 					auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
