@@ -1,9 +1,8 @@
 #include "catch.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "test_helpers.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
+#include "expression_helper.hpp"
 
 using namespace duckdb;
 using namespace std;
