@@ -209,11 +209,16 @@ void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, 
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<string_t>(result);
 	nullmask_t result_nullmask;
-	for (idx_t i = 0; i < approved_tuple_count; i++) {
-		if (base_nullmask[sel.get_index(i)]) {
-			result_nullmask.set(i, true);
-		} else {
-			result_nullmask.set(i, false);
+	if (base_nullmask.any()) {
+		for (size_t i = 0; i < approved_tuple_count; i++) {
+			if (base_nullmask[sel.get_index(i)]) {
+				result_nullmask.set(i, true);
+			} else {
+				result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[sel.get_index(i)]);
+			}
+		}
+	} else {
+		for (size_t i = 0; i < approved_tuple_count; i++) {
 			result_data[i] = FetchStringFromDict(state.handles, baseptr, base_data[sel.get_index(i)]);
 		}
 	}

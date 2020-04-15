@@ -228,8 +228,14 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	bool use_valid_sel = count != max_count;
 	//! If we have filters
 	if (!table_filters.empty() && !apply_filter) {
-		SelectionVector sel(STANDARD_VECTOR_SIZE);
-		idx_t approved_tuple_count = 0;
+		SelectionVector sel;
+		idx_t approved_tuple_count = count ;
+		if (count != max_count) {
+			sel = valid_sel;
+		} else {
+			sel = FlatVector::IncrementalSelectionVector;
+		}
+
 		//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 		for (auto &table_filter : table_filters) {
 			apply_filter = columns[table_filter.first].Select(
@@ -238,12 +244,6 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (apply_filter) {
 				break;
 			}
-			//			if (approved_tuple_count == 0) {
-			//				//! nothing to scan for this vector, skip the entire vector
-			//				state.NextVector();
-			//				current_row += STANDARD_VECTOR_SIZE;
-			//				return true;
-			//			}
 		}
 		if (!apply_filter) {
 			result.Slice(sel, approved_tuple_count);

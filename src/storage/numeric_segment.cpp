@@ -46,75 +46,62 @@ NumericSegment::NumericSegment(BufferManager &manager, TypeId type, idx_t row_st
 
 template <class T, class OP>
 void Select(SelectionVector &sel, Vector &result, SelectionVector &valid_sel, unsigned char *source,
-            nullmask_t *source_mask, unsigned long size, T constant, idx_t &approved_tuple_count, bool use_valid_sel) {
+            nullmask_t *source_nullmask, unsigned long size, T constant, idx_t &approved_tuple_count,
+            bool use_valid_sel) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData(result);
-
-	if (approved_tuple_count == 0) {
-		//! This is the first filter we are applying, we need to scan the full vector
-		for (idx_t i = 0; i < size; i++) {
-			idx_t src_idx;
-			if (use_valid_sel) {
-				src_idx = valid_sel.get_index(i);
-			} else {
-				src_idx = i;
-			}
-			if (!(*source_mask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant)) {
+	SelectionVector new_sel(approved_tuple_count);
+	idx_t result_count = 0;
+	if (source_nullmask->any()) {
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			idx_t src_idx = sel.get_index(i);
+			if (!(*source_nullmask)[src_idx] && OP::Operation(((T *)source)[src_idx], constant)) {
 				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				sel.set_index(approved_tuple_count++, src_idx);
+				new_sel.set_index(result_count++, src_idx);
 			}
 		}
 	} else {
-		//! We already applied at least one filter, we only need to check the selection vector
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_mask)[src_idx] && !OP::Operation(((T *)source)[src_idx], constant)) {
-				sel.swap(i, approved_tuple_count - 1);
-				approved_tuple_count--;
-				i--;
-			} else {
+			if (OP::Operation(((T *)source)[src_idx], constant)) {
 				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+				new_sel.set_index(result_count++, src_idx);
 			}
 		}
 	}
+	sel = new_sel;
+	approved_tuple_count = result_count;
 }
 
 template <class T, class OPL, class OPR>
 void Select(SelectionVector &sel, Vector &result, SelectionVector &valid_sel, unsigned char *source,
-            nullmask_t *source_mask, unsigned long size, const T constantLeft, const T constantRight,
+            nullmask_t *source_nullmask, unsigned long size, const T constantLeft, const T constantRight,
             idx_t &approved_tuple_count, bool use_valid_sel) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData(result);
-	if (approved_tuple_count == 0) {
-		//! This is the first filter we are applying, we need to scan the full vector
-		for (idx_t i = 0; i < size; i++) {
-			idx_t src_idx;
-			if (use_valid_sel) {
-				src_idx = valid_sel.get_index(i);
-			} else {
-				src_idx = i;
-			}
-			if (!(*source_mask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
+	SelectionVector new_sel(approved_tuple_count);
+	idx_t result_count = 0;
+	if (source_nullmask->any()) {
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			idx_t src_idx = sel.get_index(i);
+			if (!(*source_nullmask)[src_idx] && OPL::Operation(((T *)source)[src_idx], constantLeft) &&
 			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
 				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
-				sel.set_index(approved_tuple_count++, src_idx);
+				new_sel.set_index(result_count++, src_idx);
 			}
 		}
 	} else {
-		//! We already applied at least one filter, we only need to check the selection vector
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			idx_t src_idx = sel.get_index(i);
-			if (!(*source_mask)[sel.get_index(i)] &&
-			    !(OPL::Operation(((T *)source)[sel.get_index(i)], constantLeft) &&
-			      OPR::Operation(((T *)source)[sel.get_index(i)], constantRight))) {
-				sel.swap(i, approved_tuple_count - 1);
-				approved_tuple_count--;
-				i--;
-			} else {
+			if (OPL::Operation(((T *)source)[src_idx], constantLeft) &&
+			    OPR::Operation(((T *)source)[src_idx], constantRight)) {
 				((T *)result_data)[src_idx] = ((T *)source)[src_idx];
+				new_sel.set_index(result_count++, src_idx);
 			}
 		}
 	}
+	sel = new_sel;
+	approved_tuple_count = result_count;
 }
 
 template <class OP>
@@ -308,6 +295,25 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 	fetch_from_update_info(transaction, version, result);
 }
 
+template <class T>
+static void templated_assignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result,
+                                 nullmask_t &source_nullmask, nullmask_t &result_nullmask, idx_t approved_tuple_count) {
+
+	if (source_nullmask.any()) {
+		for (size_t i = 0; i < approved_tuple_count; i++) {
+			if (source_nullmask[sel.get_index(i)]) {
+				result_nullmask.set(i, true);
+			} else {
+				((T *)result)[i] = ((T *)source)[sel.get_index(i)];
+			}
+		}
+	} else {
+		for (size_t i = 0; i < approved_tuple_count; i++) {
+			((T *)result)[i] = ((T *)source)[sel.get_index(i)];
+		}
+	}
+}
+
 void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
                                          idx_t &approved_tuple_count) {
 	auto vector_index = state.vector_index;
@@ -325,17 +331,42 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData(result);
 	nullmask_t result_nullmask;
-
-	for (size_t i = 0; i < approved_tuple_count; i++) {
-		if ((*source_nullmask)[sel.get_index(i)]) {
-			result_nullmask.set(i, true);
-		} else {
-			result_nullmask.set(i, false);
-			auto cur_source = source_data + sel.get_index(i) * type_size;
-			memcpy(result_data, cur_source, type_size);
-			result_data += type_size;
-		}
+	// the inplace loops take the result as the last parameter
+	switch (type) {
+	case TypeId::INT8: {
+		templated_assignment<int8_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                             approved_tuple_count);
+		break;
 	}
+	case TypeId::INT16: {
+		templated_assignment<int16_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case TypeId::INT32: {
+		templated_assignment<int32_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case TypeId::INT64: {
+		templated_assignment<int64_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
+	case TypeId::FLOAT: {
+		templated_assignment<float>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                            approved_tuple_count);
+		break;
+	}
+	case TypeId::DOUBLE: {
+		templated_assignment<double>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                             approved_tuple_count);
+		break;
+	}
+	default:
+		throw InvalidTypeException(type, "Invalid type for filter pushed down to table comparison");
+	}
+
 	FlatVector::SetNullmask(result, result_nullmask);
 }
 

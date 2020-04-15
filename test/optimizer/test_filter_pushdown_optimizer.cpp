@@ -219,7 +219,7 @@ TEST_CASE("Test Table Filter Push Down Scan", "[filterpushdown-optimizer][.]") {
 		    con.Query("INSERT INTO integers VALUES(" + to_string(input[i]) + "," + to_string(input[i]) + ")"));
 	}
 
-	result = con.Query("SELECT i FROM integers where j = 99 ");
+	result = con.Query("SELECT j FROM integers where j = 99 ");
 	REQUIRE(CHECK_COLUMN(result, 0, {99}));
 
 	result = con.Query("SELECT i FROM integers where j = 99 and i = 99 ");
