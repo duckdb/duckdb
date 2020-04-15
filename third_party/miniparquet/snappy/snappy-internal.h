@@ -226,6 +226,24 @@ static const uint16 char_table[256] = {
 };
 
 }  // end namespace internal
+
+
+// The size of a compression block. Note that many parts of the compression
+// code assumes that kBlockSize <= 65536; in particular, the hash table
+// can only store 16-bit offsets, and EmitCopy() also assumes the offset
+// is 65535 bytes or less. Note also that if you change this, it will
+// affect the framing format (see framing_format.txt).
+//
+// Note that there might be older data around that is compressed with larger
+// block sizes, so the decompression code should not rely on the
+// non-existence of long backreferences.
+static const int kBlockLog = 16;
+static const size_t kBlockSize = 1 << kBlockLog;
+
+static const int kMaxHashTableBits = 14;
+static const size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
+
+
 }  // end namespace snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_
