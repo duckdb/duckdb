@@ -31,14 +31,14 @@ endif()
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 if(NOT WIN32 AND NOT SUN)
+  add_dependencies(unittest miniparquet)
   target_link_libraries(unittest
                         duckdb
                         dbgen
                         dsdgen
                         test_helpers
                         tpce
-                        sqlite_transfer
-                        miniparquet)
+                        sqlite_transfer)
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
