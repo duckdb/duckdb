@@ -6,7 +6,6 @@
 using namespace duckdb;
 using namespace std;
 
-// The tests in this file are taken from https://www.manuelrigger.at/dbms-bugs/
 TEST_CASE("Test basic parqet reading", "[parquet]") {
 	DuckDB db(nullptr);
 	Parquet::Init(db);
