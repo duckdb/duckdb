@@ -150,7 +150,6 @@ private:
 	void Select_String(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                   SelectionVector &sel, const string &constant, idx_t &approved_tuple_count,
 	                   nullmask_t *source_nullmask, size_t vector_index) {
-
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);
@@ -181,7 +180,6 @@ private:
 	void Select_String_Between(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                           SelectionVector &sel, string constantLeft, string constantRight,
 	                           idx_t &approved_tuple_count, nullmask_t *source_nullmask, size_t vector_index) {
-
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<string_t>(result);
 		SelectionVector new_sel(approved_tuple_count);

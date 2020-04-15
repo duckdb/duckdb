@@ -284,7 +284,6 @@ void NumericSegment::FetchUpdateData(ColumnScanState &state, Transaction &transa
 template <class T>
 static void templated_assignment(SelectionVector &sel, data_ptr_t source, data_ptr_t result,
                                  nullmask_t &source_nullmask, nullmask_t &result_nullmask, idx_t approved_tuple_count) {
-
 	if (source_nullmask.any()) {
 		for (size_t i = 0; i < approved_tuple_count; i++) {
 			if (source_nullmask[sel.get_index(i)]) {
