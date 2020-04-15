@@ -379,7 +379,7 @@ matrix:
         - python scripts/amalgamation.py > /dev/null
         - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest .  root@localhost:/home/duckdb
         - $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
-        - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[.]"
+        - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
 
 
 # APIs: REST, r / python packages
