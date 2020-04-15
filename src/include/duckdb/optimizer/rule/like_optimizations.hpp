@@ -21,9 +21,7 @@ public:
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 
-	unique_ptr<Expression> ApplyRule(BoundFunctionExpression *expr, StringFunctionsType funct_type, string pattern);
-
-	ScalarFunction GetScalarFunction(StringFunctionsType type);
+	unique_ptr<Expression> ApplyRule(BoundFunctionExpression *expr, ScalarFunction function, string pattern);
 };
 
 } // namespace duckdb

@@ -41,46 +41,31 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	if (std::regex_match(patt_str, std::regex("[^%_]*[%]+"))) {
 		//^^^^^^^^^^^^^^^Prefix LIKE pattern : [^%_]*[%]+, ignoring undescore
 
-		return move(ApplyRule(root, StringFunctionsType::PREFIX, patt_str));
+		return move(ApplyRule(root, PrefixFun::GetFunction(), patt_str));
 
 	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*"))) {
 		//^^^^^^^^^^^^^^^^^^^^^^^Suffix LIKE pattern: [%]+[^%_]*, ignoring undescore
 
-		return move(ApplyRule(root, StringFunctionsType::SUFFIX, patt_str));
+		return move(ApplyRule(root, SuffixFun::GetFunction(), patt_str));
 
 	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*[%]+"))) {
 		//^^^^^^^^^^^^^^^^^^^^^Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring undescore
 
-		return move(ApplyRule(root, StringFunctionsType::CONTAINS, patt_str));
+		return move(ApplyRule(root, ContainsFun::GetFunction(), patt_str));
 	}
 
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, StringFunctionsType func_type,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, ScalarFunction function,
                                                        string pattern) {
-	ScalarFunction function = GetScalarFunction(func_type);
-
 	// replace LIKE by an optimized function
 	expr->function = function;
 
-	// removing "%" from the prefix pattern
+	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
 	expr->children[1] = make_unique<BoundConstantExpression>(Value(pattern));
 
 	return move(expr->Copy());
-}
-
-ScalarFunction LikeOptimizationRule::GetScalarFunction(StringFunctionsType type) {
-	switch (type) {
-	case StringFunctionsType::PREFIX:
-		return PrefixFun::GetFunction();
-	case StringFunctionsType::SUFFIX:
-		return SuffixFun::GetFunction();
-	case StringFunctionsType::CONTAINS:
-		return ContainsFun::GetFunction();
-	default:
-		throw InternalException("Scalar function \"%s\" not supported!", StringFunctionsTypeToString(type));
-	}
 }
