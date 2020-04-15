@@ -88,21 +88,4 @@ struct RegexpMatchesBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override;
 };
 
-enum class StringFunctionsType : uint8_t {
-    REVERSE,
-    LOWER,
-    UPPER,
-    CONCAT,
-    LENGTH,
-    LIKE,
-    REGEXP,
-    SUBSTRING,
-    PRINTF,
-    INSTR,
-    PREFIX,
-    SUFFIX,
-    CONTAINS
-};
-string StringFunctionsTypeToString(StringFunctionsType type);
-
 } // namespace duckdb
