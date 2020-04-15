@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "utf8proc_wrapper.hpp"
 
 
 using namespace duckdb;
@@ -74,7 +75,6 @@ struct ParquetScanFunction : public TableFunction {
 	}
 
 	template <class T> static void scan_parquet_column(ResultColumn& parquet_col, idx_t count, idx_t offset, Vector &out) {
-
 		auto src_ptr = (T *)parquet_col.data.ptr;
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 
@@ -156,7 +156,16 @@ struct ParquetScanFunction : public TableFunction {
 				for (idx_t row = 0; row < this_count; row++) {
 					auto val = src_ptr[row + data.position];
 					if (!FlatVector::IsNull(output.data[col_idx], row)) {
-						tgt_ptr[row] = StringVector::AddString(output.data[col_idx], val);
+						auto utf_type = Utf8Proc::Analyze(val);
+						if (utf_type == UnicodeType::INVALID) {
+							throw Exception("Invalid UTF in Parquet file");
+						} else if (utf_type == UnicodeType::ASCII) {
+							tgt_ptr[row] = StringVector::AddString(output.data[col_idx], val);
+						} else {
+							auto val_norm = Utf8Proc::Normalize(val);
+							tgt_ptr[row] = StringVector::AddString(output.data[col_idx], val_norm);
+							free(val_norm);
+						}
 					}
 				}
 				break;

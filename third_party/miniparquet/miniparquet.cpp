@@ -567,8 +567,8 @@ public:
 				}
 
 				auto row_idx = page_start_row + val_offset;
-				result_arr[row_idx] = ((bool*) page_buf_ptr != 0);
-				page_buf_ptr += sizeof(bool);
+				result_arr[row_idx] = ((int8_t*) page_buf_ptr != 0);
+				page_buf_ptr += sizeof(int8_t);
 			}
 
 		}
