@@ -119,7 +119,7 @@ TEST_CASE("Basic sqlite wrapper usage", "[sqlite3wrapper]") {
 	// simple statements
 	REQUIRE(db.Execute("CREATE TABLE test(i INTEGER)"));
 	REQUIRE(db.Execute("INSERT INTO test VALUES (1), (2), (3)"));
-	REQUIRE(db.Execute("SELECT SUM(t1.i) FROM test t1, test t2, test t3;"));
+	REQUIRE(db.Execute("SELECT SUM(t1.i)::BIGINT FROM test t1, test t2, test t3;"));
 	REQUIRE(db.CheckColumn(0, {"54"}));
 
 	REQUIRE(db.Execute("DELETE FROM test WHERE i=2"));
