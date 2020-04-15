@@ -39,7 +39,6 @@ if(NOT WIN32 AND NOT SUN)
                         tpce
                         sqlite_transfer
                         miniparquet)
-  add_dependencies(unittest miniparquet)
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
