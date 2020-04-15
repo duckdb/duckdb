@@ -7,7 +7,7 @@ include_directories(.
                     snappy
                     thrift)
 
-add_library(miniparquet STATIC
+add_library_unity(miniparquet STATIC
             parquet/parquet_constants.cpp
             parquet/parquet_types.cpp
             thrift/protocol/TProtocol.cpp

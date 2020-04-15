@@ -7,6 +7,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb.hpp"
 
 
 using namespace duckdb;
