@@ -9,48 +9,70 @@ using namespace std;
 
 namespace duckdb {
 
-struct SumOperation : public StandardDistributiveFunction {
-	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
-		*state = input;
+struct sum_state_t {
+	double value;
+	bool isset;
+};
+
+struct SumOperation {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->value = 0;
+		state->isset = false;
 	}
 
-	template <class INPUT_TYPE, class STATE> static void Execute(STATE *state, INPUT_TYPE input) {
-		*state += input;
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		state->isset = true;
+		state->value += input[idx];
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
-		assert(!nullmask[0]);
-		if (IsNullValue<INPUT_TYPE>(*state)) {
-			*state = 0;
-		}
-		*state += input[0] * count;
+		state->isset = true;
+		state->value += input[0] * count;
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		nullmask[idx] = IsNullValue<T>(*state);
-		target[idx] = *state;
+		if (!state->isset) {
+			nullmask[idx] = true;
+		} else {
+			if (!Value::DoubleIsValid(state->value)) {
+				throw OutOfRangeException("SUM is out of range!");
+			}
+			target[idx] = state->value;
+		}
+	}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (!source.isset) {
+			// source is NULL, nothing to do
+			return;
+		}
+		if (!target->isset) {
+			// target is NULL, use source value directly
+			*target = source;
+		} else {
+			// else perform the operation
+			target->value += source.value;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
 	}
 };
-
-template <>
-void SumOperation::Finalize(Vector &result, double *state, double *target, nullmask_t &nullmask, idx_t idx) {
-	if (!Value::DoubleIsValid(*state)) {
-		throw OutOfRangeException("SUM is out of range!");
-	}
-	nullmask[idx] = IsNullValue<double>(*state);
-	target[idx] = *state;
-}
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
 	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, SumOperation>(SQLType::BIGINT, SQLType::BIGINT));
+	    AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER, SQLType::DOUBLE));
+	sum.AddFunction(
+	    AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT, SQLType::DOUBLE));
 	// float sums to float
 	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<double, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
+	    AggregateFunction::UnaryAggregate<sum_state_t, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
 
 	set.AddFunction(sum);
 }

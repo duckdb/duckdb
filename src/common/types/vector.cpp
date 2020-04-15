@@ -722,6 +722,10 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	assert(vector.type == TypeId::VARCHAR);
 	assert(other.type == TypeId::VARCHAR);
 
+	if (other.vector_type == VectorType::DICTIONARY_VECTOR) {
+		StringVector::AddHeapReference(vector, DictionaryVector::Child(other));
+		return;
+	}
 	if (!other.auxiliary) {
 		return;
 	}

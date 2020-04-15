@@ -185,6 +185,9 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public Statement createStatement(int resultSetType, int resultSetConcurrency) throws SQLException {
+		if (resultSetConcurrency == ResultSet.CONCUR_READ_ONLY && resultSetType == ResultSet.TYPE_FORWARD_ONLY) {
+			return createStatement();
+		}
 		throw new SQLFeatureNotSupportedException();
 	}
 

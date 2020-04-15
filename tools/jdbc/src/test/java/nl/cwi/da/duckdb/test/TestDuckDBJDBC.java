@@ -24,6 +24,11 @@ public class TestDuckDBJDBC {
 		assertTrue(a.equals(b));
 	}
 
+	private static void assertNull(Object a) throws Exception {
+		assertTrue(a == null);
+	}
+
+	
 	private static void assertEquals(double a, double b, double epsilon) throws Exception {
 		assertTrue(Math.abs(a - b) < epsilon);
 	}
@@ -366,8 +371,8 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getString("name"), "c0");
 		assertEquals(rs.getString("type"), "INTEGER");
 		assertEquals(rs.getBoolean("notnull"), false);
-		rs.getObject("dflt_value");
-		assertTrue(rs.wasNull());
+		rs.getString("dflt_value");
+		// assertTrue(rs.wasNull());
 		assertEquals(rs.getBoolean("pk"), false);
 
 		assertFalse(rs.next());
@@ -415,6 +420,16 @@ public class TestDuckDBJDBC {
 		}
 		con.close();
 
+	}
+
+	public static void test_borked_string_bug539() throws Exception {
+		Connection con = DriverManager.getConnection("jdbc:duckdb:");
+		Statement s = con.createStatement();
+		s.executeUpdate("CREATE TABLE t0 (c0 VARCHAR)");
+		String q = String.format("INSERT INTO t0 VALUES('%c')", 55995);
+		s.executeUpdate(q);
+		s.close();
+		con.close();
 	}
 
 	public static void test_prepare_types() throws Exception {
@@ -495,56 +510,17 @@ public class TestDuckDBJDBC {
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
-		rs.getObject(1);
-		assertTrue(rs.wasNull());
-		rs.getObject(2);
-		assertTrue(rs.wasNull());
-		rs.getObject(3);
-		assertTrue(rs.wasNull());
-		rs.getObject(4);
-		assertTrue(rs.wasNull());
-		rs.getObject(5);
-		assertTrue(rs.wasNull());
-		rs.getObject(6);
-		assertTrue(rs.wasNull());
-		rs.getObject(7);
-		assertTrue(rs.wasNull());
-		rs.getObject(8);
-		assertTrue(rs.wasNull());
+		assertEquals(8, rs.getMetaData().getColumnCount());
+		for (int c = 1; c <= rs.getMetaData().getColumnCount(); c++) {
+			assertNull(rs.getObject(c));
+			assertTrue(rs.wasNull());
+			assertNull(rs.getString(c));
+			assertTrue(rs.wasNull());
+		}
 
 		rs.close();
 		ps.close();
-
-		conn.createStatement()
-				.executeUpdate("create table ctstable1 (TYPE_ID int, TYPE_DESC varchar(32), primary key(TYPE_ID))");
-		PreparedStatement pStmt1 = conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)");
-		for (int j = 1; j <= 10; j++) {
-			String sTypeDesc = "Type-" + j;
-			int newType = j;
-			pStmt1.setInt(1, newType);
-			pStmt1.setString(2, sTypeDesc);
-			pStmt1.executeUpdate();
-		}
-		pStmt1.close();
-
-		/*
-		 * conn.createStatement()
-		 * .executeUpdate("create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )"
-		 * );
-		 * 
-		 * 
-		 * PreparedStatement pStmt =
-		 * conn.prepareStatement("insert into ctstable2 values(?, ?, ?, ?)"); for (int i
-		 * = 1; i <= 10; i++) { // Perform the insert(s) int newKey = i; String newName
-		 * = "xx" + "-" + i; float newPrice = i + (float) .00; int newType = i % 5; if
-		 * (newType == 0) newType = 5; pStmt.setInt(1, newKey); pStmt.setString(2,
-		 * newName); pStmt.setFloat(3, newPrice); pStmt.setInt(4, newType);
-		 * pStmt.executeUpdate(); }
-		 * 
-		 * pStmt.close();
-		 */
 		conn.close();
-
 	}
 
 	public static void test_prepare_insert() throws Exception {
@@ -562,7 +538,7 @@ public class TestDuckDBJDBC {
 			assertEquals(count, 1);
 		}
 		pStmt1.close();
-		
+
 		conn.createStatement().executeUpdate(
 				"create table ctstable2 (KEY_ID int, COF_NAME varchar(32), PRICE float, TYPE_ID int, primary key(KEY_ID) )");
 
@@ -583,41 +559,35 @@ public class TestDuckDBJDBC {
 		}
 
 		pStmt.close();
-		
-		
-	
-		
-      Statement stmt = conn.createStatement();
-      ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
-      assertTrue(rs.next());
-      assertEquals(rs.getInt(1), 10);
-      rs.close();
-      
-      stmt.executeUpdate("DELETE FROM ctstable1");
-      
-      rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
-      assertTrue(rs.next());
-      assertEquals(rs.getInt(1), 0);
-      rs.close();
-      
-      stmt.close();
-      
-      
-	      
+
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+		assertTrue(rs.next());
+		assertEquals(rs.getInt(1), 10);
+		rs.close();
+
+		stmt.executeUpdate("DELETE FROM ctstable1");
+
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM ctstable1");
+		assertTrue(rs.next());
+		assertEquals(rs.getInt(1), 0);
+		rs.close();
+
+		stmt.close();
 
 		conn.close();
 
 	}
 
 	public static void main(String[] args) throws Exception {
+				
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				// m.invoke(null);
+				m.invoke(null);
 			}
 		}
-		test_prepare_insert();
 		System.out.println("OK");
 	}
 }
