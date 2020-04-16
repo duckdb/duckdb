@@ -1,5 +1,5 @@
 # this script creates a single header + source file combination out of the DuckDB sources
-import os, re, sys, pickle
+import os, re, sys
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
 source_file = os.path.join(amal_dir, "duckdb.cpp")
@@ -29,29 +29,15 @@ compile_directories = [src_dir, fmt_dir, hll_dir, miniz_dir, re2_dir, utf8proc_d
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
-# where to cache which files have already been compiled, only used for --compile --resume
-cache_file = 'amalgamation.cache'
 
 
 linenumbers = False
-compile = False
-resume = False
 
 for arg in sys.argv:
-	if arg == '--compile':
-		compile = True
-	elif arg == '--resume':
-		resume = True
-	elif arg == '--linenumbers':
+	if arg == '--linenumbers':
 		linenumbers = True
 	elif arg == '--no-linenumbers':
 		linenumbers = False
-
-if not resume:
-	try:
-		os.remove(cache_file)
-	except:
-		pass
 
 def get_includes(fpath, text):
 	# find all the includes referred to in the directory
@@ -115,78 +101,41 @@ def write_file(current_file, ignore_excluded = False):
 	# now read the header and write it
 	return cleanup_file(text)
 
-def try_compilation(fpath, cache):
-	if fpath in cache:
-		return
-	print(fpath)
+if __name__ == "__main__":
+	if not os.path.exists(amal_dir):
+		os.makedirs(amal_dir)
 
-	cmd = 'clang++ -std=c++11 -Wno-deprecated -Wno-writable-strings -S -MMD -MF dependencies.d -o deps.s ' + fpath + ' ' + ' '.join(["-I" + x for x in include_paths])
-	ret = os.system(cmd)
-	if ret != 0:
-		raise Exception('Failed compilation of file "' + fpath + '"!\n Command: ' + cmd)
-	cache[fpath] = True
-	with open(cache_file, 'wb') as cf:
-		pickle.dump(cache, cf)
+	# now construct duckdb.hpp from these headers
+	print("-----------------------")
+	print("-- Writing duckdb.hpp --")
+	print("-----------------------")
+	with open(header_file, 'w+') as hfile:
+		hfile.write("#pragma once\n")
+		for fpath in main_header_files:
+			hfile.write(write_file(fpath))
 
-def compile_dir(dir, cache):
-	files = os.listdir(dir)
-	files.sort()
-	for fname in files:
-		if fname in excluded_compilation_files:
-			continue
-		fpath = os.path.join(dir, fname)
-		if os.path.isdir(fpath):
-			compile_dir(fpath, cache)
-		elif fname.endswith('.cpp') or fname.endswith('.hpp') or fname.endswith('.c') or fname.endswith('.cc'):
-			try_compilation(fpath, cache)
+	def write_dir(dir, sfile):
+		files = os.listdir(dir)
+		files.sort()
+		for fname in files:
+			if fname in excluded_files:
+				continue
+			fpath = os.path.join(dir, fname)
+			if os.path.isdir(fpath):
+				write_dir(fpath, sfile)
+			elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
+				sfile.write(write_file(fpath))
 
-if compile:
-	# compilation pass only
-	# compile all files in the src directory (including headers!) individually
-	try:
-		with open(cache_file, 'rb') as cf:
-			cache = pickle.load(cf)
-	except:
-		cache = {}
-	for cdir in compile_directories:
-		compile_dir(cdir, cache)
-	exit(0)
+	# now construct duckdb.cpp
+	print("------------------------")
+	print("-- Writing duckdb.cpp --")
+	print("------------------------")
 
-
-if not os.path.exists(amal_dir):
-	os.makedirs(amal_dir)
-
-# now construct duckdb.hpp from these headers
-print("-----------------------")
-print("-- Writing duckdb.hpp --")
-print("-----------------------")
-with open(header_file, 'w+') as hfile:
-	hfile.write("#pragma once\n")
-	for fpath in main_header_files:
-		hfile.write(write_file(fpath))
-
-def write_dir(dir, sfile):
-	files = os.listdir(dir)
-	files.sort()
-	for fname in files:
-		if fname in excluded_files:
-			continue
-		fpath = os.path.join(dir, fname)
-		if os.path.isdir(fpath):
-			write_dir(fpath, sfile)
-		elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
-			sfile.write(write_file(fpath))
-
-# now construct duckdb.cpp
-print("------------------------")
-print("-- Writing duckdb.cpp --")
-print("------------------------")
-
-# scan all the .cpp files
-with open(source_file, 'w+') as sfile:
-	sfile.write('#include "duckdb.hpp"\n\n')
-	for compile_dir in compile_directories:
-		write_dir(compile_dir, sfile)
-	# for windows we write file_system.cpp last
-	# this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-	sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
+	# scan all the .cpp files
+	with open(source_file, 'w+') as sfile:
+		sfile.write('#include "duckdb.hpp"\n\n')
+		for compile_dir in compile_directories:
+			write_dir(compile_dir, sfile)
+		# for windows we write file_system.cpp last
+		# this is because it includes windows.h which contains a lot of #define statements that mess up the other code
+		sfile.write(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
