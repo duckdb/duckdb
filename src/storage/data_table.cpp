@@ -65,27 +65,25 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 	transaction.storage.InitializeScan(this, state.local_state);
 }
 
-bool DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
-	bool applyFilters = false;
 	// scan the persistent segments
 	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0,
-	                     persistent_manager, table_filters, applyFilters)) {
+	                     persistent_manager, table_filters)) {
 		if (result.size() > 0) {
-			return applyFilters;
+			return;
 		}
 	}
 	// scan the transient segments
 	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row,
-	                     persistent_manager.max_row, transient_manager, table_filters, applyFilters)) {
+	                     persistent_manager.max_row, transient_manager, table_filters)) {
 		if (result.size() > 0) {
-			return applyFilters;
+			return;
 		}
 	}
 
 	// scan the transaction-local segments
-	transaction.storage.Scan(state.local_state, state.column_ids, result);
-	return true;
+	transaction.storage.Scan(state.local_state, state.column_ids, result, &table_filters);
 }
 
 template <class T> bool checkZonemap(TableScanState &state, TableFilter &table_filter, T constant) {
@@ -205,7 +203,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 
 bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
                               idx_t max_row, idx_t base_row, VersionManager &manager,
-                              unordered_map<idx_t, vector<TableFilter>> &table_filters, bool &apply_filter) {
+                              unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -225,69 +223,40 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		current_row += STANDARD_VECTOR_SIZE;
 		return true;
 	}
-	//! If we have filters
-//	if (!table_filters.empty() && !apply_filter) {
-		SelectionVector sel;
-		idx_t approved_tuple_count = count;
-		if (count != max_count) {
-			sel = valid_sel;
-		} else {
-			sel = FlatVector::IncrementalSelectionVector;
-		}
-		//! First, we scan the columns with filters, fetch their data and generate a selection vector.
-		for (auto &table_filter : table_filters) {
-			apply_filter = columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first],
-			                                                  result.data[table_filter.first], sel,
-			                                                  approved_tuple_count, table_filter.second);
-			if (apply_filter) {
-				break;
-			}
-		}
-		if (!apply_filter) {
-		    for (auto &table_filter : table_filters) {
-			result.data[table_filter.first].Slice(sel,approved_tuple_count);
-		}
-			//! Now we use the selection vector to fetch data for the other columns.
-			for (idx_t i = 0; i < state.column_ids.size(); i++) {
-				if (table_filters.find(i) == table_filters.end()) {
-					auto column = state.column_ids[i];
-					if (column == COLUMN_IDENTIFIER_ROW_ID) {
-						assert(result.data[i].type == TypeId::INT64);
-						result.data[i].vector_type = VectorType::FLAT_VECTOR;
-						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
-						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-							result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
-						}
-					} else {
-						columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
-						                           approved_tuple_count);
-					}
+	SelectionVector sel;
+	idx_t approved_tuple_count = count;
+	if (count != max_count) {
+		sel = valid_sel;
+	} else {
+		sel = FlatVector::IncrementalSelectionVector;
+	}
+	//! First, we scan the columns with filters, fetch their data and generate a selection vector.
+	for (auto &table_filter : table_filters) {
+		columns[table_filter.first].Select(transaction, state.column_scans[table_filter.first],
+		                                   result.data[table_filter.first], sel, approved_tuple_count,
+		                                   table_filter.second);
+	}
+	for (auto &table_filter : table_filters) {
+		result.data[table_filter.first].Slice(sel, approved_tuple_count);
+	}
+	//! Now we use the selection vector to fetch data for the other columns.
+	for (idx_t i = 0; i < state.column_ids.size(); i++) {
+		if (table_filters.find(i) == table_filters.end()) {
+			auto column = state.column_ids[i];
+			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+				assert(result.data[i].type == TypeId::INT64);
+				result.data[i].vector_type = VectorType::FLAT_VECTOR;
+				auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+				for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+					result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
 				}
+			} else {
+				columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
+				                           approved_tuple_count);
 			}
-			result.SetCardinality(approved_tuple_count);
 		}
-//	}
-
-//	if (apply_filter || table_filters.empty()) {
-//		for (idx_t i = 0; i < state.column_ids.size(); i++) {
-//			auto column = state.column_ids[i];
-//			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-//				// scan row id
-//				assert(result.data[i].type == ROW_TYPE);
-//				result.data[i].Sequence(base_row + current_row, 1);
-//			} else {
-//				columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
-//			}
-//		}
-//		if (count == max_count) {
-//			// no deleted tuples
-//			result.SetCardinality(count);
-//		} else {
-//			// deleted tuples
-//			result.Slice(valid_sel, count);
-//		}
-//	}
-
+	}
+	result.SetCardinality(approved_tuple_count);
 	current_row += STANDARD_VECTOR_SIZE;
 	return true;
 }

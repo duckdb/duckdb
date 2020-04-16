@@ -35,7 +35,7 @@ public:
 	//! Scan one vector from this transient segment, throwing an exception if there are any outstanding updates
 	void IndexScan(ColumnScanState &state, Vector &result) override;
 	//! Executes the filters directly in the table's data
-	bool Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	            idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) override;
 	//! Fetch the base table vector index that belongs to this row
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) override;

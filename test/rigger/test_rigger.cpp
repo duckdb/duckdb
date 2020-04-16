@@ -519,5 +519,4 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 ON 0 WHERE t0.c0 OR t1.c0 BETWEEN t0.c0 AND 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
-
 }

@@ -68,7 +68,7 @@ struct VectorOperations {
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
 	          bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-	          static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 	                                   const SelectionVector *sel, idx_t count, nullmask_t &nullmask,
 	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;

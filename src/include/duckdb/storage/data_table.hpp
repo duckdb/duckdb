@@ -67,7 +67,7 @@ public:
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	bool Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
 	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
@@ -128,7 +128,7 @@ private:
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
 	                   idx_t max_row, idx_t base_row, VersionManager &manager,
-	                   unordered_map<idx_t, vector<TableFilter>> &table_filters, bool &apply_filter);
+	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
 	                     idx_t base_row);
 

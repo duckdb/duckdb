@@ -43,9 +43,9 @@ void PersistentSegment::IndexScan(ColumnScanState &state, Vector &result) {
 	data->IndexScan(state, state.vector_index, result);
 }
 
-bool PersistentSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+void PersistentSegment::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
                                idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
-	return data->Select(transaction, result, tableFilter, sel, approved_tuple_count, state);
+	data->Select(transaction, result, tableFilter, sel, approved_tuple_count, state);
 }
 
 void PersistentSegment::Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) {

@@ -32,6 +32,10 @@ public:
 	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
 		value_.integer = val;
 	}
+	//! Create a BIGINT value
+	Value(int64_t val) : type(TypeId::INT64), is_null(false) {
+		value_.bigint = val;
+	}
 	//! Create a FLOAT value
 	Value(float val) : type(TypeId::FLOAT), is_null(false) {
 		value_.float_ = val;

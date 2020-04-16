@@ -119,6 +119,7 @@ public:
 	void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
 	void Deserialize(idx_t count, Deserializer &source);
+	nullmask_t getNullMask();
 
 protected:
 	//! A pointer to the data.

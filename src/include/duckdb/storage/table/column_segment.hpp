@@ -75,7 +75,7 @@ public:
 	//! Scan one vector from this segment, throwing an exception if there are any outstanding updates
 	virtual void IndexScan(ColumnScanState &state, Vector &result) = 0;
 	//! Executes filter in this column
-	virtual bool Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	virtual void Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                    idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) = 0;
 	//! Fetch the base table vector index that belongs to this row
 	virtual void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result) = 0;

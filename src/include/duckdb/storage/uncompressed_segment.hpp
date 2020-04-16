@@ -57,8 +57,10 @@ public:
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, throwing an exception if there are any
 	//! outstanding updates
 	void IndexScan(ColumnScanState &state, idx_t vector_index, Vector &result);
+	static void filterSelection(SelectionVector &sel, Vector &result, TableFilter filter, idx_t &approved_tuple_count,
+	                            nullmask_t &nullmask);
 	//! Executes the filters directly in the table's data
-	bool Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilter, SelectionVector &sel,
+	void Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters, SelectionVector &sel,
 	            idx_t &approved_tuple_count, ColumnScanState &state);
 	//! Fetch a single vector from the base table
 	void Fetch(ColumnScanState &state, idx_t vector_index, Vector &result);

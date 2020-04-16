@@ -66,10 +66,10 @@ struct SumOperation {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER, SQLType::DOUBLE));
-	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT, SQLType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER,
+	                                                                                              SQLType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT,
+	                                                                                              SQLType::DOUBLE));
 	// float sums to float
 	sum.AddFunction(
 	    AggregateFunction::UnaryAggregate<sum_state_t, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
