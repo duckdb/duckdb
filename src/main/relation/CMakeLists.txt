@@ -16,8 +16,10 @@ add_library_unity(duckdb_main_relation
                   read_csv_relation.cpp
                   setop_relation.cpp
                   subquery_relation.cpp
+                  table_function_relation.cpp
                   table_relation.cpp
                   value_relation.cpp
+                  view_relation.cpp
                   write_csv_relation.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_relation>
