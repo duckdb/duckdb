@@ -27,11 +27,15 @@ static bool contains_strstr(const string_t &str, const string_t &pattern) {
 	return (strstr(str_data , patt_data) != nullptr);
 }
 
+ScalarFunction ContainsFun::GetFunction() {
+	return ScalarFunction("contains",                           // name of the function
+                          {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+                          SQLType::BOOLEAN,                     // return type
+                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>);
+}
+
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("contains",                           // name of the function
-	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-								   SQLType::BOOLEAN,                     // return type
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>));
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

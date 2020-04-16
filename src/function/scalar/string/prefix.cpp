@@ -60,11 +60,15 @@ static bool prefix(const string_t &str, const string_t &pattern) {
 	}
 }
 
+ScalarFunction PrefixFun::GetFunction() {
+	return ScalarFunction("prefix",                             // name of the function
+                          {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+                          SQLType::BOOLEAN,                     // return type
+                          ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator, true>);
+}
+
 void PrefixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("prefix",                             // name of the function
-	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-	                               SQLType::BOOLEAN,                     // return type
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator, true>));
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb
