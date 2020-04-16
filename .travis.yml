@@ -17,7 +17,7 @@ matrix:
   include:
 
     - os: linux
-      dist: bionic
+      dist: xenial
       name: GCC 9
       python: 3.7
 
@@ -25,6 +25,7 @@ matrix:
         apt:
           sources:
             - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'ppa:deadsnakes/ppa'
           packages:
             - g++-9 python3.7
       env:
