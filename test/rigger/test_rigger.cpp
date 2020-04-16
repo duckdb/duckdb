@@ -526,7 +526,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	SECTION("562") {
 		// SELECT with CASE expression causes an assertion failure "Assertion `!entry.first->Equals(&expr)' failed"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
-		result = con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
+		REQUIRE_FAIL(con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);"));
+		result = con.Query("SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
 
