@@ -145,7 +145,7 @@ private:
 	}
 
 	void read_string(string_t *result_data, buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t *dict_offset,
-	                 idx_t src_idx, idx_t &update_idx, size_t vector_index);
+	                 idx_t src_idx,idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	template <class OP>
 	void Select_String(buffer_handle_set_t &handles, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 	                   SelectionVector &sel, const string &constant, idx_t &approved_tuple_count,
@@ -158,7 +158,7 @@ private:
 		if (source_nullmask->any()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, update_idx, vector_index);
+				read_string(result_data, handles, baseptr, dict_offset, src_idx,src_idx, update_idx, vector_index);
 				if (!(*source_nullmask)[src_idx] && OP::Operation(result_data[src_idx].GetString(), constant)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
@@ -166,7 +166,7 @@ private:
 		} else {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, update_idx, vector_index);
+				read_string(result_data, handles, baseptr, dict_offset, src_idx,src_idx, update_idx, vector_index);
 				if (OP::Operation(result_data[src_idx].GetString(), constant)) {
 					new_sel.set_index(result_count++, src_idx);
 				}
@@ -188,7 +188,7 @@ private:
 		if (source_nullmask->any()) {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, update_idx, vector_index);
+				read_string(result_data, handles, baseptr, dict_offset, src_idx,src_idx, update_idx, vector_index);
 				if (!(*source_nullmask)[src_idx] && OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
 				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
 					new_sel.set_index(result_count++, src_idx);
@@ -197,7 +197,7 @@ private:
 		} else {
 			for (idx_t i = 0; i < approved_tuple_count; i++) {
 				idx_t src_idx = sel.get_index(i);
-				read_string(result_data, handles, baseptr, dict_offset, src_idx, update_idx, vector_index);
+				read_string(result_data, handles, baseptr, dict_offset, src_idx,src_idx, update_idx, vector_index);
 				if (OPL::Operation(result_data[src_idx].GetString(), constantLeft) &&
 				    OPR::Operation(result_data[src_idx].GetString(), constantRight)) {
 					new_sel.set_index(result_count++, src_idx);

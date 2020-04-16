@@ -226,7 +226,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		return true;
 	}
 	//! If we have filters
-	if (!table_filters.empty() && !apply_filter) {
+//	if (!table_filters.empty() && !apply_filter) {
 		SelectionVector sel;
 		idx_t approved_tuple_count = count;
 		if (count != max_count) {
@@ -244,7 +244,9 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			}
 		}
 		if (!apply_filter) {
-			result.Slice(sel, approved_tuple_count);
+		    for (auto &table_filter : table_filters) {
+			result.data[table_filter.first].Slice(sel,approved_tuple_count);
+		}
 			//! Now we use the selection vector to fetch data for the other columns.
 			for (idx_t i = 0; i < state.column_ids.size(); i++) {
 				if (table_filters.find(i) == table_filters.end()) {
@@ -264,27 +266,27 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			}
 			result.SetCardinality(approved_tuple_count);
 		}
-	}
+//	}
 
-	if (apply_filter || table_filters.empty()) {
-		for (idx_t i = 0; i < state.column_ids.size(); i++) {
-			auto column = state.column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				// scan row id
-				assert(result.data[i].type == ROW_TYPE);
-				result.data[i].Sequence(base_row + current_row, 1);
-			} else {
-				columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
-			}
-		}
-		if (count == max_count) {
-			// no deleted tuples
-			result.SetCardinality(count);
-		} else {
-			// deleted tuples
-			result.Slice(valid_sel, count);
-		}
-	}
+//	if (apply_filter || table_filters.empty()) {
+//		for (idx_t i = 0; i < state.column_ids.size(); i++) {
+//			auto column = state.column_ids[i];
+//			if (column == COLUMN_IDENTIFIER_ROW_ID) {
+//				// scan row id
+//				assert(result.data[i].type == ROW_TYPE);
+//				result.data[i].Sequence(base_row + current_row, 1);
+//			} else {
+//				columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
+//			}
+//		}
+//		if (count == max_count) {
+//			// no deleted tuples
+//			result.SetCardinality(count);
+//		} else {
+//			// deleted tuples
+//			result.Slice(valid_sel, count);
+//		}
+//	}
 
 	current_row += STANDARD_VECTOR_SIZE;
 	return true;

@@ -66,6 +66,32 @@ struct VectorOperations {
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
 
+	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
+	          bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	          static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	                                   const SelectionVector *sel, idx_t count, nullmask_t &nullmask,
+	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+		idx_t true_count = 0, false_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t result_idx = sel->get_index(i);
+			idx_t lidx = LEFT_CONSTANT ? 0 : i;
+			idx_t ridx = RIGHT_CONSTANT ? 0 : i;
+			if ((NO_NULL || !nullmask[i]) && OP::Operation(ldata[lidx], rdata[ridx])) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
+			}
+		}
+		if (HAS_TRUE_SEL) {
+			return true_count;
+		} else {
+			return count - false_count;
+		}
+	}
 	//===--------------------------------------------------------------------===//
 	// Scatter methods
 	//===--------------------------------------------------------------------===//
