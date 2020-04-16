@@ -20,8 +20,7 @@ bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpre
 }
 
 hash_t ConstantExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	return CombineHash(ValueOperations::Hash(value), result);
+	return ParsedExpression::Hash();
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
