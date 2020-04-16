@@ -75,15 +75,17 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
+		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
-			AppendData(i, chunk.data[i], chunk.size());
+			AppendData(i, chunk.data[i], chunk_size);
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
 	for (idx_t i = 0; i < table.columns.size(); i++) {
 		FlushSegment(i);
 	}
+	VerifyDataPointers();
 	WriteDataPointers();
 }
 
@@ -100,7 +102,7 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 
 void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
-	while (offset < count) {
+	while (count > 0) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
 		if (appended == count) {
 			// appended everything: finished
@@ -145,6 +147,33 @@ void TableDataWriter::FlushSegment(idx_t col_idx) {
 	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
+
+	handle.reset();
+	segments[col_idx] = nullptr;
+}
+
+void TableDataWriter::VerifyDataPointers() {
+	// verify the data pointers
+	idx_t table_count = 0;
+	for (idx_t i = 0; i < data_pointers.size(); i++) {
+		auto &data_pointer_list = data_pointers[i];
+		idx_t column_count = 0;
+		// then write the data pointers themselves
+		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
+			auto &data_pointer = data_pointer_list[k];
+			column_count += data_pointer.tuple_count;
+		}
+		if (segments[i]) {
+			column_count += segments[i]->tuple_count;
+		}
+		if (i == 0) {
+			table_count = column_count;
+		} else {
+			if (table_count != column_count) {
+				throw Exception("Column count mismatch in data write!");
+			}
+		}
+	}
 }
 
 void TableDataWriter::WriteDataPointers() {

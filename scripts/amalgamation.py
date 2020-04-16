@@ -127,7 +127,7 @@ def copy_if_different(src, dest):
 def generate_amalgamation(source_file, header_file):
     # now construct duckdb.hpp from these headers
     print("-----------------------")
-    print("-- Writing duckdb.hpp --")
+    print("-- Writing " + header_file + " --")
     print("-----------------------")
     with open(temp_header, 'w+') as hfile:
         hfile.write("#pragma once\n")
@@ -137,7 +137,7 @@ def generate_amalgamation(source_file, header_file):
 
     # now construct duckdb.cpp
     print("------------------------")
-    print("-- Writing duckdb.cpp --")
+    print("-- Writing " + source_file " --")
     print("------------------------")
 
     # scan all the .cpp files

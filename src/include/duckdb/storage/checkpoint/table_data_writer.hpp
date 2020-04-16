@@ -30,6 +30,7 @@ private:
 	void FlushSegment(idx_t col_idx);
 
 	void WriteDataPointers();
+	void VerifyDataPointers();
 
 private:
 	CheckpointManager &manager;
