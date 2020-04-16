@@ -83,8 +83,13 @@ public:
 
 	//! Returns a relation that produces a table from this connection
 	shared_ptr<Relation> Table(string tname);
-	//! Returns a relation that produces a table from this connection
 	shared_ptr<Relation> Table(string schema_name, string table_name);
+	//! Returns a relation that produces a view from this connection
+	shared_ptr<Relation> View(string tname);
+	shared_ptr<Relation> View(string schema_name, string table_name);
+	//! Returns a relation that calls a specified table function
+	shared_ptr<Relation> TableFunction(string tname);
+	shared_ptr<Relation> TableFunction(string tname, vector<Value> values);
 	//! Returns a relation that produces values
 	shared_ptr<Relation> Values(vector<vector<Value>> values);
 	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names, string alias = "values");

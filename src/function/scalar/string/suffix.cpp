@@ -34,11 +34,15 @@ static bool suffix(const string_t &str, const string_t &suffix) {
 	return true;
 }
 
+ScalarFunction SuffixFun::GetFunction() {
+    return ScalarFunction("suffix",               				// name of the function
+                          {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+                          SQLType::BOOLEAN,                     // return type
+                          ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator, true>);
+}
+
 void SuffixFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("suffix",                             // name of the function
-	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-	                               SQLType::BOOLEAN,                     // return type
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator, true>));
+	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

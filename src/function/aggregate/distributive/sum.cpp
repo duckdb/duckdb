@@ -29,7 +29,7 @@ struct SumOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		state->isset = true;
-		state->value += input[0] * count;
+		state->value += (double) input[0] * (double) count;
 	}
 
 	template <class T, class STATE>
