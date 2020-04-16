@@ -516,5 +516,19 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 ON 0 WHERE t0.c0 OR t1.c0 BETWEEN t0.c0 AND 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+	SECTION("560") {
+		// Incorrect result for SUM() and negative number
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT SUM(-1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+	}
+	SECTION("562") {
+		// SELECT with CASE expression causes an assertion failure "Assertion `!entry.first->Equals(&expr)' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		result = con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+
 
 }
