@@ -309,7 +309,10 @@ struct DuckDBPyRelation {
 		return make_unique<DuckDBPyRelation>(rel->Order(expr));
 	}
 
-	unique_ptr<DuckDBPyRelation> aggregate(string expr) {
+	unique_ptr<DuckDBPyRelation> aggregate(string expr, string groups = "") {
+		if (groups.size() > 0) {
+			return make_unique<DuckDBPyRelation>(rel->Aggregate(expr, groups));
+		}
 		return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 	}
 
@@ -774,7 +777,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::project, "some doc string for project", py::arg("project_expr"))
 	    .def("order", &DuckDBPyRelation::order, "some doc string for order", py::arg("order_expr"))
-	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"))
+	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"), py::arg("group_expr") = "")
 	    .def("union", &DuckDBPyRelation::union_, "some doc string for union", py::arg("other_rel"))
 	    .def("except", &DuckDBPyRelation::except, "some doc string for except", py::arg("other_rel"))
 	    .def("intersect", &DuckDBPyRelation::intersect, "some doc string for intersect", py::arg("other_rel"))
