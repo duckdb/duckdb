@@ -62,5 +62,4 @@ TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
 		result = con.Query("SELECT COUNT(*) FROM pdata");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT((counter + 1) * row_count)}));
 	}
-
 }

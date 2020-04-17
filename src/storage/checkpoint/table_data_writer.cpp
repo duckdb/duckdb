@@ -123,7 +123,6 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	if (tuple_count == 0) {
 		return;
 	}
-	segments[col_idx]->Verify(transaction);
 
 	// get the buffer of the segment and pin it
 	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
