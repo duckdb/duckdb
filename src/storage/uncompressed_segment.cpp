@@ -191,7 +191,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	default:
 		throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 	}
-	sel = new_sel;
+	sel.Initialize(new_sel);
 }
 
 void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, TableFilter filter,

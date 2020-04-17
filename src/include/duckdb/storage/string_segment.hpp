@@ -172,7 +172,7 @@ private:
 				}
 			}
 		}
-		sel = new_sel;
+		sel.Initialize(new_sel);
 		approved_tuple_count = result_count;
 	}
 
@@ -204,7 +204,7 @@ private:
 				}
 			}
 		}
-		sel = new_sel;
+		sel.Initialize(new_sel);
 		approved_tuple_count = result_count;
 	}
 

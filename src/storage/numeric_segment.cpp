@@ -75,7 +75,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 			}
 		}
 	}
-	sel = new_sel;
+	sel.Initialize(new_sel);
 	approved_tuple_count = result_count;
 }
 
@@ -105,7 +105,7 @@ void Select(SelectionVector &sel, Vector &result, unsigned char *source, nullmas
 			}
 		}
 	}
-	sel = new_sel;
+	sel.Initialize(new_sel);
 	approved_tuple_count = result_count;
 }
 
