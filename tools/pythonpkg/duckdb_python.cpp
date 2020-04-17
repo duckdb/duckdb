@@ -65,6 +65,23 @@ template <class T> static py::array fetch_column_regular(string numpy_type, Chun
 }
 
 }; // namespace duckdb_py_convert
+// namespace duckdb_py_convert
+
+namespace random_string {
+static std::random_device rd;
+static std::mt19937 gen(rd());
+static std::uniform_int_distribution<> dis(0, 15);
+
+std::string generate() {
+	std::stringstream ss;
+	int i;
+	ss << std::hex;
+	for (i = 0; i < 16; i++) {
+		ss << dis(gen);
+	}
+	return ss.str();
+}
+} // namespace random_string
 
 struct DuckDBPyResult {
 
@@ -346,6 +363,37 @@ struct DuckDBPyRelation {
 	shared_ptr<Relation> rel;
 };
 
+static vector<Value> transform_python_param_list(py::handle params) {
+	vector<Value> args;
+
+	auto datetime_mod = py::module::import("datetime");
+	auto datetime_date = datetime_mod.attr("datetime");
+	auto datetime_datetime = datetime_mod.attr("date");
+
+	for (auto &ele : params) {
+		if (ele.is_none()) {
+			args.push_back(Value());
+		} else if (py::isinstance<py::bool_>(ele)) {
+			args.push_back(Value::BOOLEAN(ele.cast<bool>()));
+		} else if (py::isinstance<py::int_>(ele)) {
+			args.push_back(Value::BIGINT(ele.cast<int64_t>()));
+		} else if (py::isinstance<py::float_>(ele)) {
+			args.push_back(Value::DOUBLE(ele.cast<double>()));
+		} else if (py::isinstance<py::str>(ele)) {
+			args.push_back(Value(ele.cast<string>()));
+		} else if (ele.get_type().is(datetime_date)) {
+			throw runtime_error("date parameters not supported yet :/");
+			// args.push_back(Value::DATE(1984, 4, 24));
+		} else if (ele.get_type().is(datetime_datetime)) {
+			throw runtime_error("datetime parameters not supported yet :/");
+			// args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
+		} else {
+			throw runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
+		}
+	}
+	return args;
+}
+
 struct DuckDBPyConnection {
 	DuckDBPyConnection *executemany(string query, py::object params = py::list()) {
 		execute(query, params, true);
@@ -372,38 +420,12 @@ struct DuckDBPyConnection {
 			params_set = params;
 		}
 
-		auto datetime_mod = py::module::import("datetime");
-		auto datetime_date = datetime_mod.attr("datetime");
-		auto datetime_datetime = datetime_mod.attr("date");
-
 		for (auto &single_query_params : params_set) {
-			vector<Value> args;
-			for (auto &ele : single_query_params) {
-
-				if (ele.is_none()) {
-					args.push_back(Value());
-				} else if (py::isinstance<py::bool_>(ele)) {
-					args.push_back(Value::BOOLEAN(ele.cast<bool>()));
-				} else if (py::isinstance<py::int_>(ele)) {
-					args.push_back(Value::BIGINT(ele.cast<int64_t>()));
-				} else if (py::isinstance<py::float_>(ele)) {
-					args.push_back(Value::DOUBLE(ele.cast<double>()));
-				} else if (py::isinstance<py::str>(ele)) {
-					args.push_back(Value(ele.cast<string>()));
-				} else if (ele.get_type().is(datetime_date)) {
-					throw runtime_error("date parameters not supported yet :/");
-					// args.push_back(Value::DATE(1984, 4, 24));
-				} else if (ele.get_type().is(datetime_datetime)) {
-					throw runtime_error("datetime parameters not supported yet :/");
-					// args.push_back(Value::TIMESTAMP(1984, 4, 24, 14, 42, 0, 0));
-				} else {
-					throw runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
-				}
-			}
 			if (prep->n_param != py::len(single_query_params)) {
 				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");
 			}
+			auto args = transform_python_param_list(single_query_params);
 			auto res = make_unique<DuckDBPyResult>();
 			res->result = prep->Execute(args);
 			if (!res->result->success) {
@@ -421,18 +443,19 @@ struct DuckDBPyConnection {
 		return execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 	}
 
-	DuckDBPyConnection *register_df(string name, py::object value) {
+	static string ptr_to_string(void const *ptr) {
 		std::ostringstream address;
-		address << (void const *)value.ptr();
-		string pointer_str = address.str();
+		address << ptr;
+		return address.str();
+	}
 
+	DuckDBPyConnection *register_df(string name, py::object value) {
 		// hack alert: put the pointer address into the function call as a string
-		execute("CREATE OR REPLACE TEMPORARY VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + pointer_str +
+		execute("CREATE OR REPLACE VIEW \"" + name + "\" AS SELECT * FROM pandas_scan('" + ptr_to_string(value.ptr()) +
 		        "')");
 
 		// keep a reference
 		registered_dfs[name] = value;
-
 		return this;
 	}
 
@@ -441,6 +464,31 @@ struct DuckDBPyConnection {
 			throw runtime_error("connection closed");
 		}
 		return make_unique<DuckDBPyRelation>(connection->Table(tname));
+	}
+
+	unique_ptr<DuckDBPyRelation> view(string vname) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		}
+		return make_unique<DuckDBPyRelation>(connection->View(vname));
+	}
+
+	unique_ptr<DuckDBPyRelation> table_function(string fname, py::object params = py::list()) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		}
+
+		return make_unique<DuckDBPyRelation>(connection->TableFunction(fname, transform_python_param_list(params)));
+	}
+
+	unique_ptr<DuckDBPyRelation> from_df(py::object value) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+		registered_dfs[random_string::generate()] = value;
+		vector<Value> params;
+		params.push_back(Value(ptr_to_string(value.ptr())));
+		return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params));
 	}
 
 	DuckDBPyConnection *unregister_df(string name) {
@@ -695,7 +743,11 @@ PYBIND11_MODULE(duckdb, m) {
 	py::class_<DuckDBPyConnection>(m, "DuckDBPyConnection")
 	    .def("cursor", &DuckDBPyConnection::cursor)
 	    .def("begin", &DuckDBPyConnection::begin)
-	    .def("table", &DuckDBPyConnection::table, "some doc string for table", py::arg("tname"))
+	    .def("table", &DuckDBPyConnection::table, "some doc string for table", py::arg("name"))
+	    .def("view", &DuckDBPyConnection::view, "some doc string for view", py::arg("name"))
+	    .def("table_function", &DuckDBPyConnection::table_function, "some doc string for table_function",
+	         py::arg("name"), py::arg("parameters") = py::list())
+	    .def("from_df", &DuckDBPyConnection::from_df, "some doc string for from_df", py::arg("value"))
 	    .def("commit", &DuckDBPyConnection::commit)
 	    .def("rollback", &DuckDBPyConnection::rollback)
 	    .def("execute", &DuckDBPyConnection::execute, "some doc string for execute", py::arg("query"),
