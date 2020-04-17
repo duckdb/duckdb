@@ -50,13 +50,12 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 		table.InitializeScan(transaction, state->scan_offset, column_ids);
 		state->initialized = true;
 	}
-	chunk.Reset();
 	table.Scan(transaction, chunk, state->scan_offset, table_filters);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
 	if (expression) {
-		return tableref.name + " " + expression->GetName();
+		return tableref.name + " " + expression->ToString();
 	} else {
 		return tableref.name;
 	}

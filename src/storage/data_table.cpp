@@ -226,9 +226,9 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 	SelectionVector sel;
 	idx_t approved_tuple_count = count;
 	if (count != max_count) {
-		sel = valid_sel;
+		sel.Initialize(valid_sel);
 	} else {
-		sel = FlatVector::IncrementalSelectionVector;
+		sel.Initialize(FlatVector::IncrementalSelectionVector);
 	}
 	//! First, we scan the columns with filters, fetch their data and generate a selection vector.
 	for (auto &table_filter : table_filters) {

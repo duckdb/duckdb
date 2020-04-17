@@ -228,21 +228,48 @@ public:
 		}
 	}
 
+		template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
+	          bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	static inline idx_t SelectFlatLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+	                                   const SelectionVector *sel, idx_t count, nullmask_t &nullmask,
+	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+		idx_t true_count = 0, false_count = 0;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t result_idx = sel->get_index(i);
+			idx_t lidx = LEFT_CONSTANT ? 0 : i;
+			idx_t ridx = RIGHT_CONSTANT ? 0 : i;
+			if ((NO_NULL || !nullmask[i]) && OP::Operation(ldata[lidx], rdata[ridx])) {
+				if (HAS_TRUE_SEL) {
+					true_sel->set_index(true_count++, result_idx);
+				}
+			} else {
+				if (HAS_FALSE_SEL) {
+					false_sel->set_index(false_count++, result_idx);
+				}
+			}
+		}
+		if (HAS_TRUE_SEL) {
+			return true_count;
+		} else {
+			return count - false_count;
+		}
+	}
+
 	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL>
 	static inline idx_t SelectFlatLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
 	                                            const SelectionVector *sel, idx_t count, nullmask_t &nullmask,
 	                                            SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
-			return VectorOperations::SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
 			                                        true, true>(ldata, rdata, sel, count, nullmask, true_sel,
 			                                                    false_sel);
 		} else if (true_sel) {
-			return VectorOperations::SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
 			                                        true, false>(ldata, rdata, sel, count, nullmask, true_sel,
 			                                                     false_sel);
 		} else {
 			assert(false_sel);
-			return VectorOperations::SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
+			return SelectFlatLoop<LEFT_TYPE, RIGHT_TYPE, OP, LEFT_CONSTANT, RIGHT_CONSTANT, NO_NULL,
 			                                        false, true>(ldata, rdata, sel, count, nullmask, true_sel,
 			                                                     false_sel);
 		}

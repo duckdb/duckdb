@@ -571,10 +571,6 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	}
 }
 
-nullmask_t Vector::getNullMask() {
-	return nullmask;
-}
-
 void Vector::Verify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {

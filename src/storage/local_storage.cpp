@@ -85,9 +85,9 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 
 	SelectionVector sel;
 	if (count != chunk_count) {
-		sel = valid_sel;
+		sel.Initialize(valid_sel);
 	} else {
-		sel = FlatVector::IncrementalSelectionVector;
+		sel.Initialize(FlatVector::IncrementalSelectionVector);
 	}
 	// now scan the vectors of the chunk
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -104,7 +104,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			if (column_filters != table_filters->end()) {
 				//! We have filters to apply here
 				for (auto &column_filter : column_filters->second) {
-					nullmask_t nullmask = result.data[i].getNullMask();
+					nullmask_t nullmask = FlatVector::Nullmask(result.data[i]);
 					UncompressedSegment::filterSelection(sel, result.data[i], column_filter, approved_tuple_count,
 					                                     nullmask);
 				}
