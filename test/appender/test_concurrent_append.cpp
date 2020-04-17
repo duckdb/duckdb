@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 
 #include <atomic>
@@ -18,16 +18,16 @@ static void append_to_integers(DuckDB *db, size_t threadnr) {
 	REQUIRE(db);
 	Connection con(*db);
 
-	Appender appender(*db, DEFAULT_SCHEMA, "integers");
+	Appender appender(con, "integers");
 	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
 		appender.BeginRow();
-		appender.AppendInteger(1);
+		appender.Append<int32_t>(1);
 		appender.EndRow();
 	}
 	finished_threads++;
 	while (finished_threads != THREAD_COUNT)
 		;
-	appender.Commit();
+	appender.Close();
 }
 
 TEST_CASE("Test concurrent appends", "[appender][.]") {

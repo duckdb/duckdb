@@ -34,13 +34,32 @@ TEST_CASE("Test results API", "[api]") {
 	REQUIRE(!str.empty());
 }
 
+TEST_CASE("Test iterating over results", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE data(i INTEGER, j VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO data VALUES (1, 'hello'), (2, 'test')"));
+
+	vector<int> i_values = {1, 2};
+	vector<string> j_values = {"hello", "test"};
+	idx_t row_count = 0;
+	auto result = con.Query("SELECT * FROM data;");
+	for (auto &row : *result) {
+		REQUIRE(row.GetValue<int>(0) == i_values[row.row]);
+		REQUIRE(row.GetValue<string>(1) == j_values[row.row]);
+		row_count++;
+	}
+	REQUIRE(row_count == 2);
+}
+
 TEST_CASE("Error in streaming result after initial query", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	// create a big table with strings that are numbers
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(v VARCHAR)"));
-	for (size_t i = 0; i < STANDARD_VECTOR_SIZE + 10; i++) {
+	for (size_t i = 0; i < STANDARD_VECTOR_SIZE * 2 - 1; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('" + to_string(i) + "')"));
 	}
 	// now insert one non-numeric value

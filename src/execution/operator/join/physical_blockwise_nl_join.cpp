@@ -1,11 +1,30 @@
-#include "execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 
-#include "common/types/static_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
+public:
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, PhysicalOperator *right, Expression &condition)
+	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false),
+	      checked_found_match(false), executor(condition) {
+		assert(left && right);
+	}
+
+	//! Whether or not a tuple on the LHS has found a match, only used for LEFT OUTER and FULL OUTER joins
+	unique_ptr<bool[]> lhs_found_match;
+	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
+	unique_ptr<bool[]> rhs_found_match;
+	ChunkCollection right_chunks;
+	idx_t left_position;
+	idx_t right_position;
+	bool fill_in_rhs;
+	bool checked_found_match;
+	ExpressionExecutor executor;
+};
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                  unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
@@ -64,17 +83,17 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			return;
 		}
 		// fill in the data from the chunk
-		for (index_t i = 0; i < state->child_chunk.column_count; i++) {
+		idx_t i;
+		for (i = 0; i < state->child_chunk.column_count(); i++) {
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
+		chunk.SetCardinality(state->child_chunk.size());
 		if (type == JoinType::LEFT || type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
-			chunk.sel_vector = chunk.data[0].sel_vector;
-			for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
-				chunk.data[i].count = chunk.size();
-				chunk.data[i].sel_vector = chunk.sel_vector;
-				VectorOperations::Set(chunk.data[i], Value());
+			for (; i < chunk.column_count(); i++) {
+				chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				ConstantVector::SetNull(chunk.data[i], true);
 			}
 		}
 		return;
@@ -85,8 +104,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	// every step that we do not have output results we shift the vectors of the RHS one up or down
 	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
 	// while allowing us to use vectorized execution for every step
-	StaticVector<bool> result;
-	index_t result_count = 0;
+	idx_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
 			throw NotImplementedException("FIXME: full outer join");
@@ -96,25 +114,20 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (!state->checked_found_match && state->lhs_found_match) {
 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
 				// non-matching tuples
-				for (index_t i = 0; i < state->child_chunk.size(); i++) {
+				SelectionVector sel(STANDARD_VECTOR_SIZE);
+				for (idx_t i = 0; i < state->child_chunk.size(); i++) {
 					if (!state->lhs_found_match[i]) {
-						chunk.owned_sel_vector[result_count++] = i;
+						sel.set_index(result_count++, i);
 					}
 				}
 				if (result_count > 0) {
 					// have to create the chunk, set the selection vector and count
-					chunk.sel_vector = chunk.owned_sel_vector;
 					// for the LHS, reference the child_chunk and set the sel_vector and count
-					for (index_t i = 0; i < state->child_chunk.column_count; i++) {
-						chunk.data[i].Reference(state->child_chunk.data[i]);
-						chunk.data[i].sel_vector = chunk.sel_vector;
-						chunk.data[i].count = result_count;
-					}
+					chunk.Slice(state->child_chunk, sel, result_count);
 					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (index_t i = state->child_chunk.column_count; i < chunk.column_count; i++) {
-						chunk.data[i].nullmask.set();
-						chunk.data[i].sel_vector = chunk.sel_vector;
-						chunk.data[i].count = result_count;
+					for (idx_t i = state->child_chunk.column_count(); i < chunk.column_count(); i++) {
+						chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+						ConstantVector::SetNull(chunk.data[i], true);
 					}
 					state->checked_found_match = true;
 					return;
@@ -130,7 +143,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					return;
 				}
 			}
-			state->child_chunk.Flatten();
+			state->child_chunk.Normalify();
 			state->left_position = 0;
 			state->right_position = 0;
 			if (state->lhs_found_match) {
@@ -140,44 +153,36 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		}
 		auto &lchunk = state->child_chunk;
 		auto &rchunk = *state->right_chunks.chunks[state->right_position];
-		for (index_t i = 0; i < chunk.column_count; i++) {
-			assert(!chunk.data[i].sel_vector);
-			chunk.data[i].count = rchunk.size();
-		}
+
 		// fill in the current element of the LHS into the chunk
-		assert(chunk.column_count == lchunk.column_count + rchunk.column_count);
-		for (index_t i = 0; i < lchunk.column_count; i++) {
-			VectorOperations::Set(chunk.data[i], lchunk.data[i].GetValue(state->left_position));
+		assert(chunk.column_count() == lchunk.column_count() + rchunk.column_count());
+		for (idx_t i = 0; i < lchunk.column_count(); i++) {
+			auto lvalue = lchunk.GetValue(i, state->left_position);
+			chunk.data[i].Reference(lvalue);
 		}
 		// for the RHS we just reference the entire vector
-		for (index_t i = 0; i < rchunk.column_count; i++) {
-			chunk.data[lchunk.column_count + i].Reference(rchunk.data[i]);
+		for (idx_t i = 0; i < rchunk.column_count(); i++) {
+			chunk.data[lchunk.column_count() + i].Reference(rchunk.data[i]);
 		}
+		chunk.SetCardinality(rchunk.size());
+
 		// now perform the computation
-		ExpressionExecutor executor(chunk);
-		executor.ExecuteExpression(*condition, result);
-
-		// create the result
-		VectorOperations::ExecType<bool>(result, [&](bool match, index_t i, index_t k) {
-			if (match && !result.nullmask[i]) {
-				// found a match!
-				// set the match flags
-				if (state->lhs_found_match) {
-					state->lhs_found_match[state->left_position] = true;
-					if (state->rhs_found_match) {
-						state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + i] = true;
-					}
-				}
-				chunk.owned_sel_vector[result_count++] = i;
-			}
-		});
-
+		SelectionVector match_sel(STANDARD_VECTOR_SIZE);
+		result_count = state->executor.SelectExpression(chunk, match_sel);
 		if (result_count > 0) {
-			// had a result! set the selection vector of the child elements
-			chunk.sel_vector = chunk.owned_sel_vector;
-			for (index_t i = 0; i < chunk.column_count; i++) {
-				chunk.data[i].sel_vector = chunk.sel_vector;
-				chunk.data[i].count = result_count;
+			// found a match!
+			// set the match flags in the LHS
+			if (state->lhs_found_match) {
+				state->lhs_found_match[state->left_position] = true;
+			}
+			chunk.Slice(match_sel, result_count);
+
+			// set the match flags in the RHS
+			if (state->rhs_found_match) {
+				for (idx_t i = 0; i < result_count; i++) {
+					auto idx = match_sel.get_index(i);
+					state->rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + idx] = true;
+				}
 			}
 		} else {
 			// no result: reset the chunk
@@ -197,7 +202,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
-	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get());
+	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), children[1].get(), *condition);
 }
 
 string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {

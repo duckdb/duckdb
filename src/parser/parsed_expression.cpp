@@ -1,9 +1,9 @@
-#include "parser/parsed_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
 
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
-#include "parser/expression/list.hpp"
-#include "parser/parsed_expression_iterator.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -46,8 +46,50 @@ bool ParsedExpression::HasSubquery() const {
 	return has_subquery;
 }
 
-uint64_t ParsedExpression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+bool ParsedExpression::Equals(const BaseExpression *other) const {
+	if (other->expression_class == ExpressionClass::BOUND_EXPRESSION) {
+		auto bound_expr = (BoundExpression *)other;
+		other = bound_expr->parsed_expr.get();
+	}
+	if (!BaseExpression::Equals(other)) {
+		return false;
+	}
+	switch (expression_class) {
+	case ExpressionClass::CASE:
+		return CaseExpression::Equals((CaseExpression *)this, (CaseExpression *)other);
+	case ExpressionClass::CAST:
+		return CastExpression::Equals((CastExpression *)this, (CastExpression *)other);
+	case ExpressionClass::COLUMN_REF:
+		return ColumnRefExpression::Equals((ColumnRefExpression *)this, (ColumnRefExpression *)other);
+	case ExpressionClass::COMPARISON:
+		return ComparisonExpression::Equals((ComparisonExpression *)this, (ComparisonExpression *)other);
+	case ExpressionClass::CONJUNCTION:
+		return ConjunctionExpression::Equals((ConjunctionExpression *)this, (ConjunctionExpression *)other);
+	case ExpressionClass::CONSTANT:
+		return ConstantExpression::Equals((ConstantExpression *)this, (ConstantExpression *)other);
+	case ExpressionClass::DEFAULT:
+		return true;
+	case ExpressionClass::FUNCTION:
+		return FunctionExpression::Equals((FunctionExpression *)this, (FunctionExpression *)other);
+	case ExpressionClass::OPERATOR:
+		return OperatorExpression::Equals((OperatorExpression *)this, (OperatorExpression *)other);
+	case ExpressionClass::PARAMETER:
+		return true;
+	case ExpressionClass::STAR:
+		return true;
+	case ExpressionClass::TABLE_STAR:
+		return TableStarExpression::Equals((TableStarExpression *)this, (TableStarExpression *)other);
+	case ExpressionClass::SUBQUERY:
+		return SubqueryExpression::Equals((SubqueryExpression *)this, (SubqueryExpression *)other);
+	case ExpressionClass::WINDOW:
+		return WindowExpression::Equals((WindowExpression *)this, (WindowExpression *)other);
+	default:
+		throw SerializationException("Unsupported type for expression deserialization!");
+	}
+}
+
+hash_t ParsedExpression::Hash() const {
+	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	ParsedExpressionIterator::EnumerateChildren(
 	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
@@ -97,6 +139,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::STAR:
 		result = StarExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::TABLE_STAR:
+		result = TableStarExpression::Deserialize(type, source);
 		break;
 	case ExpressionClass::SUBQUERY:
 		result = SubqueryExpression::Deserialize(type, source);

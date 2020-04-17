@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <random>
 
@@ -13,14 +13,12 @@ using namespace std;
 DUCKDB_BENCHMARK(SimpleAggregate, "[aggregate]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
-	// insert the elements into the database
+	Appender appender(state->conn, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
 		appender.BeginRow();
-		appender.AppendInteger(i % GROUP_COUNT);
+		appender.Append<int32_t>(i % GROUP_COUNT);
 		appender.EndRow();
 	}
-	appender.Commit();
 }
 
 virtual string GetQuery() {
@@ -54,15 +52,13 @@ virtual void Load(DuckDBBenchmarkState *state) {
 	gen.seed(42);
 
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
-	// insert the elements into the database
+	Appender appender(state->conn, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < GROUP_ROW_COUNT; i++) {
 		appender.BeginRow();
-		appender.AppendInteger(i % GROUP_COUNT);
-		appender.AppendInteger(distribution(gen));
+		appender.Append<int32_t>(i % GROUP_COUNT);
+		appender.Append<int32_t>(distribution(gen));
 		appender.EndRow();
 	}
-	appender.Commit();
 }
 
 virtual string GetQuery() {

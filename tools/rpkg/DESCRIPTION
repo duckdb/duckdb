@@ -1,22 +1,25 @@
 Package: duckdb
-Title: DBI Package for DuckDB
-Version: 0.1.0
-Author: Hannes Muehleisen <hannes@cwi.nl>
-Maintainer: Hannes Muehleisen <hannes@cwi.nl>
-Description: TODO
+Title: DBI Package for the DuckDB Database Management System
+Version: 0.1.6
+Authors@R: c(person(given = "DuckDB Contributors", role = "aut"),
+    person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")))
+Description: DuckDB is an embedded analytical data management system with SQL support. This package includes all of DuckDB as well as R DBI & dplyr connectors.
 Depends: 
-    R (>= 3.5.0)
+    R (>= 3.5.0),
+    DBI
 License: MPL
 LazyData: true
 Encoding: UTF-8
-Imports: 
-    DBI,
-    testthat,
+Imports:
+    dbplyr,
     methods,
+    testthat,
     utils
 Suggests: 
-    DBItest
-GitHub: https://github.com/cwida/duckdb
+    DBItest, 
+    callr
+URL: https://www.duckdb.org, https://github.com/cwida/duckdb
+BugReports: https://github.com/cwida/duckdb/issues
 Collate: 
     'duckdb.R'
     'Driver.R'

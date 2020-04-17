@@ -1,12 +1,13 @@
-#include "parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_)
-    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_)) {
+SubqueryRef::SubqueryRef(unique_ptr<QueryNode> subquery_p, string alias_p)
+    : TableRef(TableReferenceType::SUBQUERY), subquery(move(subquery_p)) {
+	this->alias = alias_p;
 }
 
 bool SubqueryRef::Equals(const TableRef *other_) const {
@@ -18,8 +19,7 @@ bool SubqueryRef::Equals(const TableRef *other_) const {
 }
 
 unique_ptr<TableRef> SubqueryRef::Copy() {
-	auto copy = make_unique<SubqueryRef>(subquery->Copy());
-	copy->alias = alias;
+	auto copy = make_unique<SubqueryRef>(subquery->Copy(), alias);
 	copy->column_name_alias = column_name_alias;
 	return move(copy);
 }
@@ -40,8 +40,8 @@ unique_ptr<TableRef> SubqueryRef::Deserialize(Deserializer &source) {
 		return nullptr;
 	}
 	auto result = make_unique<SubqueryRef>(move(subquery));
-	index_t column_count = (index_t)source.Read<uint32_t>();
-	for (index_t i = 0; i < column_count; i++) {
+	idx_t column_count = (idx_t)source.Read<uint32_t>();
+	for (idx_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(source.Read<string>());
 	}
 	return move(result);

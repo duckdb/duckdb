@@ -1,7 +1,7 @@
 #include "catch.hpp"
-#include "common/helper.hpp"
+#include "duckdb/common/helper.hpp"
 #include "expression_helper.hpp"
-#include "optimizer/rule/comparison_simplification.hpp"
+#include "duckdb/optimizer/rule/comparison_simplification.hpp"
 
 using namespace duckdb;
 using namespace std;

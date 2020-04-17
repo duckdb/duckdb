@@ -1,8 +1,8 @@
-#include "optimizer/filter_pushdown.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_empty_result.hpp"
-#include "planner/operator/logical_projection.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	// all the BoundColumnRefExpressions in the filter should refer to the LogicalProjection
 	// we can rewrite them by replacing those references with the expression of the LogicalProjection node
 	FilterPushdown child_pushdown(optimizer);
-	for (index_t i = 0; i < filters.size(); i++) {
+	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
 		assert(f.bindings.size() <= 1);
 		// rewrite the bindings within this subquery

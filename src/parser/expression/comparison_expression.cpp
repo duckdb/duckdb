@@ -1,8 +1,8 @@
-#include "parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "parser/expression/cast_expression.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -18,15 +18,11 @@ string ComparisonExpression::ToString() const {
 	return left->ToString() + ExpressionTypeToOperator(type) + right->ToString();
 }
 
-bool ComparisonExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool ComparisonExpression::Equals(const ComparisonExpression *a, const ComparisonExpression *b) {
+	if (!a->left->Equals(b->left.get())) {
 		return false;
 	}
-	auto other = (ComparisonExpression *)other_;
-	if (!left->Equals(other->left.get())) {
-		return false;
-	}
-	if (!right->Equals(other->right.get())) {
+	if (!a->right->Equals(b->right.get())) {
 		return false;
 	}
 	return true;

@@ -1,7 +1,7 @@
-#include "planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-#include "common/types/hash.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -22,8 +22,8 @@ bool BoundConstantExpression::Equals(const BaseExpression *other_) const {
 	return value == other->value;
 }
 
-uint64_t BoundConstantExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundConstantExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	return CombineHash(ValueOperations::Hash(value), result);
 }
 

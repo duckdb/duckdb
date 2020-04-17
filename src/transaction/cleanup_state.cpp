@@ -1,4 +1,12 @@
-#include "transaction/cleanup_state.hpp"
+#include "duckdb/transaction/cleanup_state.hpp"
+#include "duckdb/transaction/delete_info.hpp"
+#include "duckdb/transaction/update_info.hpp"
+
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
+
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -7,7 +15,7 @@ CleanupState::CleanupState() : current_table(nullptr), count(0) {
 }
 
 CleanupState::~CleanupState() {
-	FlushIndexCleanup();
+	Flush();
 }
 
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
@@ -25,38 +33,29 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		}
 		break;
 	}
-	case UndoFlags::DELETE_TUPLE:
-	case UndoFlags::UPDATE_TUPLE:
-	case UndoFlags::INSERT_TUPLE: {
-		// undo this entry
-		auto info = (VersionInfo *)data;
-		if (type == UndoFlags::DELETE_TUPLE || type == UndoFlags::UPDATE_TUPLE) {
-			CleanupIndexInsert(info);
-		}
-		if (!info->prev) {
-			// parent refers to a storage chunk
-			info->vinfo->Cleanup(info);
-		} else {
-			// parent refers to another entry in UndoBuffer
-			// simply remove this entry from the list
-			auto parent = info->prev;
-			parent->next = info->next;
-			if (parent->next) {
-				parent->next->prev = parent;
-			}
-		}
+	case UndoFlags::DELETE_TUPLE: {
+		auto info = (DeleteInfo *)data;
+		CleanupDelete(info);
 		break;
 	}
-	case UndoFlags::QUERY:
+	case UndoFlags::UPDATE_TUPLE: {
+		auto info = (UpdateInfo *)data;
+		CleanupUpdate(info);
 		break;
+	}
 	default:
-		assert(type == UndoFlags::EMPTY_ENTRY);
 		break;
 	}
 }
 
-void CleanupState::CleanupIndexInsert(VersionInfo *info) {
-	assert(info->tuple_data);
+void CleanupState::CleanupUpdate(UpdateInfo *info) {
+	// remove the update info from the update chain
+	// first obtain an exclusive lock on the segment
+	auto lock = info->segment->lock.GetExclusiveLock();
+	info->segment->CleanupUpdate(info);
+}
+
+void CleanupState::CleanupDelete(DeleteInfo *info) {
 	auto version_table = &info->GetTable();
 	if (version_table->indexes.size() == 0) {
 		// this table has no indexes: no cleanup to be done
@@ -64,37 +63,27 @@ void CleanupState::CleanupIndexInsert(VersionInfo *info) {
 	}
 	if (current_table != version_table) {
 		// table for this entry differs from previous table: flush and switch to the new table
-		FlushIndexCleanup();
+		Flush();
 		current_table = version_table;
-		chunk.Initialize(current_table->types);
 	}
-	if (count == STANDARD_VECTOR_SIZE) {
-		// current vector is filled up: flush
-		FlushIndexCleanup();
+	for (idx_t i = 0; i < info->count; i++) {
+		if (count == STANDARD_VECTOR_SIZE) {
+			Flush();
+		}
+		row_numbers[count++] = info->vinfo->start + info->rows[i];
 	}
-
-	// store the row identifiers and tuple data
-	data[count] = info->tuple_data;
-	row_numbers[count] = info->GetRowId();
-	count++;
 }
 
-void CleanupState::FlushIndexCleanup() {
+void CleanupState::Flush() {
 	if (count == 0) {
 		return;
 	}
 
 	// set up the row identifiers vector
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_numbers);
-	row_identifiers.count = count;
 
-	// now retrieve data from the version info
-	current_table->RetrieveVersionedData(chunk, data, count);
-	for (auto &index : current_table->indexes) {
-		index->Delete(chunk, row_identifiers);
-	}
-
-	chunk.Reset();
+	// delete the tuples from all the indexes
+	current_table->RemoveFromIndexes(row_identifiers, count);
 
 	count = 0;
 }

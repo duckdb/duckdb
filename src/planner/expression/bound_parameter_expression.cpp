@@ -1,9 +1,10 @@
-#include "planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundParameterExpression::BoundParameterExpression(index_t parameter_nr)
+BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
       sql_type(SQLType(SQLTypeId::UNKNOWN)), parameter_nr(parameter_nr), value(nullptr) {
 }
@@ -30,8 +31,8 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_) const {
 	return parameter_nr == other->parameter_nr;
 }
 
-uint64_t BoundParameterExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundParameterExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	result = CombineHash(duckdb::Hash(parameter_nr), result);
 	result = CombineHash(duckdb::Hash((int)sql_type.id), result);
 	return result;

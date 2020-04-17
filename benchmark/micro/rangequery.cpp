@@ -1,6 +1,6 @@
 #include "benchmark_runner.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "main/appender.hpp"
+#include "duckdb/main/appender.hpp"
 
 #include <random>
 
@@ -15,15 +15,14 @@ using namespace std;
 DUCKDB_BENCHMARK(RangeQueryWithoutIndex, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
-	// insert the elements into the database
+	Appender appender(state->conn, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.AppendInteger(i);
+		appender.Append<int32_t>(i);
+		appender.Append<int32_t>(i);
 		appender.EndRow();
 	}
-	appender.Commit();
+	appender.Close();
 }
 virtual std::string GetQuery() {
 	return "SELECT sum(j) FROM integers WHERE i >= " + to_string(RANGE_QUERY_ENTRY_LOW) +
@@ -55,15 +54,13 @@ FINISH_BENCHMARK(RangeQueryWithoutIndex)
 DUCKDB_BENCHMARK(RangeQueryWithIndexART, "[micro]")
 virtual void Load(DuckDBBenchmarkState *state) {
 	state->conn.Query("CREATE TABLE integers(i INTEGER, j INTEGER);");
-	Appender appender(state->db, DEFAULT_SCHEMA, "integers");
-	// insert the elements into the database
+	Appender appender(state->conn, "integers"); // insert the elements into the database
 	for (size_t i = 0; i < RANGE_QUERY_ROW_COUNT; i++) {
 		appender.BeginRow();
-		appender.AppendInteger(i);
-		appender.AppendInteger(i);
+		appender.Append<int32_t>(i);
+		appender.Append<int32_t>(i);
 		appender.EndRow();
 	}
-	appender.Commit();
 	state->conn.Query("CREATE INDEX i_index ON integers using art(i)");
 }
 

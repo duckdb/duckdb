@@ -1,26 +1,42 @@
-#include "common/types/value.hpp"
+#include "duckdb/common/types/value.hpp"
 
-#include "common/exception.hpp"
-#include "common/limits.hpp"
-#include "common/operator/aggregate_operators.hpp"
-#include "common/operator/cast_operators.hpp"
-#include "common/operator/comparison_operators.hpp"
-#include "common/operator/numeric_binary_operators.hpp"
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
-#include "common/types/timestamp.hpp"
-#include "common/types/vector.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+
+#include "utf8proc_wrapper.hpp"
+#include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Value::Value(const Value &other) : type(other.type), is_null(other.is_null), str_value(other.str_value) {
-	this->value_ = other.value_;
+Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+}
+
+Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	auto utf_type = Utf8Proc::Analyze(val);
+	switch (utf_type) {
+	case UnicodeType::INVALID:
+		throw Exception("String value is not valid UTF8");
+	case UnicodeType::ASCII:
+		str_value = val;
+		break;
+	case UnicodeType::UNICODE:
+		str_value = Utf8Proc::Normalize(val);
+		break;
+	}
 }
 
 Value Value::MinimumValue(TypeId type) {
@@ -28,19 +44,19 @@ Value Value::MinimumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		result.value_.boolean = false;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		result.value_.tinyint = std::numeric_limits<int8_t>::min();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		result.value_.smallint = std::numeric_limits<int16_t>::min();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		result.value_.integer = std::numeric_limits<int32_t>::min();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
 		break;
 	case TypeId::FLOAT:
@@ -50,7 +66,7 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.double_ = std::numeric_limits<double>::min();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uint64_t>::min();
+		result.value_.pointer = std::numeric_limits<uintptr_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -63,19 +79,19 @@ Value Value::MaximumValue(TypeId type) {
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		result.value_.boolean = true;
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		result.value_.tinyint = std::numeric_limits<int8_t>::max();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		result.value_.smallint = std::numeric_limits<int16_t>::max();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		result.value_.integer = std::numeric_limits<int32_t>::max();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
 		break;
 	case TypeId::FLOAT:
@@ -94,41 +110,52 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::BOOLEAN(int8_t value) {
-	Value result(TypeId::BOOLEAN);
+	Value result(TypeId::BOOL);
 	result.value_.boolean = value ? true : false;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TINYINT(int8_t value) {
-	Value result(TypeId::TINYINT);
+	Value result(TypeId::INT8);
 	result.value_.tinyint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::SMALLINT(int16_t value) {
-	Value result(TypeId::SMALLINT);
+	Value result(TypeId::INT16);
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::INTEGER(int32_t value) {
-	Value result(TypeId::INTEGER);
+	Value result(TypeId::INT32);
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BIGINT(int64_t value) {
-	Value result(TypeId::BIGINT);
+	Value result(TypeId::INT64);
 	result.value_.bigint = value;
 	result.is_null = false;
 	return result;
 }
 
+bool Value::FloatIsValid(float value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
+bool Value::DoubleIsValid(double value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
 Value Value::FLOAT(float value) {
+	if (!Value::FloatIsValid(value)) {
+		throw OutOfRangeException("Invalid float value %f", value);
+	}
 	Value result(TypeId::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -136,13 +163,16 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
+	if (!Value::DoubleIsValid(value)) {
+		throw OutOfRangeException("Invalid double value %f", value);
+	}
 	Value result(TypeId::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
 	return result;
 }
 
-Value Value::HASH(uint64_t value) {
+Value Value::HASH(hash_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
@@ -156,20 +186,61 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
+Value Value::DATE(date_t date) {
+	auto val = Value::INTEGER(date);
+	val.sql_type = SQLType::DATE;
+	return val;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
-	return Value::INTEGER(Date::FromDate(year, month, day));
+	auto val = Value::INTEGER(Date::FromDate(year, month, day));
+	val.sql_type = SQLType::DATE;
+	return val;
+}
+
+Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
+	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIME;
+	return val;
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
-	return Value::BIGINT(timestamp);
+	auto val = Value::BIGINT(timestamp);
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
-	return Value::BIGINT(Timestamp::FromDatetime(date, time));
+	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
+}
+
+Value Value::STRUCT(child_list_t<Value> values) {
+	Value result(TypeId::STRUCT);
+	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+Value Value::LIST(vector<Value> values) {
+	Value result(TypeId::LIST);
+	result.list_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// CreateValue
+//===--------------------------------------------------------------------===//
+template <> Value Value::CreateValue(bool value) {
+	return Value::BOOLEAN(value);
 }
 
 template <> Value Value::CreateValue(int8_t value) {
@@ -196,6 +267,10 @@ template <> Value Value::CreateValue(string value) {
 	return Value(value);
 }
 
+template <> Value Value::CreateValue(string_t value) {
+	return Value(value);
+}
+
 template <> Value Value::CreateValue(float value) {
 	return Value::FLOAT(value);
 }
@@ -204,22 +279,79 @@ template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
+template <> Value Value::CreateValue(Value value) {
+	return value;
+}
+//===--------------------------------------------------------------------===//
+// GetValue
+//===--------------------------------------------------------------------===//
+template <class T> T Value::GetValueInternal() {
+	if (is_null) {
+		return NullValue<T>();
+	}
+	switch (type) {
+	case TypeId::BOOL:
+		return Cast::Operation<bool, T>(value_.boolean);
+	case TypeId::INT8:
+		return Cast::Operation<int8_t, T>(value_.tinyint);
+	case TypeId::INT16:
+		return Cast::Operation<int16_t, T>(value_.smallint);
+	case TypeId::INT32:
+		return Cast::Operation<int32_t, T>(value_.integer);
+	case TypeId::INT64:
+		return Cast::Operation<int64_t, T>(value_.bigint);
+	case TypeId::FLOAT:
+		return Cast::Operation<float, T>(value_.float_);
+	case TypeId::DOUBLE:
+		return Cast::Operation<double, T>(value_.double_);
+	case TypeId::VARCHAR:
+		return Cast::Operation<string_t, T>(str_value.c_str());
+	default:
+		throw NotImplementedException("Unimplemented type for GetValue()");
+	}
+}
+
+template <> bool Value::GetValue() {
+	return GetValueInternal<bool>();
+}
+template <> int8_t Value::GetValue() {
+	return GetValueInternal<int8_t>();
+}
+template <> int16_t Value::GetValue() {
+	return GetValueInternal<int16_t>();
+}
+template <> int32_t Value::GetValue() {
+	return GetValueInternal<int32_t>();
+}
+template <> int64_t Value::GetValue() {
+	return GetValueInternal<int64_t>();
+}
+template <> string Value::GetValue() {
+	return GetValueInternal<string>();
+}
+template <> float Value::GetValue() {
+	return GetValueInternal<float>();
+}
+template <> double Value::GetValue() {
+	return GetValueInternal<double>();
+}
+
 Value Value::Numeric(TypeId type, int64_t value) {
 	assert(!TypeIsIntegral(type) ||
 	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		assert(value <= std::numeric_limits<int8_t>::max());
 		return Value::TINYINT((int8_t)value);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		assert(value <= std::numeric_limits<int16_t>::max());
 		return Value::SMALLINT((int16_t)value);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		assert(value <= std::numeric_limits<int32_t>::max());
 		return Value::INTEGER((int32_t)value);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return Value::BIGINT(value);
 	case TypeId::FLOAT:
 		return Value((float)value);
@@ -235,31 +367,10 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	return val;
 }
 
-int64_t Value::GetNumericValue() {
-	if (is_null) {
-		throw ConversionException("Cannot convert NULL Value to numeric value");
-	}
-	switch (type) {
-	case TypeId::TINYINT:
-		return value_.tinyint;
-	case TypeId::SMALLINT:
-		return value_.smallint;
-	case TypeId::INTEGER:
-		return value_.integer;
-	case TypeId::BIGINT:
-		return value_.bigint;
-	case TypeId::FLOAT:
-		return value_.float_;
-	case TypeId::DOUBLE:
-		return value_.double_;
-	case TypeId::POINTER:
-		return value_.pointer;
-	default:
-		throw InvalidTypeException(type, "GetNumericValue requires numeric type");
-	}
-}
-
 string Value::ToString(SQLType sql_type) const {
+	if (is_null) {
+		return "NULL";
+	}
 	switch (sql_type.id) {
 	case SQLTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
@@ -277,20 +388,50 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
+	case SQLTypeId::TIME:
+		return Time::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+	case SQLTypeId::STRUCT: {
+		string ret = "<";
+		for (size_t i = 0; i < struct_value.size(); i++) {
+			auto &child = struct_value[i];
+			ret += child.first + ": " + child.second.ToString();
+			if (i < struct_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		string ret = "[";
+		for (size_t i = 0; i < list_value.size(); i++) {
+			auto &child = list_value[i];
+			ret += child.ToString();
+			if (i < list_value.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing");
 	}
 }
 
 string Value::ToString() const {
-	if (is_null) {
-		return "NULL";
+	switch (type) {
+	case TypeId::POINTER:
+		return to_string(value_.pointer);
+	case TypeId::HASH:
+		return to_string(value_.hash);
+	default:
+		return ToString(SQLTypeFromInternalType(type));
 	}
-	return ToString(SQLTypeFromInternalType(type));
 }
 
 //===--------------------------------------------------------------------===//
@@ -375,7 +516,7 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type);
+	VectorOperations::Cast(input, result, source_type, target_type, 1);
 	return result.GetValue(0);
 }
 
@@ -391,19 +532,19 @@ void Value::Serialize(Serializer &serializer) {
 	serializer.Write<bool>(is_null);
 	if (!is_null) {
 		switch (type) {
-		case TypeId::BOOLEAN:
+		case TypeId::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
 			break;
-		case TypeId::TINYINT:
+		case TypeId::INT8:
 			serializer.Write<int8_t>(value_.tinyint);
 			break;
-		case TypeId::SMALLINT:
+		case TypeId::INT16:
 			serializer.Write<int16_t>(value_.smallint);
 			break;
-		case TypeId::INTEGER:
+		case TypeId::INT32:
 			serializer.Write<int32_t>(value_.integer);
 			break;
-		case TypeId::BIGINT:
+		case TypeId::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
 		case TypeId::FLOAT:
@@ -433,19 +574,19 @@ Value Value::Deserialize(Deserializer &source) {
 	}
 	new_value.is_null = false;
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
 		break;
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		new_value.value_.tinyint = source.Read<int8_t>();
 		break;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		new_value.value_.smallint = source.Read<int16_t>();
 		break;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		new_value.value_.integer = source.Read<int32_t>();
 		break;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
 	case TypeId::FLOAT:
@@ -464,36 +605,6 @@ Value Value::Deserialize(Deserializer &source) {
 		throw NotImplementedException("Value type not implemented for deserialization");
 	}
 	return new_value;
-}
-
-// adapted from MonetDB's str.c
-bool Value::IsUTF8String(const char *s) {
-	int c;
-
-	if (s == NULL) {
-		return true;
-	}
-	if (*s == '\200' && s[1] == '\0') {
-		return true; /* str_nil */
-	}
-	while ((c = *s++) != '\0') {
-		if ((c & 0x80) == 0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xE0) == 0xC0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF0) == 0xE0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF8) == 0xF0)
-			continue;
-		return false;
-	}
-	return true;
 }
 
 void Value::Print() {

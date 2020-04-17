@@ -1,4 +1,4 @@
-#include "common/enums/logical_operator_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 
 using namespace std;
 
@@ -17,6 +17,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DELIM_GET";
 	case LogicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
+	case LogicalOperatorType::EXPRESSION_GET:
+		return "EXPRESSION_GET";
 	case LogicalOperatorType::ANY_JOIN:
 		return "ANY_JOIN";
 	case LogicalOperatorType::COMPARISON_JOIN:
@@ -31,16 +33,18 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "AGGREGATE_AND_GROUP_BY";
 	case LogicalOperatorType::WINDOW:
 		return "WINDOW";
+	case LogicalOperatorType::UNNEST:
+		return "UNNEST";
 	case LogicalOperatorType::LIMIT:
 		return "LIMIT";
 	case LogicalOperatorType::ORDER_BY:
 		return "ORDER_BY";
+	case LogicalOperatorType::TOP_N:
+		return "TOP_N";
 	case LogicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::COPY_FROM_FILE:
 		return "COPY_FROM_FILE";
-	case LogicalOperatorType::SUBQUERY:
-		return "SUBQUERY";
 	case LogicalOperatorType::JOIN:
 		return "JOIN";
 	case LogicalOperatorType::CROSS_PRODUCT:
@@ -61,8 +65,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "UPDATE";
 	case LogicalOperatorType::PREPARE:
 		return "PREPARE";
-	case LogicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case LogicalOperatorType::TABLE_FUNCTION:
 		return "TABLE_FUNCTION";
 	case LogicalOperatorType::CREATE_INDEX:
@@ -73,8 +75,14 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPLAIN";
 	case LogicalOperatorType::EXECUTE:
 		return "EXECUTE";
+	case LogicalOperatorType::VACUUM:
+		return "VACUUM";
 	case LogicalOperatorType::INDEX_SCAN:
 		return "INDEX_SCAN";
+	case LogicalOperatorType::RECURSIVE_CTE:
+		return "REC_CTE";
+	case LogicalOperatorType::CTE_REF:
+		return "CTE_SCAN";
 	case LogicalOperatorType::INVALID:
 	default:
 		return "INVALID";

@@ -1,6 +1,6 @@
-#include "parser/tableref/crossproductref.hpp"
+#include "duckdb/parser/tableref/crossproductref.hpp"
 
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;

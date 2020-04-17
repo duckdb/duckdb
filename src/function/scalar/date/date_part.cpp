@@ -1,206 +1,321 @@
-#include "function/scalar/date_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/string_util.hpp"
-
+#include "duckdb/function/scalar/date_functions.hpp"
+#include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/string_util.hpp"
 using namespace std;
 
 namespace duckdb {
 
-enum class SpecifierType {
-	YEAR,
-	MONTH,
-	DAY,
-	DECADE,
-	CENTURY,
-	MILLENIUM,
-	MICROSECONDS,
-	MILLISECONDS,
-	SECOND,
-	MINUTE,
-	HOUR,
-	EPOCH,
-	DOW,
-	ISODOW,
-	WEEK,
-	QUARTER,
-	DOY
-};
-
-static SpecifierType GetSpecifierType(string specifier) {
+DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	specifier = StringUtil::Lower(specifier);
 	if (specifier == "year") {
-		return SpecifierType::YEAR;
+		return DatePartSpecifier::YEAR;
 	} else if (specifier == "month") {
-		return SpecifierType::MONTH;
+		return DatePartSpecifier::MONTH;
 	} else if (specifier == "day") {
-		return SpecifierType::DAY;
+		return DatePartSpecifier::DAY;
 	} else if (specifier == "decade") {
-		return SpecifierType::DECADE;
+		return DatePartSpecifier::DECADE;
 	} else if (specifier == "century") {
-		return SpecifierType::CENTURY;
+		return DatePartSpecifier::CENTURY;
 	} else if (specifier == "millennium") {
-		return SpecifierType::MILLENIUM;
+		return DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds") {
-		return SpecifierType::MICROSECONDS;
+		return DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds") {
-		return SpecifierType::MILLISECONDS;
+		return DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second") {
-		return SpecifierType::SECOND;
+		return DatePartSpecifier::SECOND;
 	} else if (specifier == "minute") {
-		return SpecifierType::MINUTE;
+		return DatePartSpecifier::MINUTE;
 	} else if (specifier == "hour") {
-		return SpecifierType::HOUR;
+		return DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
-		return SpecifierType::EPOCH;
+		return DatePartSpecifier::EPOCH;
 	} else if (specifier == "dow") {
 		// day of the week (Sunday = 0, Saturday = 6)
-		return SpecifierType::DOW;
+		return DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
-		return SpecifierType::ISODOW;
+		return DatePartSpecifier::ISODOW;
 	} else if (specifier == "week") {
 		// week number
-		return SpecifierType::WEEK;
+		return DatePartSpecifier::WEEK;
 	} else if (specifier == "doy") {
 		// day of the year (1-365/366)
-		return SpecifierType::DOY;
+		return DatePartSpecifier::DOY;
 	} else if (specifier == "quarter") {
 		// quarter of the year (1-4)
-		return SpecifierType::QUARTER;
+		return DatePartSpecifier::QUARTER;
 	} else {
 		throw ConversionException("extract specifier \"%s\" not recognized", specifier.c_str());
 	}
 }
 
-static int64_t extract_element(SpecifierType type, date_t element) {
-	switch (type) {
-	case SpecifierType::YEAR:
-		return Date::ExtractYear(element);
-	case SpecifierType::MONTH:
-		return Date::ExtractMonth(element);
-	case SpecifierType::DAY:
-		return Date::ExtractDay(element);
-	case SpecifierType::DECADE:
-		return Date::ExtractYear(element) / 10;
-	case SpecifierType::CENTURY:
-		return ((Date::ExtractYear(element) - 1) / 100) + 1;
-	case SpecifierType::MILLENIUM:
-		return ((Date::ExtractYear(element) - 1) / 1000) + 1;
-	case SpecifierType::QUARTER:
-		return Date::ExtractMonth(element) / 4;
-	case SpecifierType::EPOCH:
-		return Date::Epoch(element);
-	case SpecifierType::DOW:
+struct YearOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractYear(input);
+	}
+};
+
+template <> int64_t YearOperator::Operation(timestamp_t input) {
+	return YearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct MonthOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractMonth(input);
+	}
+};
+
+template <> int64_t MonthOperator::Operation(timestamp_t input) {
+	return MonthOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractDay(input);
+	}
+};
+
+template <> int64_t DayOperator::Operation(timestamp_t input) {
+	return DayOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DecadeOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractYear(input) / 10;
+	}
+};
+
+template <> int64_t DecadeOperator::Operation(timestamp_t input) {
+	return DecadeOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct CenturyOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return ((Date::ExtractYear(input) - 1) / 100) + 1;
+	}
+};
+
+template <> int64_t CenturyOperator::Operation(timestamp_t input) {
+	return CenturyOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct MilleniumOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return ((Date::ExtractYear(input) - 1) / 1000) + 1;
+	}
+};
+
+template <> int64_t MilleniumOperator::Operation(timestamp_t input) {
+	return MilleniumOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct QuarterOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractMonth(input) / 4;
+	}
+};
+
+template <> int64_t QuarterOperator::Operation(timestamp_t input) {
+	return QuarterOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOfWeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		// day of the week (Sunday = 0, Saturday = 6)
 		// turn sunday into 0 by doing mod 7
-		return Date::ExtractISODayOfTheWeek(element) % 7;
-	case SpecifierType::ISODOW:
+		return Date::ExtractISODayOfTheWeek(input) % 7;
+	}
+};
+
+template <> int64_t DayOfWeekOperator::Operation(timestamp_t input) {
+	return DayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct ISODayOfWeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		// isodow (Monday = 1, Sunday = 7)
-		return Date::ExtractISODayOfTheWeek(element);
-	case SpecifierType::DOY:
-		return Date::ExtractDayOfTheYear(element);
-	case SpecifierType::WEEK:
-		return Date::ExtractWeekNumber(element);
-	case SpecifierType::MICROSECONDS:
-	case SpecifierType::MILLISECONDS:
-	case SpecifierType::SECOND:
-	case SpecifierType::MINUTE:
-	case SpecifierType::HOUR:
+		return Date::ExtractISODayOfTheWeek(input);
+	}
+};
+
+template <> int64_t ISODayOfWeekOperator::Operation(timestamp_t input) {
+	return ISODayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct DayOfYearOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractDayOfTheYear(input);
+	}
+};
+
+template <> int64_t DayOfYearOperator::Operation(timestamp_t input) {
+	return DayOfYearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct WeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::ExtractWeekNumber(input);
+	}
+};
+
+template <> int64_t WeekOperator::Operation(timestamp_t input) {
+	return WeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
+}
+
+struct EpochOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return Date::Epoch(input);
+	}
+};
+
+template <> int64_t EpochOperator::Operation(timestamp_t input) {
+	return Timestamp::GetEpoch(input);
+}
+
+struct MicrosecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
 		return 0;
-	default:
-		throw NotImplementedException("Specifier type not implemented");
 	}
+};
+
+template <> int64_t MicrosecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMilliseconds(input) * 1000;
 }
 
-static int64_t extract_element(SpecifierType type, timestamp_t element) {
+struct MillisecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t MillisecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMilliseconds(input);
+}
+
+struct SecondsOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t SecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetSeconds(input);
+}
+
+struct MinutesOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t MinutesOperator::Operation(timestamp_t input) {
+	return Timestamp::GetMinutes(input);
+}
+
+struct HoursOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return 0;
+	}
+};
+
+template <> int64_t HoursOperator::Operation(timestamp_t input) {
+	return Timestamp::GetHours(input);
+}
+
+template <class T> static int64_t extract_element(DatePartSpecifier type, T element) {
 	switch (type) {
-	case SpecifierType::YEAR:
-	case SpecifierType::MONTH:
-	case SpecifierType::DAY:
-	case SpecifierType::DECADE:
-	case SpecifierType::CENTURY:
-	case SpecifierType::MILLENIUM:
-	case SpecifierType::QUARTER:
-	case SpecifierType::DOW:
-	case SpecifierType::ISODOW:
-	case SpecifierType::DOY:
-	case SpecifierType::WEEK:
-        return extract_element(type, Timestamp::GetDate(element));
-	case SpecifierType::EPOCH:
-		return Timestamp::GetEpoch(element);
-	case SpecifierType::MILLISECONDS:
-        return Timestamp::GetMilliseconds(element);
-	case SpecifierType::SECOND:
-        return Timestamp::GetSeconds(element);
-	case SpecifierType::MINUTE:
-        return Timestamp::GetMinutes(element);
-	case SpecifierType::HOUR:
-        return Timestamp::GetHours(element);
+	case DatePartSpecifier::YEAR:
+		return YearOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MONTH:
+		return MonthOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::DAY:
+		return DayOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::DECADE:
+		return DecadeOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::CENTURY:
+		return CenturyOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MILLENNIUM:
+		return MilleniumOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::QUARTER:
+		return QuarterOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::DOW:
+		return DayOfWeekOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::ISODOW:
+		return ISODayOfWeekOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::DOY:
+		return DayOfYearOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::WEEK:
+		return WeekOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::EPOCH:
+		return EpochOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MICROSECONDS:
+		return MicrosecondsOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MILLISECONDS:
+		return MillisecondsOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::SECOND:
+		return SecondsOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::MINUTE:
+		return MinutesOperator::Operation<T, int64_t>(element);
+	case DatePartSpecifier::HOUR:
+		return HoursOperator::Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
 }
 
-static void date_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
-	result.Initialize(TypeId::BIGINT);
-	result.nullmask = inputs[1].nullmask;
-	result.count = inputs[1].count;
-	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::INTEGER) {
-		throw NotImplementedException("Can only extract from dates or timestamps");
-    }
-
-	auto result_data = (int64_t *)result.data;
-	if (inputs[0].IsConstant()) {
-		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-  		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(specifier_type, element);
-    	});
-	} else {
-		// not constant specifier
-		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<date_t>(inputs[1], [&](date_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    	});
+struct DatePartOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA specifier, TB date) {
+		return extract_element<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
+};
+
+template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, string name) {
+	ScalarFunctionSet operator_set(name);
+	operator_set.AddFunction(
+	    ScalarFunction({SQLType::DATE}, SQLType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
+	operator_set.AddFunction(
+	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+	set.AddFunction(operator_set);
 }
 
-static void timestamp_part_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                        Vector &result) {
-	result.Initialize(TypeId::BIGINT);
-	result.nullmask = inputs[1].nullmask;
-	result.count = inputs[1].count;
-	result.sel_vector = inputs[1].sel_vector;
-	if (inputs[1].type != TypeId::BIGINT) {
-		throw NotImplementedException("Can only extract from dates or timestamps");
-    }
+void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
+	// register the individual operators
+	AddDatePartOperator<YearOperator>(set, "year");
+	AddDatePartOperator<MonthOperator>(set, "month");
+	AddDatePartOperator<DayOperator>(set, "day");
+	AddDatePartOperator<DecadeOperator>(set, "decade");
+	AddDatePartOperator<CenturyOperator>(set, "century");
+	AddDatePartOperator<MilleniumOperator>(set, "millenium");
+	AddDatePartOperator<QuarterOperator>(set, "quarter");
+	AddDatePartOperator<DayOfWeekOperator>(set, "dayofweek");
+	AddDatePartOperator<ISODayOfWeekOperator>(set, "isodow");
+	AddDatePartOperator<DayOfYearOperator>(set, "dayofyear");
+	AddDatePartOperator<WeekOperator>(set, "week");
+	AddDatePartOperator<EpochOperator>(set, "epoch");
+	AddDatePartOperator<MicrosecondsOperator>(set, "microsecond");
+	AddDatePartOperator<MillisecondsOperator>(set, "millisecond");
+	AddDatePartOperator<SecondsOperator>(set, "second");
+	AddDatePartOperator<MinutesOperator>(set, "minute");
+	AddDatePartOperator<HoursOperator>(set, "hour");
 
-	auto result_data = (int64_t *)result.data;
-	if (inputs[0].IsConstant()) {
-		// constant specifier
-		auto specifier_type = GetSpecifierType(((const char **)inputs[0].data)[0]);
-  		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(specifier_type, element);
-    	});
-	} else {
-		// not constant specifier
-		auto specifiers = ((const char **)inputs[0].data);
-		VectorOperations::ExecType<timestamp_t>(inputs[1], [&](timestamp_t element, index_t i, index_t k) {
-		    result_data[i] = extract_element(GetSpecifierType(specifiers[i]), element);
-    	});
-	}
-}
-
-void DatePart::RegisterFunction(BuiltinFunctions &set) {
-    ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::DATE }, SQLType::BIGINT, date_part_function));
-	date_part.AddFunction(ScalarFunction({ SQLType::VARCHAR, SQLType::TIMESTAMP }, SQLType::BIGINT, timestamp_part_function));
-    set.AddFunction(date_part);
+	// finally the actual date_part function
+	ScalarFunctionSet date_part("date_part");
+	date_part.AddFunction(
+	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::BIGINT,
+	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator, true>));
+	date_part.AddFunction(
+	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::BIGINT,
+	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator, true>));
+	set.AddFunction(date_part);
+	date_part.name = "datepart";
+	set.AddFunction(date_part);
 }
 
 } // namespace duckdb

@@ -45,6 +45,10 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	result = con.Query("SELECT a FROM test UNION SELECT b FROM test2 ORDER BY b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->types.size() == 1);
+	// if names are ambiguous, throw an error
+	REQUIRE_FAIL(con.Query("SELECT 1, a FROM test UNION SELECT b AS a, 1 FROM test2 ORDER BY a;"));
+	// if expressions are ambiguous as well, throw an error
+	REQUIRE_FAIL(con.Query("SELECT 1, a+1 FROM test UNION SELECT a+1, 1 FROM test ORDER BY a+1;"));
 	// also if we have multiple setops
 	result = con.Query("SELECT a FROM test UNION SELECT b FROM test2 UNION SELECT b AS c FROM test2 ORDER BY c;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
@@ -70,4 +74,49 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	result = con.Query("(SELECT a FROM test ORDER BY a+1) UNION SELECT b FROM test2 ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
 	REQUIRE(result->types.size() == 1);
+
+	// unions with SELECT * also allows orders
+	result = con.Query("SELECT * FROM test UNION SELECT * FROM test2 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT * FROM test UNION SELECT * FROM test2 ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+
+	// test union with/without table specifiers
+	result = con.Query("SELECT a FROM test UNION SELECT * FROM test2 ORDER BY test.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT a FROM test UNION SELECT b FROM test2 ORDER BY test2.b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT test.a FROM test UNION SELECT * FROM test2 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT test.a FROM test UNION SELECT test2.b FROM test2 ORDER BY b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+
+	// what about multiple set ops?
+	result = con.Query(
+	    "SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY test.a, test2.b, t1.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	result = con.Query("SELECT a FROM test UNION SELECT * FROM test2 UNION SELECT * FROM test t1 ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	// and subqueries
+	result = con.Query("SELECT a FROM (SELECT * FROM test) bla UNION SELECT * FROM test2 ORDER BY bla.a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3, 4}));
+	// what if we have cross products or joins
+	result = con.Query("SELECT t1.a, t2.a FROM test t1, test t2 WHERE t1.a=t2.a UNION SELECT b, b - 1 FROM test2 ORDER "
+	                   "BY t1.a, t2.a, test2.b;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 2, 3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 2, 2, 3, 3}));
+
+
+}
+
+TEST_CASE("Test union with nulls", "[setops]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST('2015-10-11 00:00:00' AS TIMESTAMP) as "
+	                   "a, CAST('2015-10-11 12:34:56' AS TIMESTAMP) as b, 2 as id ORDER BY 3");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value::TIMESTAMP(2015, 10, 11, 0, 0, 0, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value::TIMESTAMP(2015, 10, 11, 12, 34, 56, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2}));
 }

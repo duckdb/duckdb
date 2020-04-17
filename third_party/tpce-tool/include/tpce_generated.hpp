@@ -6,12 +6,10 @@
 ////////////////////////////////////////////////////////////////////
 
 
-#include "catalog/catalog.hpp"
-#include "main/client_context.hpp"
-#include "main/connection.hpp"
-#include "main/database.hpp"
-#include "storage/data_table.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/appender.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 
 #include "main/BaseLoader.h"
 #include "main/BaseLoaderFactory.h"
@@ -20,14 +18,14 @@
 
 namespace TPCE {
 	class DuckDBLoaderFactory : public CBaseLoaderFactory {
-		duckdb::ClientContext *context;
+		duckdb::Connection &con;
 		std::string schema;
 		std::string suffix;
 
 	  public:
-		DuckDBLoaderFactory(duckdb::ClientContext *context, std::string schema,
+		DuckDBLoaderFactory(duckdb::Connection &con, std::string schema,
 		                    std::string suffix)
-		    : context(context), schema(schema), suffix(suffix) {
+		    : con(con), schema(schema), suffix(suffix) {
 		}
 
 		// Functions to create loader classes for individual tables.

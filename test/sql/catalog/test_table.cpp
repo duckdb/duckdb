@@ -17,12 +17,3 @@ TEST_CASE("Test failure cases in table creation/deletion", "[catalog]") {
 	REQUIRE_FAIL(con.Query("CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)"));
 }
-
-TEST_CASE("Test temporary table creation", "[catalog]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	// temp tables are not supported yet
-	REQUIRE_FAIL(con.Query("CREATE TEMPORARY TABLE integers(i INTEGER)"));
-}

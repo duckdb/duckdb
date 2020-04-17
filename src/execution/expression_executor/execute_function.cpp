@@ -1,17 +1,43 @@
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, Vector &result) {
-	auto arguments = unique_ptr<Vector[]>(new Vector[expr.children.size()]);
-	for (index_t i = 0; i < expr.children.size(); i++) {
-		Execute(*expr.children[i], arguments[i]);
+struct FunctionState : public ExpressionState {
+	FunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+		auto &func = (BoundFunctionExpression &)expr;
+		for (auto &child : func.children) {
+			child_types.push_back(child->return_type);
+		}
 	}
-	expr.function.function(*this, arguments.get(), expr.children.size(), expr, result);
+
+	vector<TypeId> child_types;
+};
+
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
+                                                                ExpressionExecutorState &root) {
+	auto result = make_unique<FunctionState>(expr, root);
+	for (auto &child : expr.children) {
+		result->AddChild(child.get());
+	}
+	return move(result);
+}
+
+void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state_, const SelectionVector *sel,
+                                 idx_t count, Vector &result) {
+	auto state = (FunctionState *)state_;
+	DataChunk arguments;
+	arguments.SetCardinality(count);
+	if (state->child_types.size() > 0) {
+		arguments.Initialize(state->child_types);
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			assert(state->child_types[i] == expr.children[i]->return_type);
+			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+		}
+		arguments.Verify();
+	}
+	expr.function.function(arguments, *state, result);
 	if (result.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.type,
 		                            "expected function to return the former "

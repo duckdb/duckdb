@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -13,6 +13,7 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	DeleteDatabase(dbdir);
 
 	DBConfig readonly_config;
+	readonly_config.use_temporary_directory = false;
 	readonly_config.access_mode = AccessMode::READ_ONLY;
 
 	// cannot create read-only memory database
@@ -37,6 +38,7 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5}));
 	// however, we can't perform DDL statements
 	REQUIRE_FAIL(con->Query("CREATE TABLE integers2(i INTEGER)"));
+	REQUIRE_FAIL(con->Query("ALTER TABLE integers RENAME COLUMN i TO k"));
 	REQUIRE_FAIL(con->Query("DROP TABLE integers"));
 	REQUIRE_FAIL(con->Query("CREATE SEQUENCE seq"));
 	REQUIRE_FAIL(con->Query("CREATE VIEW v1 AS SELECT * FROM integers"));
@@ -50,8 +52,31 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS SELECT * FROM integers"));
 	REQUIRE_NO_FAIL(con->Query("EXECUTE v1"));
 	REQUIRE_NO_FAIL(con->Query("DEALLOCATE v1"));
-	// unless the prepared statements involve DDL statements or inserts/updates!
-	REQUIRE_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// we can also prepare a DDL/update statement
+	REQUIRE_NO_FAIL(con->Query("PREPARE v1 AS INSERT INTO integers VALUES ($1)"));
+	// however, executing it fails then!
+	REQUIRE_FAIL(con->Query("EXECUTE v1(3)"));
+
+	// we can create, alter and query temporary tables however
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY TABLE integers2(i INTEGER)"));
+	REQUIRE_NO_FAIL(con->Query("INSERT INTO integers2 VALUES (1), (2), (3), (4), (5)"));
+	REQUIRE_NO_FAIL(con->Query("UPDATE integers2 SET i=i+1"));
+	REQUIRE_NO_FAIL(con->Query("DELETE FROM integers2 WHERE i=3"));
+	REQUIRE_NO_FAIL(con->Query("ALTER TABLE integers2 RENAME COLUMN i TO k"));
+	result = con->Query("SELECT k FROM integers2 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 5, 6}));
+	REQUIRE_NO_FAIL(con->Query("DROP TABLE integers2"));
+
+	// also temporary views and sequences
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY SEQUENCE seq"));
+	result = con->Query("SELECT nextval('seq')");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE_NO_FAIL(con->Query("DROP SEQUENCE seq"));
+
+	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY VIEW v1 AS SELECT 42"));
+	result = con->Query("SELECT * FROM v1");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	REQUIRE_NO_FAIL(con->Query("DROP VIEW v1"));
 
 	con.reset();
 	db.reset();

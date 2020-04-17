@@ -28,6 +28,59 @@ TEST_CASE("Test COUNT operator", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {3}));
 	REQUIRE(CHECK_COLUMN(result, 4, {2}));
 	REQUIRE(CHECK_COLUMN(result, 5, {1}));
+
+	// ORDERED aggregates are not supported
+	REQUIRE_FAIL(con.Query("SELECT COUNT(1 ORDER BY 1)"));
+	// FILTER clause not supported
+	REQUIRE_FAIL(con.Query("SELECT COUNT(1) FILTER (WHERE false)"));
+	// cannot do DISTINCT *
+	REQUIRE_FAIL(con.Query("SELECT COUNT(DISTINCT *) FROM integers"));
+}
+
+TEST_CASE("Test aggregates with scalar inputs", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test aggregate on scalar values
+	result = con.Query("SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',')");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1}));
+	REQUIRE(CHECK_COLUMN(result, 5, {"hello"}));
+
+	// test aggregate on scalar NULLs
+	result = con.Query("SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (NULL)"));
+
+	// test aggregates on a set of values with scalar inputs
+	result = con.Query("SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',') FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1}));
+	REQUIRE(CHECK_COLUMN(result, 3, {1}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3}));
+	REQUIRE(CHECK_COLUMN(result, 5, {"hello,hello,hello"}));
+
+	// test aggregates on a set of values with scalar NULL values as inputs
+	result = con.Query(
+	    "SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
 }
 
 TEST_CASE("Test COVAR operators", "[aggregate]") {
@@ -87,8 +140,13 @@ TEST_CASE("Test COVAR operators", "[aggregate]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
 
-	// test average on empty set
+	// test covar on empty set
 	result = con.Query("SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	// test covar with only null inputs
+	result = con.Query("SELECT COVAR_POP(NULL, NULL), COVAR_SAMP(NULL, NULL) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 }
@@ -118,19 +176,20 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// test string aggregation on a set of values
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR, y VARCHAR);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (1,'a','/'), (1,'b','-'), "
-	                            "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
-	                            "(3,'p','/'), "
-	                            "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
+	                          "(2,'i','/'), (2,NULL,'-'), (2,'j','+'), "
+	                          "(3,'p','/'), "
+	                          "(4,'x','/'), (4,'y','-'), (4,'z','+')"));
 
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,i,j,p,x,y,z"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"a-b/i+j/p/x-y+z"}));
 
-	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g");
-	REQUIRE(CHECK_COLUMN(result, 0, {"a,b","x,y,z","i,j","p"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"a-b","x-y+z","i+j","p"}));
+	result = con.Query("SELECT g, STRING_AGG(x,','), STRING_AGG(x,y) FROM strings GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a,b", "i,j", "p", "x,y,z"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"a-b", "i+j", "p", "x-y+z"}));
 
-	// test average on empty set
+	// test agg on empty set
 	result = con.Query("SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings WHERE g > 100");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
@@ -138,6 +197,85 @@ TEST_CASE("Test STRING_AGG operator", "[aggregate]") {
 	// numerics are auto cast to strings
 	result = con.Query("SELECT STRING_AGG(1, 2)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
+}
+
+TEST_CASE("Test distinct STRING_AGG operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('a'), ('b'), ('a');"));
+
+	result = con.Query("SELECT STRING_AGG(s,','), STRING_AGG(DISTINCT s, ',') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"a,b,a"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a,b"}));
+}
+
+TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR);"));
+	vector<Value> expected_g, expected_h;
+	string expected_large_value;
+	for (idx_t i = 0; i < 10000; i++) {
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int)i, "hello"));
+		expected_g.push_back(Value::INTEGER(i));
+		expected_h.push_back(Value("hello"));
+		expected_large_value += (i > 0 ? "," : "") + string("hello");
+	}
+	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
+
+	// many small groups
+	result = con.Query("SELECT g, STRING_AGG(x, ',') FROM strings GROUP BY g ORDER BY g");
+	REQUIRE(CHECK_COLUMN(result, 0, expected_g));
+	REQUIRE(CHECK_COLUMN(result, 1, expected_h));
+
+	// one begin group
+	result = con.Query("SELECT 1, STRING_AGG(x, ',') FROM strings GROUP BY 1 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(expected_large_value)}));
+
+	// now test exception in the middle of an aggregate
+	REQUIRE_FAIL(con.Query("SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM "
+	                       "strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)"));
+}
+
+TEST_CASE("STRING_AGG big", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test string aggregation on a set of values
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g VARCHAR, x VARCHAR);"));
+
+	std::stringstream query_string;
+	query_string << "INSERT INTO strings VALUES ";
+	for (int c = 0; c < 100; ++c) {
+		for (int e = 0; e < 100; ++e) {
+			query_string << "(";
+
+			query_string << c;
+
+			query_string << ",";
+
+			query_string << "'";
+			query_string << c * 10 + e;
+			query_string << "'";
+
+			query_string << "),";
+		}
+	}
+	std::string query_string_str = query_string.str();
+	query_string_str.pop_back();
+
+	REQUIRE_NO_FAIL(con.Query(query_string_str));
+
+	result = con.Query("SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g");
+	REQUIRE_NO_FAIL(std::move(result));
 }
 
 TEST_CASE("Test AVG operator", "[aggregate]") {
@@ -237,20 +375,59 @@ TEST_CASE("Test GROUP BY on expression", "[aggregate]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integer(i INTEGER, j INTEGER);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integer VALUES (3, 4), (3, 5), (3, 7);"));
+	// group by on expression
 	result = con.Query("SELECT j * 2 FROM integer GROUP BY j * 2 ORDER BY j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	// verify that adding or removing the table name does not impact the validity of the query
+	result = con.Query("SELECT integer.j * 2 FROM integer GROUP BY j * 2 ORDER BY j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT j * 2 FROM integer GROUP BY j * 2 ORDER BY integer.j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT integer.j * 2 FROM integer GROUP BY j * 2 ORDER BY integer.j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY integer.j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT integer.j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT integer.j * 2 FROM integer GROUP BY integer.j * 2 ORDER BY integer.j * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
+	result = con.Query("SELECT j * 2 AS i FROM integer GROUP BY j * 2 ORDER BY i;");
 	REQUIRE(CHECK_COLUMN(result, 0, {8, 10, 14}));
 }
 
-TEST_CASE("Test GROUP BY with many groups", "[aggregate]") {
+TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
-	for (index_t i = 0; i < 10000; i++) {
+	for (idx_t i = 0; i < 10000; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ", 1), (" + to_string(i) + ", 2);"));
 	}
 	result = con.Query("SELECT SUM(i), SUM(sums) FROM (SELECT i, SUM(j) AS sums FROM integers GROUP BY i) tbl1");
 	REQUIRE(CHECK_COLUMN(result, 0, {49995000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {30000}));
+}
+
+TEST_CASE("Test FIRST with non-inlined strings", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(a INTEGER, b VARCHAR)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')"));
+
+	// non-grouped aggregate
+	result = con.Query("SELECT FIRST(b) FROM tbl WHERE a=2");
+	REQUIRE(CHECK_COLUMN(result, 0, {"thisisalongstring"}));
+	result = con.Query("SELECT FIRST(b) FROM tbl WHERE a=1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// grouped aggregate
+	result = con.Query("SELECT a, FIRST(b) FROM tbl GROUP BY a ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), "thisisalongstring", "thisisalsoalongstring"}));
 }

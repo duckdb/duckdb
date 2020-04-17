@@ -1,6 +1,6 @@
-#include "parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,15 +15,11 @@ string CastExpression::ToString() const {
 	return "CAST[" + SQLTypeToString(cast_type) + "](" + child->ToString() + ")";
 }
 
-bool CastExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
+	if (!a->child->Equals(b->child.get())) {
 		return false;
 	}
-	auto other = (CastExpression *)other_;
-	if (!child->Equals(other->child.get())) {
-		return false;
-	}
-	if (cast_type != other->cast_type) {
+	if (a->cast_type != b->cast_type) {
 		return false;
 	}
 	return true;

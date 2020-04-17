@@ -1,7 +1,8 @@
-#include "parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -29,27 +30,18 @@ string OperatorExpression::ToString() const {
 	}
 	// if there is no operator we render it as a function
 	auto result = ExpressionTypeToString(type) + "(";
-	for (index_t i = 0; i < children.size(); i++) {
-		result += children[i]->ToString();
-		if (i + 1 < children.size()) {
-			result += ", ";
-		} else {
-			result += ")";
-		}
-	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
+	result += ")";
 	return result;
 }
 
-bool OperatorExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool OperatorExpression::Equals(const OperatorExpression *a, const OperatorExpression *b) {
+	if (a->children.size() != b->children.size()) {
 		return false;
 	}
-	auto other = (OperatorExpression *)other_;
-	if (children.size() != other->children.size()) {
-		return false;
-	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
+	for (idx_t i = 0; i < a->children.size(); i++) {
+		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
 	}

@@ -130,11 +130,7 @@ typedef struct SEED_T {
 #endif
 } seed_t;
 
-#if defined(__STDC__)
 #define PROTO(s) s
-#else
-#define PROTO(s) ()
-#endif
 
 /* bm_utils.c */
 const char *env_config PROTO((const char *var, const char *dflt));

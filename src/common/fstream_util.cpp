@@ -1,4 +1,4 @@
-#include "common/fstream_util.hpp"
+#include "duckdb/common/fstream_util.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -18,7 +18,7 @@ void FstreamUtil::CloseFile(fstream &file) {
 	}
 }
 
-index_t FstreamUtil::GetFileSize(fstream &file) {
+idx_t FstreamUtil::GetFileSize(fstream &file) {
 	file.seekg(0, ios::end);
 	return file.tellg();
 }

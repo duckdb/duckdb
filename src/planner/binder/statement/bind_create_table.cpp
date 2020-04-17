@@ -1,21 +1,21 @@
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/expression/cast_expression.hpp"
-#include "parser/statement/create_table_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/constraints/list.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression_binder/check_binder.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
-#include "planner/statement/bound_create_table_statement.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 static void CreateColumnMap(BoundCreateTableInfo &info) {
-	for (uint64_t oid = 0; oid < info.base->columns.size(); oid++) {
-		auto &col = info.base->columns[oid];
+	auto &base = (CreateTableInfo &)*info.base;
+
+	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
+		auto &col = base.columns[oid];
 		if (info.name_map.find(col.name) != info.name_map.end()) {
 			throw CatalogException("Column with name %s already exists!", col.name.c_str());
 		}
@@ -26,15 +26,16 @@ static void CreateColumnMap(BoundCreateTableInfo &info) {
 }
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
+	auto &base = (CreateTableInfo &)*info.base;
+
 	bool has_primary_key = false;
-	for (index_t i = 0; i < info.base->constraints.size(); i++) {
-		auto &cond = info.base->constraints[i];
+	for (idx_t i = 0; i < base.constraints.size(); i++) {
+		auto &cond = base.constraints[i];
 		switch (cond->type) {
 		case ConstraintType::CHECK: {
 			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, info.base->table, info.base->columns,
-			                         bound_constraint->bound_columns);
+			CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
 			auto &check = (CheckConstraint &)*cond;
 			// create a copy of the unbound expression because the binding destroys the constraint
 			auto unbound_expression = check.expression->Copy();
@@ -53,9 +54,9 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::UNIQUE: {
 			auto &unique = (UniqueConstraint &)*cond;
 			// have to resolve columns of the unique constraint
-			unordered_set<index_t> keys;
+			unordered_set<idx_t> keys;
 			if (unique.index != INVALID_INDEX) {
-				assert(unique.index < info.base->columns.size());
+				assert(unique.index < base.columns.size());
 				// unique constraint is given by single index
 				keys.insert(unique.index);
 			} else {
@@ -79,7 +80,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.is_primary_key) {
 				// we can only have one primary key per table
 				if (has_primary_key) {
-					throw ParserException("table \"%s\" has more than one primary key", info.base->table.c_str());
+					throw ParserException("table \"%s\" has more than one primary key", base.table.c_str());
 				}
 				has_primary_key = true;
 			}
@@ -93,7 +94,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 }
 
 void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
-	for (index_t i = 0; i < columns.size(); i++) {
+	for (idx_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
 		if (columns[i].default_value) {
 			// we bind a copy of the DEFAULT value because binding is destructive
@@ -110,36 +111,32 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 	}
 }
 
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateTableInfo> info) {
-	auto result = make_unique<BoundCreateTableInfo>(move(info));
-	// create the name map for the statement
-	CreateColumnMap(*result);
-	// bind any constraints
-	BindConstraints(*this, *result);
-	// bind the default values
-	BindDefaultValues(result->base->columns, result->bound_defaults);
-	return result;
-}
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+	auto &base = (CreateTableInfo &)*info;
 
-unique_ptr<BoundSQLStatement> Binder::Bind(CreateTableStatement &stmt) {
-	auto result = make_unique<BoundCreateTableStatement>();
-	// bind the schema
-	result->schema = context.catalog.GetSchema(context.ActiveTransaction(), stmt.info->schema);
-	if (stmt.query) {
+	auto result = make_unique<BoundCreateTableInfo>(move(info));
+	result->schema = BindSchema(*result->base);
+	if (base.query) {
 		// construct the result object
-		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*stmt.query));
-		result->info = make_unique<BoundCreateTableInfo>(move(stmt.info));
+		auto query_obj = Bind(*base.query);
+		result->query = move(query_obj.plan);
+
 		// construct the set of columns based on the names and types of the query
-		auto &names = result->query->node->names;
-		auto &sql_types = result->query->node->types;
+		auto &names = query_obj.names;
+		auto &sql_types = query_obj.types;
 		assert(names.size() == sql_types.size());
-		for (index_t i = 0; i < names.size(); i++) {
-			result->info->base->columns.push_back(ColumnDefinition(names[i], sql_types[i]));
+		for (idx_t i = 0; i < names.size(); i++) {
+			base.columns.push_back(ColumnDefinition(names[i], sql_types[i]));
 		}
 		// create the name map for the statement
-		CreateColumnMap(*result->info);
+		CreateColumnMap(*result);
 	} else {
-		result->info = BindCreateTableInfo(move(stmt.info));
+		// create the name map for the statement
+		CreateColumnMap(*result);
+		// bind any constraints
+		BindConstraints(*this, *result);
+		// bind the default values
+		BindDefaultValues(base.columns, result->bound_defaults);
 	}
-	return move(result);
+	return result;
 }

@@ -1,7 +1,12 @@
-#include "execution/index/art/node.hpp"
-#include "execution/index/art/leaf.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
-Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf) {
+#include <cstring>
+
+using namespace duckdb;
+using namespace std;
+
+Leaf::Leaf(ART &art, unique_ptr<Key> value, row_t row_id) : Node(art, NodeType::NLeaf, 0) {
 	this->value = move(value);
 	this->capacity = 1;
 	this->row_ids = unique_ptr<row_t[]>(new row_t[this->capacity]);
@@ -22,15 +27,18 @@ void Leaf::Insert(row_t row_id) {
 
 //! TODO: Maybe shrink array dynamically?
 void Leaf::Remove(row_t row_id) {
-	index_t entry_offset = -1;
-	for (index_t i = 0; i < num_elements; i++) {
+	idx_t entry_offset = INVALID_INDEX;
+	for (idx_t i = 0; i < num_elements; i++) {
 		if (row_ids[i] == row_id) {
 			entry_offset = i;
 			break;
 		}
 	}
+	if (entry_offset == INVALID_INDEX) {
+		return;
+	}
 	num_elements--;
-	for (index_t j = entry_offset; j < num_elements; j++) {
+	for (idx_t j = entry_offset; j < num_elements; j++) {
 		row_ids[j] = row_ids[j + 1];
 	}
 }

@@ -1,28 +1,16 @@
-#include "parser/expression/cast_expression.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "parser/expression/operator_expression.hpp"
-#include "parser/expression/star_expression.hpp"
-#include "parser/expression/window_expression.hpp"
-#include "parser/transformer.hpp"
-#include "common/string_util.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
-	if (fun_name == "sum") {
-		return ExpressionType::WINDOW_SUM;
-	} else if (fun_name == "count") {
-		return ExpressionType::WINDOW_COUNT_STAR;
-	} else if (fun_name == "min") {
-		return ExpressionType::WINDOW_MIN;
-	} else if (fun_name == "max") {
-		return ExpressionType::WINDOW_MAX;
-	} else if (fun_name == "avg") {
-		return ExpressionType::WINDOW_AVG;
-	} else if (fun_name == "rank") {
+	if (fun_name == "rank") {
 		return ExpressionType::WINDOW_RANK;
 	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
 		return ExpressionType::WINDOW_RANK_DENSE;
@@ -44,10 +32,10 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_NTILE;
 	}
 
-	return ExpressionType::INVALID;
+	return ExpressionType::WINDOW_AGGREGATE;
 }
 
-void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr) {
 	assert(window_spec);
 	assert(expr);
 
@@ -102,29 +90,39 @@ void Transformer::TransformWindowDef(WindowDef *window_spec, WindowExpression *e
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
 		// schema + name
-		schema = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
-		function_name = reinterpret_cast<postgres::Value *>(name->head->next->data.ptr_value)->val.str;
+		schema = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
 		schema = DEFAULT_SCHEMA;
-		function_name = reinterpret_cast<postgres::Value *>(name->head->data.ptr_value)->val.str;
+		function_name = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
 	}
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 
+	if (root->agg_filter) {
+		throw ParserException("FILTER is not implemented for aggregates");
+	}
+	if (root->agg_order) {
+		throw ParserException("ORDER BY is not implemented for aggregates");
+	}
+
 	if (root->over) {
+		if (root->agg_distinct) {
+			throw ParserException("DISTINCT is not implemented for window functions!");
+		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw Exception("Unknown/unsupported window function");
 		}
 
-		auto expr = make_unique<WindowExpression>(win_fun_type, nullptr);
+		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
@@ -132,25 +130,30 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 			if (!res) {
 				throw Exception("Failed to transform window function children");
 			}
-			if (function_list.size() > 0) {
-				expr->child = move(function_list[0]);
+			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
+				for (auto &child : function_list) {
+					expr->children.push_back(move(child));
+				}
+			} else {
+				if (function_list.size() > 0) {
+					expr->children.push_back(move(function_list[0]));
+				}
+				if (function_list.size() > 1) {
+					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+					expr->offset_expr = move(function_list[1]);
+				}
+				if (function_list.size() > 2) {
+					assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
+					expr->default_expr = move(function_list[2]);
+				}
+				assert(function_list.size() <= 3);
 			}
-			if (function_list.size() > 1) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-				expr->offset_expr = move(function_list[1]);
-			}
-			if (function_list.size() > 2) {
-				assert(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-				expr->default_expr = move(function_list[2]);
-			}
-			assert(function_list.size() <= 3);
 		}
-		auto window_spec = reinterpret_cast<WindowDef *>(root->over);
-
+		auto window_spec = reinterpret_cast<PGWindowDef *>(root->over);
 		if (window_spec->name) {
 			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
 			if (it == window_clauses.end()) {
-				throw Exception("Could not find named window specification");
+				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
 			window_spec = it->second;
 			assert(window_spec);
@@ -163,10 +166,56 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(FuncCall *root) {
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((Node *)node->data.ptr_value);
+			auto child_expr = TransformExpression((PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
 	}
 
 	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
+}
+
+static string SQLValueOpToString(PGSQLValueFunctionOp op) {
+	switch (op) {
+	case PG_SVFOP_CURRENT_DATE:
+		return "current_date";
+	case PG_SVFOP_CURRENT_TIME:
+		return "current_time";
+	case PG_SVFOP_CURRENT_TIME_N:
+		return "current_time_n";
+	case PG_SVFOP_CURRENT_TIMESTAMP:
+		return "current_timestamp";
+	case PG_SVFOP_CURRENT_TIMESTAMP_N:
+		return "current_timestamp_n";
+	case PG_SVFOP_LOCALTIME:
+		return "current_localtime";
+	case PG_SVFOP_LOCALTIME_N:
+		return "current_localtime_n";
+	case PG_SVFOP_LOCALTIMESTAMP:
+		return "current_localtimestamp";
+	case PG_SVFOP_LOCALTIMESTAMP_N:
+		return "current_localtimestamp_n";
+	case PG_SVFOP_CURRENT_ROLE:
+		return "current_role";
+	case PG_SVFOP_CURRENT_USER:
+		return "current_user";
+	case PG_SVFOP_USER:
+		return "user";
+	case PG_SVFOP_SESSION_USER:
+		return "session_user";
+	case PG_SVFOP_CURRENT_CATALOG:
+		return "current_catalog";
+	case PG_SVFOP_CURRENT_SCHEMA:
+		return "current_schema";
+	default:
+		throw Exception("Could not find named SQL value function specification " + to_string((int)op));
+	}
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(PGSQLValueFunction *node) {
+	if (!node) {
+		return nullptr;
+	}
+	vector<unique_ptr<ParsedExpression>> children;
+	auto fname = SQLValueOpToString(node->op);
+	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, children);
 }

@@ -8,7 +8,7 @@ class TestSimpleDBAPI(object):
     def test_regular_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchall()
-        assert result == [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [None]], "Incorrect result returned"
+        assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
 
     def test_numpy_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
@@ -16,7 +16,6 @@ class TestSimpleDBAPI(object):
         arr = numpy.ma.masked_array(numpy.arange(11))
         arr.mask = [False] * 10 + [True]
         numpy.testing.assert_array_equal(result['i'], arr, "Incorrect result returned")
-
         duckdb_cursor.execute('SELECT * FROM timestamps')
         result = duckdb_cursor.fetchnumpy()
         arr = numpy.array(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None], dtype="datetime64[ms]")
@@ -31,7 +30,6 @@ class TestSimpleDBAPI(object):
         arr.mask = [False] * 10 + [True]
         arr = {'i': arr}
         arr = pandas.DataFrame.from_dict(arr)
-        # assert str(result) == str(arr), "Incorrect result returned"
         pandas.testing.assert_frame_equal(result, arr)
 
         duckdb_cursor.execute('SELECT * FROM timestamps')

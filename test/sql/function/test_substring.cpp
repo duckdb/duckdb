@@ -35,6 +35,22 @@ TEST_CASE("Substring test", "[function]") {
 
 	result = con.Query("SELECT substring('hello' from off for length) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"he", "ell", "h", "el"}));
+
+	// test substrings with constant nulls in different places
+	result = con.Query("SELECT substring(NULL from off for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring('hello' from NULL for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring('hello' from off for NULL) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring(NULL from NULL for length) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring('hello' from NULL for NULL) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring(NULL from off for NULL) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
+	result = con.Query("SELECT substring(NULL from NULL for NULL) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value(), Value()}));
 }
 
 TEST_CASE("Substring test with UTF8", "[function]") {

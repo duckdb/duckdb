@@ -1,2 +1,0 @@
-PKG_CXXFLAGS = -IDDSRCPREFIX/src/include
-OBJECTS=duckdbr.o DDSRCPREFIX/build/release_notest/src/libduckdb_static.a DDSRCPREFIX/build/release_notest/third_party/libpg_query/libpg_query.a DDSRCPREFIX/build/release_notest/third_party/hyperloglog/libhyperloglog.a DDSRCPREFIX/build/release_notest/third_party/re2/libre2.a DDSRCPREFIX/build/release_notest/third_party/miniz/libminiz.a

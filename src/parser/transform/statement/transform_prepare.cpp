@@ -1,14 +1,13 @@
-#include "parser/statement/deallocate_statement.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "parser/statement/prepare_statement.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
-	PrepareStmt *stmt = reinterpret_cast<PrepareStmt *>(node);
+unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
+	auto stmt = reinterpret_cast<PGPrepareStmt *>(node);
 	assert(stmt);
 
 	if (stmt->argtypes && stmt->argtypes->length > 0) {
@@ -18,12 +17,13 @@ unique_ptr<PrepareStatement> Transformer::TransformPrepare(Node *node) {
 	auto result = make_unique<PrepareStatement>();
 	result->name = string(stmt->name);
 	result->statement = TransformStatement(stmt->query);
+	SetParamCount(0);
 
 	return result;
 }
 
-unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
-	ExecuteStmt *stmt = reinterpret_cast<ExecuteStmt *>(node);
+unique_ptr<ExecuteStatement> Transformer::TransformExecute(PGNode *node) {
+	auto stmt = reinterpret_cast<PGExecuteStmt *>(node);
 	assert(stmt);
 
 	auto result = make_unique<ExecuteStatement>();
@@ -31,21 +31,19 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(Node *node) {
 
 	TransformExpressionList(stmt->params, result->values);
 	for (auto &expr : result->values) {
-		if (expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT &&
-		    expr->GetExpressionType() != ExpressionType::VALUE_NULL) {
+		if (!expr->IsScalar()) {
 			throw Exception("Only scalar parameters or NULL supported for EXECUTE");
 		}
 	}
-
 	return result;
 }
 
-unique_ptr<DeallocateStatement> Transformer::TransformDeallocate(Node *node) {
-	DeallocateStmt *stmt = reinterpret_cast<DeallocateStmt *>(node);
+unique_ptr<DropStatement> Transformer::TransformDeallocate(PGNode *node) {
+	auto stmt = reinterpret_cast<PGDeallocateStmt *>(node);
 	assert(stmt);
 
-	// TODO empty name means all are removed
-	auto result = make_unique<DeallocateStatement>(string(stmt->name));
-
+	auto result = make_unique<DropStatement>();
+	result->info->type = CatalogType::PREPARED_STATEMENT;
+	result->info->name = string(stmt->name);
 	return result;
 }

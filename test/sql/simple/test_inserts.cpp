@@ -4,13 +4,34 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test insert into and updates of constant values", "[simpleinserts]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
+
+	// insert a constant 1 for every uneven value in "integers"
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE i2 AS SELECT 1 AS i FROM integers WHERE i % 2 <> 0"));
+
+	result = con.Query("SELECT * FROM i2 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1}));
+
+	// now update the table with a constant
+	REQUIRE_NO_FAIL(con.Query("UPDATE i2 SET i=NULL"));
+
+	result = con.Query("SELECT * FROM i2 ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+}
+
 TEST_CASE("Test insert into statements", "[simpleinserts]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	// big insert
-	con.Query("CREATE TABLE integers(i INTEGER)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	result = con.Query("INSERT INTO integers VALUES (0), (1), (2), (3), (4), (5), (6), (7), "
 	                   "(8), (9), (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (0), (1), "
 	                   "(2), (3), (4), (5), (6), (7), (8), (9), (0), (1), (2), (3), (4), (5), "

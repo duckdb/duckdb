@@ -1,10 +1,10 @@
 add_library_unity(duckdb_transaction
                   OBJECT
                   undo_buffer.cpp
+                  delete_info.cpp
                   transaction_context.cpp
                   transaction.cpp
                   transaction_manager.cpp
-                  version_info.cpp
                   commit_state.cpp
                   rollback_state.cpp
                   cleanup_state.cpp)

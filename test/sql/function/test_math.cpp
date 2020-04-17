@@ -70,11 +70,10 @@ TEST_CASE("Rounding test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {42.123}));
 }
 
-TEST_CASE("Test random() function", "[function]") {
+TEST_CASE("Test random & setseed functions", "[function]") {
 	unique_ptr<QueryResult> result, result1, result2;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<string> splits1, splits2;
 
 	// random() is evaluated twice here
 	result = con.Query("select case when random() between 0 and 0.99999 then 1 else 0 end");
@@ -83,6 +82,29 @@ TEST_CASE("Test random() function", "[function]") {
 	result1 = con.Query("select random()");
 	result2 = con.Query("select random()");
 	REQUIRE(!result1->Equals(*result2));
+
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE(CHECK_COLUMN(result1, 0, {0.612055}));
+	REQUIRE(CHECK_COLUMN(result1, 1, {0.384141}));
+	REQUIRE(CHECK_COLUMN(result1, 2, {0.288025}));
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
+
+	REQUIRE_FAIL(con.Query("select setseed(1.1)"));
+	REQUIRE_FAIL(con.Query("select setseed(-1.1)"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE seeds(a DOUBLE)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO seeds VALUES (-0.1), (0.0), (0.1)"));
+	result2 = con.Query("select setseed(a), a from seeds;");
+	REQUIRE(CHECK_COLUMN(result2, 0, {Value(), Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result2, 1, {-0.1, 0.0, 0.1}));
+	// Make sure last seed (0.1) is in effect
+	result1 = con.Query("select random(), random(), random()");
+	REQUIRE_NO_FAIL(con.Query("select setseed(0.1)"));
+	result2 = con.Query("select random(), random(), random()");
+	REQUIRE(result1->Equals(*result2));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(a INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)"));
@@ -207,4 +229,43 @@ TEST_CASE("Power test", "[function]") {
 
 	result = con.Query("select power(b, a) from powerme");
 	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
+}
+
+TEST_CASE("Test invalid input for math functions", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// any invalid input in math functions results in a NULL
+	// sqrt of negative number
+	result = con.Query("SELECT SQRT(-1), SQRT(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+
+	// log of value <= 0
+	result = con.Query("SELECT LN(-1), LN(0), LOG10(-1), LOG10(0), LOG2(-1), LOG2(0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+
+	// invalid input to POW function
+	result = con.Query("SELECT POW(1e300,100), POW(-1e300,100), POW(-1.0, 0.5)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+
+	// overflow in EXP function
+	result = con.Query("SELECT EXP(1e300), EXP(1e100)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+	// invalid input to trigonometric functions
+	result = con.Query("SELECT ACOS(3), ACOS(100), DEGREES(1e308)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
 }

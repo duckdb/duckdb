@@ -1,4 +1,4 @@
-#include "common/enums/statement_type.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 using namespace std;
 
@@ -14,8 +14,6 @@ string StatementTypeToString(StatementType type) {
 		return "UPDATE";
 	case StatementType::DELETE:
 		return "DELETE";
-	case StatementType::DEALLOCATE:
-		return "DEALLOCATE";
 	case StatementType::PREPARE:
 		return "PREPARE";
 	case StatementType::EXECUTE:
@@ -34,18 +32,16 @@ string StatementTypeToString(StatementType type) {
 		return "CREATE_FUNC";
 	case StatementType::EXPLAIN:
 		return "EXPLAIN";
-	case StatementType::CREATE_TABLE:
-		return "CREATE_TABLE";
-	case StatementType::CREATE_SCHEMA:
-		return "CREATE_SCHEMA";
-	case StatementType::CREATE_INDEX:
-		return "CREATE_INDEX";
-	case StatementType::CREATE_VIEW:
-		return "CREATE_VIEW";
-	case StatementType::CREATE_SEQUENCE:
-		return "CREATE_SEQUENCE";
+	case StatementType::CREATE:
+		return "CREATE";
 	case StatementType::DROP:
 		return "DROP";
+	case StatementType::PRAGMA:
+		return "PRAGMA";
+	case StatementType::VACUUM:
+		return "VACUUM";
+	case StatementType::RELATION:
+		return "RELATION";
 	default:
 		return "INVALID";
 	}

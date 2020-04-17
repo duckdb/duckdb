@@ -1,8 +1,7 @@
 #include "dsdgen.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
-#include "common/types/data_chunk.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "tpcds_constants.hpp"
 #include "append_info.hpp"
 #include "dsdgen_helpers.hpp"
@@ -77,7 +76,7 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 
 	// flush any incomplete chunks
 	for (int table_id = tmin; table_id < tmax; table_id++) {
-		append_info[table_id]->appender.Commit();
+		append_info[table_id]->appender.Close();
 	}
 }
 

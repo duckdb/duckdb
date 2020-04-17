@@ -1,9 +1,9 @@
-#include "planner/joinside.hpp"
+#include "duckdb/planner/joinside.hpp"
 
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_comparison_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -25,8 +25,8 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-JoinSide JoinSide::GetJoinSide(index_t table_binding, unordered_set<index_t> &left_bindings,
-                               unordered_set<index_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_bindings,
+                               unordered_set<idx_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		assert(right_bindings.find(table_binding) == right_bindings.end());
@@ -38,8 +38,8 @@ JoinSide JoinSide::GetJoinSide(index_t table_binding, unordered_set<index_t> &le
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<index_t> &left_bindings,
-                               unordered_set<index_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
+                               unordered_set<idx_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		if (colref.depth > 0) {
@@ -72,8 +72,8 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<index_t> &l
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(unordered_set<index_t> bindings, unordered_set<index_t> &left_bindings,
-                               unordered_set<index_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_t> &left_bindings,
+                               unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

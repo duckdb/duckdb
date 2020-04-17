@@ -1,8 +1,8 @@
-#include "parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -28,16 +28,12 @@ string ColumnRefExpression::ToString() const {
 	}
 }
 
-bool ColumnRefExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
-		return false;
-	}
-	auto other = (ColumnRefExpression *)other_;
-	return column_name == other->column_name && table_name == other->table_name;
+bool ColumnRefExpression::Equals(const ColumnRefExpression *a, const ColumnRefExpression *b) {
+	return a->column_name == b->column_name && a->table_name == b->table_name;
 }
 
-uint64_t ColumnRefExpression::Hash() const {
-	uint64_t result = ParsedExpression::Hash();
+hash_t ColumnRefExpression::Hash() const {
+	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(column_name.c_str()));
 	return result;
 }

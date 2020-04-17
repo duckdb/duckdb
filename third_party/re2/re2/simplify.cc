@@ -45,6 +45,9 @@ bool Regexp::SimplifyRegexp(const StringPiece& src, ParseFlags flags,
 // is this Regexp* simple?
 bool Regexp::ComputeSimple() {
   Regexp** subs;
+  auto ccb = ccb_;
+  auto cc = cc_;
+
   switch (op_) {
     case kRegexpNoMatch:
     case kRegexpEmptyMatch:
@@ -70,9 +73,9 @@ bool Regexp::ComputeSimple() {
       return true;
     case kRegexpCharClass:
       // Simple as long as the char class is not empty, not full.
-      if (ccb_ != NULL)
-        return !ccb_->empty() && !ccb_->full();
-      return !cc_->empty() && !cc_->full();
+      if (ccb != NULL)
+        return !ccb->empty() && !ccb->full();
+      return !cc->empty() && !cc->full();
     case kRegexpCapture:
       subs = sub();
       return subs[0]->simple();
@@ -186,8 +189,6 @@ Regexp* Regexp::Simplify() {
   cre->Decref();
   return sre;
 }
-
-#define Simplify DontCallSimplify  // Avoid accidental recursion
 
 // Utility function for PostVisit implementations that compares re->sub() with
 // child_args to determine whether any child_args changed. In the common case,

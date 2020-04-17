@@ -1,7 +1,7 @@
-#include "main/stream_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
-#include "main/client_context.hpp"
-#include "main/materialized_query_result.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,7 +32,7 @@ unique_ptr<DataChunk> StreamQueryResult::Fetch() {
 		return nullptr;
 	}
 	auto chunk = context.Fetch();
-	if (!chunk || chunk->column_count == 0 || chunk->size() == 0) {
+	if (!chunk || chunk->column_count() == 0 || chunk->size() == 0) {
 		Close();
 	}
 	return chunk;

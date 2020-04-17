@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -18,7 +18,7 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		Connection con(db);
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
-		for (index_t i = 0; i < 2; i++) {
+		for (idx_t i = 0; i < 2; i++) {
 			REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 			result = con.Query("SELECT a FROM test ORDER BY a");
 			REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
@@ -31,18 +31,12 @@ TEST_CASE("Test storage of alter table", "[storage]") {
 		}
 	}
 	// reload the database from disk
-	{
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT k FROM test ORDER BY k");
 		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
-	}
-	// reload the database from disk
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT k FROM test ORDER BY k");
-		REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+		REQUIRE_FAIL(con.Query("SELECT a FROM test"));
 	}
 	DeleteDatabase(storage_database);
 }

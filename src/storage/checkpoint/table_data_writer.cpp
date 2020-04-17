@@ -1,224 +1,254 @@
-#include "storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
-#include "common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/serializer/buffered_serializer.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+
+#include "duckdb/storage/numeric_segment.hpp"
+#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-constexpr char TableDataWriter::BIG_STRING_MARKER[];
+class WriteOverflowStringsToDisk : public OverflowStringWriter {
+public:
+	WriteOverflowStringsToDisk(CheckpointManager &manager);
+	~WriteOverflowStringsToDisk();
 
-static index_t GetTypeHeaderSize(SQLType type);
+	//! The checkpoint manager
+	CheckpointManager &manager;
+	//! Block handle use for writing to
+	unique_ptr<BufferHandle> handle;
+	//! The current block we are writing to
+	block_id_t block_id;
+	//! The offset within the current block
+	idx_t offset;
+
+	static constexpr idx_t STRING_SPACE = Storage::BLOCK_SIZE - sizeof(block_id_t);
+
+public:
+	void WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) override;
+
+private:
+	void AllocateNewBlock(block_id_t new_block_id);
+};
 
 TableDataWriter::TableDataWriter(CheckpointManager &manager, TableCatalogEntry &table)
     : manager(manager), table(table) {
 }
 
+TableDataWriter::~TableDataWriter() {
+}
+
 void TableDataWriter::WriteTableData(Transaction &transaction) {
-	assert(blocks.size() == 0);
+	// allocate segments to write the table to
+	segments.resize(table.columns.size());
+	data_pointers.resize(table.columns.size());
+	for (idx_t i = 0; i < table.columns.size(); i++) {
+		auto type_id = GetInternalType(table.columns[i].type);
+		stats.push_back(make_unique<SegmentStatistics>(type_id, GetTypeIdSize(type_id)));
+		CreateSegment(i);
+	}
 
-	// when writing table data we write columns to individual blocks
-	// we scan the underlying table structure and write to the blocks
-	// then flush the blocks to disk when they are full
-
-	// initialize scan structures to prepare for the scan
-	TableScanState state;
-	table.storage->InitializeScan(state);
+	// now start scanning the table and append the data to the uncompressed segments
 	vector<column_t> column_ids;
 	for (auto &column : table.columns) {
 		column_ids.push_back(column.oid);
 	}
+	// initialize scan structures to prepare for the scan
+	TableScanState state;
+	table.storage->InitializeScan(transaction, state, column_ids);
 	//! get all types of the table and initialize the chunk
 	auto types = table.GetTypes();
 	DataChunk chunk;
 	chunk.Initialize(types);
 
-	// the pointers to the written column data for this table
-	dictionaries.resize(table.columns.size());
-	data_pointers.resize(table.columns.size());
-	// we want to fetch all the column ids from the scan
-	// so make a list of all column ids of the table
-	for (index_t i = 0; i < table.columns.size(); i++) {
-		// for each column, create a block that serves as the buffer for that blocks data
-		blocks.push_back(make_unique<Block>(INVALID_BLOCK));
-		// initialize offsets, tuple counts and row number sizes
-		offsets.push_back(GetTypeHeaderSize(table.columns[i].type));
-		tuple_counts.push_back(0);
-		row_numbers.push_back(0);
-	}
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		table.storage->Scan(transaction, chunk, column_ids, state);
+		vector<TableFilter> mock;
+		table.storage->Scan(transaction, chunk, state, mock);
 		if (chunk.size() == 0) {
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
-		for (index_t i = 0; i < table.columns.size(); i++) {
+		idx_t chunk_size = chunk.size();
+		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
-			WriteColumnData(chunk, i);
+			AppendData(transaction, i, chunk.data[i], chunk_size);
 		}
 	}
-	// finally we write the blocks that were not completely filled to disk
-	// FIXME: pack together these unfilled blocks
-	for (index_t i = 0; i < table.columns.size(); i++) {
-		// we only write blocks that have data in them
-		if (offsets[i] > 0) {
-			FlushBlock(i);
-		}
+	// flush any remaining data and write the data pointers to disk
+	for (idx_t i = 0; i < table.columns.size(); i++) {
+		FlushSegment(transaction, i);
 	}
-	// finally write the table storage information
+	VerifyDataPointers();
 	WriteDataPointers();
 }
 
-//===--------------------------------------------------------------------===//
-// Write Column Data to Block
-//===--------------------------------------------------------------------===//
-void TableDataWriter::WriteColumnData(DataChunk &chunk, index_t column_index) {
-	TypeId type = chunk.data[column_index].type;
-	if (TypeIsConstantSize(type)) {
-		// constant size type: simple memcpy
-		// first check if we can fit the chunk into the block
-		index_t size = GetTypeIdSize(type) * chunk.size();
-		// check if we need to flush
-		// FIXME: append part of data that still fits into block if it does not fit entirely
-		FlushIfFull(column_index, size);
-		// data fits into block, write it and update the offset
-		auto ptr = blocks[column_index]->buffer + offsets[column_index];
-		VectorOperations::CopyToStorage(chunk.data[column_index], ptr);
-		offsets[column_index] += size;
-		tuple_counts[column_index] += chunk.size();
+void TableDataWriter::CreateSegment(idx_t col_idx) {
+	auto type_id = GetInternalType(table.columns[col_idx].type);
+	if (type_id == TypeId::VARCHAR) {
+		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
+		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(manager);
+		segments[col_idx] = move(string_segment);
 	} else {
-		assert(type == TypeId::VARCHAR);
-		// we inline strings into the block
-		VectorOperations::ExecType<const char *>(chunk.data[column_index], [&](const char *val, size_t i, size_t k) {
-			if (chunk.data[column_index].nullmask[i]) {
-				// NULL value
-				val = NullValue<const char *>();
-			}
-			WriteString(column_index, val);
-		});
+		segments[col_idx] = make_unique<NumericSegment>(manager.buffer_manager, type_id, 0);
 	}
 }
 
-void TableDataWriter::FlushBlock(index_t col) {
-	if (tuple_counts[col] == 0) {
+void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count) {
+	idx_t offset = 0;
+	while (count > 0) {
+		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
+		if (appended == count) {
+			// appended everything: finished
+			return;
+		}
+		// the segment is full: flush it to disk
+		FlushSegment(transaction, col_idx);
+
+		// now create a new segment and continue appending
+		CreateSegment(col_idx);
+		offset += appended;
+		count -= appended;
+	}
+}
+
+void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
+	auto tuple_count = segments[col_idx]->tuple_count;
+	if (tuple_count == 0) {
 		return;
 	}
-	assert(offsets[col] + dictionaries[col].size < blocks[col]->size);
-	// get a block id
-	blocks[col]->id = manager.block_manager.GetFreeBlockId();
-	if (table.columns[col].type.id == SQLTypeId::VARCHAR) {
-		// for varchar columns, write the dictionary to the buffer
-		FlushDictionary(col);
-	}
+
+	// get the buffer of the segment and pin it
+	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
+
+	// get a free block id to write to
+	auto block_id = manager.block_manager.GetFreeBlockId();
+
 	// construct the data pointer, FIXME: add statistics as well
 	DataPointer data_pointer;
-	data_pointer.block_id = blocks[col]->id;
+	data_pointer.block_id = block_id;
 	data_pointer.offset = 0;
-	data_pointer.row_start = row_numbers[col];
-	data_pointer.tuple_count = tuple_counts[col];
-	data_pointers[col].push_back(data_pointer);
-	// write the block
-	manager.block_manager.Write(*blocks[col]);
+	data_pointer.row_start = 0;
+	if (data_pointers[col_idx].size() > 0) {
+		auto &last_pointer = data_pointers[col_idx].back();
+		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
+	}
+	data_pointer.tuple_count = tuple_count;
+	//! FIXME: Can't deal with strings yet
+	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 0 : stats[col_idx]->type_size;
+	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
+	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
+	data_pointers[col_idx].push_back(move(data_pointer));
+	// write the block to disk
+	manager.block_manager.Write(*handle->node, block_id);
 
-	offsets[col] = GetTypeHeaderSize(table.columns[col].type);
-	row_numbers[col] += tuple_counts[col];
-	tuple_counts[col] = 0;
+	handle.reset();
+	segments[col_idx] = nullptr;
 }
 
-void TableDataWriter::FlushIfFull(index_t col, index_t write_size) {
-	if (offsets[col] + dictionaries[col].size + write_size >= blocks[col]->size) {
-		// data does not fit into block, flush block to disk
-		FlushBlock(col);
+void TableDataWriter::VerifyDataPointers() {
+	// verify the data pointers
+	idx_t table_count = 0;
+	for (idx_t i = 0; i < data_pointers.size(); i++) {
+		auto &data_pointer_list = data_pointers[i];
+		idx_t column_count = 0;
+		// then write the data pointers themselves
+		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
+			auto &data_pointer = data_pointer_list[k];
+			column_count += data_pointer.tuple_count;
+		}
+		if (segments[i]) {
+			column_count += segments[i]->tuple_count;
+		}
+		if (i == 0) {
+			table_count = column_count;
+		} else {
+			if (table_count != column_count) {
+				throw Exception("Column count mismatch in data write!");
+			}
+		}
 	}
-}
-
-void TableDataWriter::FlushDictionary(index_t col) {
-	assert(table.columns[col].type.id == SQLTypeId::VARCHAR);
-	assert(dictionaries[col].size > 0);
-	// write the dictionary size offset to the start of the block
-	*((int32_t *)blocks[col]->buffer) = offsets[col];
-	// now write the strings to the block
-	for (auto &entry : dictionaries[col].offsets) {
-		memcpy(blocks[col]->buffer + offsets[col] + entry.second, entry.first.c_str(), entry.first.size() + 1);
-	}
-	// reset the dictionary
-	dictionaries[col].offsets.clear();
-	dictionaries[col].size = 0;
-}
-
-static index_t GetTypeHeaderSize(SQLType type) {
-	if (type.id == SQLTypeId::VARCHAR) {
-		return TableDataWriter::BLOCK_HEADER_STRING;
-	} else {
-		return TableDataWriter::BLOCK_HEADER_NUMERIC;
-	}
-}
-
-static string BigStringMarker(block_id_t id) {
-	BufferedSerializer serializer(TableDataWriter::BIG_STRING_MARKER_SIZE);
-	serializer.Write<char>(TableDataWriter::BIG_STRING_MARKER[0]);
-	serializer.Write<char>(TableDataWriter::BIG_STRING_MARKER[1]);
-	serializer.Write<block_id_t>(id);
-	auto data = serializer.GetData();
-	assert(data.size == TableDataWriter::BIG_STRING_MARKER_SIZE);
-	return string((char *)data.data.get(), data.size);
-}
-
-void TableDataWriter::WriteString(index_t col, const char *val) {
-	FlushIfFull(col, sizeof(int32_t));
-	// create the string value
-	string str_value(val);
-	if (str_value.size() + 1 > blocks[col]->size - BLOCK_HEADER_STRING - sizeof(int32_t)) {
-		// string can never fit in a single block, insert a special marker followed by the block id and offset where it
-		// is stored create the special marker indicating it is a big string
-		MetaBlockWriter writer(manager.block_manager);
-		string marker = BigStringMarker(writer.block->id);
-		// write the string to the overflow blocks
-		writer.WriteString(str_value);
-		// now write the marker in the dictionary
-		str_value = marker;
-	}
-	// add the string to the dictionary
-	auto entry = dictionaries[col].offsets.find(str_value);
-	int32_t offset;
-	if (entry == dictionaries[col].offsets.end()) {
-		// not in the dictionary yet, add it to the dictionary
-		// first check if we have room for the string in our dictionary
-		FlushIfFull(col, sizeof(int32_t) + str_value.size() + 1);
-		// now add the string to the dictionary
-		offset = dictionaries[col].size;
-		dictionaries[col].offsets[str_value] = offset;
-		dictionaries[col].size += str_value.size() + 1;
-	} else {
-		// in the dictionary, only need to write the offset
-		// check if we have room to write the offset
-		offset = entry->second;
-	}
-	// now write the offset of this string into the buffer
-	*((int32_t *)(blocks[col]->buffer + offsets[col])) = offset;
-	offsets[col] += sizeof(int32_t);
-	tuple_counts[col]++;
 }
 
 void TableDataWriter::WriteDataPointers() {
-	for (index_t i = 0; i < data_pointers.size(); i++) {
+	for (idx_t i = 0; i < data_pointers.size(); i++) {
 		// get a reference to the data column
 		auto &data_pointer_list = data_pointers[i];
-		manager.tabledata_writer->Write<index_t>(data_pointer_list.size());
+		manager.tabledata_writer->Write<idx_t>(data_pointer_list.size());
 		// then write the data pointers themselves
-		for (index_t k = 0; k < data_pointer_list.size(); k++) {
+		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
 			auto &data_pointer = data_pointer_list[k];
 			manager.tabledata_writer->Write<double>(data_pointer.min);
 			manager.tabledata_writer->Write<double>(data_pointer.max);
-			manager.tabledata_writer->Write<index_t>(data_pointer.row_start);
-			manager.tabledata_writer->Write<index_t>(data_pointer.tuple_count);
+			manager.tabledata_writer->Write<idx_t>(data_pointer.row_start);
+			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
+			manager.tabledata_writer->WriteData(data_pointer.min_stats, 8);
+			manager.tabledata_writer->WriteData(data_pointer.max_stats, 8);
 		}
 	}
+}
+
+WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(CheckpointManager &manager)
+    : manager(manager), handle(nullptr), block_id(INVALID_BLOCK), offset(0) {
+}
+
+WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
+	if (offset > 0) {
+		manager.block_manager.Write(*handle->node, block_id);
+	}
+}
+
+void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
+	if (!handle) {
+		handle = manager.buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	}
+	// first write the length of the string
+	if (block_id == INVALID_BLOCK || offset + sizeof(uint32_t) >= STRING_SPACE) {
+		AllocateNewBlock(manager.block_manager.GetFreeBlockId());
+	}
+	result_block = block_id;
+	result_offset = offset;
+
+	// write the length field
+	auto string_length = string.GetSize();
+	*((uint32_t *)(handle->node->buffer + offset)) = string_length;
+	offset += sizeof(uint32_t);
+	// now write the remainder of the string
+	auto strptr = string.GetData();
+	uint32_t remaining = string_length + 1;
+	while (remaining > 0) {
+		uint32_t to_write = std::min((uint32_t)remaining, (uint32_t)(STRING_SPACE - offset));
+		if (to_write > 0) {
+			memcpy(handle->node->buffer + offset, strptr, to_write);
+
+			remaining -= to_write;
+			offset += to_write;
+			strptr += to_write;
+		}
+		if (remaining > 0) {
+			// there is still remaining stuff to write
+			// first get the new block id and write it to the end of the previous block
+			auto new_block_id = manager.block_manager.GetFreeBlockId();
+			*((block_id_t *)(handle->node->buffer + offset)) = new_block_id;
+			// now write the current block to disk and allocate a new block
+			AllocateNewBlock(new_block_id);
+		}
+	}
+}
+
+void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
+	if (block_id != INVALID_BLOCK) {
+		// there is an old block, write it first
+		manager.block_manager.Write(*handle->node, block_id);
+	}
+	offset = 0;
+	block_id = new_block_id;
 }

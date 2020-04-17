@@ -1,21 +1,15 @@
-#include "transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
-#include "catalog/catalog_set.hpp"
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/types/timestamp.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "storage/storage_manager.hpp"
-#include "transaction/transaction.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 using namespace duckdb;
 using namespace std;
-
-namespace duckdb {
-transaction_t TRANSACTION_ID_START = 4294967296ULL;                         // 2^32
-transaction_t MAXIMUM_QUERY_ID = std::numeric_limits<transaction_t>::max(); // 2^64
-} // namespace duckdb
 
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
 	// start timestamp starts at zero
@@ -27,6 +21,9 @@ TransactionManager::TransactionManager(StorageManager &storage) : storage(storag
 	current_transaction_id = TRANSACTION_ID_START;
 	// the current active query id
 	current_query_number = 1;
+}
+
+TransactionManager::~TransactionManager() {
 }
 
 Transaction *TransactionManager::StartTransaction() {
@@ -52,19 +49,24 @@ Transaction *TransactionManager::StartTransaction() {
 	return transaction_ptr;
 }
 
-void TransactionManager::CommitTransaction(Transaction *transaction) {
+string TransactionManager::CommitTransaction(Transaction *transaction) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
 
 	// obtain a commit id for the transaction
 	transaction_t commit_id = current_start_timestamp++;
-
 	// commit the UndoBuffer of the transaction
-	transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	string error = transaction->Commit(storage.GetWriteAheadLog(), commit_id);
+	if (!error.empty()) {
+		// commit unsuccessful: rollback the transaction instead
+		transaction->commit_id = 0;
+		transaction->Rollback();
+	}
 
-	// remove the transaction id from the list of active transactions
+	// commit successful: remove the transaction id from the list of active transactions
 	// potentially resulting in garbage collection
 	RemoveTransaction(transaction);
+	return error;
 }
 
 void TransactionManager::RollbackTransaction(Transaction *transaction) {
@@ -79,13 +81,13 @@ void TransactionManager::RollbackTransaction(Transaction *transaction) {
 	RemoveTransaction(transaction);
 }
 
-void TransactionManager::RemoveTransaction(Transaction *transaction) {
+void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	// remove the transaction from the list of active transactions
-	index_t t_index = active_transactions.size();
+	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
-	for (index_t i = 0; i < active_transactions.size(); i++) {
+	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
 			t_index = i;
 		} else {
@@ -109,7 +111,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 	// remove the transaction from the set of currently active transactions
 	active_transactions.erase(active_transactions.begin() + t_index);
 	// traverse the recently_committed transactions to see if we can remove any
-	index_t i = 0;
+	idx_t i = 0;
 	for (; i < recently_committed_transactions.size(); i++) {
 		assert(recently_committed_transactions[i]);
 		lowest_stored_query = std::min(recently_committed_transactions[i]->start_time, lowest_stored_query);
@@ -175,13 +177,15 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) {
 
 void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set) {
 	// remove the dependencies from all entries of the CatalogSet
-	context.catalog.dependency_manager.ClearDependencies(*catalog_set);
+	Catalog::GetCatalog(context).dependency_manager.ClearDependencies(*catalog_set);
 
 	lock_guard<mutex> lock(transaction_lock);
+	if (active_transactions.size() > 0) {
+		// if there are active transactions we wait with deleting the objects
+		StoredCatalogSet set;
+		set.stored_set = move(catalog_set);
+		set.highest_active_query = current_start_timestamp;
 
-	StoredCatalogSet set;
-	set.stored_set = move(catalog_set);
-	set.highest_active_query = current_start_timestamp;
-
-	old_catalog_sets.push_back(move(set));
+		old_catalog_sets.push_back(move(set));
+	}
 }

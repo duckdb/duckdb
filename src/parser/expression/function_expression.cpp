@@ -1,8 +1,8 @@
-#include "parser/expression/function_expression.hpp"
-#include "common/string_util.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -10,7 +10,7 @@ using namespace std;
 FunctionExpression::FunctionExpression(string schema, string function_name,
                                        vector<unique_ptr<ParsedExpression>> &children, bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(schema),
-      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct){
+      function_name(StringUtil::Lower(function_name)), is_operator(is_operator), distinct(distinct) {
 	for (auto &child : children) {
 		this->children.push_back(move(child));
 	}
@@ -32,36 +32,28 @@ string FunctionExpression::ToString() const {
 	}
 	// standard function call
 	string result = function_name + "(";
-	for (index_t i = 0; i < children.size(); i++) {
-		if (i != 0) {
-			result += ", ";
-		}
-		result += children[i]->ToString();
-	}
+	result += StringUtil::Join(children, children.size(), ", ",
+	                           [](const unique_ptr<ParsedExpression> &child) { return child->ToString(); });
 	return result + ")";
 }
 
-bool FunctionExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool FunctionExpression::Equals(const FunctionExpression *a, const FunctionExpression *b) {
+	if (a->schema != b->schema || a->function_name != b->function_name || b->distinct != a->distinct) {
 		return false;
 	}
-	auto other = (FunctionExpression *)other_;
-	if (schema != other->schema || function_name != other->function_name || other->distinct != distinct) {
+	if (b->children.size() != a->children.size()) {
 		return false;
 	}
-	if (other->children.size() != children.size()) {
-		return false;
-	}
-	for (index_t i = 0; i < children.size(); i++) {
-		if (!children[i]->Equals(other->children[i].get())) {
+	for (idx_t i = 0; i < a->children.size(); i++) {
+		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
 		}
 	}
 	return true;
 }
 
-uint64_t FunctionExpression::Hash() const {
-	uint64_t result = ParsedExpression::Hash();
+hash_t FunctionExpression::Hash() const {
+	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
 	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
 	result = CombineHash(result, duckdb::Hash<bool>(distinct));

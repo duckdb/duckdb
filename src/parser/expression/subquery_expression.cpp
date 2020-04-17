@@ -1,7 +1,7 @@
-#include "parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,18 +15,11 @@ string SubqueryExpression::ToString() const {
 	return "SUBQUERY";
 }
 
-bool SubqueryExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool SubqueryExpression::Equals(const SubqueryExpression *a, const SubqueryExpression *b) {
+	if (!a->subquery || !b->subquery) {
 		return false;
 	}
-	auto other = reinterpret_cast<const SubqueryExpression *>(other_);
-	if (!other) {
-		return false;
-	}
-	if (!subquery || !other->subquery) {
-		return false;
-	}
-	return subquery_type == other->subquery_type && subquery->Equals(other->subquery.get());
+	return a->subquery_type == b->subquery_type && a->subquery->Equals(b->subquery.get());
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {

@@ -12,18 +12,21 @@
 DuckDB requires [CMake](https://cmake.org) to be installed and a `C++11` compliant compiler. GCC 4.9 and newer, Clang 3.9 and newer and VisualStudio 2017 are tested on each revision.
 
 ## Compiling
-Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug versoin. You may run `make unit` and `make allunit` to verify that your version works properly after making changes.
+Run `make` in the root directory to compile the sources. For development, use `make debug` to build a non-optimized debug version. You may run `make unit` and `make allunit` to verify that your version works properly after making changes.
 
 # Usage
-A command line utility based on `sqlite3` can be found in either `build/release/tools/shell/shell` (release, the default) or `build/debug/tools/shell/shell` (debug).
+A command line utility based on `sqlite3` can be found in either `build/release/duckdb_cli` (release, the default) or `build/debug/duckdb_cli` (debug).
 
 # Embedding
 As DuckDB is an embedded database, there is no database server to launch or client to connect to a running server. However, the database server can be embedded directly into an application using the C or C++ bindings. The main build process creates the shared library `build/release/src/libduckdb.[so|dylib|dll]` that can be linked against. A static library is built as well.
 
 For examples on how to embed DuckDB into your application, see the [examples](https://github.com/cwida/duckdb/tree/master/examples) folder.
 
+## Benchmarks
+After compiling, benchmarks can be executed from the root directory by executing `./build/release/benchmark/benchmark_runner`.
+
 ## Standing on the Shoulders of Giants
-DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. In addition, we use [Jenkins](https://jenkins.io) as a CI platform. DuckDB uses some components from various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
+DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake to build and [Catch2](https://github.com/catchorg/Catch2) for testing. DuckDB uses some components from various Open-Source databases and draws inspiration from scientific publications. Here is an overview:
 
 * Parser: We use the PostgreSQL parser that was [repackaged as a stand-alone library](https://github.com/lfittl/libpg_query). The translation to our own parse tree is inspired by [Peloton](https://pelotondb.io).
 * Shell: We have adapted the [SQLite shell](https://sqlite.org/cli.html) to work with DuckDB.
@@ -34,8 +37,7 @@ DuckDB is implemented in C++ 11, should compile with GCC and clang, uses CMake t
 * Execution engine: The vectorized execution engine is inspired by the paper "MonetDB/X100: Hyper-Pipelining Query Execution" by Peter Boncz, Marcin Zukowski and Niels Nes.
 * Optimizer: DuckDB's optimizer draws inspiration from the papers "Dynamic programming strikes back" by Guido Moerkotte and Thomas Neumman as well as "Unnesting Arbitrary Queries" by Thomas Neumann and Alfons Kemper.
 * Concurrency control: Our MVCC implementation is inspired by the paper "Fast Serializable Multi-Version Concurrency Control for Main-Memory Database Systems" by Thomas Neumann, Tobias Mühlbauer and Alfons Kemper.
-* Storage: DuckDB uses DataBlocks for persistent storage as described in the paper "Data Blocks: Hybrid OLTP and OLAP on Compressed Storage using both Vectorization and Compilation" by Harald Lang, Tobias Mühlbauer, Florian Funke, Peter Boncz, Thomas Neumann and Alfons Kemper
 * Regular Expression: DuckDB uses Google's [RE2](https://github.com/google/re2) regular expression engine.
 
 ## Other pages
-* [Continuous Benchmarking (CB™)](http://www.duckdb.org/benchmarking/), runs TPC-H, TPC-DS and some microbenchmarks on every commit
+* [Continuous Benchmarking (CB™)](https://www.duckdb.org/benchmarks/index.html), runs TPC-H, TPC-DS and some microbenchmarks on every commit

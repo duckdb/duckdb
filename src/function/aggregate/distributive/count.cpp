@@ -1,45 +1,61 @@
-#include "function/aggregate/distributive_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-void countstar_update(Vector inputs[], index_t input_count, Vector &result) {
-	// add one to each address, regardless of if the value is NULL
-	Vector one(Value::BIGINT(1));
-	VectorOperations::Scatter::Add(one, result);
+struct BaseCountFunction {
+	template <class STATE> static void Initialize(STATE *state) {
+		*state = 0;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		*state += 1;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		*state += count;
+	}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		*target += source;
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		target[idx] = *state;
+	}
+};
+
+struct CountStarFunction : public BaseCountFunction {
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+struct CountFunction : public BaseCountFunction {
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+AggregateFunction CountFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(SQLType(SQLTypeId::ANY),
+	                                                                                   SQLType::BIGINT);
 }
 
-void countstar_simple_update(Vector inputs[], index_t input_count, Value &result) {
-	assert(input_count == 1);
-	Value count = Value::BIGINT(inputs[0].count);
-	result = result + count;
+AggregateFunction CountStarFun::GetFunction() {
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(SQLType(SQLTypeId::ANY),
+	                                                                                       SQLType::BIGINT);
 }
 
-void count_update(Vector inputs[], index_t input_count, Vector &result) {
-	assert(input_count == 1);
-	VectorOperations::Scatter::AddOne(inputs[0], result);
-}
-
-void count_simple_update(Vector inputs[], index_t input_count, Value &result) {
-	assert(input_count == 1);
-	Value count = VectorOperations::Count(inputs[0]);
-	result = result + count;
-}
-
-AggregateFunction Count::GetFunction() {
-	return AggregateFunction({SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, count_update, gather_finalize, bigint_simple_initialize, count_simple_update);
-}
-
-AggregateFunction CountStar::GetFunction() {
-	return AggregateFunction("count_star", {SQLType(SQLTypeId::ANY)}, SQLType::BIGINT, get_bigint_type_size, bigint_payload_initialize, countstar_update, gather_finalize, bigint_simple_initialize, countstar_simple_update);
-}
-
-void Count::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunction count_function = Count::GetFunction();
+void CountFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunction count_function = CountFun::GetFunction();
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments
@@ -48,8 +64,10 @@ void Count::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(count);
 }
 
-void CountStar::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(CountStar::GetFunction());
+void CountStarFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet count("count_star");
+	count.AddFunction(CountStarFun::GetFunction());
+	set.AddFunction(count);
 }
 
 } // namespace duckdb

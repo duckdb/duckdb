@@ -1,13 +1,13 @@
-#include "parser/expression/columnref_expression.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression_binder.hpp"
-#include "common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, index_t depth) {
+BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
 	assert(!colref.column_name.empty());
 	// individual column reference
 	// resolve to either a base table or a subquery expression

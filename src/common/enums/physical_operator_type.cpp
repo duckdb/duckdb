@@ -1,4 +1,4 @@
-#include "common/enums/physical_operator_type.hpp"
+#include "duckdb/common/enums/physical_operator_type.hpp"
 
 using namespace std;
 
@@ -26,10 +26,14 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "ORDER_BY";
 	case PhysicalOperatorType::LIMIT:
 		return "LIMIT";
+	case PhysicalOperatorType::TOP_N:
+		return "TOP_N";
 	case PhysicalOperatorType::AGGREGATE:
 		return "AGGREGATE";
 	case PhysicalOperatorType::WINDOW:
 		return "WINDOW";
+	case PhysicalOperatorType::UNNEST:
+		return "UNNEST";
 	case PhysicalOperatorType::DISTINCT:
 		return "DISTINCT";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
@@ -70,8 +74,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UPDATE";
 	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
-	case PhysicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::TABLE_FUNCTION:
@@ -84,6 +86,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPLAIN";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
+	case PhysicalOperatorType::VACUUM:
+		return "VACUUM";
+	case PhysicalOperatorType::RECURSIVE_CTE:
+		return "REC_CTE";
 	case PhysicalOperatorType::INVALID:
 	default:
 		return "INVALID";

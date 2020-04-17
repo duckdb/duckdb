@@ -1,18 +1,18 @@
-#include "function/scalar/operators.hpp"
-#include "common/exception.hpp"
+#include "duckdb/function/scalar/operators.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 void BuiltinFunctions::RegisterOperators() {
-	Register<Add>();
-	Register<Subtract>();
-	Register<Multiply>();
-	Register<Divide>();
-	Register<Mod>();
-	Register<LeftShift>();
-	Register<RightShift>();
-	Register<BitwiseAnd>();
-	Register<BitwiseOr>();
-	Register<BitwiseXor>();
+	Register<AddFun>();
+	Register<SubtractFun>();
+	Register<MultiplyFun>();
+	Register<DivideFun>();
+	Register<ModFun>();
+	Register<LeftShiftFun>();
+	Register<RightShiftFun>();
+	Register<BitwiseAndFun>();
+	Register<BitwiseOrFun>();
+	Register<BitwiseXorFun>();
 }

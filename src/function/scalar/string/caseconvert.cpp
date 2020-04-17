@@ -1,7 +1,8 @@
-#include "function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 #include <string.h>
 
@@ -9,87 +10,56 @@ using namespace std;
 
 namespace duckdb {
 
-typedef void (*str_function)(const char *input, char *output);
-
 // TODO: this does not handle UTF characters yet.
-static void strtoupper(const char *input, char *output) {
-	while (*input) {
-		*output = toupper((unsigned char)*input);
-		input++;
-		output++;
+template <class OP> static void strcase(const char *input_data, idx_t input_length, char *output) {
+	for (idx_t i = 0; i < input_length; i++) {
+		output[i] = OP::Operation(input_data[i]);
 	}
-	*output = '\0';
+	output[input_length] = '\0';
 }
 
-static void strtolower(const char *input, char *output) {
-	while (*input) {
-		*output = tolower((unsigned char)*input);
-		input++;
-		output++;
-	}
-	*output = '\0';
-}
-
-template <str_function CASE_FUNCTION>
-static void caseconvert_function(Vector inputs[], BoundFunctionExpression &expr, Vector &result) {
-	auto &input = inputs[0];
+template <class OP> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
 	assert(input.type == TypeId::VARCHAR);
 
-	result.Initialize(TypeId::VARCHAR);
-	result.nullmask = input.nullmask;
-	result.count = input.count;
-	result.sel_vector = input.sel_vector;
+	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
+		auto input_data = input.GetData();
+		auto input_length = input.GetSize();
 
-	auto result_data = (const char **)result.data;
-	auto input_data = (const char **)input.data;
-
-	// bool has_stats = expr.function->children[0]->stats.has_stats;
-	index_t current_len = 0;
-	unique_ptr<char[]> output;
-	// if (has_stats) {
-	// 	// stats available, pre-allocate the result chunk
-	// 	current_len = expr.function->children[0]->stats.maximum_string_length + 1;
-	// 	output = unique_ptr<char[]>{new char[current_len]};
-	// }
-
-	VectorOperations::Exec(input, [&](index_t i, index_t k) {
-		if (input.nullmask[i]) {
-			return;
-		}
-		// if (!has_stats) {
-		// no stats available, might need to reallocate
-		index_t required_len = strlen(input_data[i]) + 1;
-		if (required_len > current_len) {
-			current_len = required_len + 1;
-			output = unique_ptr<char[]>{new char[current_len]};
-		}
-		//}
-		assert(strlen(input_data[i]) < current_len);
-		CASE_FUNCTION(input_data[i], output.get());
-
-		result_data[i] = result.string_heap.AddString(output.get());
+		auto target = StringVector::EmptyString(result, input_length);
+		strcase<OP>(input_data, input_length, target.GetData());
+		target.Finalize();
+		return target;
 	});
 }
 
-static void caseconvert_upper_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 1);
-	caseconvert_function<strtoupper>(inputs, expr, result);
+struct StringToUpper {
+	static char Operation(char input) {
+		return toupper(input);
+	}
+};
+
+struct StringToLower {
+	static char Operation(char input) {
+		return tolower(input);
+	}
+};
+
+static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count() == 1);
+	caseconvert_function<StringToUpper>(args.data[0], result, args.size());
 }
 
-static void caseconvert_lower_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                                BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 1);
-	caseconvert_function<strtolower>(inputs, expr, result);
+static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count() == 1);
+	caseconvert_function<StringToLower>(args.data[0], result, args.size());
 }
 
-
-void Lower::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lower", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_lower_function));
+void LowerFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("lower", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function));
 }
 
-void Upper::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("upper", { SQLType::VARCHAR }, SQLType::VARCHAR, caseconvert_upper_function));
+void UpperFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("upper", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb

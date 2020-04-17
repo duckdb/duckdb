@@ -1,7 +1,9 @@
-#include "common/types.hpp"
+#include "duckdb/common/types.hpp"
 
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 #include <cmath>
 
@@ -19,53 +21,42 @@ const SQLType SQLType::FLOAT = SQLType(SQLTypeId::FLOAT);
 const SQLType SQLType::DOUBLE = SQLType(SQLTypeId::DOUBLE);
 const SQLType SQLType::DATE = SQLType(SQLTypeId::DATE);
 const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
+const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
+
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 
-const vector<SQLType> SQLType::NUMERIC = {
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT,
-	SQLType::FLOAT,
-	SQLType::DOUBLE,
-	SQLType(SQLTypeId::DECIMAL)
-};
+// TODO these are incomplete and should maybe not exist as such
+const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
+const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
 
-const vector<SQLType> SQLType::INTEGRAL = {
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT
-};
+const SQLType SQLType::ANY = SQLType(SQLTypeId::ANY);
+
+const vector<SQLType> SQLType::NUMERIC = {
+    SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
+    SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
+
+const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT};
 
 const vector<SQLType> SQLType::ALL_TYPES = {
-	SQLType::BOOLEAN,
-	SQLType::TINYINT,
-	SQLType::SMALLINT,
-	SQLType::INTEGER,
-	SQLType::BIGINT,
-	SQLType::DATE,
-	SQLType::TIMESTAMP,
-	SQLType::DOUBLE,
-	SQLType::FLOAT,
-	SQLType(SQLTypeId::DECIMAL),
-	SQLType::VARCHAR
-};
+    SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
+    SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
+    SQLType::VARCHAR};
+// TODO add LIST/STRUCT here
 
-const TypeId ROW_TYPE = TypeId::BIGINT;
+const TypeId ROW_TYPE = TypeId::INT64;
 
 string TypeIdToString(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
-		return "BOOLEAN";
-	case TypeId::TINYINT:
-		return "TINYINT";
-	case TypeId::SMALLINT:
-		return "SMALLINT";
-	case TypeId::INTEGER:
-		return "INTEGER";
-	case TypeId::BIGINT:
-		return "BIGINT";
+	case TypeId::BOOL:
+		return "BOOL";
+	case TypeId::INT8:
+		return "INT8";
+	case TypeId::INT16:
+		return "INT16";
+	case TypeId::INT32:
+		return "INT32";
+	case TypeId::INT64:
+		return "INT64";
 	case TypeId::HASH:
 		return "HASH";
 	case TypeId::POINTER:
@@ -78,33 +69,41 @@ string TypeIdToString(TypeId type) {
 		return "VARCHAR";
 	case TypeId::VARBINARY:
 		return "VARBINARY";
+	case TypeId::STRUCT:
+		return "STRUCT<?>";
+	case TypeId::LIST:
+		return "LIST<?>";
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
 }
 
-index_t GetTypeIdSize(TypeId type) {
+idx_t GetTypeIdSize(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return sizeof(bool);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return sizeof(int8_t);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return sizeof(int16_t);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return sizeof(int32_t);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return sizeof(int64_t);
 	case TypeId::FLOAT:
 		return sizeof(float);
 	case TypeId::DOUBLE:
 		return sizeof(double);
 	case TypeId::HASH:
-		return sizeof(uint64_t);
+		return sizeof(hash_t);
 	case TypeId::POINTER:
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
-		return sizeof(void *);
+		return sizeof(string_t);
+	case TypeId::STRUCT:
+		return 0; // no own payload
+	case TypeId::LIST:
+		return 16; // offset + len
 	case TypeId::VARBINARY:
 		return sizeof(blob_t);
 	default:
@@ -114,15 +113,15 @@ index_t GetTypeIdSize(TypeId type) {
 
 SQLType SQLTypeFromInternalType(TypeId type) {
 	switch (type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return SQLType(SQLTypeId::BOOLEAN);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return SQLType::TINYINT;
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return SQLType::SMALLINT;
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return SQLType::INTEGER;
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return SQLType::BIGINT;
 	case TypeId::FLOAT:
 		return SQLType::FLOAT;
@@ -132,22 +131,28 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
 		return SQLType(SQLTypeId::VARBINARY);
+	case TypeId::STRUCT:
+		return SQLType(SQLTypeId::STRUCT); // TODO we do not know the child types here
+	case TypeId::LIST:
+		return SQLType(SQLTypeId::LIST);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
 }
 
 bool TypeIsConstantSize(TypeId type) {
-	return type < TypeId::VARCHAR;
+	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
+	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
+	       type == TypeId::POINTER;
 }
 bool TypeIsIntegral(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::POINTER;
+	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER;
 }
 bool TypeIsNumeric(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::DOUBLE;
+	return type >= TypeId::UINT8 && type <= TypeId::DOUBLE;
 }
 bool TypeIsInteger(TypeId type) {
-	return type >= TypeId::TINYINT && type <= TypeId::BIGINT;
+	return type >= TypeId::UINT8 && type <= TypeId::INT64;
 }
 
 void SQLType::Serialize(Serializer &serializer) {
@@ -177,6 +182,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "BIGINT";
 	case SQLTypeId::DATE:
 		return "DATE";
+	case SQLTypeId::TIME:
+		return "TIME";
 	case SQLTypeId::TIMESTAMP:
 		return "TIMESTAMP";
 	case SQLTypeId::FLOAT:
@@ -195,6 +202,10 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "NULL";
 	case SQLTypeId::ANY:
 		return "ANY";
+	case SQLTypeId::STRUCT:
+		return "STRUCT<?>";
+	case SQLTypeId::LIST:
+		return "LIST<?>";
 	default:
 		return "INVALID";
 	}
@@ -202,11 +213,80 @@ string SQLTypeIdToString(SQLTypeId id) {
 
 string SQLTypeToString(SQLType type) {
 	// FIXME: display width/scale
-	return SQLTypeIdToString(type.id);
+	switch (type.id) {
+	case SQLTypeId::STRUCT: {
+		string ret = "STRUCT<";
+		for (size_t i = 0; i < type.child_type.size(); i++) {
+			ret += type.child_type[i].first + ": " + SQLTypeToString(type.child_type[i].second);
+			if (i < type.child_type.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += ">";
+		return ret;
+	}
+	case SQLTypeId::LIST: {
+		if (type.child_type.size() == 0) {
+			return "LIST<?>";
+		}
+		if (type.child_type.size() != 1) {
+			throw Exception("List needs a single child element");
+		}
+		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
+	}
+	default:
+		return SQLTypeIdToString(type.id);
+	}
 }
 
-bool IsNumericType(SQLTypeId type) {
-	switch (type) {
+SQLType TransformStringToSQLType(string str) {
+	auto lower_str = StringUtil::Lower(str);
+	// Transform column type
+	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
+	    lower_str == "integral" || lower_str == "int32") {
+		return SQLType::INTEGER;
+	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
+	           lower_str == "char") {
+		return SQLType::VARCHAR;
+	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
+		return SQLType::BIGINT;
+	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
+		return SQLType::SMALLINT;
+	} else if (lower_str == "timestamp" || lower_str == "datetime") {
+		return SQLType::TIMESTAMP;
+	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
+		return SQLType(SQLTypeId::BOOLEAN);
+	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
+		return SQLType::FLOAT;
+	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8") {
+		return SQLType::DOUBLE;
+	} else if (lower_str == "tinyint" || lower_str == "int1") {
+		return SQLType::TINYINT;
+	} else if (lower_str == "varbinary") {
+		return SQLType(SQLTypeId::VARBINARY);
+	} else if (lower_str == "date") {
+		return SQLType::DATE;
+	} else if (lower_str == "time") {
+		return SQLType::TIME;
+	} else {
+		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
+	}
+}
+
+bool SQLType::IsIntegral() const {
+	switch (id) {
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+	case SQLTypeId::BIGINT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool SQLType::IsNumeric() const {
+	switch (id) {
 	case SQLTypeId::TINYINT:
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
@@ -223,18 +303,19 @@ bool IsNumericType(SQLTypeId type) {
 TypeId GetInternalType(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
-		return TypeId::BOOLEAN;
+		return TypeId::BOOL;
 	case SQLTypeId::TINYINT:
-		return TypeId::TINYINT;
+		return TypeId::INT8;
 	case SQLTypeId::SMALLINT:
-		return TypeId::SMALLINT;
+		return TypeId::INT16;
 	case SQLTypeId::SQLNULL:
 	case SQLTypeId::DATE:
+	case SQLTypeId::TIME:
 	case SQLTypeId::INTEGER:
-		return TypeId::INTEGER;
+		return TypeId::INT32;
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::TIMESTAMP:
-		return TypeId::BIGINT;
+		return TypeId::INT64;
 	case SQLTypeId::FLOAT:
 		return TypeId::FLOAT;
 	case SQLTypeId::DOUBLE:
@@ -247,8 +328,14 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+	case SQLTypeId::STRUCT:
+		return TypeId::STRUCT;
+	case SQLTypeId::LIST:
+		return TypeId::LIST;
+	case SQLTypeId::ANY:
+		return TypeId::INVALID;
 	default:
-		throw ConversionException("Invalid SQLType %d", type);
+		throw ConversionException("Invalid SQLType %s", SQLTypeToString(type).c_str());
 	}
 }
 

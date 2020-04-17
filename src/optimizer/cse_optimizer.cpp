@@ -1,9 +1,9 @@
-#include "optimizer/cse_optimizer.hpp"
+#include "duckdb/optimizer/cse_optimizer.hpp"
 
-#include "planner/expression/common_subexpression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_filter.hpp"
-#include "planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression/common_subexpression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -79,7 +79,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	// look into the children to see if we can replace them
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		PerformCSEReplacement(&child, expression_count);
-		return child;
+		return move(child);
 	});
 }
 
@@ -90,7 +90,7 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 		CountExpressions(*expr, expression_count);
 	}
 	// now we iterate over all the expressions and perform the actual CSE elimination
-	for (index_t i = 0; i < op.expressions.size(); i++) {
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		PerformCSEReplacement(&op.expressions[i], expression_count);
 	}
 }

@@ -23,6 +23,10 @@ TEST_CASE("Test IN statement", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
 
+	result = con.Query("SELECT i, i NOT IN (1, 2, 3, 4, 5, 6, 7, 8) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, false}));
+
 	result = con.Query("SELECT i, i IN (1, 2, NULL, 4, 5, 6, 7, 8) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
@@ -35,11 +39,42 @@ TEST_CASE("Test IN statement", "[sql]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
 
+	result = con.Query("SELECT i, 1 IN (i - 1, i, i + 1) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, false}));
+
+	result = con.Query("SELECT i, 1 NOT IN (i - 1, i, i + 1) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, true}));
+
+	result = con.Query("SELECT i, i IN (11, 12, 13, 14, 15, 16, 17, 18, 1, i) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, true}));
+
+	result = con.Query("SELECT i, i NOT IN (11, 12, 13, 14, 15, 16, 17, 18, 1, i) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, false}));
+
+	result = con.Query("SELECT i, 1 IN (11, 12, 13, 14, 15, 16, 17, 18, 1, i) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {true, true, true, true}));
+
+	result = con.Query("SELECT i, 1 NOT IN (11, 12, 13, 14, 15, 16, 17, 18, 1, i) FROM integers ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+
 	// multiple subqueries in IN-clause
 	result = con.Query(
 	    "SELECT i, i IN ((SELECT MAX(i) FROM integers), (SELECT MIN(i) FROM integers)) FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, false, true}));
+
+	// multiple correlated subqueries in IN-clause
+	result = con.Query("SELECT i, (SELECT MAX(i) FROM integers WHERE i <> i1.i), (SELECT MIN(i) FROM integers WHERE i "
+	                   "<= i1.i) FROM integers i1 ORDER BY i");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 3, 3, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 1, 1, 1}));
 
 	// multiple correlated subqueries in IN-clause
 	result = con.Query("SELECT i, i IN ((SELECT MAX(i) FROM integers WHERE i <> i1.i), (SELECT MIN(i) FROM integers "
@@ -199,11 +234,19 @@ TEST_CASE("Test large IN statement with varchar", "[sql][.]") {
 	result = con.Query("SELECT * FROM strings WHERE s IN (" + in_list + ") ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HXR", "NUT"}));
 
-	result = con.Query("SELECT s, s IN (" + in_list + ") FROM strings ORDER BY s");
+	result = con.Query("SELECT s, s IN (" + in_list + ") AS in_list FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, false}));
 
-	result = con.Query("SELECT s, s IN (" + in_list + ", NULL) FROM strings ORDER BY s");
+	result = con.Query("SELECT s, s IN (" + in_list + ", NULL) AS in_list FROM strings ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), true, true, Value()}));
+
+	result = con.Query("SELECT s, s NOT IN (" + in_list + ") AS in_list FROM strings ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, true}));
+
+	result = con.Query("SELECT s, s NOT IN (" + in_list + ", NULL) AS in_list FROM strings ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), "HXR", "NUT", "ZZZ"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), false, false, Value()}));
 }

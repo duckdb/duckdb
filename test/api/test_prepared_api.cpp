@@ -66,6 +66,42 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	// now delete the table in con2
 	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i TINYINT)"));
+
+	// keep a prepared statement around
+	auto prepare = con.Prepare("SELECT COUNT(*) FROM a WHERE i=$1");
+
+	// now we can't drop the table
+	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
+
+	// until we delete the prepared statement
+	prepare.reset();
+
+	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
+}
+
+TEST_CASE("Dropping connection with prepared statement resets dependencies", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	auto con = make_unique<Connection>(db);
+	Connection con2(db);
+
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE a(i TINYINT)"));
+	REQUIRE_NO_FAIL(con->Query("INSERT INTO a VALUES (11), (12), (13)"));
+
+	auto prepared = con->Prepare("SELECT COUNT(*) FROM a WHERE i=$1");
+	result = prepared->Execute(12);
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	// now we can't drop the table
+	REQUIRE_FAIL(con2.Query("DROP TABLE a"));
+
+	// now drop con
+	con.reset();
+
+	// now we can
+	REQUIRE_NO_FAIL(con2.Query("DROP TABLE a"));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {
@@ -182,18 +218,27 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	Connection con(db);
 
 	auto p0 = con.Prepare("SELECT 42");
+	REQUIRE(p0->success);
 	REQUIRE(p0->n_param == 0);
 
-	auto p1 = con.Prepare("SELECT ?::int");
+	auto p1 = con.Prepare("SELECT $1::int");
+	REQUIRE(p1->success);
+	REQUIRE(p1->n_param == 1);
+
+	p1 = con.Prepare("SELECT ?::int");
+	REQUIRE(p1->success);
 	REQUIRE(p1->n_param == 1);
 
 	auto p2 = con.Prepare("SELECT $1::int");
+	REQUIRE(p2->success);
 	REQUIRE(p2->n_param == 1);
 
 	auto p3 = con.Prepare("SELECT ?::int, ?::string");
+	REQUIRE(p3->success);
 	REQUIRE(p3->n_param == 2);
 
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
+	REQUIRE(p4->success);
 	REQUIRE(p4->n_param == 2);
 
 	auto p5 = con.Prepare("SELECT $2::int, $2::string");

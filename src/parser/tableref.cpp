@@ -1,8 +1,8 @@
-#include "parser/tableref.hpp"
+#include "duckdb/parser/tableref.hpp"
 
-#include "common/printer.hpp"
-#include "common/serializer.hpp"
-#include "parser/tableref/list.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -33,6 +33,13 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	case TableReferenceType::TABLE_FUNCTION:
 		result = TableFunctionRef::Deserialize(source);
 		break;
+	case TableReferenceType::EMPTY:
+		result = EmptyTableRef::Deserialize(source);
+		break;
+	case TableReferenceType::EXPRESSION_LIST:
+		result = ExpressionListRef::Deserialize(source);
+		break;
+    case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 		return nullptr;
 	}

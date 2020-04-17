@@ -37,3 +37,19 @@ TEST_CASE("Test LIMIT keyword", "[limit]") {
 	// subquery in limit
 	REQUIRE_FAIL(con.Query("SELECT a FROM test LIMIT (SELECT MIN(a) FROM test)"));
 }
+
+TEST_CASE("LIMIT Bug #321 Crazy Result", "[limit]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a STRING);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('Hello World')"));
+
+	auto prep = con.Prepare("SELECT * FROM test LIMIT 3");
+	vector<Value> params;
+	params.clear();
+	result = prep->Execute(params);
+	REQUIRE(CHECK_COLUMN(result, 0, {"Hello World"}));
+}

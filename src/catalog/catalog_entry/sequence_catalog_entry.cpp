@@ -1,9 +1,9 @@
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 #include <algorithm>
 
@@ -11,9 +11,10 @@ using namespace duckdb;
 using namespace std;
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
-    : CatalogEntry(CatalogType::SEQUENCE, catalog, info->name), schema(schema), usage_count(info->usage_count),
+    : StandardEntry(CatalogType::SEQUENCE, schema, catalog, info->name), usage_count(info->usage_count),
       counter(info->start_value), increment(info->increment), start_value(info->start_value),
       min_value(info->min_value), max_value(info->max_value), cycle(info->cycle) {
+	this->temporary = info->temporary;
 }
 
 void SequenceCatalogEntry::Serialize(Serializer &serializer) {

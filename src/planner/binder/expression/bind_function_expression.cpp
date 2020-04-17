@@ -1,28 +1,27 @@
-#include "catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/function_expression.hpp"
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_function_expression.hpp"
-#include "planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-
-void ExpressionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
-	for(index_t i = 0; i < types.size(); i++) {
-		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
-		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
-			// type of child does not match type of function argument: add a cast
-			children[i] = AddCastToType(move(children[i]), types[i], target_type);
-		}
-	}
-}
-
-BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_t depth) {
+BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth) {
 	// lookup the function in the catalog
-	auto func = context.catalog.GetFunction(context.ActiveTransaction(), function.schema, function.function_name);
+
+	if (function.function_name == "unnest" || function.function_name == "unlist") {
+			// special case, not in catalog
+			// TODO make sure someone does not create such a function OR
+			// have unnest live in catalog, too
+			return BindUnnest(function, depth);
+		}
+
+
+	auto func = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION, function.schema,
+	                                                  function.function_name);
 	if (func->type == CatalogType::SCALAR_FUNCTION) {
 		// scalar function
 		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
@@ -32,11 +31,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, index_
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
-                                          index_t depth) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth) {
 	// bind the children of the function expression
 	string error;
-	for (index_t i = 0; i < function.children.size(); i++) {
+	for (idx_t i = 0; i < function.children.size(); i++) {
 		BindChild(function.children[i], depth, error);
 	}
 	if (!error.empty()) {
@@ -44,36 +42,34 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	// all children bound successfully
 	// extract the children and types
-	vector<SQLType> types;
+	vector<SQLType> arguments;
 	vector<unique_ptr<Expression>> children;
-	for (index_t i = 0; i < function.children.size(); i++) {
+	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
-		types.push_back(child.sql_type);
+		arguments.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
-	// bind the function
-	index_t best_function = Function::BindFunction(func->name, func->functions, types);
-	// found a matching function!
-	auto &bound_function = func->functions[best_function];
-	// check if we need to add casts to the children
-	CastToFunctionArguments(bound_function, children, types);
 
-	// types match up, get the result type
-	auto return_type = bound_function.return_type;
-	// now create the function
-	auto result = make_unique<BoundFunctionExpression>(GetInternalType(return_type), bound_function, function.is_operator);
-	result->children = move(children);
-	if (bound_function.bind) {
-		result->bind_info = bound_function.bind(*result, context);
-	}
-	return BindResult(move(result), return_type);
+	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
+	auto sql_return_type = result->sql_return_type;
+	return BindResult(move(result), sql_return_type);
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,
-                                           index_t depth) {
+                                           idx_t depth) {
 	return BindResult(UnsupportedAggregateMessage());
+}
+
+BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr,
+                                           idx_t depth) {
+	return BindResult(UnsupportedUnnestMessage());
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
 	return "Aggregate functions are not supported here";
+}
+
+
+string ExpressionBinder::UnsupportedUnnestMessage() {
+	return "UNNEST not supported here";
 }

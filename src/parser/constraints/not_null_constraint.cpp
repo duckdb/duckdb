@@ -1,6 +1,6 @@
-#include "parser/constraints/not_null_constraint.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
-#include "common/serializer.hpp"
+#include "duckdb/common/serializer.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -15,10 +15,10 @@ unique_ptr<Constraint> NotNullConstraint::Copy() {
 
 void NotNullConstraint::Serialize(Serializer &serializer) {
 	Constraint::Serialize(serializer);
-	serializer.Write<index_t>(index);
+	serializer.Write<idx_t>(index);
 }
 
 unique_ptr<Constraint> NotNullConstraint::Deserialize(Deserializer &source) {
-	auto index = source.Read<index_t>();
+	auto index = source.Read<idx_t>();
 	return make_unique_base<Constraint, NotNullConstraint>(index);
 }

@@ -1,122 +1,96 @@
-#include "execution/window_segment_tree.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
 
-#include "common/types/constant_vector.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <cmath>
 
 using namespace duckdb;
 using namespace std;
 
-void WindowSegmentTree::AggregateInit() {
-	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_AVG:
-		aggregate = Value::Numeric(payload_type, 0);
-		break;
-	case ExpressionType::WINDOW_MIN:
-		aggregate = Value::MaximumValue(payload_type);
-		break;
-	case ExpressionType::WINDOW_MAX:
-		aggregate = Value::MinimumValue(payload_type);
-		break;
-	default:
-		throw NotImplementedException("Window Type");
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
+    : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
+      input_ref(input) {
+	statep.SetCount(STANDARD_VECTOR_SIZE);
+	Value ptr_val = Value::POINTER((idx_t)state.data());
+	statep.Reference(ptr_val);
+	statep.Normalify(STANDARD_VECTOR_SIZE);
+
+	if (input_ref && input_ref->column_count() > 0) {
+		inputs.Initialize(input_ref->types);
+		if (aggregate.combine) {
+			ConstructTree();
+		}
 	}
-	assert(aggregate.type == payload_type);
-	n_aggregated = 0;
+}
+
+void WindowSegmentTree::AggregateInit() {
+	aggregate.initialize(state.data());
 }
 
 Value WindowSegmentTree::AggegateFinal() {
-	if (n_aggregated == 0) {
-		return Value(payload_type);
-	}
-	switch (window_type) {
-	case ExpressionType::WINDOW_AVG:
-		return aggregate / Value::Numeric(payload_type, n_aggregated);
-	default:
-		return aggregate;
-	}
+	Vector statev(Value::POINTER((idx_t)state.data()));
+	Vector result(result_type);
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	ConstantVector::SetNull(result, false);
+	aggregate.finalize(statev, result, 1);
 
-	return aggregate;
+	return result.GetValue(0);
 }
 
-void WindowSegmentTree::WindowSegmentValue(index_t l_idx, index_t begin, index_t end) {
+void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
 	assert(begin <= end);
 	if (begin == end) {
 		return;
 	}
-	Vector v;
+	inputs.SetCardinality(end - begin);
+
+	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
+	Vector s;
+	s.Slice(statep, start_in_vector);
 	if (l_idx == 0) {
-		auto &vec = input_ref->GetChunk(begin).data[0];
-		v.Reference(vec);
-		index_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
-		v.data = v.data + GetTypeIdSize(v.type) * start_in_vector;
-		v.count = end - begin;
-		v.nullmask <<= start_in_vector;
-		assert(v.count + start_in_vector <=
-		       vec.count); // if STANDARD_VECTOR_SIZE is not divisible by fanout this will trip
+		const auto input_count = input_ref->column_count();
+		auto &chunk = input_ref->GetChunk(begin);
+		for (idx_t i = 0; i < input_count; ++i) {
+			auto &v = inputs.data[i];
+			auto &vec = chunk.data[i];
+			v.Slice(vec, start_in_vector);
+			v.Verify(inputs.size());
+		}
+		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
-		assert(end - begin < STANDARD_VECTOR_SIZE);
-		v.data = levels_flat_native.get() + GetTypeIdSize(payload_type) * (begin + levels_flat_start[l_idx - 1]);
-		v.count = end - begin;
-		v.type = payload_type;
+		assert(end - begin <= STANDARD_VECTOR_SIZE);
+		data_ptr_t ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
+		Vector v(result_type, ptr);
+		v.Verify(inputs.size());
+		aggregate.combine(v, s, inputs.size());
 	}
-
-	assert(!v.sel_vector);
-	v.Verify();
-
-	switch (window_type) {
-	case ExpressionType::WINDOW_SUM:
-	case ExpressionType::WINDOW_AVG:
-		aggregate = aggregate + VectorOperations::Sum(v);
-		break;
-	case ExpressionType::WINDOW_MIN: {
-		auto val = VectorOperations::Min(v);
-		aggregate = aggregate > val ? val : aggregate;
-		break;
-	}
-	case ExpressionType::WINDOW_MAX: {
-		auto val = VectorOperations::Max(v);
-		aggregate = aggregate < val ? val : aggregate;
-		break;
-	}
-	default:
-		throw NotImplementedException("Window Type");
-	}
-
-	n_aggregated += end - begin;
 }
 
 void WindowSegmentTree::ConstructTree() {
 	assert(input_ref);
-	assert(input_ref->column_count() == 1);
+	assert(inputs.column_count() > 0);
 
 	// compute space required to store internal nodes of segment tree
-	index_t internal_nodes = 0;
-	index_t level_nodes = input_ref->count;
+	idx_t internal_nodes = 0;
+	idx_t level_nodes = input_ref->count;
 	do {
-		level_nodes = (index_t)ceil((double)level_nodes / TREE_FANOUT);
+		level_nodes = (idx_t)ceil((double)level_nodes / TREE_FANOUT);
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat_native = unique_ptr<data_t[]>(new data_t[internal_nodes * GetTypeIdSize(payload_type)]);
+	levels_flat_native = unique_ptr<data_t[]>(new data_t[internal_nodes * state.size()]);
 	levels_flat_start.push_back(0);
 
-	index_t levels_flat_offset = 0;
-	index_t level_current = 0;
+	idx_t levels_flat_offset = 0;
+	idx_t level_current = 0;
 	// level 0 is data itself
-	index_t level_size;
+	idx_t level_size;
 	while ((level_size = (level_current == 0 ? input_ref->count
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
-		for (index_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
+		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, min(level_size, pos + TREE_FANOUT));
 
-			ConstantVector res_vec(AggegateFinal());
-			assert(res_vec.type == payload_type);
-			ConstantVector ptr_vec(Value::POINTER(
-			    (index_t)(levels_flat_native.get() + (levels_flat_offset * GetTypeIdSize(payload_type)))));
-			VectorOperations::Scatter::Set(res_vec, ptr_vec);
+			memcpy(levels_flat_native.get() + (levels_flat_offset * state.size()), state.data(), state.size());
 
 			levels_flat_offset++;
 		}
@@ -126,22 +100,35 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-Value WindowSegmentTree::Compute(index_t begin, index_t end) {
+Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	assert(input_ref);
+
+	// No arguments, so just count
+	if (inputs.column_count() == 0) {
+		return Value::Numeric(result_type, end - begin);
+	}
+
 	AggregateInit();
-	for (index_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
-		index_t parent_begin = begin / TREE_FANOUT;
-		index_t parent_end = end / TREE_FANOUT;
+
+	// Aggregate everything at once if we can't combine states
+	if (!aggregate.combine) {
+		WindowSegmentValue(0, begin, end);
+		return AggegateFinal();
+	}
+
+	for (idx_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
+		idx_t parent_begin = begin / TREE_FANOUT;
+		idx_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {
 			WindowSegmentValue(l_idx, begin, end);
 			return AggegateFinal();
 		}
-		index_t group_begin = parent_begin * TREE_FANOUT;
+		idx_t group_begin = parent_begin * TREE_FANOUT;
 		if (begin != group_begin) {
 			WindowSegmentValue(l_idx, begin, group_begin + TREE_FANOUT);
 			parent_begin++;
 		}
-		index_t group_end = parent_end * TREE_FANOUT;
+		idx_t group_end = parent_end * TREE_FANOUT;
 		if (end != group_end) {
 			WindowSegmentValue(l_idx, group_end, end);
 		}

@@ -1,6 +1,6 @@
-#include "common/enums/expression_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace std;
 
@@ -52,16 +52,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "SCALAR";
 	case ExpressionType::AGGREGATE:
 		return "AGGREGATE";
-	case ExpressionType::WINDOW_SUM:
-		return "SUM";
-	case ExpressionType::WINDOW_COUNT_STAR:
-		return "COUNT_STAR";
-	case ExpressionType::WINDOW_MIN:
-		return "MIN";
-	case ExpressionType::WINDOW_MAX:
-		return "MAX";
-	case ExpressionType::WINDOW_AVG:
-		return "AVG";
+	case ExpressionType::WINDOW_AGGREGATE:
+		return "WINDOW_AGGREGATE";
 	case ExpressionType::WINDOW_RANK:
 		return "RANK";
 	case ExpressionType::WINDOW_RANK_DENSE:

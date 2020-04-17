@@ -1,23 +1,22 @@
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/serializer.hpp"
-#include "main/connection.hpp"
-#include "main/database.hpp"
-#include "parser/constraints/list.hpp"
-#include "parser/parsed_data/alter_table_info.hpp"
-#include "planner/constraints/bound_not_null_constraint.hpp"
-#include "planner/constraints/bound_unique_constraint.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/parsed_data/bound_create_table_info.hpp"
-#include "storage/storage_manager.hpp"
-#include "planner/binder.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/constraints/list.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/planner/binder.hpp"
 
-#include "execution/index/art/art.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #include <algorithm>
 
@@ -26,9 +25,10 @@ using namespace std;
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
-    : CatalogEntry(CatalogType::TABLE, catalog, info->base->table), schema(schema), storage(inherited_storage),
-      columns(move(info->base->columns)), constraints(move(info->base->constraints)),
+    : StandardEntry(CatalogType::TABLE, schema, catalog, info->Base().table), storage(inherited_storage),
+      columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
+	this->temporary = info->Base().temporary;
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -36,8 +36,9 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	if (!storage) {
 		// create the physical storage
 		storage = make_shared<DataTable>(catalog->storage, schema->name, name, GetTypes(), move(info->data));
+
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
-		for (index_t i = 0; i < bound_constraints.size(); i++) {
+		for (idx_t i = 0; i < bound_constraints.size(); i++) {
 			auto &constraint = bound_constraints[i];
 			if (constraint->type == ConstraintType::UNIQUE) {
 				// unique constraint: create a unique index
@@ -46,7 +47,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<column_t> column_ids;
 				vector<unique_ptr<Expression>> unbound_expressions;
 				vector<unique_ptr<Expression>> bound_expressions;
-				index_t key_nr = 0;
+				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
 					TypeId column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
@@ -87,8 +88,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::RENAME_COLUMN: {
 		auto rename_info = (RenameColumnInfo *)table_info;
 		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+		create_info->temporary = temporary;
 		bool found = false;
-		for (index_t i = 0; i < columns.size(); i++) {
+		for (idx_t i = 0; i < columns.size(); i++) {
 			ColumnDefinition copy(columns[i].name, columns[i].type);
 			copy.oid = columns[i].oid;
 			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
@@ -105,12 +107,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		}
 		assert(constraints.size() == 0);
 		// create_info->constraints.resize(constraints.size());
-		// for (index_t i = 0; i < constraints.size(); i++) {
+		// for (idx_t i = 0; i < constraints.size(); i++) {
 		// 	create_info->constraints[i] = constraints[i]->Copy();
 		// }
 		Binder binder(context);
 		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, bound_create_info.get(), storage);
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
+	}
+	case AlterTableType::RENAME_TABLE: {
+		auto rename_info = (RenameTableInfo *)table_info;
+		auto copied_table = Copy(context);
+		copied_table->name = rename_info->new_table_name;
+		return copied_table;
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
@@ -137,7 +146,7 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 	vector<TypeId> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::BIGINT);
+			result.push_back(TypeId::INT64);
 		} else {
 			result.push_back(GetInternalType(columns[index].type));
 		}
@@ -182,4 +191,23 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 		info->constraints.push_back(move(constraint));
 	}
 	return info;
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		ColumnDefinition copy(columns[i].name, columns[i].type);
+		copy.oid = columns[i].oid;
+		copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+		create_info->columns.push_back(move(copy));
+	}
+
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }

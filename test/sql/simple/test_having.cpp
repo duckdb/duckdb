@@ -8,8 +8,9 @@ TEST_CASE("Test HAVING clause", "[having]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 
 	// HAVING with condition on group
 	result = con.Query("SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING "
@@ -86,22 +87,47 @@ TEST_CASE("Test HAVING clause without GROUP BY", "[having]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	// CONTROVERSIAL: HAVING without GROUP BY works in PostgreSQL, but not in SQLite
 	// scalar HAVING queries
-	// CONTROVERSIAL: this works in PostgreSQL, but not in SQLite
-	REQUIRE_FAIL(con.Query("SELECT 42 HAVING 42 > 20"));
-	REQUIRE_FAIL(con.Query("SELECT 42 HAVING 42 > 80"));
+	// constants only
+	result = con.Query("SELECT 42 HAVING 42 > 20");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	result = con.Query("SELECT 42 HAVING 42 > 80");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	// aggregates
+	result = con.Query("SELECT SUM(42) HAVING AVG(42) > MIN(20)");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	result = con.Query("SELECT SUM(42) HAVING SUM(42) > SUM(80)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT SUM(42)+COUNT(*)+COUNT(1), 3 HAVING SUM(42)+MAX(20)+AVG(30) > SUM(120)-MIN(100)");
+	REQUIRE(CHECK_COLUMN(result, 0, {44}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3}));
+	// subqueries
+	result = con.Query("SELECT SUM(42) HAVING (SELECT SUM(42)) > SUM(80)");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
 	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
 
-	// HAVING with column references
-	// CONTROVERSIAL: this works in PostgreSQL, but not in SQLite
+	// HAVING with column references does not work
+	// HAVING clause can only contain aggregates
 	REQUIRE_FAIL(con.Query("SELECT a FROM test WHERE a=13 HAVING a > 11"));
+	// HAVING clause also turns the rest of the query into an aggregate
+	// thus column references in SELECT clause also produce errors
+	REQUIRE_FAIL(con.Query("SELECT a FROM test WHERE a=13 HAVING SUM(a) > 11"));
+	// once we produce a sum this works though
+	result = con.Query("SELECT SUM(a) FROM test WHERE a=13 HAVING SUM(a) > 11");
+	REQUIRE(CHECK_COLUMN(result, 0, {13}));
+	result = con.Query("SELECT SUM(a) FROM test WHERE a=13 HAVING SUM(a) > 20");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 
 	// HAVING with single-node aggregation does work, even without GROUP BY
-	// CONTROVERSIAL: this works in PostgreSQL, but not in SQLite (SQLite requires GROUP BY)
-	REQUIRE_FAIL(con.Query("SELECT SUM(a) FROM test HAVING SUM(a)>10;"));
-	REQUIRE_FAIL(con.Query("SELECT SUM(a) FROM test HAVING SUM(a)<10;"));
-	REQUIRE_FAIL(con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>1;"));
-	REQUIRE_FAIL(con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>10;"));
+	result = con.Query("SELECT SUM(a) FROM test HAVING SUM(a)>10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {36}));
+	result = con.Query("SELECT SUM(a) FROM test HAVING SUM(a)<10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {36}));
+	result = con.Query("SELECT SUM(a) FROM test HAVING COUNT(*)>10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }

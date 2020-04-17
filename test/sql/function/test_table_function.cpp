@@ -18,7 +18,7 @@ TEST_CASE("Table functions", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"i", "j"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"INTEGER", "INTEGER"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {false, false}));
-	REQUIRE(CHECK_COLUMN(result, 4, {"NULL", "NULL"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value(), Value()}));
 	REQUIRE(CHECK_COLUMN(result, 5, {false, false}));
 
 	// project single column

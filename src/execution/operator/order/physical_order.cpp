@@ -1,13 +1,23 @@
-#include "execution/operator/order/physical_order.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 
-#include "common/assert.hpp"
-#include "common/value_operations/value_operations.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalOrderOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
+	}
+
+	idx_t position;
+	ChunkCollection sorted_data;
+	unique_ptr<idx_t[]> sorted_vector;
+};
 
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
@@ -21,30 +31,29 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 
 		// now perform the actual ordering of the data
 		// compute the sorting columns from the input data
+		ExpressionExecutor executor;
 		vector<TypeId> sort_types;
-		vector<Expression *> order_expressions;
 		vector<OrderType> order_types;
-		for (index_t i = 0; i < orders.size(); i++) {
+		for (idx_t i = 0; i < orders.size(); i++) {
 			auto &expr = orders[i].expression;
 			sort_types.push_back(expr->return_type);
-			order_expressions.push_back(expr.get());
 			order_types.push_back(orders[i].type);
+			executor.AddExpression(*expr);
 		}
 
 		ChunkCollection sort_collection;
-		for (index_t i = 0; i < big_data.chunks.size(); i++) {
+		for (idx_t i = 0; i < big_data.chunks.size(); i++) {
 			DataChunk sort_chunk;
 			sort_chunk.Initialize(sort_types);
 
-			ExpressionExecutor executor(*big_data.chunks[i]);
-			executor.Execute(order_expressions, sort_chunk);
+			executor.Execute(*big_data.chunks[i], sort_chunk);
 			sort_collection.Append(sort_chunk);
 		}
 
 		assert(sort_collection.count == big_data.count);
 
 		// now perform the actual sort
-		state->sorted_vector = unique_ptr<index_t[]>(new index_t[sort_collection.count]);
+		state->sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
 		sort_collection.Sort(order_types, state->sorted_vector.get());
 	}
 

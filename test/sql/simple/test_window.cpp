@@ -4,6 +4,28 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Most scalar window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test scalar window functions
+	result = con.Query("SELECT row_number() OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT avg(42) OVER ()");
+	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+
+	// nested window functions are not allowed
+	REQUIRE_FAIL(con.Query("SELECT avg(row_number() over ()) over ()"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (partition by row_number() over ())"));
+	REQUIRE_FAIL(con.Query("SELECT avg(42) over (order by row_number() over ())"));
+	// distinct aggregates not supported for window functions
+	REQUIRE_FAIL(con.Query("SELECT COUNT(DISTINCT 42) OVER ()"));
+	REQUIRE_FAIL(con.Query("WITH t AS (SELECT col0 AS a, col1 AS b FROM (VALUES(1,2),(1,1),(1,2),(2,1),(2,1),(2,2),(2,3),(2,4)) v) SELECT *, COUNT(b) OVER(PARTITION BY a), COUNT(DISTINCT b) OVER(PARTITION BY a) FROM t;"));
+}
+
 TEST_CASE("Most basic window function", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -79,6 +101,26 @@ TEST_CASE("Most basic window function", "[window]") {
 	REQUIRE(CHECK_COLUMN(
 	    result, 3,
 	    {4200.0, 5020.0, 4350.0, 4633.33333333333, 4775.0, 3700.0, 3500.0, 4866.66666666667, 4800.0, 4800.0}));
+
+	// stddev_pop
+	result = con.Query("SELECT depname, "
+	                   "STDDEV_POP(salary) OVER (PARTITION BY depname ORDER BY salary, empno) s "
+	                   "FROM empsalary ORDER BY depname, empno");
+	REQUIRE(result->types.size() == 2);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0, 627.375486, 150.0, 418.993503, 438.035387, 200, 0.0, 94.280904, 0.0, 0.0}));
+
+	// covar_pop
+	result = con.Query("SELECT depname, "
+	                   "COVAR_POP(salary, empno) OVER (PARTITION BY depname ORDER BY salary, empno) c "
+	                   "FROM empsalary ORDER BY depname, empno");
+	REQUIRE(result->types.size() == 2);
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {"develop", "develop", "develop", "develop", "develop", "personnel", "personnel", "sales", "sales", "sales"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0.0, 240.0, 150.0, 477.777778, 606.250000, -300.0, 0.0, -111.111111, 0.0, 0.0}));
 }
 
 TEST_CASE("Illegal window function", "[window]") {
@@ -145,7 +187,7 @@ TEST_CASE("More evil cases", "[window]") {
 	                     {23.904382, 51.724138, 54.450262, 100.000000, 52.702703, 100.000000, 34.246575, 100.000000}));
 }
 
-TEST_CASE("Wiscosin-derived window test cases", "[window]") {
+TEST_CASE("Wisconsin-derived window test cases", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -168,6 +210,7 @@ TEST_CASE("Wiscosin-derived window test cases", "[window]") {
 
 	result = con.Query("SELECT COUNT(*) OVER () FROM tenk1");
 	REQUIRE(result->types.size() == 1);
+
 	// FIXME	REQUIRE(CHECK_COLUMN(result, 0, {10, 10, 10, 10, 10, 10, 10, 10, 10, 10}));
 
 	result = con.Query("SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE "
@@ -368,23 +411,23 @@ TEST_CASE("Expressions in boundaries", "[window]") {
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 2 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 6, 10, 15, 20, 25, 30, 35, 30, 24}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 2 preceding and 1 preceding) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0, 1, 3, 5, 7, 9, 11, 13, 15}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between 1 following and 3 following) su FROM "
 	                   "tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 9, 12, 15, 18, 21, 24, 17, 9, Value()}));
+	REQUIRE(result->types.size() == 1);
 
 	result = con.Query("SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 1 following) "
 	                   "su FROM tenk1 order by unique1");
-	REQUIRE(result->types.size() == 1);
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 6, 10, 15, 21, 28, 36, 45, 45}));
+	REQUIRE(result->types.size() == 1);
 }
 
 TEST_CASE("TPC-DS inspired micro benchmarks", "[window]") {
@@ -457,4 +500,98 @@ TEST_CASE("TPC-DS Q49 bug fix for multi-sort window functions", "[window]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {7, 8, 9, 6, 4, 16, 2, 12, 10, 13, 1, 14, 11, 15, 5, 3}));
 
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+}
+
+TEST_CASE("Ensure dbplyr crash with ORDER BY under window stays fixed", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dbplyr_052 (x INTEGER, g DOUBLE, w int)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO dbplyr_052 VALUES (1,1, 42),(2,1, 42),(3,1, 42),(2,2, 42),(3,2, 42),(4,2, 42)"));
+
+	// this works fine because we order by the already-projected column in the innermost query
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
+
+	// this breaks because we add a fake projection that is not pruned
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY w) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
+
+	// this also breaks because we add a fake projection that is not pruned even if we already have that projection,
+	// just with a different table name
+	result =
+	    con.Query("SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS "
+	              "zzz67 FROM (SELECT * FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1.0, 2.0, 2.0}));
+}
+
+TEST_CASE("Test errors in binding window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	// we use columns here that are not part of the table
+	REQUIRE_FAIL(con.Query("SELECT MIN(a) OVER (PARTITION BY i ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY a ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY a) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i, a ORDER BY i) FROM integers"));
+	REQUIRE_FAIL(con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY i, a) FROM integers"));
+
+	// now we only use the "proper" columns
+	result = con.Query("SELECT MIN(i) OVER (PARTITION BY i ORDER BY i) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+}
+
+TEST_CASE("Test binding of named window functions in CTEs", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// named window clause
+	result = con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
+
+	// named window clause in CTE
+	result = con.Query("with subquery as (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) select * from subquery;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
+
+	// named window clause in subquery
+	result = con.Query("select * from (select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i)) t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
+
+	// named window clause in view
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i);"));
+
+	result = con.Query("select * from v1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 2}));
+
+	// same window clause name multiple times but in different subqueries
+	result = con.Query("SELECT * FROM (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t1, (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i) window named_window AS ( ORDER BY i)) t2 ORDER BY 1, 2, 3, 4;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), Value(), Value(), 1, 1, 1, 2, 2, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), 1, 2, Value(), 1, 2, Value(), 1, 2}));
+
+	// we cannot use named window specifications of the main query inside CTEs
+	REQUIRE_FAIL(con.Query("WITH subquery AS (SELECT i, lag(i) OVER named_window FROM ( VALUES (1), (2), (3)) AS t (i)) SELECT * FROM subquery window named_window AS ( ORDER BY i);"));
+	// duplicate window clause name
+	REQUIRE_FAIL(con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window named_window as (order by i), named_window as (order by j);"));
 }

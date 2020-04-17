@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
 
@@ -917,4 +917,81 @@ TEST_CASE("Test correlated subqueries based on TPC-DS", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query(
 	    "SELECT * FROM item i1 WHERE (SELECT count(*) AS item_cnt FROM item WHERE (i_manufact = i1.i_manufact AND "
 	    "i_manufact=3) OR (i_manufact = i1.i_manufact AND i_manufact=3)) ORDER BY 1 LIMIT 100;"));
+}
+
+TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  "
+	                          "varchar(64), TotalSales int); "));
+	REQUIRE_NO_FAIL(con.Query(
+	    "CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl_ProductSales VALUES (1,'Game','Mobo Game',200),(2,'Game','PKO "
+	                          "Game',400),(3,'Fashion','Shirt',500),(4,'Fashion','Shorts',100);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO another_T VALUES (1,2,3,4,5,6,7,8), (11,22,33,44,55,66,77,88), "
+	                          "(111,222,333,444,555,666,777,888), (1111,2222,3333,4444,5555,6666,7777,8888);"));
+
+	result = con.Query("SELECT col1 IN (SELECT ColID FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query("SELECT col1 IN (SELECT ColID + col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result =
+	    con.Query("SELECT col1 IN (SELECT ColID + another_T.col1 FROM tbl_ProductSales) FROM another_T GROUP BY col1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+	result = con.Query(
+	    "SELECT (col1 + 1) AS k, k IN (SELECT ColID + k FROM tbl_ProductSales) FROM another_T GROUP BY k ORDER BY 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 12, 112, 1112}));
+	REQUIRE(CHECK_COLUMN(result, 1, {false, false, false, false}));
+	result = con.Query(
+	    "SELECT (col1 + 1) IN (SELECT ColID + (col1 + 1) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, false, false, false}));
+
+	// this should fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query("SELECT col1+1, col1+42 FROM another_T GROUP BY col1+1;"));
+	// this should also fail, col1 + 42 is not a grouping column
+	REQUIRE_FAIL(con.Query(
+	    "SELECT (col1 + 1) IN (SELECT ColID + (col1 + 42) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);"));
+
+	// having without GROUP BY in subquery
+	result = con.Query("SELECT col5 = ALL (SELECT 1 FROM tbl_ProductSales HAVING MIN(col8) IS NULL) FROM another_T "
+	                   "GROUP BY col1, col2, col5, col8;");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true, true, true}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT MAX(col7) UNION ALL (SELECT MIN(ColID) FROM tbl_ProductSales "
+	                   "INNER JOIN another_T t2 ON t2.col5 = t2.col1)) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	// UNION ALL with correlated subquery on either side
+	result =
+	    con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MAX(col7)) UNION ALL (SELECT MIN(ColID) FROM tbl_ProductSales "
+	              "INNER JOIN another_T t2 ON t2.col5 = t2.col1)) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	result = con.Query("SELECT CASE WHEN 1 IN (SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 "
+	                   "ON t2.col5 = t2.col1) UNION ALL (SELECT MAX(col7))) THEN 2 ELSE NULL END FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// correlated column comparison with correlated subquery
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> (SELECT "
+	                   "MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+	result = con.Query("SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.col7 <> "
+	                   "ANY(SELECT MAX(t1.col1 + t3.col4) FROM another_T t3)) FROM another_T t1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 1}));
+
+	// LEFT JOIN between correlated columns not supported for now
+	REQUIRE_FAIL(con.Query(
+	    "SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(ColID) FROM tbl_ProductSales "
+	    "LEFT JOIN another_T t2 ON t2.col5 = t1.col1)) THEN 1 ELSE 2 END FROM another_T t1 GROUP BY col1 ORDER BY 1;"));
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 2}));
+
+	// correlated columns in window functions not supported yet
+	REQUIRE_FAIL(con.Query("SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;"));
+	// REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	REQUIRE_FAIL(con.Query("SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS "
+	                       "UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1"));
 }

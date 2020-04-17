@@ -11,6 +11,7 @@ add_library_unity(duckdb_bind_expression
                   bind_operator_expression.cpp
                   bind_parameter_expression.cpp
                   bind_subquery_expression.cpp
+                  bind_unnest_expression.cpp
                   bind_window_expression.cpp)
 set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
                      $<TARGET_OBJECTS:duckdb_bind_expression> PARENT_SCOPE)

@@ -1,6 +1,6 @@
-#include "parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
-#include "common/exception.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -13,18 +13,14 @@ string CaseExpression::ToString() const {
 	       result_if_false->ToString() + ")";
 }
 
-bool CaseExpression::Equals(const BaseExpression *other_) const {
-	if (!BaseExpression::Equals(other_)) {
+bool CaseExpression::Equals(const CaseExpression *a, const CaseExpression *b) {
+	if (!a->check->Equals(b->check.get())) {
 		return false;
 	}
-	auto other = (CaseExpression *)other_;
-	if (!check->Equals(other->check.get())) {
+	if (!a->result_if_true->Equals(b->result_if_true.get())) {
 		return false;
 	}
-	if (!result_if_true->Equals(other->result_if_true.get())) {
-		return false;
-	}
-	if (!result_if_false->Equals(other->result_if_false.get())) {
+	if (!a->result_if_false->Equals(b->result_if_false.get())) {
 		return false;
 	}
 	return true;

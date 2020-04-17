@@ -1,13 +1,14 @@
-#include "function/scalar/sequence_functions.hpp"
+#include "duckdb/function/scalar/sequence_functions.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/sequence_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 
 using namespace std;
 
@@ -26,30 +27,6 @@ struct NextvalBindData : public FunctionData {
 		return make_unique<NextvalBindData>(context, sequence);
 	}
 };
-
-static void parse_schema_and_sequence(string input, string &schema, string &name) {
-	index_t start = 0;
-	for (const char *istr = input.c_str(); *istr; istr++) {
-		if (*istr == '.') {
-			// separator
-			index_t len = istr - input.c_str();
-			if (len == 0) {
-				throw ParserException("invalid name syntax");
-			}
-			if (start > 0) {
-				throw ParserException("invalid name syntax");
-			}
-			schema = input.substr(0, len);
-			start = len + 1;
-		}
-	}
-	if (start == 0) {
-		schema = DEFAULT_SCHEMA;
-		name = input;
-	} else {
-		name = input.substr(start, input.size() - start);
-	}
-}
 
 static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntry *seq) {
 	lock_guard<mutex> seqlock(seq->lock);
@@ -82,41 +59,32 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 	return result;
 }
 
-static void nextval_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count, BoundFunctionExpression &expr,
-                      Vector &result) {
-	auto &info = (NextvalBindData &)*expr.bind_info;
-	assert(input_count == 1 && inputs[0].type == TypeId::VARCHAR);
-	result.Initialize(TypeId::BIGINT);
+static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (NextvalBindData &)*func_expr.bind_info;
+	assert(args.column_count() == 1 && args.data[0].type == TypeId::VARCHAR);
+	auto &input = args.data[0];
 
-	if (exec.chunk) {
-		result.count = exec.chunk->size();
-		result.sel_vector = exec.chunk->sel_vector;
-	} else {
-		result.count = inputs[0].count;
-		result.sel_vector = inputs[0].sel_vector;
-	}
-	Transaction &transaction = info.context.ActiveTransaction();
+	auto &transaction = Transaction::GetTransaction(info.context);
 	if (info.sequence) {
 		// sequence to use is hard coded
 		// increment the sequence
-		int64_t *result_data = (int64_t *)result.data;
-		VectorOperations::Exec(result, [&](index_t i, index_t k) {
+		result.vector_type = VectorType::FLAT_VECTOR;
+		auto result_data = FlatVector::GetData<int64_t>(result);
+		for (idx_t i = 0; i < args.size(); i++) {
 			// get the next value from the sequence
 			result_data[i] = next_sequence_value(transaction, info.sequence);
-		});
+		}
 	} else {
 		// sequence to use comes from the input
-		assert(result.count == inputs[0].count && result.sel_vector == inputs[0].sel_vector);
-		int64_t *result_data = (int64_t *)result.data;
-		VectorOperations::ExecType<const char *>(inputs[0], [&](const char *value, index_t i, index_t k) {
-			// first get the sequence schema/name
+		UnaryExecutor::Execute<string_t, int64_t, true>(input, result, args.size(), [&](string_t value) {
 			string schema, seq;
-			string seqname = string(value);
-			parse_schema_and_sequence(seqname, schema, seq);
+			string seqname = value.GetString();
+			Catalog::ParseRangeVar(seqname, schema, seq);
 			// fetch the sequence from the catalog
-			auto sequence = info.context.catalog.GetSequence(info.context.ActiveTransaction(), schema, seq);
+			auto sequence = Catalog::GetCatalog(info.context).GetEntry<SequenceCatalogEntry>(info.context, schema, seq);
 			// finally get the next value from the sequence
-			result_data[i] = next_sequence_value(transaction, sequence);
+			return next_sequence_value(transaction, sequence);
 		});
 	}
 }
@@ -128,9 +96,11 @@ static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, Clie
 		// parameter to nextval function is a foldable constant
 		// evaluate the constant and perform the catalog lookup already
 		Value seqname = ExpressionExecutor::EvaluateScalar(*expr.children[0]);
-		assert(seqname.type == TypeId::VARCHAR);
-		parse_schema_and_sequence(seqname.str_value, schema, seq);
-		sequence = context.catalog.GetSequence(context.ActiveTransaction(), schema, seq);
+		if (!seqname.is_null) {
+			assert(seqname.type == TypeId::VARCHAR);
+			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
+			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
+		}
 	}
 	return make_unique<NextvalBindData>(context, sequence);
 }
@@ -142,8 +112,9 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 	}
 }
 
-void Nextval::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", { SQLType::VARCHAR }, SQLType::BIGINT, nextval_function, true, nextval_bind, nextval_dependency));
+void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("nextval", {SQLType::VARCHAR}, SQLType::BIGINT, nextval_function, true, nextval_bind,
+	                               nextval_dependency));
 }
 
 } // namespace duckdb

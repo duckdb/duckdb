@@ -4,81 +4,77 @@
 // operations == != >= <= > <
 //===--------------------------------------------------------------------===//
 
-#include "common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
-#include "common/vector_operations/binary_loops.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-inline void COMPARISON_TYPE_CHECK(Vector &left, Vector &right, Vector &result) {
-	if (left.type != right.type) {
-		throw TypeMismatchException(left.type, right.type, "left and right types must be the same");
+struct ComparisonExecutor {
+private:
+	template <class T, class OP, bool IGNORE_NULL = false>
+	static inline void TemplatedExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		BinaryExecutor::Execute<T, T, bool, OP, IGNORE_NULL>(left, right, result, count);
 	}
-	if (result.type != TypeId::BOOLEAN) {
-		throw InvalidTypeException(result.type, "result of comparison must be boolean");
+
+public:
+	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		assert(left.type == right.type && result.type == TypeId::BOOL);
+		// the inplace loops take the result as the last parameter
+		switch (left.type) {
+		case TypeId::BOOL:
+		case TypeId::INT8:
+			TemplatedExecute<int8_t, OP>(left, right, result, count);
+			break;
+		case TypeId::INT16:
+			TemplatedExecute<int16_t, OP>(left, right, result, count);
+			break;
+		case TypeId::INT32:
+			TemplatedExecute<int32_t, OP>(left, right, result, count);
+			break;
+		case TypeId::INT64:
+			TemplatedExecute<int64_t, OP>(left, right, result, count);
+			break;
+		case TypeId::POINTER:
+			TemplatedExecute<uintptr_t, OP>(left, right, result, count);
+			break;
+		case TypeId::FLOAT:
+			TemplatedExecute<float, OP>(left, right, result, count);
+			break;
+		case TypeId::DOUBLE:
+			TemplatedExecute<double, OP>(left, right, result, count);
+			break;
+		case TypeId::VARCHAR:
+			TemplatedExecute<string_t, OP, true>(left, right, result, count);
+			break;
+		default:
+			throw InvalidTypeException(left.type, "Invalid type for comparison");
+		}
 	}
-	if (!left.IsConstant() && !right.IsConstant() && left.count != right.count) {
-		throw Exception("Cardinality exception: left and right cannot have "
-		                "different cardinalities");
-	}
+};
+
+void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::Equals>(left, right, result, count);
 }
 
-template <class OP> static void templated_boolean_operation(Vector &left, Vector &right, Vector &result) {
-	COMPARISON_TYPE_CHECK(left, right, result);
-	// the inplace loops take the result as the last parameter
-	switch (left.type) {
-	case TypeId::BOOLEAN:
-	case TypeId::TINYINT:
-		templated_binary_loop<int8_t, int8_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::SMALLINT:
-		templated_binary_loop<int16_t, int16_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::INTEGER:
-		templated_binary_loop<int32_t, int32_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::BIGINT:
-		templated_binary_loop<int64_t, int64_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::POINTER:
-		templated_binary_loop<uint64_t, uint64_t, bool, OP>(left, right, result);
-		break;
-	case TypeId::FLOAT:
-		templated_binary_loop<float, float, bool, OP>(left, right, result);
-		break;
-	case TypeId::DOUBLE:
-		templated_binary_loop<double, double, bool, OP>(left, right, result);
-		break;
-	case TypeId::VARCHAR:
-		templated_binary_loop<const char *, const char *, bool, OP, true>(left, right, result);
-		break;
-	default:
-		throw InvalidTypeException(left.type, "Invalid type for addition");
-	}
+void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::NotEquals>(left, right, result, count);
 }
 
-void VectorOperations::Equals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::Equals>(left, right, result);
+void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(left, right, result, count);
 }
 
-void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::NotEquals>(left, right, result);
+void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::LessThanEquals>(left, right, result, count);
 }
 
-void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::GreaterThanEquals>(left, right, result);
+void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::GreaterThan>(left, right, result, count);
 }
 
-void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::LessThanEquals>(left, right, result);
-}
-
-void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::GreaterThan>(left, right, result);
-}
-
-void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result) {
-	templated_boolean_operation<duckdb::LessThan>(left, right, result);
+void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+	ComparisonExecutor::Execute<duckdb::LessThan>(left, right, result, count);
 }

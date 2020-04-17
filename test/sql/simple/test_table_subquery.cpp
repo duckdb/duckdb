@@ -10,8 +10,8 @@ TEST_CASE("Table subquery", "[subquery]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE test (i INTEGER, j INTEGER)");
-	con.Query("INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 4), (4, 5), (5, 6);"));
 
 	result = con.Query("SELECT * FROM (SELECT i, j AS d FROM test ORDER BY i) AS b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 4, 5}));
@@ -23,7 +23,7 @@ TEST_CASE("Table subquery", "[subquery]") {
 
 	// join with subqueries
 	result = con.Query("SELECT a.i,a.j,b.r,b.j FROM (SELECT i, j FROM test) AS a "
-	                   "INNER JOIN (SELECT i+1 AS r,j FROM test) AS b ON a.i=b.r;");
+	                   "INNER JOIN (SELECT i+1 AS r,j FROM test) AS b ON a.i=b.r ORDER BY 1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
 	REQUIRE(CHECK_COLUMN(result, 1, {5, 6}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 5}));

@@ -1,6 +1,6 @@
 #include "sqlite_transfer.hpp"
 
-#include "common/types/date.hpp"
+#include "duckdb/common/types/date.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -68,10 +68,10 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 					case SQLTypeId::TINYINT:
 					case SQLTypeId::SMALLINT:
 					case SQLTypeId::INTEGER:
-						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetNumericValue());
+						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetValue<int64_t>());
 						break;
 					case SQLTypeId::BIGINT:
-						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetNumericValue());
+						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetValue<int64_t>());
 						break;
 					case SQLTypeId::DATE: {
 						auto date_str = value.ToString() + " 00:00:00";
@@ -114,77 +114,76 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 
 unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sqlite, std::string query,
                                       volatile int &interrupt) {
+	if (!sqlite) {
+		return nullptr;
+	}
 	// prepare the SQL statement
 	sqlite3_stmt *stmt;
 	if (sqlite3_prepare_v2(sqlite, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-		return nullptr;
+		return make_unique<MaterializedQueryResult>(sqlite3_errmsg(sqlite));
 	}
-	// construct the result
-	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT);
+	int col_count = sqlite3_column_count(stmt);
+	vector<string> names;
+	for (int i = 0; i < col_count; i++) {
+		names.push_back(sqlite3_column_name(stmt, i));
+	}
 	// figure out the types of the columns
 	// construct the types of the result
-	int col_count = sqlite3_column_count(stmt);
-	for (int i = 0; i < col_count; i++) {
-		result->names.push_back(sqlite3_column_name(stmt, i));
-	}
 	vector<TypeId> typeids;
 	for (auto &tp : result_types) {
 		typeids.push_back(GetInternalType(tp));
 	}
+
+	// construct the result
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT, result_types, typeids, std::move(names));
 	DataChunk result_chunk;
 	result_chunk.Initialize(typeids);
 	int rc = SQLITE_ERROR;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && interrupt == 0) {
 		// get the value for each of the columns
+		idx_t result_idx = result_chunk.size();
 		for (int i = 0; i < col_count; i++) {
 			if (sqlite3_column_type(stmt, i) == SQLITE_NULL) {
 				// NULL value
-				result_chunk.data[i].nullmask[result_chunk.data[i].count] = true;
+				FlatVector::Nullmask(result_chunk.data[i])[result_idx] = true;
 			} else {
+				auto dataptr = FlatVector::GetData(result_chunk.data[i]);
 				// normal value, convert type
 				switch (result_types[i].id) {
 				case SQLTypeId::BOOLEAN:
-					((int8_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    sqlite3_column_int(stmt, i) == 0 ? 0 : 1;
+					((int8_t *)dataptr)[result_idx] = sqlite3_column_int(stmt, i) == 0 ? 0 : 1;
 					break;
 				case SQLTypeId::TINYINT:
-					((int8_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    (int8_t)sqlite3_column_int(stmt, i);
+					((int8_t *)dataptr)[result_idx] = (int8_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::SMALLINT:
-					((int16_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    (int16_t)sqlite3_column_int(stmt, i);
+					((int16_t *)dataptr)[result_idx] = (int16_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::INTEGER:
-					((int32_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    (int32_t)sqlite3_column_int(stmt, i);
+					((int32_t *)dataptr)[result_idx] = (int32_t)sqlite3_column_int(stmt, i);
 					break;
 				case SQLTypeId::BIGINT:
-					((int64_t *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    (int64_t)sqlite3_column_int64(stmt, i);
+					((int64_t *)dataptr)[result_idx] = (int64_t)sqlite3_column_int64(stmt, i);
 					break;
 				case SQLTypeId::DECIMAL:
-					((double *)result_chunk.data[i].data)[result_chunk.data[i].count] =
-					    (double)sqlite3_column_double(stmt, i);
+					((double *)dataptr)[result_idx] = (double)sqlite3_column_double(stmt, i);
 					break;
 				case SQLTypeId::VARCHAR: {
 					Value result((char *)sqlite3_column_text(stmt, i));
-					result_chunk.data[i].count++;
-					result_chunk.data[i].SetValue(result_chunk.data[i].count - 1, result);
-					result_chunk.data[i].count--;
+					result_chunk.SetValue(i, result_idx, result);
 					break;
 				}
 				case SQLTypeId::DATE: {
 					auto unix_time = sqlite3_column_int64(stmt, i);
-					((date_t *)result_chunk.data[i].data)[result_chunk.data[i].count] = Date::EpochToDate(unix_time);
+					((date_t *)dataptr)[result_idx] = Date::EpochToDate(unix_time);
 					break;
 				}
 				default:
 					throw NotImplementedException("Unimplemented type for SQLite -> DuckDB type conversion");
 				}
 			}
-			result_chunk.data[i].count++;
 		}
+		result_chunk.SetCardinality(result_idx + 1);
 		if (result_chunk.size() == STANDARD_VECTOR_SIZE) {
 			// chunk is filled
 			// flush the chunk to the result

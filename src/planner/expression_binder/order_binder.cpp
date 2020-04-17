@@ -1,19 +1,27 @@
-#include "planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/order_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/query_node/select_node.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-OrderBinder::OrderBinder(index_t projection_index, SelectNode &node, unordered_map<string, index_t> &alias_map,
-                         expression_map_t<index_t> &projection_map)
-    : projection_index(projection_index), node(node), alias_map(alias_map), projection_map(projection_map) {
+namespace duckdb {
+
+OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map,
+                         expression_map_t<idx_t> &projection_map, idx_t max_count)
+    : binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
+      alias_map(alias_map), projection_map(projection_map) {
+}
+OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
+                         unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
+    : binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+	this->max_count = node.select_list.size();
+	this->extra_list = &node.select_list;
 }
 
-unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, index_t index) {
+unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
 	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
@@ -37,10 +45,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 			return nullptr;
 		}
 		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-		auto index = (index_t)constant.value.GetNumericValue();
-		if (index < 1 || index > node.select_list.size()) {
-			throw BinderException("ORDER term out of range - should be between 1 and %lld",
-			                      (index_t)node.select_list.size());
+		auto index = (idx_t)constant.value.GetValue<int64_t>();
+		if (index < 1 || index > max_count) {
+			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 		}
 		return CreateProjectionReference(*expr, index - 1);
 	}
@@ -64,18 +71,30 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		break;
 	}
 	// general case
+	// first bind the table names of this entry
+	for (auto &binder : binders) {
+		ExpressionBinder::BindTableNames(*binder, *expr);
+	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = projection_map.find(expr.get());
 	if (entry != projection_map.end()) {
+		if (entry->second == INVALID_INDEX) {
+			throw BinderException("Ambiguous reference to column");
+		}
 		// there is a matching entry in the projection list
 		// just point to that entry
 		return CreateProjectionReference(*expr, entry->second);
 	}
-	if (node.select_distinct) {
-		throw BinderException("for SELECT DISTINCT, ORDER BY expressions must appear in select list!");
+	if (!extra_list) {
+		// no extra list specified: we cannot push an extra ORDER BY clause
+		throw BinderException("Could not ORDER BY column \"%s\": add the expression/function to every SELECT, or move "
+		                      "the UNION into a FROM clause.",
+		                      expr->ToString().c_str());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
-	auto result = CreateProjectionReference(*expr, node.select_list.size());
-	node.select_list.push_back(move(expr));
+	auto result = CreateProjectionReference(*expr, extra_list->size());
+	extra_list->push_back(move(expr));
 	return result;
 }
+
+} // namespace duckdb

@@ -5,9 +5,9 @@
 #include "nulls.h"
 #include "date.h"
 
-#include "common/types/date.hpp"
-#include "common/exception.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include <cstring>
 #include <memory>
 
@@ -31,30 +31,31 @@ void append_row_end(append_info *info) {
 void append_varchar(append_info *info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
 	if (!nullCheck(append_info->appender.CurrentColumn())) {
-		append_info->appender.AppendString(value);
+		append_info->appender.Append<const char*>(value);
 	} else {
-		append_info->appender.AppendValue(duckdb::Value());
+		append_info->appender.Append(nullptr);
 	}
 }
 
 // TODO: use direct array manipulation for speed, but not now
 static void append_value(append_info *info, duckdb::Value v) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(v);
+	append_info->appender.Append<duckdb::Value>(v);
 }
 
 void append_key(append_info *info, int64_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(duckdb::Value::BIGINT(value));
+	append_info->appender.Append<int64_t>(value);
 }
 
 void append_integer(append_info *info, int32_t value) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.AppendValue(duckdb::Value::INTEGER(value));
+	append_info->appender.Append<int32_t>(value);
 }
 
 void append_boolean(append_info *info, int32_t value) {
-	append_value(info, duckdb::Value::BOOLEAN((int8_t)value));
+	auto append_info = (tpcds_append_information *)info;
+	append_info->appender.Append<bool>(value != 0);
 }
 
 // value is a Julian date
@@ -63,7 +64,7 @@ void append_date(append_info *info, int64_t value) {
 	date_t dTemp;
 	jtodt(&dTemp, (int)value);
 	auto ddate = duckdb::Date::FromDate(dTemp.year, dTemp.month, dTemp.day);
-	append_value(info, duckdb::Value::INTEGER(ddate));
+	append_integer(info, (int32_t) ddate);
 }
 
 void append_decimal(append_info *info, decimal_t *val) {
@@ -71,5 +72,6 @@ void append_decimal(append_info *info, decimal_t *val) {
 	for (int i = 0; i < val->precision; i++) {
 		dTemp /= 10.0;
 	}
-	append_value(info, duckdb::Value(dTemp));
+	auto append_info = (tpcds_append_information *)info;
+	append_info->appender.Append<double>(dTemp);
 }

@@ -1,0 +1,26 @@
+add_library_unity(duckdb_main_relation
+                  OBJECT
+                  aggregate_relation.cpp
+                  create_table_relation.cpp
+                  create_view_relation.cpp
+                  delete_relation.cpp
+                  distinct_relation.cpp
+                  explain_relation.cpp
+                  filter_relation.cpp
+                  insert_relation.cpp
+                  join_relation.cpp
+                  limit_relation.cpp
+                  order_relation.cpp
+                  update_relation.cpp
+                  projection_relation.cpp
+                  read_csv_relation.cpp
+                  setop_relation.cpp
+                  subquery_relation.cpp
+                  table_function_relation.cpp
+                  table_relation.cpp
+                  value_relation.cpp
+                  view_relation.cpp
+                  write_csv_relation.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_relation>
+    PARENT_SCOPE)

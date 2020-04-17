@@ -36,11 +36,11 @@
 #include "re2/unicode_groups.h"
 #include "re2/walker-inl.h"
 
-#if defined(RE2_USE_ICU)
-#include "unicode/uniset.h"
-#include "unicode/unistr.h"
-#include "unicode/utypes.h"
-#endif
+// #if defined(RE2_USE_ICU)
+// #include "unicode/uniset.h"
+// #include "unicode/unistr.h"
+// #include "unicode/utypes.h"
+// #endif
 
 namespace re2 {
 
@@ -242,16 +242,17 @@ bool Regexp::ParseState::PushRegexp(Regexp* re) {
   // single characters (e.g., [.] instead of \.), and some
   // analysis does better with fewer character classes.
   // Similarly, [Aa] can be rewritten as a literal A with ASCII case folding.
-  if (re->op_ == kRegexpCharClass && re->ccb_ != NULL) {
-    re->ccb_->RemoveAbove(rune_max_);
-    if (re->ccb_->size() == 1) {
-      Rune r = re->ccb_->begin()->lo;
+  auto ccb = re->ccb_;
+  if (re->op_ == kRegexpCharClass && ccb != NULL) {
+	  ccb->RemoveAbove(rune_max_);
+    if (ccb->size() == 1) {
+      Rune r = ccb->begin()->lo;
       re->Decref();
       re = new Regexp(kRegexpLiteral, flags_);
       re->rune_ = r;
-    } else if (re->ccb_->size() == 2) {
-      Rune r = re->ccb_->begin()->lo;
-      if ('A' <= r && r <= 'Z' && re->ccb_->Contains(r + 'a' - 'A')) {
+    } else if (ccb->size() == 2) {
+      Rune r = ccb->begin()->lo;
+      if ('A' <= r && r <= 'Z' && ccb->Contains(r + 'a' - 'A')) {
         re->Decref();
         re = new Regexp(kRegexpLiteral, flags_ | FoldCase);
         re->rune_ = r + 'a' - 'A';

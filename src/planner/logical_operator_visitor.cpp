@@ -1,8 +1,8 @@
-#include "planner/logical_operator_visitor.hpp"
+#include "duckdb/planner/logical_operator_visitor.hpp"
 
-#include "planner/expression/list.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,6 +36,13 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 		}
 		break;
 	}
+	case LogicalOperatorType::TOP_N: {
+		auto &order = (LogicalTopN &)op;
+		for (auto &node : order.orders) {
+			VisitExpression(&node.expression);
+		}
+		break;
+	}
 	case LogicalOperatorType::DISTINCT: {
 		auto &distinct = (LogicalDistinct &)op;
 		for (auto &target : distinct.distinct_targets) {
@@ -59,7 +66,7 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = (LogicalAggregate &)op;
-		for (index_t i = 0; i < aggr.groups.size(); i++) {
+		for (idx_t i = 0; i < aggr.groups.size(); i++) {
 			VisitExpression(&aggr.groups[i]);
 		}
 		break;
@@ -67,7 +74,7 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	default:
 		break;
 	}
-	for (index_t i = 0; i < op.expressions.size(); i++) {
+	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		VisitExpression(&op.expressions[i]);
 	}
 }
@@ -78,6 +85,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = VisitReplace((BoundAggregateExpression &)expr, expression);
+		break;
+	case ExpressionClass::BOUND_BETWEEN:
+		result = VisitReplace((BoundBetweenExpression &)expr, expression);
 		break;
 	case ExpressionClass::BOUND_CASE:
 		result = VisitReplace((BoundCaseExpression &)expr, expression);
@@ -118,10 +128,14 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::COMMON_SUBEXPRESSION:
 		result = VisitReplace((CommonSubExpression &)expr, expression);
 		break;
-	default:
-		assert(expr.GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+	case ExpressionClass::BOUND_WINDOW:
 		result = VisitReplace((BoundWindowExpression &)expr, expression);
 		break;
+	case ExpressionClass::BOUND_UNNEST:
+		result = VisitReplace((BoundUnnestExpression &)expr, expression);
+		break;
+	default:
+		assert(0);
 	}
 	if (result) {
 		*expression = move(result);
@@ -134,11 +148,16 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		VisitExpression(&expr);
-		return expr;
+		return move(expr);
 	});
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
@@ -204,6 +223,11 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundSubqueryExpress
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundWindowExpression &expr,
+                                                            unique_ptr<Expression> *expr_ptr) {
+	return nullptr;
+}
+
+unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundUnnestExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

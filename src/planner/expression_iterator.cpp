@@ -1,10 +1,10 @@
-#include "planner/expression_iterator.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
-#include "planner/bound_query_node.hpp"
-#include "planner/expression/list.hpp"
-#include "planner/query_node/bound_select_node.hpp"
-#include "planner/query_node/bound_set_operation_node.hpp"
-#include "planner/tableref/list.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
+#include "duckdb/planner/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,14 +12,14 @@ using namespace std;
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
 	EnumerateChildren((Expression &)expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return child;
+		return move(child);
 	});
 }
 
 void ExpressionIterator::EnumerateChildren(Expression &expr, std::function<void(Expression &child)> callback) {
 	EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		callback(*child);
-		return child;
+		return move(child);
 	});
 }
 
@@ -31,6 +31,13 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		for (auto &child : aggr_expr.children) {
 			child = callback(move(child));
 		}
+		break;
+	}
+	case ExpressionClass::BOUND_BETWEEN: {
+		auto &between_expr = (BoundBetweenExpression &)expr;
+		between_expr.input = callback(move(between_expr.input));
+		between_expr.lower = callback(move(between_expr.lower));
+		between_expr.upper = callback(move(between_expr.upper));
 		break;
 	}
 	case ExpressionClass::BOUND_CASE: {
@@ -53,8 +60,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = (BoundConjunctionExpression &)expr;
-		conj_expr.left = callback(move(conj_expr.left));
-		conj_expr.right = callback(move(conj_expr.right));
+		for (auto &child : conj_expr.children) {
+			child = callback(move(child));
+		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
@@ -86,8 +94,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		for (auto &order : window_expr.orders) {
 			order.expression = callback(move(order.expression));
 		}
-		if (window_expr.child) {
-			window_expr.child = callback(move(window_expr.child));
+		for (auto &child : window_expr.children) {
+			child = callback(move(child));
 		}
 		if (window_expr.offset_expr) {
 			window_expr.offset_expr = callback(move(window_expr.offset_expr));
@@ -95,6 +103,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		if (window_expr.default_expr) {
 			window_expr.default_expr = callback(move(window_expr.default_expr));
 		}
+		break;
+	}
+	case ExpressionClass::BOUND_UNNEST: {
+		auto &unnest_expr = (BoundUnnestExpression &)expr;
+		unnest_expr.child = callback(move(unnest_expr.child));
 		break;
 	}
 	case ExpressionClass::COMMON_SUBEXPRESSION: {
@@ -126,7 +139,7 @@ void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,
 	callback(*expr);
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		EnumerateExpression(child, callback);
-		return child;
+		return move(child);
 	});
 }
 
@@ -152,7 +165,8 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 		break;
 	}
 	default:
-		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE);
+		assert(ref.type == TableReferenceType::TABLE_FUNCTION || ref.type == TableReferenceType::BASE_TABLE ||
+		       ref.type == TableReferenceType::EMPTY);
 		break;
 	}
 }
@@ -169,18 +183,18 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	default:
 		assert(node.type == QueryNodeType::SELECT_NODE);
 		auto &bound_select = (BoundSelectNode &)node;
-		for (index_t i = 0; i < bound_select.select_list.size(); i++) {
+		for (idx_t i = 0; i < bound_select.select_list.size(); i++) {
 			EnumerateExpression(bound_select.select_list[i], callback);
 		}
 		EnumerateExpression(bound_select.where_clause, callback);
-		for (index_t i = 0; i < bound_select.groups.size(); i++) {
+		for (idx_t i = 0; i < bound_select.groups.size(); i++) {
 			EnumerateExpression(bound_select.groups[i], callback);
 		}
 		EnumerateExpression(bound_select.having, callback);
-		for (index_t i = 0; i < bound_select.aggregates.size(); i++) {
+		for (idx_t i = 0; i < bound_select.aggregates.size(); i++) {
 			EnumerateExpression(bound_select.aggregates[i], callback);
 		}
-		for (index_t i = 0; i < bound_select.windows.size(); i++) {
+		for (idx_t i = 0; i < bound_select.windows.size(); i++) {
 			EnumerateExpression(bound_select.windows[i], callback);
 		}
 		if (bound_select.from_table) {
@@ -188,7 +202,20 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		}
 		break;
 	}
-	for (index_t i = 0; i < node.orders.size(); i++) {
-		EnumerateExpression(node.orders[i].expression, callback);
+	for (idx_t i = 0; i < node.modifiers.size(); i++) {
+		switch (node.modifiers[i]->type) {
+		case ResultModifierType::DISTINCT_MODIFIER:
+			for (auto &expr : ((BoundDistinctModifier &)*node.modifiers[i]).target_distincts) {
+				EnumerateExpression(expr, callback);
+			}
+			break;
+		case ResultModifierType::ORDER_MODIFIER:
+			for (auto &order : ((BoundOrderModifier &)*node.modifiers[i]).orders) {
+				EnumerateExpression(order.expression, callback);
+			}
+			break;
+		default:
+			break;
+		}
 	}
 }

@@ -1,22 +1,20 @@
-#include "transaction/undo_buffer.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
-#include "catalog/catalog_entry.hpp"
-#include "catalog/catalog_entry/list.hpp"
-#include "catalog/catalog_set.hpp"
-#include "common/exception.hpp"
-#include "storage/data_table.hpp"
-#include "storage/table/version_chunk.hpp"
-#include "storage/write_ahead_log.hpp"
-#include "transaction/cleanup_state.hpp"
-#include "transaction/commit_state.hpp"
-#include "transaction/rollback_state.hpp"
-#include "transaction/version_info.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/transaction/cleanup_state.hpp"
+#include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/transaction/rollback_state.hpp"
 
 #include <unordered_map>
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
 constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
@@ -25,7 +23,7 @@ UndoBuffer::UndoBuffer() {
 	tail = head.get();
 }
 
-UndoChunk::UndoChunk(index_t size) : current_position(0), maximum_size(size), prev(nullptr) {
+UndoChunk::UndoChunk(idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
 	if (size > 0) {
 		data = unique_ptr<data_t[]>(new data_t[maximum_size]);
 	}
@@ -50,9 +48,9 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 	return result;
 }
 
-data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
+data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	assert(len <= std::numeric_limits<uint32_t>::max());
-	index_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
+	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
 	if (head->current_position + needed_space >= head->maximum_size) {
 		auto new_chunk =
 		    make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
@@ -63,21 +61,45 @@ data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, index_t len) {
 	return head->WriteEntry(type, len);
 }
 
-template <class T> void UndoBuffer::IterateEntries(T &&callback) {
+template <class T> void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
-	auto current = tail;
-	while (current) {
-		data_ptr_t start = current->data.get();
-		data_ptr_t end = start + current->current_position;
-		while (start < end) {
-			UndoFlags type = *((UndoFlags *)start);
-			start += sizeof(UndoFlags);
-			uint32_t len = *((uint32_t *)start);
-			start += sizeof(uint32_t);
-			callback(type, start);
-			start += len;
+	state.current = tail;
+	while (state.current) {
+		state.start = state.current->data.get();
+		state.end = state.start + state.current->current_position;
+		while (state.start < state.end) {
+			UndoFlags type = *((UndoFlags *)state.start);
+			state.start += sizeof(UndoFlags);
+			uint32_t len = *((uint32_t *)state.start);
+			state.start += sizeof(uint32_t);
+			callback(type, state.start);
+			state.start += len;
 		}
-		current = current->prev;
+		state.current = state.current->prev;
+	}
+}
+
+template <class T>
+void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
+	// iterate in insertion order: start with the tail
+	state.current = tail;
+	while (state.current) {
+		state.start = state.current->data.get();
+		state.end =
+		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
+		while (state.start < state.end) {
+			UndoFlags type = *((UndoFlags *)state.start);
+			state.start += sizeof(UndoFlags);
+			uint32_t len = *((uint32_t *)state.start);
+			state.start += sizeof(uint32_t);
+			callback(type, state.start);
+			state.start += len;
+		}
+		if (state.current == end_state.current) {
+			// finished executing until the current end state
+			return;
+		}
+		state.current = state.current->prev;
 	}
 }
 
@@ -98,7 +120,7 @@ template <class T> void UndoBuffer::ReverseIterateEntries(T &&callback) {
 			start += len;
 		}
 		// iterate over it in reverse order
-		for (index_t i = nodes.size(); i > 0; i--) {
+		for (idx_t i = nodes.size(); i > 0; i--) {
 			callback(nodes[i - 1].first, nodes[i - 1].second);
 		}
 		current = current->next.get();
@@ -119,25 +141,30 @@ void UndoBuffer::Cleanup() {
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
 	CleanupState state;
-	IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
+	UndoBuffer::IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
-void UndoBuffer::Commit(WriteAheadLog *log, transaction_t commit_id) {
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
+	CommitState state(commit_id, log);
 	if (log) {
-		CommitState<true> state(commit_id, log);
 		// commit WITH write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
-		// final flush after writing
-		state.Flush(UndoFlags::EMPTY_ENTRY);
+		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 	} else {
-		CommitState<false> state(commit_id);
 		// comit WITHOUT write ahead log
-		IterateEntries([&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
+		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }
 
-void UndoBuffer::Rollback() {
+void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
+	CommitState state(transaction_id, nullptr);
+	UndoBuffer::IteratorState start_state;
+	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
+}
+
+void UndoBuffer::Rollback() noexcept {
 	// rollback needs to be performed in reverse
 	RollbackState state;
 	ReverseIterateEntries([&](UndoFlags type, data_ptr_t data) { state.RollbackEntry(type, data); });
 }
+} // namespace duckdb

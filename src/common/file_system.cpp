@@ -1,14 +1,20 @@
-#include "common/file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 
-#include "common/exception.hpp"
-#include "common/helper.hpp"
-#include "common/string_util.hpp"
-#include "common/checksum.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/checksum.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 #include <cstdio>
+
+FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
+	return *context.db.file_system;
+}
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
@@ -30,6 +36,11 @@ static void AssertValidFileFlags(uint8_t flags) {
 // somehow sometimes this is missing
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
+#endif
+
+// Solaris
+#ifndef O_DIRECT
+# define O_DIRECT 0
 #endif
 
 struct UnixFileHandle : public FileHandle {
@@ -70,7 +81,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		}
 	}
 	if (flags & FileFlags::DIRECT_IO) {
-#if defined(__DARWIN__) || defined(__APPLE__)
+#if defined(__sun) && defined(__SVR4)
+		throw Exception("DIRECT_IO not supported on Solaris");
+#endif
+#if defined(__DARWIN__) || defined(__APPLE__) || defined(__OpenBSD__)
 		// OSX does not have O_DIRECT, instead we need to use fcntl afterwards to support direct IO
 		open_flags |= O_SYNC;
 #else
@@ -81,15 +95,15 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	if (fd == -1) {
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
-#if defined(__DARWIN__) || defined(__APPLE__)
-	if (flags & FileFlags::DIRECT_IO) {
-		// OSX requires fcntl for Direct IO
-		rc = fcntl(fd, F_NOCACHE, 1);
-		if (fd == -1) {
-			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
-		}
-	}
-#endif
+	// #if defined(__DARWIN__) || defined(__APPLE__)
+	// 	if (flags & FileFlags::DIRECT_IO) {
+	// 		// OSX requires fcntl for Direct IO
+	// 		rc = fcntl(fd, F_NOCACHE, 1);
+	// 		if (fd == -1) {
+	// 			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+	// 		}
+	// 	}
+	// #endif
 	if (lock_type != FileLockType::NO_LOCK) {
 		// set lock on file
 		struct flock fl;
@@ -106,7 +120,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return make_unique<UnixFileHandle>(*this, path, fd);
 }
 
-void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
@@ -142,6 +156,13 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return s.st_size;
 }
 
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	int fd = ((UnixFileHandle &)handle).fd;
+	if (ftruncate(fd, new_size) != 0) {
+		throw IOException("Could not truncate file \"%s\": %s", handle.path.c_str(), strerror(errno));
+	}
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	if (!directory.empty()) {
 		if (access(directory.c_str(), 0) == 0) {
@@ -174,16 +195,16 @@ void FileSystem::CreateDirectory(const string &directory) {
 	if (stat(directory.c_str(), &st) != 0) {
 		/* Directory does not exist. EEXIST for race condition */
 		if (mkdir(directory.c_str(), 0755) != 0 && errno != EEXIST) {
-			throw IOException("Failed create directory!");
+			throw IOException("Failed to create directory \"%s\"!", directory.c_str());
 		}
 	} else if (!S_ISDIR(st.st_mode)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Failed to create directory \"%s\": path exists but is not a directory!", directory.c_str());
 	}
 }
 
 int remove_directory_recursively(const char *path) {
 	DIR *d = opendir(path);
-	index_t path_len = (index_t)strlen(path);
+	idx_t path_len = (idx_t)strlen(path);
 	int r = -1;
 
 	if (d) {
@@ -192,12 +213,12 @@ int remove_directory_recursively(const char *path) {
 		while (!r && (p = readdir(d))) {
 			int r2 = -1;
 			char *buf;
-			index_t len;
+			idx_t len;
 			/* Skip the names "." and ".." as we don't want to recurse on them. */
 			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, "..")) {
 				continue;
 			}
-			len = path_len + (index_t)strlen(p->d_name) + 2;
+			len = path_len + (idx_t)strlen(p->d_name) + 2;
 			buf = new char[len];
 			if (buf) {
 				struct stat statbuf;
@@ -258,7 +279,9 @@ string FileSystem::PathSeparator() {
 
 void FileSystem::FileSync(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	fsync(fd);
+	if (fsync(fd) != 0) {
+		throw FatalException("fsync failed!");
+	}
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {
@@ -288,7 +311,7 @@ std::string GetLastErrorAsString() {
 		return std::string(); // No error message has been recorded
 
 	LPSTR messageBuffer = nullptr;
-	index_t size =
+	idx_t size =
 	    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 	                   NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
 
@@ -355,7 +378,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	return move(handle);
 }
 
-void FileSystem::SetFilePointer(FileHandle &handle, index_t location) {
+void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
 	LARGE_INTEGER loc;
 	loc.QuadPart = location;
@@ -398,6 +421,17 @@ int64_t FileSystem::GetFileSize(FileHandle &handle) {
 	return result.QuadPart;
 }
 
+void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	// seek to the location
+	SetFilePointer(handle, new_size);
+	// now set the end of file position
+	if (!SetEndOfFile(hFile)) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Failure in SetEndOfFile call on file \"%s\": %s", handle.path.c_str(), error.c_str());
+	}
+}
+
 bool FileSystem::DirectoryExists(const string &directory) {
 	DWORD attrs = GetFileAttributesA(directory.c_str());
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
@@ -428,7 +462,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 	WIN32_FIND_DATA ffd;
 	HANDLE hFind = FindFirstFile(szDir, &ffd);
 	if (hFind == INVALID_HANDLE_VALUE) {
-		throw IOException("Could not find directory");
+		return;
 	}
 
 	do {
@@ -515,7 +549,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 }
 #endif
 
-void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
 	// now read from the location
@@ -525,7 +559,7 @@ void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, index_
 	}
 }
 
-void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, index_t location) {
+void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	// seek to the location
 	SetFilePointer(handle, location);
 	// now write to the location
@@ -540,14 +574,18 @@ string FileSystem::JoinPath(const string &a, const string &b) {
 	return a + PathSeparator() + b;
 }
 
-void FileHandle::Read(void *buffer, index_t nr_bytes, index_t location) {
+void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Read(*this, buffer, nr_bytes, location);
 }
 
-void FileHandle::Write(void *buffer, index_t nr_bytes, index_t location) {
+void FileHandle::Write(void *buffer, idx_t nr_bytes, idx_t location) {
 	file_system.Write(*this, buffer, nr_bytes, location);
 }
 
 void FileHandle::Sync() {
 	file_system.FileSync(*this);
+}
+
+void FileHandle::Truncate(int64_t new_size) {
+	file_system.Truncate(*this, new_size);
 }

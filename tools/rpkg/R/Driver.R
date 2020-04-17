@@ -7,6 +7,8 @@ NULL
 #' @name DBI
 NULL
 
+DBDIR_MEMORY <- ":memory:"
+
 #' DuckDB driver
 #'
 #' TBD.
@@ -18,17 +20,32 @@ NULL
 #' #' library(DBI)
 #' duckdb::duckdb()
 #' }
-duckdb <- function() {
-  new("duckdb_driver")
+
+
+duckdb <- function(dbdir=DBDIR_MEMORY, read_only=FALSE) {
+  check_flag(read_only)
+  new(
+    "duckdb_driver",
+    database_ref = .Call(duckdb_startup_R, dbdir, read_only),
+    dbdir=dbdir,
+    read_only = read_only
+  )
 }
 
 #' @rdname DBI
 #' @export
-setClass("duckdb_driver", contains = "DBIDriver")
+setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir="character", read_only="logical"))
 
 extptr_str <- function(e, n=5) {
   x <- .Call(duckdb_ptr_to_str, e)
   substr(x, nchar(x)-n+1, nchar(x))
+}
+
+drv_to_string <- function(drv) {
+  if (!is(drv, "duckdb_driver")) {
+    stop("pass a duckdb_driver object")
+  }
+  sprintf("<duckdb_driver %s dbdir='%s' read_only=%s>",  extptr_str(drv@database_ref), drv@dbdir, drv@read_only)
 }
 
 #' @rdname DBI
@@ -37,7 +54,8 @@ extptr_str <- function(e, n=5) {
 setMethod(
   "show", "duckdb_driver",
   function(object) {
-    cat("<duckdb_driver>\n")
+    cat(drv_to_string(object))
+    cat("\n")
   })
 
 #' @rdname DBI
@@ -45,11 +63,21 @@ setMethod(
 #' @export
 setMethod(
   "dbConnect", "duckdb_driver",
-  function(drv, dbdir=":memory:", ..., debug=getOption("duckdb.debug", FALSE), dbname=NA) {
-    if (!missing(dbname)) {
-      dbdir <- dbname
+  function(drv, dbdir=DBDIR_MEMORY, ..., debug=getOption("duckdb.debug", FALSE), read_only=FALSE) {
+
+    check_flag(debug)
+
+    missing_dbdir <- missing(dbdir)
+    dbdir <- path.expand(as.character(dbdir))
+
+
+    # aha, a late comer. let's make a new instance.
+    if (!missing_dbdir && dbdir != drv@dbdir) {
+      duckdb_shutdown(drv)
+      drv <- duckdb(dbdir, read_only)
     }
-    duckdb_connection(drv, dbdir=dbdir, debug=debug)
+
+    duckdb_connection(drv, debug=debug)
   }
 )
 
@@ -105,7 +133,6 @@ setMethod(
 
 #' @export
 duckdb_shutdown <- function(drv) {
-  stop("FIXME")
   if (!is(drv, "duckdb_driver")) {
     stop("pass a duckdb_driver object")
   }
@@ -115,4 +142,23 @@ duckdb_shutdown <- function(drv) {
   }
   .Call(duckdb_shutdown_R, drv@database_ref)
   invisible(TRUE)
+}
+
+is_installed <- function (pkg) {
+    as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
+}
+
+
+#' @importFrom DBI dbConnect
+#' @importFrom dbplyr src_dbi
+#' @export
+src_duckdb <- function (path=":memory:", create = FALSE, read_only=FALSE) {
+    if (!is_installed("dbplyr")) {
+      stop("Need package `dbplyr` installed.")
+    }
+    if (path != ":memory:" && !create && !file.exists(path)) {
+        stop("`path` '",path,"' must already exist, unless `create` = TRUE")
+    }
+    con <- DBI::dbConnect(duckdb::duckdb(), path, read_only=read_only)
+    dbplyr::src_dbi(con, auto_disconnect = TRUE)
 }

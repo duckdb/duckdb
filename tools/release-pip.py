@@ -38,6 +38,8 @@ with urllib.request.urlopen(request,  context=ssl._create_unverified_context()) 
 	data = url.read().decode()
 	f_matches = re.findall(r'href="([^"]+\.(whl|tar\.gz))"', data)
 	for m in f_matches:
+		if '.dev' in m[0]:
+			continue
 		print("Downloading %s" % m[0])
 		url = binurl + '/' + m[0]
 		local_file = fdir + '/' + m[0]

@@ -1,13 +1,29 @@
 #' @include Connection.R
 NULL
 
-duckdb_result <- function(connection, statement, has_resultset, resultset=data.frame(), rows_affected=0) {
-
+duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent=emptyenv())
   env$rows_fetched <- 0
   env$open <- TRUE
+  env$rows_affected <- 0
 
-  new("duckdb_result", connection = connection, statement = statement, has_resultset=has_resultset, resultset = resultset, rows_affected=rows_affected, env=env)
+  res <- new("duckdb_result", connection = connection, stmt_lst = stmt_lst, env=env)
+
+  if (stmt_lst$n_param == 0) {
+    duckdb_execute(res)
+  }
+
+  return(res)
+}
+
+duckdb_execute <- function(res) {
+  res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref)
+  attr(res@env$resultset, "row.names") <-
+          c(NA_integer_, as.integer(-1 * length(res@env$resultset[[1]])))
+  class(res@env$resultset) <- "data.frame"
+  if (res@stmt_lst$type != 'SELECT') {
+    res@env$rows_affected <- as.numeric(res@env$resultset[[1]][1])
+  }
 }
 
 #' @rdname DBI
@@ -17,15 +33,10 @@ setClass(
   contains = "DBIResult",
   slots = list(
     connection = "duckdb_connection",
-    statement = "character",
-    has_resultset = "logical",
-    resultset = "data.frame",
-    rows_affected = "numeric",
+    stmt_lst = "list",
     env = "environment"
   )
 )
-
-
 
 #' @rdname DBI
 #' @inheritParams methods::show
@@ -33,7 +44,7 @@ setClass(
 setMethod(
   "show", "duckdb_result",
   function(object) {
-    cat(sprintf("<duckdb_result connection=%s statement='%s'>\n", extptr_str(object@connection@conn_ref), object@statement))
+    cat(sprintf("<duckdb_result %s connection=%s statement='%s'>\n", extptr_str(object@stmt_lst$ref), extptr_str(object@connection@conn_ref), object@stmt_lst$str))
   })
 
 #' @rdname DBI
@@ -42,10 +53,12 @@ setMethod(
 setMethod(
   "dbClearResult", "duckdb_result",
   function(res, ...) {
-    if (!res@env$open) {
+    if (res@env$open) {
+      .Call(duckdb_release_R, res@stmt_lst$ref)
+      res@env$open <- FALSE
+    } else {
       warning("Result was cleared already")
     }
-    res@env$open <- FALSE
     return(invisible(TRUE))
   })
 
@@ -60,6 +73,7 @@ fix_rownames <- function(df) {
 
 #' @rdname DBI
 #' @inheritParams DBI::dbFetch
+#' @importFrom utils head
 #' @export
 setMethod(
   "dbFetch", "duckdb_result",
@@ -79,35 +93,35 @@ setMethod(
     if (!is_wholenumber(n)) {
       stop("n needs to be not a whole number")
     }
-    if (!res@has_resultset) {
-      warning("Cannot fetch from statement result")
+    if (res@stmt_lst$type != "SELECT") {
+      warning("Should not call dbFetch() on results that do not come from SELECT")
       return(data.frame())
     }
 
 # FIXME this is ugly
     if (n == 0) {
-      return(utils::head(res@resultset, 0))
+      return(utils::head(res@env$resultset, 0))
     }
     if (res@env$rows_fetched < 0) {
       res@env$rows_fetched <- 0
     }
-    if (res@env$rows_fetched >= nrow(res@resultset)) {
-      return(fix_rownames(res@resultset[F,, drop=F]))
+    if (res@env$rows_fetched >= nrow(res@env$resultset)) {
+      return(fix_rownames(res@env$resultset[F,, drop=F]))
     }
     # special case, return everything
     if (n == -1 && res@env$rows_fetched == 0) {
-      res@env$rows_fetched <- nrow(res@resultset)
-      return(res@resultset)
+      res@env$rows_fetched <- nrow(res@env$resultset)
+      return(res@env$resultset)
     }
     if (n > -1) {
-      n <- min(n, nrow(res@resultset) - res@env$rows_fetched)
+      n <- min(n, nrow(res@env$resultset) - res@env$rows_fetched)
       res@env$rows_fetched <- res@env$rows_fetched + n
-      df <- res@resultset[(res@env$rows_fetched - n + 1):(res@env$rows_fetched),, drop=F]
+      df <- res@env$resultset[(res@env$rows_fetched - n + 1):(res@env$rows_fetched),, drop=F]
       return(fix_rownames(df))
     }
     start <- res@env$rows_fetched + 1
-    res@env$rows_fetched <- nrow(res@resultset)
-    df <- res@resultset[nrow(res@resultset),, drop=F]
+    res@env$rows_fetched <- nrow(res@env$resultset)
+    df <- res@env$resultset[nrow(res@env$resultset),, drop=F]
     return(fix_rownames(df))
   })
 
@@ -120,10 +134,10 @@ setMethod(
     if (!res@env$open) {
      stop("result has already been cleared")
     }
-    if (!res@has_resultset) {
+    if (res@stmt_lst$type != "SELECT") {
       return(TRUE)
     }
-    return(res@env$rows_fetched == nrow(res@resultset))
+    return(res@env$rows_fetched == nrow(res@env$resultset))
   })
 
 #' @rdname DBI
@@ -154,7 +168,7 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
-    return(res@statement)
+    return(res@stmt_lst$str)
   })
 
 #' @rdname DBI
@@ -163,8 +177,8 @@ setMethod(
 setMethod(
   "dbColumnInfo", "duckdb_result",
   function(res, ...) {
-      return(data.frame(name=names(res@resultset), type=vapply(res@resultset, class, "character"), stringsAsFactors=F))
-   return(list())
+    return(data.frame(name=res@stmt_lst$names, type=res@stmt_lst$rtypes, stringsAsFactors=FALSE))
+
   })
 
 #' @rdname DBI
@@ -173,7 +187,7 @@ setMethod(
 setMethod(
   "dbGetRowCount", "duckdb_result",
   function(res, ...) {
-     if (!res@env$open) {
+    if (!res@env$open) {
       stop("result has already been cleared")
     }
    return(res@env$rows_fetched)
@@ -188,14 +202,22 @@ setMethod(
      if (!res@env$open) {
       stop("result has already been cleared")
     }
-    return(invisible(res@rows_affected))
+  return (res@env$rows_affected)
   })
 
 #' @rdname DBI
 #' @inheritParams DBI::dbBind
+#' @importFrom testthat skip
 #' @export
 setMethod(
   "dbBind", "duckdb_result",
   function(res, params, ...) {
-    testthat::skip("Not yet implemented: dbBind(Result)")
+    if (!res@env$open) {
+      stop("result has already been cleared")
+    }
+    res@env$rows_fetched <- 0
+    res@env$resultset <- data.frame()
+
+    invisible(.Call(duckdb_bind_R, res@stmt_lst$ref, params))
+    duckdb_execute(res)
   })

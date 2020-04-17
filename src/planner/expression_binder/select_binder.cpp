@@ -1,12 +1,12 @@
-#include "planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
 
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/window_expression.hpp"
-#include "parser/parsed_expression_iterator.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_window_expression.hpp"
-#include "planner/expression_binder/aggregate_binder.hpp"
-#include "planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,7 +15,7 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
 }
 
-BindResult SelectBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
+BindResult SelectBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
 	if (group_index != INVALID_INDEX) {
@@ -31,7 +31,7 @@ BindResult SelectBinder::BindExpression(ParsedExpression &expr, index_t depth, b
 	}
 }
 
-index_t SelectBinder::TryBindGroup(ParsedExpression &expr, index_t depth) {
+idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	// first check the group alias map, if expr is a ColumnRefExpression
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
@@ -49,10 +49,16 @@ index_t SelectBinder::TryBindGroup(ParsedExpression &expr, index_t depth) {
 	if (entry != info.map.end()) {
 		return entry->second;
 	}
+#ifdef DEBUG
+	for (auto entry : info.map) {
+		assert(!entry.first->Equals(&expr));
+		assert(!expr.Equals(entry.first));
+	}
+#endif
 	return INVALID_INDEX;
 }
 
-BindResult SelectBinder::BindGroup(ParsedExpression &expr, index_t depth, index_t group_index) {
+BindResult SelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
 	auto &group = node.groups[group_index];
 
 	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,

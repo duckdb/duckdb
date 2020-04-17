@@ -1,9 +1,8 @@
 #include "catch.hpp"
-#include "common/file_buffer.hpp"
-#include "common/file_system.hpp"
-#include "common/fstream.hpp"
+#include "duckdb/common/file_buffer.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/fstream.hpp"
 #include "test_helpers.hpp"
-#include "common/file_buffer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -104,7 +103,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 	auto fname = TestCreatePath("test_file");
 
 	// create the buffer and fill it with data
-	auto buf = make_unique<FileBuffer>(4096);
+	auto buf = make_unique<FileBuffer>(FileBufferType::MANAGED_BUFFER, 4096);
 	int64_t *ptr = (int64_t *)buf->buffer;
 	for (size_t i = 0; i < 10; i++) {
 		ptr[i] = i;

@@ -1,19 +1,23 @@
-#include "function/scalar/string_functions.hpp"
-#include "common/exception.hpp"
-#include "common/vector_operations/vector_operations.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include "re2/re2.h"
 
-using namespace re2;
 using namespace std;
 
 namespace duckdb {
 
-RegexpMatchesBindData::RegexpMatchesBindData(unique_ptr<RE2> constant_pattern, string range_min, string range_max, bool range_success)
-        : constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
-          range_success(range_success) {
+RegexpMatchesBindData::RegexpMatchesBindData(unique_ptr<RE2> constant_pattern, string range_min, string range_max,
+                                             bool range_success)
+    : constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
+      range_success(range_success) {
 }
 
 RegexpMatchesBindData::~RegexpMatchesBindData() {
@@ -23,50 +27,52 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 	return make_unique<RegexpMatchesBindData>(move(constant_pattern), range_min, range_max, range_success);
 }
 
-static void regexp_matches_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                             BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 2);
-	auto &strings = inputs[0];
-	auto &patterns = inputs[1];
+static inline re2::StringPiece CreateStringPiece(string_t &input) {
+	return re2::StringPiece(input.GetData(), input.GetSize());
+}
 
-	auto &info = (RegexpMatchesBindData &)*expr.bind_info;
+struct RegexPartialMatch {
+	static inline bool Operation(const re2::StringPiece &input, RE2 &re) {
+		return RE2::PartialMatch(input, re);
+	}
+};
 
-	assert(strings.type == TypeId::VARCHAR);
-	assert(patterns.type == TypeId::VARCHAR);
+struct RegexFullMatch {
+	static inline bool Operation(const re2::StringPiece &input, RE2 &re) {
+		return RE2::FullMatch(input, re);
+	}
+};
 
-	result.Initialize(TypeId::BOOLEAN);
-	result.nullmask = strings.nullmask | patterns.nullmask;
+template<class OP>
+static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &strings = args.data[0];
+	auto &patterns = args.data[1];
 
-	auto strings_data = (const char **)strings.data;
-	auto patterns_data = (const char **)patterns.data;
-	auto result_data = (bool *)result.data;
+	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	VectorOperations::BinaryExec(strings, patterns, result,
-	                             [&](index_t strings_index, index_t patterns_index, index_t result_index) {
-		                             if (result.nullmask[result_index]) {
-			                             return;
-		                             }
-		                             auto string = strings_data[strings_index];
-
-		                             if (info.constant_pattern) {
-			                             result_data[result_index] = RE2::PartialMatch(string, *info.constant_pattern);
-
-		                             } else {
-			                             auto pattern = patterns_data[patterns_index];
-			                             RE2 re(pattern, options);
-
-			                             if (!re.ok()) {
-				                             throw Exception(re.error());
-			                             }
-			                             result_data[result_index] = RE2::PartialMatch(string, re);
-		                             }
-	                             });
+	if (info.constant_pattern) {
+		// FIXME: this should be a unary loop
+		UnaryExecutor::Execute<string_t, bool, true>(strings, result, args.size(), [&](string_t input) {
+			return OP::Operation(CreateStringPiece(input), *info.constant_pattern);
+		});
+	} else {
+		BinaryExecutor::Execute<string_t, string_t, bool, true>(
+		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
+			    RE2 re(CreateStringPiece(pattern), options);
+			    if (!re.ok()) {
+				    throw Exception(re.error());
+			    }
+			    return OP::Operation(CreateStringPiece(input), re);
+		    });
+	}
 }
 
-static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr, ClientContext &context) {
+static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionExpression &expr,
+                                                                 ClientContext &context) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	assert(expr.children.size() == 2);
 	if (expr.children[1]->IsScalar()) {
@@ -81,10 +87,18 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 
 			string range_min, range_max;
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
-			// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
-			// in this case we don't push a range filter
-			if (range_success && (!Value::IsUTF8String(range_min.c_str()) || !Value::IsUTF8String(range_max.c_str()))) {
-				range_success = false;
+			if (range_success) {
+				// there can be null terminators in the produced range value: remove them
+				range_min = string(range_min.c_str());
+				range_max = string(range_max.c_str());
+				if (range_min.size() == 0 || range_max.size() == 0) {
+					range_success = false;
+				}
+				// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
+				// in this case we don't push a range filter
+				if (Utf8Proc::Analyze(range_min) == UnicodeType::INVALID || Utf8Proc::Analyze(range_max) == UnicodeType::INVALID) {
+					range_success = false;
+				}
 			}
 
 			return make_unique<RegexpMatchesBindData>(move(re), range_min, range_max, range_success);
@@ -93,50 +107,30 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 	return make_unique<RegexpMatchesBindData>(nullptr, "", "", false);
 }
 
-static void regexp_replace_function(ExpressionExecutor &exec, Vector inputs[], index_t input_count,
-                             BoundFunctionExpression &expr, Vector &result) {
-	assert(input_count == 3);
-	auto &strings = inputs[0];
-	auto &patterns = inputs[1];
-	auto &replaces = inputs[2];
-
-	assert(strings.type == TypeId::VARCHAR);
-	assert(patterns.type == TypeId::VARCHAR);
-	assert(replaces.type == TypeId::VARCHAR);
-
-	result.Initialize(TypeId::VARCHAR);
-	result.nullmask =
-	    strings.nullmask | patterns.nullmask | replaces.nullmask; // TODO what would jesus, err postgres do
-
-	auto strings_data = (const char **)strings.data;
-	auto patterns_data = (const char **)patterns.data;
-	auto replaces_data = (const char **)replaces.data;
-	auto result_data = (const char **)result.data;
+static void regexp_replace_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &strings = args.data[0];
+	auto &patterns = args.data[1];
+	auto &replaces = args.data[2];
 
 	RE2::Options options;
 	options.set_log_errors(false);
 
-	VectorOperations::TernaryExec(
-	    strings, patterns, replaces, result,
-	    [&](index_t strings_index, index_t patterns_index, index_t replaces_index, index_t result_index) {
-		    if (result.nullmask[strings_index]) {
-			    return;
-		    }
-
-		    auto string = strings_data[strings_index];
-		    auto pattern = patterns_data[patterns_index];
-		    auto replace = replaces_data[replaces_index];
-
-		    RE2 re(pattern, options);
-		    std::string sstring(string);
-		    RE2::Replace(&sstring, re, replace);
-		    result_data[result_index] = result.string_heap.AddString(sstring.c_str());
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
+	    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
+		    RE2 re(CreateStringPiece(pattern), options);
+		    std::string sstring(input.GetData(), input.GetSize());
+		    RE2::Replace(&sstring, re, CreateStringPiece(replace));
+		    return StringVector::AddString(result, sstring);
 	    });
 }
 
-void Regexp::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("regexp_matches", { SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::BOOLEAN, regexp_matches_function, false, regexp_matches_get_bind_function));
-	set.AddFunction(ScalarFunction("regexp_replace", { SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR }, SQLType::VARCHAR, regexp_replace_function));
+void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("regexp_full_match", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               regexp_matches_function<RegexFullMatch>, false, regexp_matches_get_bind_function));
+	set.AddFunction(ScalarFunction("regexp_matches", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               regexp_matches_function<RegexPartialMatch>, false, regexp_matches_get_bind_function));
+	set.AddFunction(ScalarFunction("regexp_replace", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                               SQLType::VARCHAR, regexp_replace_function));
 }
 
 } // namespace duckdb

@@ -6,6 +6,7 @@ add_library_unity(duckdb_physical_plan
                   plan_comparison_join.cpp
                   plan_copy_from_file.cpp
                   plan_copy_to_file.cpp
+                  plan_create.cpp
                   plan_create_index.cpp
                   plan_create_table.cpp
                   plan_cross_product.cpp
@@ -24,12 +25,15 @@ add_library_unity(duckdb_physical_plan
                   plan_order.cpp
                   plan_prepare.cpp
                   plan_projection.cpp
-                  plan_prune_columns.cpp
                   plan_set_operation.cpp
+                  plan_simple.cpp
                   plan_table_function.cpp
+                  plan_top_n.cpp
                   plan_update.cpp
                   plan_window.cpp
-                  plan_expression_get.cpp)
+                  plan_unnest.cpp
+                  plan_expression_get.cpp
+                  plan_recursive_cte.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_physical_plan>
     PARENT_SCOPE)

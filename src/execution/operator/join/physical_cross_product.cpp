@@ -1,9 +1,21 @@
-#include "execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/execution/operator/join/physical_cross_product.hpp"
 
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalCrossProductOperatorState(PhysicalOperator *left, PhysicalOperator *right)
+	    : PhysicalOperatorState(left), left_position(0) {
+		assert(left && right);
+	}
+
+	idx_t left_position;
+	idx_t right_position;
+	ChunkCollection right_data;
+};
 
 PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                            unique_ptr<PhysicalOperator> right)
@@ -35,6 +47,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 		state->left_position = 0;
 		state->right_position = 0;
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		state->child_chunk.Normalify();
 	}
 
 	if (state->left_position >= state->child_chunk.size()) {
@@ -45,14 +58,15 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 	auto &right_chunk = *state->right_data.chunks[state->right_position];
 	// now match the current row of the left relation with the current chunk
 	// from the right relation
-	for (index_t i = 0; i < left_chunk.column_count; i++) {
+	chunk.SetCardinality(right_chunk.size());
+	for (idx_t i = 0; i < left_chunk.column_count(); i++) {
 		// first duplicate the values of the left side
-		chunk.data[i].count = right_chunk.size();
-		VectorOperations::Set(chunk.data[i], left_chunk.data[i].GetValue(state->left_position));
+		auto lvalue = left_chunk.GetValue(i, state->left_position);
+		chunk.data[i].Reference(lvalue);
 	}
-	for (index_t i = 0; i < right_chunk.column_count; i++) {
+	for (idx_t i = 0; i < right_chunk.column_count(); i++) {
 		// now create a reference to the vectors of the right chunk
-		chunk.data[left_chunk.column_count + i].Reference(right_chunk.data[i]);
+		chunk.data[left_chunk.column_count() + i].Reference(right_chunk.data[i]);
 	}
 
 	// for the next iteration, move to the next position on the left side
@@ -66,6 +80,7 @@ void PhysicalCrossProduct::GetChunkInternal(ClientContext &context, DataChunk &c
 			state->right_position = 0;
 			// move to the next chunk on the left side
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+			state->child_chunk.Normalify();
 		}
 	}
 }

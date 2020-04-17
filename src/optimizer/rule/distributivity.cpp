@@ -1,10 +1,10 @@
-#include "optimizer/rule/distributivity.hpp"
+#include "duckdb/optimizer/rule/distributivity.hpp"
 
-#include "optimizer/matcher/expression_matcher.hpp"
-#include "planner/expression/bound_conjunction_expression.hpp"
-#include "planner/expression/bound_constant_expression.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/operator/logical_filter.hpp"
+#include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -15,132 +15,110 @@ DistributivityRule::DistributivityRule(ExpressionRewriter &rewriter) : Rule(rewr
 	root->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::CONJUNCTION_OR);
 }
 
-static void GatherAndExpressions(Expression *expression, vector<Expression *> &result) {
-	if (expression->type == ExpressionType::CONJUNCTION_AND) {
-		// gather expressions
-		ExpressionIterator::EnumerateChildren(*expression,
-		                                      [&](Expression &child) { GatherAndExpressions(&child, result); });
+void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &set) {
+	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &and_expr = (BoundConjunctionExpression &)expr;
+		for (auto &child : and_expr.children) {
+			set.insert(child.get());
+		}
 	} else {
-		// just add the expression
-		result.push_back(expression);
+		set.insert(&expr);
 	}
 }
 
-static void GatherOrExpressions(Expression *expression, vector<vector<Expression *>> &result) {
-	assert(expression->type == ExpressionType::CONJUNCTION_OR);
-	// traverse the children
-	ExpressionIterator::EnumerateChildren(*expression, [&](Expression &child) {
-		if (child.type == ExpressionType::CONJUNCTION_OR) {
-			GatherOrExpressions(&child, result);
-		} else {
-			vector<Expression *> new_expressions;
-			GatherAndExpressions(&child, new_expressions);
-			result.push_back(new_expressions);
+unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, idx_t idx,
+                                                             Expression &expr) {
+	auto &child = conj.children[idx];
+	unique_ptr<Expression> result;
+	if (child->type == ExpressionType::CONJUNCTION_AND) {
+		// AND, remove expression from the list
+		auto &and_expr = (BoundConjunctionExpression &)*child;
+		for (idx_t i = 0; i < and_expr.children.size(); i++) {
+			if (Expression::Equals(and_expr.children[i].get(), &expr)) {
+				result = move(and_expr.children[i]);
+				and_expr.children.erase(and_expr.children.begin() + i);
+				break;
+			}
 		}
-	});
-}
-
-static unique_ptr<Expression> Prune(unique_ptr<Expression> root) {
-	if (root->type == ExpressionType::INVALID) {
-		// prune this node
-		return nullptr;
-	}
-	if (root->type == ExpressionType::CONJUNCTION_OR || root->type == ExpressionType::CONJUNCTION_AND) {
-		auto &conj = (BoundConjunctionExpression &)*root;
-		// conjunction, prune recursively
-		conj.left = Prune(move(conj.left));
-		conj.right = Prune(move(conj.right));
-		if (conj.left && conj.right) {
-			// don't prune
-			return root;
-		} else if (conj.left) {
-			// prune right
-			return move(conj.left);
-		} else if (conj.right) {
-			// prune left
-			return move(conj.right);
-		} else {
-			// prune entire node
-			return nullptr;
+		if (and_expr.children.size() == 1) {
+			conj.children[idx] = move(and_expr.children[0]);
 		}
+	} else {
+		// not an AND node! remove the entire expression
+		// this happens in the case of e.g. (X AND B) OR X
+		assert(Expression::Equals(child.get(), &expr));
+		result = move(child);
+		conj.children[idx] = nullptr;
 	}
-	// no conjunction or invalid, just return the node again
-	return root;
+	assert(result);
+	return result;
 }
 
 unique_ptr<Expression> DistributivityRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                  bool &changes_made) {
 	auto initial_or = (BoundConjunctionExpression *)bindings[0];
-	// gather all the expressions inside AND expressions
-	vector<vector<Expression *>> gathered_expressions;
-	GatherOrExpressions(initial_or, gathered_expressions);
 
-	// now we have a list of expressions we have gathered for this OR
-	// if every list in this OR contains the same expression, we can extract
-	// that expression
-	// FIXME: this could be done more efficiently with a hashmap
-
-	vector<int> matches;
-	matches.resize(gathered_expressions.size());
-
-	unique_ptr<Expression> new_root;
-	for (index_t i = 0; i < gathered_expressions[0].size(); i++) {
-		auto entry = gathered_expressions[0][i];
-
-		matches[0] = i;
-		bool occurs_in_all_expressions = true;
-		for (index_t j = 1; j < gathered_expressions.size(); j++) {
-			matches[j] = -1;
-			for (index_t k = 0; k < gathered_expressions[j].size(); k++) {
-				auto other_entry = gathered_expressions[j][k];
-				if (Expression::Equals(entry, other_entry)) {
-					// match found
-					matches[j] = k;
-					break;
-				}
-			}
-			if (matches[j] < 0) {
-				occurs_in_all_expressions = false;
-				break;
+	// we want to find expressions that occur in each of the children of the OR
+	// i.e. (X AND A) OR (X AND B) => X occurs in all branches
+	// first, for the initial child, we create an expression set of which expressions occur
+	// this is our initial candidate set (in the example: [X, A])
+	expression_set_t candidate_set;
+	AddExpressionSet(*initial_or->children[0], candidate_set);
+	// now for each of the remaining children, we create a set again and intersect them
+	// in our example: the second set would be [X, B]
+	// the intersection would leave [X]
+	for (idx_t i = 1; i < initial_or->children.size(); i++) {
+		expression_set_t next_set;
+		AddExpressionSet(*initial_or->children[i], next_set);
+		expression_set_t intersect_result;
+		for (auto &expr : candidate_set) {
+			if (next_set.find(expr) != next_set.end()) {
+				intersect_result.insert(expr);
 			}
 		}
-		if (occurs_in_all_expressions) {
-			assert(matches.size() >= 2);
-			// this expression occurs in all expressions, we can push it up
-			// before the main OR expression.
-
-			// make a copy of the right child for usage in the root
-			auto right_child = gathered_expressions[0][i]->Copy();
-
-			// now we need to remove each matched entry from its parents.
-			// for all nodes, set the ExpressionType to INVALID
-			// we do the actual pruning later
-			for (index_t m = 0; m < matches.size(); m++) {
-				auto entry = gathered_expressions[m][matches[m]];
-				entry->type = ExpressionType::INVALID;
-			}
-
-			unique_ptr<Expression> left_child;
-			if (new_root) {
-				// we already have a new root, set that as the left child
-				left_child = move(new_root);
-			} else {
-				// no new root yet, create a new OR expression with the children
-				// of the main root
-				left_child = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR,
-				                                                     move(initial_or->left), move(initial_or->right));
-			}
-			new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(left_child),
-			                                                   move(right_child));
-		}
+		candidate_set = intersect_result;
 	}
-	if (new_root) {
-		// we made a new root
-		// we need to prune invalid entries!
-		new_root = Prune(move(new_root));
-		assert(new_root);
-		return new_root;
-	} else {
+	if (candidate_set.size() == 0) {
+		// nothing found: abort
 		return nullptr;
 	}
+	// now for each of the remaining expressions in the candidate set we know that it is contained in all branches of
+	// the OR
+	auto new_root = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+	for (auto &expr : candidate_set) {
+		assert(initial_or->children.size() > 0);
+
+		// extract the expression from the first child of the OR
+		auto result = ExtractExpression(*initial_or, 0, (Expression &)*expr);
+		// now for the subsequent expressions, simply remove the expression
+		for (idx_t i = 1; i < initial_or->children.size(); i++) {
+			ExtractExpression(*initial_or, i, *result);
+		}
+		// now we add the expression to the new root
+		new_root->children.push_back(move(result));
+		// remove any expressions that were set to nullptr
+		for (idx_t i = 0; i < initial_or->children.size(); i++) {
+			if (!initial_or->children[i]) {
+				initial_or->children.erase(initial_or->children.begin() + i);
+				i--;
+			}
+		}
+	}
+	// finally we need to add the remaining expressions in the OR to the new root
+	if (initial_or->children.size() == 1) {
+		// one child: skip the OR entirely and only add the single child
+		new_root->children.push_back(move(initial_or->children[0]));
+	} else if (initial_or->children.size() > 1) {
+		// multiple children still remain: push them into a new OR and add that to the new root
+		auto new_or = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+		for (auto &child : initial_or->children) {
+			new_or->children.push_back(move(child));
+		}
+		new_root->children.push_back(move(new_or));
+	}
+	// finally return the new root
+	if (new_root->children.size() == 1) {
+		return move(new_root->children[0]);
+	}
+	return move(new_root);
 }

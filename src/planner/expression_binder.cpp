@@ -1,16 +1,14 @@
-#include "planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
-#include "main/client_context.hpp"
-#include "main/database.hpp"
-#include "parser/expression/columnref_expression.hpp"
-#include "parser/expression/subquery_expression.hpp"
-#include "parser/parsed_expression_iterator.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression/bound_cast_expression.hpp"
-#include "planner/expression/bound_default_expression.hpp"
-#include "planner/expression/bound_parameter_expression.hpp"
-#include "planner/expression/bound_subquery_expression.hpp"
-#include "planner/expression_iterator.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_default_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_subquery_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -35,7 +33,7 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
-BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, index_t depth, bool root_expression) {
+BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
 	switch (expr.expression_class) {
 	case ExpressionClass::CASE:
 		return BindExpression((CaseExpression &)expr, depth);
@@ -55,9 +53,10 @@ BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, index_t dept
 		return BindExpression((OperatorExpression &)expr, depth);
 	case ExpressionClass::SUBQUERY:
 		return BindExpression((SubqueryExpression &)expr, depth);
-	default:
-		assert(expr.GetExpressionClass() == ExpressionClass::PARAMETER);
+	case ExpressionClass::PARAMETER:
 		return BindExpression((ParameterExpression &)expr, depth);
+	default:
+		throw NotImplementedException("Unimplemented expression class");
 	}
 }
 
@@ -67,10 +66,11 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	active_binders.pop_back();
-	index_t depth = 1;
+	idx_t depth = 1;
 	bool success = false;
 	while (active_binders.size() > 0) {
 		auto &next_binder = active_binders.back();
+		ExpressionBinder::BindTableNames(next_binder->binder, *expr);
 		auto bind_result = next_binder->Bind(&expr, depth);
 		if (bind_result.empty()) {
 			success = true;
@@ -83,7 +83,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	return success;
 }
 
-void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, index_t depth, string &error) {
+void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error) {
 	if (expr.get()) {
 		string bind_error = Bind(&expr, depth);
 		if (error.empty()) {
@@ -121,13 +121,13 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	unique_ptr<Expression> result = move(bound_expr->expr);
 	if (target_type.id != SQLTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
-		result = AddCastToType(move(result), bound_expr->sql_type, target_type);
+		result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, target_type);
 	} else {
 		if (bound_expr->sql_type.id == SQLTypeId::SQLNULL) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
 			bound_expr->sql_type = SQLType::INTEGER;
-			result = AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
+			result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
 		}
 	}
 	if (result_type) {
@@ -136,9 +136,10 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	return result;
 }
 
-string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth, bool root_expression) {
+string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
 	auto &expression = **expr;
+	auto alias = expression.alias;
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
 		return string();
@@ -149,12 +150,18 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, index_t depth,
 		return result.error;
 	} else {
 		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression), result.sql_type);
+		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr), result.sql_type);
+		auto be = (BoundExpression *)expr->get();
+		assert(be);
+		be->alias = alias;
+		if (!alias.empty()) {
+			be->expr->alias = alias;
+		}
 		return string();
 	}
 }
 
-void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
+void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.table_name.empty()) {
@@ -163,24 +170,5 @@ void ExpressionBinder::BindTableNames(ParsedExpression &expr) {
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BindTableNames((ParsedExpression &)child); });
+	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child); });
 }
-
-namespace duckdb {
-unique_ptr<Expression> AddCastToType(unique_ptr<Expression> expr, SQLType source_type, SQLType target_type) {
-	assert(expr);
-	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
-		auto &parameter = (BoundParameterExpression &)*expr;
-		parameter.sql_type = target_type;
-		parameter.return_type = GetInternalType(target_type);
-	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
-		auto &def = (BoundDefaultExpression &)*expr;
-		def.sql_type = target_type;
-		def.return_type = GetInternalType(target_type);
-	} else if (source_type != target_type) {
-		return make_unique<BoundCastExpression>(GetInternalType(target_type), move(expr), source_type, target_type);
-	}
-	return expr;
-}
-
-} // namespace duckdb

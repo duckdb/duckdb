@@ -1,8 +1,8 @@
 #include "catch.hpp"
-#include "common/serializer/buffered_deserializer.hpp"
-#include "common/serializer/buffered_serializer.hpp"
-#include "common/types/data_chunk.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "expression_helper.hpp"
 
 using namespace duckdb;
@@ -10,12 +10,12 @@ using namespace std;
 
 TEST_CASE("Basic serializer test", "[serializer]") {
 	BufferedSerializer serializer(4);
-	serializer.Write<sel_t>(33);
+	serializer.Write<int32_t>(33);
 	serializer.Write<uint64_t>(42);
 	auto data = serializer.GetData();
 
 	Deserializer source(data.data.get(), data.size);
-	REQUIRE_NOTHROW(source.Read<sel_t>() == 33);
+	REQUIRE_NOTHROW(source.Read<int32_t>() == 33);
 	REQUIRE_NOTHROW(source.Read<uint64_t>() == 42);
 }
 
@@ -26,13 +26,13 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	Value d = Value("world");
 	// test serializing of DataChunk
 	DataChunk chunk;
-	vector<TypeId> types = {TypeId::INTEGER, TypeId::VARCHAR};
+	vector<TypeId> types = {TypeId::INT32, TypeId::VARCHAR};
 	chunk.Initialize(types);
-	chunk.data[0].count = chunk.data[1].count = 2;
-	chunk.data[0].SetValue(0, a);
-	chunk.data[0].SetValue(1, b);
-	chunk.data[1].SetValue(0, c);
-	chunk.data[1].SetValue(1, d);
+	chunk.SetCardinality(2);
+	chunk.SetValue(0, 0, a);
+	chunk.SetValue(0, 1, b);
+	chunk.SetValue(1, 0, c);
+	chunk.SetValue(1, 1, d);
 
 	BufferedSerializer serializer;
 	chunk.Serialize(serializer);
@@ -43,13 +43,13 @@ TEST_CASE("Data Chunk serialization", "[serializer]") {
 	DataChunk other_chunk;
 	REQUIRE_NOTHROW(other_chunk.Deserialize(source));
 	REQUIRE(other_chunk.size() == 2);
-	REQUIRE(other_chunk.column_count == 2);
+	REQUIRE(other_chunk.column_count() == 2);
 	REQUIRE(other_chunk.data[0].count == 2);
-	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(0), a));
-	REQUIRE(ValueOperations::Equals(other_chunk.data[0].GetValue(1), b));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(0, 0), a));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(0, 1), b));
 	REQUIRE(other_chunk.data[1].count == 2);
-	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(0), c));
-	REQUIRE(ValueOperations::Equals(other_chunk.data[1].GetValue(1), d));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(1, 0), c));
+	REQUIRE(ValueOperations::Equals(other_chunk.GetValue(1, 1), d));
 }
 
 TEST_CASE("Value serialization", "[serializer]") {

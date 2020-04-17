@@ -1,8 +1,9 @@
-#include "storage/index.hpp"
-#include "execution/expression_executor.hpp"
-#include "planner/expression_iterator.hpp"
-#include "planner/expression/bound_columnref_expression.hpp"
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -14,15 +15,32 @@ Index::Index(IndexType type, DataTable &table, vector<column_t> column_ids,
 		types.push_back(expr->return_type);
 		bound_expressions.push_back(BindExpression(expr->Copy()));
 	}
+	for (auto &bound_expr : bound_expressions) {
+		executor.AddExpression(*bound_expr);
+	}
 	for (auto column_id : column_ids) {
 		column_id_set.insert(column_id);
 	}
 }
 
+void Index::InitializeLock(IndexLock &state) {
+	state.index_lock = unique_lock<mutex>(lock);
+}
+
+bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
+	IndexLock state;
+	InitializeLock(state);
+	return Append(state, entries, row_identifiers);
+}
+
+void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
+	IndexLock state;
+	InitializeLock(state);
+	Delete(state, entries, row_identifiers);
+}
+
 void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
-	result.Reset();
-	ExpressionExecutor executor(input);
-	executor.Execute(bound_expressions, result);
+	executor.Execute(input, result);
 }
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {

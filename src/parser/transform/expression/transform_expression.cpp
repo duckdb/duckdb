@@ -1,12 +1,11 @@
-#include "common/exception.hpp"
-#include "parser/expression/default_expression.hpp"
-#include "parser/transformer.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 using namespace duckdb;
-using namespace postgres;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformResTarget(ResTarget *root) {
+unique_ptr<ParsedExpression> Transformer::TransformResTarget(PGResTarget *root) {
 	if (!root) {
 		return nullptr;
 	}
@@ -20,37 +19,52 @@ unique_ptr<ParsedExpression> Transformer::TransformResTarget(ResTarget *root) {
 	return expr;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformExpression(Node *node) {
+unique_ptr<ParsedExpression> Transformer::TransformNamedArg(PGNamedArgExpr *root) {
+	if (!root) {
+		return nullptr;
+	}
+	auto expr = TransformExpression((PGNode *)root->arg);
+	if (root->name) {
+		expr->alias = string(root->name);
+	}
+	return expr;
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformExpression(PGNode *node) {
 	if (!node) {
 		return nullptr;
 	}
 
 	switch (node->type) {
-	case T_ColumnRef:
-		return TransformColumnRef(reinterpret_cast<ColumnRef *>(node));
-	case T_A_Const:
-		return TransformConstant(reinterpret_cast<A_Const *>(node));
-	case T_A_Expr:
-		return TransformAExpr(reinterpret_cast<A_Expr *>(node));
-	case T_FuncCall:
-		return TransformFuncCall(reinterpret_cast<FuncCall *>(node));
-	case T_BoolExpr:
-		return TransformBoolExpr(reinterpret_cast<BoolExpr *>(node));
-	case T_TypeCast:
-		return TransformTypeCast(reinterpret_cast<TypeCast *>(node));
-	case T_CaseExpr:
-		return TransformCase(reinterpret_cast<CaseExpr *>(node));
-	case T_SubLink:
-		return TransformSubquery(reinterpret_cast<SubLink *>(node));
-	case T_CoalesceExpr:
-		return TransformCoalesce(reinterpret_cast<A_Expr *>(node));
-	case T_NullTest:
-		return TransformNullTest(reinterpret_cast<NullTest *>(node));
-	case T_ResTarget:
-		return TransformResTarget(reinterpret_cast<ResTarget *>(node));
-	case T_ParamRef:
-		return TransformParamRef(reinterpret_cast<ParamRef *>(node));
-	case T_SetToDefault:
+	case T_PGColumnRef:
+		return TransformColumnRef(reinterpret_cast<PGColumnRef *>(node));
+	case T_PGAConst:
+		return TransformConstant(reinterpret_cast<PGAConst *>(node));
+	case T_PGAExpr:
+		return TransformAExpr(reinterpret_cast<PGAExpr *>(node));
+	case T_PGFuncCall:
+		return TransformFuncCall(reinterpret_cast<PGFuncCall *>(node));
+	case T_PGBoolExpr:
+		return TransformBoolExpr(reinterpret_cast<PGBoolExpr *>(node));
+	case T_PGTypeCast:
+		return TransformTypeCast(reinterpret_cast<PGTypeCast *>(node));
+	case T_PGCaseExpr:
+		return TransformCase(reinterpret_cast<PGCaseExpr *>(node));
+	case T_PGSubLink:
+		return TransformSubquery(reinterpret_cast<PGSubLink *>(node));
+	case T_PGCoalesceExpr:
+		return TransformCoalesce(reinterpret_cast<PGAExpr *>(node));
+	case T_PGNullTest:
+		return TransformNullTest(reinterpret_cast<PGNullTest *>(node));
+	case T_PGResTarget:
+		return TransformResTarget(reinterpret_cast<PGResTarget *>(node));
+	case T_PGParamRef:
+		return TransformParamRef(reinterpret_cast<PGParamRef *>(node));
+	case T_PGNamedArgExpr:
+		return TransformNamedArg(reinterpret_cast<PGNamedArgExpr *>(node));
+	case T_PGSQLValueFunction:
+		return TransformSQLValueFunction(reinterpret_cast<PGSQLValueFunction *>(node));
+	case T_PGSetToDefault:
 		return make_unique<DefaultExpression>();
 
 	default:
@@ -58,12 +72,12 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(Node *node) {
 	}
 }
 
-bool Transformer::TransformExpressionList(List *list, vector<unique_ptr<ParsedExpression>> &result) {
+bool Transformer::TransformExpressionList(PGList *list, vector<unique_ptr<ParsedExpression>> &result) {
 	if (!list) {
 		return false;
 	}
 	for (auto node = list->head; node != nullptr; node = node->next) {
-		auto target = reinterpret_cast<Node *>(node->data.ptr_value);
+		auto target = reinterpret_cast<PGNode *>(node->data.ptr_value);
 		if (!target) {
 			return false;
 		}

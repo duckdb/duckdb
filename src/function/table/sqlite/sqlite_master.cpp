@@ -1,11 +1,10 @@
-#include "function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/sqlite_functions.hpp"
 
-#include "catalog/catalog.hpp"
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "common/exception.hpp"
-#include "main/client_context.hpp"
-#include "main/database.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
 
@@ -13,23 +12,14 @@ using namespace std;
 
 namespace duckdb {
 
-struct SQLiteMasterData : public FunctionData {
+struct SQLiteMasterData : public TableFunctionData {
 	SQLiteMasterData() : initialized(false), offset(0) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		throw NotImplementedException("Copy not required for table-producing function");
 	}
 
 	bool initialized;
 	vector<CatalogEntry *> entries;
-	index_t offset;
+	idx_t offset;
 };
-
-FunctionData *sqlite_master_init(ClientContext &context) {
-	// initialize the function data structure
-	return new SQLiteMasterData();
-}
 
 string GenerateQuery(CatalogEntry *entry) {
 	// generate a query from a catalog entry
@@ -39,7 +29,7 @@ string GenerateQuery(CatalogEntry *entry) {
 		auto table = (TableCatalogEntry *)entry;
 		ss << "CREATE TABLE " << table->name << "(";
 
-		for (index_t i = 0; i < table->columns.size(); i++) {
+		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
 			ss << column.name << " " << SQLTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
@@ -54,12 +44,34 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, FunctionData *dataptr) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> inputs,
+                                                   vector<SQLType> &return_types, vector<string> &names) {
+	names.push_back("type");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("tbl_name");
+	return_types.push_back(SQLType::VARCHAR);
+
+	names.push_back("rootpage");
+	return_types.push_back(SQLType::INTEGER);
+
+	names.push_back("sql");
+	return_types.push_back(SQLType::VARCHAR);
+
+	// initialize the function data structure
+	return make_unique<SQLiteMasterData>();
+}
+
+void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 	auto &data = *((SQLiteMasterData *)dataptr);
+	assert(input.size() == 0);
 	if (!data.initialized) {
 		// scan all the schemas
-		auto &transaction = context.ActiveTransaction();
-		context.catalog.schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		auto &transaction = Transaction::GetTransaction(context);
+		Catalog::GetCatalog(context).schemas.Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});
@@ -70,15 +82,12 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		// finished returning values
 		return;
 	}
-	index_t next = min(data.offset + STANDARD_VECTOR_SIZE, (index_t)data.entries.size());
+	idx_t next = min(data.offset + STANDARD_VECTOR_SIZE, (idx_t)data.entries.size());
+	output.SetCardinality(next - data.offset);
 
-	index_t output_count = next - data.offset;
-	for (index_t j = 0; j < output.column_count; j++) {
-		output.data[j].count = output_count;
-	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	for (index_t i = data.offset; i < next; i++) {
+	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
 		auto &entry = data.entries[i];
 
@@ -101,17 +110,21 @@ void sqlite_master(ClientContext &context, DataChunk &input, DataChunk &output, 
 		default:
 			type_str = "unknown";
 		}
-		output.data[0].SetValue(index, Value(type_str));
+		output.SetValue(0, index, Value(type_str));
 		// "name", TypeId::VARCHAR
-		output.data[1].SetValue(index, Value(entry->name));
+		output.SetValue(1, index, Value(entry->name));
 		// "tbl_name", TypeId::VARCHAR
-		output.data[2].SetValue(index, Value(entry->name));
-		// "rootpage", TypeId::INTEGER
-		output.data[3].SetValue(index, Value::INTEGER(0));
+		output.SetValue(2, index, Value(entry->name));
+		// "rootpage", TypeId::INT32
+		output.SetValue(3, index, Value::INTEGER(0));
 		// "sql", TypeId::VARCHAR
-		output.data[4].SetValue(index, Value(GenerateQuery(entry)));
+		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;
+}
+
+void SQLiteMaster::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(TableFunction("sqlite_master", {}, sqlite_master_bind, sqlite_master, nullptr));
 }
 
 } // namespace duckdb

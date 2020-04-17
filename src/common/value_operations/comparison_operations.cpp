@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "common/operator/comparison_operators.hpp"
-#include "common/value_operations/value_operations.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,10 +17,10 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 			} else {
 				right_cast = left.type;
 			}
-		} else if (left.type == TypeId::BOOLEAN) {
-			right_cast = TypeId::BOOLEAN;
-		} else if (right.type == TypeId::BOOLEAN) {
-			left_cast = TypeId::BOOLEAN;
+		} else if (left.type == TypeId::BOOL) {
+			right_cast = TypeId::BOOL;
+		} else if (right.type == TypeId::BOOL) {
+			left_cast = TypeId::BOOL;
 		}
 		if (left_cast != TypeId::INVALID) {
 			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
@@ -30,15 +30,15 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return false;
 	}
 	switch (left.type) {
-	case TypeId::BOOLEAN:
+	case TypeId::BOOL:
 		return OP::Operation(left.value_.boolean, right.value_.boolean);
-	case TypeId::TINYINT:
+	case TypeId::INT8:
 		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
-	case TypeId::SMALLINT:
+	case TypeId::INT16:
 		return OP::Operation(left.value_.smallint, right.value_.smallint);
-	case TypeId::INTEGER:
+	case TypeId::INT32:
 		return OP::Operation(left.value_.integer, right.value_.integer);
-	case TypeId::BIGINT:
+	case TypeId::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
@@ -50,6 +50,18 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.double_, right.value_.double_);
 	case TypeId::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
+	case TypeId::STRUCT: {
+		for (idx_t i = 0; i < left.struct_value.size(); i++) {
+			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
+			    left.struct_value[i].second != left.struct_value[i].second) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case TypeId::LIST: {
+		return left.list_value == right.list_value;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type");
 	}

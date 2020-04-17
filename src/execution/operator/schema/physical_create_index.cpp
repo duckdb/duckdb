@@ -1,15 +1,14 @@
-#include "execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/execution/operator/schema/physical_create_index.hpp"
 
-#include "catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "catalog/catalog_entry/table_catalog_entry.hpp"
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 void PhysicalCreateIndex::CreateARTIndex() {
-	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions));
+	auto art = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions), info->unique);
 
 	table.storage->AddIndex(move(art), expressions);
 }
@@ -20,15 +19,13 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	auto &schema = *table.schema;
-	if (!schema.CreateIndex(context.ActiveTransaction(), info.get())) {
+	if (!schema.CreateIndex(context, info.get())) {
 		// index already exists, but error ignored because of CREATE ... IF NOT
 		// EXISTS
 		return;
 	}
 
 	// create the chunk to hold intermediate expression results
-	// "Multidimensional indexes not supported yet"
-	assert(expressions.size() == 1);
 
 	switch (info->index_type) {
 	case IndexType::ART: {
@@ -40,7 +37,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 		throw NotImplementedException("Unimplemented index type");
 	}
 
-	chunk.data[0].count = 0;
+	chunk.SetCardinality(0);
 
 	state->finished = true;
 }

@@ -65,7 +65,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"a", "b", "c"}));
 
 	result = con.Query("SELECT b FROM test WHERE a < 13 UNION  SELECT b FROM "
-	                   "test WHERE a > 11");
+	                   "test WHERE a > 11 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 
 	// mixed fun
@@ -106,7 +106,7 @@ TEST_CASE("Test EXCEPT / INTERSECT", "[setop]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE b(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO b VALUES (40), (43), (43)"));
 
-	result = con.Query("select * from a except select * from b");
+	result = con.Query("select * from a except select * from b order by 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {41, 42}));
 
 	result = con.Query("select * from a intersect select * from b");

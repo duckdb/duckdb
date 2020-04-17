@@ -155,7 +155,7 @@ TEST_CASE("Test ORDER BY exceptions", "[order]") {
 	REQUIRE_FAIL(con.Query("SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1"));
 }
 
-TEST_CASE("Test ORDER BY with large table", "[order]") {
+TEST_CASE("Test ORDER BY with large table", "[order][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -168,4 +168,34 @@ TEST_CASE("Test ORDER BY with large table", "[order]") {
 	for (size_t i = 0; i < 10000; i++) {
 		REQUIRE(result->GetValue<int32_t>(0, i) == i + 1);
 	}
+}
+
+TEST_CASE("Test Top N Optimization", "[order]") {
+	unique_ptr<MaterializedQueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (22), (2), (7);"));
+
+	// Top N optimization
+	result = con.Query("SELECT b FROM test ORDER BY b DESC LIMIT 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {22, 7}));
+
+	// Top N optimization: works with OFFSET
+	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 1 OFFSET 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {7}));
+
+	// Top N optimization: Limit greater than number of rows
+	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 1;");
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 22}));
+
+	// Top N optimization: Offset greater than total number of rows
+	result = con.Query("SELECT b FROM test ORDER BY b LIMIT 10 OFFSET 10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+
+	// Top N optimization: doesn't apply for Offset without Limit
+	result = con.Query("SELECT b FROM test ORDER BY b OFFSET 10;");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }

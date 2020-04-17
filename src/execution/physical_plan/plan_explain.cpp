@@ -1,6 +1,6 @@
-#include "execution/operator/scan/physical_chunk_scan.hpp"
-#include "execution/physical_plan_generator.hpp"
-#include "planner/operator/logical_explain.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -17,12 +17,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	vector<string> values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	// create a ChunkCollection from the output
 	auto collection = make_unique<ChunkCollection>();
+
 	DataChunk chunk;
 	chunk.Initialize(op.types);
-	chunk.data[0].count = chunk.data[1].count = keys.size();
-	for (index_t i = 0; i < keys.size(); i++) {
-		chunk.data[0].SetValue(i, Value(keys[i]));
-		chunk.data[1].SetValue(i, Value(values[i]));
+	for (idx_t i = 0; i < keys.size(); i++) {
+		chunk.SetValue(0, chunk.size(), Value(keys[i]));
+		chunk.SetValue(1, chunk.size(), Value(values[i]));
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			collection->Append(chunk);
+			chunk.Reset();
+		}
 	}
 	collection->Append(chunk);
 

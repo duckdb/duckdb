@@ -1,6 +1,6 @@
-#include "common/exception.hpp"
-#include "main/connection.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include "tpce_generated.hpp"
 #include "tpce.hpp"
@@ -36,7 +36,7 @@ void dbgen(duckdb::DuckDB &db, uint32_t sf, std::string schema, std::string suff
 		return;
 	}
 
-	pLoaderFactory = make_unique<DuckDBLoaderFactory>(con.context.get(), schema, suffix);
+	pLoaderFactory = make_unique<DuckDBLoaderFactory>(con, schema, suffix);
 
 	// Create log formatter and logger instance
 	CLogFormatTab fmt;

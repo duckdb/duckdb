@@ -1,43 +1,41 @@
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "parser/expression/constant_expression.hpp"
-#include "parser/statement/execute_statement.hpp"
-#include "planner/binder.hpp"
-#include "planner/expression_binder/constant_binder.hpp"
-#include "planner/statement/bound_execute_statement.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_execute.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
+#include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<BoundSQLStatement> Binder::Bind(ExecuteStatement &stmt) {
-	auto result = make_unique<BoundExecuteStatement>();
+BoundStatement Binder::Bind(ExecuteStatement &stmt) {
+	BoundStatement result;
+
 	// bind the prepared statement
-	result->prep =
+	auto entry =
 	    (PreparedStatementCatalogEntry *)context.prepared_statements->GetEntry(context.ActiveTransaction(), stmt.name);
-	if (!result->prep || result->prep->deleted) {
+	if (!entry || entry->deleted) {
 		throw BinderException("Could not find prepared statement with that name");
 	}
-	// set parameters
-	if (stmt.values.size() != result->prep->value_map.size()) {
-		throw BinderException("Parameter/argument count mismatch");
-	}
-	// bind the values
-	index_t param_idx = 1;
-	for (auto &expr : stmt.values) {
-		auto it = result->prep->value_map.find(param_idx);
-		if (it == result->prep->value_map.end()) {
-			throw Exception("Could not find parameter with this index");
-		}
-		auto &target = it->second;
+	auto prepared = entry->prepared.get();
+	this->read_only = prepared->read_only;
+	this->requires_valid_transaction = prepared->requires_valid_transaction;
 
+	vector<Value> bind_values;
+	for (idx_t i = 0; i < stmt.values.size(); i++) {
 		ConstantBinder binder(*this, context, "EXECUTE statement");
-		binder.target_type = target.target_type;
-		auto bound_expr = binder.Bind(expr);
+		binder.target_type = prepared->GetType(i + 1);
+		auto bound_expr = binder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-		assert(target.value);
-		*target.value = value;
-		param_idx++;
+		bind_values.push_back(move(value));
 	}
-	return move(result);
+	prepared->Bind(move(bind_values));
+
+	result.plan = make_unique<LogicalExecute>(prepared);
+	result.names = prepared->names;
+	result.types = prepared->sql_types;
+
+	return result;
 }

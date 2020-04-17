@@ -1,5 +1,5 @@
 #include "catch.hpp"
-#include "common/checksum.hpp"
+#include "duckdb/common/checksum.hpp"
 
 #include <vector>
 

@@ -1,55 +1,59 @@
-#include "function/aggregate/algebraic_functions.hpp"
-#include "common/exception.hpp"
-#include "common/types/null_value.hpp"
-#include "common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/aggregate/algebraic_functions.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/function_set.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-struct avg_state_t {
-    uint64_t    count;
-    double      sum;
+template <class T> struct avg_state_t {
+	uint64_t count;
+	T sum;
 };
 
-static index_t avg_payload_size(TypeId return_type) {
-	return sizeof(avg_state_t);
-}
+struct AverageFunction {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->count = 0;
+		state->sum = 0;
+	}
 
-static void avg_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, avg_payload_size(return_type));
-}
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		state->sum += input[idx];
+		state->count++;
+	}
 
-static void avg_update(Vector inputs[], index_t input_count, Vector &state) {
-	assert(input_count == 1);
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		state->count += count;
+		state->sum += input[0] * count;
+	}
 
-	VectorOperations::Exec(state, [&](index_t i, index_t k) {
-		if (inputs[0].nullmask[i]) {
-			return;
-		}
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		target->count += source.count;
+		target->sum += source.sum;
+	}
 
-		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
-
-		// update count and running sum
-		state_ptr->count++;
-		const auto new_value = ((double *)inputs[0].data)[i];
-		state_ptr->sum += new_value;
-		// see Finalize() method below for final step
-	});
-}
-
-static void avg_finalize(Vector &state, Vector &result) {
-	// compute finalization of streaming avg
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = (avg_state_t*) ((data_ptr_t *)state.data)[i];
-
-		if (state_ptr->count == 0) {
-			result.nullmask[i] = true;
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!Value::DoubleIsValid(state->sum)) {
+			throw OutOfRangeException("AVG is out of range!");
+		} else if (state->count == 0) {
+			nullmask[idx] = true;
 		} else {
-			((double *)result.data)[i] = state_ptr->sum / state_ptr->count;
+			target[idx] = state->sum / state->count;
 		}
-	});
-}
+	}
 
-void Avg::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("avg", {SQLType::DOUBLE}, SQLType::DOUBLE, avg_payload_size, avg_initialize, avg_update, avg_finalize));
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+void AvgFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet avg("avg");
+	avg.AddFunction(AggregateFunction::UnaryAggregate<avg_state_t<double>, double, double, AverageFunction>(
+	    SQLType::DOUBLE, SQLType::DOUBLE));
+	set.AddFunction(avg);
 }

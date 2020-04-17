@@ -1,8 +1,8 @@
-#include "common/types/timestamp.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
-#include "common/exception.hpp"
-#include "common/types/date.hpp"
-#include "common/types/time.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -47,7 +47,7 @@ timestamp_t Timestamp::FromString(string str) {
 	// Character length	19 positions minimum to 23 maximum
 	if (str.size() < STD_TIMESTAMP_LENGTH) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD hh:mm:ss)",
+		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
 		                          str.c_str());
 	}
 
@@ -83,14 +83,13 @@ void Timestamp::Convert(timestamp_t date, date_t &out_date, dtime_t &out_time) {
 }
 
 timestamp_t Timestamp::GetCurrentTimestamp() {
-
 	auto in_time_t = std::time(nullptr);
-	auto local_time = std::localtime(&in_time_t);
+	auto utc = std::gmtime(&in_time_t);
 
 	// tm_year[0...] considers the amount of years since 1900 and tm_mon considers the amount of months since january
 	// tm_mon[0-11]
-	auto date = Date::FromDate(local_time->tm_year + START_YEAR, local_time->tm_mon + 1, local_time->tm_mday);
-	auto time = Time::FromTime(local_time->tm_hour, local_time->tm_min, local_time->tm_sec);
+	auto date = Date::FromDate(utc->tm_year + START_YEAR, utc->tm_mon + 1, utc->tm_mday);
+	auto time = Time::FromTime(utc->tm_hour, utc->tm_min, utc->tm_sec);
 
 	return Timestamp::FromDatetime(date, time);
 }
@@ -225,27 +224,27 @@ Interval TimestampToInterval(timestamp_struct *timestamp) {
 }
 
 int64_t Timestamp::GetEpoch(timestamp_t timestamp) {
-    return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
+	return Date::Epoch(Timestamp::GetDate(timestamp)) + (int64_t)(Timestamp::GetTime(timestamp) / 1000);
 }
 
 int64_t Timestamp::GetMilliseconds(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int m = n / 60000;
-    return n - m * 60000;
+	int n = Timestamp::GetTime(timestamp);
+	int m = n / 60000;
+	return n - m * 60000;
 }
 
 int64_t Timestamp::GetSeconds(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int m = n / 60000;
-    return (n - m * 60000) / 1000;
+	int n = Timestamp::GetTime(timestamp);
+	int m = n / 60000;
+	return (n - m * 60000) / 1000;
 }
 
 int64_t Timestamp::GetMinutes(timestamp_t timestamp) {
-    int n = Timestamp::GetTime(timestamp);
-    int h = n / 3600000;
-    return (n - h * 3600000) / 60000;
+	int n = Timestamp::GetTime(timestamp);
+	int h = n / 3600000;
+	return (n - h * 3600000) / 60000;
 }
 
 int64_t Timestamp::GetHours(timestamp_t timestamp) {
-    return Timestamp::GetTime(timestamp) / 3600000;
+	return Timestamp::GetTime(timestamp) / 3600000;
 }

@@ -1,8 +1,7 @@
-#include "execution/operator/persistent/physical_delete.hpp"
+#include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
-#include "execution/expression_executor.hpp"
-#include "main/client_context.hpp"
-#include "storage/data_table.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,12 +15,12 @@ void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		// delete data in the base table
 		// the row ids are given to us as the last column of the child chunk
-		table.Delete(tableref, context, state->child_chunk.data[row_id_index]);
+		table.Delete(tableref, context, state->child_chunk.data[row_id_index], state->child_chunk.size());
 		deleted_count += state->child_chunk.size();
 	}
 
-	chunk.data[0].count = 1;
-	chunk.data[0].SetValue(0, Value::BIGINT(deleted_count));
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(deleted_count));
 
 	state->finished = true;
 }

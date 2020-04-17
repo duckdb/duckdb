@@ -1,16 +1,16 @@
-#include "planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-#include "common/serializer.hpp"
-#include "common/types/hash.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/hash.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, index_t index)
+BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, idx_t index)
     : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, type), index(index) {
 	this->alias = alias;
 }
-BoundReferenceExpression::BoundReferenceExpression(TypeId type, index_t index)
+BoundReferenceExpression::BoundReferenceExpression(TypeId type, idx_t index)
     : BoundReferenceExpression(string(), type, index) {
 }
 
@@ -26,8 +26,8 @@ bool BoundReferenceExpression::Equals(const BaseExpression *other_) const {
 	return other->index == index;
 }
 
-uint64_t BoundReferenceExpression::Hash() const {
-	return CombineHash(Expression::Hash(), duckdb::Hash<index_t>(index));
+hash_t BoundReferenceExpression::Hash() const {
+	return CombineHash(Expression::Hash(), duckdb::Hash<idx_t>(index));
 }
 
 unique_ptr<Expression> BoundReferenceExpression::Copy() {

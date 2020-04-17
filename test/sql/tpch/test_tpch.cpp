@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <iostream>
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,6 +17,22 @@ TEST_CASE("Test TPC-H SF0", "[tpch]") {
 	tpch::dbgen(0, db);
 	for (size_t i = 1; i <= 22; i++) {
 		REQUIRE_NO_FAIL(con.Query(tpch::get_query(i)));
+	}
+}
+
+TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
+	unique_ptr<QueryResult> result;
+	double sf = 0.01;
+
+	// generate the TPC-H data for SF 0.1
+	DuckDB db(nullptr);
+	Connection con(db);
+	tpch::dbgen(sf, db);
+
+	// test all the basic queries
+	for (idx_t i = 1; i <= 22; i++) {
+		result = con.Query(tpch::get_query(i));
+		COMPARE_CSV(result, tpch::get_answer(sf, i), true);
 	}
 }
 
@@ -88,69 +105,8 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 
 	// test all the basic queries
-	result = con.Query(tpch::get_query(1));
-	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
-
-	result = con.Query(tpch::get_query(2));
-	COMPARE_CSV(result, tpch::get_answer(sf, 2), true);
-
-	result = con.Query(tpch::get_query(3));
-	COMPARE_CSV(result, tpch::get_answer(sf, 3), true);
-
-	result = con.Query(tpch::get_query(4));
-	COMPARE_CSV(result, tpch::get_answer(sf, 4), true);
-
-	result = con.Query(tpch::get_query(5));
-	COMPARE_CSV(result, tpch::get_answer(sf, 5), true);
-
-	result = con.Query(tpch::get_query(6));
-	COMPARE_CSV(result, tpch::get_answer(sf, 6), true);
-
-	result = con.Query(tpch::get_query(7));
-	COMPARE_CSV(result, tpch::get_answer(sf, 7), true);
-
-	result = con.Query(tpch::get_query(8));
-	COMPARE_CSV(result, tpch::get_answer(sf, 8), true);
-
-	result = con.Query(tpch::get_query(9));
-	COMPARE_CSV(result, tpch::get_answer(sf, 9), true);
-
-	result = con.Query(tpch::get_query(10));
-	COMPARE_CSV(result, tpch::get_answer(sf, 10), true);
-
-	result = con.Query(tpch::get_query(11));
-	COMPARE_CSV(result, tpch::get_answer(sf, 11), true);
-
-	result = con.Query(tpch::get_query(12));
-	COMPARE_CSV(result, tpch::get_answer(sf, 12), true);
-
-	result = con.Query(tpch::get_query(13));
-	COMPARE_CSV(result, tpch::get_answer(sf, 13), true);
-
-	result = con.Query(tpch::get_query(14));
-	COMPARE_CSV(result, tpch::get_answer(sf, 14), true);
-
-	result = con.Query(tpch::get_query(15));
-	COMPARE_CSV(result, tpch::get_answer(sf, 15), true);
-
-	result = con.Query(tpch::get_query(16));
-	COMPARE_CSV(result, tpch::get_answer(sf, 16), true);
-
-	result = con.Query(tpch::get_query(17));
-	COMPARE_CSV(result, tpch::get_answer(sf, 17), true);
-
-	result = con.Query(tpch::get_query(18));
-	COMPARE_CSV(result, tpch::get_answer(sf, 18), true);
-
-	result = con.Query(tpch::get_query(19));
-	COMPARE_CSV(result, tpch::get_answer(sf, 19), true);
-
-	result = con.Query(tpch::get_query(20));
-	COMPARE_CSV(result, tpch::get_answer(sf, 20), true);
-
-	result = con.Query(tpch::get_query(21));
-	COMPARE_CSV(result, tpch::get_answer(sf, 21), true);
-
-	result = con.Query(tpch::get_query(22));
-	COMPARE_CSV(result, tpch::get_answer(sf, 22), true);
+	for (idx_t i = 1; i <= 22; i++) {
+		result = con.Query(tpch::get_query(i));
+		COMPARE_CSV(result, tpch::get_answer(sf, i), true);
+	}
 }

@@ -10,8 +10,8 @@ TEST_CASE("Test aggregation/group by statements", "[aggregations]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
-	con.Query("CREATE TABLE test (a INTEGER, b INTEGER);");
-	con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)");
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)"));
 
 	// aggregates cannot be nested
 	REQUIRE_FAIL(con.Query("SELECT SUM(SUM(41)), COUNT(*);"));
@@ -179,13 +179,13 @@ TEST_CASE("Test aliases in group by/aggregation", "[aggregations]") {
 	// ...BUT the alias in ORDER BY should refer to the alias from the select list
 	// note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do
 	// too.
-	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i;");
+	result = con.Query("SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));
 
 	// changing the name of the alias makes it more explicit what should happen
-	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k;");
+	result = con.Query("SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 2, 1, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 0, 1, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 2, 1, 3}));
@@ -238,7 +238,7 @@ TEST_CASE("Group by multiple columns", "[aggregations]") {
 	REQUIRE_NO_FAIL(
 	    con.Query("INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);"));
 
-	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1");
+	result = con.Query("SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1, 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {4, 6, 2}));

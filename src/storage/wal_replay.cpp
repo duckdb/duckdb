@@ -1,7 +1,18 @@
-#include "storage/write_ahead_log.hpp"
-#include "common/serializer/buffered_file_reader.hpp"
-
-#include "parser/parsed_data/drop_info.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -23,6 +34,7 @@ public:
 private:
 	void ReplayCreateTable();
 	void ReplayDropTable();
+	void ReplayAlter();
 
 	void ReplayCreateView();
 	void ReplayDropView();
@@ -38,8 +50,6 @@ private:
 	void ReplayInsert();
 	void ReplayDelete();
 	void ReplayUpdate();
-
-	void ReplayQuery();
 };
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
@@ -67,6 +77,7 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 			if (entry_type == WALType::WAL_FLUSH) {
 				// flush: commit the current transaction
 				context.transaction.Commit();
+				context.transaction.SetAutoCommit(false);
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -97,6 +108,9 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_TABLE:
 		ReplayDropTable();
+		break;
+	case WALType::ALTER_INFO:
+		ReplayAlter();
 		break;
 	case WALType::CREATE_VIEW:
 		ReplayCreateView();
@@ -131,9 +145,6 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::UPDATE_TUPLE:
 		ReplayUpdate();
 		break;
-	case WALType::QUERY:
-		ReplayQuery();
-		break;
 	default:
 		throw Exception("Invalid WAL entry type!");
 	}
@@ -149,7 +160,7 @@ void ReplayState::ReplayCreateTable() {
 	Binder binder(context);
 	auto bound_info = binder.BindCreateTableInfo(move(info));
 
-	db.catalog->CreateTable(context.ActiveTransaction(), bound_info.get());
+	db.catalog->CreateTable(context, bound_info.get());
 }
 
 void ReplayState::ReplayDropTable() {
@@ -159,7 +170,16 @@ void ReplayState::ReplayDropTable() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropTable(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
+}
+
+void ReplayState::ReplayAlter() {
+	auto info = AlterInfo::Deserialize(source);
+	if (info->type != AlterType::ALTER_TABLE) {
+		throw Exception("Expected ALTER TABLE!");
+	}
+
+	db.catalog->AlterTable(context, (AlterTableInfo *)info.get());
 }
 
 //===--------------------------------------------------------------------===//
@@ -168,7 +188,7 @@ void ReplayState::ReplayDropTable() {
 void ReplayState::ReplayCreateView() {
 	auto entry = ViewCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateView(context.ActiveTransaction(), entry.get());
+	db.catalog->CreateView(context, entry.get());
 }
 
 void ReplayState::ReplayDropView() {
@@ -176,7 +196,7 @@ void ReplayState::ReplayDropView() {
 	info.type = CatalogType::VIEW;
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	db.catalog->DropView(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -186,7 +206,7 @@ void ReplayState::ReplayCreateSchema() {
 	CreateSchemaInfo info;
 	info.schema = source.Read<string>();
 
-	db.catalog->CreateSchema(context.ActiveTransaction(), &info);
+	db.catalog->CreateSchema(context, &info);
 }
 
 void ReplayState::ReplayDropSchema() {
@@ -195,7 +215,7 @@ void ReplayState::ReplayDropSchema() {
 	info.type = CatalogType::SCHEMA;
 	info.name = source.Read<string>();
 
-	db.catalog->DropSchema(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -204,7 +224,7 @@ void ReplayState::ReplayDropSchema() {
 void ReplayState::ReplayCreateSequence() {
 	auto entry = SequenceCatalogEntry::Deserialize(source);
 
-	db.catalog->CreateSequence(context.ActiveTransaction(), entry.get());
+	db.catalog->CreateSequence(context, entry.get());
 }
 
 void ReplayState::ReplayDropSequence() {
@@ -213,7 +233,7 @@ void ReplayState::ReplayDropSequence() {
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 
-	db.catalog->DropSequence(context.ActiveTransaction(), &info);
+	db.catalog->DropEntry(context, &info);
 }
 
 void ReplayState::ReplaySequenceValue() {
@@ -223,7 +243,7 @@ void ReplayState::ReplaySequenceValue() {
 	auto counter = source.Read<int64_t>();
 
 	// fetch the sequence from the catalog
-	auto seq = db.catalog->GetSequence(context.ActiveTransaction(), schema, name);
+	auto seq = db.catalog->GetEntry<SequenceCatalogEntry>(context, schema, name);
 	if (usage_count > seq->usage_count) {
 		seq->usage_count = usage_count;
 		seq->counter = counter;
@@ -236,7 +256,7 @@ void ReplayState::ReplaySequenceValue() {
 void ReplayState::ReplayUseTable() {
 	auto schema_name = source.Read<string>();
 	auto table_name = source.Read<string>();
-	current_table = db.catalog->GetTable(context.ActiveTransaction(), schema_name, table_name);
+	current_table = db.catalog->GetEntry<TableCatalogEntry>(context, schema_name, table_name);
 }
 
 void ReplayState::ReplayInsert() {
@@ -257,16 +277,15 @@ void ReplayState::ReplayDelete() {
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
+	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
 	row_t row_ids[1];
 	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
-	row_identifiers.count = 1;
 
-	auto source_ids = (row_t *)chunk.data[0].data;
+	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
-	for (index_t i = 0; i < chunk.size(); i++) {
+	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		current_table->storage->Delete(*current_table, context, row_identifiers);
+		current_table->storage->Delete(*current_table, context, row_identifiers, 1);
 	}
 }
 
@@ -274,36 +293,21 @@ void ReplayState::ReplayUpdate() {
 	if (!current_table) {
 		throw Exception("Corrupt WAL: update without table");
 	}
+
+	idx_t column_index = source.Read<column_t>();
+
 	DataChunk chunk;
 	chunk.Deserialize(source);
 
-	vector<column_t> column_ids;
-	for (index_t i = 0; i < chunk.column_count - 1; i++) {
-		column_ids.push_back(i);
+	vector<column_t> column_ids{column_index};
+	if (column_index >= current_table->columns.size()) {
+		throw Exception("Corrupt WAL: column index for update out of bounds");
 	}
 
-	index_t update_count = chunk.size();
-	for (index_t i = 0; i < chunk.column_count; i++) {
-		chunk.data[i].sel_vector = chunk.owned_sel_vector;
-		chunk.data[i].count = 1;
-	}
-	chunk.sel_vector = chunk.owned_sel_vector;
-	chunk.column_count = chunk.column_count - 1;
+	// remove the row id vector from the chunk
+	auto row_ids = move(chunk.data.back());
+	chunk.data.pop_back();
 
-	auto &row_ids = chunk.data[chunk.column_count];
-
-	for (index_t i = 0; i < update_count; i++) {
-		chunk.owned_sel_vector[0] = i;
-		current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Query
-//===--------------------------------------------------------------------===//
-void ReplayState::ReplayQuery() {
-	// read the query
-	auto query = source.Read<string>();
-
-	context.Query(query, false);
+	// now perform the update
+	current_table->storage->Update(*current_table, context, row_ids, column_ids, chunk);
 }

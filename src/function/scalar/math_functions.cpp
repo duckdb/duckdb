@@ -1,28 +1,29 @@
-#include "function/scalar/math_functions.hpp"
-#include "common/exception.hpp"
+#include "duckdb/function/scalar/math_functions.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 void BuiltinFunctions::RegisterMathFunctions() {
-	Register<Abs>();
-	Register<Sign>();
+	Register<AbsFun>();
+	Register<SignFun>();
 
-	Register<Ceil>();
-	Register<Floor>();
-	Register<Round>();
+	Register<CeilFun>();
+	Register<FloorFun>();
+	Register<RoundFun>();
 
-	Register<Degrees>();
-	Register<Radians>();
+	Register<DegreesFun>();
+	Register<RadiansFun>();
 
-	Register<Cbrt>();
-	Register<Exp>();
-	Register<Log2>();
-	Register<Log10>();
-	Register<Ln>();
-	Register<Pow>();
-	Register<Random>();
-	Register<Sqrt>();
+	Register<CbrtFun>();
+	Register<ExpFun>();
+	Register<Log2Fun>();
+	Register<Log10Fun>();
+	Register<LnFun>();
+	Register<PowFun>();
+	Register<RandomFun>();
+	Register<SetseedFun>();
+	Register<SqrtFun>();
 
-	Register<Pi>();
+	Register<PiFun>();
 }

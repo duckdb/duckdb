@@ -1,5 +1,9 @@
-#include "storage/write_ahead_log.hpp"
-
+#include "duckdb/storage/write_ahead_log.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include <cstring>
 
 using namespace duckdb;
@@ -13,6 +17,13 @@ void WriteAheadLog::Initialize(string &path) {
 	initialized = true;
 }
 
+int64_t WriteAheadLog::GetWALSize() {
+	return writer->GetFileSize();
+}
+
+void WriteAheadLog::Truncate(int64_t size) {
+	writer->Truncate(size);
+}
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
@@ -97,7 +108,6 @@ void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::INSERT_TUPLE);
 	chunk.Serialize(*writer);
@@ -105,29 +115,28 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	assert(chunk.size() > 0);
-	assert(chunk.column_count == 1 && chunk.data[0].type == ROW_TYPE);
+	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::DELETE_TUPLE);
 	chunk.Serialize(*writer);
 }
 
-void WriteAheadLog::WriteUpdate(DataChunk &chunk) {
+void WriteAheadLog::WriteUpdate(DataChunk &chunk, column_t col_idx) {
 	assert(chunk.size() > 0);
 	chunk.Verify();
-	assert(!chunk.sel_vector); // "Cannot insert into WAL from chunk with SEL vector"
 
 	writer->Write<WALType>(WALType::UPDATE_TUPLE);
+	writer->Write<column_t>(col_idx);
 	chunk.Serialize(*writer);
 }
 
 //===--------------------------------------------------------------------===//
-// QUERY
+// Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteQuery(string &query) {
-	writer->Write<WALType>(WALType::QUERY);
-	writer->WriteString(query);
+void WriteAheadLog::WriteAlter(AlterInfo &info) {
+	writer->Write<WALType>(WALType::ALTER_INFO);
+	info.Serialize(*writer);
 }
 
 //===--------------------------------------------------------------------===//
