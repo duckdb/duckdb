@@ -400,6 +400,12 @@ struct DuckDBPyConnection {
 		return this;
 	}
 
+	~DuckDBPyConnection() {
+		for (auto& element : registered_dfs) {
+			unregister_df(element.first);
+		}
+	}
+
 	DuckDBPyConnection *execute(string query, py::object params = py::list(), bool many = false) {
 		if (!connection) {
 			throw runtime_error("connection closed");
