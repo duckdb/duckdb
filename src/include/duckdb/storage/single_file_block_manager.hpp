@@ -26,6 +26,7 @@ class SingleFileBlockManager : public BlockManager {
 public:
 	SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new, bool use_direct_io);
 
+	void StartCheckpoint() override;
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;
 	//! Return the next free block id

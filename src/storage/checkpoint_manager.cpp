@@ -41,6 +41,7 @@ void CheckpointManager::CreateCheckpoint() {
 	assert(!metadata_writer);
 
 	auto transaction = database.transaction_manager->StartTransaction();
+	block_manager.StartCheckpoint();
 
 	//! Set up the writers for the checkpoints
 	metadata_writer = make_unique<MetaBlockWriter>(block_manager);

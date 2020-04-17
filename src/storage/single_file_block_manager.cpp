@@ -105,22 +105,30 @@ void SingleFileBlockManager::LoadFreeList(BufferManager &manager) {
 	}
 	MetaBlockReader reader(manager, free_list_id);
 	auto free_list_count = reader.Read<uint64_t>();
+	free_list.clear();
 	free_list.reserve(free_list_count);
 	for (idx_t i = 0; i < free_list_count; i++) {
 		free_list.push_back(reader.Read<block_id_t>());
 	}
 }
 
+void SingleFileBlockManager::StartCheckpoint() {
+	used_blocks.clear();
+}
+
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
+	block_id_t block;
 	if (free_list.size() > 0) {
 		// free list is non empty
 		// take an entry from the free list
-		block_id_t block = free_list.back();
+		block = free_list.back();
 		// erase the entry from the free list again
 		free_list.pop_back();
-		return block;
+	} else {
+		block = max_block++;
 	}
-	return max_block++;
+	used_blocks.insert(block);
+	return block;
 }
 
 block_id_t SingleFileBlockManager::GetMetaBlock() {
@@ -133,7 +141,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 
 void SingleFileBlockManager::Read(Block &block) {
 	assert(block.id >= 0);
-	used_blocks.insert(block.id);
+	assert(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
 	block.Read(*handle, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
 }
 
@@ -147,13 +155,24 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	header.iteration = ++iteration_count;
 	header.block_count = max_block;
 	// now handle the free list
-	if (used_blocks.size() > 0) {
+	free_list.clear();
+	for(block_id_t i = 0; i < max_block; i++) {
+		if (used_blocks.find(i) == used_blocks.end()) {
+			free_list.push_back(i);
+		}
+	}
+	if (free_list.size() > 0) {
 		// there are blocks in the free list
 		// write them to the file
 		MetaBlockWriter writer(*this);
+		auto entry = std::find(free_list.begin(), free_list.end(), writer.block->id);
+		if (entry != free_list.end()) {
+			free_list.erase(entry);
+		}
 		header.free_list = writer.block->id;
-		writer.Write<uint64_t>(used_blocks.size());
-		for (auto &block_id : used_blocks) {
+
+		writer.Write<uint64_t>(free_list.size());
+		for (auto &block_id : free_list) {
 			writer.Write<block_id_t>(block_id);
 		}
 		writer.Flush();
@@ -178,6 +197,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	handle->Sync();
 
 	// the free list is now equal to the blocks that were used by the previous iteration
+	free_list.clear();
 	for (auto &block_id : used_blocks) {
 		free_list.push_back(block_id);
 	}
