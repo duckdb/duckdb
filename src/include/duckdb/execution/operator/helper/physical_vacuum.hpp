@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_transaction.hpp
+// duckdb/execution/operator/helper/physical_vacuum.hpp
 //
 //
 //===----------------------------------------------------------------------===//

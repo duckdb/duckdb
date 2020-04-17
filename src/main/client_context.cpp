@@ -703,7 +703,7 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	// verify that the result types and result names of the query match the expected result types/names
 	if (result->types.size() == expected_columns.size()) {
 		bool mismatch = false;
-		for(idx_t i = 0; i < result->types.size(); i++) {
+		for (idx_t i = 0; i < result->types.size(); i++) {
 			if (result->sql_types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
 				mismatch = true;
 				break;
@@ -716,12 +716,12 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	}
 	// result mismatch
 	string err_str = "Result mismatch in query!\nExpected the following columns: ";
-	for(idx_t i = 0; i < expected_columns.size(); i++) {
+	for (idx_t i = 0; i < expected_columns.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
 		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
 	}
 	err_str += "]\nBut result contained the following: ";
-	for(idx_t i = 0; i < result->types.size(); i++) {
+	for (idx_t i = 0; i < result->types.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
 		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
 	}

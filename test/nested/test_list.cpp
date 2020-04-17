@@ -407,5 +407,5 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 //	unique_ptr<QueryResult> result;
 //
 //	result = con.Query("SELECT SUM(a), b FROM (VALUES (42, LIST_VALUE(1, 2)), (42, LIST_VALUE(3, 4, 5)), (24,
-//LIST_VALUE(1, 2))) lv(a, b) GROUP BY b"); 	result->Print();
+// LIST_VALUE(1, 2))) lv(a, b) GROUP BY b"); 	result->Print();
 //}

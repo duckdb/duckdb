@@ -26,7 +26,8 @@ struct OrderByNode;
 //! parser representation into the DuckDB representation
 class Transformer {
 public:
-	Transformer(Transformer *parent = nullptr) : parent(parent) {}
+	Transformer(Transformer *parent = nullptr) : parent(parent) {
+	}
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements);

@@ -33,8 +33,8 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &source) {
 	switch (type) {
 	case AlterTableType::RENAME_COLUMN:
 		return RenameColumnInfo::Deserialize(source, schema, table);
-    case AlterTableType::RENAME_TABLE:
-        return RenameTableInfo::Deserialize(source, schema, table);
+	case AlterTableType::RENAME_TABLE:
+		return RenameTableInfo::Deserialize(source, schema, table);
 	default:
 		throw SerializationException("Unknown alter table type for deserialization!");
 	}
@@ -54,10 +54,10 @@ unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(Deserializer &source, string
 
 void RenameTableInfo::Serialize(Serializer &serializer) {
 	AlterTableInfo::Serialize(serializer);
-    serializer.WriteString(new_table_name);
+	serializer.WriteString(new_table_name);
 }
 
 unique_ptr<AlterInfo> RenameTableInfo::Deserialize(Deserializer &source, string schema, string table) {
-    auto new_name = source.Read<string>();
+	auto new_name = source.Read<string>();
 	return make_unique<RenameTableInfo>(schema, table, new_name);
 }

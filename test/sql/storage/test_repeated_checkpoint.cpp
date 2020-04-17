@@ -14,15 +14,19 @@ TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
 	auto csv_file = TestCreatePath("rload.csv");
 	auto config = GetTestConfig();
 
-	vector<string> model { "M11", "F22", "U33" };
-	vector<string> shop { "www.goodshop.com", "www.badshop.com" };
-	vector<string> name { "Electronics  Something  One", "Electronics  Something  Two", "Electronics  Something  Three", "Electronics  Something  Four", "Electronics  Something  Five", "Electronics  Something  Six", "Electronics  Something  Seven", "Electronics  Something  Eight", "Electronics  Something  Nine", "Electronics  Something  Ten"};
-	vector<string> brand { "AAAAA", "BBBBB", "CCCC", "DDDDDD", "PPPP" };
-	vector<string> color { "violet", "indigo", "blue", "green", "yellow", "orange", "red" };
+	vector<string> model{"M11", "F22", "U33"};
+	vector<string> shop{"www.goodshop.com", "www.badshop.com"};
+	vector<string> name{"Electronics  Something  One",   "Electronics  Something  Two",
+	                    "Electronics  Something  Three", "Electronics  Something  Four",
+	                    "Electronics  Something  Five",  "Electronics  Something  Six",
+	                    "Electronics  Something  Seven", "Electronics  Something  Eight",
+	                    "Electronics  Something  Nine",  "Electronics  Something  Ten"};
+	vector<string> brand{"AAAAA", "BBBBB", "CCCC", "DDDDDD", "PPPP"};
+	vector<string> color{"violet", "indigo", "blue", "green", "yellow", "orange", "red"};
 	idx_t row_count = 1000;
 
 	DeleteDatabase(storage_database);
-	for(idx_t counter = 0; counter < 100; counter++) {
+	for (idx_t counter = 0; counter < 100; counter++) {
 		DuckDB db(storage_database);
 		Connection con(db);
 
@@ -32,13 +36,14 @@ TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
 		}
 		// generate the csv file
 		ofstream csv_writer(csv_file);
-		for(idx_t i = 0; i < row_count; i++) {
+		for (idx_t i = 0; i < row_count; i++) {
 			idx_t z = i + counter;
 			idx_t record_id = i + (row_count * counter);
 			csv_writer << record_id << "|";
 			csv_writer << i % 99 << "|";
 			csv_writer << shop[z % 2] << "|";
-			csv_writer << "electronics" << "|";
+			csv_writer << "electronics"
+			           << "|";
 			csv_writer << name[z % 10] << "|";
 			csv_writer << brand[z % 5] << "|";
 			csv_writer << color[z % 7] << "|";
@@ -47,9 +52,13 @@ TEST_CASE("Test repeated load and checkpoint of storage", "[storage][.]") {
 		}
 		csv_writer.close();
 		// create and load the table
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS pdata (record_id BIGINT PRIMARY KEY , price DOUBLE, shop VARCHAR, category VARCHAR, name VARCHAR, brand VARCHAR, color VARCHAR, model VARCHAR);"));
-		REQUIRE_NO_FAIL(con.Query("COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '" + csv_file + "' ( DELIMITER '|' );"));
-		result = con.Query("SELECT MIN(record_id), MIN(price), MIN(shop), MIN(category), MIN(name), MIN(brand), MIN(color), MIN(model) FROM pdata");
+		REQUIRE_NO_FAIL(
+		    con.Query("CREATE TABLE IF NOT EXISTS pdata (record_id BIGINT PRIMARY KEY , price DOUBLE, shop VARCHAR, "
+		              "category VARCHAR, name VARCHAR, brand VARCHAR, color VARCHAR, model VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("COPY pdata(record_id,price,shop,category,name,brand,color,model) FROM '" + csv_file +
+		                          "' ( DELIMITER '|' );"));
+		result = con.Query("SELECT MIN(record_id), MIN(price), MIN(shop), MIN(category), MIN(name), MIN(brand), "
+		                   "MIN(color), MIN(model) FROM pdata");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 		REQUIRE(CHECK_COLUMN(result, 1, {0}));
 		REQUIRE(CHECK_COLUMN(result, 2, {"www.badshop.com"}));

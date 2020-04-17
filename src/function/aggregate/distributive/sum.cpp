@@ -29,7 +29,7 @@ struct SumOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		state->isset = true;
-		state->value += (double) input[0] * (double) count;
+		state->value += (double)input[0] * (double)count;
 	}
 
 	template <class T, class STATE>
@@ -66,10 +66,10 @@ struct SumOperation {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER, SQLType::DOUBLE));
-	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT, SQLType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER,
+	                                                                                              SQLType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT,
+	                                                                                              SQLType::DOUBLE));
 	// float sums to float
 	sum.AddFunction(
 	    AggregateFunction::UnaryAggregate<sum_state_t, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));

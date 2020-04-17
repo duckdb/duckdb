@@ -133,20 +133,23 @@ TEST_CASE("Test LEFT OUTER JOIN", "[join]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {20, 20, 10, 20}));
 
 	// range join
-	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k WHERE integers.i <= 2 ORDER BY i");
+	result = con.Query(
+	    "SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k WHERE integers.i <= 2 ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {2, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {20, Value()}));
 
 	// multiple conditions
-	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k AND integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i");
+	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k AND "
+	                   "integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 2, {2, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {20, Value()}));
 
-	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN (SELECT * FROM integers2 WHERE k=100) integers2 ON integers.i<integers2.k ORDER BY i");
+	result = con.Query("SELECT * FROM integers LEFT OUTER JOIN (SELECT * FROM integers2 WHERE k=100) integers2 ON "
+	                   "integers.i<integers2.k ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));

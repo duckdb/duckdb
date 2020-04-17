@@ -50,8 +50,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(
-		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
+		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
@@ -88,8 +87,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(
-		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
+		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
 	}
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER,
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
@@ -125,8 +123,7 @@ template <> double MultiplyOperator::Operation(double left, double right) {
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
-		functions.AddFunction(
-		    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
+		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
 	set.AddFunction(functions);
 }

@@ -24,9 +24,9 @@ void UncompressedSegment::Verify(Transaction &transaction) {
 	InitializeScan(state);
 
 	Vector result(this->type);
-	for(idx_t i = 0; i < this->tuple_count; i+= STANDARD_VECTOR_SIZE) {
+	for (idx_t i = 0; i < this->tuple_count; i += STANDARD_VECTOR_SIZE) {
 		idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
-		idx_t count = std::min((idx_t) STANDARD_VECTOR_SIZE, tuple_count - i);
+		idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
 		Scan(transaction, state, vector_idx, result);
 		result.Verify(count);
 	}

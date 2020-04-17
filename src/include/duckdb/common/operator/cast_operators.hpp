@@ -102,7 +102,7 @@ template <> string Cast::Operation(string_t input);
 // these functions are convenience functions that cast a value to a std::string, they are very slow
 // for performance sensitive casting StringCast::Operation should be used
 template <> string Cast::Operation(bool input);
-template <> string Cast::Operation(int8_t  input);
+template <> string Cast::Operation(int8_t input);
 template <> string Cast::Operation(int16_t input);
 template <> string Cast::Operation(int32_t input);
 template <> string Cast::Operation(int64_t input);

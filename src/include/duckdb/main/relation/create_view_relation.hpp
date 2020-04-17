@@ -20,6 +20,7 @@ public:
 	string view_name;
 	bool replace;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	BoundStatement Bind(Binder &binder) override;

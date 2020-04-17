@@ -117,5 +117,5 @@ TEST_CASE("Test date truncate functionality", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2019-01-01 00:00:00"))}));
 
 	// Unknown specifier should fail
-    REQUIRE_FAIL(con.Query("SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;"));
+	REQUIRE_FAIL(con.Query("SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;"));
 }
