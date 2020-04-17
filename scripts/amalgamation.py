@@ -137,7 +137,7 @@ def generate_amalgamation(source_file, header_file):
 
     # now construct duckdb.cpp
     print("------------------------")
-    print("-- Writing " + source_file " --")
+    print("-- Writing " + source_file + " --")
     print("------------------------")
 
     # scan all the .cpp files
