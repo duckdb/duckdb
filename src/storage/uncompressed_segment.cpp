@@ -260,6 +260,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 
 void UncompressedSegment::Select(Transaction &transaction, Vector &result, vector<TableFilter> &tableFilters,
                                  SelectionVector &sel, idx_t &approved_tuple_count, ColumnScanState &state) {
+	auto read_lock = lock.GetSharedLock();
 	if (versions && versions[state.vector_index]) {
 		Scan(transaction, state, state.vector_index, result);
 		auto vector_index = state.vector_index;
@@ -272,7 +273,6 @@ void UncompressedSegment::Select(Transaction &transaction, Vector &result, vecto
 			filterSelection(sel, result, table_filter, approved_tuple_count, *source_nullmask);
 		}
 	} else {
-		auto read_lock = lock.GetSharedLock();
 		//! Select the data from the base table
 		Select(state, result, sel, approved_tuple_count, tableFilters);
 	}
@@ -294,12 +294,12 @@ void UncompressedSegment::Scan(Transaction &transaction, ColumnScanState &state,
 
 void UncompressedSegment::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result,
                                      SelectionVector &sel, idx_t &approved_tuple_count) {
+	auto read_lock = lock.GetSharedLock();
 	if (versions && versions[state.vector_index]) {
 		// if there are any versions, we do a regular scan
 		Scan(transaction, state, state.vector_index, result);
 		result.Slice(sel, approved_tuple_count);
 	} else {
-		auto read_lock = lock.GetSharedLock();
 		FilterFetchBaseData(state, result, sel, approved_tuple_count);
 	}
 }

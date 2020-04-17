@@ -24,7 +24,7 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
-	for(auto &parameter : parameters) {
+	for (auto &parameter : parameters) {
 		children.push_back(make_unique<ConstantExpression>(parameter.GetSQLType(), parameter));
 	}
 
@@ -44,7 +44,7 @@ const vector<ColumnDefinition> &TableFunctionRelation::Columns() {
 
 string TableFunctionRelation::ToString(idx_t depth) {
 	string function_call = name + "(";
-	for(idx_t i = 0; i < parameters.size(); i++) {
+	for (idx_t i = 0; i < parameters.size(); i++) {
 		if (i > 0) {
 			function_call += ", ";
 		}

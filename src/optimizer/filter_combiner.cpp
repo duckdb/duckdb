@@ -232,6 +232,22 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 	for (auto &remaining_filter : remaining_filters) {
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*remaining_filter;
+			if (func.function.name == "prefix" &&
+			    func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
+			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+				//! This is a like function.
+				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
+				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
+				string like_string = constant_value_expr.value.str_value;
+				auto const_value = constant_value_expr.value.Copy();
+				const_value.str_value = like_string;
+				//! Here the like must be transformed to a BOUND COMPARISON geq le
+				tableFilters.push_back(TableFilter(const_value, ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                                   column_ref.binding.column_index));
+				const_value.str_value[const_value.str_value.size() - 1]++;
+				tableFilters.push_back(
+				    TableFilter(const_value, ExpressionType::COMPARE_LESSTHAN, column_ref.binding.column_index));
+			}
 			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.

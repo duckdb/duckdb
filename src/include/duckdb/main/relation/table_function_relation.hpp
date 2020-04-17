@@ -19,6 +19,7 @@ public:
 	string name;
 	vector<Value> parameters;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;
