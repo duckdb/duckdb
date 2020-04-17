@@ -9,6 +9,9 @@
 
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
+
 using namespace duckdb;
 using namespace std;
 

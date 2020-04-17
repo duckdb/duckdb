@@ -78,12 +78,12 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
-			AppendData(i, chunk.data[i], chunk_size);
+			AppendData(transaction, i, chunk.data[i], chunk_size);
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
 	for (idx_t i = 0; i < table.columns.size(); i++) {
-		FlushSegment(i);
+		FlushSegment(transaction, i);
 	}
 	VerifyDataPointers();
 	WriteDataPointers();
@@ -100,7 +100,7 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 	}
 }
 
-void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
+void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
 	while (count > 0) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
@@ -109,7 +109,7 @@ void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
 			return;
 		}
 		// the segment is full: flush it to disk
-		FlushSegment(col_idx);
+		FlushSegment(transaction, col_idx);
 
 		// now create a new segment and continue appending
 		CreateSegment(col_idx);
@@ -118,11 +118,12 @@ void TableDataWriter::AppendData(idx_t col_idx, Vector &data, idx_t count) {
 	}
 }
 
-void TableDataWriter::FlushSegment(idx_t col_idx) {
+void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;
 	}
+	segments[col_idx]->Verify(transaction);
 
 	// get the buffer of the segment and pin it
 	auto handle = manager.buffer_manager.Pin(segments[col_idx]->block_id);
