@@ -156,7 +156,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	header.block_count = max_block;
 	// now handle the free list
 	free_list.clear();
-	for(idx_t i = 0; i < max_block; i++) {
+	for(block_id_t i = 0; i < max_block; i++) {
 		if (used_blocks.find(i) == used_blocks.end()) {
 			free_list.push_back(i);
 		}
