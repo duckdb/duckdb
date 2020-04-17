@@ -254,8 +254,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
 	}
 	SECTION("513") {
-		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop
-		// join!"
+		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
@@ -301,8 +300,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
 	}
 	SECTION("516") {
-		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for
-		// index"
+		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for index"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL UNIQUE);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
@@ -443,8 +441,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
 		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
-		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * "
-		                   "FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
 		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"0", "0.9201898334673894"}));
 	}
@@ -519,4 +516,20 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 RIGHT JOIN t1 ON 0 WHERE t0.c0 OR t1.c0 BETWEEN t0.c0 AND 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+	SECTION("560") {
+		// Incorrect result for SUM() and negative number
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT SUM(-1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+	}
+	SECTION("562") {
+		// SELECT with CASE expression causes an assertion failure "Assertion `!entry.first->Equals(&expr)' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_FAIL(con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);"));
+		result = con.Query("SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+
+
 }

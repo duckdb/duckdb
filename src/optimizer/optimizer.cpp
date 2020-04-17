@@ -27,6 +27,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

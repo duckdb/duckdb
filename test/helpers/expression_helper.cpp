@@ -17,12 +17,12 @@ ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(*con.conte
 	con.Query("BEGIN TRANSACTION");
 }
 
-bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
+bool ExpressionHelper::VerifyRewrite(string input, string expected_output, bool silent) {
 	auto root = ParseExpression(input);
 	auto result = ApplyExpressionRule(move(root));
 	auto expected_result = ParseExpression(expected_output);
 	bool equals = Expression::Equals(result.get(), expected_result.get());
-	if (!equals) {
+	if (!equals && !silent) {
 		printf("Optimized result does not equal expected result!\n");
 		result->Print();
 		printf("Expected:\n");

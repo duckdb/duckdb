@@ -29,7 +29,6 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();
 	result->select_list.push_back(make_unique<StarExpression>());
-
 	result->from_table = GetTableRef();
 	return move(result);
 }

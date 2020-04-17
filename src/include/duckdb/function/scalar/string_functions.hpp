@@ -62,14 +62,17 @@ struct InstrFun {
 };
 
 struct PrefixFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct SuffixFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct ContainsFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

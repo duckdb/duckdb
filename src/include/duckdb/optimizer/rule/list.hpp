@@ -6,3 +6,4 @@
 #include "duckdb/optimizer/rule/date_part_simplification.hpp"
 #include "duckdb/optimizer/rule/distributivity.hpp"
 #include "duckdb/optimizer/rule/move_constants.hpp"
+#include "duckdb/optimizer/rule/like_optimizations.hpp"
