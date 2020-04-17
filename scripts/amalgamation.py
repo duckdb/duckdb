@@ -162,9 +162,9 @@ if __name__ == "__main__":
         elif arg == '--no-linenumbers':
             linenumbers = False
         elif arg.startswith('--header='):
-            header_file = arg.split('=', 1)[1]
+            header_file = os.path.join(*arg.split('=', 1)[1].split('/'))
         elif arg.startswith('--source='):
-            source_file = arg.split('=', 1)[1]
+            source_file = os.path.join(*arg.split('=', 1)[1].split('/'))
     if not os.path.exists(amal_dir):
         os.makedirs(amal_dir)
 
