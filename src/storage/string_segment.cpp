@@ -314,6 +314,7 @@ string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t
 
 string_t StringSegment::FetchStringFromDict(buffer_handle_set_t &handles, data_ptr_t baseptr, int32_t dict_offset) {
 	// fetch base data
+	assert(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
 	return FetchString(handles, baseptr, location);
 }
@@ -533,6 +534,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				memcpy(dict_pos + sizeof(uint16_t), sdata[source_idx].GetData(), string_length + 1);
 			}
 			// place the dictionary offset into the set of vectors
+			assert(dictionary_offset <= Storage::BLOCK_SIZE);
 			result_data[target_idx] = dictionary_offset;
 		}
 		remaining_strings--;

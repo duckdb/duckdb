@@ -94,6 +94,7 @@ public:
 		return std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - vector_index * STANDARD_VECTOR_SIZE);
 	}
 
+	virtual void Verify(Transaction &transaction);
 protected:
 	virtual void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update,
 	                    row_t *ids, idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) = 0;

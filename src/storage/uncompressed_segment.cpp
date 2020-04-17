@@ -21,6 +21,21 @@ UncompressedSegment::~UncompressedSegment() {
 	}
 }
 
+void UncompressedSegment::Verify(Transaction &transaction) {
+#ifdef DEBUG
+	ColumnScanState state;
+	InitializeScan(state);
+
+	Vector result(this->type);
+	for(idx_t i = 0; i < this->tuple_count; i+= STANDARD_VECTOR_SIZE) {
+		idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
+		idx_t count = std::min((idx_t) STANDARD_VECTOR_SIZE, tuple_count - i);
+		Scan(transaction, state, vector_idx, result);
+		result.Verify(count);
+	}
+#endif
+}
+
 static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, idx_t count, row_t offset,
                               UpdateInfo *&node) {
 	if (info->version_number == transaction.transaction_id) {

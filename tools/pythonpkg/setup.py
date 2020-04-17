@@ -17,13 +17,16 @@ from setuptools.command.sdist import sdist
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-if not os.path.exists('duckdb.cpp'):
+# check if amalgamation exists
+if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     prev_wd = os.getcwd()
-    os.chdir('../..')
-    subprocess.Popen('python scripts/amalgamation.py'.split(' ')).wait()
+    target_header = os.path.join(prev_wd, 'duckdb.hpp')
+    target_source = os.path.join(prev_wd, 'duckdb.cpp')
+    os.chdir(os.path.join('..', '..'))
+    sys.path.append('scripts')
+    import amalgamation
+    amalgamation.generate_amalgamation(target_source, target_header)
     os.chdir(prev_wd)
-    shutil.copyfile('../../src/amalgamation/duckdb.hpp', 'duckdb.hpp')
-    shutil.copyfile('../../src/amalgamation/duckdb.cpp', 'duckdb.cpp')
 
 
 toolchain_args = ['-std=c++11']
@@ -66,7 +69,7 @@ setup(
     url="https://www.duckdb.org",
     long_description = '',
     install_requires=[ # these versions are still available for Python 2, newer ones aren't
-         'numpy>=1.14', 
+         'numpy>=1.14',
          'pandas>=0.23',
     ],
     packages=['duckdb_query_graph'],
