@@ -17,7 +17,7 @@ matrix:
   include:
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: GCC 9
       python: 3.7
 
