@@ -76,6 +76,7 @@ public:
 
 	//! Rollback a previous update
 	void RollbackUpdate(UpdateInfo *info) override;
+
 protected:
 	void Update(ColumnData &column_data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
 	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;

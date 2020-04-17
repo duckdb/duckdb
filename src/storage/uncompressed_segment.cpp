@@ -28,9 +28,9 @@ void UncompressedSegment::Verify(Transaction &transaction) {
 	InitializeScan(state);
 
 	Vector result(this->type);
-	for(idx_t i = 0; i < this->tuple_count; i+= STANDARD_VECTOR_SIZE) {
+	for (idx_t i = 0; i < this->tuple_count; i += STANDARD_VECTOR_SIZE) {
 		idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
-		idx_t count = std::min((idx_t) STANDARD_VECTOR_SIZE, tuple_count - i);
+		idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
 		Scan(transaction, state, vector_idx, result);
 		result.Verify(count);
 	}
@@ -182,9 +182,8 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 	}
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
 		if (nullmask.any()) {
-			approved_tuple_count =
-			    BinaryExecutor::SelectFlatLoop<T, T, LessThanEquals, false, true, true, true, false>(
-			        vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
+			approved_tuple_count = BinaryExecutor::SelectFlatLoop<T, T, LessThanEquals, false, true, true, true, false>(
+			    vec, predicate, &sel, approved_tuple_count, nullmask, &new_sel, &sel);
 		} else {
 			approved_tuple_count =
 			    BinaryExecutor::SelectFlatLoop<T, T, LessThanEquals, false, true, false, true, false>(

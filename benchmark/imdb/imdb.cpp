@@ -21,7 +21,7 @@ using namespace std;
 		              true);  */                                                                                       \
 	}                                                                                                                  \
 	virtual string BenchmarkInfo() {                                                                                   \
-		return StringUtil::Format("IMDB (JOB) Q%d: %s", QNR, imdb::get_query(QNR).c_str());                       \
+		return StringUtil::Format("IMDB (JOB) Q%d: %s", QNR, imdb::get_query(QNR).c_str());                            \
 	}
 
 DUCKDB_BENCHMARK(IMDBQ001, "[imdb]")

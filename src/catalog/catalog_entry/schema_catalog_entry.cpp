@@ -140,36 +140,36 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 }
 
 void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info) {
-    switch (info->alter_table_type)	{
-        case AlterTableType::RENAME_TABLE: {
-            auto &transaction = Transaction::GetTransaction(context);
-            auto entry = tables.GetEntry(transaction, info->table);
-            if(entry == nullptr) {
-                throw CatalogException("Table \"%s\" doesn't exist!", info->table.c_str());
-            }
-            assert(entry->type == CatalogType::TABLE);
+	switch (info->alter_table_type) {
+	case AlterTableType::RENAME_TABLE: {
+		auto &transaction = Transaction::GetTransaction(context);
+		auto entry = tables.GetEntry(transaction, info->table);
+		if (entry == nullptr) {
+			throw CatalogException("Table \"%s\" doesn't exist!", info->table.c_str());
+		}
+		assert(entry->type == CatalogType::TABLE);
 
-            auto copied_entry = entry->Copy(context);
+		auto copied_entry = entry->Copy(context);
 
-            // Drop the old table entry
-            if (!tables.DropEntry(transaction, info->table, false)) {
-                throw CatalogException("Could not drop \"%s\" entry!", info->table.c_str());
-            }
+		// Drop the old table entry
+		if (!tables.DropEntry(transaction, info->table, false)) {
+			throw CatalogException("Could not drop \"%s\" entry!", info->table.c_str());
+		}
 
-            // Create a new table entry
-            auto &new_table = ((RenameTableInfo *)info)->new_table_name;
-            unordered_set<CatalogEntry *> dependencies;
-            copied_entry->name = new_table;
-            if (!tables.CreateEntry(transaction, new_table, move(copied_entry), dependencies)) {
-                throw CatalogException("Could not create \"%s\" entry!", new_table.c_str());
-            }
-            break;
-        }
-        default:
-            if (!tables.AlterEntry(context, info->table, info)) {
-                throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
-            }
-    } // end switch
+		// Create a new table entry
+		auto &new_table = ((RenameTableInfo *)info)->new_table_name;
+		unordered_set<CatalogEntry *> dependencies;
+		copied_entry->name = new_table;
+		if (!tables.CreateEntry(transaction, new_table, move(copied_entry), dependencies)) {
+			throw CatalogException("Could not create \"%s\" entry!", new_table.c_str());
+		}
+		break;
+	}
+	default:
+		if (!tables.AlterEntry(context, info->table, info)) {
+			throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
+		}
+	} // end switch
 }
 
 CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &name,
