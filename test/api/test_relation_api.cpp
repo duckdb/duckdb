@@ -31,8 +31,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// we can stack projections
 	REQUIRE_NOTHROW(
-	    result =
-	        tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
+		result =
+			tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 6, 7}));
 
 	// we can execute the same projection multiple times
@@ -155,10 +155,10 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
-	                             ->Filter("v2.id < 3")
-	                             ->Filter("v3.id=2")
-	                             ->Project("v1.id+v2.id+v3.id")
-	                             ->Execute());
+								 ->Filter("v2.id < 3")
+								 ->Filter("v3.id=2")
+								 ->Project("v1.id+v2.id+v3.id")
+								 ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
 	// test explain
@@ -400,7 +400,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 
 	// create a table from a query
 	REQUIRE_NOTHROW(
-	    con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
+		con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));
@@ -664,4 +664,62 @@ TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") 
 	REQUIRE_THROWS(i2->Join(i1, "i"));
 
 	// FIXME: what about a wrapper to scan data from other databases/connections?
+}
+
+TEST_CASE("Test view relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v1 AS SELECT i+1 AS i, i+2 FROM integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE VIEW v2(a,b) AS SELECT i+1, i+2 FROM integers"));
+
+	auto i1 = con.View("v1");
+	result = i1->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 4, 5}));
+
+	result = con.View("v2")->Project("a+b")->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {5, 7, 9}));
+
+	// non-existant view
+	REQUIRE_THROWS(con.View("blabla"));
+
+	// combining views
+	result = con.View("v1")->Join(con.View("v2"), "v1.i=v2.a")->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 4, 5}));
+	REQUIRE(CHECK_COLUMN(result, 2, {2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3, 4, 5}));
+}
+
+TEST_CASE("Test table function relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+
+	auto i1 = con.TableFunction("sqlite_master");
+	result = i1->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"table"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"integers"}));
+
+	// function with parameters
+	auto i2 = con.TableFunction("pragma_table_info", {"integers"});
+	result = i2->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"i"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"INTEGER"}));
+
+	// we can do ops on table functions
+	result = i2->Filter("cid=0")->Project("concat(name, ' ', type), length(name), reverse(lower(type))")->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"i INTEGER"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"regetni"}));
+
+	// non-existant table function
+	REQUIRE_THROWS(con.TableFunction("blabla"));
 }

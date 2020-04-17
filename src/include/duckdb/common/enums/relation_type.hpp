@@ -36,7 +36,9 @@ enum class RelationType : uint8_t {
 	UPDATE,
 	WRITE_CSV,
 	READ_CSV,
-	SUBQUERY
+	SUBQUERY,
+	TABLE_FUNCTION,
+	VIEW
 };
 
 } // namespace duckdb
