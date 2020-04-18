@@ -132,3 +132,17 @@ size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {
 size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
 	return Utf8Proc::PreviousGraphemeCluster(s, len, pos);
 }
+
+size_t utf8proc_render_width(const char *s, size_t len, size_t pos) {
+	if (!Utf8Proc::IsValid(s, len)) {
+		return 1;
+	}
+
+	auto codepoint = Utf8Proc::GetCodePoint(s + pos);
+	auto properties = utf8proc_get_property(codepoint);
+	return properties->charwidth;
+}
+
+int utf8proc_is_valid(const char *s, size_t len) {
+	return Utf8Proc::IsValid(s, len) ? 1 : 0;
+}

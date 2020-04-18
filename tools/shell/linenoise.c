@@ -539,10 +539,16 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	while (plen + len > l->cols) {
 		len--;
 	}
-	size_t cpos = 0;
-	while(cpos < l->pos) {
-		cpos = utf8proc_next_grapheme_cluster(l->buf, l->len, cpos);
-		render_pos++;
+	if (utf8proc_is_valid(l->buf, l->len)) {
+		size_t cpos = 0;
+		while(cpos < l->pos) {
+			size_t render_width = utf8proc_render_width(l->buf, l->len, cpos);
+			cpos = utf8proc_next_grapheme_cluster(l->buf, l->len, cpos);
+			render_pos += render_width;
+		}
+	} else {
+		// invalid utf8
+		render_pos = l->pos;
 	}
 
 	abInit(&ab);
