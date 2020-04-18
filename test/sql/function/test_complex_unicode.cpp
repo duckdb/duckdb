@@ -43,4 +43,6 @@ TEST_CASE("Test correct behavior of various string functions under complex unico
 	REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
 	result = con.Query("SELECT substring('test: 🤦🏼‍♂️hello🤦🏼‍♂️ world', 7, 7)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"🤦🏼‍♂️hello🤦🏼‍♂️"}));
+	result = con.Query("SELECT substring('S̈a', 1, 1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {"S̈"}));
 }

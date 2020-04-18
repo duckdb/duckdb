@@ -29,7 +29,7 @@ static string_t substring_scalar_function(Vector &result, string_t input, int of
 
 	// check if there is any non-ascii
 	bool ascii_only = true;
-	int ascii_end = std::min(offset + length, (int)input_size);
+	int ascii_end = std::min(offset + length + 1, (int)input_size);
 	for (int i = 0; i < ascii_end; i++) {
 		if (input_data[i] & 0x80) {
 			ascii_only = false;
@@ -38,7 +38,7 @@ static string_t substring_scalar_function(Vector &result, string_t input, int of
 	}
 	if (ascii_only) {
 		// ascii only
-		length = ascii_end - offset;
+		length = std::min(offset + length, (int)input_size) - offset;
 		return substring_ascii_only(result, input_data, offset, length);
 	}
 
