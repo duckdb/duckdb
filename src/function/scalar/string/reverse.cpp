@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <string.h>
 
@@ -10,29 +11,28 @@ using namespace std;
 
 namespace duckdb {
 
-static void strreverse(const char *input, idx_t n, char *output) {
-	idx_t bytes = 0;
-
-	output[n] = 0;
-
-	while (*input) {
-		if (!(*input & 0x80)) { // !*input & 0b10000000
-			bytes = 1;
-		} else if ((*input & 0xe0) == 0xc0) { // (*input & 0b1110_0000 == 0b1100_0000)
-			bytes = 2;
-		} else if ((*input & 0xf0) == 0xe0) { // (*input & 0b1111_0000 == 0b1110_0000)
-			bytes = 3;
-		} else if ((*input & 0xf8) == 0xf0) { // (*input & 0b1111_1000 == 0b1111_0000)
-			bytes = 4;
-		} else {
-			assert(false);
+//! Fast ASCII string reverse, returns false if the input data is not ascii
+static bool strreverse_ascii(const char *input, idx_t n, char *output) {
+	for(idx_t i = 0; i < n; i++) {
+		if (input[i] & 0x80) {
+			// non-ascii character
+			return false;
 		}
+		output[n - i - 1] = input[i];
+	}
+	return true;
+}
 
-		memcpy(&output[n - bytes], input, bytes);
-		input += bytes;
-		n -= bytes;
+//! Unicode string reverse using grapheme breakers
+static void strreverse_unicode(const char *input, idx_t n, char *output) {
+	idx_t cpos = 0;
+	while(cpos < n) {
+		idx_t next_pos = Utf8Proc::NextGraphemeCluster(input, n, cpos);
+		memcpy(output + n - next_pos, input + cpos, next_pos - cpos);
+		cpos = next_pos;
 	}
 }
+
 
 static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
@@ -43,7 +43,10 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 		auto input_length = input.GetSize();
 
 		auto target = StringVector::EmptyString(result, input_length);
-		strreverse(input_data, input_length, target.GetData());
+		auto target_data = target.GetData();
+		if (!strreverse_ascii(input_data, input_length, target_data)) {
+			strreverse_unicode(input_data, input_length, target_data);
+		}
 		target.Finalize();
 		return target;
 	});

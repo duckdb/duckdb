@@ -535,4 +535,9 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		    con.Query("SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+	SECTION("567") {
+		// REVERSE() on special character results in "Assertion `strcmp(dataptr, normalized) == 0' failed."
+		result = con.Query("SELECT REVERSE('S̈a︍');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"a︍S̈"}));
+	}
 }

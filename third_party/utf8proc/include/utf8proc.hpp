@@ -616,6 +616,8 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break_stateful(
 UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
     utf8proc_int32_t codepoint1, utf8proc_int32_t codepoint2);
 
+//! Returns the current UTF8 codepoint in a UTF8 string. Assumes the string is valid UTF8.
+UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u);
 
 /**
  * Given a codepoint `c`, return the codepoint of the corresponding

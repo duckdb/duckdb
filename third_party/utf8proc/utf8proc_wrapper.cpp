@@ -54,13 +54,72 @@ std::string Utf8Proc::Normalize(std::string s) {
 	free(normalized);
 	return res;
 }
-;
 
 char* Utf8Proc::Normalize(const char *s) {
 	assert(s);
 	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
 	return (char*) utf8proc_NFC((const utf8proc_uint8_t*) s);
 }
-;
 
-;
+bool Utf8Proc::IsValid(const char *s, size_t len) {
+	return Utf8Proc::Analyze(s, len) != UnicodeType::INVALID;
+}
+
+int32_t Utf8Proc::GetCodePoint(const char *s) {
+	// should be the first char of a codepoint
+	assert((*s & 0xC0) != 0x80);
+	return utf8proc_codepoint(s);
+}
+
+bool Utf8Proc::IsCodepointStart(char c) {
+	return ((c & 0xC0) != 0x80);
+}
+
+
+size_t Utf8Proc::PrevCodePoint(const char *s, size_t len, size_t cpos) {
+    size_t pos = cpos - 1;
+    while(pos > 0 && !IsCodepointStart(s[pos])) {
+        pos--;
+    }
+    return pos;
+}
+
+size_t Utf8Proc::NextCodePoint(const char *s, size_t len, size_t cpos) {
+    size_t pos = cpos + 1;
+    while(pos < len && !IsCodepointStart(s[pos])) {
+        pos++;
+    }
+    return pos;
+}
+
+size_t Utf8Proc::NextGraphemeCluster(const char *s, size_t len, size_t cpos) {
+	if (!Utf8Proc::IsValid(s, len)) {
+		return cpos + 1;
+	}
+	utf8proc_int32_t grapheme_state = 0;
+	utf8proc_int32_t initial_codepoint = utf8proc_codepoint(s + cpos);
+	while(true) {
+		cpos = NextCodePoint(s, len, cpos);
+		if (cpos == len) {
+			return cpos;
+		}
+		utf8proc_int32_t next_codepoint = utf8proc_codepoint(s + cpos);
+		if (utf8proc_grapheme_break_stateful(initial_codepoint, next_codepoint, &grapheme_state)) {
+			return cpos;
+		}
+	}
+}
+
+size_t Utf8Proc::PreviousGraphemeCluster(const char *s, size_t len, size_t cpos) {
+	if (!Utf8Proc::IsValid(s, len)) {
+		return cpos - 1;
+	}
+	size_t current_pos = 0;
+	while(true) {
+		size_t new_pos = NextGraphemeCluster(s, len, current_pos);
+		if (new_pos <= current_pos || new_pos >= cpos) {
+			return current_pos;
+		}
+		current_pos = new_pos;
+	}
+}

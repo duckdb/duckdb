@@ -330,6 +330,16 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
   return utf8proc_grapheme_break_stateful(c1, c2, NULL);
 }
 
+// from http://www.zedwood.com/article/cpp-utf8-char-to-codepoint
+UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u) {
+    unsigned char u0 = u[0]; if (u0>=0   && u0<=127) return u0;
+    unsigned char u1 = u[1]; if (u0>=192 && u0<=223) return (u0-192)*64 + (u1-128);
+    if (u[0]==0xed && (u[1] & 0xa0) == 0xa0) return -1; //code points, 0xd800 to 0xdfff
+    unsigned char u2 = u[2]; if (u0>=224 && u0<=239) return (u0-224)*4096 + (u1-128)*64 + (u2-128);
+    unsigned char u3 = u[3]; if (u0>=240 && u0<=247) return (u0-240)*262144 + (u1-128)*4096 + (u2-128)*64 + (u3-128);
+    return -1;
+}
+
 static utf8proc_int32_t seqindex_decode_entry(const utf8proc_uint16_t **entry)
 {
   utf8proc_int32_t entry_cp = **entry;
