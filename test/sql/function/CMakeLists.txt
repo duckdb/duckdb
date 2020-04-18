@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   test_math.cpp
   test_concat.cpp
+  test_complex_unicode.cpp
   test_function_resolution.cpp
   test_unary_operators.cpp
   test_substring.cpp

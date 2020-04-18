@@ -637,7 +637,9 @@ void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {
 		}
 		int next = utf8proc_get_property(utf8proc_codepoint(s + cpos, sz))->boundclass;
 		if (grapheme_break_extended(boundclass, next, &boundclass)) {
-			fun(start, cpos);
+			if (!fun(start, cpos)) {
+				return;
+			}
 			start = cpos;
 		}
 	}

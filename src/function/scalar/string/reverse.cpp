@@ -27,6 +27,7 @@ static bool strreverse_ascii(const char *input, idx_t n, char *output) {
 static void strreverse_unicode(const char *input, idx_t n, char *output) {
 	utf8proc_grapheme_callback(input, n, [&](size_t start, size_t end) {
 		memcpy(output + n - end, input + start, end - start);
+		return true;
 	});
 }
 

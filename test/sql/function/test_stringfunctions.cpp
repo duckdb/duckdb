@@ -194,20 +194,4 @@ TEST_CASE("REVERSE test", "[function]") {
 	REQUIRE_FAIL(con.Query("select REVERSE()"));
 	REQUIRE_FAIL(con.Query("select REVERSE(1, 2)"));
 	REQUIRE_FAIL(con.Query("select REVERSE('hello', 'world')"));
-
-	// reverse with grapheme clusters
-	result = con.Query("SELECT REVERSE('S̈a︍')");
-	REQUIRE(CHECK_COLUMN(result, 0, {"a︍S̈"}));
-
-	result = con.Query("SELECT REVERSE('Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢')");
-	REQUIRE(CHECK_COLUMN(result, 0, {"A̴̵̜̰͔ͫ͗͢Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍"}));
-
-	result = con.Query("SELECT REVERSE('🤦🏼‍♂️')");
-	REQUIRE(CHECK_COLUMN(result, 0, {"🤦🏼‍♂️"}));
-
-	result = con.Query("SELECT REVERSE('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')");
-	REQUIRE(CHECK_COLUMN(result, 0, {"🤦🏼‍♂️ R🤦🏼‍♂️L 🤦🏼‍♂️"}));
-
-	result = con.Query("SELECT REVERSE('MotörHead')");
-	REQUIRE(CHECK_COLUMN(result, 0, {"daeHrötoM"}));
 }
