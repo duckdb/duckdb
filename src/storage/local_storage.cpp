@@ -112,6 +112,12 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			}
 		}
 	}
+	if (count == 0){
+	    // all entries in this chunk were filtered:: Continue on next chunk
+			state.chunk_index++;
+			Scan(state, column_ids, result, table_filters);
+			return;
+	}
 	if (count == chunk_count) {
 		result.SetCardinality(count);
 	} else {
