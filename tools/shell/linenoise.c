@@ -116,6 +116,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include "linenoise.h"
+#include "utf8proc_wrapper.h"
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
@@ -528,6 +529,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	size_t len = l->len;
 	size_t pos = l->pos;
 	struct abuf ab;
+	size_t render_pos = 0;
 
 	while ((plen + pos) >= l->cols) {
 		buf++;
@@ -536,6 +538,11 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	}
 	while (plen + len > l->cols) {
 		len--;
+	}
+	size_t cpos = 0;
+	while(cpos < l->pos) {
+		cpos = utf8proc_next_grapheme_cluster(l->buf, l->len, cpos);
+		render_pos++;
 	}
 
 	abInit(&ab);
@@ -551,7 +558,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	snprintf(seq, 64, "\x1b[0K");
 	abAppend(&ab, seq, strlen(seq));
 	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int)(pos + plen));
+	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
 	abAppend(&ab, seq, strlen(seq));
 	if (write(fd, ab.b, ab.len) == -1) {
 	} /* Can't recover from write error. */
@@ -684,10 +691,18 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 	return 0;
 }
 
+static size_t prev_char(struct linenoiseState *l) {
+	return utf8proc_prev_grapheme_cluster(l->buf, l->len, l->pos);
+}
+
+static size_t next_char(struct linenoiseState *l) {
+	return utf8proc_next_grapheme_cluster(l->buf, l->len, l->pos);
+}
+
 /* Move cursor on the left. */
 void linenoiseEditMoveLeft(struct linenoiseState *l) {
 	if (l->pos > 0) {
-		l->pos--;
+		l->pos = prev_char(l);
 		refreshLine(l);
 	}
 }
@@ -695,7 +710,7 @@ void linenoiseEditMoveLeft(struct linenoiseState *l) {
 /* Move cursor on the right. */
 void linenoiseEditMoveRight(struct linenoiseState *l) {
 	if (l->pos != l->len) {
-		l->pos++;
+		l->pos = next_char(l);
 		refreshLine(l);
 	}
 }
@@ -746,8 +761,10 @@ void linenoiseEditHistoryNext(struct linenoiseState *l, int dir) {
  * position. Basically this is what happens with the "Delete" keyboard key. */
 void linenoiseEditDelete(struct linenoiseState *l) {
 	if (l->len > 0 && l->pos < l->len) {
-		memmove(l->buf + l->pos, l->buf + l->pos + 1, l->len - l->pos - 1);
-		l->len--;
+		size_t new_pos = next_char(l);
+		size_t char_sz = new_pos - l->pos;
+		memmove(l->buf + l->pos, l->buf + new_pos, l->len - new_pos);
+		l->len -= char_sz;
 		l->buf[l->len] = '\0';
 		refreshLine(l);
 	}
@@ -756,9 +773,11 @@ void linenoiseEditDelete(struct linenoiseState *l) {
 /* Backspace implementation. */
 void linenoiseEditBackspace(struct linenoiseState *l) {
 	if (l->pos > 0 && l->len > 0) {
-		memmove(l->buf + l->pos - 1, l->buf + l->pos, l->len - l->pos);
-		l->pos--;
-		l->len--;
+		size_t new_pos = prev_char(l);
+		size_t char_sz = l->pos - new_pos;
+		memmove(l->buf + new_pos, l->buf+l->pos, l->len-l->pos);
+		l->len -= char_sz;
+		l->pos = new_pos;
 		l->buf[l->len] = '\0';
 		refreshLine(l);
 	}

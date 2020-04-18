@@ -331,7 +331,8 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
 }
 
 // from http://www.zedwood.com/article/cpp-utf8-char-to-codepoint
-UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u) {
+UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input) {
+    auto u = (const unsigned char *) u_input;
     unsigned char u0 = u[0]; if (u0>=0   && u0<=127) return u0;
     unsigned char u1 = u[1]; if (u0>=192 && u0<=223) return (u0-192)*64 + (u1-128);
     if (u[0]==0xed && (u[1] & 0xa0) == 0xa0) return -1; //code points, 0xd800 to 0xdfff

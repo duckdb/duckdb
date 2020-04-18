@@ -1,4 +1,5 @@
 #include "utf8proc_wrapper.hpp"
+#include "utf8proc_wrapper.h"
 #include "utf8proc.hpp"
 
 using namespace duckdb;
@@ -122,4 +123,12 @@ size_t Utf8Proc::PreviousGraphemeCluster(const char *s, size_t len, size_t cpos)
 		}
 		current_pos = new_pos;
 	}
+}
+
+size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {
+	return Utf8Proc::NextGraphemeCluster(s, len, pos);
+}
+
+size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
+	return Utf8Proc::PreviousGraphemeCluster(s, len, pos);
 }
