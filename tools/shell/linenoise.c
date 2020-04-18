@@ -541,7 +541,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	}
 	if (utf8proc_is_valid(l->buf, l->len)) {
 		size_t cpos = 0;
-		while(cpos < l->pos) {
+		while (cpos < l->pos) {
 			size_t render_width = utf8proc_render_width(l->buf, l->len, cpos);
 			cpos = utf8proc_next_grapheme_cluster(l->buf, l->len, cpos);
 			render_pos += render_width;
@@ -781,7 +781,7 @@ void linenoiseEditBackspace(struct linenoiseState *l) {
 	if (l->pos > 0 && l->len > 0) {
 		size_t new_pos = prev_char(l);
 		size_t char_sz = l->pos - new_pos;
-		memmove(l->buf + new_pos, l->buf+l->pos, l->len-l->pos);
+		memmove(l->buf + new_pos, l->buf + l->pos, l->len - l->pos);
 		l->len -= char_sz;
 		l->pos = new_pos;
 		l->buf[l->len] = '\0';

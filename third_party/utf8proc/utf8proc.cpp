@@ -359,6 +359,44 @@ utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz) {
 	return -1;
 }
 
+bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c, int remaining_length) {
+	if (cp<=0x7F) {
+		sz = 1;
+		if (remaining_length < sz) {
+			return false;
+		}
+		c[0] = cp;
+	} else if(cp<=0x7FF) {
+		sz = 2;
+		if (remaining_length < sz) {
+			return false;
+		}
+		c[0] = (cp>>6)+192;
+		c[1] = (cp&63)+128;
+	} else if(0xd800<=cp && cp<=0xdfff) {
+		sz = -1;
+		// invalid block of utf
+	} else if(cp<=0xFFFF) {
+		sz = 3;
+		if (remaining_length < sz) {
+			return false;
+		}
+		c[0] = (cp>>12)+224;
+		c[1]= ((cp>>6)&63)+128;
+		c[2]=(cp&63)+128;
+	} else if(cp<=0x10FFFF) {
+		sz = 4;
+		if (remaining_length < sz) {
+			return false;
+		}
+		c[0] = (cp>>18)+240;
+		c[1] = ((cp>>12)&63)+128;
+		c[2] = ((cp>>6)&63)+128;
+		c[3]=(cp&63)+128;
+	}
+	return true;
+}
+
 size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos) {
 	int sz;
 	int boundclass = UTF8PROC_BOUNDCLASS_START;

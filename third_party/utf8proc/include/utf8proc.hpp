@@ -620,6 +620,7 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
 
 UTF8PROC_DLLEXPORT utf8proc_bool grapheme_break_extended(int lbc, int tbc, utf8proc_int32_t *state);
 UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz);
+UTF8PROC_DLLEXPORT bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c, int remaining_length);
 UTF8PROC_DLLEXPORT size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos);
 template<class T>
 void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {

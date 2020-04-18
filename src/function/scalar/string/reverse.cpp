@@ -13,7 +13,7 @@ namespace duckdb {
 
 //! Fast ASCII string reverse, returns false if the input data is not ascii
 static bool strreverse_ascii(const char *input, idx_t n, char *output) {
-	for(idx_t i = 0; i < n; i++) {
+	for (idx_t i = 0; i < n; i++) {
 		if (input[i] & 0x80) {
 			// non-ascii character
 			return false;
@@ -30,7 +30,6 @@ static void strreverse_unicode(const char *input, idx_t n, char *output) {
 		return true;
 	});
 }
-
 
 static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);

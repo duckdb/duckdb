@@ -13,7 +13,7 @@ struct StringLengthOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-		for(idx_t i = 0; i < input_length; i++) {
+		for (idx_t i = 0; i < input_length; i++) {
 			if (input_data[i] & 0x80) {
 				int64_t length = 0;
 				// non-ascii character: use grapheme iterator on remainder of string
