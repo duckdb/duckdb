@@ -896,11 +896,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
 			if (l.pos > 0 && l.pos < l.len) {
-				int aux = buf[l.pos - 1];
-				buf[l.pos - 1] = buf[l.pos];
-				buf[l.pos] = aux;
-				if (l.pos != l.len - 1)
-					l.pos++;
+				char temp_buffer[128];
+				int prev_pos = prev_char(&l);
+				int next_pos = next_char(&l);
+				int prev_char_size = l.pos - prev_pos;
+				int cur_char_size = next_pos - l.pos;
+				memcpy(temp_buffer, l.buf + prev_pos, prev_char_size);
+				memmove(l.buf + prev_pos, l.buf + l.pos, cur_char_size);
+				memcpy(l.buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
+				l.pos = next_pos;
 				refreshLine(&l);
 			}
 			break;

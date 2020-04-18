@@ -66,39 +66,7 @@ bool Utf8Proc::IsValid(const char *s, size_t len) {
 	return Utf8Proc::Analyze(s, len) != UnicodeType::INVALID;
 }
 
-int32_t Utf8Proc::GetCodePoint(const char *s) {
-	return 0;
-}
-
-bool Utf8Proc::IsCodepointStart(char c) {
-	return ((c & 0xC0) != 0x80);
-}
-
-
-size_t Utf8Proc::PrevCodePoint(const char *s, size_t len, size_t cpos) {
-    size_t pos = cpos - 1;
-    while(pos > 0 && !IsCodepointStart(s[pos])) {
-        pos--;
-    }
-    return pos;
-}
-
-size_t Utf8Proc::NextCodePoint(const char *s, size_t len, size_t cpos) {
-    size_t pos = cpos + 1;
-    while(pos < len && !IsCodepointStart(s[pos])) {
-        pos++;
-    }
-    return pos;
-}
-
 size_t Utf8Proc::NextGraphemeCluster(const char *s, size_t len, size_t cpos) {
-	// utf8proc_ssize_t glen;
-	// utf8proc_uint8_t *g;
-	// glen = utf8proc_map((utf8proc_uint8_t *) s, len, &g, UTF8PROC_CHARBOUND);
-	// int x = 5;
-	// if (!Utf8Proc::IsValid(s, len)) {
-	// 	return cpos + 1;
-	// }
 	return utf8proc_next_grapheme(s, len, cpos);
 }
 
@@ -125,11 +93,8 @@ size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
 }
 
 size_t utf8proc_render_width(const char *s, size_t len, size_t pos) {
-	if (!Utf8Proc::IsValid(s, len)) {
-		return 1;
-	}
-
-	auto codepoint = Utf8Proc::GetCodePoint(s + pos);
+	int sz;
+	auto codepoint = utf8proc_codepoint(s + pos, sz);
 	auto properties = utf8proc_get_property(codepoint);
 	return properties->charwidth;
 }
