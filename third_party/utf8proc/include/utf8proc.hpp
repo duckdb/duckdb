@@ -617,7 +617,31 @@ UTF8PROC_DLLEXPORT utf8proc_bool utf8proc_grapheme_break(
     utf8proc_int32_t codepoint1, utf8proc_int32_t codepoint2);
 
 //! Returns the current UTF8 codepoint in a UTF8 string. Assumes the string is valid UTF8.
-UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u);
+
+UTF8PROC_DLLEXPORT utf8proc_bool grapheme_break_extended(int lbc, int tbc, utf8proc_int32_t *state);
+UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz);
+UTF8PROC_DLLEXPORT size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos);
+template<class T>
+void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {
+	int sz;
+	int boundclass = UTF8PROC_BOUNDCLASS_START;
+	int initial = utf8proc_get_property(utf8proc_codepoint(s, sz))->boundclass;
+	grapheme_break_extended(boundclass, initial, &boundclass);
+	size_t start = 0;
+	size_t cpos = 0;
+	while(true) {
+		cpos += sz;
+		if (cpos >= len) {
+			fun(start, cpos);
+			return;
+		}
+		int next = utf8proc_get_property(utf8proc_codepoint(s + cpos, sz))->boundclass;
+		if (grapheme_break_extended(boundclass, next, &boundclass)) {
+			fun(start, cpos);
+			start = cpos;
+		}
+	}
+}
 
 /**
  * Given a codepoint `c`, return the codepoint of the corresponding

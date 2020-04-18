@@ -202,4 +202,12 @@ TEST_CASE("REVERSE test", "[function]") {
 	result = con.Query("SELECT REVERSE('Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"A̴̵̜̰͔ͫ͗͢Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍"}));
 
+	result = con.Query("SELECT REVERSE('🤦🏼‍♂️')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"🤦🏼‍♂️"}));
+
+	result = con.Query("SELECT REVERSE('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"🤦🏼‍♂️ R🤦🏼‍♂️L 🤦🏼‍♂️"}));
+
+	result = con.Query("SELECT REVERSE('MotörHead')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"daeHrötoM"}));
 }
