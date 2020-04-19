@@ -548,15 +548,53 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	struct abuf ab;
 	size_t render_pos = 0;
 
-	while ((plen + pos) >= l->cols) {
-		buf++;
-		len--;
-		pos--;
+	if (utf8proc_is_valid(l->buf, l->len)) {
+		// utf8 in prompt, handle rendering
+		size_t remaining_render_width = l->cols - plen - 1;
+		size_t start_pos = 0;
+		size_t cpos = 0;
+		size_t prev_pos = 0;
+		size_t total_render_width = 0;
+		while (cpos < len) {
+			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			prev_pos = cpos;
+			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			total_render_width += cpos - prev_pos;
+			if (total_render_width >= remaining_render_width) {
+				// character does not fit anymore! we need to figure something out
+				if (prev_pos >= l->pos) {
+					// we passed the cursor: break
+					cpos = prev_pos;
+					break;
+				} else {
+					// we did not pass the cursor yet! remove characters from the start until it fits again
+					while(total_render_width >= remaining_render_width) {
+						size_t start_char_width = utf8proc_render_width(buf, len, start_pos);
+						size_t new_start = utf8proc_next_grapheme_cluster(buf, len, start_pos);
+						total_render_width -= new_start - start_pos;
+						start_pos = new_start;
+						render_pos -= start_char_width;
+					}
+				}
+			}
+			if (prev_pos < l->pos) {
+				render_pos += char_render_width;
+			}
+		}
+		buf = buf + start_pos;
+		len = cpos - start_pos;
+	} else {
+		// invalid UTF8: fallback
+		while ((plen + pos) >= l->cols) {
+			buf++;
+			len--;
+			pos--;
+		}
+		while (plen + len > l->cols) {
+			len--;
+		}
+		render_pos = pos;
 	}
-	while (plen + len > l->cols) {
-		len--;
-	}
-	render_pos = compute_render_width(l->buf, l->pos);
 
 	abInit(&ab);
 	/* Cursor to left edge */
