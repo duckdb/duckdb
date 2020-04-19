@@ -32,6 +32,10 @@ public:
 	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
 		value_.integer = val;
 	}
+	//! Create a BIGINT value
+	Value(int64_t val) : type(TypeId::INT64), is_null(false) {
+		value_.bigint = val;
+	}
 	//! Create a FLOAT value
 	Value(float val) : type(TypeId::FLOAT), is_null(false) {
 		value_.float_ = val;
@@ -112,7 +116,8 @@ public:
 	Value CastAs(TypeId target_type) const;
 	//! Cast this value to another type
 	Value CastAs(SQLType source_type, SQLType target_type);
-
+	//! Tries to cast value to another type, throws exception if its not possible
+	bool TryCastAs(SQLType source_type, SQLType target_type);
 	//! The type of the value
 	TypeId type;
 	//! Whether or not the value is NULL

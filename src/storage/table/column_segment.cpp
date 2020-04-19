@@ -53,6 +53,10 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t stats_
 		set_min_max<double>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;
 	}
+	case TypeId::VARCHAR: {
+		set_min_max<char[8]>(stats_min, stats_max, minimum.get(), maximum.get());
+		break;
+	}
 
 	default:
 		break;
@@ -65,13 +69,13 @@ template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
 }
 
 void SegmentStatistics::Reset() {
-	minimum = unique_ptr<data_t[]>(new data_t[type_size]);
-	maximum = unique_ptr<data_t[]>(new data_t[type_size]);
-	memset(minimum.get(), 0, type_size);
-	memset(maximum.get(), 0, type_size);
+	idx_t min_max_size = type_size > 8 ? 8 : type_size;
+	minimum = unique_ptr<data_t[]>(new data_t[min_max_size]);
+	maximum = unique_ptr<data_t[]>(new data_t[min_max_size]);
 	has_null = false;
 	max_string_length = 0;
 	has_overflow_strings = false;
+	char padding = '\0';
 	switch (type) {
 	case TypeId::INT8:
 		initialize_max_min<int8_t>(minimum.get(), maximum.get());
@@ -91,6 +95,11 @@ void SegmentStatistics::Reset() {
 	case TypeId::DOUBLE:
 		initialize_max_min<double>(minimum.get(), maximum.get());
 		break;
+	case TypeId::VARCHAR: {
+		memset(minimum.get(), padding, min_max_size);
+		memset(maximum.get(), padding, min_max_size);
+		break;
+	}
 	default:
 		break;
 	}
