@@ -3,6 +3,8 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -64,6 +66,103 @@ void StringSegment::InitializeScan(ColumnScanState &state) {
 }
 
 //===--------------------------------------------------------------------===//
+// Filter base data
+//===--------------------------------------------------------------------===//
+void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &handles, data_ptr_t baseptr,
+                                int32_t *dict_offset, idx_t src_idx, idx_t res_idx, idx_t &update_idx,
+                                size_t vector_index) {
+	if (string_updates && string_updates[vector_index]) {
+		auto &info = *string_updates[vector_index];
+		if (update_idx < info.count && info.ids[update_idx] == src_idx) {
+			result_data[res_idx] = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
+			update_idx++;
+		} else {
+			result_data[res_idx] = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+		}
+	} else {
+		result_data[res_idx] = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
+	}
+}
+
+void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+                           vector<TableFilter> &tableFilter) {
+	auto vector_index = state.vector_index;
+	assert(vector_index < max_vector_count);
+	assert(vector_index * STANDARD_VECTOR_SIZE <= tuple_count);
+
+	auto handle = state.primary_handle.get();
+	state.handles.clear();
+	auto baseptr = handle->node->buffer;
+	// fetch the data from the base segment
+	auto base = baseptr + state.vector_index * vector_size;
+	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	auto base_nullmask = (nullmask_t *)base;
+
+	if (tableFilter.size() == 1) {
+		switch (tableFilter[0].comparison_type) {
+		case ExpressionType::COMPARE_EQUAL: {
+			Select_String<Equals>(state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                      approved_tuple_count, base_nullmask, vector_index);
+			break;
+		}
+		case ExpressionType::COMPARE_LESSTHAN: {
+			Select_String<LessThan>(state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+			                        approved_tuple_count, base_nullmask, vector_index);
+			break;
+		}
+		case ExpressionType::COMPARE_GREATERTHAN: {
+			Select_String<GreaterThan>(state.handles, result, baseptr, base_data, sel,
+			                           tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                           vector_index);
+			break;
+		}
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+			Select_String<LessThanEquals>(state.handles, result, baseptr, base_data, sel,
+			                              tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                              vector_index);
+			break;
+		}
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+			Select_String<GreaterThanEquals>(state.handles, result, baseptr, base_data, sel,
+			                                 tableFilter[0].constant.str_value, approved_tuple_count, base_nullmask,
+			                                 vector_index);
+
+			break;
+		}
+		default:
+			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
+		}
+	} else {
+		assert(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+		assert(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
+		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+
+		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+				Select_String_Between<GreaterThan, LessThan>(
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+			} else {
+				Select_String_Between<GreaterThan, LessThanEquals>(
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+			}
+		} else {
+			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+				Select_String_Between<GreaterThanEquals, LessThan>(
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+			} else {
+				Select_String_Between<GreaterThanEquals, LessThanEquals>(
+				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
+				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+			}
+		}
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Fetch base data
 //===--------------------------------------------------------------------===//
 void StringSegment::FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) {
@@ -104,6 +203,39 @@ void StringSegment::FetchBaseData(ColumnScanState &state, data_ptr_t baseptr, id
 		}
 	}
 	FlatVector::SetNullmask(result, base_nullmask);
+}
+
+void StringSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+                                        idx_t &approved_tuple_count) {
+	// clear any previously locked buffers and get the primary buffer handle
+	auto handle = state.primary_handle.get();
+	state.handles.clear();
+	auto baseptr = handle->node->buffer;
+	// fetch the data from the base segment
+	auto base = baseptr + state.vector_index * vector_size;
+	auto &base_nullmask = *((nullmask_t *)base);
+	auto base_data = (int32_t *)(base + sizeof(nullmask_t));
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<string_t>(result);
+	nullmask_t result_nullmask;
+	idx_t update_idx = 0;
+	if (base_nullmask.any()) {
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			idx_t src_idx = sel.get_index(i);
+			if (base_nullmask[src_idx]) {
+				result_nullmask.set(i, true);
+				read_string(result_data, state.handles, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+			} else {
+				read_string(result_data, state.handles, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < approved_tuple_count; i++) {
+			idx_t src_idx = sel.get_index(i);
+			read_string(result_data, state.handles, baseptr, base_data, src_idx, i, update_idx, state.vector_index);
+		}
+	}
+	FlatVector::SetNullmask(result, result_nullmask);
 }
 
 //===--------------------------------------------------------------------===//
@@ -281,7 +413,6 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
 	assert(data.type == TypeId::VARCHAR);
 	auto handle = manager.Pin(block_id);
-
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
 		// get the vector index of the vector to append to and see how many tuples we can append to that vector
@@ -311,6 +442,33 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 	return tuple_count - initial_count;
 }
 
+static void update_min_max(string value, char *__restrict min, char *__restrict max) {
+	//! we can only fit 8 bytes, so we might need to trim our string
+	size_t value_size = value.size() > 7 ? 7 : value.size();
+	if (min[0] == '\0' && max[0] == '\0') {
+		size_t min_end = value.copy(min, value_size);
+		size_t max_end = value.copy(max, value_size);
+		for (size_t i = min_end; i < 8; i++) {
+			min[i] = '\0';
+		}
+		for (size_t i = max_end; i < 8; i++) {
+			max[i] = '\0';
+		}
+	}
+	if (strcmp(value.data(), min) < 0) {
+		size_t min_end = value.copy(min, value_size);
+		for (size_t i = min_end; i < 8; i++) {
+			min[i] = '\0';
+		}
+	}
+	if (strcmp(value.data(), max) > 0) {
+		size_t max_end = value.copy(max, value_size);
+		for (size_t i = max_end; i < 8; i++) {
+			max[i] = '\0';
+		}
+	}
+}
+
 void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data_ptr_t end, idx_t target_offset,
                                Vector &source, idx_t offset, idx_t count) {
 	VectorData adata;
@@ -319,6 +477,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 	auto sdata = (string_t *)adata.data;
 	auto &result_nullmask = *((nullmask_t *)target);
 	auto result_data = (int32_t *)(target + sizeof(nullmask_t));
+	auto min = (char *)stats.minimum.get();
+	auto max = (char *)stats.maximum.get();
 
 	idx_t remaining_strings = STANDARD_VECTOR_SIZE - (this->tuple_count % STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
@@ -338,7 +498,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 			if (string_length > stats.max_string_length) {
 				stats.max_string_length = string_length;
 			}
-			// determine hwether or not the string needs to be stored in an overflow block
+			// determine whether or not the string needs to be stored in an overflow block
 			// we never place small strings in the overflow blocks: the pointer would take more space than the
 			// string itself we always place big strings (>= STRING_BLOCK_LIMIT) in the overflow blocks we also have
 			// to always leave enough room for BIG_STRING_MARKER_SIZE for each of the remaining strings
@@ -349,9 +509,10 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				// string is too big for block: write to overflow blocks
 				block_id_t block;
 				int32_t offset;
+				//! Update min/max of column segment
+				update_min_max(sdata[source_idx].GetData(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
-
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
 				auto dict_pos = end - dictionary_offset;
 
@@ -364,7 +525,8 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				assert(string_length < std::numeric_limits<uint16_t>::max());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
-
+				//! Update min/max of column segment
+				update_min_max(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
 				uint16_t string_length_u16 = string_length;
 				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
@@ -514,6 +676,11 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		info->ids[i] = ids[i] - vector_offset;
 		// copy the string into the block
 		if (!update_nullmask[i]) {
+			auto min = (char *)stats.minimum.get();
+			auto max = (char *)stats.maximum.get();
+			for (idx_t i = 0; i < count; i++) {
+				update_min_max(strings[i].GetData(), min, max);
+			}
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;

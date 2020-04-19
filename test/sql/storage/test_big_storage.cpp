@@ -134,12 +134,16 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	{
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("UPDATE test SET a='aaa' WHERE a='a'"));
+		result = con.Query("SELECT count(a) FROM test WHERE a='a'");
+		REQUIRE(CHECK_COLUMN(result, 0, {count_per_group}));
+		result = con.Query("UPDATE test SET a='aaa' WHERE a='a'");
+		REQUIRE(CHECK_COLUMN(result, 0, {count_per_group}));
 	}
 	// reload the database from disk again
 	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
+
 		result = con.Query("SELECT a, COUNT(*) FROM test GROUP BY a ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {"aaa", "bb", "ccc", "dddd", "eeeee"}));
 		REQUIRE(CHECK_COLUMN(result, 1,

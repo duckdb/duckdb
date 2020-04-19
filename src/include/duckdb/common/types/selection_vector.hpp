@@ -17,7 +17,6 @@ class VectorBuffer;
 struct SelectionData {
 	SelectionData(idx_t count) {
 		owned_data = unique_ptr<sel_t[]>(new sel_t[count]);
-		;
 	}
 
 	unique_ptr<sel_t[]> owned_data;
