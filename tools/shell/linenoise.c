@@ -517,13 +517,30 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	}
 }
 
+static size_t compute_render_width(const char *buf, size_t len) {
+	if (utf8proc_is_valid(buf, len)) {
+		// utf8 in prompt, get render width
+		size_t cpos = 0;
+		size_t render_width = 0;
+		while (cpos < len) {
+			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			render_width += char_render_width;
+		}
+		return render_width;
+	} else {
+		// invalid utf8 in prompt, use length in bytes
+		return len;
+	}
+}
+
 /* Single line low level line refresh.
  *
  * Rewrite the currently edited line accordingly to the buffer content,
  * cursor position, and number of columns of the terminal. */
 static void refreshSingleLine(struct linenoiseState *l) {
 	char seq[64];
-	size_t plen = strlen(l->prompt);
+	size_t plen = compute_render_width(l->prompt, strlen(l->prompt));
 	int fd = l->ofd;
 	char *buf = l->buf;
 	size_t len = l->len;
@@ -539,17 +556,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	while (plen + len > l->cols) {
 		len--;
 	}
-	if (utf8proc_is_valid(l->buf, l->len)) {
-		size_t cpos = 0;
-		while (cpos < l->pos) {
-			size_t render_width = utf8proc_render_width(l->buf, l->len, cpos);
-			cpos = utf8proc_next_grapheme_cluster(l->buf, l->len, cpos);
-			render_pos += render_width;
-		}
-	} else {
-		// invalid utf8
-		render_pos = l->pos;
-	}
+	render_pos = compute_render_width(l->buf, l->pos);
 
 	abInit(&ab);
 	/* Cursor to left edge */
