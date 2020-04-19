@@ -32,7 +32,6 @@ static string_t strcase_unicode(Vector &result, const char *input_data, idx_t in
 			// ascii
 			output_length++;
 			i++;
-
 		}
 	}
 	auto result_str = StringVector::EmptyString(result, output_length);
