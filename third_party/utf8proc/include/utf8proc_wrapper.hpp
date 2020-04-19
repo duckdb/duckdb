@@ -11,7 +11,6 @@ enum class UnicodeType {INVALID, ASCII, UNICODE};
 
 class Utf8Proc {
 public:
-
 	static UnicodeType Analyze(const char* s) {
 		return Analyze(s, std::strlen(s));
 	}
