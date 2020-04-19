@@ -359,42 +359,49 @@ utf8proc_int32_t utf8proc_codepoint(const char *u_input, int &sz) {
 	return -1;
 }
 
-bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c, int remaining_length) {
+bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c) {
 	if (cp<=0x7F) {
 		sz = 1;
-		if (remaining_length < sz) {
-			return false;
-		}
 		c[0] = cp;
 	} else if(cp<=0x7FF) {
 		sz = 2;
-		if (remaining_length < sz) {
-			return false;
-		}
 		c[0] = (cp>>6)+192;
 		c[1] = (cp&63)+128;
 	} else if(0xd800<=cp && cp<=0xdfff) {
 		sz = -1;
 		// invalid block of utf
+		return false;
 	} else if(cp<=0xFFFF) {
 		sz = 3;
-		if (remaining_length < sz) {
-			return false;
-		}
 		c[0] = (cp>>12)+224;
 		c[1]= ((cp>>6)&63)+128;
 		c[2]=(cp&63)+128;
 	} else if(cp<=0x10FFFF) {
 		sz = 4;
-		if (remaining_length < sz) {
-			return false;
-		}
 		c[0] = (cp>>18)+240;
 		c[1] = ((cp>>12)&63)+128;
 		c[2] = ((cp>>6)&63)+128;
 		c[3]=(cp&63)+128;
+	} else {
+		sz = -1;
+		return false;
 	}
 	return true;
+}
+
+int utf8proc_codepoint_length(int cp) {
+	if (cp<=0x7F) {
+		return 1;
+	} else if(cp<=0x7FF) {
+		return 2;
+	} else if(0xd800<=cp && cp<=0xdfff) {
+		return -1;
+	} else if(cp<=0xFFFF) {
+		return 3;
+	} else if(cp<=0x10FFFF) {
+		return 4;
+	}
+	return -1;
 }
 
 size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos) {
