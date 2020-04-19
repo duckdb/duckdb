@@ -739,6 +739,7 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 			refreshLine(l);
 		}
 	}
+	refreshLine(l);
 	return 0;
 }
 
