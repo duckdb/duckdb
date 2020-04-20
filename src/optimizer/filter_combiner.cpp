@@ -239,7 +239,7 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
 				string like_string = constant_value_expr.value.str_value;
-				if (like_string.size() == 0) {
+				if (like_string.empty()) {
 					continue;
 				}
 				auto const_value = constant_value_expr.value.Copy();
