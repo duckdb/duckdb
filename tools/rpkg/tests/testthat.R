@@ -8,7 +8,9 @@ dbplyr_tests <- function() {
 		return()
 	}
 	# the hacky part
+	library("dplyr")
 	library("dbplyr")
+
 	# pull dbplyr sources to harvest test cases
 	zipfile <- tempfile()
 	url <- "https://github.com/tidyverse/dbplyr/archive/v1.4.2.zip"
