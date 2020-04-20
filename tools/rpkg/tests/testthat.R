@@ -8,7 +8,6 @@ dbplyr_tests <- function() {
 		return()
 	}
 	# the hacky part
-	library("dplyr")
 	library("dbplyr")
 
 	# pull dbplyr sources to harvest test cases
@@ -26,4 +25,4 @@ dbplyr_tests <- function() {
 	# TODO fix excluded test cases
 	test_check("dbplyr", stop_on_failure=TRUE,, invert=T, filter="(verb-joins|verb-mutate)")
 }
-dbplyr_tests()
+# dbplyr_tests()
