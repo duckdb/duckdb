@@ -623,6 +623,7 @@ UTF8PROC_DLLEXPORT utf8proc_int32_t utf8proc_codepoint(const char *u_input, int 
 UTF8PROC_DLLEXPORT bool utf8proc_codepoint_to_utf8(int cp, int &sz, char *c);
 UTF8PROC_DLLEXPORT int utf8proc_codepoint_length(int cp);
 UTF8PROC_DLLEXPORT size_t utf8proc_next_grapheme(const char *s, size_t len, size_t cpos);
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_remove_accents(const utf8proc_uint8_t *str);
 template<class T>
 void utf8proc_grapheme_callback(const char *s, size_t len, T &&fun) {
 	int sz;

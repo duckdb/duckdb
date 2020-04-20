@@ -842,6 +842,13 @@ UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFC(const utf8proc_uint8_t *str) {
 	return retval;
 }
 
+UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_remove_accents(const utf8proc_uint8_t *str) {
+	utf8proc_uint8_t *retval;
+	utf8proc_map(str, 0, &retval, (utf8proc_option_t)(UTF8PROC_NULLTERM | UTF8PROC_STABLE |
+		UTF8PROC_COMPOSE | UTF8PROC_STRIPMARK));
+	return retval;
+}
+
 UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKD(const utf8proc_uint8_t *str) {
 	utf8proc_uint8_t *retval;
 	utf8proc_map(str, 0, &retval, (utf8proc_option_t)(UTF8PROC_NULLTERM | UTF8PROC_STABLE |

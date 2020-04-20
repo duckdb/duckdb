@@ -29,6 +29,10 @@ struct UpperFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StripAccentsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ConcatFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
