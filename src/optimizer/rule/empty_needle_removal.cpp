@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/rule/empty_prefix_removal.hpp"
+#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -9,17 +9,19 @@
 using namespace duckdb;
 using namespace std;
 
-EmptyPrefixRemovalRule::EmptyPrefixRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression
 	auto func = make_unique<FunctionExpressionMatcher>();
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
-	func->function = make_unique<SpecificFunctionMatcher>("prefix");
+
+	unordered_set<string> functions = {"prefix", "contains", "suffix"};
+	func->function = make_unique<ManyFunctionMatcher>(functions);
 	root = move(func);
 }
 
-unique_ptr<Expression> EmptyPrefixRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                      bool &changes_made) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	assert(root->children.size() == 2);

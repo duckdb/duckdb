@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/rule/empty_prefix_removal.hpp
+// duckdb/optimizer/rule/empty_needle_removal.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,9 +14,9 @@
 namespace duckdb {
 
 // The Like Optimization rule rewrites LIKE to optimized scalar functions (e.g.: prefix, suffix, and contains)
-class EmptyPrefixRemovalRule : public Rule {
+class EmptyNeedleRemovalRule : public Rule {
 public:
-	EmptyPrefixRemovalRule(ExpressionRewriter &rewriter);
+	EmptyNeedleRemovalRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made) override;
 };
