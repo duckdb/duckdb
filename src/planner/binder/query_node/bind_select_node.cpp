@@ -109,16 +109,16 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 	}
 }
 
-void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &types, idx_t projection_index) {
+void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sql_types, idx_t projection_index) {
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct = (BoundDistinctModifier &)*bound_mod;
 			if (distinct.target_distincts.size() == 0) {
 				// DISTINCT without a target: push references to the standard select list
-				for (idx_t i = 0; i < types.size(); i++) {
+				for (idx_t i = 0; i < sql_types.size(); i++) {
 					distinct.target_distincts.push_back(
-					    make_unique<BoundColumnRefExpression>(types[i], ColumnBinding(projection_index, i)));
+					    make_unique<BoundColumnRefExpression>(GetInternalType(sql_types[i]), ColumnBinding(projection_index, i)));
 				}
 			} else {
 				// DISTINCT with target list: set types
@@ -129,8 +129,15 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &typ
 					if (bound_colref.binding.column_index == INVALID_INDEX) {
 						throw BinderException("Ambiguous name in DISTINCT ON!");
 					}
-					assert(bound_colref.binding.column_index < types.size());
-					bound_colref.return_type = types[bound_colref.binding.column_index];
+					assert(bound_colref.binding.column_index < sql_types.size());
+					bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+				}
+			}
+			for(idx_t i = 0; i < distinct.target_distincts.size(); i++) {
+				auto &bound_colref = (BoundColumnRefExpression &)*distinct.target_distincts[i];
+				auto sql_type = sql_types[bound_colref.binding.column_index];
+				if (sql_type.id == SQLTypeId::VARCHAR) {
+					distinct.target_distincts[i] = ExpressionBinder::PushCollation(move(distinct.target_distincts[i]), sql_type.collation);
 				}
 			}
 			break;
@@ -144,8 +151,12 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<TypeId> &typ
 				if (bound_colref.binding.column_index == INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
-				assert(bound_colref.binding.column_index < types.size());
-				bound_colref.return_type = types[bound_colref.binding.column_index];
+				assert(bound_colref.binding.column_index < sql_types.size());
+				auto sql_type = sql_types[bound_colref.binding.column_index];
+				bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+				if (sql_type.id == SQLTypeId::VARCHAR) {
+					order.orders[i].expression = ExpressionBinder::PushCollation(move(order.orders[i].expression), sql_type.collation);
+				}
 			}
 			break;
 		}
@@ -250,7 +261,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info);
-	vector<TypeId> internal_types;
+	vector<SQLType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		SQLType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
@@ -270,7 +281,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		if (i < result->column_count) {
 			result->types.push_back(result_type);
 		}
-		internal_types.push_back(GetInternalType(result_type));
+		internal_sql_types.push_back(result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			select_binder.ResetBindings();
 		}
@@ -292,7 +303,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	}
 
 	// now that the SELECT list is bound, we set the types of DISTINCT/ORDER BY expressions
-	BindModifierTypes(*result, internal_types, result->projection_index);
+	BindModifierTypes(*result, internal_sql_types, result->projection_index);
 	return move(result);
 }
 

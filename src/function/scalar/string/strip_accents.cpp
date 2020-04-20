@@ -35,8 +35,12 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
+ScalarFunction StripAccentsFun::GetFunction() {
+	return ScalarFunction("strip_accents", {SQLType::VARCHAR}, SQLType::VARCHAR, strip_accents_function);
+}
+
 void StripAccentsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("strip_accents", {SQLType::VARCHAR}, SQLType::VARCHAR, strip_accents_function));
+	set.AddFunction(StripAccentsFun::GetFunction());
 }
 
 } // namespace duckdb

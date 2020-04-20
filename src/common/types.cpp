@@ -159,13 +159,15 @@ void SQLType::Serialize(Serializer &serializer) {
 	serializer.Write(id);
 	serializer.Write(width);
 	serializer.Write(scale);
+	serializer.Write<CollationType>(collation);
 }
 
 SQLType SQLType::Deserialize(Deserializer &source) {
 	auto id = source.Read<SQLTypeId>();
 	auto width = source.Read<uint16_t>();
 	auto scale = source.Read<uint8_t>();
-	return SQLType(id, width, scale);
+	auto collation = source.Read<CollationType>();
+	return SQLType(id, width, scale, collation);
 }
 
 string SQLTypeIdToString(SQLTypeId id) {
@@ -344,7 +346,7 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 		return right;
 	} else if (right.id < left.id) {
 		return left;
-	} else if (left.width > right.width) {
+	} else if (left.width > right.width || left.collation > right.collation) {
 		return left;
 	} else {
 		return right;

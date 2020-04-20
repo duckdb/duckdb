@@ -6,6 +6,46 @@
 using namespace duckdb;
 using namespace std;
 
+CollationType Transformer::TransformCollation(PGCollateClause *collate) {
+	if (!collate) {
+		return CollationType::COLLATE_NONE;
+	}
+	CollationType collation = CollationType::COLLATE_NONE;
+	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
+		auto pgvalue = (PGValue*) c->data.ptr_value;
+		if (pgvalue->type != T_PGString) {
+			throw ParserException("Expected a string as collation type!");
+		}
+		auto collation_argument = string(pgvalue->val.str);
+		if (collation_argument== "nocase") {
+			switch(collation) {
+			case CollationType::COLLATE_NONE:
+				collation = CollationType::COLLATE_NOCASE;
+				break;
+			case CollationType::COLLATE_NOACCENT:
+				collation = CollationType::COLLATE_NOCASE_NOACCENT;
+				break;
+			default:
+				throw ParserException("Unexpected NOCASE collation!");
+			}
+		} else if (collation_argument == "noaccent") {
+			switch(collation) {
+			case CollationType::COLLATE_NONE:
+				collation = CollationType::COLLATE_NOACCENT;
+				break;
+			case CollationType::COLLATE_NOCASE:
+				collation = CollationType::COLLATE_NOCASE_NOACCENT;
+				break;
+			default:
+				throw ParserException("Unexpected NOACCENT collation!");
+			}
+		} else {
+			throw ParserException("Unsupported collation type %s", collation_argument.c_str());
+		}
+	}
+	return collation;
+}
+
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
 	assert(stmt);
@@ -39,6 +79,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 		case T_PGColumnDef: {
 			auto cdef = (PGColumnDef *)c->data.ptr_value;
 			SQLType target_type = TransformTypeName(cdef->typeName);
+			target_type.collation = TransformCollation(cdef->collClause);
+
 			auto centry = ColumnDefinition(cdef->colname, target_type);
 
 			if (cdef->constraints) {
