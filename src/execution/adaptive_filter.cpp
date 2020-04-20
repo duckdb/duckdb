@@ -1,26 +1,33 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
-
-#include <chrono>
-#include <vector>
 #include "duckdb/execution/adaptive_filter.hpp"
+#include <vector>
 
 using namespace duckdb;
 using namespace std;
 
 AdaptiveFilter::AdaptiveFilter(Expression &expr)
-	    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
-		auto &conj_expr = (BoundConjunctionExpression &)expr;
-		assert(conj_expr.children.size() > 1);
-		for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
-			permutation.push_back(idx);
-			if (idx != conj_expr.children.size() - 1) {
-				swap_likeliness.push_back(100);
-			}
+    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
+	auto &conj_expr = (BoundConjunctionExpression &)expr;
+	assert(conj_expr.children.size() > 1);
+	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
+		permutation.push_back(idx);
+		if (idx != conj_expr.children.size() - 1) {
+			swap_likeliness.push_back(100);
 		}
-		right_random_border = 100 * (conj_expr.children.size() - 1);
 	}
+	right_random_border = 100 * (conj_expr.children.size() - 1);
+}
+
+AdaptiveFilter::AdaptiveFilter(unordered_map<idx_t, vector<TableFilter>> &table_filters)
+    : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
+	for (auto &table_filter : table_filters) {
+		permutation.push_back(table_filter.first);
+		swap_likeliness.push_back(100);
+	}
+	swap_likeliness.pop_back();
+	right_random_border = 100 * (table_filters.size() - 1);
+}
 void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
