@@ -213,3 +213,62 @@ TEST_CASE("REVERSE test", "[function]") {
 	REQUIRE_FAIL(con.Query("select REVERSE(1, 2)"));
 	REQUIRE_FAIL(con.Query("select REVERSE('hello', 'world')"));
 }
+
+TEST_CASE("LTRIM/RTRIM test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test ltrim on scalars
+	result = con.Query("select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"Leading"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Trailing   "}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"Both "}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+
+	// test rtrim on scalars
+	result = con.Query("select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {" Leading"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Trailing"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {" Both"}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('', 'Neither'), "
+	                          "(' Leading', NULL), (' Both ','Trailing   '), ('', NULL)"));
+
+	result = con.Query("select LTRIM(a) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "Leading", "Both ", ""}));
+
+	result = con.Query("select LTRIM(b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Neither", Value(), "Trailing   ", Value()}));
+
+	result = con.Query("select LTRIM(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "Both "}));
+
+	// test rtrim on tables
+	result = con.Query("select RTRIM(a) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", " Leading", " Both", ""}));
+
+	result = con.Query("select RTRIM(b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Neither", Value(), "Trailing", Value()}));
+
+	result = con.Query("select RTRIM(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", " Both"}));
+
+	// test incorrect usage of ltrim
+	REQUIRE_FAIL(con.Query("select LTRIM()"));
+	REQUIRE_FAIL(con.Query("select LTRIM(1, 2)"));
+	REQUIRE_FAIL(con.Query("select LTRIM('hello', 'world')"));
+
+	// test incorrect usage of rtrim
+	REQUIRE_FAIL(con.Query("select RTRIM()"));
+	REQUIRE_FAIL(con.Query("select RTRIM(1, 2)"));
+	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world')"));
+}

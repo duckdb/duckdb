@@ -12,6 +12,7 @@ add_library_unity(
   instr.cpp
   prefix.cpp
   suffix.cpp
+  trim.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>
