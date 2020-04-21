@@ -31,18 +31,26 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	if (!prefix_expr->IsFoldable()) {
 		return nullptr;
 	}
+	assert(root->return_type == TypeId::BOOL);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
 	if (prefix_value.is_null) {
-		return make_unique<BoundConstantExpression>(Value(root->return_type));
+		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
 	}
 
 	assert(prefix_value.type == prefix_expr->return_type);
 	string needle_string = string(((string_t)prefix_value.str_value).GetData());
 
+	/* PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN
+	 * TRUE ELSE NULL END) */
 	if (needle_string.empty()) {
-		return bindings[1]->Copy();
+		auto if_ = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, TypeId::BOOL);
+		if_->children.push_back(bindings[1]->Copy());
+		auto case_ =
+		    make_unique<BoundCaseExpression>(move(if_), make_unique<BoundConstantExpression>(Value::BOOLEAN(true)),
+		                                     make_unique<BoundConstantExpression>(Value(TypeId::BOOL)));
+		return move(case_);
 	}
 
 	return nullptr;
