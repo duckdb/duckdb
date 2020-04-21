@@ -143,24 +143,42 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {"motörhead"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 
+	// test ucase/lcase on scalar values
+	result = con.Query("select UCASE(''), UCASE('hello'), UCASE('MotörHead'), UCASE(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
+	result = con.Query("select LCASE(''), LCASE('hello'), LCASE('MotörHead'), LCASE(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"motörhead"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+
 	// test on entire tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
 
-	result = con.Query("select UPPER(a) FROM strings");
+	result = con.Query("select UPPER(a), UCASE(a)  FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "HULLD", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO", "HULLD", "MOTöRHEAD"}));
 
-	result = con.Query("select LOWER(a) FROM strings");
+	result = con.Query("select LOWER(a), LCASE(a) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hulld", "motörhead"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hulld", "motörhead"}));
 
-	result = con.Query("select LOWER(b) FROM strings");
+	result = con.Query("select LOWER(b), LCASE(b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "rÄcks"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"world", Value(), "rÄcks"}));
 
 	// test with selection vector
-	result = con.Query("select UPPER(a), LOWER(a) FROM strings WHERE b IS NOT NULL");
+	result = con.Query("select UPPER(a), LOWER(a), UCASE(a), LCASE(a) FROM strings WHERE b IS NOT NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTöRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "motörhead"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"HELLO", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"hello", "motörhead"}));
 }
 
 TEST_CASE("REVERSE test", "[function]") {

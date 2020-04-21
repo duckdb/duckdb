@@ -56,10 +56,12 @@ static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, 
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lower", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function));
+	set.AddFunction(ScalarFunction("lcase", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function));
 }
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("upper", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
+	set.AddFunction(ScalarFunction("ucase", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb
