@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 #include "duckdb/optimizer/rule/constant_folding.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "expression_helper.hpp"
 
 using namespace duckdb;
