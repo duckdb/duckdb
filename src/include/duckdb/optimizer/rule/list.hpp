@@ -5,5 +5,6 @@
 #include "duckdb/optimizer/rule/constant_folding.hpp"
 #include "duckdb/optimizer/rule/date_part_simplification.hpp"
 #include "duckdb/optimizer/rule/distributivity.hpp"
+#include "duckdb/optimizer/rule/empty_needle_removal.hpp"
 #include "duckdb/optimizer/rule/like_optimizations.hpp"
 #include "duckdb/optimizer/rule/move_constants.hpp"
