@@ -11,16 +11,16 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<ConcatFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
-    Register<LtrimFun>();
+	Register<LtrimFun>();
 	Register<PrintfFun>();
 	Register<RegexpFun>();
 	Register<SubstringFun>();
 	Register<InstrFun>();
 	Register<PrefixFun>();
 	Register<ReplaceFun>();
-    Register<RtrimFun>();
+	Register<RtrimFun>();
 	Register<SuffixFun>();
-    Register<ContainsFun>();
+	Register<ContainsFun>();
 }
 
 } // namespace duckdb

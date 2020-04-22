@@ -31,11 +31,13 @@ template <class LTRIM, class RTRIM> static void trim_function(Vector &input, Vec
 
 		idx_t begin = 0;
 		for (; begin < input_length; ++begin)
-			if (!LTRIM::Operation(input_data[begin])) break;
-			
+			if (!LTRIM::Operation(input_data[begin]))
+				break;
+
 		idx_t end = input_length;
 		for (; begin < --end;)
-			if (!RTRIM::Operation(input_data[end])) break;
+			if (!RTRIM::Operation(input_data[end]))
+				break;
 		++end;
 
 		auto target = StringVector::EmptyString(result, end - begin);
@@ -51,12 +53,12 @@ template <class LTRIM, class RTRIM> static void trim_function(Vector &input, Vec
 
 static void trim_ltrim_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	trim_function<SpaceChar,KeptChar>(args.data[0], result, args.size());
+	trim_function<SpaceChar, KeptChar>(args.data[0], result, args.size());
 }
 
 static void trim_rtrim_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	trim_function<KeptChar,SpaceChar>(args.data[0], result, args.size());
+	trim_function<KeptChar, SpaceChar>(args.data[0], result, args.size());
 }
 
 void LtrimFun::RegisterFunction(BuiltinFunctions &set) {

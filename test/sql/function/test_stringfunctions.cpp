@@ -267,7 +267,8 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	con.EnableQueryVerification();
 
 	// test ltrim on scalars
-	result = con.Query("select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL)");
+	result = con.Query(
+	    "select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"Leading"}));
@@ -276,7 +277,8 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
 
 	// test rtrim on scalars
-	result = con.Query("select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL)");
+	result = con.Query(
+	    "select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" Leading"}));
