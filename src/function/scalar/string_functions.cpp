@@ -17,6 +17,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<SubstringFun>();
 	Register<InstrFun>();
 	Register<PrefixFun>();
+	Register<RepeatFun>();
 	Register<ReplaceFun>();
 	Register<RtrimFun>();
 	Register<SuffixFun>();

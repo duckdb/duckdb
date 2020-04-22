@@ -11,6 +11,7 @@ add_library_unity(
   substring.cpp
   instr.cpp
   prefix.cpp
+  repeat.cpp
   replace.cpp
   suffix.cpp
   trim.cpp

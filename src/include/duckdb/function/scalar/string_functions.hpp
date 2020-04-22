@@ -70,6 +70,10 @@ struct PrefixFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RepeatFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ReplaceFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

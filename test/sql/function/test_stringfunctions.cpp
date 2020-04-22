@@ -181,6 +181,46 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"hello", "motörhead"}));
 }
 
+TEST_CASE("REPEAT test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test repeat on NULLs
+	result = con.Query("select REPEAT(NULL, NULL), REPEAT(NULL, 3), REPEAT('MySQL', NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+
+	// test repeat on scalars
+	result = con.Query("select REPEAT('', 3), REPEAT('MySQL', 3), REPEAT('MotörHead', 2), REPEAT('Hello', -1)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"MySQLMySQLMySQL"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MotörHeadMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+
+	// test repeat on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
+	                          "('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)"));
+
+	result = con.Query("select REPEAT(a, 3) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloHelloHello", "HuLlDHuLlDHuLlD", "MotörHeadMotörHeadMotörHead", ""}));
+
+	result = con.Query("select REPEAT(b, 2) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"WorldWorld", Value(), "RÄcksRÄcks", Value()}));
+
+	result = con.Query("select REPEAT(a, 4) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"HelloHelloHelloHello", "MotörHeadMotörHeadMotörHeadMotörHead"}));
+
+	// test incorrect usage of reverse
+	REQUIRE_FAIL(con.Query("select REPEAT()"));
+	REQUIRE_FAIL(con.Query("select REPEAT(1)"));
+	REQUIRE_FAIL(con.Query("select REPEAT('hello', 'world')"));
+	REQUIRE_FAIL(con.Query("select REPEAT('hello', 'world', 3)"));
+}
+
 TEST_CASE("REPLACE test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
