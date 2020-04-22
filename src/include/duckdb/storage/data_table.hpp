@@ -61,8 +61,10 @@ public:
 	vector<unique_ptr<Index>> indexes;
 
 public:
-	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
-	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);
+	void InitializeScan(TableScanState &state, vector<column_t> column_ids,
+	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
+	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids,
+	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
