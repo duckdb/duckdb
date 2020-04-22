@@ -45,6 +45,10 @@ struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct LtrimFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -66,6 +70,14 @@ struct PrefixFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ReplaceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RtrimFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct SuffixFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
@@ -73,14 +85,6 @@ struct SuffixFun {
 
 struct ContainsFun {
 	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct LtrimFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RtrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

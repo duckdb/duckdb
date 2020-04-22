@@ -181,6 +181,52 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"hello", "motörhead"}));
 }
 
+TEST_CASE("REPLACE test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test replace on NULLs
+	result = con.Query("select REPLACE('This is the main test string', NULL, 'ALT')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	result = con.Query("select REPLACE(NULL, 'main', 'ALT')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	result = con.Query("select REPLACE('This is the main test string', 'main', NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+
+	// test replace on scalars
+	result = con.Query("select REPLACE('This is the main test string', 'main', 'ALT')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"This is the ALT test string"}));
+
+	result = con.Query("select REPLACE('This is the main test string', 'main', 'larger-main')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"This is the larger-main test string"}));
+
+	result = con.Query("select REPLACE('aaaaaaa', 'a', '0123456789')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"0123456789012345678901234567890123456789012345678901234567890123456789"}));
+
+	// test replace on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
+	                          "('HuLlD', NULL), ('MotörHead','RÄcks'), ('', NULL)"));
+
+	result = con.Query("select REPLACE(a, 'l', '-') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"He--o", "HuL-D", "MotörHead", ""}));
+
+	result = con.Query("select REPLACE(b, 'Ä', '--') FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"World", Value(), "R--cks", Value()}));
+
+	result = con.Query("select REPLACE(a, 'H', '') FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"ello", "Motöread"}));
+
+	// test incorrect usage of replace
+	REQUIRE_FAIL(con.Query("select REPLACE(1)"));
+	REQUIRE_FAIL(con.Query("select REPLACE(1, 2)"));
+	REQUIRE_FAIL(con.Query("select REPLACE(1, 2, 3, 4)"));
+}
+
 TEST_CASE("REVERSE test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
