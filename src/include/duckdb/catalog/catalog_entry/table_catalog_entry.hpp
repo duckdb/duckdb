@@ -58,6 +58,5 @@ public:
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
-
 };
 } // namespace duckdb

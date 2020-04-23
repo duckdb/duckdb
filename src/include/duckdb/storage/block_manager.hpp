@@ -19,6 +19,7 @@ class BlockManager {
 public:
 	virtual ~BlockManager() = default;
 
+	virtual void StartCheckpoint() = 0;
 	//! Creates a new block inside the block manager
 	virtual unique_ptr<Block> CreateBlock() = 0;
 	//! Return the next free block id

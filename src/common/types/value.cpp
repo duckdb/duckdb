@@ -520,6 +520,22 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	return result.GetValue(0);
 }
 
+bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+	Value new_value;
+	try {
+		new_value = CastAs(source_type, target_type);
+	} catch (Exception &) {
+		return false;
+	}
+	type = new_value.type;
+	is_null = new_value.is_null;
+	value_ = new_value.value_;
+	str_value = new_value.str_value;
+	struct_value = new_value.struct_value;
+	list_value = new_value.list_value;
+	return true;
+}
+
 Value Value::CastAs(TypeId target_type) const {
 	if (target_type == type) {
 		return Copy(); // in case of types that have no SQLType equivalent such as POINTER

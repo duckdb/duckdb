@@ -56,6 +56,13 @@ amalgamation:
 	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
+amaldebug:
+	mkdir -p build/amaldebug && \
+	python scripts/amalgamation.py && \
+	cd build/amaldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
 jdbc:
 	mkdir -p build/jdbc && \
 	cd build/jdbc && \

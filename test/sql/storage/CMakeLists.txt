@@ -14,6 +14,7 @@ if(NOT WIN32 AND NOT SUN)
                     test_store_alter.cpp
                     test_views.cpp
                     test_readonly.cpp
+                    test_repeated_checkpoint.cpp
                     test_storage_tpch.cpp
                     test_storage_scan.cpp
                     test_database_size.cpp)
@@ -27,6 +28,7 @@ else()
                     test_storage_sequences.cpp
                     test_shutdown.cpp
                     test_big_storage.cpp
+                    test_repeated_checkpoint.cpp
                     test_storage.cpp
                     test_storage_defaults.cpp
                     test_store_alter.cpp

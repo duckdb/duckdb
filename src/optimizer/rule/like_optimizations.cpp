@@ -31,7 +31,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!constant_expr->IsFoldable()) {
-		return move(root->Copy());
+		return root->Copy();
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
@@ -39,19 +39,19 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	string patt_str = string(((string_t)constant_value.str_value).GetData());
 
 	if (std::regex_match(patt_str, std::regex("[^%_]*[%]+"))) {
-		//^^^^^^^^^^^^^^^Prefix LIKE pattern : [^%_]*[%]+, ignoring undescore
+		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 
-		return move(ApplyRule(root, PrefixFun::GetFunction(), patt_str));
+		return ApplyRule(root, PrefixFun::GetFunction(), patt_str);
 
 	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*"))) {
-		//^^^^^^^^^^^^^^^^^^^^^^^Suffix LIKE pattern: [%]+[^%_]*, ignoring undescore
+		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
 
-		return move(ApplyRule(root, SuffixFun::GetFunction(), patt_str));
+		return ApplyRule(root, SuffixFun::GetFunction(), patt_str);
 
 	} else if (std::regex_match(patt_str, std::regex("[%]+[^%_]*[%]+"))) {
-		//^^^^^^^^^^^^^^^^^^^^^Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring undescore
+		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
 
-		return move(ApplyRule(root, ContainsFun::GetFunction(), patt_str));
+		return ApplyRule(root, ContainsFun::GetFunction(), patt_str);
 	}
 
 	return nullptr;
@@ -67,5 +67,5 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 
 	expr->children[1] = make_unique<BoundConstantExpression>(Value(pattern));
 
-	return move(expr->Copy());
+	return expr->Copy();
 }

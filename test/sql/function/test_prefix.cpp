@@ -70,6 +70,11 @@ TEST_CASE("Prefix test", "[function]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	}
 
+	SECTION("Issue #572 alloc exception on empty table") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR)"));
+		REQUIRE_NO_FAIL(con.Query("SELECT * FROM t0 WHERE PREFIX(t0.c0, '')"));
+	}
+
 	SECTION("Prefix test with UTF8") {
 		// átomo (atom)
 		result = con.Query("SELECT prefix('\xc3\xa1tomo', '\xc3\xa1')");

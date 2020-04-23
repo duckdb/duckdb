@@ -130,7 +130,8 @@ int main() {
 	auto scan_function_catalog_entry =
 	    con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
 	vector<Value> parameters; // empty
-	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(bind_data), move(parameters));
+	auto scan_function =
+	    make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(bind_data), move(parameters));
 
 	//  FILTER[some_int<=7 some_int>=3]
 	vector<unique_ptr<Expression>> filter_expressions;
