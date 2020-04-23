@@ -128,6 +128,33 @@ TEST_CASE("Test combined collations", "[collate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"Hëllö"}));
 }
 
+TEST_CASE("Test default collations", "[collate]") {
+	unique_ptr<QueryResult> result;
+	DBConfig config;
+	config.collation = CollationType::COLLATE_NOCASE;
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO collate_test VALUES ('hEllO'), ('WöRlD'), ('wozld')"));
+
+	// collate in equality
+	result = con.Query("SELECT COUNT(*) FROM collate_test WHERE 'BlA'='bLa'");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	result = con.Query("SELECT * FROM collate_test WHERE s='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO"}));
+
+	// collate in order
+	result = con.Query("SELECT * FROM collate_test ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "wozld", "WöRlD"}));
+
+	// switch default collate using pragma
+	REQUIRE_NO_FAIL(con.Query("PRAGMA default_collation='NOCASE.NOACCENT'"));
+
+	result = con.Query("SELECT * FROM collate_test ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "WöRlD", "wozld"}));
+}
+
 
 TEST_CASE("Test unsupported collations", "[collate]") {
 	unique_ptr<QueryResult> result;

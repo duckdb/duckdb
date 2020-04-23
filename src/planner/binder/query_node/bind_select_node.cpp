@@ -137,7 +137,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 				auto &bound_colref = (BoundColumnRefExpression &)*distinct.target_distincts[i];
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id == SQLTypeId::VARCHAR) {
-					distinct.target_distincts[i] = ExpressionBinder::PushCollation(move(distinct.target_distincts[i]), sql_type.collation);
+					distinct.target_distincts[i] = ExpressionBinder::PushCollation(context, move(distinct.target_distincts[i]), sql_type.collation);
 				}
 			}
 			break;
@@ -155,7 +155,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
 				if (sql_type.id == SQLTypeId::VARCHAR) {
-					order.orders[i].expression = ExpressionBinder::PushCollation(move(order.orders[i].expression), sql_type.collation);
+					order.orders[i].expression = ExpressionBinder::PushCollation(context, move(order.orders[i].expression), sql_type.collation);
 				}
 			}
 			break;

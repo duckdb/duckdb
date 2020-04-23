@@ -8,40 +8,16 @@ using namespace std;
 
 CollationType Transformer::TransformCollation(PGCollateClause *collate) {
 	if (!collate) {
-		return CollationType::COLLATE_NONE;
+		return CollationType::COLLATE_DEFAULT;
 	}
-	CollationType collation = CollationType::COLLATE_NONE;
+	CollationType collation = CollationType::COLLATE_DEFAULT;
 	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
 		auto pgvalue = (PGValue*) c->data.ptr_value;
 		if (pgvalue->type != T_PGString) {
 			throw ParserException("Expected a string as collation type!");
 		}
 		auto collation_argument = string(pgvalue->val.str);
-		if (collation_argument== "nocase") {
-			switch(collation) {
-			case CollationType::COLLATE_NONE:
-				collation = CollationType::COLLATE_NOCASE;
-				break;
-			case CollationType::COLLATE_NOACCENT:
-				collation = CollationType::COLLATE_NOCASE_NOACCENT;
-				break;
-			default:
-				throw ParserException("Unexpected NOCASE collation!");
-			}
-		} else if (collation_argument == "noaccent") {
-			switch(collation) {
-			case CollationType::COLLATE_NONE:
-				collation = CollationType::COLLATE_NOACCENT;
-				break;
-			case CollationType::COLLATE_NOCASE:
-				collation = CollationType::COLLATE_NOCASE_NOACCENT;
-				break;
-			default:
-				throw ParserException("Unexpected NOACCENT collation!");
-			}
-		} else {
-			throw ParserException("Unsupported collation type %s", collation_argument.c_str());
-		}
+		collation = ParseCollation(collation_argument, collation);
 	}
 	return collation;
 }

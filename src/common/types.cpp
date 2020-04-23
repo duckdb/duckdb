@@ -353,6 +353,37 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 	}
 }
 
+CollationType ParseCollation(string collation_argument, CollationType collation) {
+	if (collation_argument == "nocase") {
+		switch(collation) {
+		case CollationType::COLLATE_DEFAULT:
+			return CollationType::COLLATE_NOCASE;
+		case CollationType::COLLATE_NOACCENT:
+			return CollationType::COLLATE_NOCASE_NOACCENT;
+		default:
+			throw ParserException("Unexpected NOCASE collation!");
+		}
+	} else if (collation_argument == "noaccent") {
+		switch(collation) {
+		case CollationType::COLLATE_DEFAULT:
+			return CollationType::COLLATE_NOACCENT;
+		case CollationType::COLLATE_NOCASE:
+			return CollationType::COLLATE_NOCASE_NOACCENT;
+		default:
+			throw ParserException("Unexpected NOACCENT collation!");
+		}
+	} else if (collation_argument == "binary" || collation_argument == "c" || collation_argument == "posix") {
+		switch(collation) {
+		case CollationType::COLLATE_DEFAULT:
+			return CollationType::COLLATE_NONE;
+		default:
+			throw ParserException("Unexpected BINARY collation!");
+		}
+	} else {
+		throw ParserException("Unsupported collation type %s", collation_argument.c_str());
+	}
+}
+
 bool ApproxEqual(float ldecimal, float rdecimal) {
 	float epsilon = fabs(rdecimal) * 0.01;
 	return fabs(ldecimal - rdecimal) <= epsilon;
