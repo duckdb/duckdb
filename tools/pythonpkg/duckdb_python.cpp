@@ -297,6 +297,10 @@ struct DuckDBPyRelation {
 		return make_unique<DuckDBPyRelation>(rel->Project(expr));
 	}
 
+	unique_ptr<DuckDBPyRelation> alias(string expr) {
+		return make_unique<DuckDBPyRelation>(rel->Alias(expr));
+	}
+
 	unique_ptr<DuckDBPyRelation> filter(string expr) {
 		return make_unique<DuckDBPyRelation>(rel->Filter(expr));
 	}
@@ -347,6 +351,21 @@ struct DuckDBPyRelation {
 
 	void write_csv(string file) {
 		rel->WriteCSV(file);
+	}
+
+	// should this return a rel with the new view?
+	unique_ptr<DuckDBPyRelation> create_view(string view_name, bool replace = true) {
+		rel->CreateView(view_name, replace);
+		return make_unique<DuckDBPyRelation>(rel);
+	}
+
+	unique_ptr<DuckDBPyResult> query(string sql_query) {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Query(sql_query);
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res;
 	}
 
 	void insert(string table) {
@@ -404,7 +423,7 @@ struct DuckDBPyConnection {
 	}
 
 	~DuckDBPyConnection() {
-		for (auto& element : registered_dfs) {
+		for (auto &element : registered_dfs) {
 			unregister_df(element.first);
 		}
 	}
@@ -757,6 +776,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("table_function", &DuckDBPyConnection::table_function, "some doc string for table_function",
 	         py::arg("name"), py::arg("parameters") = py::list())
 	    .def("from_df", &DuckDBPyConnection::from_df, "some doc string for from_df", py::arg("value"))
+	    .def("df", &DuckDBPyConnection::from_df, "some doc string for df", py::arg("value"))
 	    .def("commit", &DuckDBPyConnection::commit)
 	    .def("rollback", &DuckDBPyConnection::rollback)
 	    .def("execute", &DuckDBPyConnection::execute, "some doc string for execute", py::arg("query"),
@@ -773,23 +793,36 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchdf", &DuckDBPyConnection::fetchdf)
 	    .def("__getattr__", &DuckDBPyConnection::getattr);
 
+	py::class_<DuckDBPyResult>(m, "DuckDBPyResult")
+	    .def("close", &DuckDBPyResult::close)
+	    .def("fetchone", &DuckDBPyResult::fetchone)
+	    .def("fetchall", &DuckDBPyResult::fetchall)
+	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
+	    .def("fetchdf", &DuckDBPyResult::fetchdf);
+
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
 	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::project, "some doc string for project", py::arg("project_expr"))
+	    .def("alias", &DuckDBPyRelation::alias, "some doc string for alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::order, "some doc string for order", py::arg("order_expr"))
-	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"), py::arg("group_expr") = "")
-	    .def("union", &DuckDBPyRelation::union_, "some doc string for union", py::arg("other_rel"))
-	    .def("except", &DuckDBPyRelation::except, "some doc string for except", py::arg("other_rel"))
+	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"),
+	         py::arg("group_expr") = "")
+	    .def("union", &DuckDBPyRelation::union_, "some doc string for union")
+	    .def("except_", &DuckDBPyRelation::except, "some doc string for except", py::arg("other_rel"))
 	    .def("intersect", &DuckDBPyRelation::intersect, "some doc string for intersect", py::arg("other_rel"))
 	    .def("join", &DuckDBPyRelation::join, "some doc string for join", py::arg("other_rel"),
 	         py::arg("join_condition"))
 	    .def("distinct", &DuckDBPyRelation::distinct, "some doc string for distinct")
 	    .def("limit", &DuckDBPyRelation::limit, "some doc string for limit", py::arg("n"))
+	    .def("query", &DuckDBPyRelation::query, "some doc string for query", py::arg("sql_query"))
 	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
 	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("table_name"))
 	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
 	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")
-	    .def("__str__", &DuckDBPyRelation::print);
+	    .def("create_view", &DuckDBPyRelation::create_view, "some doc string for create_view", py::arg("view_name"),
+	         py::arg("replace") = true)
+	    .def("df", &DuckDBPyRelation::to_df, "some doc string for df")
+	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print");
 
 	PyDateTime_IMPORT;
 }
