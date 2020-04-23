@@ -181,6 +181,93 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"hello", "motörhead"}));
 }
 
+TEST_CASE("LPAD/RPAD test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test lpad on NULLs
+	result = con.Query("select LPAD(NULL, 7, '-'), LPAD('Base', NULL, '-'), LPAD('Base', 7, NULL), "
+	                   "LPAD(NULL, NULL, '-'), LPAD(NULL, 7, NULL), LPAD('Base', NULL, NULL), "
+	                   "LPAD(NULL, NULL, NULL)");
+	for (idx_t col_idx = 0; col_idx < 7; ++col_idx) {
+		REQUIRE(CHECK_COLUMN(result, col_idx, {Value()}));
+	}
+
+	// test rpad on NULLs
+	result = con.Query("select RPAD(NULL, 7, '-'), RPAD('Base', NULL, '-'), RPAD('Base', 7, NULL), "
+	                   "RPAD(NULL, NULL, '-'), RPAD(NULL, 7, NULL), RPAD('Base', NULL, NULL), "
+	                   "RPAD(NULL, NULL, NULL)");
+	for (idx_t col_idx = 0; col_idx < 7; ++col_idx) {
+		REQUIRE(CHECK_COLUMN(result, col_idx, {Value()}));
+	}
+
+	// test lpad/rpad on scalar values
+	result = con.Query("select LPAD('Base', 7, '-'), LPAD('Base', 4, '-'), LPAD('Base', 2, ''), LPAD('Base', -1, '-')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"---Base"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Base"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"Ba"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+
+	result = con.Query("select RPAD('Base', 7, '-'), RPAD('Base', 4, '-'), RPAD('Base', 2, ''), RPAD('Base', -1, '-')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Base---"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Base"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"Ba"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+
+	result =
+	    con.Query("select LPAD('Base', 7, '-|'), LPAD('Base', 6, '-|'), LPAD('Base', 5, '-|'), LPAD('Base', 4, '-|')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"-|-Base"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"-|Base"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"-Base"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Base"}));
+
+	result =
+	    con.Query("select RPAD('Base', 7, '-|'), RPAD('Base', 6, '-|'), RPAD('Base', 5, '-|'), RPAD('Base', 4, '-|')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Base-|-"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Base-|"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"Base-"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Base"}));
+
+	result = con.Query(
+	    "select LPAD('MotörHead', 16, 'RÄcks'), LPAD('MotörHead', 12, 'RÄcks'), LPAD('MotörHead', 10, 'RÄcks')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"RÄcksRÄMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"RÄcMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"RMotörHead"}));
+
+	result = con.Query(
+	    "select RPAD('MotörHead', 16, 'RÄcks'), RPAD('MotörHead', 12, 'RÄcks'), RPAD('MotörHead', 10, 'RÄcks')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"MotörHeadRÄcksRÄ"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"MotörHeadRÄc"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MotörHeadR"}));
+
+	// test on entire tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('Hello', 'World'), "
+	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
+
+	result = con.Query("select LPAD(a, 16, b), RPAD(a, 16, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"WorldWorldWHello", Value(), "RÄcksRÄMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HelloWorldWorldW", Value(), "MotörHeadRÄcksRÄ"}));
+
+	// test with selection vector
+	result = con.Query("select LPAD(a, 12, b), RPAD(a, 12, b), UCASE(a), LCASE(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {"WorldWoHello", "RÄcMotörHead"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HelloWorldWo", "MotörHeadRÄc"}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("select LPAD()"));
+	REQUIRE_FAIL(con.Query("select LPAD(1)"));
+	REQUIRE_FAIL(con.Query("select LPAD(1, 2)"));
+	REQUIRE_FAIL(con.Query("select LPAD('Hello', 10, '')"));
+
+	REQUIRE_FAIL(con.Query("select RPAD()"));
+	REQUIRE_FAIL(con.Query("select RPAD(1)"));
+	REQUIRE_FAIL(con.Query("select RPAD(1, 2)"));
+	REQUIRE_FAIL(con.Query("select RPAD('Hello', 10, '')"));
+}
+
 TEST_CASE("REPEAT test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

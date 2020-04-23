@@ -45,6 +45,10 @@ struct LikeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct LpadFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct LtrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -75,6 +79,10 @@ struct RepeatFun {
 };
 
 struct ReplaceFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct RpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

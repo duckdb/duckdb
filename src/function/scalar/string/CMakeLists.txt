@@ -10,6 +10,7 @@ add_library_unity(
   regexp.cpp
   substring.cpp
   instr.cpp
+  pad.cpp
   prefix.cpp
   repeat.cpp
   replace.cpp
