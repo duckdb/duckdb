@@ -9,9 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+
+#include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
 class LocalTableStorage;
@@ -70,6 +72,7 @@ public:
 	idx_t current_persistent_row, max_persistent_row;
 	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
+	unique_ptr<AdaptiveFilter> adaptive_filter;
 	idx_t offset;
 	vector<column_t> column_ids;
 	LocalScanState local_state;

@@ -228,7 +228,7 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 			}
 		}
 	}
-	//! Here we look for LIKE filters with a prefix to use them  to skip partitions
+	//! Here we look for LIKE filters with a prefix to use them to skip partitions
 	for (auto &remaining_filter : remaining_filters) {
 		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = (BoundFunctionExpression &)*remaining_filter;
@@ -239,6 +239,9 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 				auto &column_ref = (BoundColumnRefExpression &)*func.children[0].get();
 				auto &constant_value_expr = (BoundConstantExpression &)*func.children[1].get();
 				string like_string = constant_value_expr.value.str_value;
+				if (like_string.empty()) {
+					continue;
+				}
 				auto const_value = constant_value_expr.value.Copy();
 				const_value.str_value = like_string;
 				//! Here the like must be transformed to a BOUND COMPARISON geq le
