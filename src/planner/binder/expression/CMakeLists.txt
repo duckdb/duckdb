@@ -3,6 +3,7 @@ add_library_unity(duckdb_bind_expression
                   bind_aggregate_expression.cpp
                   bind_case_expression.cpp
                   bind_cast_expression.cpp
+                  bind_collate_expression.cpp
                   bind_columnref_expression.cpp
                   bind_comparison_expression.cpp
                   bind_conjunction_expression.cpp

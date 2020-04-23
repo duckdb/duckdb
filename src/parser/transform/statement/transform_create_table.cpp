@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/collate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -20,6 +21,12 @@ CollationType Transformer::TransformCollation(PGCollateClause *collate) {
 		collation = ParseCollation(collation_argument, collation);
 	}
 	return collation;
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(PGCollateClause *collate) {
+	auto child = TransformExpression(collate->arg);
+	auto collation = TransformCollation(collate);
+	return make_unique<CollateExpression>(collation, move(child));
 }
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {

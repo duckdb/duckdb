@@ -68,6 +68,7 @@ protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
+	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);

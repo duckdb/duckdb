@@ -128,6 +128,34 @@ TEST_CASE("Test combined collations", "[collate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"Hëllö"}));
 }
 
+TEST_CASE("Test COLLATE in individual expressions", "[collate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO collate_test VALUES ('hEllO'), ('WöRlD'), ('wozld')"));
+
+	// collate in equality
+	result = con.Query("SELECT 'hëllo' COLLATE NOACCENT='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT * FROM collate_test WHERE s='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
+	result = con.Query("SELECT * FROM collate_test WHERE s='hello' COLLATE NOCASE");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO"}));
+	result = con.Query("SELECT * FROM collate_test WHERE s COLLATE NOCASE='hello'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO"}));
+
+	// conflict in collate statements results in an error
+	REQUIRE_FAIL(con.Query("SELECT * FROM collate_test WHERE s COLLATE NOCASE='hello' COLLATE NOACCENT"));
+
+	// we can also do this in the order
+	result = con.Query("SELECT * FROM collate_test ORDER BY s COLLATE NOCASE");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "wozld", "WöRlD"}));
+	result = con.Query("SELECT * FROM collate_test ORDER BY s COLLATE NOCASE.NOACCENT");
+	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "WöRlD", "wozld"}));
+}
+
 TEST_CASE("Test default collations", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DBConfig config;
@@ -154,7 +182,6 @@ TEST_CASE("Test default collations", "[collate]") {
 	result = con.Query("SELECT * FROM collate_test ORDER BY s");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "WöRlD", "wozld"}));
 }
-
 
 TEST_CASE("Test unsupported collations", "[collate]") {
 	unique_ptr<QueryResult> result;

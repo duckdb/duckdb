@@ -81,7 +81,6 @@ static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, 
 
 ScalarFunction LowerFun::GetFunction() {
 	return ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function);
-
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {

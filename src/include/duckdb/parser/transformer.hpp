@@ -147,6 +147,8 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Collation transform
 	//===--------------------------------------------------------------------===//
+	unique_ptr<ParsedExpression> TransformCollateExpr(PGCollateClause *collate);
+
 	CollationType TransformCollation(PGCollateClause *collate);
 
 	//===--------------------------------------------------------------------===//
