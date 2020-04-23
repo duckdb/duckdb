@@ -36,7 +36,7 @@ struct StrLenOperator {
 };
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("length", {SQLType::VARCHAR}, SQLType::BIGINT,
+	set.AddFunction({"length", "len"}, ScalarFunction({SQLType::VARCHAR}, SQLType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>));
 	set.AddFunction(ScalarFunction("strlen", {SQLType::VARCHAR}, SQLType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
