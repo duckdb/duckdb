@@ -447,3 +447,39 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	REQUIRE_FAIL(con.Query("select RTRIM(1, 2)"));
 	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world')"));
 }
+
+TEST_CASE("UNICODE test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test on scalars
+	result = con.Query("select UNICODE(NULL), UNICODE(''), UNICODE('\x24'), "
+	                   "UNICODE('\xC2\xA2'), UNICODE('\xE2\x82\xAC'), UNICODE('\xF0\x90\x8D\x88')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0x000000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {0x000024}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0x0000A2}));
+	REQUIRE(CHECK_COLUMN(result, 4, {0x0020AC}));
+	REQUIRE(CHECK_COLUMN(result, 5, {0x010348}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES "
+	                          "('', 'Zero'), ('\x24', NULL), ('\xC2\xA2','Two'), "
+	                          "('\xE2\x82\xAC', NULL), ('\xF0\x90\x8D\x88','Four')"));
+
+	result = con.Query("select UNICODE(a) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {0x000000, 0x000024, 0x0000A2, 0x0020AC, 0x010348}));
+
+	result = con.Query("select UNICODE(b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {90, Value(), 84, Value(), 70}));
+
+	result = con.Query("select UNICODE(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {0x000000, 0x0000A2, 0x010348}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("select UNICODE()"));
+	REQUIRE_FAIL(con.Query("select UNICODE(1, 2)"));
+}
