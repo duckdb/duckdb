@@ -28,6 +28,19 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 	return expr;
 }
 
+bool BoundCastExpression::CastIsInvertable(SQLType source_type, SQLType target_type) {
+	if (source_type.id == SQLTypeId::BOOLEAN || target_type.id == SQLTypeId::BOOLEAN) {
+		return false;
+	}
+	if (source_type.id == SQLTypeId::FLOAT || target_type.id == SQLTypeId::FLOAT) {
+		return false;
+	}
+	if (source_type.id == SQLTypeId::DOUBLE || target_type.id == SQLTypeId::DOUBLE) {
+		return false;
+	}
+	return true;
+}
+
 string BoundCastExpression::ToString() const {
 	return "CAST[" + TypeIdToString(return_type) + "](" + child->GetName() + ")";
 }
