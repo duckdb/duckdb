@@ -108,6 +108,7 @@ public:
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
 	void AddFunction(ScalarFunction function);
+	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
 
 private:

@@ -52,6 +52,13 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	catalog.CreateFunction(context, &info);
 }
 
+void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function) {
+	for(auto &name: names) {
+		function.name = name;
+		AddFunction(function);
+	}
+}
+
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 	CreateScalarFunctionInfo info(set);
 	catalog.CreateFunction(context, &info);

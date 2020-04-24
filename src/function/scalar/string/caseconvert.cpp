@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "utf8proc.hpp"
 
 #include <string.h>
 
@@ -10,56 +11,84 @@ using namespace std;
 
 namespace duckdb {
 
-// TODO: this does not handle UTF characters yet.
-template <class OP> static void strcase(const char *input_data, idx_t input_length, char *output) {
-	for (idx_t i = 0; i < input_length; i++) {
-		output[i] = OP::Operation(input_data[i]);
+template <bool IS_UPPER>
+static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
+	// first figure out the output length
+	// optimization: if only ascii then input_length = output_length
+	idx_t output_length = 0;
+	for (idx_t i = 0; i < input_length;) {
+		if (input_data[i] & 0x80) {
+			// unicode
+			int sz = 0;
+			int codepoint = utf8proc_codepoint(input_data + i, sz);
+			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			sz = utf8proc_codepoint_length(converted_codepoint);
+			if (sz < 0) {
+				throw InternalException("Invalid UTF8 encountered!");
+			}
+			output_length += sz;
+			i += sz;
+		} else {
+			// ascii
+			output_length++;
+			i++;
+		}
 	}
-	output[input_length] = '\0';
+	auto result_str = StringVector::EmptyString(result, output_length);
+	auto result_data = result_str.GetData();
+
+	for (idx_t i = 0; i < input_length;) {
+		if (input_data[i] & 0x80) {
+			// non-ascii character
+			int sz = 0;
+			int codepoint = utf8proc_codepoint(input_data + i, sz);
+			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			if (!utf8proc_codepoint_to_utf8(converted_codepoint, sz, result_data)) {
+				throw InternalException("Invalid UTF8 encountered!");
+			}
+			result_data += sz;
+			i += sz;
+		} else {
+			// ascii
+			*result_data = IS_UPPER ? toupper(input_data[i]) : tolower(input_data[i]);
+			result_data++;
+			i++;
+		}
+	}
+	result_str.Finalize();
+	return result_str;
 }
 
-template <class OP> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
+template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
 	assert(input.type == TypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
-
-		auto target = StringVector::EmptyString(result, input_length);
-		strcase<OP>(input_data, input_length, target.GetData());
-		target.Finalize();
-		return target;
+		return strcase_unicode<IS_UPPER>(result, input_data, input_length);
 	});
 }
 
-struct StringToUpper {
-	static char Operation(char input) {
-		return toupper(input);
-	}
-};
-
-struct StringToLower {
-	static char Operation(char input) {
-		return tolower(input);
-	}
-};
-
 static void caseconvert_upper_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<StringToUpper>(args.data[0], result, args.size());
+	caseconvert_function<true>(args.data[0], result, args.size());
 }
 
 static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	caseconvert_function<StringToLower>(args.data[0], result, args.size());
+	caseconvert_function<false>(args.data[0], result, args.size());
+}
+
+ScalarFunction LowerFun::GetFunction() {
+	return ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lower", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function));
+	set.AddFunction({"lower", "lcase"}, LowerFun::GetFunction());
 }
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("upper", {SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
+	set.AddFunction({"upper", "ucase"}, ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb

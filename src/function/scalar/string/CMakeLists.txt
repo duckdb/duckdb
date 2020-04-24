@@ -11,6 +11,7 @@ add_library_unity(
   substring.cpp
   instr.cpp
   prefix.cpp
+  strip_accents.cpp
   suffix.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES
