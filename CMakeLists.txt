@@ -246,6 +246,7 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+add_subdirectory(extension)
 add_subdirectory(src)
 add_subdirectory(third_party)
 add_subdirectory(test)

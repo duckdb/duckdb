@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -74,6 +75,13 @@ public:
 	idx_t maximum_memory;
 	string temporary_directory;
 	CollationType collation;
+
+public:
+	template<class T>
+	void LoadExtension() {
+		T extension;
+		extension.Load(*this);
+	}
 
 private:
 	void Configure(DBConfig &config);
