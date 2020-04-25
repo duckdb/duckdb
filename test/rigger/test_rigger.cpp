@@ -558,4 +558,9 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT t0.c1 FROM t0 WHERE '' = t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
 	}
+		SECTION("580") {
+		// SUBSTRING with an invalid start position causes a segmentation fault #580
+		result = con.Query("SELECT SUBSTRING(0, 3, 0)");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	}
 }
