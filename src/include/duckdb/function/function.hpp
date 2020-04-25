@@ -111,6 +111,8 @@ public:
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
 
+	void AddCollation(string name, ScalarFunction function, bool combinable = false);
+
 private:
 	ClientContext &context;
 	Catalog &catalog;

@@ -66,7 +66,4 @@ void DuckDB::Configure(DBConfig &config) {
 	maximum_memory = config.maximum_memory;
 	temporary_directory = config.temporary_directory;
 	collation = config.collation;
-	if (config.collation == CollationType::COLLATE_DEFAULT) {
-		collation = CollationType::COLLATE_NONE;
-	}
 }

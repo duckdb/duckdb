@@ -7,18 +7,22 @@
 using namespace duckdb;
 using namespace std;
 
-CollationType Transformer::TransformCollation(PGCollateClause *collate) {
+string Transformer::TransformCollation(PGCollateClause *collate) {
 	if (!collate) {
-		return CollationType::COLLATE_DEFAULT;
+		return string();
 	}
-	CollationType collation = CollationType::COLLATE_DEFAULT;
+	string collation;
 	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
 		auto pgvalue = (PGValue*) c->data.ptr_value;
 		if (pgvalue->type != T_PGString) {
 			throw ParserException("Expected a string as collation type!");
 		}
 		auto collation_argument = string(pgvalue->val.str);
-		collation = ParseCollation(collation_argument, collation);
+		if (collation.empty()) {
+			collation = collation_argument;
+		} else {
+			collation += "." + collation_argument;
+		}
 	}
 	return collation;
 }

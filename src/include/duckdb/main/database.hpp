@@ -45,7 +45,7 @@ public:
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
 	//! The collation type of the database
-	CollationType collation = CollationType::COLLATE_NONE;
+	string collation = string();
 
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
@@ -74,7 +74,7 @@ public:
 	idx_t checkpoint_wal_size;
 	idx_t maximum_memory;
 	string temporary_directory;
-	CollationType collation;
+	string collation;
 
 public:
 	template<class T>

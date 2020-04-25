@@ -159,7 +159,7 @@ TEST_CASE("Test COLLATE in individual expressions", "[collate]") {
 TEST_CASE("Test default collations", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DBConfig config;
-	config.collation = CollationType::COLLATE_NOCASE;
+	config.collation = "NOCASE";
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -189,7 +189,9 @@ TEST_CASE("Test unsupported collations", "[collate]") {
 	Connection con(db);
 
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE blabla)"));
-	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE.NOCASE)"));
+	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE 1)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')"));
+
+	REQUIRE_FAIL(con.Query("PRAGMA default_collation='blabla'"));
 }
