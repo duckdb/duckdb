@@ -616,7 +616,7 @@ struct PandasScanFunction : public TableFunction {
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> inputs,
 	                                                 vector<SQLType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
-		py::handle df((PyObject *)stoul(inputs[0].GetValue<string>(), nullptr, 16));
+		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		auto df_names = py::list(df.attr("columns"));
 		auto df_types = py::list(df.attr("dtypes"));
@@ -798,8 +798,8 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchone", &DuckDBPyResult::fetchone)
 	    .def("fetchall", &DuckDBPyResult::fetchall)
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
-	    .def("fetchdf", &DuckDBPyResult::fetchdf).
-		.def("fetch_df", &DuckDBPyResult::fetchdf).
+	    .def("fetchdf", &DuckDBPyResult::fetchdf)
+		.def("fetch_df", &DuckDBPyResult::fetchdf)
 		.def("df", &DuckDBPyResult::fetchdf);
 
 
