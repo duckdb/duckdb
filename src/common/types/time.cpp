@@ -47,9 +47,9 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 
 // TODO this is duplicated in date.cpp
 static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit(buf[pos])) {
+	if (std::isdigit((unsigned char)buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit(buf[pos])) {
+		if (std::isdigit((unsigned char)buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -63,11 +63,11 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	int sep;
 
 	// skip leading spaces
-	while (std::isspace(buf[pos])) {
+	while (std::isspace((unsigned char)buf[pos])) {
 		pos++;
 	}
 
-	if (!std::isdigit(buf[pos])) {
+	if (!std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 
@@ -107,7 +107,7 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	sep = buf[pos++];
 	if (sep == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit(buf[pos]) && mult > 0; pos++, mult /= 10) {
+		for (; std::isdigit((unsigned char)buf[pos]) && mult > 0; pos++, mult /= 10) {
 			msec += (buf[pos] - '0') * mult;
 		}
 	}

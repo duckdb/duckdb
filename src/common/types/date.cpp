@@ -100,9 +100,9 @@ static inline int32_t date_to_number(int32_t year, int32_t month, int32_t day) {
 }
 
 static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit(buf[pos])) {
+	if (std::isdigit((unsigned char)buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit(buf[pos])) {
+		if (std::isdigit((unsigned char)buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -116,12 +116,12 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 	idx_t pos = 0;
 	int sep;
 
-	if (yearneg == 0 && !std::isdigit(buf[0])) {
+	if (yearneg == 0 && !std::isdigit((unsigned char)buf[0])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = yearneg; std::isdigit(buf[pos]); pos++) {
+	for (pos = yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
@@ -149,7 +149,7 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 		return false;
 	}
 
-	if (std::isdigit(buf[pos])) {
+	if (std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 

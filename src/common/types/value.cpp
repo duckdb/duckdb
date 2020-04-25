@@ -509,21 +509,44 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-Value Value::CastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 	if (source_type == target_type) {
 		return Copy();
 	}
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type, 1);
+	if (strict) {
+		VectorOperations::StrictCast(input, result, source_type, target_type, 1);
+	} else {
+		VectorOperations::Cast(input, result, source_type, target_type, 1);
+	}
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(TypeId target_type, bool strict) const {
+	if (target_type == type) {
+		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+	}
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
+}
+
+Value Value::CastStrictlyAs(SQLType source_type, SQLType target_type) {
+	return CastAs(source_type, target_type, true);
+}
+
+Value Value::CastStrictlyAs(TypeId target_type) const {
+	return CastAs(target_type, true);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strictly) {
 	Value new_value;
 	try {
-		new_value = CastAs(source_type, target_type);
+		if (strictly) {
+			new_value = CastStrictlyAs(source_type, target_type);
+		} else {
+			new_value = CastAs(source_type, target_type);
+		}
 	} catch (Exception &) {
 		return false;
 	}
@@ -536,11 +559,13 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
 	return true;
 }
 
-Value Value::CastAs(TypeId target_type) const {
-	if (target_type == type) {
-		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+bool Value::TryCastStrictlyAs(SQLType source_type, SQLType target_type) {
+	try {
+		CastStrictlyAs(source_type, target_type);
+	} catch (Exception &) {
+		return false;
 	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
+	return true;
 }
 
 void Value::Serialize(Serializer &serializer) {

@@ -300,6 +300,186 @@ bool SQLType::IsNumeric() const {
 	}
 }
 
+bool SQLType::IsMoreGenericThan(SQLType &other) const {
+	switch (id) {
+	case SQLTypeId::SQLNULL:
+	case SQLTypeId::BOOLEAN:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::SMALLINT:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TINYINT:
+			return true;
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::INTEGER:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::BIGINT:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::DOUBLE:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::TIME:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::DATE:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TIME:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::TIMESTAMP:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+			return true;
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return false;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	case SQLTypeId::VARCHAR:
+		switch (other.id) {
+		case SQLTypeId::SQLNULL:
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::VARCHAR:
+			return true;
+		default:
+			throw NotImplementedException("IsMoreGenericThan not implemented for type %s",
+			                              SQLTypeIdToString(other.id).c_str());
+		}
+	default:
+		throw NotImplementedException("IsMoreGenericThan not implemented for type %s", SQLTypeIdToString(id).c_str());
+	}
+
+	return true;
+}
+
 TypeId GetInternalType(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:

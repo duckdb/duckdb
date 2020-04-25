@@ -220,6 +220,7 @@ struct SQLType {
 
 	bool IsIntegral() const;
 	bool IsNumeric() const;
+	bool IsMoreGenericThan(SQLType &other) const;
 
 public:
 	static const SQLType SQLNULL;
