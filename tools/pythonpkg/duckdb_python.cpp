@@ -696,6 +696,10 @@ struct DuckDBPyRelation {
 	DuckDBPyRelation(shared_ptr<Relation> rel) : rel(rel) {
 	}
 
+	static unique_ptr<DuckDBPyRelation> from_df(py::object df) {
+		return default_connection()->from_df(df);
+	}
+
 	unique_ptr<DuckDBPyRelation> project(string expr) {
 		return make_unique<DuckDBPyRelation>(rel->Project(expr));
 	}
@@ -899,6 +903,8 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("df", &DuckDBPyRelation::to_df, "some doc string for df")
 	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print");
 
+	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
+	m.def("df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("filter", &DuckDBPyRelation::filter_df, "some doc string for filter", py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "some doc string for project", py::arg("df"),
 	      py::arg("project_expr"));
