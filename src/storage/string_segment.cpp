@@ -448,7 +448,9 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 static void update_min_max(string value, char *__restrict min, char *__restrict max) {
 	//! we can only fit 8 bytes, so we might need to trim our string
 	size_t value_size = value.size() > 7 ? 7 : value.size();
-	if (min[0] == '\0' && max[0] == '\0') {
+	//! This marks the min/max was not initialized
+	char marker = '1';
+	if (min[0] == '\0' && min[1] == marker && max[0] == '\0' && max[1] == marker) {
 		size_t min_end = value.copy(min, value_size);
 		size_t max_end = value.copy(max, value_size);
 		for (size_t i = min_end; i < 8; i++) {
