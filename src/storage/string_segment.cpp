@@ -701,6 +701,14 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	// perform a merge between the new and old indexes
 	auto strings = FlatVector::GetData<string_t>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
+	//! Check if we need to update the segment's nullmask
+	for (idx_t i = 0; i < update_count; i++) {
+		if (!update_nullmask[i]) {
+			auto min = (char *)stats.minimum.get();
+			auto max = (char *)stats.maximum.get();
+			update_min_max(strings[i].GetData(), min, max);
+		}
+	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
 		info->ids[count] = id;
 		if (!update_nullmask[idx]) {

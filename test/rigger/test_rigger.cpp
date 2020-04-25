@@ -563,4 +563,15 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT SUBSTRING(0, 3, 0)");
 		REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	}
+	SECTION("583"){
+		// Updated value in column is not visible in a SELECT
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=0;"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=true;"));
+
+		// -- expected: {true}, actual: {}
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"true"}));
+	}
 }
