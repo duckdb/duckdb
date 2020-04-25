@@ -798,7 +798,10 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("fetchone", &DuckDBPyResult::fetchone)
 	    .def("fetchall", &DuckDBPyResult::fetchall)
 	    .def("fetchnumpy", &DuckDBPyResult::fetchnumpy)
-	    .def("fetchdf", &DuckDBPyResult::fetchdf);
+	    .def("fetchdf", &DuckDBPyResult::fetchdf).
+		.def("fetch_df", &DuckDBPyResult::fetchdf).
+		.def("df", &DuckDBPyResult::fetchdf);
+
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
 	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
