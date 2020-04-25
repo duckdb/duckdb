@@ -549,4 +549,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT t0.c0 FROM t0 WHERE NOT (0 BETWEEN 0 AND t0.c0::BOOL);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+		SECTION("579") {
+		// Updated value in column is not visible in a SELECT
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(0), ('');"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = 1;"));
+		// -- expected: {1}, actual: {''}
+		result = con.Query("SELECT t0.c1 FROM t0 WHERE '' = t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
+	}
 }
