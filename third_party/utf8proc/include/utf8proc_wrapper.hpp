@@ -11,7 +11,6 @@ enum class UnicodeType {INVALID, ASCII, UNICODE};
 
 class Utf8Proc {
 public:
-
 	static UnicodeType Analyze(const char* s) {
 		return Analyze(s, std::strlen(s));
 	}
@@ -27,5 +26,12 @@ public:
 
 	static char* Normalize(const char* s);
 
+	//! Returns whether or not the UTF8 string is valid
+	static bool IsValid(const char *s, size_t len);
+	//! Returns the position (in bytes) of the next grapheme cluster
+	static size_t NextGraphemeCluster(const char *s, size_t len, size_t pos);
+	//! Returns the position (in bytes) of the previous grapheme cluster
+	static size_t PreviousGraphemeCluster(const char *s, size_t len, size_t pos);
 };
+
 }

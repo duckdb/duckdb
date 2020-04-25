@@ -145,6 +145,13 @@ private:
 	unique_ptr<Constraint> TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index);
 
 	//===--------------------------------------------------------------------===//
+	// Collation transform
+	//===--------------------------------------------------------------------===//
+	unique_ptr<ParsedExpression> TransformCollateExpr(PGCollateClause *collate);
+
+	CollationType TransformCollation(PGCollateClause *collate);
+
+	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(PGAlias *root);

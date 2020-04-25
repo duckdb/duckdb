@@ -1609,6 +1609,30 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
 }
 
+// http://www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
+TEST_CASE("Test CSV with Unicode NFC Normalization test suite", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto nfc_csv = fs.JoinPath(csv_path, "nfc_test_suite.csv");
+
+	WriteBinary(nfc_csv, nfc_normalization, sizeof(nfc_normalization));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);"));
+	REQUIRE_NO_FAIL(con.Query("COPY nfcstrings FROM '" + nfc_csv + "' DELIMITER '|';"));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE source=nfc");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE nfc=nfd");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+}
+
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

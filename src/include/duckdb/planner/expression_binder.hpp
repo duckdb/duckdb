@@ -56,6 +56,7 @@ public:
 
 	// Bind table names to ColumnRefExpressions
 	static void BindTableNames(Binder &binder, ParsedExpression &expr);
+	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, CollationType collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
@@ -67,6 +68,7 @@ protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
+	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);

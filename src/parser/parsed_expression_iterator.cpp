@@ -20,6 +20,11 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		callback(*cast_expr.child);
 		break;
 	}
+	case ExpressionClass::COLLATE: {
+		auto &cast_expr = (const CollateExpression &)expr;
+		callback(*cast_expr.child);
+		break;
+	}
 	case ExpressionClass::COMPARISON: {
 		auto &comp_expr = (const ComparisonExpression &)expr;
 		callback(*comp_expr.left);

@@ -169,6 +169,14 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 // SQL Types
 //===--------------------------------------------------------------------===//
+enum class CollationType : uint8_t {
+	COLLATE_DEFAULT = 0,
+	COLLATE_NONE = 1,
+	COLLATE_NOCASE = 2,
+	COLLATE_NOACCENT = 3,
+	COLLATE_NOCASE_NOACCENT = 4
+};
+
 enum class SQLTypeId : uint8_t {
 	INVALID = 0,
 	SQLNULL = 1, /* NULL type, used for constant NULL */
@@ -198,12 +206,13 @@ struct SQLType {
 	SQLTypeId id;
 	uint16_t width;
 	uint8_t scale;
+	CollationType collation;
 
 	// TODO serialize this
 	child_list_t<SQLType> child_type;
 
-	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0)
-	    : id(id), width(width), scale(scale) {
+	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, CollationType collation = CollationType::COLLATE_DEFAULT)
+	    : id(id), width(width), scale(scale), collation(collation) {
 	}
 
 	bool operator==(const SQLType &rhs) const {
@@ -251,6 +260,8 @@ string SQLTypeToString(SQLType type);
 
 SQLType MaxSQLType(SQLType left, SQLType right);
 SQLType TransformStringToSQLType(string str);
+
+CollationType ParseCollation(string collation, CollationType current = CollationType::COLLATE_DEFAULT);
 
 //! Gets the internal type associated with the given SQL type
 TypeId GetInternalType(SQLType type);

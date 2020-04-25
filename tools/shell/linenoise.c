@@ -116,6 +116,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include "linenoise.h"
+#include "utf8proc_wrapper.h"
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
 #define LINENOISE_MAX_LINE 4096
@@ -516,26 +517,83 @@ void refreshShowHints(struct abuf *ab, struct linenoiseState *l, int plen) {
 	}
 }
 
+static size_t compute_render_width(const char *buf, size_t len) {
+	if (utf8proc_is_valid(buf, len)) {
+		// utf8 in prompt, get render width
+		size_t cpos = 0;
+		size_t render_width = 0;
+		while (cpos < len) {
+			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			render_width += char_render_width;
+		}
+		return render_width;
+	} else {
+		// invalid utf8 in prompt, use length in bytes
+		return len;
+	}
+}
+
 /* Single line low level line refresh.
  *
  * Rewrite the currently edited line accordingly to the buffer content,
  * cursor position, and number of columns of the terminal. */
 static void refreshSingleLine(struct linenoiseState *l) {
 	char seq[64];
-	size_t plen = strlen(l->prompt);
+	size_t plen = compute_render_width(l->prompt, strlen(l->prompt));
 	int fd = l->ofd;
 	char *buf = l->buf;
 	size_t len = l->len;
 	size_t pos = l->pos;
 	struct abuf ab;
+	size_t render_pos = 0;
 
-	while ((plen + pos) >= l->cols) {
-		buf++;
-		len--;
-		pos--;
-	}
-	while (plen + len > l->cols) {
-		len--;
+	if (utf8proc_is_valid(l->buf, l->len)) {
+		// utf8 in prompt, handle rendering
+		size_t remaining_render_width = l->cols - plen - 1;
+		size_t start_pos = 0;
+		size_t cpos = 0;
+		size_t prev_pos = 0;
+		size_t total_render_width = 0;
+		while (cpos < len) {
+			size_t char_render_width = utf8proc_render_width(buf, len, cpos);
+			prev_pos = cpos;
+			cpos = utf8proc_next_grapheme_cluster(buf, len, cpos);
+			total_render_width += cpos - prev_pos;
+			if (total_render_width >= remaining_render_width) {
+				// character does not fit anymore! we need to figure something out
+				if (prev_pos >= l->pos) {
+					// we passed the cursor: break
+					cpos = prev_pos;
+					break;
+				} else {
+					// we did not pass the cursor yet! remove characters from the start until it fits again
+					while(total_render_width >= remaining_render_width) {
+						size_t start_char_width = utf8proc_render_width(buf, len, start_pos);
+						size_t new_start = utf8proc_next_grapheme_cluster(buf, len, start_pos);
+						total_render_width -= new_start - start_pos;
+						start_pos = new_start;
+						render_pos -= start_char_width;
+					}
+				}
+			}
+			if (prev_pos < l->pos) {
+				render_pos += char_render_width;
+			}
+		}
+		buf = buf + start_pos;
+		len = cpos - start_pos;
+	} else {
+		// invalid UTF8: fallback
+		while ((plen + pos) >= l->cols) {
+			buf++;
+			len--;
+			pos--;
+		}
+		while (plen + len > l->cols) {
+			len--;
+		}
+		render_pos = pos;
 	}
 
 	abInit(&ab);
@@ -551,7 +609,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	snprintf(seq, 64, "\x1b[0K");
 	abAppend(&ab, seq, strlen(seq));
 	/* Move cursor to original position. */
-	snprintf(seq, 64, "\r\x1b[%dC", (int)(pos + plen));
+	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
 	abAppend(&ab, seq, strlen(seq));
 	if (write(fd, ab.b, ab.len) == -1) {
 	} /* Can't recover from write error. */
@@ -681,13 +739,22 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
 			refreshLine(l);
 		}
 	}
+	refreshLine(l);
 	return 0;
+}
+
+static size_t prev_char(struct linenoiseState *l) {
+	return utf8proc_prev_grapheme_cluster(l->buf, l->len, l->pos);
+}
+
+static size_t next_char(struct linenoiseState *l) {
+	return utf8proc_next_grapheme_cluster(l->buf, l->len, l->pos);
 }
 
 /* Move cursor on the left. */
 void linenoiseEditMoveLeft(struct linenoiseState *l) {
 	if (l->pos > 0) {
-		l->pos--;
+		l->pos = prev_char(l);
 		refreshLine(l);
 	}
 }
@@ -695,7 +762,7 @@ void linenoiseEditMoveLeft(struct linenoiseState *l) {
 /* Move cursor on the right. */
 void linenoiseEditMoveRight(struct linenoiseState *l) {
 	if (l->pos != l->len) {
-		l->pos++;
+		l->pos = next_char(l);
 		refreshLine(l);
 	}
 }
@@ -746,8 +813,10 @@ void linenoiseEditHistoryNext(struct linenoiseState *l, int dir) {
  * position. Basically this is what happens with the "Delete" keyboard key. */
 void linenoiseEditDelete(struct linenoiseState *l) {
 	if (l->len > 0 && l->pos < l->len) {
-		memmove(l->buf + l->pos, l->buf + l->pos + 1, l->len - l->pos - 1);
-		l->len--;
+		size_t new_pos = next_char(l);
+		size_t char_sz = new_pos - l->pos;
+		memmove(l->buf + l->pos, l->buf + new_pos, l->len - new_pos);
+		l->len -= char_sz;
 		l->buf[l->len] = '\0';
 		refreshLine(l);
 	}
@@ -756,9 +825,11 @@ void linenoiseEditDelete(struct linenoiseState *l) {
 /* Backspace implementation. */
 void linenoiseEditBackspace(struct linenoiseState *l) {
 	if (l->pos > 0 && l->len > 0) {
-		memmove(l->buf + l->pos - 1, l->buf + l->pos, l->len - l->pos);
-		l->pos--;
-		l->len--;
+		size_t new_pos = prev_char(l);
+		size_t char_sz = l->pos - new_pos;
+		memmove(l->buf + new_pos, l->buf + l->pos, l->len - l->pos);
+		l->len -= char_sz;
+		l->pos = new_pos;
 		l->buf[l->len] = '\0';
 		refreshLine(l);
 	}
@@ -871,11 +942,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_T: /* ctrl-t, swaps current character with previous. */
 			if (l.pos > 0 && l.pos < l.len) {
-				int aux = buf[l.pos - 1];
-				buf[l.pos - 1] = buf[l.pos];
-				buf[l.pos] = aux;
-				if (l.pos != l.len - 1)
-					l.pos++;
+				char temp_buffer[128];
+				int prev_pos = prev_char(&l);
+				int next_pos = next_char(&l);
+				int prev_char_size = l.pos - prev_pos;
+				int cur_char_size = next_pos - l.pos;
+				memcpy(temp_buffer, l.buf + prev_pos, prev_char_size);
+				memmove(l.buf + prev_pos, l.buf + l.pos, cur_char_size);
+				memcpy(l.buf + prev_pos + cur_char_size, temp_buffer, prev_char_size);
+				l.pos = next_pos;
 				refreshLine(&l);
 			}
 			break;
