@@ -542,10 +542,11 @@ struct DuckDBPyConnection {
 		if (!connection) {
 			throw runtime_error("connection closed");
 		};
-		registered_dfs[random_string::generate()] = value;
+		string name = "df_" + random_string::generate();
+		registered_dfs[name] = value;
 		vector<Value> params;
 		params.push_back(Value(ptr_to_string(value.ptr())));
-		return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params));
+		return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
 	}
 
 	DuckDBPyConnection *unregister_df(string name) {
@@ -819,16 +820,8 @@ struct DuckDBPyRelation {
 		rel->Insert(table);
 	}
 
-	static void insert_df(py::object df, string table) {
-		default_connection()->from_df(df)->insert(table);
-	}
-
 	void create(string table) {
 		rel->Create(table);
-	}
-
-	static void create_df(py::object df, string table) {
-		default_connection()->from_df(df)->create(table);
 	}
 
 	string print() {
@@ -918,8 +911,6 @@ PYBIND11_MODULE(duckdb, m) {
 	      py::arg("virtual_table_name"), py::arg("sql_query"));
 	m.def("write_csv", &DuckDBPyRelation::write_csv_df, "some doc string for write_csv", py::arg("df"),
 	      py::arg("file_name"));
-	m.def("insert", &DuckDBPyRelation::insert_df, "some doc string for insert", py::arg("df"), py::arg("table_name"));
-	m.def("create", &DuckDBPyRelation::create_df, "some doc string for create", py::arg("df"), py::arg("table_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
 	auto clean_default_connection = []() { default_connection_ = nullptr; };
