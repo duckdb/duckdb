@@ -64,7 +64,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 }
 
 void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function) {
-	for(auto &name: names) {
+	for (auto &name : names) {
 		function.name = name;
 		AddFunction(function);
 	}

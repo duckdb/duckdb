@@ -13,7 +13,7 @@ string Transformer::TransformCollation(PGCollateClause *collate) {
 	}
 	string collation;
 	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
-		auto pgvalue = (PGValue*) c->data.ptr_value;
+		auto pgvalue = (PGValue *)c->data.ptr_value;
 		if (pgvalue->type != T_PGString) {
 			throw ParserException("Expected a string as collation type!");
 		}

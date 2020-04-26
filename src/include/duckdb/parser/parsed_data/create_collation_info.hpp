@@ -14,8 +14,8 @@
 namespace duckdb {
 
 struct CreateCollationInfo : public CreateInfo {
-	CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p) :
-		CreateInfo(CatalogType::COLLATION), function(move(function_p)), combinable(combinable_p) {
+	CreateCollationInfo(string name_p, ScalarFunction function_p, bool combinable_p)
+	    : CreateInfo(CatalogType::COLLATION), function(move(function_p)), combinable(combinable_p) {
 		this->name = move(name_p);
 	}
 

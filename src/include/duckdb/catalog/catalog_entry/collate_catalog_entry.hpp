@@ -18,7 +18,8 @@ namespace duckdb {
 class CollateCatalogEntry : public StandardEntry {
 public:
 	CollateCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateCollationInfo *info)
-	    : StandardEntry(CatalogType::COLLATION, schema, catalog, info->name), function(info->function), combinable(info->combinable) {
+	    : StandardEntry(CatalogType::COLLATION, schema, catalog, info->name), function(info->function),
+	      combinable(info->combinable) {
 	}
 
 	ScalarFunction function;

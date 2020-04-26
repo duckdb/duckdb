@@ -20,14 +20,15 @@ struct PragmaCollateData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> inputs,
-                                                       vector<SQLType> &return_types, vector<string> &names) {
+                                                    vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("collname");
 	return_types.push_back(SQLType::VARCHAR);
 
 	return make_unique<PragmaCollateData>();
 }
 
-static void pragma_collate_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
+static void pragma_collate_info(ClientContext &context, vector<Value> &input, DataChunk &output,
+                                FunctionData *dataptr) {
 	auto &data = *((PragmaCollateData *)dataptr);
 	assert(input.size() == 0);
 	if (!data.initialized) {
@@ -48,18 +49,16 @@ static void pragma_collate_info(ClientContext &context, vector<Value> &input, Da
 	output.SetCardinality(next - data.offset);
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto entry = (CollateCatalogEntry*) data.entries[i];
+		auto entry = (CollateCatalogEntry *)data.entries[i];
 
 		output.SetValue(0, index, Value(entry->name));
 	}
 
 	data.offset = next;
-
 }
 
 void PragmaCollations::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_collations", {}, pragma_collate_bind, pragma_collate_info, nullptr));
+	set.AddFunction(TableFunction("pragma_collations", {}, pragma_collate_bind, pragma_collate_info, nullptr));
 }
 
 } // namespace duckdb

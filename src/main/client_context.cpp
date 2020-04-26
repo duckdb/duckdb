@@ -234,7 +234,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 			break;
 		}
 #ifdef DEBUG
-		for(idx_t i = 0; i < chunk->column_count(); i++) {
+		for (idx_t i = 0; i < chunk->column_count(); i++) {
 			if (statement.sql_types[i].id == SQLTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}

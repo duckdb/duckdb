@@ -13,7 +13,8 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source, string collation) {
+unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
+                                                       string collation) {
 	// replace default collation with system collation
 	if (collation.empty()) {
 		collation = context.db.collation;
@@ -25,19 +26,20 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	}
 	auto &catalog = Catalog::GetCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
-	vector<CollateCatalogEntry*> entries;
-	for(auto &collation_argument : splits) {
+	vector<CollateCatalogEntry *> entries;
+	for (auto &collation_argument : splits) {
 		auto collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
 		if (collation_entry->combinable) {
 			entries.insert(entries.begin(), collation_entry);
 		} else {
 			if (entries.size() > 0 && !entries.back()->combinable) {
-				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name.c_str(), collation_entry->name.c_str());
+				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name.c_str(),
+				                      collation_entry->name.c_str());
 			}
 			entries.push_back(collation_entry);
 		}
 	}
-	for(auto &collation_entry : entries) {
+	for (auto &collation_entry : entries) {
 		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, collation_entry->function);
 		function->children.push_back(move(source));
 		function->arguments.push_back({SQLType::VARCHAR});
@@ -72,9 +74,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 			input_type = right.sql_type;
 		} else {
 			// else: check if collations are compatible
-			if (!left.sql_type.collation.empty() &&
-			    !right.sql_type.collation.empty() &&
-				left.sql_type.collation != right.sql_type.collation) {
+			if (!left.sql_type.collation.empty() && !right.sql_type.collation.empty() &&
+			    left.sql_type.collation != right.sql_type.collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
