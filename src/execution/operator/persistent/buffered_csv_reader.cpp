@@ -146,8 +146,14 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	source->clear();
-	source->seekg(0, source->beg);
+	if (!plain_file_source && StringUtil::EndsWith(StringUtil::Lower(info.file_path), ".gz")) {
+		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
+		// so we have to create a new stream source here for now
+		source = make_unique<GzipStream>(info.file_path);
+	} else{
+		source->clear();
+		source->seekg(0, source->beg);
+	}
 	linenr = 0;
 	linenr_estimated = false;
 	bytes_per_line_avg = 0;
