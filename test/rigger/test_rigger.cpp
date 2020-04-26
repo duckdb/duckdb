@@ -563,6 +563,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT SUBSTRING(0, 3, 0)");
 		REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	}
+	SECTION("581") {
+		// DISTINCT malfunctions for BOOLEAN
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOLEAN);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (NULL), (false);"));
+		result = con.Query("SELECT DISTINCT t0.c0 FROM t0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), false}));
+	}
 	SECTION("583"){
 		// Comparing a string with a boolean yields an incorrect result after UPDATE
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
