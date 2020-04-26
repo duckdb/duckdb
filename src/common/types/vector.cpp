@@ -176,7 +176,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
-		((string_t *)data)[index] = StringVector::AddString(*this, newVal.str_value);
+		((string_t *)data)[index] = StringVector::AddBlob(*this, newVal.str_value);
 		break;
 	}
 	case TypeId::STRUCT: {
@@ -272,7 +272,7 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::DOUBLE(((double *)data)[index]);
 	case TypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		return Value(str.GetString());
+		return Value::BLOB(str.GetString());
 	}
 	case TypeId::STRUCT: {
 		Value ret(TypeId::STRUCT);
