@@ -49,7 +49,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 
 			string_size = collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())), (uint8_t*) buffer.get(), buffer_size);
 		}
-		return StringVector::AddString(result, string_t(buffer.get(), buffer_size));
+		return StringVector::AddBlob(result, string_t(buffer.get(), buffer_size));
 	});
 }
 

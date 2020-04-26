@@ -233,6 +233,13 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		if (chunk->size() == 0) {
 			break;
 		}
+#ifdef DEBUG
+		for(idx_t i = 0; i < chunk->column_count(); i++) {
+			if (statement.sql_types[i].id == SQLTypeId::VARCHAR) {
+				chunk->data[i].UTFVerify(chunk->size());
+			}
+		}
+#endif
 		result->collection.Append(*chunk);
 	}
 	return move(result);

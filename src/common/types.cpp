@@ -24,6 +24,7 @@ const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
 const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
 
 // TODO these are incomplete and should maybe not exist as such
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);

@@ -144,6 +144,14 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::BLOB(string value) {
+	Value result(TypeId::VARCHAR);
+	result.str_value = value;
+	result.is_null = false;
+	result.sql_type = SQLType::VARBINARY;
+	return result;
+}
+
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
 }

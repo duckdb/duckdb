@@ -235,6 +235,7 @@ public:
 	static const SQLType TIMESTAMP;
 	static const SQLType TIME;
 	static const SQLType VARCHAR;
+	static const SQLType VARBINARY;
 	static const SQLType STRUCT;
 	static const SQLType LIST;
 	static const SQLType ANY;
