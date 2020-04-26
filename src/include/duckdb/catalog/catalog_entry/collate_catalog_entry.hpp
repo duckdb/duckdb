@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 

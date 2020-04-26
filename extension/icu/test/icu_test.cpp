@@ -25,4 +25,12 @@ TEST_CASE("Test basic ICU extension usage", "[icu]") {
 	// default binary collation, Göbel is not smaller than Gabel in UTF8 encoding
 	result = con.Query("SELECT * FROM strings WHERE 'Goethe' > s ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Gabel"}));
+
+	// we can also combine this collation with NOCASE
+	result = con.Query("SELECT * FROM strings WHERE 'goethe' > s COLLATE de.NOCASE ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Gabel", "Göbel"}));
+	result = con.Query("SELECT * FROM strings WHERE 'goethe' > s COLLATE NOCASE.de ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Gabel", "Göbel"}));
+	// but not with NOACCENT
+	REQUIRE_FAIL(con.Query("SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1"));
 }

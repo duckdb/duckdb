@@ -183,6 +183,17 @@ TEST_CASE("Test default collations", "[collate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "WöRlD", "wozld"}));
 }
 
+TEST_CASE("Get list of collations", "[collate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("PRAGMA collations");
+	REQUIRE(CHECK_COLUMN(result, 0, {"noaccent", "nocase"}));
+
+	REQUIRE_FAIL(con.Query("PRAGMA collations=3"));
+}
+
 TEST_CASE("Test unsupported collations", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
