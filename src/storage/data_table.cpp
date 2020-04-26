@@ -120,13 +120,11 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 	case ExpressionType::COMPARE_EQUAL:
 		return min_comp <= 0 && max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp > 0;
+		return max_comp >= 0;
+	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return min_comp <= 0;
-	case ExpressionType::COMPARE_LESSTHAN:
-		return min_comp < 0;
 	default:
 		throw NotImplementedException("Operation not implemented");
 	}

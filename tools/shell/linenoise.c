@@ -568,7 +568,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 					break;
 				} else {
 					// we did not pass the cursor yet! remove characters from the start until it fits again
-					while(total_render_width >= remaining_render_width) {
+					while (total_render_width >= remaining_render_width) {
 						size_t start_char_width = utf8proc_render_width(buf, len, start_pos);
 						size_t new_start = utf8proc_next_grapheme_cluster(buf, len, start_pos);
 						total_render_width -= new_start - start_pos;

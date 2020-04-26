@@ -549,7 +549,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT t0.c0 FROM t0 WHERE NOT (0 BETWEEN 0 AND t0.c0::BOOL);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
-		SECTION("579") {
+	SECTION("579") {
 		// Updated value in column is not visible in a SELECT
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(0), ('');"));
@@ -570,7 +570,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT DISTINCT t0.c0 FROM t0 ORDER BY 1;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), false}));
 	}
-	SECTION("583"){
+	SECTION("583") {
 		// Comparing a string with a boolean yields an incorrect result after UPDATE
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
@@ -580,7 +580,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"true"}));
 	}
-	SECTION("584"){
+	SECTION("584") {
 		// A select with BETWEEN and VARCHAR cast results in an incorrect result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-2);"));
@@ -611,7 +611,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// Query with complex ORDER BY causes an incorrect rowid value
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1), (0), (1);"));
-		result = con.Query("SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;");
+		result = con.Query(
+		    "SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;");
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	}
 	SECTION("589") {
@@ -623,9 +624,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// Comparison with a DATE yields an incorrect result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (DATE '2000-01-02');"));
-		con.Query("explain SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;")->Print();
 		result = con.Query("SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2000, 1, 1)}));
+		REQUIRE(CHECK_COLUMN(result, 0, {"2000-01-02"}));
 	}
 	SECTION("591") {
 		// Subtracting a large integer from a DATE results in a "double free or corruption"

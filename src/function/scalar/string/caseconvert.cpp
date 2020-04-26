@@ -11,8 +11,7 @@ using namespace std;
 
 namespace duckdb {
 
-template <bool IS_UPPER>
-static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
+template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const char *input_data, idx_t input_length) {
 	// first figure out the output length
 	// optimization: if only ascii then input_length = output_length
 	idx_t output_length = 0;
@@ -88,7 +87,8 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"upper", "ucase"}, ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
+	set.AddFunction({"upper", "ucase"},
+	                ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb
