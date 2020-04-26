@@ -33,4 +33,13 @@ TEST_CASE("Test basic ICU extension usage", "[icu]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"Gabel", "Göbel"}));
 	// but not with NOACCENT
 	REQUIRE_FAIL(con.Query("SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1"));
+
+	// japanese collation
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM strings"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('賃貸人側連絡先 (Lessor side contact)'), ('賃借人側連絡先 (Lessee side contact)'), ('解約連絡先 (Termination contacts)'), ('更新連絡先 (Update contact)')"));
+
+	result = con.Query("SELECT * FROM strings ORDER BY s");
+	REQUIRE(CHECK_COLUMN(result, 0, {"更新連絡先 (Update contact)", "解約連絡先 (Termination contacts)", "賃借人側連絡先 (Lessee side contact)", "賃貸人側連絡先 (Lessor side contact)"}));
+	result = con.Query("SELECT * FROM strings ORDER BY s COLLATE ja.NOCASE");
+	REQUIRE(CHECK_COLUMN(result, 0, {"解約連絡先 (Termination contacts)", "更新連絡先 (Update contact)", "賃借人側連絡先 (Lessee side contact)", "賃貸人側連絡先 (Lessor side contact)"}));
 }
