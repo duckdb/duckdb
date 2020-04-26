@@ -38,7 +38,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			return nullptr;
 		}
 		auto bound_const_expr = (BoundConstantExpression *)constant_expr;
-		auto new_constant = (BoundConstantExpression *)bound_const_expr->value.TryCastAs(
+		auto new_constant = bound_const_expr->value.TryCastAs(
 		    cast_expression->target_type.id, cast_expression->source_type.id);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);

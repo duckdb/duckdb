@@ -38,6 +38,12 @@ bool BoundCastExpression::CastIsInvertible(SQLType source_type, SQLType target_t
 	if (source_type.id == SQLTypeId::DOUBLE || target_type.id == SQLTypeId::DOUBLE) {
 		return false;
 	}
+	if (source_type.id == SQLTypeId::VARCHAR) {
+		return target_type.id == SQLTypeId::DATE || target_type.id == SQLTypeId::TIMESTAMP;
+	}
+	if (target_type.id == SQLTypeId::VARCHAR) {
+		return source_type.id == SQLTypeId::DATE || source_type.id == SQLTypeId::TIMESTAMP;
+	}
 	return true;
 }
 

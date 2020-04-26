@@ -573,15 +573,14 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"true"}));
 	}
-//	SECTION("584"){
-//		// A select with BETWEEN and VARCHAR cast results in an incorrect result
-//		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INTEGER);"));
-//		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-2);"));
-//		result = con.Query("SELECT t0.c0 FROM t0 WHERE -1 BETWEEN t0.c0::VARCHAR AND 1;");
-//		//  -- expected: {-2}, actual: {}
-//		REQUIRE(CHECK_COLUMN(result, 0, {-2}));
-//	}
-	SECTION("585"){
+	SECTION("584"){
+		// A select with BETWEEN and VARCHAR cast results in an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-2);"));
+		result = con.Query("SELECT t0.c0 FROM t0 WHERE -1 BETWEEN t0.c0::VARCHAR AND 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-2}));
+	}
+	SECTION("585") {
 		// Predicate checking for an empty string yields an incorrect result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (''), (0)"));
