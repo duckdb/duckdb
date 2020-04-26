@@ -568,7 +568,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 					break;
 				} else {
 					// we did not pass the cursor yet! remove characters from the start until it fits again
-					while(total_render_width >= remaining_render_width) {
+					while (total_render_width >= remaining_render_width) {
 						size_t start_char_width = utf8proc_render_width(buf, len, start_pos);
 						size_t new_start = utf8proc_next_grapheme_cluster(buf, len, start_pos);
 						total_render_width -= new_start - start_pos;
@@ -909,6 +909,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		}
 
 		switch (c) {
+		case 10:
 		case ENTER: /* enter */
 			history_len--;
 			free(history[history_len]);
@@ -1024,10 +1025,6 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				}
 			}
 			break;
-		default:
-			if (linenoiseEditInsert(&l, c))
-				return -1;
-			break;
 		case CTRL_U: /* Ctrl+u, delete the whole line. */
 			buf[0] = '\0';
 			l.pos = l.len = 0;
@@ -1050,6 +1047,10 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_W: /* ctrl+w, delete previous word */
 			linenoiseEditDeletePrevWord(&l);
+			break;
+		default:
+			if (linenoiseEditInsert(&l, c))
+				return -1;
 			break;
 		}
 	}

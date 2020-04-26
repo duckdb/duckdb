@@ -38,8 +38,11 @@ static string_t substring_scalar_function(Vector &result, string_t input, int of
 	}
 	if (ascii_only) {
 		// ascii only
-		length = std::min(offset + length, (int)input_size) - offset;
-		return substring_ascii_only(result, input_data, offset, length);
+		length = std::min(offset + length, (int)input_size);
+		if (offset >= length) {
+			return string_t((uint32_t)0);
+		}
+		return substring_ascii_only(result, input_data, offset, length - offset);
 	}
 
 	// size is at most the input size: alloc it
@@ -84,7 +87,8 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 }
 
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"substring", "substr"}, ScalarFunction({SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER}, SQLType::VARCHAR, substring_function));
+	set.AddFunction({"substring", "substr"}, ScalarFunction({SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER},
+	                                                        SQLType::VARCHAR, substring_function));
 }
 
 } // namespace duckdb
