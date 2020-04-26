@@ -597,7 +597,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("587") {
 		// A negative DATE results in a "double free or corruption" crash
-		result = con.Query("SELECT DATE '-10000-01-01';");
+		result = con.Query("SELECT (DATE '-10000-01-01')::VARCHAR;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"10000-01-01 (BC)"}));
 	}
 	SECTION("588") {
 		// Query with complex ORDER BY causes an incorrect rowid value
@@ -615,11 +616,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// Comparison with a DATE yields an incorrect result
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (DATE '2000-01-02');"));
+		con.Query("explain SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;")->Print();
 		result = con.Query("SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2000, 1, 1)}));
 	}
 	SECTION("591") {
 		// Subtracting a large integer from a DATE results in a "double free or corruption"
-		REQUIRE_FAIL(con.Query("SELECT - 41756167 + '1969-12-11 032657' ::DATE;"));
+		result = con.Query("SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"112356-06-10 (BC)"}));
 	}
 }
