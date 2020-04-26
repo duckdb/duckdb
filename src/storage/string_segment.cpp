@@ -136,30 +136,29 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		assert(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-		assert(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-
-		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+	    bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+        auto less = isFirstGreater?tableFilter[1]:tableFilter[0];
+        auto greater = isFirstGreater?tableFilter[0]:tableFilter[1];
+		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThan, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}

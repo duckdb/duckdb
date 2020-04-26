@@ -632,4 +632,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"112356-06-10 (BC)"}));
 	}
+	SECTION("592"){
+	    // Expression with LIKE and comparison causes an assertion failure
+	    REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
 }
