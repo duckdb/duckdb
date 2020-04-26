@@ -73,9 +73,12 @@ void StringSegment::read_string(string_t *result_data, buffer_handle_set_t &hand
                                 size_t vector_index) {
 	if (string_updates && string_updates[vector_index]) {
 		auto &info = *string_updates[vector_index];
+		while (info.ids[update_idx] < src_idx) {
+			//! We need to catch the update_idx up to the src_idx
+			update_idx++;
+		}
 		if (update_idx < info.count && info.ids[update_idx] == src_idx) {
 			result_data[res_idx] = ReadString(handles, info.block_ids[update_idx], info.offsets[update_idx]);
-			update_idx++;
 		} else {
 			result_data[res_idx] = FetchStringFromDict(handles, baseptr, dict_offset[src_idx]);
 		}
@@ -133,30 +136,29 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-		assert(tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO);
-		assert(tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		       tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
-
-		if (tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+	    bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+        auto less = isFirstGreater?tableFilter[1]:tableFilter[0];
+        auto greater = isFirstGreater?tableFilter[0]:tableFilter[1];
+		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
+			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThan, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
-			if (tableFilter[1].comparison_type == ExpressionType::COMPARE_LESSTHAN) {
+			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
 				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, tableFilter[0].constant.str_value,
-				    tableFilter[1].constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
+				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}
@@ -445,7 +447,9 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 static void update_min_max(string value, char *__restrict min, char *__restrict max) {
 	//! we can only fit 8 bytes, so we might need to trim our string
 	size_t value_size = value.size() > 7 ? 7 : value.size();
-	if (min[0] == '\0' && max[0] == '\0') {
+	//! This marks the min/max was not initialized
+	char marker = '1';
+	if (min[0] == '\0' && min[1] == marker && max[0] == '\0' && max[1] == marker) {
 		size_t min_end = value.copy(min, value_size);
 		size_t max_end = value.copy(max, value_size);
 		for (size_t i = min_end; i < 8; i++) {
@@ -698,6 +702,14 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 	// perform a merge between the new and old indexes
 	auto strings = FlatVector::GetData<string_t>(update);
 	auto &update_nullmask = FlatVector::Nullmask(update);
+	//! Check if we need to update the segment's nullmask
+	for (idx_t i = 0; i < update_count; i++) {
+		if (!update_nullmask[i]) {
+			auto min = (char *)stats.minimum.get();
+			auto max = (char *)stats.maximum.get();
+			update_min_max(strings[i].GetData(), min, max);
+		}
+	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
 		info->ids[count] = id;
 		if (!update_nullmask[idx]) {

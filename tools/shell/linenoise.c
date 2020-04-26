@@ -909,6 +909,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		}
 
 		switch (c) {
+		case 10:
 		case ENTER: /* enter */
 			history_len--;
 			free(history[history_len]);
@@ -1024,10 +1025,6 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				}
 			}
 			break;
-		default:
-			if (linenoiseEditInsert(&l, c))
-				return -1;
-			break;
 		case CTRL_U: /* Ctrl+u, delete the whole line. */
 			buf[0] = '\0';
 			l.pos = l.len = 0;
@@ -1050,6 +1047,10 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 			break;
 		case CTRL_W: /* ctrl+w, delete previous word */
 			linenoiseEditDeletePrevWord(&l);
+			break;
+		default:
+			if (linenoiseEditInsert(&l, c))
+				return -1;
 			break;
 		}
 	}
