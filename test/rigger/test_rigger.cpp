@@ -604,7 +604,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1), (0), (1);"));
 		result = con.Query("SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;");
-		REQUIRE(CHECK_COLUMN(result, 0, {0, 2}));
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 	}
 	SECTION("589") {
 		// Creating an index on rowid results in an internal error "Failed to bind column reference"

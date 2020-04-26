@@ -488,11 +488,21 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
-		child.Normalify(sel, count);
+		if (child.vector_type == VectorType::FLAT_VECTOR) {
+			data.sel = &sel;
+			data.data = FlatVector::GetData(child);
+			data.nullmask = &FlatVector::Nullmask(child);
+		} else {
+			// dictionary with non-flat child: create a new reference to the child and normalify it
+			auto new_aux = make_unique<VectorChildBuffer>();
+			new_aux->data.Reference(child);
+			new_aux->data.Normalify(sel, count);
 
-		data.sel = &sel;
-		data.data = FlatVector::GetData(child);
-		data.nullmask = &FlatVector::Nullmask(child);
+			data.sel = &sel;
+			data.data = FlatVector::GetData(new_aux->data);
+			data.nullmask = &FlatVector::Nullmask(new_aux->data);
+			this->auxiliary = move(new_aux);
+		}
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
