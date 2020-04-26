@@ -588,4 +588,38 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		//  -- expected: {''}, actual: {}
 		REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	}
+	SECTION("586") {
+		// NOACCENT.NOCASE comparison with a special character results in a segmentation fault
+		result = con.Query("SELECT ''='Ʇ';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT '' COLLATE NOACCENT.NOCASE='Ʇ';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	}
+	SECTION("587") {
+		// A negative DATE results in a "double free or corruption" crash
+		result = con.Query("SELECT DATE '-10000-01-01';");
+	}
+	SECTION("588") {
+		// Query with complex ORDER BY causes an incorrect rowid value
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1), (0), (1);"));
+		result = con.Query("SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;");
+		REQUIRE(CHECK_COLUMN(result, 0, {0, 2}));
+	}
+	SECTION("589") {
+		// Creating an index on rowid results in an internal error "Failed to bind column reference"
+		REQUIRE_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_FAIL(con.Query("CREATE INDEX i0 ON t0(rowid, c0);"));
+	}
+	SECTION("590") {
+		// Comparison with a DATE yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (DATE '2000-01-02');"));
+		result = con.Query("SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2000, 1, 1)}));
+	}
+	SECTION("591") {
+		// Subtracting a large integer from a DATE results in a "double free or corruption"
+		REQUIRE_FAIL(con.Query("SELECT - 41756167 + '1969-12-11 032657' ::DATE;"));
+	}
 }

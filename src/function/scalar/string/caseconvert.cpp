@@ -22,11 +22,11 @@ static string_t strcase_unicode(Vector &result, const char *input_data, idx_t in
 			int sz = 0;
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			sz = utf8proc_codepoint_length(converted_codepoint);
-			if (sz < 0) {
+			int new_sz = utf8proc_codepoint_length(converted_codepoint);
+			if (new_sz < 0) {
 				throw InternalException("Invalid UTF8 encountered!");
 			}
-			output_length += sz;
+			output_length += new_sz;
 			i += sz;
 		} else {
 			// ascii
@@ -40,13 +40,13 @@ static string_t strcase_unicode(Vector &result, const char *input_data, idx_t in
 	for (idx_t i = 0; i < input_length;) {
 		if (input_data[i] & 0x80) {
 			// non-ascii character
-			int sz = 0;
+			int sz = 0, new_sz = 0;
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			if (!utf8proc_codepoint_to_utf8(converted_codepoint, sz, result_data)) {
+			if (!utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data)) {
 				throw InternalException("Invalid UTF8 encountered!");
 			}
-			result_data += sz;
+			result_data += new_sz;
 			i += sz;
 		} else {
 			// ascii
