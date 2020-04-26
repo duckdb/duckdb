@@ -608,7 +608,7 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	}
 	SECTION("589") {
 		// Creating an index on rowid results in an internal error "Failed to bind column reference"
-		REQUIRE_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_FAIL(con.Query("CREATE INDEX i0 ON t0(rowid, c0);"));
 	}
 	SECTION("590") {

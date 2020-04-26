@@ -94,6 +94,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			throw BinderException("Cannot create index on a view!");
 		}
 		auto &get = (LogicalGet &)*plan;
+		for(auto &column_id : get.column_ids) {
+			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+				throw BinderException("Cannot create an index on the rowid!");
+			}
+		}
 		// this gives us a logical table scan
 		// we take the required columns from here
 		// create the logical operator
