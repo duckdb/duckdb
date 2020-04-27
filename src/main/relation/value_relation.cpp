@@ -10,7 +10,7 @@ namespace duckdb {
 
 ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> values, vector<string> names_p,
                              string alias_p)
-    : Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	// create constant expressions for the values
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 		auto &list = values[row_idx];
@@ -25,7 +25,7 @@ ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> value
 }
 
 ValueRelation::ValueRelation(ClientContext &context, string values_list, vector<string> names_p, string alias_p)
-    : Relation(context, RelationType::VALUE_LIST), names(move(names_p)), alias(move(alias_p)) {
+    : Relation(context, RelationType::VALUE_LIST_RELATION), names(move(names_p)), alias(move(alias_p)) {
 	this->expressions = Parser::ParseValuesList(values_list);
 	context.TryBindRelation(*this, this->columns);
 }

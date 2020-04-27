@@ -8,7 +8,7 @@ namespace duckdb {
 
 DeleteRelation::DeleteRelation(ClientContext &context, unique_ptr<ParsedExpression> condition_p, string schema_name_p,
                                string table_name_p)
-    : Relation(context, RelationType::DELETE), condition(move(condition_p)), schema_name(move(schema_name_p)),
+    : Relation(context, RelationType::DELETE_RELATION), condition(move(condition_p)), schema_name(move(schema_name_p)),
       table_name(move(table_name_p)) {
 	context.TryBindRelation(*this, this->columns);
 }

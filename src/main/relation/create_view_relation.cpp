@@ -7,7 +7,7 @@
 namespace duckdb {
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name, bool replace)
-    : Relation(child_p->context, RelationType::CREATE_VIEW), child(move(child_p)), view_name(move(view_name)),
+    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)), view_name(move(view_name)),
       replace(replace) {
 	context.TryBindRelation(*this, this->columns);
 }

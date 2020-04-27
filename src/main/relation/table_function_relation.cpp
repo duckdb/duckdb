@@ -11,7 +11,7 @@
 namespace duckdb {
 
 TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p)
-    : Relation(context, RelationType::TABLE_FUNCTION), name(move(name_p)), parameters(move(parameters_p)) {
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)) {
 	context.TryBindRelation(*this, this->columns);
 }
 
