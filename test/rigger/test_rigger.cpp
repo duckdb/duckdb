@@ -544,8 +544,6 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		// Incorrect result for BETWEEN query that casts column to boolean #571
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (-1);"));
-		con.Query("explain SELECT t0.c0 FROM t0 WHERE NOT (0 BETWEEN 0 AND t0.c0::BOOL);")->Print();
-
 		result = con.Query("SELECT t0.c0 FROM t0 WHERE NOT (0 BETWEEN 0 AND t0.c0::BOOL);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
