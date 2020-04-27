@@ -84,6 +84,7 @@ matrix:
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
         - cmake --build . --target jdbc --config Release
+        - cmake --build . --target icu_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
         - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
