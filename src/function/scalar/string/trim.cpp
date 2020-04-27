@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "utf8proc.hpp"
 
 #include <string.h>
 
@@ -11,13 +12,13 @@ using namespace std;
 namespace duckdb {
 
 struct SpaceChar {
-	static char Operation(char input) {
-		return isspace(input);
+	static char Operation(utf8proc_int32_t codepoint) {
+		return isspace(codepoint);
 	}
 };
 
 struct KeptChar {
-	static char Operation(char input) {
+	static char Operation(utf8proc_int32_t codepoint) {
 		return false;
 	}
 };
@@ -26,25 +27,38 @@ template <class LTRIM, class RTRIM> static void trim_function(Vector &input, Vec
 	assert(input.type == TypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
-		auto input_data = input.GetData();
-		auto input_length = input.GetSize();
+		const auto data = input.GetData();
+		const auto size = input.GetSize();
 
+		utf8proc_int32_t codepoint;
+		const auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
+
+		//  Find the first character that is not left trimmed
 		idx_t begin = 0;
-		for (; begin < input_length; ++begin)
-			if (!LTRIM::Operation(input_data[begin]))
+		while (begin < size) {
+			const auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
+			assert(bytes > 0);
+			if (!LTRIM::Operation(codepoint)) {
 				break;
+			}
+			begin += bytes;
+		}
 
-		idx_t end = input_length;
-		for (; begin < --end;)
-			if (!RTRIM::Operation(input_data[end]))
-				break;
-		++end;
+		//  Find the last character that is not right trimmed
+		idx_t end = size;
+		for (auto next = begin; next < size;) {
+			const auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
+			assert(bytes > 0);
+			next += bytes;
+			if (!RTRIM::Operation(codepoint)) {
+				end = next;
+			}
+		}
 
+		//  Copy the trimmed string
 		auto target = StringVector::EmptyString(result, end - begin);
-		auto output_data = target.GetData();
-		for (idx_t i = begin; i < end; ++i)
-			*output_data++ = input_data[i];
-		*output_data++ = '\0';
+		auto output = target.GetData();
+		memcpy(output, data + begin, end - begin);
 
 		target.Finalize();
 		return target;
