@@ -135,7 +135,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 	}
 
 	// construct the result
-	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT, result_types, typeids, std::move(names));
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT, result_types, typeids, std::move(names));
 	DataChunk result_chunk;
 	result_chunk.Initialize(typeids);
 	int rc = SQLITE_ERROR;

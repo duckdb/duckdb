@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 
 #include "duckdb/function/scalar/string_functions.hpp"
 
@@ -12,39 +13,43 @@
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source, CollationType collation) {
+unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
+                                                       string collation) {
 	// replace default collation with system collation
-	if (collation == CollationType::COLLATE_DEFAULT) {
+	if (collation.empty()) {
 		collation = context.db.collation;
 	}
-	switch(collation) {
-	case CollationType::COLLATE_NONE: {
+	// bind the collation
+	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
+		// binary collation: just skip
 		return move(source);
 	}
-	case CollationType::COLLATE_NOCASE: {
-		// push lower
-		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, LowerFun::GetFunction());
+	auto &catalog = Catalog::GetCatalog(context);
+	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
+	vector<CollateCatalogEntry *> entries;
+	for (auto &collation_argument : splits) {
+		auto collation_entry = catalog.GetEntry<CollateCatalogEntry>(context, DEFAULT_SCHEMA, collation_argument);
+		if (collation_entry->combinable) {
+			entries.insert(entries.begin(), collation_entry);
+		} else {
+			if (entries.size() > 0 && !entries.back()->combinable) {
+				throw BinderException("Cannot combine collation types \"%s\" and \"%s\"", entries.back()->name.c_str(),
+				                      collation_entry->name.c_str());
+			}
+			entries.push_back(collation_entry);
+		}
+	}
+	for (auto &collation_entry : entries) {
+		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, collation_entry->function);
 		function->children.push_back(move(source));
 		function->arguments.push_back({SQLType::VARCHAR});
 		function->sql_return_type = SQLType::VARCHAR;
-		return move(function);
+		if (collation_entry->function.bind) {
+			function->bind_info = collation_entry->function.bind(*function, context);
+		}
+		source = move(function);
 	}
-	case CollationType::COLLATE_NOACCENT: {
-		// push strip_accents
-		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, StripAccentsFun::GetFunction());
-		function->children.push_back(move(source));
-		function->arguments.push_back({SQLType::VARCHAR});
-		function->sql_return_type = SQLType::VARCHAR;
-		return move(function);
-	}
-	case CollationType::COLLATE_NOCASE_NOACCENT: {
-		// push both NOCASE and NOACCENT
-		auto expr = PushCollation(context, move(source), CollationType::COLLATE_NOCASE);
-		return PushCollation(context, move(expr), CollationType::COLLATE_NOACCENT);
-	}
-	default:
-		throw BinderException("Unsupported collation type in binder");
-	}
+	return source;
 }
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {
@@ -69,9 +74,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 			input_type = right.sql_type;
 		} else {
 			// else: check if collations are compatible
-			if (left.sql_type.collation != CollationType::COLLATE_DEFAULT &&
-			    right.sql_type.collation != CollationType::COLLATE_DEFAULT &&
-				left.sql_type.collation != right.sql_type.collation) {
+			if (!left.sql_type.collation.empty() && !right.sql_type.collation.empty() &&
+			    left.sql_type.collation != right.sql_type.collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
@@ -82,7 +86,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// add casts (if necessary)
 	left.expr = BoundCastExpression::AddCastToType(move(left.expr), left.sql_type, input_type);
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), right.sql_type, input_type);
-	if (input_type.id == SQLTypeId::VARCHAR && input_type.collation != CollationType::COLLATE_NONE) {
+	if (input_type.id == SQLTypeId::VARCHAR) {
 		// handle collation
 		left.expr = PushCollation(context, move(left.expr), input_type.collation);
 		right.expr = PushCollation(context, move(right.expr), input_type.collation);

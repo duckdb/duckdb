@@ -56,7 +56,8 @@ public:
 
 	// Bind table names to ColumnRefExpressions
 	static void BindTableNames(Binder &binder, ParsedExpression &expr);
-	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source, CollationType collation);
+	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
+	                                            string collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 

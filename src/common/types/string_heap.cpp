@@ -16,12 +16,7 @@ StringHeap::StringHeap() : tail(nullptr) {
 
 string_t StringHeap::AddString(const char *data, idx_t len) {
 	assert(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
-
-	auto insert_string = EmptyString(len);
-	auto insert_pos = insert_string.GetData();
-	memcpy(insert_pos, data, len);
-	insert_string.Finalize();
-	return insert_string;
+	return AddBlob(data, len);
 }
 
 string_t StringHeap::AddString(const char *data) {
@@ -34,6 +29,14 @@ string_t StringHeap::AddString(const string &data) {
 
 string_t StringHeap::AddString(const string_t &data) {
 	return AddString(data.GetData(), data.GetSize());
+}
+
+string_t StringHeap::AddBlob(const char *data, idx_t len) {
+	auto insert_string = EmptyString(len);
+	auto insert_pos = insert_string.GetData();
+	memcpy(insert_pos, data, len);
+	insert_string.Finalize();
+	return insert_string;
 }
 
 string_t StringHeap::EmptyString(idx_t len) {

@@ -176,7 +176,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
 	case TypeId::VARCHAR: {
-		((string_t *)data)[index] = StringVector::AddString(*this, newVal.str_value);
+		((string_t *)data)[index] = StringVector::AddBlob(*this, newVal.str_value);
 		break;
 	}
 	case TypeId::STRUCT: {
@@ -272,7 +272,7 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::DOUBLE(((double *)data)[index]);
 	case TypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		return Value(str.GetString());
+		return Value::BLOB(str.GetString());
 	}
 	case TypeId::STRUCT: {
 		Value ret(TypeId::STRUCT);
@@ -581,23 +581,9 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	}
 }
 
-void Vector::Verify(const SelectionVector &sel, idx_t count) {
+void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
-		return;
-	}
-	if (vector_type == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(*this);
-		auto &dict_sel = DictionaryVector::SelVector(*this);
-		for (idx_t i = 0; i < count; i++) {
-			auto oidx = sel.get_index(i);
-			auto idx = dict_sel.get_index(oidx);
-			assert(idx < STANDARD_VECTOR_SIZE);
-		}
-		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(sel, count);
-		SelectionVector new_sel(new_buffer);
-		child.Verify(new_sel, count);
 		return;
 	}
 	if (type == TypeId::VARCHAR) {
@@ -624,6 +610,32 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		default:
 			break;
 		}
+	}
+#endif
+}
+
+void Vector::UTFVerify(idx_t count) {
+	UTFVerify(FlatVector::IncrementalSelectionVector, count);
+}
+
+void Vector::Verify(const SelectionVector &sel, idx_t count) {
+#ifdef DEBUG
+	if (count == 0) {
+		return;
+	}
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(*this);
+		auto &dict_sel = DictionaryVector::SelVector(*this);
+		for (idx_t i = 0; i < count; i++) {
+			auto oidx = sel.get_index(i);
+			auto idx = dict_sel.get_index(oidx);
+			assert(idx < STANDARD_VECTOR_SIZE);
+		}
+		// merge the selection vectors and verify the child
+		auto new_buffer = dict_sel.Slice(sel, count);
+		SelectionVector new_sel(new_buffer);
+		child.Verify(new_sel, count);
+		return;
 	}
 	if (type == TypeId::DOUBLE) {
 		// verify that there are no INF or NAN values
@@ -713,6 +725,20 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
 	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
 	return string_buffer.AddString(data);
+}
+
+string_t StringVector::AddBlob(Vector &vector, string_t data) {
+	assert(vector.type == TypeId::VARCHAR);
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	return string_buffer.AddBlob(data);
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {

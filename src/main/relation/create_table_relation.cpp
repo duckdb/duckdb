@@ -8,7 +8,7 @@
 namespace duckdb {
 
 CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
-    : Relation(child_p->context, RelationType::CREATE_TABLE), child(move(child_p)), schema_name(move(schema_name)),
+    : Relation(child_p->context, RelationType::CREATE_TABLE_RELATION), child(move(child_p)), schema_name(move(schema_name)),
       table_name(move(table_name)) {
 	context.TryBindRelation(*this, this->columns);
 }

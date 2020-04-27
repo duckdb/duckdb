@@ -15,12 +15,12 @@ namespace duckdb {
 //! CollateExpression represents a COLLATE statement
 class CollateExpression : public ParsedExpression {
 public:
-	CollateExpression(CollationType collate, unique_ptr<ParsedExpression> child);
+	CollateExpression(string collation, unique_ptr<ParsedExpression> child);
 
 	//! The child of the cast expression
 	unique_ptr<ParsedExpression> child;
 	//! The collation clause
-	CollationType collation;
+	string collation;
 
 public:
 	string ToString() const override;

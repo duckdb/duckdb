@@ -170,10 +170,10 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 bool sqlite3_display_result(StatementType type) {
 	switch (type) {
-	case StatementType::EXECUTE:
-	case StatementType::EXPLAIN:
-	case StatementType::PRAGMA:
-	case StatementType::SELECT:
+	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::EXPLAIN_STATEMENT:
+	case StatementType::PRAGMA_STATEMENT:
+	case StatementType::SELECT_STATEMENT:
 		return true;
 	default:
 		return false;
