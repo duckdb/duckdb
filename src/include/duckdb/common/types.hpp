@@ -26,6 +26,11 @@ struct blob_t {
 struct string_t;
 
 template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
+template <class T> using buffer_ptr = std::shared_ptr<T>;
+
+template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {
+	return std::make_shared<T>(std::forward<Args>(args)...);
+}
 
 struct list_entry_t {
 	list_entry_t() = default;
@@ -193,12 +198,13 @@ struct SQLType {
 	SQLTypeId id;
 	uint16_t width;
 	uint8_t scale;
+	string collation;
 
 	// TODO serialize this
 	child_list_t<SQLType> child_type;
 
-	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0)
-	    : id(id), width(width), scale(scale) {
+	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
+	    : id(id), width(width), scale(scale), collation(move(collation)) {
 	}
 
 	bool operator==(const SQLType &rhs) const {
@@ -229,6 +235,7 @@ public:
 	static const SQLType TIMESTAMP;
 	static const SQLType TIME;
 	static const SQLType VARCHAR;
+	static const SQLType VARBINARY;
 	static const SQLType STRUCT;
 	static const SQLType LIST;
 	static const SQLType ANY;
@@ -268,6 +275,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {
 		return TypeId::POINTER;
+	} else if (std::is_same<T, float>()) {
+		return TypeId::FLOAT;
 	} else if (std::is_same<T, double>()) {
 		return TypeId::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {

@@ -27,7 +27,6 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(AdaptiveStringReorderingAND)
 
-
 DUCKDB_BENCHMARK(AdaptiveStringReorderingOR, "[expression_reordering]")
 void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema
@@ -47,14 +46,14 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(AdaptiveStringReorderingOR)
 
-
 DUCKDB_BENCHMARK(AdaptiveNumericReorderingAND, "[expression_reordering]")
 void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-	return "SELECT * FROM lineitem WHERE l_quantity < 11 AND l_shipdate < 727272 AND l_receiptdate < 828282 AND l_tax < 0.05;";
+	return "SELECT * FROM lineitem WHERE l_quantity < 11 AND l_shipdate < 727272 AND l_receiptdate < 828282 AND l_tax "
+	       "< 0.05;";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -67,14 +66,14 @@ string BenchmarkInfo() override {
 }
 FINISH_BENCHMARK(AdaptiveNumericReorderingAND)
 
-
 DUCKDB_BENCHMARK(AdaptiveNumericReorderingOR, "[expression_reordering]")
 void Load(DuckDBBenchmarkState *state) override {
 	// load the data into the tpch schema
 	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override {
-	return "SELECT * FROM lineitem WHERE l_quantity < 11 OR l_shipdate < 727272 OR l_receiptdate < 828282 OR l_tax < 0.05;";
+	return "SELECT * FROM lineitem WHERE l_quantity < 11 OR l_shipdate < 727272 OR l_receiptdate < 828282 OR l_tax < "
+	       "0.05;";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -86,7 +85,6 @@ string BenchmarkInfo() override {
 	return "Execute adaptive reordering query ...";
 }
 FINISH_BENCHMARK(AdaptiveNumericReorderingOR)
-
 
 DUCKDB_BENCHMARK(AdaptiveMixedReorderingAND, "[expression_reordering]")
 void Load(DuckDBBenchmarkState *state) override {
@@ -106,7 +104,6 @@ string BenchmarkInfo() override {
 	return "Execute adaptive reordering query ...";
 }
 FINISH_BENCHMARK(AdaptiveMixedReorderingAND)
-
 
 DUCKDB_BENCHMARK(AdaptiveMixedReorderingOR, "[expression_reordering]")
 void Load(DuckDBBenchmarkState *state) override {

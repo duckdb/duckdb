@@ -37,7 +37,7 @@ public:
 	bool HasParameter() const override;
 
 	bool Equals(const BaseExpression *other) const override;
-	uint64_t Hash() const override;
+	hash_t Hash() const override;
 
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;

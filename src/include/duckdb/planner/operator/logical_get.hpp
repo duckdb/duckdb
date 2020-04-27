@@ -11,12 +11,15 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/storage/data_table.hpp"
+
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
 	LogicalGet(idx_t table_index);
+	LogicalGet(TableCatalogEntry *table, idx_t table_index);
 	LogicalGet(TableCatalogEntry *table, idx_t table_index, vector<column_t> column_ids);
 
 	idx_t EstimateCardinality() override;
@@ -27,7 +30,8 @@ public:
 	idx_t table_index;
 	//! Bound column IDs
 	vector<column_t> column_ids;
-
+	//! Filters pushed down for table scan
+	vector<TableFilter> tableFilters;
 	string ParamsToString() const override;
 
 public:

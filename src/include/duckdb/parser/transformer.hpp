@@ -26,11 +26,31 @@ struct OrderByNode;
 //! parser representation into the DuckDB representation
 class Transformer {
 public:
+	Transformer(Transformer *parent = nullptr) : parent(parent) {
+	}
+
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
 	string NodetypeToString(PGNodeTag type);
 
+	idx_t ParamCount() {
+		return parent ? parent->ParamCount() : prepared_statement_parameter_index;
+	}
+
+private:
+	Transformer *parent;
+	//! The current prepared statement parameter index
 	idx_t prepared_statement_parameter_index = 0;
+	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
+	unordered_map<string, PGWindowDef *> window_clauses;
+
+	void SetParamCount(idx_t new_count) {
+		if (parent) {
+			parent->SetParamCount(new_count);
+		} else {
+			this->prepared_statement_parameter_index = new_count;
+		}
+	}
 
 private:
 	//! Transforms a Postgres statement into a single SQL statement
@@ -70,6 +90,9 @@ private:
 	unique_ptr<UpdateStatement> TransformUpdate(PGNode *node);
 	//! Transform a Postgres T_PGPragmaStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformPragma(PGNode *node);
+	unique_ptr<ExplainStatement> TransformExplain(PGNode *node);
+	unique_ptr<VacuumStatement> TransformVacuum(PGNode *node);
+	unique_ptr<PragmaStatement> TransformShow(PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(PGNode *node);
@@ -122,6 +145,13 @@ private:
 	unique_ptr<Constraint> TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index);
 
 	//===--------------------------------------------------------------------===//
+	// Collation transform
+	//===--------------------------------------------------------------------===//
+	unique_ptr<ParsedExpression> TransformCollateExpr(PGCollateClause *collate);
+
+	string TransformCollation(PGCollateClause *collate);
+
+	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	string TransformAlias(PGAlias *root);
@@ -163,9 +193,6 @@ private:
 	bool TransformExpressionList(PGList *list, vector<unique_ptr<ParsedExpression>> &result);
 
 	void TransformWindowDef(PGWindowDef *window_spec, WindowExpression *expr);
-
-	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
-	unordered_map<string, PGWindowDef *> window_clauses;
 };
 
 } // namespace duckdb

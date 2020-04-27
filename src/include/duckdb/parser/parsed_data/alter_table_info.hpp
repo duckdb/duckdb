@@ -26,7 +26,7 @@ struct AlterInfo : public ParseInfo {
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
-enum class AlterTableType : uint8_t { INVALID = 0, RENAME_COLUMN = 1 };
+enum class AlterTableType : uint8_t { INVALID = 0, RENAME_COLUMN = 1, RENAME_TABLE = 2 };
 
 struct AlterTableInfo : public AlterInfo {
 	AlterTableInfo(AlterTableType type, string schema, string table)
@@ -56,6 +56,20 @@ struct RenameColumnInfo : public AlterTableInfo {
 	string name;
 	//! Column new name
 	string new_name;
+
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
+};
+
+struct RenameTableInfo : public AlterTableInfo {
+	RenameTableInfo(string schema, string table, string new_name)
+	    : AlterTableInfo(AlterTableType::RENAME_TABLE, schema, table), new_table_name(new_name) {
+	}
+	~RenameTableInfo() override {
+	}
+
+	//! Table new name
+	string new_table_name;
 
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);

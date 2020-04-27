@@ -32,6 +32,10 @@ public:
 	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
 		value_.integer = val;
 	}
+	//! Create a BIGINT value
+	Value(int64_t val) : type(TypeId::INT64), is_null(false) {
+		value_.bigint = val;
+	}
 	//! Create a FLOAT value
 	Value(float val) : type(TypeId::FLOAT), is_null(false) {
 		value_.float_ = val;
@@ -45,13 +49,7 @@ public:
 	}
 	Value(string_t val);
 	//! Create a VARCHAR value
-	Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-		if (IsUTF8String(val.c_str())) {
-			str_value = val;
-		} else {
-			throw Exception("String value is not valid UTF8");
-		}
-	}
+	Value(string val);
 
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
@@ -71,9 +69,11 @@ public:
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
 	//! Create a hash Value from a specified value
-	static Value HASH(uint64_t value);
+	static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
 	static Value POINTER(uintptr_t value);
+	//! Create a date Value from a specified date
+	static Value DATE(date_t date);
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified date
@@ -86,12 +86,17 @@ public:
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
 
+	//! Create a blob value
+	static Value BLOB(string value);
+
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
 	static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	static Value STRUCT(child_list_t<Value> values);
+	//! Create a list value with the given entries
+	static Value LIST(std::vector<Value> values);
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
@@ -114,11 +119,16 @@ public:
 	Value CastAs(TypeId target_type) const;
 	//! Cast this value to another type
 	Value CastAs(SQLType source_type, SQLType target_type);
-
+	//! Tries to cast value to another type, throws exception if its not possible
+	bool TryCastAs(SQLType source_type, SQLType target_type);
 	//! The type of the value
 	TypeId type;
 	//! Whether or not the value is NULL
 	bool is_null;
+
+	SQLType GetSQLType() {
+		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
+	}
 
 	//! The value of the object, if it is of a constant size Type
 	union Val {
@@ -170,8 +180,8 @@ public:
 	bool operator<=(const int64_t &rhs) const;
 	bool operator>=(const int64_t &rhs) const;
 
-	static bool IsUTF8String(const char *s);
-	static bool IsUTF8String(string_t s);
+	static bool FloatIsValid(float value);
+	static bool DoubleIsValid(double value);
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	static bool ValuesAreEqual(Value result_value, Value value);
@@ -181,6 +191,9 @@ public:
 		return out;
 	}
 	void Print();
+
+private:
+	SQLType sql_type = SQLType(SQLTypeId::INVALID);
 
 private:
 	template <class T> T GetValueInternal();
@@ -205,6 +218,7 @@ template <> Value Value::CreateValue(string value);
 template <> Value Value::CreateValue(string_t value);
 template <> Value Value::CreateValue(float value);
 template <> Value Value::CreateValue(double value);
+template <> Value Value::CreateValue(Value value);
 
 template <> bool Value::GetValue();
 template <> int8_t Value::GetValue();

@@ -32,6 +32,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "AGGREGATE";
 	case PhysicalOperatorType::WINDOW:
 		return "WINDOW";
+	case PhysicalOperatorType::UNNEST:
+		return "UNNEST";
 	case PhysicalOperatorType::DISTINCT:
 		return "DISTINCT";
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
@@ -72,8 +74,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "UPDATE";
 	case PhysicalOperatorType::EXPORT_EXTERNAL_FILE:
 		return "EXPORT_EXTERNAL_FILE";
-	case PhysicalOperatorType::PRUNE_COLUMNS:
-		return "PRUNE";
 	case PhysicalOperatorType::EMPTY_RESULT:
 		return "EMPTY_RESULT";
 	case PhysicalOperatorType::TABLE_FUNCTION:
@@ -86,8 +86,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "EXPLAIN";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
-    case PhysicalOperatorType::RECURSIVE_CTE:
-        return "REC_CTE";
+	case PhysicalOperatorType::VACUUM:
+		return "VACUUM";
+	case PhysicalOperatorType::RECURSIVE_CTE:
+		return "REC_CTE";
 	case PhysicalOperatorType::INVALID:
 	default:
 		return "INVALID";

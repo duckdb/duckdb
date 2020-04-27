@@ -77,6 +77,10 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 
 	case CatalogType::INDEX:
 	case CatalogType::PREPARED_STATEMENT:
+	case CatalogType::AGGREGATE_FUNCTION:
+	case CatalogType::SCALAR_FUNCTION:
+	case CatalogType::TABLE_FUNCTION:
+
 		// do nothing, we log the query to recreate this
 		break;
 	default:
@@ -94,7 +98,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 		vector<TypeId> delete_types = {ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
-	auto rows = (row_t *)delete_chunk->data[0].GetData();
+	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
 	for (idx_t i = 0; i < info->count; i++) {
 		rows[i] = info->base_row + info->rows[i];
 	}
@@ -107,11 +111,9 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	// switch to the current table, if necessary
 	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
 
-	if (!update_chunk || info->column_data->type != update_chunk->data[0].type) {
-		update_chunk = make_unique<DataChunk>();
-		vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
-		update_chunk->Initialize(update_types);
-	}
+	update_chunk = make_unique<DataChunk>();
+	vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
+	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base table
 	ColumnScanState state;
@@ -119,12 +121,13 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	info->segment->Fetch(state, info->vector_index, update_chunk->data[0]);
 
 	// write the row ids into the chunk
-	auto row_ids = (row_t *)update_chunk->data[1].GetData();
+	auto row_ids = FlatVector::GetData<row_t>(update_chunk->data[1]);
 	idx_t start = info->segment->row_start + info->vector_index * STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < info->N; i++) {
 		row_ids[info->tuples[i]] = start + info->tuples[i];
 	}
-	update_chunk->SetCardinality(info->N, info->tuples);
+	SelectionVector sel(info->tuples);
+	update_chunk->Slice(sel, info->N);
 
 	log->WriteUpdate(*update_chunk, info->column_data->column_idx);
 }

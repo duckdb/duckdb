@@ -9,65 +9,87 @@
 using namespace duckdb;
 using namespace std;
 
-template <class T>
-void generate_sequence_function(T *__restrict result_data, T value, T increment, idx_t count,
-                                sel_t *__restrict sel_vector, bool ignore_sel_vector) {
-	if (ignore_sel_vector) {
-		VectorOperations::Exec(sel_vector, count, [&](idx_t i, idx_t k) {
-			result_data[i] = value;
-			value += increment;
-		});
-	} else {
-		if (sel_vector) {
-			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector[i];
-				result_data[idx] = value + increment * idx;
-			}
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				result_data[i] = value;
-				value += increment;
-			}
-		}
+template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
+	assert(TypeIsNumeric(result.type));
+	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
+		throw Exception("Sequence start or increment out of type range");
+	}
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<T>(result);
+	auto value = (T)start;
+	for (idx_t i = 0; i < count; i++) {
+		result_data[i] = value;
+		value += increment;
 	}
 }
 
-template <class T> void templated_generate_sequence(Vector &result, T start, T increment, bool ignore_sel_vector) {
-	auto ldata = (T *)result.GetData();
-	generate_sequence_function<T>(ldata, start, increment, result.size(), result.sel_vector(), ignore_sel_vector);
-}
-
-void VectorOperations::GenerateSequence(Vector &result, int64_t start, int64_t increment, bool ignore_sel_vector) {
+void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	if (!TypeIsNumeric(result.type)) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
 	switch (result.type) {
 	case TypeId::INT8:
-		if (start > numeric_limits<int8_t>::max() || increment > numeric_limits<int8_t>::max()) {
-			throw Exception("Sequence start or increment out of type range");
-		}
-		templated_generate_sequence<int8_t>(result, (int8_t)start, (int8_t)increment, ignore_sel_vector);
+		templated_generate_sequence<int8_t>(result, count, start, increment);
 		break;
 	case TypeId::INT16:
-		if (start > numeric_limits<int16_t>::max() || increment > numeric_limits<int16_t>::max()) {
-			throw Exception("Sequence start or increment out of type range");
-		}
-		templated_generate_sequence<int16_t>(result, (int16_t)start, (int16_t)increment, ignore_sel_vector);
+		templated_generate_sequence<int16_t>(result, count, start, increment);
 		break;
 	case TypeId::INT32:
-		if (start > numeric_limits<int32_t>::max() || increment > numeric_limits<int32_t>::max()) {
-			throw Exception("Sequence start or increment out of type range");
-		}
-		templated_generate_sequence<int32_t>(result, (int32_t)start, (int32_t)increment, ignore_sel_vector);
+		templated_generate_sequence<int32_t>(result, count, start, increment);
 		break;
 	case TypeId::INT64:
-		templated_generate_sequence<int64_t>(result, start, increment, ignore_sel_vector);
+		templated_generate_sequence<int64_t>(result, count, start, increment);
 		break;
 	case TypeId::FLOAT:
-		templated_generate_sequence<float>(result, start, increment, ignore_sel_vector);
+		templated_generate_sequence<float>(result, count, start, increment);
 		break;
 	case TypeId::DOUBLE:
-		templated_generate_sequence<double>(result, start, increment, ignore_sel_vector);
+		templated_generate_sequence<double>(result, count, start, increment);
+		break;
+	default:
+		throw NotImplementedException("Unimplemented type for generate sequence");
+	}
+}
+
+template <class T>
+void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
+                                 int64_t increment) {
+	assert(TypeIsNumeric(result.type));
+	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
+		throw Exception("Sequence start or increment out of type range");
+	}
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<T>(result);
+	auto value = (T)start;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		result_data[idx] = value + increment * idx;
+	}
+}
+
+void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
+                                        int64_t increment) {
+	if (!TypeIsNumeric(result.type)) {
+		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
+	}
+	switch (result.type) {
+	case TypeId::INT8:
+		templated_generate_sequence<int8_t>(result, count, sel, start, increment);
+		break;
+	case TypeId::INT16:
+		templated_generate_sequence<int16_t>(result, count, sel, start, increment);
+		break;
+	case TypeId::INT32:
+		templated_generate_sequence<int32_t>(result, count, sel, start, increment);
+		break;
+	case TypeId::INT64:
+		templated_generate_sequence<int64_t>(result, count, sel, start, increment);
+		break;
+	case TypeId::FLOAT:
+		templated_generate_sequence<float>(result, count, sel, start, increment);
+		break;
+	case TypeId::DOUBLE:
+		templated_generate_sequence<double>(result, count, sel, start, increment);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");

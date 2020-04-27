@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -12,6 +13,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -27,7 +29,7 @@ using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      functions(*catalog), sequences(*catalog) {
+      functions(*catalog), sequences(*catalog), collations(*catalog) {
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -96,6 +98,11 @@ CatalogEntry *SchemaCatalogEntry::CreateIndex(ClientContext &context, CreateInde
 	return AddEntry(context, move(index), info->on_conflict);
 }
 
+CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
+	auto collation = make_unique<CollateCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(collation), info->on_conflict);
+}
+
 CatalogEntry *SchemaCatalogEntry::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
 	return AddEntry(context, move(table_function), info->on_conflict);
@@ -140,9 +147,36 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 }
 
 void SchemaCatalogEntry::AlterTable(ClientContext &context, AlterTableInfo *info) {
-	if (!tables.AlterEntry(context, info->table, info)) {
-		throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
+	switch (info->alter_table_type) {
+	case AlterTableType::RENAME_TABLE: {
+		auto &transaction = Transaction::GetTransaction(context);
+		auto entry = tables.GetEntry(transaction, info->table);
+		if (entry == nullptr) {
+			throw CatalogException("Table \"%s\" doesn't exist!", info->table.c_str());
+		}
+		assert(entry->type == CatalogType::TABLE);
+
+		auto copied_entry = entry->Copy(context);
+
+		// Drop the old table entry
+		if (!tables.DropEntry(transaction, info->table, false)) {
+			throw CatalogException("Could not drop \"%s\" entry!", info->table.c_str());
+		}
+
+		// Create a new table entry
+		auto &new_table = ((RenameTableInfo *)info)->new_table_name;
+		unordered_set<CatalogEntry *> dependencies;
+		copied_entry->name = new_table;
+		if (!tables.CreateEntry(transaction, new_table, move(copied_entry), dependencies)) {
+			throw CatalogException("Could not create \"%s\" entry!", new_table.c_str());
+		}
+		break;
 	}
+	default:
+		if (!tables.AlterEntry(context, info->table, info)) {
+			throw CatalogException("Table with name \"%s\" does not exist!", info->table.c_str());
+		}
+	} // end switch
 }
 
 CatalogEntry *SchemaCatalogEntry::GetEntry(ClientContext &context, CatalogType type, const string &name,
@@ -184,6 +218,8 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return functions;
 	case CatalogType::SEQUENCE:
 		return sequences;
+	case CatalogType::COLLATION:
+		return collations;
 	default:
 		throw CatalogException("Unsupported catalog type in schema");
 	}

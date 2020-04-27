@@ -26,7 +26,7 @@ bool BoundReferenceExpression::Equals(const BaseExpression *other_) const {
 	return other->index == index;
 }
 
-uint64_t BoundReferenceExpression::Hash() const {
+hash_t BoundReferenceExpression::Hash() const {
 	return CombineHash(Expression::Hash(), duckdb::Hash<idx_t>(index));
 }
 

@@ -11,9 +11,23 @@ using namespace std;
 class PhysicalSimpleAggregateOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalSimpleAggregateOperatorState(PhysicalSimpleAggregate *parent, PhysicalOperator *child);
+	~PhysicalSimpleAggregateOperatorState() {
+		assert(destructors.size() == aggregates.size());
+		for (idx_t i = 0; i < destructors.size(); i++) {
+			if (!destructors[i]) {
+				continue;
+			}
+			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
+			state_vector.vector_type = VectorType::FLAT_VECTOR;
+
+			destructors[i](state_vector, 1);
+		}
+	}
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
+
+	vector<aggregate_destructor_t> destructors;
 
 	ExpressionExecutor child_executor;
 	//! The payload chunk
@@ -56,7 +70,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 			}
 			// perform the actual aggregation
 			aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
-			                                 state->aggregates[aggr_idx].get());
+			                                 state->aggregates[aggr_idx].get(), payload_chunk.size());
 			payload_idx += payload_cnt;
 		}
 	}
@@ -65,8 +79,8 @@ void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		Vector state_vector(chunk, Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, chunk.data[aggr_idx]);
+		Vector state_vector(Value::POINTER((uintptr_t)state->aggregates[aggr_idx].get()));
+		aggregate.function.finalize(state_vector, chunk.data[aggr_idx], 1);
 	}
 	state->finished = true;
 }
@@ -93,9 +107,10 @@ PhysicalSimpleAggregateOperatorState::PhysicalSimpleAggregateOperatorState(Physi
 			payload_types.push_back(TypeId::INT64);
 		}
 		// initialize the aggregate values
-		auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
-		aggr.function.initialize(state.get(), aggr.return_type);
+		auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
+		aggr.function.initialize(state.get());
 		aggregates.push_back(move(state));
+		destructors.push_back(aggr.function.destructor);
 	}
 	payload_chunk.Initialize(payload_types);
 }

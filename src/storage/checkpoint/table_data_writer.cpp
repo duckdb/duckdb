@@ -69,20 +69,23 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		table.storage->Scan(transaction, chunk, state);
+		unordered_map<idx_t, vector<TableFilter>> mock;
+		table.storage->Scan(transaction, chunk, state, mock);
 		if (chunk.size() == 0) {
 			break;
 		}
 		// for each column, we append whatever we can fit into the block
+		idx_t chunk_size = chunk.size();
 		for (idx_t i = 0; i < table.columns.size(); i++) {
 			assert(chunk.data[i].type == GetInternalType(table.columns[i].type));
-			AppendData(i, chunk.data[i]);
+			AppendData(transaction, i, chunk.data[i], chunk_size);
 		}
 	}
 	// flush any remaining data and write the data pointers to disk
 	for (idx_t i = 0; i < table.columns.size(); i++) {
-		FlushSegment(i);
+		FlushSegment(transaction, i);
 	}
+	VerifyDataPointers();
 	WriteDataPointers();
 }
 
@@ -97,17 +100,16 @@ void TableDataWriter::CreateSegment(idx_t col_idx) {
 	}
 }
 
-void TableDataWriter::AppendData(idx_t col_idx, Vector &data) {
-	idx_t count = data.size();
+void TableDataWriter::AppendData(Transaction &transaction, idx_t col_idx, Vector &data, idx_t count) {
 	idx_t offset = 0;
-	while (offset < count) {
+	while (count > 0) {
 		idx_t appended = segments[col_idx]->Append(*stats[col_idx], data, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;
 		}
 		// the segment is full: flush it to disk
-		FlushSegment(col_idx);
+		FlushSegment(transaction, col_idx);
 
 		// now create a new segment and continue appending
 		CreateSegment(col_idx);
@@ -116,7 +118,7 @@ void TableDataWriter::AppendData(idx_t col_idx, Vector &data) {
 	}
 }
 
-void TableDataWriter::FlushSegment(idx_t col_idx) {
+void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 	auto tuple_count = segments[col_idx]->tuple_count;
 	if (tuple_count == 0) {
 		return;
@@ -138,9 +140,39 @@ void TableDataWriter::FlushSegment(idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointers[col_idx].push_back(data_pointer);
+	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 8 : stats[col_idx]->type_size;
+	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
+	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
+	data_pointers[col_idx].push_back(move(data_pointer));
 	// write the block to disk
 	manager.block_manager.Write(*handle->node, block_id);
+
+	handle.reset();
+	segments[col_idx] = nullptr;
+}
+
+void TableDataWriter::VerifyDataPointers() {
+	// verify the data pointers
+	idx_t table_count = 0;
+	for (idx_t i = 0; i < data_pointers.size(); i++) {
+		auto &data_pointer_list = data_pointers[i];
+		idx_t column_count = 0;
+		// then write the data pointers themselves
+		for (idx_t k = 0; k < data_pointer_list.size(); k++) {
+			auto &data_pointer = data_pointer_list[k];
+			column_count += data_pointer.tuple_count;
+		}
+		if (segments[i]) {
+			column_count += segments[i]->tuple_count;
+		}
+		if (i == 0) {
+			table_count = column_count;
+		} else {
+			if (table_count != column_count) {
+				throw Exception("Column count mismatch in data write!");
+			}
+		}
+	}
 }
 
 void TableDataWriter::WriteDataPointers() {
@@ -157,6 +189,8 @@ void TableDataWriter::WriteDataPointers() {
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
+			manager.tabledata_writer->WriteData(data_pointer.min_stats, 8);
+			manager.tabledata_writer->WriteData(data_pointer.max_stats, 8);
 		}
 	}
 }

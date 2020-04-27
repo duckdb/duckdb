@@ -11,22 +11,24 @@ template <class T> idx_t MergeJoinMark::Equality::Operation(ScalarMergeInfo &l, 
 }
 
 template <class T, class OP> static idx_t merge_join_mark_gt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	assert(l.sel_vector);
-	auto ldata = (T *)l.v.GetData();
-	l.pos = l.count;
+	auto ldata = (T *)l.order.vdata.data;
+	auto &lorder = l.order.order;
+	l.pos = l.order.count;
 	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the SMALLEST value in each of the RHS
 		// because we want to figure out if they are greater than [or equal] to ANY value
 		// get the smallest value from the RHS
 		auto &rorder = r.order_info[chunk_idx];
-		auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
-		auto min_r_value = rdata[rorder.order[0]];
+		auto rdata = (T *)rorder.vdata.data;
+		auto min_r_value = rdata[rorder.vdata.sel->get_index(rorder.order.get_index(0))];
 		// now we start from the current lpos value and check if we found a new value that is [>= OR >] the min RHS
 		// value
 		while (true) {
-			if (OP::Operation(ldata[l.sel_vector[l.pos - 1]], min_r_value)) {
+			auto lidx = lorder.get_index(l.pos - 1);
+			auto dlidx = l.order.vdata.sel->get_index(lidx);
+			if (OP::Operation(ldata[dlidx], min_r_value)) {
 				// found a match for lpos, set it in the found_match vector
-				r.found_match[l.sel_vector[l.pos - 1]] = true;
+				r.found_match[lidx] = true;
 				l.pos--;
 				if (l.pos == 0) {
 					// early out: we exhausted the entire LHS and they all match
@@ -50,24 +52,26 @@ template <class T> idx_t MergeJoinMark::GreaterThanEquals::Operation(ScalarMerge
 }
 
 template <class T, class OP> static idx_t merge_join_mark_lt(ScalarMergeInfo &l, ChunkMergeInfo &r) {
-	assert(l.sel_vector);
-	auto ldata = (T *)l.v.GetData();
+	auto ldata = (T *)l.order.vdata.data;
+	auto &lorder = l.order.order;
 	l.pos = 0;
 	for (idx_t chunk_idx = 0; chunk_idx < r.order_info.size(); chunk_idx++) {
 		// we only care about the BIGGEST value in each of the RHS
 		// because we want to figure out if they are less than [or equal] to ANY value
 		// get the biggest value from the RHS
 		auto &rorder = r.order_info[chunk_idx];
-		auto rdata = (T *)r.data_chunks.chunks[chunk_idx]->data[0].GetData();
-		auto max_r_value = rdata[rorder.order[rorder.count - 1]];
+		auto rdata = (T *)rorder.vdata.data;
+		auto max_r_value = rdata[rorder.vdata.sel->get_index(rorder.order.get_index(rorder.count - 1))];
 		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
 		// value
 		while (true) {
-			if (OP::Operation(ldata[l.sel_vector[l.pos]], max_r_value)) {
+			auto lidx = lorder.get_index(l.pos);
+			auto dlidx = l.order.vdata.sel->get_index(lidx);
+			if (OP::Operation(ldata[dlidx], max_r_value)) {
 				// found a match for lpos, set it in the found_match vector
-				r.found_match[l.sel_vector[l.pos]] = true;
+				r.found_match[lidx] = true;
 				l.pos++;
-				if (l.pos == l.count) {
+				if (l.pos == l.order.count) {
 					// early out: we exhausted the entire LHS and they all match
 					return 0;
 				}

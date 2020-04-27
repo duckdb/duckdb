@@ -28,6 +28,8 @@ class PrepareStatement;
 class ExecuteStatement;
 class PragmaStatement;
 class ExplainStatement;
+class VacuumStatement;
+class RelationStatement;
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -42,9 +44,9 @@ class RecursiveCTENode;
 //===--------------------------------------------------------------------===//
 class ParsedExpression;
 
-class BetweenExpression;
 class CaseExpression;
 class CastExpression;
+class CollateExpression;
 class ColumnRefExpression;
 class ComparisonExpression;
 class ConjunctionExpression;

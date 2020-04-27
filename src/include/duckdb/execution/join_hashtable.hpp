@@ -41,11 +41,12 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		FlatVector pointers;
-		FlatVector build_pointer_vector;
-		sel_t sel_vector[STANDARD_VECTOR_SIZE];
-		// whether or not the given tuple has found a match, used for LeftJoin
-		bool found_match[STANDARD_VECTOR_SIZE];
+		unique_ptr<VectorData[]> key_data;
+		Vector pointers;
+		idx_t count;
+		SelectionVector sel_vector;
+		// whether or not the given tuple has found a match
+		unique_ptr<bool[]> found_match;
 		JoinHashTable &ht;
 		bool finished;
 
@@ -54,6 +55,9 @@ public:
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
 
 	private:
+		void AdvancePointers();
+		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
+
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
@@ -72,10 +76,18 @@ public:
 		void ScanKeyMatches(DataChunk &keys);
 		template <bool MATCH> void NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 
-		idx_t ScanInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result);
 
-		void ResolvePredicates(DataChunk &keys, Vector &comparison_result);
-		idx_t ResolvePredicates(DataChunk &keys, sel_t comparison_result[]);
+		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
+
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel);
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
+		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
+		                  idx_t count, idx_t &offset);
+		void GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset);
+
+		template <bool NO_MATCH_SEL>
+		idx_t ResolvePredicates(DataChunk &keys, SelectionVector *match_sel, SelectionVector *no_match_sel);
 	};
 
 private:
@@ -86,10 +98,10 @@ private:
 		block_id_t block_id;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, Vector &key_data, data_ptr_t key_locations[],
-	                    data_ptr_t tuple_locations[], data_ptr_t hash_locations[], idx_t remaining);
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+	                    idx_t remaining);
 
-	void Hash(DataChunk &keys, Vector &hashes);
+	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 public:
 	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> build_types,
@@ -104,13 +116,13 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 
-	//! The stringheap of the JoinHashTable
-	StringHeap string_heap;
-
 	idx_t size() {
 		return count;
 	}
 
+	//! The stringheap of the JoinHashTable
+	StringHeap string_heap;
+	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<TypeId> equality_types;
@@ -159,10 +171,17 @@ public:
 
 private:
 	//! Apply a bitmask to the hashes
-	void ApplyBitmask(Vector &hashes);
+	void ApplyBitmask(Vector &hashes, idx_t count);
+	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, data_ptr_t key_locations[]);
+	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
+
+	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
+	                  SelectionVector &sel);
+	void SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count,
+	                         data_ptr_t key_locations[]);
+	void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t count, data_ptr_t key_locations[]);
 
 	//! The amount of entries stored in the HT currently
 	idx_t count;

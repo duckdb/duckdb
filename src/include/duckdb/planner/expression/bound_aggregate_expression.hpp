@@ -22,6 +22,10 @@ public:
 	bool distinct;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
+	//! Argument types
+	vector<SQLType> arguments;
+	//! The bound function data (if any)
+	unique_ptr<FunctionData> bind_info;
 
 public:
 	bool IsAggregate() const override {
@@ -33,7 +37,7 @@ public:
 
 	string ToString() const override;
 
-	uint64_t Hash() const override;
+	hash_t Hash() const override;
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;

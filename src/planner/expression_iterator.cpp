@@ -105,6 +105,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
+	case ExpressionClass::BOUND_UNNEST: {
+		auto &unnest_expr = (BoundUnnestExpression &)expr;
+		unnest_expr.child = callback(move(unnest_expr.child));
+		break;
+	}
 	case ExpressionClass::COMMON_SUBEXPRESSION: {
 		auto &cse_expr = (CommonSubExpression &)expr;
 		if (cse_expr.owned_child) {
@@ -197,7 +202,20 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		}
 		break;
 	}
-	for (idx_t i = 0; i < node.orders.size(); i++) {
-		EnumerateExpression(node.orders[i].expression, callback);
+	for (idx_t i = 0; i < node.modifiers.size(); i++) {
+		switch (node.modifiers[i]->type) {
+		case ResultModifierType::DISTINCT_MODIFIER:
+			for (auto &expr : ((BoundDistinctModifier &)*node.modifiers[i]).target_distincts) {
+				EnumerateExpression(expr, callback);
+			}
+			break;
+		case ResultModifierType::ORDER_MODIFIER:
+			for (auto &order : ((BoundOrderModifier &)*node.modifiers[i]).orders) {
+				EnumerateExpression(order.expression, callback);
+			}
+			break;
+		default:
+			break;
+		}
 	}
 }

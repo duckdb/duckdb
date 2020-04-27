@@ -10,13 +10,42 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 using namespace duckdb;
 using namespace std;
 
+// add your initializer for new functions here
+void BuiltinFunctions::Initialize() {
+	RegisterSQLiteFunctions();
+	RegisterReadFunctions();
+
+	RegisterAlgebraicAggregates();
+	RegisterDistributiveAggregates();
+	RegisterNestedAggregates();
+
+	RegisterDateFunctions();
+	RegisterMathFunctions();
+	RegisterOperators();
+	RegisterSequenceFunctions();
+	RegisterStringFunctions();
+	RegisterNestedFunctions();
+	RegisterTrigonometricsFunctions();
+
+	// initialize collations
+	AddCollation("nocase", LowerFun::GetFunction(), true);
+	AddCollation("noaccent", StripAccentsFun::GetFunction());
+}
+
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
+}
+
+void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable) {
+	CreateCollationInfo info(move(name), move(function), combinable);
+	catalog.CreateCollation(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
@@ -34,6 +63,13 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 	catalog.CreateFunction(context, &info);
 }
 
+void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function) {
+	for (auto &name : names) {
+		function.name = name;
+		AddFunction(function);
+	}
+}
+
 void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 	CreateScalarFunctionInfo info(set);
 	catalog.CreateFunction(context, &info);
@@ -42,22 +78,6 @@ void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 void BuiltinFunctions::AddFunction(TableFunction function) {
 	CreateTableFunctionInfo info(function);
 	catalog.CreateTableFunction(context, &info);
-}
-
-void BuiltinFunctions::Initialize() {
-	RegisterSQLiteFunctions();
-	RegisterReadFunctions();
-
-	RegisterAlgebraicAggregates();
-	RegisterDistributiveAggregates();
-
-	RegisterDateFunctions();
-	RegisterMathFunctions();
-	RegisterOperators();
-	RegisterSequenceFunctions();
-	RegisterStringFunctions();
-	RegisterStructFunctions();
-	RegisterTrigonometricsFunctions();
 }
 
 string Function::CallToString(string name, vector<SQLType> arguments) {

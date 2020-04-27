@@ -33,15 +33,13 @@ namespace duckdb {
     In addition to holding the data of the vectors, the DataChunk also owns the
    selection vector that underlying vectors can point to.
 */
-class DataChunk : public VectorCardinality {
+class DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
-	//! The selection vector of a chunk, if it owns it
-	sel_t owned_sel_vector[STANDARD_VECTOR_SIZE];
 
 public:
 	idx_t size() const {
@@ -50,13 +48,12 @@ public:
 	idx_t column_count() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count, sel_t *sel_vector = nullptr) {
+	void SetCardinality(idx_t count) {
 		assert(count <= STANDARD_VECTOR_SIZE);
 		this->count = count;
-		this->sel_vector = sel_vector;
 	}
-	void SetCardinality(const VectorCardinality &cardinality) {
-		SetCardinality(cardinality.count, cardinality.sel_vector);
+	void SetCardinality(const DataChunk &other) {
+		this->count = other.size();
 	}
 
 	Value GetValue(idx_t col_idx, idx_t index) const;
@@ -82,11 +79,13 @@ public:
 	//! Copies the data from this vector to another vector.
 	void Copy(DataChunk &other, idx_t offset = 0);
 
-	//! Removes the selection vector from the chunk
-	void ClearSelectionVector();
-
 	//! Turn all the vectors from the chunk into flat vectors
 	void Normalify();
+
+	unique_ptr<VectorData[]> Orrify();
+
+	void Slice(const SelectionVector &sel_vector, idx_t count);
+	void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
 
 	//! Resets the DataChunk to its state right after the DataChunk::Initialize
 	//! function was called. This sets the count to 0, and resets each member
@@ -95,12 +94,8 @@ public:
 
 	//! Serializes a DataChunk to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into a DataChunk [CAN THROW:
-	//! SerializationException]
+	//! Deserializes a blob back into a DataChunk
 	void Deserialize(Deserializer &source);
-
-	//! Move all the strings inside this DataChunk to the specified heap
-	void MoveStringsToHeap(StringHeap &heap);
 
 	//! Hashes the DataChunk to the target vector
 	void Hash(Vector &result);
@@ -117,5 +112,8 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	void Verify();
+
+private:
+	idx_t count;
 };
 } // namespace duckdb

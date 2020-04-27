@@ -5,6 +5,8 @@
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
@@ -21,6 +23,20 @@ using namespace duckdb;
 using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
+}
+
+Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	auto utf_type = Utf8Proc::Analyze(val);
+	switch (utf_type) {
+	case UnicodeType::INVALID:
+		throw Exception("String value is not valid UTF8");
+	case UnicodeType::ASCII:
+		str_value = val;
+		break;
+	case UnicodeType::UNICODE:
+		str_value = Utf8Proc::Normalize(val);
+		break;
+	}
 }
 
 Value Value::MinimumValue(TypeId type) {
@@ -50,7 +66,7 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.double_ = std::numeric_limits<double>::min();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uint64_t>::min();
+		result.value_.pointer = std::numeric_limits<uintptr_t>::min();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -128,7 +144,26 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::BLOB(string value) {
+	Value result(TypeId::VARCHAR);
+	result.str_value = value;
+	result.is_null = false;
+	result.sql_type = SQLType::VARBINARY;
+	return result;
+}
+
+bool Value::FloatIsValid(float value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
+bool Value::DoubleIsValid(double value) {
+	return !(std::isnan(value) || std::isinf(value));
+}
+
 Value Value::FLOAT(float value) {
+	if (!Value::FloatIsValid(value)) {
+		throw OutOfRangeException("Invalid float value %f", value);
+	}
 	Value result(TypeId::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
@@ -136,13 +171,16 @@ Value Value::FLOAT(float value) {
 }
 
 Value Value::DOUBLE(double value) {
+	if (!Value::DoubleIsValid(value)) {
+		throw OutOfRangeException("Invalid double value %f", value);
+	}
 	Value result(TypeId::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
 	return result;
 }
 
-Value Value::HASH(uint64_t value) {
+Value Value::HASH(hash_t value) {
 	Value result(TypeId::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
@@ -156,29 +194,52 @@ Value Value::POINTER(uintptr_t value) {
 	return result;
 }
 
+Value Value::DATE(date_t date) {
+	auto val = Value::INTEGER(date);
+	val.sql_type = SQLType::DATE;
+	return val;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
-	return Value::INTEGER(Date::FromDate(year, month, day));
+	auto val = Value::INTEGER(Date::FromDate(year, month, day));
+	val.sql_type = SQLType::DATE;
+	return val;
 }
 
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIME;
+	return val;
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
-	return Value::BIGINT(timestamp);
+	auto val = Value::BIGINT(timestamp);
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
-	return Value::BIGINT(Timestamp::FromDatetime(date, time));
+	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	return Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
+	val.sql_type = SQLType::TIMESTAMP;
+	return val;
 }
 
 Value Value::STRUCT(child_list_t<Value> values) {
 	Value result(TypeId::STRUCT);
 	result.struct_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+Value Value::LIST(vector<Value> values) {
+	Value result(TypeId::LIST);
+	result.list_value = move(values);
 	result.is_null = false;
 	return result;
 }
@@ -226,6 +287,9 @@ template <> Value Value::CreateValue(double value) {
 	return Value::DOUBLE(value);
 }
 
+template <> Value Value::CreateValue(Value value) {
+	return value;
+}
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
@@ -457,12 +521,27 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	if (source_type == target_type) {
 		return Copy();
 	}
-	VectorCardinality cardinality(1);
-	Vector input(cardinality), result(cardinality);
+	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type);
+	VectorOperations::Cast(input, result, source_type, target_type, 1);
 	return result.GetValue(0);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+	Value new_value;
+	try {
+		new_value = CastAs(source_type, target_type);
+	} catch (Exception &) {
+		return false;
+	}
+	type = new_value.type;
+	is_null = new_value.is_null;
+	value_ = new_value.value_;
+	str_value = new_value.str_value;
+	struct_value = new_value.struct_value;
+	list_value = new_value.list_value;
+	return true;
 }
 
 Value Value::CastAs(TypeId target_type) const {
@@ -550,40 +629,6 @@ Value Value::Deserialize(Deserializer &source) {
 		throw NotImplementedException("Value type not implemented for deserialization");
 	}
 	return new_value;
-}
-
-// adapted from MonetDB's str.c
-bool Value::IsUTF8String(const char *s) {
-	int c;
-
-	if (s == nullptr) {
-		return true;
-	}
-	if (*s == '\200' && s[1] == '\0') {
-		return true; /* str_nil */
-	}
-	while ((c = *s++) != '\0') {
-		if ((c & 0x80) == 0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xE0) == 0xC0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF0) == 0xE0)
-			continue;
-		if ((*s++ & 0xC0) != 0x80)
-			return false;
-		if ((c & 0xF8) == 0xF0)
-			continue;
-		return false;
-	}
-	return true;
-}
-
-bool Value::IsUTF8String(string_t s) {
-	return Value::IsUTF8String(s.GetData());
 }
 
 void Value::Print() {

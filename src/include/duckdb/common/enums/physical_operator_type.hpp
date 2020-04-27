@@ -23,6 +23,7 @@ enum class PhysicalOperatorType : uint8_t {
 	TOP_N,
 	AGGREGATE,
 	WINDOW,
+	UNNEST,
 	DISTINCT,
 	SIMPLE_AGGREGATE,
 	HASH_GROUP_BY,
@@ -84,11 +85,11 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS,
 	EXPLAIN,
 	EMPTY_RESULT,
 	EXECUTE,
-	PREPARE
+	PREPARE,
+	VACUUM
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

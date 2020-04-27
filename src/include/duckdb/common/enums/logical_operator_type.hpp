@@ -21,6 +21,7 @@ enum class LogicalOperatorType : uint8_t {
 	FILTER,
 	AGGREGATE_AND_GROUP_BY,
 	WINDOW,
+	UNNEST,
 	LIMIT,
 	ORDER_BY,
 	TOP_N,
@@ -52,8 +53,8 @@ enum class LogicalOperatorType : uint8_t {
 	UNION,
 	EXCEPT,
 	INTERSECT,
-    RECURSIVE_CTE,
-    
+	RECURSIVE_CTE,
+
 	// -----------------------------
 	// Updates
 	// -----------------------------
@@ -82,9 +83,9 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	// Helpers
 	// -----------------------------
-	PRUNE_COLUMNS,
 	PREPARE,
-	EXECUTE
+	EXECUTE,
+	VACUUM
 };
 
 string LogicalOperatorToString(LogicalOperatorType type);

@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -67,13 +68,12 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(PGNode *stmt) {
 		return TransformCreateTableAs(stmt);
 	case T_PGPragmaStmt:
 		return TransformPragma(stmt);
-	case T_PGExplainStmt: {
-		PGExplainStmt *explain_stmt = reinterpret_cast<PGExplainStmt *>(stmt);
-		return make_unique<ExplainStatement>(TransformStatement(explain_stmt->query));
-	}
-	case T_PGVacuumStmt: { // Ignore VACUUM/ANALYZE for now
-		return nullptr;
-	}
+	case T_PGExplainStmt:
+		return TransformExplain(stmt);
+	case T_PGVacuumStmt:
+		return TransformVacuum(stmt);
+	case T_PGVariableShowStmt:
+		return TransformShow(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

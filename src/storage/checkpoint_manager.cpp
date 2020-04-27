@@ -41,6 +41,7 @@ void CheckpointManager::CreateCheckpoint() {
 	assert(!metadata_writer);
 
 	auto transaction = database.transaction_manager->StartTransaction();
+	block_manager.StartCheckpoint();
 
 	//! Set up the writers for the checkpoints
 	metadata_writer = make_unique<MetaBlockWriter>(block_manager);
@@ -196,7 +197,7 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	auto info = TableCatalogEntry::Deserialize(reader);
 	// bind the info
 	Binder binder(context);
-	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
+	auto bound_info = binder.BindCreateTableInfo(move(info));
 
 	// now read the actual table data and place it into the create table info
 	auto block_id = reader.Read<block_id_t>();

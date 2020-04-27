@@ -11,6 +11,8 @@
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "utf8proc_wrapper.hpp"
+
 #include <algorithm>
 #include <fstream>
 #include <queue>
@@ -525,10 +527,10 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 	str_val[length] = '\0';
 	// test against null string
 	if (!info.force_not_null[column] && strcmp(info.null_str.c_str(), str_val) == 0) {
-		parse_chunk.data[column].nullmask[row_entry] = true;
+		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
 	} else {
 		auto &v = parse_chunk.data[column];
-		auto parse_data = (string_t *)v.GetData();
+		auto parse_data = FlatVector::GetData<string_t>(v);
 		if (escape_positions.size() > 0) {
 			// remove escape characters (if any)
 			string old_val = str_val;
@@ -541,7 +543,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
-			parse_data[row_entry] = v.AddString(new_val.c_str(), new_val.size());
+			parse_data[row_entry] = StringVector::AddString(v, new_val.c_str(), new_val.size());
 		} else {
 			parse_data[row_entry] = string_t(str_val, length);
 		}
@@ -573,21 +575,34 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
+
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
-			auto parse_data = (string_t *)parse_chunk.data[col_idx].GetData();
-			VectorOperations::Exec(parse_chunk.data[col_idx], [&](idx_t i, idx_t k) {
-				if (!parse_chunk.data[col_idx].nullmask[i]) {
-					if (!Value::IsUTF8String(parse_data[i])) {
+			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
+			for (idx_t i = 0; i < parse_chunk.size(); i++) {
+				if (!FlatVector::IsNull(parse_chunk.data[col_idx], i)) {
+					auto s = parse_data[i];
+					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+					switch (utf_type) {
+					case UnicodeType::INVALID:
 						throw ParserException("Error on line %lld: file is not valid UTF8", linenr);
+					case UnicodeType::ASCII:
+						break;
+					case UnicodeType::UNICODE: {
+						auto normie = Utf8Proc::Normalize(s.GetData());
+						parse_data[i] = StringVector::AddString(parse_chunk.data[col_idx], normie);
+						free(normie);
+						break;
+					}
 					}
 				}
-			});
+			}
+
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
-			                       sql_types[col_idx]);
+			                       sql_types[col_idx], parse_chunk.size());
 		}
 	}
 	parse_chunk.Reset();

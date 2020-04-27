@@ -7,6 +7,8 @@ add_subdirectory(fmt)
 add_subdirectory(libpg_query)
 add_subdirectory(re2)
 add_subdirectory(miniz)
+add_subdirectory(utf8proc)
+
 endif()
 
 if(NOT WIN32 AND NOT SUN)
@@ -16,4 +18,7 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(sqlsmith)
   add_subdirectory(sqlite)
   add_subdirectory(tpce-tool)
+
 endif()
+
+add_subdirectory(miniparquet)

@@ -111,16 +111,19 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 	}
 }
 
-unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
+	result->schema = BindSchema(*result->base);
 	if (base.query) {
 		// construct the result object
-		result->query = unique_ptr_cast<BoundSQLStatement, BoundSelectStatement>(Bind(*base.query));
+		auto query_obj = Bind(*base.query);
+		result->query = move(query_obj.plan);
+
 		// construct the set of columns based on the names and types of the query
-		auto &names = result->query->node->names;
-		auto &sql_types = result->query->node->types;
+		auto &names = query_obj.names;
+		auto &sql_types = query_obj.types;
 		assert(names.size() == sql_types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.push_back(ColumnDefinition(names[i], sql_types[i]));
@@ -135,5 +138,9 @@ unique_ptr<BoundCreateInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> i
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
-	return move(result);
+	// bind collations to detect any unsupported collation errors
+	for (auto &column : base.columns) {
+		ExpressionBinder::PushCollation(context, nullptr, column.type.collation);
+	}
+	return result;
 }

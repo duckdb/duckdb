@@ -13,6 +13,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
+#include "duckdb/main/relation.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
@@ -50,6 +51,7 @@ public:
 
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();
+	void DisableQueryVerification();
 
 	//! Issues a query to the database and returns a QueryResult. This result can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The result can be stepped through with calls to Fetch(). Note that there can only be
@@ -72,11 +74,33 @@ public:
 	unique_ptr<TableDescription> TableInfo(string table_name);
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	unique_ptr<TableDescription> TableInfo(string schema_name, string table_name);
+
 	//! Extract a set of SQL statements from a specific query
 	vector<unique_ptr<SQLStatement>> ExtractStatements(string query);
 
 	//! Appends a DataChunk to the specified table
 	void Append(TableDescription &description, DataChunk &chunk);
+
+	//! Returns a relation that produces a table from this connection
+	shared_ptr<Relation> Table(string tname);
+	shared_ptr<Relation> Table(string schema_name, string table_name);
+	//! Returns a relation that produces a view from this connection
+	shared_ptr<Relation> View(string tname);
+	shared_ptr<Relation> View(string schema_name, string table_name);
+	//! Returns a relation that calls a specified table function
+	shared_ptr<Relation> TableFunction(string tname);
+	shared_ptr<Relation> TableFunction(string tname, vector<Value> values);
+	//! Returns a relation that produces values
+	shared_ptr<Relation> Values(vector<vector<Value>> values);
+	shared_ptr<Relation> Values(vector<vector<Value>> values, vector<string> column_names, string alias = "values");
+	shared_ptr<Relation> Values(string values);
+	shared_ptr<Relation> Values(string values, vector<string> column_names, string alias = "values");
+	//! Reads CSV file
+	shared_ptr<Relation> ReadCSV(string csv_file, vector<string> columns);
+
+	void BeginTransaction();
+	void Commit();
+	void Rollback();
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/planner/statement/bound_select_statement.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 using namespace duckdb;
@@ -18,12 +17,12 @@ ExpressionHelper::ExpressionHelper() : db(nullptr), con(db), rewriter(*con.conte
 	con.Query("BEGIN TRANSACTION");
 }
 
-bool ExpressionHelper::VerifyRewrite(string input, string expected_output) {
+bool ExpressionHelper::VerifyRewrite(string input, string expected_output, bool silent) {
 	auto root = ParseExpression(input);
 	auto result = ApplyExpressionRule(move(root));
 	auto expected_result = ParseExpression(expected_output);
 	bool equals = Expression::Equals(result.get(), expected_result.get());
-	if (!equals) {
+	if (!equals && !silent) {
 		printf("Optimized result does not equal expected result!\n");
 		result->Print();
 		printf("Expected:\n");
@@ -49,23 +48,19 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 
 	Parser parser;
 	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		return nullptr;
 	}
 	Binder binder(*con.context);
 	auto bound_statement = binder.Bind(*parser.statements[0]);
-	auto &select_statement = (BoundSelectStatement &)*bound_statement;
-	auto &select_node = (BoundSelectNode &)*select_statement.node;
-	assert(select_node.type == QueryNodeType::SELECT_NODE);
-	auto &select_list = select_node.select_list;
-
-	return move(select_list[0]);
+	assert(bound_statement.plan->type == LogicalOperatorType::PROJECTION);
+	return move(bound_statement.plan->expressions[0]);
 }
 
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
 	Parser parser;
 	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		return nullptr;
 	}
 	Planner planner(*con.context);

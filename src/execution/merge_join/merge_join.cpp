@@ -7,6 +7,7 @@ using namespace std;
 
 template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, R_ARG &r) {
 	switch (l.type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		return MJ::template Operation<int8_t>(l, r);
 	case TypeId::INT16:
@@ -49,7 +50,7 @@ idx_t MergeJoinInner::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compari
 	auto &left = (ScalarMergeInfo &)l;
 	auto &right = (ScalarMergeInfo &)r;
 	assert(left.type == right.type);
-	if (left.count == 0 || right.count == 0) {
+	if (left.order.count == 0 || right.order.count == 0) {
 		return 0;
 	}
 	return perform_merge_join<MergeJoinInner, ScalarMergeInfo, ScalarMergeInfo>(left, right, comparison_type);
@@ -60,7 +61,7 @@ idx_t MergeJoinMark::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparis
 	auto &left = (ScalarMergeInfo &)l;
 	auto &right = (ChunkMergeInfo &)r;
 	assert(left.type == right.type);
-	if (left.count == 0 || right.data_chunks.count == 0) {
+	if (left.order.count == 0 || right.data_chunks.count == 0) {
 		return 0;
 	}
 	return perform_merge_join<MergeJoinMark, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);

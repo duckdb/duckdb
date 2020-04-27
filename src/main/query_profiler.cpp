@@ -20,7 +20,7 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	if (!enabled) {
 		return;
 	}
-	if (statement.type != StatementType::SELECT && statement.type != StatementType::EXECUTE) {
+	if (statement.type != StatementType::SELECT_STATEMENT && statement.type != StatementType::EXECUTE_STATEMENT) {
 		return;
 	}
 	this->running = true;

@@ -34,6 +34,30 @@ void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &
 	state.Next();
 }
 
+void ColumnData::FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+                            idx_t &approved_tuple_count) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
+	// perform a scan of this segment
+	state.current->FilterScan(transaction, state, result, sel, approved_tuple_count);
+	// move over to the next vector
+	state.Next();
+}
+
+void ColumnData::Select(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
+                        idx_t &approved_tuple_count, vector<TableFilter> &tableFilter) {
+	if (!state.initialized) {
+		state.current->InitializeScan(state);
+		state.initialized = true;
+	}
+	// perform a scan of this segment
+	state.current->Select(transaction, state, result, sel, approved_tuple_count, tableFilter);
+	// move over to the next vector
+	state.Next();
+}
+
 void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 	if (state.vector_index == 0) {
 		state.current->InitializeScan(state);
@@ -45,11 +69,26 @@ void ColumnData::IndexScan(ColumnScanState &state, Vector &result) {
 }
 
 void ColumnScanState::Next() {
+	//! There is no column segment
+	if (!current) {
+		return;
+	}
 	vector_index++;
 	if (vector_index * STANDARD_VECTOR_SIZE >= current->count) {
 		current = (ColumnSegment *)current->next.get();
 		vector_index = 0;
 		initialized = false;
+		segment_checked = false;
+	}
+}
+
+void TableScanState::NextVector() {
+	//! nothing to scan for this vector, skip the entire vector
+	for (idx_t j = 0; j < column_ids.size(); j++) {
+		auto column = column_ids[j];
+		if (column != COLUMN_IDENTIFIER_ROW_ID) {
+			column_scans[j].Next();
+		}
 	}
 }
 
@@ -71,9 +110,8 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector) {
+void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	idx_t offset = 0;
-	idx_t count = vector.size();
 	while (true) {
 		// append the data from the vector
 		idx_t copied_elements = state.current->Append(state, vector, offset, count);
@@ -110,12 +148,12 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-void ColumnData::Update(Transaction &transaction, Vector &updates, row_t *ids) {
+void ColumnData::Update(Transaction &transaction, Vector &updates, Vector &row_ids, idx_t count) {
 	// first find the segment that the update belongs to
-	idx_t first_id = ids[updates.sel_vector() ? updates.sel_vector()[0] : 0];
+	idx_t first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	auto segment = (ColumnSegment *)data.GetSegment(first_id);
 	// now perform the update within the segment
-	segment->Update(*this, transaction, updates, ids);
+	segment->Update(*this, transaction, updates, FlatVector::GetData<row_t>(row_ids), count);
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

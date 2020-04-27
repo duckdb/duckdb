@@ -111,9 +111,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		// 	create_info->constraints[i] = constraints[i]->Copy();
 		// }
 		Binder binder(context);
-		auto bound_create_info = binder.BindCreateInfo(move(create_info));
+		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
+	}
+	case AlterTableType::RENAME_TABLE: {
+		auto rename_info = (RenameTableInfo *)table_info;
+		auto copied_table = Copy(context);
+		copied_table->name = rename_info->new_table_name;
+		return copied_table;
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
@@ -185,4 +191,23 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 		info->constraints.push_back(move(constraint));
 	}
 	return info;
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		ColumnDefinition copy(columns[i].name, columns[i].type);
+		copy.oid = columns[i].oid;
+		copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+		create_info->columns.push_back(move(copy));
+	}
+
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }

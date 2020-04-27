@@ -169,7 +169,6 @@ TEST_CASE("Test AppendRow", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {Value::TIMESTAMP(1992, 1, 1, 1, 1, 1, 0)}));
 }
 
-
 TEST_CASE("Test incorrect usage of appender", "[appender]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -221,6 +220,27 @@ TEST_CASE("Test incorrect usage of appender", "[appender]") {
 		REQUIRE_NOTHROW(appender.Flush());
 		REQUIRE_NOTHROW(appender.Flush());
 		REQUIRE_NOTHROW(appender.Flush());
+	}
+}
+
+TEST_CASE("Test invalid input for appender", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE doubles(d DOUBLE, f REAL)"));
+	{
+		// appending NAN or INF fails
+		Appender appender(con, "doubles");
+		appender.BeginRow();
+		REQUIRE_THROWS(appender.Append<double>(1e308 + 1e308));
+	}
+	{
+		// appending NAN or INF fails
+		Appender appender(con, "doubles");
+		appender.BeginRow();
+		appender.Append<double>(1);
+		REQUIRE_THROWS(appender.Append<float>(1e38f * 1e38f));
 	}
 }
 

@@ -1589,3 +1589,64 @@ TEST_CASE("Test read CSV function with lineitem", "[copy]") {
 	// wrong argument type
 	REQUIRE_FAIL(con.Query("SELECT * FROM read_csv('" + lineitem_csv + "', '|', STRUCT_PACK(l_orderkey := 5))"));
 }
+
+TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto nfc_csv = fs.JoinPath(csv_path, "nfc.csv");
+
+	const char *nfc_content = "\xc3\xbc\n\x75\xcc\x88";
+
+	WriteBinary(nfc_csv, (const uint8_t *)nfc_content, strlen(nfc_content));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE nfcstrings (s STRING);"));
+	REQUIRE_NO_FAIL(con.Query("COPY nfcstrings FROM '" + nfc_csv + "';"));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE s = '\xc3\xbc'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(2)}));
+}
+
+// http://www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
+TEST_CASE("Test CSV with Unicode NFC Normalization test suite", "[copy]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto csv_path = GetCSVPath();
+	auto nfc_csv = fs.JoinPath(csv_path, "nfc_test_suite.csv");
+
+	WriteBinary(nfc_csv, nfc_normalization, sizeof(nfc_normalization));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE nfcstrings (source STRING, nfc STRING, nfd STRING);"));
+	REQUIRE_NO_FAIL(con.Query("COPY nfcstrings FROM '" + nfc_csv + "' DELIMITER '|';"));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE source=nfc");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+
+	result = con.Query("SELECT COUNT(*) FROM nfcstrings WHERE nfc=nfd");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(18819)}));
+}
+
+TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// write a bunch of values to a CSV
+	auto csv_file = TestCreatePath("relationtest.csv");
+
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
+
+	// now scan the CSV file
+	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
+	result = csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
+}

@@ -24,6 +24,7 @@ const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
 const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
 
 // TODO these are incomplete and should maybe not exist as such
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
@@ -95,7 +96,7 @@ idx_t GetTypeIdSize(TypeId type) {
 	case TypeId::DOUBLE:
 		return sizeof(double);
 	case TypeId::HASH:
-		return sizeof(uint64_t);
+		return sizeof(hash_t);
 	case TypeId::POINTER:
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
@@ -159,13 +160,15 @@ void SQLType::Serialize(Serializer &serializer) {
 	serializer.Write(id);
 	serializer.Write(width);
 	serializer.Write(scale);
+	serializer.WriteString(collation);
 }
 
 SQLType SQLType::Deserialize(Deserializer &source) {
 	auto id = source.Read<SQLTypeId>();
 	auto width = source.Read<uint16_t>();
 	auto scale = source.Read<uint8_t>();
-	return SQLType(id, width, scale);
+	auto collation = source.Read<string>();
+	return SQLType(id, width, scale, collation);
 }
 
 string SQLTypeIdToString(SQLTypeId id) {
@@ -226,7 +229,12 @@ string SQLTypeToString(SQLType type) {
 		return ret;
 	}
 	case SQLTypeId::LIST: {
-		assert(type.child_type.size() == 1);
+		if (type.child_type.size() == 0) {
+			return "LIST<?>";
+		}
+		if (type.child_type.size() != 1) {
+			throw Exception("List needs a single child element");
+		}
 		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
 	}
 	default:
@@ -339,7 +347,7 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 		return right;
 	} else if (right.id < left.id) {
 		return left;
-	} else if (left.width > right.width) {
+	} else if (left.width > right.width || left.collation > right.collation) {
 		return left;
 	} else {
 		return right;

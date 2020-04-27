@@ -66,6 +66,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalAggregate &)op);
 	case LogicalOperatorType::WINDOW:
 		return CreatePlan((LogicalWindow &)op);
+	case LogicalOperatorType::UNNEST:
+		return CreatePlan((LogicalUnnest &)op);
 	case LogicalOperatorType::LIMIT:
 		return CreatePlan((LogicalLimit &)op);
 	case LogicalOperatorType::ORDER_BY:
@@ -110,8 +112,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalExplain &)op);
 	case LogicalOperatorType::DISTINCT:
 		return CreatePlan((LogicalDistinct &)op);
-	case LogicalOperatorType::PRUNE_COLUMNS:
-		return CreatePlan((LogicalPruneColumns &)op);
 	case LogicalOperatorType::PREPARE:
 		return CreatePlan((LogicalPrepare &)op);
 	case LogicalOperatorType::EXECUTE:
@@ -126,6 +126,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::ALTER:
 	case LogicalOperatorType::DROP:
 	case LogicalOperatorType::PRAGMA:
+	case LogicalOperatorType::VACUUM:
 		return CreatePlan((LogicalSimple &)op);
 	case LogicalOperatorType::RECURSIVE_CTE:
 		return CreatePlan((LogicalRecursiveCTE &)op);

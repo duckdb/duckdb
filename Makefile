@@ -56,6 +56,25 @@ amalgamation:
 	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
+amaldebug:
+	mkdir -p build/amaldebug && \
+	python scripts/amalgamation.py && \
+	cd build/amaldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
+jdbc:
+	mkdir -p build/jdbc && \
+	cd build/jdbc && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build .
+
+jdbcdebug:
+	mkdir -p build/jdbcdebug && \
+	cd build/jdbcdebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DENABLE_SANITIZER=FALSE -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake --build .
+
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile
 

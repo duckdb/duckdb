@@ -70,6 +70,9 @@ TEST_CASE("CONCAT_WS test", "[function]") {
 	result = con.Query("select CONCAT_WS('@','1', '2', '3', '4', '5', '6', '7', '8', '9')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"1@2@3@4@5@6@7@8@9"}));
 
+	result = con.Query("select CONCAT_WS(b, '[', ']') FROM strings ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {"[World]", Value(), "[RÄcks]"}));
+
 	// filters
 	result = con.Query("select CONCAT_WS(',', a, 'SUFFIX') FROM strings WHERE a != 'Hello'");
 	REQUIRE(CHECK_COLUMN(result, 0, {"HuLlD,SUFFIX", "MotörHead,SUFFIX"}));
@@ -127,11 +130,24 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	Connection con(db);
 	con.EnableQueryVerification();
 
+	// unicode
+	result = con.Query("select UPPER('áaaá'), UPPER('ö'), LOWER('S̈'), UPPER('ω')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"ÁAAÁ"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ö"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"s̈"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Ω"}));
+
+	// greek
+	result = con.Query("SELECT UPPER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω'), "
+	                   "LOWER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"ΑΑ ΒΒ ΓΓ ΔΔ ΕΕ ΖΖ  ΗΗ ΘΘ ΙΙ ΚΚ ΛΛ ΜΜ ΝΝ ΞΞ ΟΟ ΠΠ ΡΡ ΣΣΣ ΤΤ ΥΥ ΦΦ ΧΧ ΨΨ ΩΩ"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"αα ββ γγ δδ εε ζζ  ηη θθ ιι κκ λλ μμ νν ξξ οο ππ ρρ σσς ττ υυ φφ χχ ψψ ωω"}));
+
 	// test upper/lower on scalar values
 	result = con.Query("select UPPER(''), UPPER('hello'), UPPER('MotörHead'), UPPER(NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO"}));
-	REQUIRE(CHECK_COLUMN(result, 2, {"MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MOTÖRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 
 	result = con.Query("select LOWER(''), LOWER('hello'), LOWER('MotörHead'), LOWER(NULL)");
@@ -146,17 +162,17 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
 
 	result = con.Query("select UPPER(a) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "HULLD", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "HULLD", "MOTÖRHEAD"}));
 
 	result = con.Query("select LOWER(a) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hulld", "motörhead"}));
 
 	result = con.Query("select LOWER(b) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "rÄcks"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "räcks"}));
 
 	// test with selection vector
 	result = con.Query("select UPPER(a), LOWER(a) FROM strings WHERE b IS NOT NULL");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTÖRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "motörhead"}));
 }
 

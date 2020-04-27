@@ -36,7 +36,7 @@ public:
 	bool Equals(const BaseExpression *other) const override {
 		return parsed_expr->Equals(other);
 	}
-	uint64_t Hash() const override {
+	hash_t Hash() const override {
 		return parsed_expr->Hash();
 	}
 

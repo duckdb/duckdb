@@ -34,9 +34,12 @@ public:
 
 protected:
 	void Update(ColumnData &data, SegmentStatistics &stats, Transaction &transaction, Vector &update, row_t *ids,
-	            idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
-
+	            idx_t count, idx_t vector_index, idx_t vector_offset, UpdateInfo *node) override;
+	void Select(ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &approved_tuple_count,
+	            vector<TableFilter> &tableFilter) override;
 	void FetchBaseData(ColumnScanState &state, idx_t vector_index, Vector &result) override;
+	void FilterFetchBaseData(ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                         idx_t &approved_tuple_count) override;
 	void FetchUpdateData(ColumnScanState &state, Transaction &transaction, UpdateInfo *versions,
 	                     Vector &result) override;
 
@@ -49,7 +52,7 @@ public:
 	                                              idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *info, data_ptr_t base_data);
 	typedef void (*merge_update_function_t)(SegmentStatistics &stats, UpdateInfo *node, data_ptr_t target,
-	                                        Vector &update, row_t *ids, idx_t vector_offset);
+	                                        Vector &update, row_t *ids, idx_t count, idx_t vector_offset);
 
 private:
 	append_function_t append_function;

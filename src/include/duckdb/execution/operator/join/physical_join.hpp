@@ -19,8 +19,12 @@ public:
 	PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinType join_type);
 
 	JoinType type;
+
+public:
+	template <bool MATCH>
+	static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
+	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
+	                                    bool has_null);
 };
 
-void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &child, DataChunk &result, bool found_match[],
-                             bool right_has_null);
 } // namespace duckdb

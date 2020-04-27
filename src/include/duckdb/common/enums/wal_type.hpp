@@ -43,5 +43,4 @@ enum class WALType : uint8_t {
 	// -----------------------------
 	WAL_FLUSH = 100
 };
-
 }

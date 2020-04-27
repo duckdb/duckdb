@@ -1,12 +1,25 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
 void string_t::Verify() {
 	auto dataptr = GetData();
+	(void)dataptr;
 	assert(dataptr);
-	assert(Value::IsUTF8String(*this));
+
+#ifdef DEBUG
+	auto utf_type = Utf8Proc::Analyze(dataptr, length);
+	assert(utf_type != UnicodeType::INVALID);
+	if (utf_type == UnicodeType::UNICODE) {
+		// check that the data is a valid NFC UTF8 string
+		auto normalized = Utf8Proc::Normalize(dataptr);
+		assert(strcmp(dataptr, normalized) == 0);
+		free(normalized);
+	}
+#endif
+
 	// verify that the string is null-terminated and that the length is correct
 	assert(strlen(dataptr) == length);
 	// verify that the prefix contains the first four characters of the string

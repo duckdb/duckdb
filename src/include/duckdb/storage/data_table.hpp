@@ -31,6 +31,15 @@ class TableCatalogEntry;
 class Transaction;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
+//! TableFilter represents a filter pushed down into the table scan.
+class TableFilter {
+public:
+	TableFilter(Value constant, ExpressionType comparison_type, idx_t column_index)
+	    : constant(constant), comparison_type(comparison_type), column_index(column_index){};
+	Value constant;
+	ExpressionType comparison_type;
+	idx_t column_index;
+};
 
 //! DataTable represents a physical table on disk
 class DataTable {
@@ -52,12 +61,16 @@ public:
 	vector<unique_ptr<Index>> indexes;
 
 public:
-	void InitializeScan(TableScanState &state, vector<column_t> column_ids);
-	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids);
+	void InitializeScan(TableScanState &state, vector<column_t> column_ids,
+	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
+	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids,
+	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
-	// from offset and store them in result. Offset is incremented with how many
-	// elements were returned.
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state);
+	//! from offset and store them in result. Offset is incremented with how many
+	//! elements were returned.
+	//! Returns true if all pushed down filters were executed during data fetching
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index, Value value,
@@ -71,12 +84,12 @@ public:
 
 	//! Fetch data from the specific row identifiers from the base table
 	void Fetch(Transaction &transaction, DataChunk &result, vector<column_t> &column_ids, Vector &row_ids,
-	           TableIndexScanState &state);
+	           idx_t fetch_count, TableIndexScanState &state);
 
 	//! Append a DataChunk to the table. Throws an exception if the columns don't match the tables' columns.
 	void Append(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Delete the entries with the specified row identifier from the table
-	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids);
+	void Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
 	//! Update the entries with the specified row identifier from the table
 	void Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
 	            DataChunk &data);
@@ -100,7 +113,7 @@ public:
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
-	void RemoveFromIndexes(Vector &row_identifiers);
+	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
 	//! Is this a temporary table?
 	bool IsTemporary();
 
@@ -113,14 +126,17 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
+	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
+	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
-	                   idx_t max_row, idx_t base_row, VersionManager &manager);
+	                   idx_t max_row, idx_t base_row, VersionManager &manager,
+	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
 	                     idx_t base_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
-	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, row_t result_rows[]);
+	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);

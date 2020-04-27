@@ -72,6 +72,12 @@ template <> bool TryCast::Operation(double input, int64_t &result);
 template <> int64_t Cast::Operation(float input);
 template <> int64_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
+// Double -> float casts
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(double input, float &result);
+
+template <> float Cast::Operation(double input);
+//===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
 template <> bool TryCast::Operation(string_t input, bool &result);
@@ -96,7 +102,7 @@ template <> string Cast::Operation(string_t input);
 // these functions are convenience functions that cast a value to a std::string, they are very slow
 // for performance sensitive casting StringCast::Operation should be used
 template <> string Cast::Operation(bool input);
-template <> string Cast::Operation(int8_t  input);
+template <> string Cast::Operation(int8_t input);
 template <> string Cast::Operation(int16_t input);
 template <> string Cast::Operation(int32_t input);
 template <> string Cast::Operation(int64_t input);

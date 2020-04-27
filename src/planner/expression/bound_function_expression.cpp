@@ -25,8 +25,8 @@ string BoundFunctionExpression::ToString() const {
 	return result;
 }
 
-uint64_t BoundFunctionExpression::Hash() const {
-	uint64_t result = Expression::Hash();
+hash_t BoundFunctionExpression::Hash() const {
+	hash_t result = Expression::Hash();
 	return CombineHash(result, duckdb::Hash(function.name.c_str()));
 }
 
@@ -57,5 +57,6 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
 	copy->CopyProperties(*this);
 	copy->arguments = arguments;
+	copy->sql_return_type = sql_return_type;
 	return move(copy);
 }

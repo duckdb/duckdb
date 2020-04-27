@@ -88,10 +88,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		payload_chunk.Verify();
 		assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
 
-		// move the strings inside the groups to the string heap
-		group_chunk.MoveStringsToHeap(state->ht->string_heap);
-		payload_chunk.MoveStringsToHeap(state->ht->string_heap);
-
 		state->ht->AddChunk(group_chunk, payload_chunk);
 		state->tuples_scanned += state->child_chunk.size();
 	} while (state->child_chunk.size() > 0);
@@ -109,11 +105,11 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 		for (idx_t i = 0; i < chunk.column_count(); i++) {
 			assert(aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
-			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size(aggr.return_type)]);
-			aggr.function.initialize(aggr_state.get(), aggr.return_type);
+			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
+			aggr.function.initialize(aggr_state.get());
 
-			Vector state_vector(chunk, Value::POINTER((uintptr_t)aggr_state.get()));
-			aggr.function.finalize(state_vector, chunk.data[i]);
+			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			aggr.function.finalize(state_vector, chunk.data[i], 1);
 		}
 		state->finished = true;
 		return;

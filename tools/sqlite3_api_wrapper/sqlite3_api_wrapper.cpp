@@ -170,9 +170,10 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 bool sqlite3_display_result(StatementType type) {
 	switch (type) {
-	case StatementType::EXECUTE:
-	case StatementType::EXPLAIN:
-	case StatementType::SELECT:
+	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::EXPLAIN_STATEMENT:
+	case StatementType::PRAGMA_STATEMENT:
+	case StatementType::SELECT_STATEMENT:
 		return true;
 	default:
 		return false;
@@ -348,7 +349,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return 0;
 	}
-	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->sql_types[iCol];
@@ -367,6 +368,8 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case SQLTypeId::TIME:
 	case SQLTypeId::TIMESTAMP:
 	case SQLTypeId::VARCHAR:
+	case SQLTypeId::LIST:
+	case SQLTypeId::STRUCT:
 		return SQLITE_BLOB;
 	default:
 		return 0;
@@ -388,7 +391,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 	if (iCol < 0 || iCol >= (int)pStmt->result->sql_types.size()) {
 		return false;
 	}
-	if (pStmt->current_chunk->data[iCol].nullmask[pStmt->current_row]) {
+	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
 		return false;
 	}
 	try {

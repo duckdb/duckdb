@@ -48,7 +48,7 @@ void my_scan_function(ClientContext &context, vector<Value> &input, DataChunk &o
 	size_t this_rows = std::min(data.nrow, (size_t)STANDARD_VECTOR_SIZE);
 	data.nrow -= this_rows;
 
-	auto int_data = (int32_t *)output.data[0].GetData();
+	auto int_data = FlatVector::GetData<int32_t>(output.data[0]);
 	for (size_t row = 0; row < this_rows; row++) {
 		int_data[row] = row % 10;
 	}
@@ -130,7 +130,8 @@ int main() {
 	auto scan_function_catalog_entry =
 	    con.context->catalog.GetEntry<TableFunctionCatalogEntry>(*con.context, DEFAULT_SCHEMA, "my_scan");
 	vector<Value> parameters; // empty
-	auto scan_function = make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(bind_data), move(parameters));
+	auto scan_function =
+	    make_unique<PhysicalTableFunction>(types, scan_function_catalog_entry, move(bind_data), move(parameters));
 
 	//  FILTER[some_int<=7 some_int>=3]
 	vector<unique_ptr<Expression>> filter_expressions;

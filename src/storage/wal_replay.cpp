@@ -158,7 +158,7 @@ void ReplayState::ReplayCreateTable() {
 
 	// bind the constraints to the table again
 	Binder binder(context);
-	auto bound_info = unique_ptr_cast<BoundCreateInfo, BoundCreateTableInfo>(binder.BindCreateInfo(move(info)));
+	auto bound_info = binder.BindCreateTableInfo(move(info));
 
 	db.catalog->CreateTable(context, bound_info.get());
 }
@@ -279,14 +279,13 @@ void ReplayState::ReplayDelete() {
 
 	assert(chunk.column_count() == 1 && chunk.data[0].type == ROW_TYPE);
 	row_t row_ids[1];
-	VectorCardinality cardinality(1);
-	Vector row_identifiers(cardinality, ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)row_ids);
 
-	auto source_ids = (row_t *)chunk.data[0].GetData();
+	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		row_ids[0] = source_ids[i];
-		current_table->storage->Delete(*current_table, context, row_identifiers);
+		current_table->storage->Delete(*current_table, context, row_identifiers, 1);
 	}
 }
 

@@ -55,7 +55,9 @@ public:
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
 	// Bind table names to ColumnRefExpressions
-	void BindTableNames(ParsedExpression &expr);
+	static void BindTableNames(Binder &binder, ParsedExpression &expr);
+	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
+	                                            string collation);
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
@@ -67,6 +69,7 @@ protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);
 
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
+	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
@@ -85,8 +88,10 @@ protected:
 
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
+	virtual string UnsupportedUnnestMessage();
 
 	Binder &binder;
 	ClientContext &context;

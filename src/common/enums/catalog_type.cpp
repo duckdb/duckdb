@@ -8,6 +8,8 @@ namespace duckdb {
 
 string CatalogTypeToString(CatalogType type) {
 	switch (type) {
+	case CatalogType::COLLATION:
+		return "Collation";
 	case CatalogType::TABLE:
 		return "Table";
 	case CatalogType::SCHEMA:

@@ -2,29 +2,47 @@
 #include "duckdb/parser/statement/alter_table_statement.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
-#include "duckdb/planner/statement/bound_simple_statement.hpp"
+#include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace duckdb;
 using namespace std;
 
 //! This file contains the binder definitions for statements that do not need to be bound at all and only require a
 //! straightforward conversion
 
-unique_ptr<BoundSQLStatement> Binder::Bind(AlterTableStatement &stmt) {
+namespace duckdb {
+
+BoundStatement Binder::Bind(AlterTableStatement &stmt) {
+	BoundStatement result;
+	result.names = {"Success"};
+	result.types = {SQLType::BOOLEAN};
 	auto table =
 	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
 	if (table && !table->temporary) {
 		// we can only alter temporary tables in read-only mode
 		this->read_only = false;
 	}
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::ALTER, move(stmt.info));
+	return result;
 }
 
-unique_ptr<BoundSQLStatement> Binder::Bind(PragmaStatement &stmt) {
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
+BoundStatement Binder::Bind(PragmaStatement &stmt) {
+	BoundStatement result;
+	result.names = {"Success"};
+	result.types = {SQLType::BOOLEAN};
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::PRAGMA, move(stmt.info));
+	return result;
 }
 
-unique_ptr<BoundSQLStatement> Binder::Bind(TransactionStatement &stmt) {
-	return make_unique<BoundSimpleStatement>(stmt.type, move(stmt.info));
+BoundStatement Binder::Bind(TransactionStatement &stmt) {
+	// transaction statements do not require a valid transaction
+	this->requires_valid_transaction = false;
+
+	BoundStatement result;
+	result.names = {"Success"};
+	result.types = {SQLType::BOOLEAN};
+	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::TRANSACTION, move(stmt.info));
+	return result;
 }
+
+} // namespace duckdb

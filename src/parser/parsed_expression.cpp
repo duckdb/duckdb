@@ -59,6 +59,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return CaseExpression::Equals((CaseExpression *)this, (CaseExpression *)other);
 	case ExpressionClass::CAST:
 		return CastExpression::Equals((CastExpression *)this, (CastExpression *)other);
+	case ExpressionClass::COLLATE:
+		return CollateExpression::Equals((CollateExpression *)this, (CollateExpression *)other);
 	case ExpressionClass::COLUMN_REF:
 		return ColumnRefExpression::Equals((ColumnRefExpression *)this, (ColumnRefExpression *)other);
 	case ExpressionClass::COMPARISON:
@@ -88,8 +90,8 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 	}
 }
 
-uint64_t ParsedExpression::Hash() const {
-	uint64_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
+hash_t ParsedExpression::Hash() const {
+	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	ParsedExpressionIterator::EnumerateChildren(
 	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
@@ -112,6 +114,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::CAST:
 		result = CastExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::COLLATE:
+		result = CollateExpression::Deserialize(type, source);
 		break;
 	case ExpressionClass::COLUMN_REF:
 		result = ColumnRefExpression::Deserialize(type, source);

@@ -173,30 +173,31 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 			} else {
 				// non varchar column, perform the cast
 				VectorOperations::Cast(state->child_chunk.data[col_idx], cast_chunk.data[col_idx], sql_types[col_idx],
-				                       SQLType::VARCHAR);
+				                       SQLType::VARCHAR, cast_chunk.size());
 			}
 		}
+		cast_chunk.Normalify();
 		// now loop over the vectors and output the values
-		VectorOperations::Exec(cast_chunk.data[0], [&](idx_t i, idx_t k) {
+		for (idx_t i = 0; i < cast_chunk.size(); i++) {
 			// write values
 			for (idx_t col_idx = 0; col_idx < state->child_chunk.column_count(); col_idx++) {
 				if (col_idx != 0) {
 					writer.Write(info.delimiter);
 				}
-				if (cast_chunk.data[col_idx].nullmask[i]) {
+				if (FlatVector::IsNull(cast_chunk.data[col_idx], i)) {
 					// write null value
 					writer.Write(info.null_str);
 					continue;
 				}
 
 				// non-null value, fetch the string value from the cast chunk
-				auto str_data = (string_t *)cast_chunk.data[col_idx].GetData();
+				auto str_data = FlatVector::GetData<string_t>(cast_chunk.data[col_idx]);
 				auto str_value = str_data[i];
 				WriteQuotedString(writer, str_value, info.delimiter, info.quote, info.escape, info.null_str,
 				                  info.force_quote[col_idx]);
 			}
 			writer.Write(newline);
-		});
+		}
 		total += cast_chunk.size();
 	}
 	writer.Close();

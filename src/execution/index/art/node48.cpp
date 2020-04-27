@@ -5,7 +5,7 @@
 using namespace duckdb;
 
 Node48::Node48(ART &art, size_t compressionLength) : Node(art, NodeType::N48, compressionLength) {
-	for (uint64_t i = 0; i < 256; i++) {
+	for (idx_t i = 0; i < 256; i++) {
 		childIndex[i] = Node::EMPTY_MARKER;
 	}
 }
@@ -18,13 +18,18 @@ idx_t Node48::GetChildPos(uint8_t k) {
 	}
 }
 
-idx_t Node48::GetChildGreaterEqual(uint8_t k) {
+idx_t Node48::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = k; pos < 256; pos++) {
 		if (childIndex[pos] != Node::EMPTY_MARKER) {
+			if (pos == k) {
+				equal = true;
+			} else {
+				equal = false;
+			}
 			return pos;
 		}
 	}
-	return Node::GetChildGreaterEqual(k);
+	return Node::GetChildGreaterEqual(k, equal);
 }
 
 idx_t Node48::GetNextPos(idx_t pos) {

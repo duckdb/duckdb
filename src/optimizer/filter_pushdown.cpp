@@ -29,12 +29,13 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	case LogicalOperatorType::UNION:
 		return PushdownSetOperation(move(op));
 	case LogicalOperatorType::DISTINCT:
-	case LogicalOperatorType::ORDER_BY:
-	case LogicalOperatorType::PRUNE_COLUMNS: {
+	case LogicalOperatorType::ORDER_BY: {
 		// we can just push directly through these operations without any rewriting
 		op->children[0] = Rewrite(move(op->children[0]));
 		return op;
 	}
+	case LogicalOperatorType::GET:
+		return PushdownGet(move(op));
 	default:
 		return FinishPushdown(move(op));
 	}
@@ -62,14 +63,15 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 		return FinishPushdown(move(op));
 	}
 }
-
-FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
-	// if there are filters in this FilterPushdown node, push them into the combiner
+void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
 		auto result = combiner.AddFilter(move(f->filter));
 		assert(result == FilterResult::SUCCESS);
 	}
 	filters.clear();
+}
+FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
+	PushFilters();
 	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;
 	expressions.push_back(move(expr));

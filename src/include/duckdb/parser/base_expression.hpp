@@ -70,7 +70,7 @@ public:
 
 	//! Creates a hash value of this expression. It is important that if two expressions are identical (i.e.
 	//! Expression::Equals() returns true), that their hash value is identical as well.
-	virtual uint64_t Hash() const = 0;
+	virtual hash_t Hash() const = 0;
 	//! Returns true if this expression is equal to another expression
 	virtual bool Equals(const BaseExpression *other) const;
 

@@ -20,6 +20,7 @@ ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expres
 		is_little_endian = false;
 	}
 	switch (types[0]) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 	case TypeId::INT16:
 	case TypeId::INT32:
@@ -70,87 +71,103 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 // Insert
 //===--------------------------------------------------------------------===//
-template <class T> static void generate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-		if (input.nullmask[i]) {
+template <class T>
+static void generate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	VectorData idata;
+	input.Orrify(count, idata);
+
+	auto input_data = (T *)idata.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = idata.sel->get_index(i);
+		if ((*idata.nullmask)[idx]) {
 			keys.push_back(nullptr);
 		} else {
-			keys.push_back(Key::CreateKey<T>(input_data[i], is_little_endian));
+			keys.push_back(Key::CreateKey<T>(input_data[idx], is_little_endian));
 		}
-	});
+	}
 }
 
-template <class T> static void concatenate_keys(Vector &input, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	auto input_data = (T *)input.GetData();
-	VectorOperations::Exec(input, [&](idx_t i, idx_t k) {
-		if (input.nullmask[i] || !keys[k]) {
+template <class T>
+static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+	VectorData idata;
+	input.Orrify(count, idata);
+
+	auto input_data = (T *)idata.data;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = idata.sel->get_index(i);
+		if ((*idata.nullmask)[idx] || !keys[i]) {
 			// either this column is NULL, or the previous column is NULL!
-			keys[k] = nullptr;
+			keys[i] = nullptr;
 		} else {
 			// concatenate the keys
-			auto old_key = move(keys[k]);
-			auto new_key = Key::CreateKey<T>(input_data[i], is_little_endian);
+			auto old_key = move(keys[i]);
+			auto new_key = Key::CreateKey<T>(input_data[idx], is_little_endian);
 			auto keyLen = old_key->len + new_key->len;
 			auto compound_data = unique_ptr<data_t[]>(new data_t[keyLen]);
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
 			memcpy(compound_data.get() + old_key->len, new_key->data.get(), new_key->len);
-			keys[k] = make_unique<Key>(move(compound_data), keyLen);
+			keys[i] = make_unique<Key>(move(compound_data), keyLen);
 		}
-	});
+	}
 }
 
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
 	// generate keys for the first input column
 	switch (input.data[0].type) {
+	case TypeId::BOOL:
+		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		break;
 	case TypeId::INT8:
-		generate_keys<int8_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT16:
-		generate_keys<int16_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT32:
-		generate_keys<int32_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::INT64:
-		generate_keys<int64_t>(input.data[0], keys, is_little_endian);
+		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::FLOAT:
-		generate_keys<float>(input.data[0], keys, is_little_endian);
+		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::DOUBLE:
-		generate_keys<double>(input.data[0], keys, is_little_endian);
+		generate_keys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	case TypeId::VARCHAR:
-		generate_keys<string_t>(input.data[0], keys, is_little_endian);
+		generate_keys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
 		throw InvalidTypeException(input.data[0].type, "Invalid type for index");
 	}
 	for (idx_t i = 1; i < input.column_count(); i++) {
-		// for each fo the remaining columns, concatenate
+		// for each of the remaining columns, concatenate
 		switch (input.data[i].type) {
+		case TypeId::BOOL:
+			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
+			break;
 		case TypeId::INT8:
-			concatenate_keys<int8_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT16:
-			concatenate_keys<int16_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT32:
-			concatenate_keys<int32_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::INT64:
-			concatenate_keys<int64_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::FLOAT:
-			concatenate_keys<float>(input.data[i], keys, is_little_endian);
+			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::DOUBLE:
-			concatenate_keys<double>(input.data[i], keys, is_little_endian);
+			concatenate_keys<double>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case TypeId::VARCHAR:
-			concatenate_keys<string_t>(input.data[i], keys, is_little_endian);
+			concatenate_keys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		default:
 			throw InvalidTypeException(input.data[0].type, "Invalid type for index");
@@ -160,7 +177,6 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	assert(row_ids.type == ROW_TYPE);
-	assert(input.size() == row_ids.size());
 	assert(types[0] == input.data[0].type);
 
 	// generate the keys for the given input
@@ -168,16 +184,15 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
-	row_ids.Normalify();
-	auto row_identifiers = (row_t *)row_ids.GetData();
-	auto rsel = row_ids.sel_vector();
+	row_ids.Normalify(input.size());
+	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = INVALID_INDEX;
-	for (idx_t i = 0; i < row_ids.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
 
-		row_t row_id = row_identifiers[rsel ? rsel[i] : i];
+		row_t row_id = row_identifiers[i];
 		if (!Insert(tree, move(keys[i]), 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
@@ -196,8 +211,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			if (!keys[i]) {
 				continue;
 			}
-			idx_t k = rsel ? rsel[i] : i;
-			row_t row_id = row_identifiers[k];
+			row_t row_id = row_identifiers[i];
 			Erase(tree, *keys[i], 0, row_id);
 		}
 		return false;
@@ -325,16 +339,14 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression_result, keys);
 
 	// now erase the elements from the database
-	row_ids.Normalify();
-	auto row_identifiers = (int64_t *)row_ids.GetData();
+	row_ids.Normalify(input.size());
+	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
-	for (idx_t i = 0; i < row_ids.size(); i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		if (!keys[i]) {
 			continue;
 		}
 		Erase(tree, *keys[i], 0, row_identifiers[i]);
-		// assert that the entry was erased properly
-		assert(!is_unique || Lookup(tree, *keys[i], 0) == nullptr);
 	}
 }
 
@@ -346,7 +358,11 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
 		if (ART::LeafMatches(node.get(), key, depth)) {
-			node.reset();
+			auto leaf = static_cast<Leaf *>(node.get());
+			leaf->Remove(row_id);
+			if (leaf->num_elements == 0) {
+				node.reset();
+			}
 		}
 		return;
 	}
@@ -367,11 +383,9 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
 			// Leaf found, remove entry
 			auto leaf = static_cast<Leaf *>(child_ref.get());
-			if (leaf->num_elements > 1) {
-				// leaf has multiple rows: remove the row from the leaf
-				leaf->Remove(row_id);
-			} else {
-				// Leaf only has one element, delete leaf, decrement node counter and maybe shrink node
+			leaf->Remove(row_id);
+			if (leaf->num_elements == 0) {
+				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
 				Node::Erase(*this, node, pos);
 			}
 		} else {
@@ -387,6 +401,8 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
 	assert(type == value.type);
 	switch (type) {
+	case TypeId::BOOL:
+		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
 	case TypeId::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
 	case TypeId::INT16:
@@ -521,6 +537,7 @@ bool ART::IteratorNext(Iterator &it) {
 //===--------------------------------------------------------------------===//
 bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 	it.depth = 0;
+	bool equal = false;
 	if (!n) {
 		return false;
 	}
@@ -531,7 +548,14 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		auto &top = it.stack[it.depth];
 		top.node = node;
 		it.depth++;
-
+		if (!equal) {
+			while (node->type != NodeType::NLeaf) {
+				node = node->GetChild(node->GetMin())->get();
+				auto &c_top = it.stack[it.depth];
+				c_top.node = node;
+				it.depth++;
+			}
+		}
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf node: check if it is bigger or equal than the current key
 			auto leaf = static_cast<Leaf *>(node);
@@ -582,13 +606,14 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		// prefix matches, search inside the child for the key
 		depth += node->prefix_length;
 
-		top.pos = node->GetChildGreaterEqual(key[depth]);
-
+		top.pos = node->GetChildGreaterEqual(key[depth], equal);
 		if (top.pos == INVALID_INDEX) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
 		node = node->GetChild(top.pos)->get();
+		//! This means all children of this node qualify as geq
+
 		depth++;
 	}
 }
@@ -762,12 +787,11 @@ void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataC
 	}
 
 	// create a vector pointing to the current set of row ids
-	FlatVector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
-	row_identifiers.SetCount(scan_count);
 
 	// fetch the actual values from the base table
-	table.Fetch(transaction, result, state->column_ids, row_identifiers, table_state);
+	table.Fetch(transaction, result, state->column_ids, row_identifiers, scan_count, table_state);
 
 	// move to the next set of row ids
 	state->result_index += scan_count;

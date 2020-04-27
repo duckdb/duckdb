@@ -11,6 +11,7 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterSQLiteFunctions() {
+	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
 	SQLiteMaster::RegisterFunction(*this);
 

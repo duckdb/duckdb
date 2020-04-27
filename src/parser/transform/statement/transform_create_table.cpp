@@ -2,9 +2,36 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/collate_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+string Transformer::TransformCollation(PGCollateClause *collate) {
+	if (!collate) {
+		return string();
+	}
+	string collation;
+	for (auto c = collate->collname->head; c != NULL; c = lnext(c)) {
+		auto pgvalue = (PGValue *)c->data.ptr_value;
+		if (pgvalue->type != T_PGString) {
+			throw ParserException("Expected a string as collation type!");
+		}
+		auto collation_argument = string(pgvalue->val.str);
+		if (collation.empty()) {
+			collation = collation_argument;
+		} else {
+			collation += "." + collation_argument;
+		}
+	}
+	return collation;
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(PGCollateClause *collate) {
+	auto child = TransformExpression(collate->arg);
+	auto collation = TransformCollation(collate);
+	return make_unique<CollateExpression>(collation, move(child));
+}
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
@@ -29,8 +56,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	    stmt->oncommit != PGOnCommitAction::PG_ONCOMMIT_NOOP) {
 		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
 	}
-
-	assert(stmt->tableElts);
+	if (!stmt->tableElts) {
+		throw ParserException("Table must have at least one column!");
+	}
 
 	for (auto c = stmt->tableElts->head; c != NULL; c = lnext(c)) {
 		auto node = reinterpret_cast<PGNode *>(c->data.ptr_value);
@@ -38,6 +66,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 		case T_PGColumnDef: {
 			auto cdef = (PGColumnDef *)c->data.ptr_value;
 			SQLType target_type = TransformTypeName(cdef->typeName);
+			target_type.collation = TransformCollation(cdef->collClause);
+
 			auto centry = ColumnDefinition(cdef->colname, target_type);
 
 			if (cdef->constraints) {

@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -47,10 +48,10 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(string op, uni
 	children.push_back(move(right));
 
 	if (op == "~" || op == "!~") {
-		// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+		// rewrite 'asdf' SIMILAR TO '.*sd.*' into regexp_full_match('asdf', '.*sd.*')
 		bool invert_similar = op == "!~";
 
-		auto result = make_unique<FunctionExpression>(schema, "regexp_matches", children);
+		auto result = make_unique<FunctionExpression>(schema, "regexp_full_match", children);
 		if (invert_similar) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(result));
 		} else {
@@ -132,7 +133,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 			return make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(compare_between));
 		}
 	} break;
-	// rewrite SIMILAR TO into regexp_matches('asdf', '.*sd.*')
+	// rewrite SIMILAR TO into regexp_full_match('asdf', '.*sd.*')
 	case PG_AEXPR_SIMILAR: {
 		auto left_expr = TransformExpression(root->lexpr);
 		auto right_expr = TransformExpression(root->rexpr);
@@ -160,7 +161,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 			invert_similar = true;
 		}
 		const auto schema = DEFAULT_SCHEMA;
-		const auto regex_function = "regexp_matches";
+		const auto regex_function = "regexp_full_match";
 		auto result = make_unique<FunctionExpression>(schema, regex_function, children);
 
 		if (invert_similar) {
@@ -172,7 +173,6 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 	default:
 		break;
 	}
-
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
 

@@ -59,7 +59,7 @@ void Appender::EndRow() {
 }
 
 template <class SRC, class DST> void Appender::AppendValueInternal(Vector &col, SRC input) {
-	((DST *)col.GetData())[col.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 void Appender::InvalidateException(string msg) {
@@ -126,7 +126,17 @@ template <> void Appender::Append(const char *value) {
 	AppendValueInternal<string_t>(string_t(value));
 }
 
+template <> void Appender::Append(float value) {
+	if (!Value::FloatIsValid(value)) {
+		InvalidateException("Float value is out of range!");
+	}
+	AppendValueInternal<float>(value);
+}
+
 template <> void Appender::Append(double value) {
+	if (!Value::DoubleIsValid(value)) {
+		InvalidateException("Double value is out of range!");
+	}
 	AppendValueInternal<double>(value);
 }
 
@@ -142,11 +152,11 @@ template <> void Appender::Append(nullptr_t value) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column++];
-	col.nullmask[col.size()] = true;
+	FlatVector::SetNull(col, chunk.size(), true);
 }
 
 void Appender::AppendValue(Value value) {
-	chunk.SetValue(column, chunk.data[column].size(), value);
+	chunk.SetValue(column, chunk.size(), value);
 	column++;
 }
 

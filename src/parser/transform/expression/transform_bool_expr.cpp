@@ -32,6 +32,12 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(PGBoolExpr *root) {
 				// convert COMPARE_IN to COMPARE_NOT_IN
 				next->type = ExpressionType::COMPARE_NOT_IN;
 				result = move(next);
+			} else if (next->type >= ExpressionType::COMPARE_EQUAL &&
+			           next->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+				// NOT on a comparison: we can negate the comparison
+				// e.g. NOT(x > y) is equivalent to x <= y
+				next->type = NegateComparisionExpression(next->type);
+				result = move(next);
 			} else {
 				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, move(next));
 			}

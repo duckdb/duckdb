@@ -24,7 +24,7 @@ public:
 		rewriter.rules.push_back(make_unique<T>(rewriter));
 	}
 
-	bool VerifyRewrite(string input, string expected_output);
+	bool VerifyRewrite(string input, string expected_output, bool silent = false);
 
 	string AddColumns(string columns);
 

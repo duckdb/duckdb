@@ -6,38 +6,42 @@ namespace duckdb {
 
 string StatementTypeToString(StatementType type) {
 	switch (type) {
-	case StatementType::SELECT:
+	case StatementType::SELECT_STATEMENT:
 		return "SELECT";
-	case StatementType::INSERT:
+	case StatementType::INSERT_STATEMENT:
 		return "INSERT";
-	case StatementType::UPDATE:
+	case StatementType::UPDATE_STATEMENT:
 		return "UPDATE";
-	case StatementType::DELETE:
+	case StatementType::DELETE_STATEMENT:
 		return "DELETE";
-	case StatementType::PREPARE:
+	case StatementType::PREPARE_STATEMENT:
 		return "PREPARE";
-	case StatementType::EXECUTE:
+	case StatementType::EXECUTE_STATEMENT:
 		return "EXECUTE";
-	case StatementType::ALTER:
+	case StatementType::ALTER_STATEMENT:
 		return "ALTER";
-	case StatementType::TRANSACTION:
+	case StatementType::TRANSACTION_STATEMENT:
 		return "TRANSACTION";
-	case StatementType::COPY:
+	case StatementType::COPY_STATEMENT:
 		return "COPY";
-	case StatementType::ANALYZE:
+	case StatementType::ANALYZE_STATEMENT:
 		return "ANALYZE";
-	case StatementType::VARIABLE_SET:
+	case StatementType::VARIABLE_SET_STATEMENT:
 		return "VARIABLE_SET";
-	case StatementType::CREATE_FUNC:
+	case StatementType::CREATE_FUNC_STATEMENT:
 		return "CREATE_FUNC";
-	case StatementType::EXPLAIN:
+	case StatementType::EXPLAIN_STATEMENT:
 		return "EXPLAIN";
-	case StatementType::CREATE:
+	case StatementType::CREATE_STATEMENT:
 		return "CREATE";
-	case StatementType::DROP:
+	case StatementType::DROP_STATEMENT:
 		return "DROP";
-	case StatementType::PRAGMA:
+	case StatementType::PRAGMA_STATEMENT:
 		return "PRAGMA";
+	case StatementType::VACUUM_STATEMENT:
+		return "VACUUM";
+	case StatementType::RELATION_STATEMENT:
+		return "RELATION";
 	default:
 		return "INVALID";
 	}

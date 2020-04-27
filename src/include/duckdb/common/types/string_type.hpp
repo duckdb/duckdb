@@ -62,6 +62,10 @@ public:
 		return IsInlined() ? (const char *)prefix : value_.data;
 	}
 
+	const char *GetPrefix() const {
+		return prefix;
+	}
+
 	idx_t GetSize() const {
 		return length;
 	}

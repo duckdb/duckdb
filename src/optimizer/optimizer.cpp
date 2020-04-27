@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/cse_optimizer.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -9,7 +10,6 @@
 #include "duckdb/optimizer/index_scan.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
-#include "duckdb/optimizer/column_lifetime_optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -24,9 +24,11 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<CaseSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<ConjunctionSimplificationRule>(rewriter));
-	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<DatePartSimplificationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
+	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

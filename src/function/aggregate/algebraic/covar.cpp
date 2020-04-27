@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/function_set.hpp"
 #include <cmath>
 
 using namespace duckdb;
@@ -14,122 +15,92 @@ struct covar_state_t {
 	double co_moment;
 };
 
-static idx_t covar_state_size(TypeId return_type) {
-	return sizeof(covar_state_t);
-}
+struct CovarOperation {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->count = 0;
+		state->meanx = 0;
+		state->meany = 0;
+		state->co_moment = 0;
+	}
 
-static void covar_initialize(data_ptr_t payload, TypeId return_type) {
-	memset(payload, 0, covar_state_size(return_type));
-}
-
-static void covar_update(Vector inputs[], idx_t input_count, Vector &state) {
-	// Streaming approximate covariance
-	assert(input_count == 2);
-	inputs[0].Normalify();
-	inputs[1].Normalify();
-
-	auto states = (covar_state_t **)state.GetData();
-	auto xdata = (double *)inputs[0].GetData();
-	auto ydata = (double *)inputs[1].GetData();
-	VectorOperations::Exec(state, [&](idx_t i, idx_t k) {
-		if (inputs[0].nullmask[i] || inputs[1].nullmask[i]) {
-			return;
-		}
-
-		auto state_ptr = states[i];
-
+	template <class A_TYPE, class B_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask, nullmask_t &bnullmask,
+	                      idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
-		const uint64_t n = ++(state_ptr->count);
+		const uint64_t n = ++(state->count);
 
-		const double x = xdata[i];
-		const double dx = (x - state_ptr->meanx);
-		const double meanx = state_ptr->meanx + dx / n;
+		const auto x = x_data[xidx];
+		const double dx = (x - state->meanx);
+		const double meanx = state->meanx + dx / n;
 
-		const double y = ydata[i];
-		const double dy = (y - state_ptr->meany);
-		const double meany = state_ptr->meany + dy / n;
+		const auto y = y_data[yidx];
+		const double dy = (y - state->meany);
+		const double meany = state->meany + dy / n;
 
-		const double C = state_ptr->co_moment + dx * (y - meany);
+		const double C = state->co_moment + dx * (y - meany);
 
-		state_ptr->meanx = meanx;
-		state_ptr->meany = meany;
-		state_ptr->co_moment = C;
-		// see Finalize() methods below for final step
-	});
-}
+		state->meanx = meanx;
+		state->meany = meany;
+		state->co_moment = C;
+	}
 
-static void covar_combine(Vector &state, Vector &combined) {
-	// combine streaming covar states
-	auto combined_data = (covar_state_t **)combined.GetData();
-	auto state_data = (covar_state_t *)state.GetData();
-
-	VectorOperations::Exec(state, [&](uint64_t i, uint64_t k) {
-		auto combined_ptr = combined_data[i];
-		auto state_ptr = state_data + i;
-
-		if (0 == combined_ptr->count) {
-			*combined_ptr = *state_ptr;
-		} else if (state_ptr->count) {
-			const auto count = combined_ptr->count + state_ptr->count;
-			const auto meanx =
-			    (state_ptr->count * state_ptr->meanx + combined_ptr->count * combined_ptr->meanx) / count;
-			const auto meany =
-			    (state_ptr->count * state_ptr->meany + combined_ptr->count * combined_ptr->meany) / count;
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (target->count == 0) {
+			*target = source;
+		} else if (source.count > 0) {
+			const auto count = target->count + source.count;
+			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
+			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
-			const auto deltax = combined_ptr->meanx - state_ptr->meanx;
-			const auto deltay = combined_ptr->meany - state_ptr->meany;
-			combined_ptr->co_moment = state_ptr->co_moment + combined_ptr->co_moment +
-			                          deltax * deltay * state_ptr->count * combined_ptr->count / count;
-			combined_ptr->meanx = meanx;
-			combined_ptr->meany = meany;
-			combined_ptr->count = count;
+			const auto deltax = target->meanx - source.meanx;
+			const auto deltay = target->meany - source.meany;
+			target->co_moment =
+			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
+			target->meanx = meanx;
+			target->meany = meany;
+			target->count = count;
 		}
-	});
-}
+	}
 
-static void covarpop_finalize(Vector &state, Vector &result) {
-	// compute finalization of streaming population covariance
-	auto states = (covar_state_t **)state.GetData();
-	auto result_data = (double *)result.GetData();
-	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
+	static bool IgnoreNull() {
+		return true;
+	}
+};
 
-		if (state_ptr->count == 0) {
-			result.nullmask[i] = true;
-			return;
+struct CovarPopOperation : public CovarOperation {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (state->count == 0) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = state->co_moment / state->count;
 		}
-		double res = state_ptr->co_moment / state_ptr->count;
+	}
+};
 
-		result_data[i] = res;
-	});
-}
-
-static void covarsamp_finalize(Vector &state, Vector &result) {
-	// compute finalization of streaming sample covariance
-	auto states = (covar_state_t **)state.GetData();
-	auto result_data = (double *)result.GetData();
-	VectorOperations::Exec(result, [&](uint64_t i, uint64_t k) {
-		auto state_ptr = states[i];
-
-		if (state_ptr->count < 2) {
-			result.nullmask[i] = true;
-			return;
+struct CovarSampOperation : public CovarOperation {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if ((state->count) < 2) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = state->co_moment / (state->count - 1);
 		}
-		double res = state_ptr->co_moment / (state_ptr->count - 1);
+	}
+};
 
-		result_data[i] = res;
-	});
+void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
+	AggregateFunctionSet covar_pop("covar_pop");
+	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(
+	    SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	set.AddFunction(covar_pop);
 }
 
 void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("covar_samp", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
-	                                  covar_state_size, covar_initialize, covar_update, covar_combine,
-	                                  covarsamp_finalize));
-}
-
-void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(AggregateFunction("covar_pop", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
-	                                  covar_state_size, covar_initialize, covar_update, covar_combine,
-	                                  covarpop_finalize));
+	AggregateFunctionSet covar_samp("covar_samp");
+	covar_samp.AddFunction(
+	    AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(
+	        SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	set.AddFunction(covar_samp);
 }

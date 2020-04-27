@@ -108,7 +108,10 @@ public:
 	void AddFunction(AggregateFunction function);
 	void AddFunction(ScalarFunctionSet set);
 	void AddFunction(ScalarFunction function);
+	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
+
+	void AddCollation(string name, ScalarFunction function, bool combinable = false);
 
 private:
 	ClientContext &context;
@@ -126,13 +129,14 @@ private:
 	// aggregates
 	void RegisterAlgebraicAggregates();
 	void RegisterDistributiveAggregates();
+	void RegisterNestedAggregates();
 
 	// scalar functions
 	void RegisterDateFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();
-	void RegisterStructFunctions();
+	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
 };

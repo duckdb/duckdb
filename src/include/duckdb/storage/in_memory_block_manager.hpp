@@ -17,6 +17,9 @@ namespace duckdb {
 //! InMemoryBlockManager is an implementation for a BlockManager
 class InMemoryBlockManager : public BlockManager {
 public:
+	void StartCheckpoint() override {
+		throw Exception("Cannot perform IO in in-memory database!");
+	}
 	unique_ptr<Block> CreateBlock() override {
 		throw Exception("Cannot perform IO in in-memory database!");
 	}

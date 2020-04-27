@@ -11,17 +11,22 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 
 namespace duckdb {
 
 class VectorBuffer;
+class Vector;
+class ChunkCollection;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER, // standard buffer, holds a single array of data
-	STRING_BUFFER    // string buffer, holds a string heap
+	STANDARD_BUFFER,     // standard buffer, holds a single array of data
+	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
+	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
+	STRING_BUFFER,       // string buffer, holds a string heap
+	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
+	LIST_BUFFER          // list buffer, holds a single flatvector child
 };
-
-template <class T> using buffer_ptr = std::shared_ptr<T>;
 
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer {
@@ -39,14 +44,34 @@ public:
 		return data.get();
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type, idx_t count = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(TypeId type);
 
-private:
+protected:
 	unique_ptr<data_t[]> data;
 };
 
-//! The VectorStringBuffer is
+//! The DictionaryBuffer holds a selection vector
+class DictionaryBuffer : public VectorBuffer {
+public:
+	DictionaryBuffer(const SelectionVector &sel) : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
+	}
+	DictionaryBuffer(buffer_ptr<SelectionData> data)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
+	}
+	DictionaryBuffer(idx_t count = STANDARD_VECTOR_SIZE)
+	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(count) {
+	}
+
+public:
+	SelectionVector &GetSelVector() {
+		return sel_vector;
+	}
+
+private:
+	SelectionVector sel_vector;
+};
+
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
@@ -57,6 +82,9 @@ public:
 	}
 	string_t AddString(string_t data) {
 		return heap.AddString(data);
+	}
+	string_t AddBlob(string_t data) {
+		return heap.AddBlob(data.GetData(), data.GetSize());
 	}
 	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);
@@ -73,8 +101,39 @@ private:
 	vector<buffer_ptr<VectorBuffer>> references;
 };
 
-template <class T, typename... Args> buffer_ptr<T> make_buffer(Args &&... args) {
-	return std::make_shared<T>(std::forward<Args>(args)...);
-}
+class VectorStructBuffer : public VectorBuffer {
+public:
+	VectorStructBuffer();
+	~VectorStructBuffer();
+
+public:
+	child_list_t<unique_ptr<Vector>> &GetChildren() {
+		return children;
+	}
+	void AddChild(string name, unique_ptr<Vector> vector) {
+		children.push_back(std::make_pair(name, move(vector)));
+	}
+
+private:
+	//! child vectors used for nested data
+	child_list_t<unique_ptr<Vector>> children;
+};
+
+class VectorListBuffer : public VectorBuffer {
+public:
+	VectorListBuffer();
+
+	~VectorListBuffer();
+
+public:
+	ChunkCollection &GetChild() {
+		return *child;
+	}
+	void SetChild(unique_ptr<ChunkCollection> new_child);
+
+private:
+	//! child vectors used for nested data
+	unique_ptr<ChunkCollection> child;
+};
 
 } // namespace duckdb

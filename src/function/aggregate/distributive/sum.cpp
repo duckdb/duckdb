@@ -9,40 +9,70 @@ using namespace std;
 
 namespace duckdb {
 
-static void sum_update(Vector inputs[], idx_t input_count, Vector &result) {
-	assert(input_count == 1);
-	VectorOperations::Scatter::Add(inputs[0], result);
-}
+struct sum_state_t {
+	double value;
+	bool isset;
+};
 
-static void sum_combine(Vector &state, Vector &combined) {
-	VectorOperations::Scatter::Add(state, combined);
-}
+struct SumOperation {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->value = 0;
+		state->isset = false;
+	}
 
-template <class T> static void sum_simple_update(Vector inputs[], idx_t input_count, data_ptr_t state_) {
-	auto state = (T *)state_;
-	T result;
-	if (!AggregateExecutor::Execute<T, T, duckdb::Add>(inputs[0], &result)) {
-		// no non-null values encountered
-		return;
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		state->isset = true;
+		state->value += input[idx];
 	}
-	if (inputs[0].vector_type == VectorType::CONSTANT_VECTOR) {
-		result *= inputs[0].size();
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		state->isset = true;
+		state->value += (double)input[0] * (double)count;
 	}
-	if (IsNullValue<T>(*state)) {
-		*state = result;
-	} else {
-		*state += result;
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!state->isset) {
+			nullmask[idx] = true;
+		} else {
+			if (!Value::DoubleIsValid(state->value)) {
+				throw OutOfRangeException("SUM is out of range!");
+			}
+			target[idx] = state->value;
+		}
 	}
-}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (!source.isset) {
+			// source is NULL, nothing to do
+			return;
+		}
+		if (!target->isset) {
+			// target is NULL, use source value directly
+			*target = source;
+		} else {
+			// else perform the operation
+			target->value += source.value;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction({SQLType::BIGINT}, SQLType::BIGINT, get_return_type_size, null_state_initialize,
-	                                  sum_update, sum_combine, gather_finalize, sum_simple_update<int64_t>));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, double, SumOperation>(SQLType::INTEGER,
+	                                                                                              SQLType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, double, SumOperation>(SQLType::BIGINT,
+	                                                                                              SQLType::DOUBLE));
 	// float sums to float
-	sum.AddFunction(AggregateFunction({SQLType::DOUBLE}, SQLType::DOUBLE, get_return_type_size, null_state_initialize,
-	                                  sum_update, sum_combine, gather_finalize, sum_simple_update<double>));
+	sum.AddFunction(
+	    AggregateFunction::UnaryAggregate<sum_state_t, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
 
 	set.AddFunction(sum);
 }

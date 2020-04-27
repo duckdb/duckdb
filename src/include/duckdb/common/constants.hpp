@@ -18,9 +18,11 @@ namespace duckdb {
 
 //! inline std directives that we use frequently
 using std::move;
+using std::shared_ptr;
 using std::string;
 using std::unique_ptr;
 using data_ptr = unique_ptr<char[]>;
+using std::make_shared;
 using std::vector;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
@@ -42,6 +44,9 @@ typedef uint64_t idx_t;
 
 //! The type used for row identifiers
 typedef int64_t row_t;
+
+//! The type used for hashes
+typedef uint64_t hash_t;
 
 //! The value used to signify an invalid index entry
 extern const idx_t INVALID_INDEX;
