@@ -3,6 +3,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/uncompressed_segment.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -50,7 +51,8 @@ void LocalStorage::InitializeScan(DataTable *table, LocalScanState &state) {
 	state.storage->InitializeScan(state);
 }
 
-void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+                        unordered_map<idx_t, vector<TableFilter>> *table_filters) {
 	if (!state.storage || state.chunk_index > state.max_index) {
 		// nothing left to scan
 		result.Reset();
@@ -61,7 +63,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	idx_t count = chunk_count;
 
 	// first create a selection vector from the deleted entries (if any)
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 	auto entry = state.storage->deleted_entries.find(state.chunk_index);
 	if (entry != state.storage->deleted_entries.end()) {
 		// deleted entries! create a selection vector
@@ -69,18 +71,24 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		idx_t new_count = 0;
 		for (idx_t i = 0; i < count; i++) {
 			if (!deleted[i]) {
-				sel.set_index(new_count++, i);
+				valid_sel.set_index(new_count++, i);
 			}
 		}
 		if (new_count == 0 && count > 0) {
 			// all entries in this chunk were deleted: continue to next chunk
 			state.chunk_index++;
-			Scan(state, column_ids, result);
+			Scan(state, column_ids, result, table_filters);
 			return;
 		}
 		count = new_count;
 	}
 
+	SelectionVector sel;
+	if (count != chunk_count) {
+		sel.Initialize(valid_sel);
+	} else {
+		sel.Initialize(FlatVector::IncrementalSelectionVector);
+	}
 	// now scan the vectors of the chunk
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto id = column_ids[i];
@@ -90,6 +98,25 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 		} else {
 			result.data[i].Reference(chunk.data[id]);
 		}
+		idx_t approved_tuple_count = count;
+		if (table_filters) {
+			auto column_filters = table_filters->find(i);
+			if (column_filters != table_filters->end()) {
+				//! We have filters to apply here
+				for (auto &column_filter : column_filters->second) {
+					nullmask_t nullmask = FlatVector::Nullmask(result.data[i]);
+					UncompressedSegment::filterSelection(sel, result.data[i], column_filter, approved_tuple_count,
+					                                     nullmask);
+				}
+				count = approved_tuple_count;
+			}
+		}
+	}
+	if (count == 0){
+	    // all entries in this chunk were filtered:: Continue on next chunk
+			state.chunk_index++;
+			Scan(state, column_ids, result, table_filters);
+			return;
 	}
 	if (count == chunk_count) {
 		result.SetCardinality(count);

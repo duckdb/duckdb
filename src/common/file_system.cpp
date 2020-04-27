@@ -40,7 +40,7 @@ static void AssertValidFileFlags(uint8_t flags) {
 
 // Solaris
 #ifndef O_DIRECT
-# define O_DIRECT 0
+#define O_DIRECT 0
 #endif
 
 struct UnixFileHandle : public FileHandle {

@@ -18,4 +18,3 @@ add_library(miniparquet STATIC
             snappy/snappy-sinksource.cc
             miniparquet.cpp
             duckdb_miniparquet.cpp)
-

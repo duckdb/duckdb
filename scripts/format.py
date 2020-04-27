@@ -13,6 +13,8 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
 confirm = True
 format_all = False
 
+os.system("git fetch origin master:master")
+
 def print_usage():
 	print("Usage: python scripts/format.py [revision|--all] [--no-confirm]")
 	print("   [revision]     is an optional revision number, all files that changed since that revision will be formatted (default=HEAD)")

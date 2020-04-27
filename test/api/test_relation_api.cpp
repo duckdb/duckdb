@@ -31,8 +31,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// we can stack projections
 	REQUIRE_NOTHROW(
-		result =
-			tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
+	    result =
+	        tbl->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Project("i + 1 AS i")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {5, 6, 7}));
 
 	// we can execute the same projection multiple times
@@ -155,10 +155,10 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 	// multiple joins followed by multiple filters
 	REQUIRE_NOTHROW(result = multi_join->Filter("v1.id>0")
-								 ->Filter("v2.id < 3")
-								 ->Filter("v3.id=2")
-								 ->Project("v1.id+v2.id+v3.id")
-								 ->Execute());
+	                             ->Filter("v2.id < 3")
+	                             ->Filter("v3.id=2")
+	                             ->Project("v1.id+v2.id+v3.id")
+	                             ->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 
 	// test explain
@@ -400,7 +400,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 
 	// create a table from a query
 	REQUIRE_NOTHROW(
-		con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
+	    con.Table("integers")->Filter("i BETWEEN 3 AND 4")->Project("i + 1 AS k, 'hello' AS l")->Create("new_values"));
 
 	result = con.Query("SELECT * FROM new_values ORDER BY k");
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 5}));

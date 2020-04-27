@@ -64,6 +64,7 @@ public:
 	//! Index of pruned node
 	idx_t prune_index;
 	bool need_prune = false;
+
 public:
 	idx_t GetRootIndex() override {
 		return need_prune ? prune_index : projection_index;

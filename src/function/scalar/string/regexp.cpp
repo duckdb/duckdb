@@ -43,8 +43,7 @@ struct RegexFullMatch {
 	}
 };
 
-template<class OP>
-static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <class OP> static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 
@@ -60,14 +59,14 @@ static void regexp_matches_function(DataChunk &args, ExpressionState &state, Vec
 			return OP::Operation(CreateStringPiece(input), *info.constant_pattern);
 		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, bool, true>(
-		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
-			    RE2 re(CreateStringPiece(pattern), options);
-			    if (!re.ok()) {
-				    throw Exception(re.error());
-			    }
-			    return OP::Operation(CreateStringPiece(input), re);
-		    });
+		BinaryExecutor::Execute<string_t, string_t, bool, true>(strings, patterns, result, args.size(),
+		                                                        [&](string_t input, string_t pattern) {
+			                                                        RE2 re(CreateStringPiece(pattern), options);
+			                                                        if (!re.ok()) {
+				                                                        throw Exception(re.error());
+			                                                        }
+			                                                        return OP::Operation(CreateStringPiece(input), re);
+		                                                        });
 	}
 }
 
@@ -87,20 +86,6 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 
 			string range_min, range_max;
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
-			if (range_success) {
-				// there can be null terminators in the produced range value: remove them
-				range_min = string(range_min.c_str());
-				range_max = string(range_max.c_str());
-				if (range_min.size() == 0 || range_max.size() == 0) {
-					range_success = false;
-				}
-				// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
-				// in this case we don't push a range filter
-				if (Utf8Proc::Analyze(range_min) == UnicodeType::INVALID || Utf8Proc::Analyze(range_max) == UnicodeType::INVALID) {
-					range_success = false;
-				}
-			}
-
 			return make_unique<RegexpMatchesBindData>(move(re), range_min, range_max, range_success);
 		}
 	}
@@ -128,7 +113,8 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("regexp_full_match", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               regexp_matches_function<RegexFullMatch>, false, regexp_matches_get_bind_function));
 	set.AddFunction(ScalarFunction("regexp_matches", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                               regexp_matches_function<RegexPartialMatch>, false, regexp_matches_get_bind_function));
+	                               regexp_matches_function<RegexPartialMatch>, false,
+	                               regexp_matches_get_bind_function));
 	set.AddFunction(ScalarFunction("regexp_replace", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
 	                               SQLType::VARCHAR, regexp_replace_function));
 }

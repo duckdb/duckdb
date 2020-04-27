@@ -105,8 +105,6 @@ TEST_CASE("Test binding parameters with union expressions", "[setops]") {
 	                   "BY t1.a, t2.a, test2.b;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 2, 3, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1, 1, 2, 2, 3, 3}));
-
-
 }
 
 TEST_CASE("Test union with nulls", "[setops]") {

@@ -18,6 +18,7 @@ public:
 
 	shared_ptr<Relation> child;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	BoundStatement Bind(Binder &binder) override;

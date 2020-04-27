@@ -14,6 +14,7 @@ add_library_unity(
   prefix.cpp
   repeat.cpp
   replace.cpp
+  strip_accents.cpp
   suffix.cpp
   trim.cpp
   contains.cpp)

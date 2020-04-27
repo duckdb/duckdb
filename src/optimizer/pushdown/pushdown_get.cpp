@@ -9,19 +9,17 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	assert(op->type == LogicalOperatorType::GET);
 	auto &get = (LogicalGet &)*op;
 	if (!get.tableFilters.empty()) {
-        if (!filters.empty()) {
-            //! We didn't managed to push down all filters to table scan
-            auto logicalFilter = make_unique<LogicalFilter>();
-            for (auto &f : filters) {
-                logicalFilter->expressions.push_back(move(f->filter));
-            }
-            logicalFilter->children.push_back(move(op));
-            return move(logicalFilter);
-        }
-    else{
-            return op;
-
-        }
+		if (!filters.empty()) {
+			//! We didn't managed to push down all filters to table scan
+			auto logicalFilter = make_unique<LogicalFilter>();
+			for (auto &f : filters) {
+				logicalFilter->expressions.push_back(move(f->filter));
+			}
+			logicalFilter->children.push_back(move(op));
+			return move(logicalFilter);
+		} else {
+			return op;
+		}
 	}
 	//! FIXME: We only need to skip if the index is in the column being filtered
 	if (!get.table || !get.table->storage->indexes.empty()) {

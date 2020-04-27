@@ -22,10 +22,16 @@ struct ReverseFun {
 };
 
 struct LowerFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct UpperFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct StripAccentsFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

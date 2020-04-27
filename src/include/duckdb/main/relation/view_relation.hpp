@@ -19,6 +19,7 @@ public:
 	string schema_name;
 	string view_name;
 	vector<ColumnDefinition> columns;
+
 public:
 	unique_ptr<QueryNode> GetQueryNode() override;
 	unique_ptr<TableRef> GetTableRef() override;

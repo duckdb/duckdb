@@ -48,7 +48,8 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable *table, LocalScanState &state);
 	//! Scan
-	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result);
+	void Scan(LocalScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+	          unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 
 	//! Append a chunk to the local storage
 	void Append(DataTable *table, DataChunk &chunk);

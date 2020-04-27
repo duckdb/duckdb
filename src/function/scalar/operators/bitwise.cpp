@@ -63,8 +63,7 @@ void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // << [bitwise_left_shift]
 //===--------------------------------------------------------------------===//
-template<class T>
-bool ShiftInRange(T shift) {
+template <class T> bool ShiftInRange(T shift) {
 	return shift >= 0 && shift < (T)(sizeof(T) * 8);
 }
 

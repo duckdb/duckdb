@@ -61,7 +61,9 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	REQUIRE_NO_FAIL(con->Query("CREATE TEMPORARY TABLE integers2(i INTEGER)"));
 	REQUIRE_NO_FAIL(con->Query("INSERT INTO integers2 VALUES (1), (2), (3), (4), (5)"));
 	REQUIRE_NO_FAIL(con->Query("UPDATE integers2 SET i=i+1"));
-	REQUIRE_NO_FAIL(con->Query("DELETE FROM integers2 WHERE i=3"));
+	result = con->Query("DELETE FROM integers2 WHERE i=3");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
 	REQUIRE_NO_FAIL(con->Query("ALTER TABLE integers2 RENAME COLUMN i TO k"));
 	result = con->Query("SELECT k FROM integers2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4, 5, 6}));

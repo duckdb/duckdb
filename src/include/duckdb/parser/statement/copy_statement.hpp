@@ -6,14 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/parser/statement/copy_statement.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -26,7 +18,7 @@ namespace duckdb {
 
 class CopyStatement : public SQLStatement {
 public:
-	CopyStatement() : SQLStatement(StatementType::COPY), info(make_unique<CopyInfo>()){};
+	CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_unique<CopyInfo>()){};
 
 	unique_ptr<CopyInfo> info;
 	// The SQL statement used instead of a table when copying data out to a file

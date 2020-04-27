@@ -17,7 +17,7 @@ class ScalarFunctionCatalogEntry;
 //! Represents a function call that has been bound to a base function
 class BoundFunctionExpression : public Expression {
 public:
-	BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator);
+	BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator = false);
 
 	// The bound function expression
 	ScalarFunction function;

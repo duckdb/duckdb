@@ -16,7 +16,7 @@ namespace duckdb {
 
 class UpdateStatement : public SQLStatement {
 public:
-	UpdateStatement() : SQLStatement(StatementType::UPDATE) {
+	UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT) {
 	}
 
 	unique_ptr<ParsedExpression> condition;

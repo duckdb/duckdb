@@ -35,7 +35,8 @@ TEST_CASE("Test scalar printf", "[printf]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"3 + 5 = 8"}));
 
 	// integers with special formatting specifiers
-	result = con.Query("SELECT printf('%04d', 33), printf('%s %02d:%02d:%02d %s', 'time', 12, 3, 16, 'AM'), printf('%10d', 1992)");
+	result = con.Query(
+	    "SELECT printf('%04d', 33), printf('%s %02d:%02d:%02d %s', 'time', 12, 3, 16, 'AM'), printf('%10d', 1992)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"0033"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"time 12:03:16 AM"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"      1992"}));
@@ -145,7 +146,8 @@ TEST_CASE("Test scalar format", "[printf]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"3 + 5 = 8"}));
 
 	// integers with special formatting specifiers
-	result = con.Query("SELECT format('{:04d}', 33), format('{} {:02d}:{:02d}:{:02d} {}', 'time', 12, 3, 16, 'AM'), format('{:10d}', 1992)");
+	result = con.Query("SELECT format('{:04d}', 33), format('{} {:02d}:{:02d}:{:02d} {}', 'time', 12, 3, 16, 'AM'), "
+	                   "format('{:10d}', 1992)");
 	REQUIRE(CHECK_COLUMN(result, 0, {"0033"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"time 12:03:16 AM"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"      1992"}));

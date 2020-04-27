@@ -190,9 +190,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 		auto &col_expr = (BoundColumnRefExpression &)expr;
 		return ExpressionCost(col_expr.return_type, 8);
 	}
-	default: {
-		break;
-	}
+	default: { break; }
 	}
 
 	// return a very high value if nothing matches

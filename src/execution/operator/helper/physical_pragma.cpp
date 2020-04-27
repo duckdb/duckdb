@@ -5,6 +5,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 #include <cctype>
 
@@ -68,6 +69,14 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 				    "Memory limit must be an assignment with a memory unit (e.g. PRAGMA memory_limit='1GB')");
 			}
 		}
+	} else if (keyword == "collation" || keyword == "default_collation") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Collation must be an assignment (e.g. PRAGMA default_collation=NOCASE)");
+		}
+		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(TypeId::VARCHAR).str_value);
+		// bind the collation to verify that it exists
+		ExpressionBinder::PushCollation(context, nullptr, collation_param);
+		context.db.collation = collation_param;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}

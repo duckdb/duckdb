@@ -115,4 +115,3 @@ TEST_CASE("Test packing and unpacking lineitem into structs", "[nested][.]") {
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(sf, 1), true);
 }
-

@@ -39,6 +39,8 @@ BindResult ExpressionBinder::BindExpression(ParsedExpression &expr, idx_t depth,
 		return BindExpression((CaseExpression &)expr, depth);
 	case ExpressionClass::CAST:
 		return BindExpression((CastExpression &)expr, depth);
+	case ExpressionClass::COLLATE:
+		return BindExpression((CollateExpression &)expr, depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindExpression((ColumnRefExpression &)expr, depth);
 	case ExpressionClass::COMPARISON:

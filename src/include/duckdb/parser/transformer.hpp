@@ -26,7 +26,8 @@ struct OrderByNode;
 //! parser representation into the DuckDB representation
 class Transformer {
 public:
-	Transformer(Transformer *parent = nullptr) : parent(parent) {}
+	Transformer(Transformer *parent = nullptr) : parent(parent) {
+	}
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(PGList *tree, vector<unique_ptr<SQLStatement>> &statements);
@@ -142,6 +143,13 @@ private:
 	unique_ptr<Constraint> TransformConstraint(PGListCell *cell);
 
 	unique_ptr<Constraint> TransformConstraint(PGListCell *cell, ColumnDefinition &column, idx_t index);
+
+	//===--------------------------------------------------------------------===//
+	// Collation transform
+	//===--------------------------------------------------------------------===//
+	unique_ptr<ParsedExpression> TransformCollateExpr(PGCollateClause *collate);
+
+	string TransformCollation(PGCollateClause *collate);
 
 	//===--------------------------------------------------------------------===//
 	// Helpers

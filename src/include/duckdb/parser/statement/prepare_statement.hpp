@@ -15,7 +15,7 @@ namespace duckdb {
 
 class PrepareStatement : public SQLStatement {
 public:
-	PrepareStatement() : SQLStatement(StatementType::PREPARE), statement(nullptr), name("") {
+	PrepareStatement() : SQLStatement(StatementType::PREPARE_STATEMENT), statement(nullptr), name("") {
 	}
 
 	unique_ptr<SQLStatement> statement;

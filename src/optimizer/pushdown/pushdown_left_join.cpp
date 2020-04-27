@@ -42,7 +42,7 @@ static bool FilterRemovesNull(ExpressionRewriter &rewriter, Expression *expr, un
 	rewriter.Apply(*filter);
 
 	// check if all expressions are foldable
-	for(idx_t i = 0; i < filter->expressions.size(); i++) {
+	for (idx_t i = 0; i < filter->expressions.size(); i++) {
 		if (!filter->expressions[i]->IsFoldable()) {
 			return false;
 		}

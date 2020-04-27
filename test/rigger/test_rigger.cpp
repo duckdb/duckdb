@@ -254,7 +254,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-10}));
 	}
 	SECTION("513") {
-		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop join!"
+		// LEFT JOIN with comparison on integer columns results in "Not implemented: Unimplemented type for nested loop
+		// join!"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1(c0) VALUES (0);"));
@@ -300,7 +301,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
 	}
 	SECTION("516") {
-		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for index"
+		// Query with comparison on boolean column results in "Invalid type: Invalid Type [BOOL]: Invalid type for
+		// index"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL UNIQUE);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
@@ -441,7 +443,8 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
 		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
-		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
+		result = con.Query("SELECT * FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING t1.c0!=MAX(t1.c0) UNION ALL SELECT * "
+		                   "FROM t0, t1 GROUP BY t0.c0, t1.c0 HAVING NOT t1.c0>MAX(t1.c0) ORDER BY 1, 2;");
 		REQUIRE(CHECK_COLUMN(result, 0, {0, 0}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"0", "0.9201898334673894"}));
 	}
@@ -526,10 +529,112 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	SECTION("562") {
 		// SELECT with CASE expression causes an assertion failure "Assertion `!entry.first->Equals(&expr)' failed"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
-		REQUIRE_FAIL(con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);"));
-		result = con.Query("SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
+		REQUIRE_FAIL(
+		    con.Query("SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);"));
+		result =
+		    con.Query("SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
-
-
+	SECTION("567") {
+		// REVERSE() on special character results in "Assertion `strcmp(dataptr, normalized) == 0' failed."
+		result = con.Query("SELECT REVERSE('S̈a︍');");
+		REQUIRE(CHECK_COLUMN(result, 0, {"a︍S̈"}));
+	}
+	SECTION("571") {
+		// Incorrect result for BETWEEN query that casts column to boolean #571
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (-1);"));
+		result = con.Query("SELECT t0.c0 FROM t0 WHERE NOT (0 BETWEEN 0 AND t0.c0::BOOL);");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("579") {
+		// Updated value in column is not visible in a SELECT
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(0), ('');"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = 1;"));
+		// -- expected: {1}, actual: {''}
+		result = con.Query("SELECT t0.c1 FROM t0 WHERE '' = t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"1"}));
+	}
+	SECTION("580") {
+		// SUBSTRING with an invalid start position causes a segmentation fault #580
+		result = con.Query("SELECT SUBSTRING(0, 3, 0)");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	}
+	SECTION("581") {
+		// DISTINCT malfunctions for BOOLEAN
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOLEAN);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (NULL), (false);"));
+		result = con.Query("SELECT DISTINCT t0.c0 FROM t0 ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), false}));
+	}
+	SECTION("583") {
+		// Comparing a string with a boolean yields an incorrect result after UPDATE
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=0;"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0=true;"));
+		// -- expected: {true}, actual: {}
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"true"}));
+	}
+	SECTION("584") {
+		// A select with BETWEEN and VARCHAR cast results in an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INTEGER);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (-2);"));
+		result = con.Query("SELECT t0.c0 FROM t0 WHERE -1 BETWEEN t0.c0::VARCHAR AND 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-2}));
+	}
+	SECTION("585") {
+		// Predicate checking for an empty string yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (''), (0)"));
+		result = con.Query("SELECT * FROM t0 WHERE t0.c0 = ''; ");
+		//  -- expected: {''}, actual: {}
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	}
+	SECTION("586") {
+		// NOACCENT.NOCASE comparison with a special character results in a segmentation fault
+		result = con.Query("SELECT ''='Ʇ';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		result = con.Query("SELECT '' COLLATE NOACCENT.NOCASE='Ʇ';");
+		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	}
+	SECTION("587") {
+		// A negative DATE results in a "double free or corruption" crash
+		result = con.Query("SELECT (DATE '-10000-01-01')::VARCHAR;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"10000-01-01 (BC)"}));
+	}
+	SECTION("588") {
+		// Query with complex ORDER BY causes an incorrect rowid value
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1), (0), (1);"));
+		result = con.Query(
+		    "SELECT t0.rowid FROM t0 WHERE t0.rowid ORDER BY CASE ((t0.c0) ::BOOL) WHEN 1 THEN t0.rowid END;");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	}
+	SECTION("589") {
+		// Creating an index on rowid results in an internal error "Failed to bind column reference"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_FAIL(con.Query("CREATE INDEX i0 ON t0(rowid, c0);"));
+	}
+	SECTION("590") {
+		// Comparison with a DATE yields an incorrect result
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (DATE '2000-01-02');"));
+		result = con.Query("SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"2000-01-02"}));
+	}
+	SECTION("591") {
+		// Subtracting a large integer from a DATE results in a "double free or corruption"
+		result = con.Query("SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"112356-06-10 (BC)"}));
+	}
+	SECTION("592"){
+	    // Expression with LIKE and comparison causes an assertion failure
+	    REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
+		result = con.Query("SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
 }
