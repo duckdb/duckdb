@@ -160,7 +160,7 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	result = con.Query("select UCASE(''), UCASE('hello'), UCASE('MotörHead'), UCASE(NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO"}));
-	REQUIRE(CHECK_COLUMN(result, 2, {"MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"MOTÖRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 
 	result = con.Query("select LCASE(''), LCASE('hello'), LCASE('MotörHead'), LCASE(NULL)");
@@ -175,22 +175,22 @@ TEST_CASE("UPPER/LOWER test", "[function]") {
 	                          "('HuLlD', NULL), ('MotörHead','RÄcks')"));
 
 	result = con.Query("select UPPER(a), UCASE(a)  FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "HULLD", "MOTöRHEAD"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO", "HULLD", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "HULLD", "MOTÖRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"HELLO", "HULLD", "MOTÖRHEAD"}));
 
 	result = con.Query("select LOWER(a), LCASE(a) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "hulld", "motörhead"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "hulld", "motörhead"}));
 
 	result = con.Query("select LOWER(b), LCASE(b) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "rÄcks"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"world", Value(), "rÄcks"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"world", Value(), "räcks"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"world", Value(), "räcks"}));
 
 	// test with selection vector
 	result = con.Query("select UPPER(a), LOWER(a), UCASE(a), LCASE(a) FROM strings WHERE b IS NOT NULL");
-	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "MOTÖRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"hello", "motörhead"}));
-	REQUIRE(CHECK_COLUMN(result, 2, {"HELLO", "MOTöRHEAD"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"HELLO", "MOTÖRHEAD"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"hello", "motörhead"}));
 }
 
