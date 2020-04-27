@@ -23,7 +23,7 @@ struct IcuBindData : public FunctionData {
 		UErrorCode status = U_ZERO_ERROR;
 		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(icu::Locale(language.c_str(), country.c_str()), status));
 		if (U_FAILURE(status)) {
-			throw Exception("Failed to create ICU !collator");
+			throw Exception("Failed to create ICU collator!");
 		}
 	}
 
@@ -54,7 +54,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 }
 
 static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	auto splits = StringUtil::Split(expr.function.name, ".");
+	auto splits = StringUtil::Split(expr.function.name, "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
@@ -85,6 +85,8 @@ void ICUExtension::Load(DuckDB &db) {
 			// language + country
 			collation = locales[i].getLanguage() + string("_") + locales[i].getCountry();
 		}
+		collation = StringUtil::Lower(collation);
+
 		CreateCollationInfo info(collation, get_icu_function(collation), false);
 		info.on_conflict = OnCreateConflict::IGNORE;
 		db.catalog->CreateCollation(*con.context, &info);
