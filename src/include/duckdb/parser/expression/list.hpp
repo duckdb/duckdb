@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"

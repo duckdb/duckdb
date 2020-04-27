@@ -27,7 +27,6 @@ public:
 	//! The bound function data (if any)
 	unique_ptr<FunctionData> bind_info;
 
-
 public:
 	bool IsAggregate() const override {
 		return true;

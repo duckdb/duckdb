@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
+#include <utility>
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -24,9 +26,9 @@ public:
 
 PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table,
                                      vector<column_t> column_ids, vector<unique_ptr<Expression>> filter,
-                                     vector<TableFilter> tableFilters)
+                                     unordered_map<idx_t, vector<TableFilter>> table_filters)
     : PhysicalOperator(PhysicalOperatorType::SEQ_SCAN, op.types), tableref(tableref), table(table),
-      column_ids(column_ids), table_filters(tableFilters) {
+      column_ids(move(column_ids)), table_filters(move(table_filters)) {
 	if (filter.size() > 1) {
 		//! create a big AND out of the expressions
 		auto conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
@@ -40,35 +42,23 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 }
 void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
-
-	if (column_ids.size() == 0) {
+	if (column_ids.empty()) {
 		return;
 	}
 	auto &transaction = Transaction::GetTransaction(context);
 	if (!state->initialized) {
-		table.InitializeScan(transaction, state->scan_offset, column_ids);
+		table.InitializeScan(transaction, state->scan_offset, column_ids, &table_filters);
 		state->initialized = true;
 	}
-	//! Get max value
-	idx_t result_count = -1;
-	do {
-		chunk.Reset();
-		table.Scan(transaction, chunk, state->scan_offset, table_filters);
-		if (expression) {
-			SelectionVector sel(STANDARD_VECTOR_SIZE);
-			idx_t initial_count = chunk.size();
-			result_count = state->executor.SelectExpression(chunk, sel);
-			if (result_count == initial_count) {
-				//! Nothing was filtered: skip adding any selection vectors
-				return;
-			}
-			chunk.Slice(sel, result_count);
-		}
-	} while (result_count == 0);
+	table.Scan(transaction, chunk, state->scan_offset, table_filters);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {
-	return tableref.name;
+	if (expression) {
+		return tableref.name + " " + expression->ToString();
+	} else {
+		return tableref.name;
+	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {

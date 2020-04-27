@@ -9,6 +9,7 @@ dbplyr_tests <- function() {
 	}
 	# the hacky part
 	library("dbplyr")
+
 	# pull dbplyr sources to harvest test cases
 	zipfile <- tempfile()
 	url <- "https://github.com/tidyverse/dbplyr/archive/v1.4.2.zip"
@@ -24,4 +25,4 @@ dbplyr_tests <- function() {
 	# TODO fix excluded test cases
 	test_check("dbplyr", stop_on_failure=TRUE,, invert=T, filter="(verb-joins|verb-mutate)")
 }
-dbplyr_tests()
+# dbplyr_tests()

@@ -30,20 +30,20 @@ FINISH_BENCHMARK(ContainsRegular)
 
 DUCKDB_BENCHMARK(ContainsAccording, "[contains_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'according')";
+	return "SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'according')";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Contains word 'according' in the l_comment";
+	return "Contains word 'according' in the l_comment";
 }
 FINISH_BENCHMARK(ContainsAccording)
 
@@ -69,19 +69,19 @@ FINISH_BENCHMARK(ContainsRegularLIKE)
 
 DUCKDB_BENCHMARK(ContainsAccordingLIKE, "[contains_tpch]")
 void Load(DuckDBBenchmarkState *state) override {
-    // load the data into the tpch schema
-    tpch::dbgen(SF, state->db);
+	// load the data into the tpch schema
+	tpch::dbgen(SF, state->db);
 }
 string GetQuery() override { // 25% of TPC-H SF 1
-    return "SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%according%'";
+	return "SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%according%'";
 }
 string VerifyResult(QueryResult *result) override {
-    if (!result->success) {
-        return result->error;
-    }
-    return string();
+	if (!result->success) {
+		return result->error;
+	}
+	return string();
 }
 string BenchmarkInfo() override {
-    return "Like word 'according' in the l_comment";
+	return "Like word 'according' in the l_comment";
 }
 FINISH_BENCHMARK(ContainsAccordingLIKE)

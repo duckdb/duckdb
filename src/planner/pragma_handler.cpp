@@ -34,10 +34,10 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 
 		// push the table name parameter into the table function
 		auto select_statement = move(parser.statements[0]);
-		auto &select = (SelectStatement&) *select_statement;
-		auto &select_node = (SelectNode&) *select.node;
-		auto &table_function = (TableFunctionRef&) *select_node.from_table;
-		auto &function = (FunctionExpression&) *table_function.function;
+		auto &select = (SelectStatement &)*select_statement;
+		auto &select_node = (SelectNode &)*select.node;
+		auto &table_function = (TableFunctionRef &)*select_node.from_table;
+		auto &function = (FunctionExpression &)*table_function.function;
 		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
 		return select_statement;
 	} else if (keyword == "show_tables") {
@@ -48,6 +48,14 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		Parser parser;
 		parser.ParseQuery("SELECT name FROM sqlite_master() ORDER BY name");
 		return move(parser.statements[0]);
+	} else if (keyword == "collations") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Invalid PRAGMA collations: cannot be called");
+		}
+		// turn into SELECT * FROM pragma_collations();
+		Parser parser;
+		parser.ParseQuery("SELECT * FROM pragma_collations() ORDER BY 1");
+		return move(parser.statements[0]);
 	} else if (keyword == "show") {
 		if (pragma.pragma_type != PragmaType::CALL) {
 			throw ParserException("Invalid PRAGMA show_tables: expected a function call");
@@ -57,14 +65,16 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		}
 		// PRAGMA table_info but with some aliases
 		Parser parser;
-		parser.ParseQuery("SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info()");
+		parser.ParseQuery(
+		    "SELECT name AS \"Field\", type as \"Type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' END AS \"Null\", "
+		    "NULL AS \"Key\", dflt_value AS \"Default\", NULL AS \"Extra\" FROM pragma_table_info()");
 
 		// push the table name parameter into the table function
 		auto select_statement = move(parser.statements[0]);
-		auto &select = (SelectStatement&) *select_statement;
-		auto &select_node = (SelectNode&) *select.node;
-		auto &table_function = (TableFunctionRef&) *select_node.from_table;
-		auto &function = (FunctionExpression&) *table_function.function;
+		auto &select = (SelectStatement &)*select_statement;
+		auto &select_node = (SelectNode &)*select.node;
+		auto &table_function = (TableFunctionRef &)*select_node.from_table;
+		auto &function = (FunctionExpression &)*table_function.function;
 		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
 		return select_statement;
 	}

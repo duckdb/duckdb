@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/aggregate/physical_window.hpp
+// duckdb/execution/operator/projection/physical_unnest.hpp
 //
 //
 //===----------------------------------------------------------------------===//

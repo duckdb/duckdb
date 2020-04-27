@@ -1,4 +1,5 @@
 #include "utf8proc_wrapper.hpp"
+#include "utf8proc_wrapper.h"
 #include "utf8proc.hpp"
 
 using namespace duckdb;
@@ -54,13 +55,50 @@ std::string Utf8Proc::Normalize(std::string s) {
 	free(normalized);
 	return res;
 }
-;
 
 char* Utf8Proc::Normalize(const char *s) {
 	assert(s);
 	assert(Utf8Proc::Analyze(s) != UnicodeType::INVALID);
 	return (char*) utf8proc_NFC((const utf8proc_uint8_t*) s);
 }
-;
 
-;
+bool Utf8Proc::IsValid(const char *s, size_t len) {
+	return Utf8Proc::Analyze(s, len) != UnicodeType::INVALID;
+}
+
+size_t Utf8Proc::NextGraphemeCluster(const char *s, size_t len, size_t cpos) {
+	return utf8proc_next_grapheme(s, len, cpos);
+}
+
+size_t Utf8Proc::PreviousGraphemeCluster(const char *s, size_t len, size_t cpos) {
+	if (!Utf8Proc::IsValid(s, len)) {
+		return cpos - 1;
+	}
+	size_t current_pos = 0;
+	while(true) {
+		size_t new_pos = NextGraphemeCluster(s, len, current_pos);
+		if (new_pos <= current_pos || new_pos >= cpos) {
+			return current_pos;
+		}
+		current_pos = new_pos;
+	}
+}
+
+size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {
+	return Utf8Proc::NextGraphemeCluster(s, len, pos);
+}
+
+size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
+	return Utf8Proc::PreviousGraphemeCluster(s, len, pos);
+}
+
+size_t utf8proc_render_width(const char *s, size_t len, size_t pos) {
+	int sz;
+	auto codepoint = utf8proc_codepoint(s + pos, sz);
+	auto properties = utf8proc_get_property(codepoint);
+	return properties->charwidth;
+}
+
+int utf8proc_is_valid(const char *s, size_t len) {
+	return Utf8Proc::IsValid(s, len) ? 1 : 0;
+}

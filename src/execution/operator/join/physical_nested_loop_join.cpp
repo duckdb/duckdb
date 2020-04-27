@@ -216,11 +216,12 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				// move to the next left chunk
 				do {
 					if (type == JoinType::LEFT) {
-						// left join: before we move to the next chunk, see if we need to output any vectors that didn't have a match found
+						// left join: before we move to the next chunk, see if we need to output any vectors that didn't
+						// have a match found
 						if (state->left_found_match) {
 							SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
 							idx_t remaining_count = 0;
-							for(idx_t i = 0; i < state->child_chunk.size(); i++) {
+							for (idx_t i = 0; i < state->child_chunk.size(); i++) {
 								if (!state->left_found_match[i]) {
 									remaining_sel.set_index(remaining_count++, i);
 								}
@@ -307,7 +308,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			// we have matching tuples!
 			// construct the result
 			if (state->left_found_match) {
-				for(idx_t i = 0; i < match_count; i++) {
+				for (idx_t i = 0; i < match_count; i++) {
 					state->left_found_match[lvector.get_index(i)] = true;
 				}
 			}

@@ -24,33 +24,33 @@ Binder::Binder(ClientContext &context, Binder *parent_)
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
-	case StatementType::SELECT:
+	case StatementType::SELECT_STATEMENT:
 		return Bind((SelectStatement &)statement);
-	case StatementType::INSERT:
+	case StatementType::INSERT_STATEMENT:
 		return Bind((InsertStatement &)statement);
-	case StatementType::COPY:
+	case StatementType::COPY_STATEMENT:
 		return Bind((CopyStatement &)statement);
-	case StatementType::DELETE:
+	case StatementType::DELETE_STATEMENT:
 		return Bind((DeleteStatement &)statement);
-	case StatementType::UPDATE:
+	case StatementType::UPDATE_STATEMENT:
 		return Bind((UpdateStatement &)statement);
-	case StatementType::RELATION:
+	case StatementType::RELATION_STATEMENT:
 		return Bind((RelationStatement &)statement);
-	case StatementType::CREATE:
+	case StatementType::CREATE_STATEMENT:
 		return Bind((CreateStatement &)statement);
-	case StatementType::DROP:
+	case StatementType::DROP_STATEMENT:
 		return Bind((DropStatement &)statement);
-	case StatementType::ALTER:
+	case StatementType::ALTER_STATEMENT:
 		return Bind((AlterTableStatement &)statement);
-	case StatementType::TRANSACTION:
+	case StatementType::TRANSACTION_STATEMENT:
 		return Bind((TransactionStatement &)statement);
-	case StatementType::PRAGMA:
+	case StatementType::PRAGMA_STATEMENT:
 		return Bind((PragmaStatement &)statement);
-	case StatementType::EXECUTE:
+	case StatementType::EXECUTE_STATEMENT:
 		return Bind((ExecuteStatement &)statement);
-	case StatementType::EXPLAIN:
+	case StatementType::EXPLAIN_STATEMENT:
 		return Bind((ExplainStatement &)statement);
-	case StatementType::VACUUM:
+	case StatementType::VACUUM_STATEMENT:
 		return Bind((VacuumStatement &)statement);
 	default:
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",

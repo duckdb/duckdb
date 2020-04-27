@@ -189,7 +189,8 @@ void Load(DuckDBBenchmarkState *state) override {
 	Appender appender(state->conn, "timestamps");
 	// insert the elements into the database
 	for (int i = 0; i < CAST_COUNT; i++) {
-		appender.AppendRow(Value::TIMESTAMP(year_dist(gen), month_dist(gen), day_dist(gen), hour_dist(gen), min_dist(gen), min_dist(gen), 0));
+		appender.AppendRow(Value::TIMESTAMP(year_dist(gen), month_dist(gen), day_dist(gen), hour_dist(gen),
+		                                    min_dist(gen), min_dist(gen), 0));
 	}
 }
 string GetQuery() override {

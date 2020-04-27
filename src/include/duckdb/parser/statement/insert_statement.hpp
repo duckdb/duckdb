@@ -17,7 +17,7 @@ namespace duckdb {
 
 class InsertStatement : public SQLStatement {
 public:
-	InsertStatement() : SQLStatement(StatementType::INSERT), schema(DEFAULT_SCHEMA){};
+	InsertStatement() : SQLStatement(StatementType::INSERT_STATEMENT), schema(DEFAULT_SCHEMA){};
 
 	//! The select statement to insert from
 	unique_ptr<SelectStatement> select_statement;

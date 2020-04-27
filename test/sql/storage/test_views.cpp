@@ -35,7 +35,7 @@ TEST_CASE("Create and drop a view over different runs", "[storage]") {
 		REQUIRE_FAIL(con.Query("SELECT * FROM test.v"));
 	}
 	// reload the database from disk
-	for(idx_t i = 0; i < 3; i++) {
+	for (idx_t i = 0; i < 3; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// the table is not there yet, but we can still check the view types

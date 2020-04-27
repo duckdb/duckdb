@@ -34,6 +34,15 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			assert(state->child_types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+#ifdef DEBUG
+			if (expr.arguments[i].id == SQLTypeId::VARCHAR) {
+				if (sel) {
+					arguments.data[i].UTFVerify(*sel, count);
+				} else {
+					arguments.data[i].UTFVerify(count);
+				}
+			}
+#endif
 		}
 		arguments.Verify();
 	}

@@ -23,11 +23,13 @@ struct CreateTableFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
+struct CreateCollationInfo;
 
 class ClientContext;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
+class CollateCatalogEntry;
 class SchemaCatalogEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
@@ -64,6 +66,8 @@ public:
 	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
 	//! Creates a table in the catalog.
 	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
+	//! Creates a collation in the catalog
+	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
 	//! Drops an entry from the catalog
 	void DropEntry(ClientContext &context, DropInfo *info);
@@ -98,5 +102,7 @@ TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string sche
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists);
+template <>
+CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists);
 
 } // namespace duckdb

@@ -8,6 +8,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<ReverseFun>();
 	Register<LowerFun>();
 	Register<UpperFun>();
+	Register<StripAccentsFun>();
 	Register<ConcatFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
@@ -17,7 +18,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<InstrFun>();
 	Register<PrefixFun>();
 	Register<SuffixFun>();
-    Register<ContainsFun>();
+	Register<ContainsFun>();
 }
 
 } // namespace duckdb

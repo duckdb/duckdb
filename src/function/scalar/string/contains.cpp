@@ -22,16 +22,16 @@ struct ContainsOperator {
 };
 
 static bool contains_strstr(const string_t &str, const string_t &pattern) {
-    auto str_data = str.GetData();
-    auto patt_data = pattern.GetData();
-	return (strstr(str_data , patt_data) != nullptr);
+	auto str_data = str.GetData();
+	auto patt_data = pattern.GetData();
+	return (strstr(str_data, patt_data) != nullptr);
 }
 
 ScalarFunction ContainsFun::GetFunction() {
 	return ScalarFunction("contains",                           // name of the function
-                          {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-                          SQLType::BOOLEAN,                     // return type
-                          ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>);
+	                      {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
+	                      SQLType::BOOLEAN,                     // return type
+	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>);
 }
 
 void ContainsFun::RegisterFunction(BuiltinFunctions &set) {

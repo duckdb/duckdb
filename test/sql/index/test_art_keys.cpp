@@ -159,7 +159,6 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 	TestKeys(keys);
 
 	keys.clear();
-
 }
 
 TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]") {

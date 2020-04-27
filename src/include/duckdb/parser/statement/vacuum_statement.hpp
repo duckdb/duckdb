@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/statement/explain_statement.hpp
+// duckdb/parser/statement/vacuum_statement.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,9 +16,8 @@ namespace duckdb {
 
 class VacuumStatement : public SQLStatement {
 public:
-	VacuumStatement() : SQLStatement(StatementType::VACUUM){};
+	VacuumStatement() : SQLStatement(StatementType::VACUUM_STATEMENT){};
 	unique_ptr<VacuumInfo> info;
-
 };
 
 } // namespace duckdb

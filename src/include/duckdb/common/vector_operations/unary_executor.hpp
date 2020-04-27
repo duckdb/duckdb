@@ -42,7 +42,8 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (!nullmask[idx]) {
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx], result_nullmask, i);
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+					    fun, ldata[idx], result_nullmask, i);
 				} else {
 					result_nullmask[i] = true;
 				}
@@ -50,7 +51,8 @@ private:
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx], result_nullmask, i);
+				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[idx],
+				                                                                                  result_nullmask, i);
 			}
 		}
 	}
@@ -64,12 +66,14 @@ private:
 			result_nullmask = nullmask;
 			for (idx_t i = 0; i < count; i++) {
 				if (!nullmask[i]) {
-					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i], result_nullmask, i);
+					result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+					    fun, ldata[i], result_nullmask, i);
 				}
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
-				result_data[i] = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i], result_nullmask, i);
+				result_data[i] =
+				    OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, ldata[i], result_nullmask, i);
 			}
 		}
 	}
@@ -86,7 +90,8 @@ private:
 				ConstantVector::SetNull(result, true);
 			} else {
 				ConstantVector::SetNull(result, false);
-				*result_data = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(fun, *ldata, ConstantVector::Nullmask(result), 0);
+				*result_data = OPWRAPPER::template Operation<FUNC, OP, INPUT_TYPE, RESULT_TYPE>(
+				    fun, *ldata, ConstantVector::Nullmask(result), 0);
 			}
 			break;
 		}
@@ -117,10 +122,10 @@ private:
 	}
 
 public:
-	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false, class OPWRAPPER=UnaryOperatorWrapper>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false,
+	          class OPWRAPPER = UnaryOperatorWrapper>
 	static void Execute(Vector &input, Vector &result, idx_t count) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(input, result, count,
-		                                                                                      false);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(input, result, count, false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,

@@ -7,6 +7,7 @@ add_subdirectory(index/art)
 
 add_library_unity(duckdb_execution
                   OBJECT
+                 adaptive_filter.cpp
                   aggregate_hashtable.cpp
                   column_binding_resolver.cpp
                   expression_executor.cpp

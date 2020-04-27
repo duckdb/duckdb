@@ -69,7 +69,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 	while (true) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
-		vector<TableFilter> mock;
+		unordered_map<idx_t, vector<TableFilter>> mock;
 		table.storage->Scan(transaction, chunk, state, mock);
 		if (chunk.size() == 0) {
 			break;
@@ -140,8 +140,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	//! FIXME: Can't deal with strings yet
-	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 0 : stats[col_idx]->type_size;
+	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 8 : stats[col_idx]->type_size;
 	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
 	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
 	data_pointers[col_idx].push_back(move(data_pointer));

@@ -11,7 +11,6 @@
 #include "duckdb/optimizer/rule.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
-
 namespace duckdb {
 
 // The Like Optimization rule rewrites LIKE to optimized scalar functions (e.g.: prefix, suffix, and contains)

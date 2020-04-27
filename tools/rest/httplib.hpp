@@ -285,13 +285,11 @@ struct Response {
 	void set_content(const char *s, size_t n, const char *content_type);
 	void set_content(const std::string &s, const char *content_type);
 
-	void set_content_provider(
-	    size_t length, std::function<void(size_t offset, size_t length, DataSink sink)> provider,
-	    std::function<void()> resource_releaser = [] {});
+	void set_content_provider(size_t length, std::function<void(size_t offset, size_t length, DataSink sink)> provider,
+	                          std::function<void()> resource_releaser = [] {});
 
-	void set_chunked_content_provider(
-	    std::function<void(size_t offset, DataSink sink, Done done)> provider,
-	    std::function<void()> resource_releaser = [] {});
+	void set_chunked_content_provider(std::function<void(size_t offset, DataSink sink, Done done)> provider,
+	                                  std::function<void()> resource_releaser = [] {});
 
 	Response() : status(-1), content_length(0) {
 	}
@@ -455,7 +453,8 @@ public:
 				std::lock_guard<std::mutex> guard(running_threads_mutex_);
 				running_threads_--;
 			}
-		}).detach();
+		})
+		    .detach();
 	}
 
 	virtual void shutdown() override {
@@ -1665,13 +1664,12 @@ inline ssize_t write_content(Stream &strm, ContentProviderWithCloser content_pro
 	size_t end_offset = offset + length;
 	while (offset < end_offset) {
 		ssize_t written_length = 0;
-		content_provider(
-		    offset, end_offset - offset,
-		    [&](const char *d, size_t l) {
-			    offset += l;
-			    written_length = strm.write(d, l);
-		    },
-		    [&](void) { written_length = -1; });
+		content_provider(offset, end_offset - offset,
+		                 [&](const char *d, size_t l) {
+			                 offset += l;
+			                 written_length = strm.write(d, l);
+		                 },
+		                 [&](void) { written_length = -1; });
 		if (written_length < 0) {
 			return written_length;
 		}
@@ -1685,20 +1683,19 @@ inline ssize_t write_content_chunked(Stream &strm, ContentProviderWithCloser con
 	ssize_t total_written_length = 0;
 	while (data_available) {
 		ssize_t written_length = 0;
-		content_provider(
-		    offset, 0,
-		    [&](const char *d, size_t l) {
-			    data_available = l > 0;
-			    offset += l;
+		content_provider(offset, 0,
+		                 [&](const char *d, size_t l) {
+			                 data_available = l > 0;
+			                 offset += l;
 
-			    // Emit chunked response header and footer for each chunk
-			    auto chunk = from_i_to_hex(l) + "\r\n" + std::string(d, l) + "\r\n";
-			    written_length = strm.write(chunk);
-		    },
-		    [&](void) {
-			    data_available = false;
-			    written_length = strm.write("0\r\n\r\n");
-		    });
+			                 // Emit chunked response header and footer for each chunk
+			                 auto chunk = from_i_to_hex(l) + "\r\n" + std::string(d, l) + "\r\n";
+			                 written_length = strm.write(chunk);
+		                 },
+		                 [&](void) {
+			                 data_available = false;
+			                 written_length = strm.write("0\r\n\r\n");
+		                 });
 
 		if (written_length < 0) {
 			return written_length;
@@ -2045,13 +2042,12 @@ inline std::string make_multipart_ranges_data(const Request &req, Response &res,
                                               const std::string &content_type) {
 	std::string data;
 
-	process_multipart_ranges_data(
-	    req, res, boundary, content_type, [&](const std::string &token) { data += token; },
-	    [&](const char *token) { data += token; },
-	    [&](size_t offset, size_t length) {
-		    data += res.body.substr(offset, length);
-		    return true;
-	    });
+	process_multipart_ranges_data(req, res, boundary, content_type, [&](const std::string &token) { data += token; },
+	                              [&](const char *token) { data += token; },
+	                              [&](size_t offset, size_t length) {
+		                              data += res.body.substr(offset, length);
+		                              return true;
+	                              });
 
 	return data;
 }
@@ -2060,13 +2056,13 @@ inline size_t get_multipart_ranges_data_length(const Request &req, Response &res
                                                const std::string &content_type) {
 	size_t data_length = 0;
 
-	process_multipart_ranges_data(
-	    req, res, boundary, content_type, [&](const std::string &token) { data_length += token.size(); },
-	    [&](const char *token) { data_length += strlen(token); },
-	    [&](size_t /*offset*/, size_t length) {
-		    data_length += length;
-		    return true;
-	    });
+	process_multipart_ranges_data(req, res, boundary, content_type,
+	                              [&](const std::string &token) { data_length += token.size(); },
+	                              [&](const char *token) { data_length += strlen(token); },
+	                              [&](size_t /*offset*/, size_t length) {
+		                              data_length += length;
+		                              return true;
+	                              });
 
 	return data_length;
 }
@@ -2694,18 +2690,17 @@ inline bool Server::handle_file_request(Request &req, Response &res) {
 }
 
 inline socket_t Server::create_server_socket(const char *host, int port, int socket_flags) const {
-	return detail::create_socket(
-	    host, port,
-	    [](socket_t sock, struct addrinfo &ai) -> bool {
-		    if (::bind(sock, ai.ai_addr, static_cast<int>(ai.ai_addrlen))) {
-			    return false;
-		    }
-		    if (::listen(sock, 5)) { // Listen through 5 channels
-			    return false;
-		    }
-		    return true;
-	    },
-	    socket_flags);
+	return detail::create_socket(host, port,
+	                             [](socket_t sock, struct addrinfo &ai) -> bool {
+		                             if (::bind(sock, ai.ai_addr, static_cast<int>(ai.ai_addrlen))) {
+			                             return false;
+		                             }
+		                             if (::listen(sock, 5)) { // Listen through 5 channels
+			                             return false;
+		                             }
+		                             return true;
+	                             },
+	                             socket_flags);
 }
 
 inline int Server::bind_internal(const char *host, int port, int socket_flags) {

@@ -14,8 +14,7 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 // AND/OR
 //===--------------------------------------------------------------------===//
-template <class OP>
-static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
 	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
@@ -25,7 +24,8 @@ static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &resu
 		auto rdata = ConstantVector::GetData<bool>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
 
-		bool is_null = OP::Operation(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right), *result_data);
+		bool is_null =
+		    OP::Operation(*ldata, *rdata, ConstantVector::IsNull(left), ConstantVector::IsNull(right), *result_data);
 		ConstantVector::SetNull(result, is_null);
 	} else {
 		// perform generic loop
@@ -42,7 +42,8 @@ static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &resu
 			for (idx_t i = 0; i < count; i++) {
 				auto lidx = ldata.sel->get_index(i);
 				auto ridx = rdata.sel->get_index(i);
-				bool is_null = OP::Operation(left_data[lidx], right_data[ridx], (*ldata.nullmask)[lidx], (*rdata.nullmask)[ridx], result_data[i]);
+				bool is_null = OP::Operation(left_data[lidx], right_data[ridx], (*ldata.nullmask)[lidx],
+				                             (*rdata.nullmask)[ridx], result_data[i]);
 				result_mask[i] = is_null;
 			}
 		} else {
@@ -154,7 +155,6 @@ struct TernaryOr {
 		}
 	}
 };
-
 
 void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
 	templated_boolean_nullmask<TernaryOr>(left, right, result, count);

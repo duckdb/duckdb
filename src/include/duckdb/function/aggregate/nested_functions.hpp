@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/aggregate/distributive_functions.hpp
+// duckdb/function/aggregate/nested_functions.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,6 @@
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
-
 
 struct ListBindData : public FunctionData {
 	ListBindData() {

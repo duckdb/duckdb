@@ -144,6 +144,14 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
+Value Value::BLOB(string value) {
+	Value result(TypeId::VARCHAR);
+	result.str_value = value;
+	result.is_null = false;
+	result.sql_type = SQLType::VARBINARY;
+	return result;
+}
+
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
@@ -518,6 +526,22 @@ Value Value::CastAs(SQLType source_type, SQLType target_type) {
 	result.Initialize(GetInternalType(target_type));
 	VectorOperations::Cast(input, result, source_type, target_type, 1);
 	return result.GetValue(0);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+	Value new_value;
+	try {
+		new_value = CastAs(source_type, target_type);
+	} catch (Exception &) {
+		return false;
+	}
+	type = new_value.type;
+	is_null = new_value.is_null;
+	value_ = new_value.value_;
+	str_value = new_value.str_value;
+	struct_value = new_value.struct_value;
+	list_value = new_value.list_value;
+	return true;
 }
 
 Value Value::CastAs(TypeId target_type) const {

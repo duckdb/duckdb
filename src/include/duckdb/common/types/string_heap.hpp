@@ -39,6 +39,8 @@ public:
 	string_t AddString(const string &data);
 	//! Add a string to the string heap, returns a pointer to the string
 	string_t AddString(const string_t &data);
+	//! Add a blob to the string heap; blobs can be non-valid UTF8
+	string_t AddBlob(const char *data, idx_t len);
 	//! Allocates space for an empty string of size "len" on the heap
 	string_t EmptyString(idx_t len);
 	//! Add all strings from a different string heap to this string heap
