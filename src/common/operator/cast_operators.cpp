@@ -6,12 +6,11 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
-
 #include "fmt/format.h"
 
-#include <cstdlib>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 
 using namespace std;
 
@@ -36,19 +35,19 @@ template <class SRC, class DST> static DST cast_with_overflow_check(SRC value) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int16_t input, int8_t &result) {
+template <> bool TryCast::Operation(int16_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int32_t input, int8_t &result) {
+template <> bool TryCast::Operation(int32_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t input, int8_t &result) {
+template <> bool TryCast::Operation(int64_t input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, int8_t &result) {
+template <> bool TryCast::Operation(float input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, int8_t &result) {
+template <> bool TryCast::Operation(double input, int8_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -70,16 +69,16 @@ template <> int8_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int32_t input, int16_t &result) {
+template <> bool TryCast::Operation(int32_t input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(int64_t input, int16_t &result) {
+template <> bool TryCast::Operation(int64_t input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, int16_t &result) {
+template <> bool TryCast::Operation(float input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, int16_t &result) {
+template <> bool TryCast::Operation(double input, int16_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -98,13 +97,13 @@ template <> int16_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int64_t input, int32_t &result) {
+template <> bool TryCast::Operation(int64_t input, int32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(float input, int32_t &result) {
+template <> bool TryCast::Operation(float input, int32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, int32_t &result) {
+template <> bool TryCast::Operation(double input, int32_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -120,10 +119,10 @@ template <> int32_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(float input, int64_t &result) {
+template <> bool TryCast::Operation(float input, int64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
-template <> bool TryCast::Operation(double input, int64_t &result) {
+template <> bool TryCast::Operation(double input, int64_t &result, bool strict) {
 	return try_cast_with_overflow_check(input, result);
 }
 
@@ -137,7 +136,7 @@ template <> int64_t Cast::Operation(double input) {
 //===--------------------------------------------------------------------===//
 // Double -> float casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(double input, float &result) {
+template <> bool TryCast::Operation(double input, float &result, bool strict) {
 	auto res = (float)input;
 	if (std::isnan(res) || std::isinf(res)) {
 		return false;
@@ -148,7 +147,8 @@ template <> bool TryCast::Operation(double input, float &result) {
 
 template <> float Cast::Operation(double input) {
 	float result;
-	if (!TryCast::Operation(input, result)) {
+	bool strict = false;
+	if (!TryCast::Operation(input, result, strict)) {
 		throw ValueOutOfRangeException(input, GetTypeId<double>(), GetTypeId<float>());
 	}
 	return result;
@@ -165,27 +165,39 @@ template <class T> static T try_cast_string(string_t input) {
 	return result;
 }
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLoop(const char *buf, T &result) {
+template <class T> static T try_strict_cast_string(string_t input) {
+	T result;
+	if (!TryCast::Operation<string_t, T>(input, result, true)) {
+		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
+	}
+	return result;
+}
+
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
 	idx_t pos = NEGATIVE ? 1 : 0;
 	while (buf[pos]) {
-		if (!std::isdigit(buf[pos])) {
+		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
+				if (strict) {
+					return false;
+				}
 				// decimal point: we accept decimal values for integers as well
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
 				while (buf[pos]) {
-					if (!std::isdigit(buf[pos++])) {
+					if (!std::isdigit((unsigned char)buf[pos++])) {
 						return false;
 					}
 				}
 				return true;
 			}
-			if (std::isspace(buf[pos])) {
+			if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
 				while (buf[++pos]) {
-					if (!std::isspace(buf[pos])) {
+					if (!std::isspace((unsigned char)buf[pos])) {
 						return false;
 					}
 				}
@@ -197,11 +209,11 @@ template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLo
 					int64_t exponent = 0;
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, exponent)) {
+						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, exponent)) {
+						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, exponent, strict)) {
 							return false;
 						}
 					}
@@ -231,46 +243,59 @@ template <class T, bool NEGATIVE, bool ALLOW_EXPONENT> static bool IntegerCastLo
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
-template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, T &result) {
+template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, T &result, bool strict) {
 	if (!*buf) {
 		return false;
 	}
 	// skip any spaces at the start
-	while (std::isspace(*buf)) {
+	while (std::isspace((unsigned char)*buf)) {
 		buf++;
 	}
 	int negative = *buf == '-';
 
 	result = 0;
 	if (!negative) {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, result);
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, result, strict);
 	} else {
-		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, result);
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, result, strict);
 	}
 }
 
-template <> bool TryCast::Operation(string_t input, bool &result) {
+template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
-	if (input_data[0] == 't' || input_data[0] == 'T') {
-		result = true;
-	} else if (input_data[0] == 'f' || input_data[0] == 'F') {
-		result = false;
+	// TODO: add support for '0' and '1' as boolean
+	if (strict) {
+		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0) {
+			result = true;
+		} else if (strcmp(input_data, "false") == 0 || strcmp(input_data, "False") == 0 ||
+		           strcmp(input_data, "FALSE") == 0) {
+			result = false;
+		} else {
+			return false;
+		}
 	} else {
-		return false;
+		if (input_data[0] == 't' || input_data[0] == 'T') {
+			result = true;
+		} else if (input_data[0] == 'f' || input_data[0] == 'F') {
+			result = false;
+		} else {
+			return false;
+		}
 	}
+
 	return true;
 }
-template <> bool TryCast::Operation(string_t input, int8_t &result) {
-	return TryIntegerCast<int8_t>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
+	return TryIntegerCast<int8_t>(input.GetData(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, int16_t &result) {
-	return TryIntegerCast<int16_t>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict) {
+	return TryIntegerCast<int16_t>(input.GetData(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, int32_t &result) {
-	return TryIntegerCast<int32_t>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict) {
+	return TryIntegerCast<int32_t>(input.GetData(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, int64_t &result) {
-	return TryIntegerCast<int64_t>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict) {
+	return TryIntegerCast<int64_t>(input.GetData(), result, strict);
 }
 
 template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
@@ -283,12 +308,12 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx
 	}
 }
 
-template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result) {
+template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result, bool strict) {
 	idx_t pos = NEGATIVE ? 1 : 0;
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (buf[pos]) {
-		if (!std::isdigit(buf[pos])) {
+		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
 				// decimal point
@@ -299,10 +324,10 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				decimal_factor = 1;
 				pos++;
 				continue;
-			} else if (std::isspace(buf[pos])) {
+			} else if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
 				while (buf[++pos]) {
-					if (!std::isspace(buf[pos])) {
+					if (!std::isspace((unsigned char)buf[pos])) {
 						return false;
 					}
 				}
@@ -313,7 +338,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				// parse an integer, this time not allowing another exponent
 				pos++;
 				int64_t exponent;
-				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent)) {
+				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent, strict)) {
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
@@ -349,23 +374,23 @@ template <> bool CheckDoubleValidity(double value) {
 	return Value::DoubleIsValid(value);
 }
 
-template <class T> static bool TryDoubleCast(const char *buf, T &result) {
+template <class T> static bool TryDoubleCast(const char *buf, T &result, bool strict) {
 	if (!*buf) {
 		return false;
 	}
 	// skip any spaces at the start
-	while (std::isspace(*buf)) {
+	while (std::isspace((unsigned char)*buf)) {
 		buf++;
 	}
 	int negative = *buf == '-';
 
 	result = 0;
 	if (!negative) {
-		if (!DoubleCastLoop<T, false>(buf, result)) {
+		if (!DoubleCastLoop<T, false>(buf, result, strict)) {
 			return false;
 		}
 	} else {
-		if (!DoubleCastLoop<T, true>(buf, result)) {
+		if (!DoubleCastLoop<T, true>(buf, result, strict)) {
 			return false;
 		}
 	}
@@ -375,11 +400,11 @@ template <class T> static bool TryDoubleCast(const char *buf, T &result) {
 	return true;
 }
 
-template <> bool TryCast::Operation(string_t input, float &result) {
-	return TryDoubleCast<float>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, float &result, bool strict) {
+	return TryDoubleCast<float>(input.GetData(), result, strict);
 }
-template <> bool TryCast::Operation(string_t input, double &result) {
-	return TryDoubleCast<double>(input.GetData(), result);
+template <> bool TryCast::Operation(string_t input, double &result, bool strict) {
+	return TryDoubleCast<double>(input.GetData(), result, strict);
 }
 
 template <> bool Cast::Operation(string_t input) {
@@ -402,6 +427,28 @@ template <> float Cast::Operation(string_t input) {
 }
 template <> double Cast::Operation(string_t input) {
 	return try_cast_string<double>(input);
+}
+
+template <> bool StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<bool>(input);
+}
+template <> int8_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<int8_t>(input);
+}
+template <> int16_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<int16_t>(input);
+}
+template <> int32_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<int32_t>(input);
+}
+template <> int64_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<int64_t>(input);
+}
+template <> float StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<float>(input);
+}
+template <> double StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<double>(input);
 }
 
 //===--------------------------------------------------------------------===//
