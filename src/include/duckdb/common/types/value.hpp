@@ -116,14 +116,8 @@ public:
 	Value CastAs(TypeId target_type, bool strict = false) const;
 	//! Cast this value to another type
 	Value CastAs(SQLType source_type, SQLType target_type, bool strict = false);
-	//! Strictly cast this value to another type
-	Value CastStrictlyAs(TypeId target_type) const;
-	//! Strictly cast this value to another type
-	Value CastStrictlyAs(SQLType source_type, SQLType target_type);
 	//! Tries to cast value to another type, throws exception if its not possible
 	bool TryCastAs(SQLType source_type, SQLType target_type, bool strict = false);
-	//! Tries to strictly cast value to another type, throws exception if its not possible
-	bool TryCastStrictlyAs(SQLType source_type, SQLType target_type);
 
 	//! The type of the value
 	TypeId type;

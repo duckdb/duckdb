@@ -516,11 +516,7 @@ Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	if (strict) {
-		VectorOperations::StrictCast(input, result, source_type, target_type, 1);
-	} else {
-		VectorOperations::Cast(input, result, source_type, target_type, 1);
-	}
+	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
 	return result.GetValue(0);
 }
 
@@ -528,25 +524,13 @@ Value Value::CastAs(TypeId target_type, bool strict) const {
 	if (target_type == type) {
 		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
 	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type), strict);
 }
 
-Value Value::CastStrictlyAs(SQLType source_type, SQLType target_type) {
-	return CastAs(source_type, target_type, true);
-}
-
-Value Value::CastStrictlyAs(TypeId target_type) const {
-	return CastAs(target_type, true);
-}
-
-bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strictly) {
+bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
 	Value new_value;
 	try {
-		if (strictly) {
-			new_value = CastStrictlyAs(source_type, target_type);
-		} else {
-			new_value = CastAs(source_type, target_type);
-		}
+		new_value = CastAs(source_type, target_type, strict);
 	} catch (Exception &) {
 		return false;
 	}
@@ -556,15 +540,6 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strictly) {
 	str_value = new_value.str_value;
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
-	return true;
-}
-
-bool Value::TryCastStrictlyAs(SQLType source_type, SQLType target_type) {
-	try {
-		CastStrictlyAs(source_type, target_type);
-	} catch (Exception &) {
-		return false;
-	}
 	return true;
 }
 

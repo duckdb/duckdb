@@ -86,88 +86,38 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 	}
 }
 
+template <class OP>
 static void string_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
 		assert(result.type == TypeId::BOOL);
-		UnaryExecutor::Execute<string_t, bool, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, bool, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::TINYINT:
 		assert(result.type == TypeId::INT8);
-		UnaryExecutor::Execute<string_t, int8_t, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, int8_t, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::SMALLINT:
 		assert(result.type == TypeId::INT16);
-		UnaryExecutor::Execute<string_t, int16_t, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, int16_t, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::INTEGER:
 		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, int32_t, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, int32_t, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::BIGINT:
 		assert(result.type == TypeId::INT64);
-		UnaryExecutor::Execute<string_t, int64_t, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, int64_t, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::FLOAT:
 		assert(result.type == TypeId::FLOAT);
-		UnaryExecutor::Execute<string_t, float, duckdb::Cast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, float, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
-		UnaryExecutor::Execute<string_t, double, duckdb::Cast, true>(source, result, count);
-		break;
-	case SQLTypeId::DATE:
-		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, date_t, duckdb::CastToDate, true>(source, result, count);
-		break;
-	case SQLTypeId::TIME:
-		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, dtime_t, duckdb::CastToTime, true>(source, result, count);
-		break;
-	case SQLTypeId::TIMESTAMP:
-		assert(result.type == TypeId::INT64);
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestamp, true>(source, result, count);
-		break;
-	default:
-		null_cast(source, result, source_type, target_type, count);
-		break;
-	}
-}
-
-static void string_strict_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
-                                      idx_t count) {
-	// now switch on the result type
-	switch (target_type.id) {
-	case SQLTypeId::BOOLEAN:
-		assert(result.type == TypeId::BOOL);
-		UnaryExecutor::Execute<string_t, bool, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::TINYINT:
-		assert(result.type == TypeId::INT8);
-		UnaryExecutor::Execute<string_t, int8_t, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::SMALLINT:
-		assert(result.type == TypeId::INT16);
-		UnaryExecutor::Execute<string_t, int16_t, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::INTEGER:
-		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, int32_t, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::BIGINT:
-		assert(result.type == TypeId::INT64);
-		UnaryExecutor::Execute<string_t, int64_t, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::FLOAT:
-		assert(result.type == TypeId::FLOAT);
-		UnaryExecutor::Execute<string_t, float, duckdb::StrictCast, true>(source, result, count);
-		break;
-	case SQLTypeId::DECIMAL:
-	case SQLTypeId::DOUBLE:
-		assert(result.type == TypeId::DOUBLE);
-		UnaryExecutor::Execute<string_t, double, duckdb::StrictCast, true>(source, result, count);
+		UnaryExecutor::Execute<string_t, double, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INT32);
@@ -239,7 +189,8 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 	}
 }
 
-void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count,
+                            bool strict) {
 	assert(source_type != target_type);
 	// first switch on source type
 	switch (source_type.id) {
@@ -286,7 +237,11 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		break;
 	case SQLTypeId::VARCHAR:
 		assert(source.type == TypeId::VARCHAR);
-		string_cast_switch(source, result, source_type, target_type, count);
+		if (strict) {
+			string_cast_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
+		} else {
+			string_cast_switch<duckdb::Cast>(source, result, source_type, target_type, count);
+		}
 		break;
 	case SQLTypeId::SQLNULL: {
 		// cast a NULL to another type, just copy the properties and change the type
@@ -299,26 +254,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	}
 }
 
-void VectorOperations::Cast(Vector &source, Vector &result, idx_t count) {
+void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
 	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type),
-	                              SQLTypeFromInternalType(result.type), count);
-}
-
-void VectorOperations::StrictCast(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
-                                  idx_t count) {
-	assert(source_type != target_type);
-	// first switch on source type
-	switch (source_type.id) {
-	case SQLTypeId::VARCHAR:
-		assert(source.type == TypeId::VARCHAR);
-		string_strict_cast_switch(source, result, source_type, target_type, count);
-		break;
-	default:
-		throw UnimplementedCast(source_type, target_type);
-	}
-}
-
-void VectorOperations::StrictCast(Vector &source, Vector &result, idx_t count) {
-	return VectorOperations::StrictCast(source, result, SQLTypeFromInternalType(source.type),
-	                                    SQLTypeFromInternalType(result.type), count);
+	                              SQLTypeFromInternalType(result.type), count, strict);
 }

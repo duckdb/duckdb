@@ -43,11 +43,9 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
-enum QuoteRule { QUOTES_RFC = 0, QUOTES_OTHER, NO_QUOTES };
+enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
-enum ParserMode { PARSING = 0, SNIFFING_DIALECT, SNIFFING_DATATYPES };
-
-enum JumpType { START = 0, NEXT };
+enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2 };
 
 static DataChunk DUMMY_CHUNK;
 

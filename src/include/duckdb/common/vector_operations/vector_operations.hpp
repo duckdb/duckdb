@@ -96,13 +96,10 @@ struct VectorOperations {
 	// Helpers
 	//===--------------------------------------------------------------------===//
 	// Cast the data from the source type to the target type
-	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count);
+	static void Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count,
+	                 bool strict = false);
 	// Cast the data from the source type to the target type
-	static void Cast(Vector &source, Vector &result, idx_t count);
-	// Strictly cast the data from the source type to the target type
-	static void StrictCast(Vector &source, Vector &result, idx_t count);
-	// Strictly cast the data from the source type to the target type
-	static void StrictCast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count);
+	static void Cast(Vector &source, Vector &result, idx_t count, bool strict = false);
 
 	// Copy the data of <source> to the target vector
 	static void Copy(Vector &source, Vector &target, idx_t source_count, idx_t source_offset, idx_t target_offset);
