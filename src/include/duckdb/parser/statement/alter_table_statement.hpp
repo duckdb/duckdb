@@ -17,7 +17,7 @@ namespace duckdb {
 
 class AlterTableStatement : public SQLStatement {
 public:
-	AlterTableStatement(unique_ptr<AlterTableInfo> info) : SQLStatement(StatementType::ALTER), info(std::move(info)){};
+	AlterTableStatement(unique_ptr<AlterTableInfo> info) : SQLStatement(StatementType::ALTER_STATEMENT), info(std::move(info)){};
 
 	unique_ptr<TableRef> table;
 	unique_ptr<AlterTableInfo> info;

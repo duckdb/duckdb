@@ -64,22 +64,22 @@ void Planner::CreatePlan(SQLStatement &statement) {
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	assert(statement);
 	switch (statement->type) {
-	case StatementType::SELECT:
-	case StatementType::INSERT:
-	case StatementType::COPY:
-	case StatementType::DELETE:
-	case StatementType::UPDATE:
-	case StatementType::CREATE:
-	case StatementType::EXECUTE:
-	case StatementType::DROP:
-	case StatementType::ALTER:
-	case StatementType::TRANSACTION:
-	case StatementType::EXPLAIN:
-	case StatementType::VACUUM:
-	case StatementType::RELATION:
+	case StatementType::SELECT_STATEMENT:
+	case StatementType::INSERT_STATEMENT:
+	case StatementType::COPY_STATEMENT:
+	case StatementType::DELETE_STATEMENT:
+	case StatementType::UPDATE_STATEMENT:
+	case StatementType::CREATE_STATEMENT:
+	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::DROP_STATEMENT:
+	case StatementType::ALTER_STATEMENT:
+	case StatementType::TRANSACTION_STATEMENT:
+	case StatementType::EXPLAIN_STATEMENT:
+	case StatementType::VACUUM_STATEMENT:
+	case StatementType::RELATION_STATEMENT:
 		CreatePlan(*statement);
 		break;
-	case StatementType::PRAGMA: {
+	case StatementType::PRAGMA_STATEMENT: {
 		auto &stmt = *reinterpret_cast<PragmaStatement *>(statement.get());
 		PragmaHandler handler(context);
 		// some pragma statements have a "replacement" SQL statement that will be executed instead
@@ -92,7 +92,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		}
 		break;
 	}
-	case StatementType::PREPARE: {
+	case StatementType::PREPARE_STATEMENT: {
 		auto &stmt = *reinterpret_cast<PrepareStatement *>(statement.get());
 		auto statement_type = stmt.statement->type;
 		// create a plan of the underlying statement
@@ -124,7 +124,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 // 	if (!context.query_verification_enabled) {
 // 		return;
 // 	}
-// 	if (statement.type != StatementType::SELECT) {
+// 	if (statement.type != StatementType::SELECT_STATEMENT) {
 // 		return;
 // 	}
 // 	auto &select = (BoundSelectStatement &)statement;

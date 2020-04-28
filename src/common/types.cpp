@@ -24,6 +24,7 @@ const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
 const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
 
 // TODO these are incomplete and should maybe not exist as such
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
@@ -159,14 +160,14 @@ void SQLType::Serialize(Serializer &serializer) {
 	serializer.Write(id);
 	serializer.Write(width);
 	serializer.Write(scale);
-	serializer.Write<CollationType>(collation);
+	serializer.WriteString(collation);
 }
 
 SQLType SQLType::Deserialize(Deserializer &source) {
 	auto id = source.Read<SQLTypeId>();
 	auto width = source.Read<uint16_t>();
 	auto scale = source.Read<uint8_t>();
-	auto collation = source.Read<CollationType>();
+	auto collation = source.Read<string>();
 	return SQLType(id, width, scale, collation);
 }
 
@@ -302,6 +303,70 @@ bool SQLType::IsNumeric() const {
 	}
 }
 
+bool SQLType::IsMoreGenericThan(SQLType &other) const {
+	if (other.id == id) {
+		return false;
+	}
+
+	if (other.id == SQLTypeId::SQLNULL) {
+		return true;
+	}
+
+	switch (id) {
+	case SQLTypeId::SMALLINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::INTEGER:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::BIGINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::DOUBLE:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	case SQLTypeId::DATE:
+		return false;
+	case SQLTypeId::TIMESTAMP:
+		switch (other.id) {
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
 TypeId GetInternalType(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -350,37 +415,6 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 		return left;
 	} else {
 		return right;
-	}
-}
-
-CollationType ParseCollation(string collation_argument, CollationType collation) {
-	if (collation_argument == "nocase") {
-		switch(collation) {
-		case CollationType::COLLATE_DEFAULT:
-			return CollationType::COLLATE_NOCASE;
-		case CollationType::COLLATE_NOACCENT:
-			return CollationType::COLLATE_NOCASE_NOACCENT;
-		default:
-			throw ParserException("Unexpected NOCASE collation!");
-		}
-	} else if (collation_argument == "noaccent") {
-		switch(collation) {
-		case CollationType::COLLATE_DEFAULT:
-			return CollationType::COLLATE_NOACCENT;
-		case CollationType::COLLATE_NOCASE:
-			return CollationType::COLLATE_NOCASE_NOACCENT;
-		default:
-			throw ParserException("Unexpected NOACCENT collation!");
-		}
-	} else if (collation_argument == "binary" || collation_argument == "c" || collation_argument == "posix") {
-		switch(collation) {
-		case CollationType::COLLATE_DEFAULT:
-			return CollationType::COLLATE_NONE;
-		default:
-			throw ParserException("Unexpected BINARY collation!");
-		}
-	} else {
-		throw ParserException("Unsupported collation type %s", collation_argument.c_str());
 	}
 }
 

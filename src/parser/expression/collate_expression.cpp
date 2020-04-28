@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-CollateExpression::CollateExpression(CollationType collation, unique_ptr<ParsedExpression> child)
+CollateExpression::CollateExpression(string collation, unique_ptr<ParsedExpression> child)
     : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE), collation(collation) {
 	assert(child);
 	this->child = move(child);
@@ -34,13 +34,13 @@ unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 void CollateExpression::Serialize(Serializer &serializer) {
 	ParsedExpression::Serialize(serializer);
 	child->Serialize(serializer);
-	serializer.Write<CollationType>(collation);
+	serializer.WriteString(collation);
 }
 
 unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	auto child = ParsedExpression::Deserialize(source);
-	auto collation = source.Read<CollationType>();
+	auto collation = source.Read<string>();
 	return make_unique_base<ParsedExpression, CollateExpression>(collation, move(child));
 }
 
-}
+} // namespace duckdb

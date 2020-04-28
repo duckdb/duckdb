@@ -5,6 +5,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 #include <cctype>
 
@@ -72,13 +73,10 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Collation must be an assignment (e.g. PRAGMA default_collation=NOCASE)");
 		}
-		CollationType collation = CollationType::COLLATE_DEFAULT;
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(TypeId::VARCHAR).str_value);
-		auto splits = StringUtil::Split(collation_param, ".");
-		for(auto &collation_argument : splits) {
-			collation = ParseCollation(collation_argument, collation);
-		}
-		context.db.collation = collation;
+		// bind the collation to verify that it exists
+		ExpressionBinder::PushCollation(context, nullptr, collation_param);
+		context.db.collation = collation_param;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}

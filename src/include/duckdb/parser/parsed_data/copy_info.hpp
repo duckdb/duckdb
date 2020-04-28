@@ -19,8 +19,8 @@ enum class ExternalFileFormat : uint8_t { INVALID, CSV };
 
 struct CopyInfo : public ParseInfo {
 	CopyInfo()
-	    : schema(DEFAULT_SCHEMA), is_from(false), delimiter(","), quote("\""), escape(""), header(false),
-	      format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
+	    : schema(DEFAULT_SCHEMA), is_from(false), auto_detect(false), delimiter(","), quote("\""), escape(""),
+	      header(false), skip_rows(0), format(ExternalFileFormat::CSV), null_str(""), quote_all(false) {
 	}
 
 	//! The schema name to copy to/from
@@ -33,6 +33,8 @@ struct CopyInfo : public ParseInfo {
 	string file_path;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect;
 	//! Delimiter to separate columns within each line
 	string delimiter;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
@@ -41,6 +43,10 @@ struct CopyInfo : public ParseInfo {
 	string escape;
 	//! Whether or not the file has a header line
 	bool header;
+	//! How many leading rows to skip
+	idx_t skip_rows;
+	//! Expected number of columns
+	idx_t num_cols;
 	//! The file format of the external file
 	ExternalFileFormat format;
 	//! Specifies the string that represents a null value

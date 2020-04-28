@@ -9,7 +9,7 @@
 namespace duckdb {
 
 TableRelation::TableRelation(ClientContext &context, unique_ptr<TableDescription> description)
-    : Relation(context, RelationType::TABLE), description(move(description)) {
+    : Relation(context, RelationType::TABLE_RELATION), description(move(description)) {
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {

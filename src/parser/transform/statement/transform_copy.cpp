@@ -58,12 +58,19 @@ void HandleOptions(PGCopyStmt *stmt, CopyInfo &info) {
 			// format
 			auto *format_val = (PGValue *)(def_elem->arg);
 			if (!format_val || format_val->type != T_PGString) {
-				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv'");
+				throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'csv_auto'");
 			}
-			if (StringUtil::Upper(format_val->val.str) != "CSV") {
+
+			if (StringUtil::Upper(format_val->val.str) != "CSV" &&
+			    StringUtil::Upper(format_val->val.str) != "CSV_AUTO") {
 				throw Exception("Copy is only supported for .CSV-files, FORMAT 'csv'");
 			}
-			info.format = StringToExternalFileFormat(format_val->val.str);
+
+			info.format = StringToExternalFileFormat("CSV");
+
+			if (StringUtil::Upper(format_val->val.str) == "CSV_AUTO") {
+				info.auto_detect = true;
+			}
 
 		} else if (def_elem->defname == kQuoteTok) {
 			// quote
@@ -207,7 +214,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 		result->select_statement = TransformSelectNode((PGSelectStmt *)stmt->query);
 	}
 
-	// handle options
+	// handle options, when no option were given, try auto detect
 	if (stmt->options) {
 		HandleOptions(stmt, info);
 	}

@@ -4,7 +4,7 @@
 namespace duckdb {
 
 SubqueryRelation::SubqueryRelation(shared_ptr<Relation> child_p, string alias_p)
-    : Relation(child_p->context, RelationType::SUBQUERY), child(move(child_p)), alias(move(alias_p)) {
+    : Relation(child_p->context, RelationType::SUBQUERY_RELATION), child(move(child_p)), alias(move(alias_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }

@@ -20,7 +20,7 @@ namespace duckdb {
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
 public:
-	SelectStatement() : SQLStatement(StatementType::SELECT) {
+	SelectStatement() : SQLStatement(StatementType::SELECT_STATEMENT) {
 	}
 
 	bool Equals(const SQLStatement *other) const;

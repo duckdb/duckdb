@@ -9,30 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-static FileSystem fs;
-
-static string GetCSVPath() {
-	string csv_path = TestCreatePath("csv_files");
-	if (fs.DirectoryExists(csv_path)) {
-		fs.RemoveDirectory(csv_path);
-	}
-	fs.CreateDirectory(csv_path);
-	return csv_path;
-}
-
-static void WriteCSV(string path, const char *csv) {
-	ofstream csv_writer(path);
-	csv_writer << csv;
-	csv_writer.close();
-}
-
-static void WriteBinary(string path, const uint8_t *data, uint64_t length) {
-	ofstream binary_writer(path, ios::binary);
-	binary_writer.write((const char *)data, length);
-	binary_writer.close();
-}
-
 TEST_CASE("Test copy statement", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -194,6 +172,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 }
 
 TEST_CASE("Test CSV file without trailing newline", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -227,6 +206,7 @@ TEST_CASE("Test CSV file without trailing newline", "[copy]") {
 }
 
 TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -267,7 +247,7 @@ TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]
 		// first value is an escaped quote (ABAB)
 		// second value is a quoted delimiter followed by an escaped quote
 		// third value is an escape outside of a set of quotes (interpreted as a literal value)
-		csv_stream << "ABABABACABABABABABADABABABADABABABABABABABADABAC";
+		csv_stream << "ABABABACABABABABABADABABABADABACABABABABABADABAC";
 		csv_stream.close();
 
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);"));
@@ -498,6 +478,7 @@ TEST_CASE("Test CSVs with repeating patterns in delimiter/escape/quote", "[copy]
 }
 
 TEST_CASE("Test long value with escapes", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -543,6 +524,7 @@ TEST_CASE("Test long value with escapes", "[copy]") {
 }
 
 TEST_CASE("Test NULL option of copy statement", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -668,6 +650,7 @@ TEST_CASE("Test NULL option of copy statement", "[copy]") {
 }
 
 TEST_CASE("Test force_quote and force_not_null", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -807,6 +790,7 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -990,6 +974,7 @@ TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with file overwrite", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1024,6 +1009,7 @@ TEST_CASE("Test copy statement with file overwrite", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with default values", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1061,6 +1047,7 @@ TEST_CASE("Test copy statement with default values", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with long lines", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1089,6 +1076,7 @@ TEST_CASE("Test copy statement with long lines", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with quotes and newlines", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1150,6 +1138,7 @@ TEST_CASE("Test copy statement with quotes and newlines", "[copy]") {
 }
 
 TEST_CASE("Test copy statement with many empty lines", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1174,6 +1163,7 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 }
 
 TEST_CASE("Test different line endings", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1207,6 +1197,7 @@ TEST_CASE("Test different line endings", "[copy]") {
 }
 
 TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1272,6 +1263,7 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 }
 
 TEST_CASE("Test lines that exceed the maximum line size", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1290,6 +1282,7 @@ TEST_CASE("Test lines that exceed the maximum line size", "[copy]") {
 }
 
 TEST_CASE("Test copy from/to on-time dataset", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1356,6 +1349,7 @@ TEST_CASE("Test copy from/to on-time dataset", "[copy]") {
 }
 
 TEST_CASE("Test copy from/to lineitem csv", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1402,6 +1396,7 @@ TEST_CASE("Test copy from/to lineitem csv", "[copy]") {
 }
 
 TEST_CASE("Test copy from web_page csv", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1437,6 +1432,7 @@ TEST_CASE("Test copy from web_page csv", "[copy]") {
 }
 
 TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1461,6 +1457,7 @@ TEST_CASE("Test copy from greek-utf8 csv", "[copy]") {
 }
 
 TEST_CASE("Test copy from ncvoter csv", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1504,6 +1501,7 @@ TEST_CASE("Test copy from ncvoter csv", "[copy]") {
 }
 
 TEST_CASE("Test date copy", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1522,6 +1520,7 @@ TEST_CASE("Test date copy", "[copy]") {
 }
 
 TEST_CASE("Test cranlogs broken gzip copy and temp table", "[copy][.]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1538,6 +1537,7 @@ TEST_CASE("Test cranlogs broken gzip copy and temp table", "[copy][.]") {
 }
 
 TEST_CASE("Test imdb escapes", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1558,6 +1558,7 @@ TEST_CASE("Test imdb escapes", "[copy]") {
 }
 
 TEST_CASE("Test read CSV function with lineitem", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1591,6 +1592,7 @@ TEST_CASE("Test read CSV function with lineitem", "[copy]") {
 }
 
 TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -1611,6 +1613,7 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 
 // http://www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
 TEST_CASE("Test CSV with Unicode NFC Normalization test suite", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

@@ -48,7 +48,7 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 
 	Parser parser;
 	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		return nullptr;
 	}
 	Binder binder(*con.context);
@@ -60,7 +60,7 @@ unique_ptr<Expression> ExpressionHelper::ParseExpression(string expression) {
 unique_ptr<LogicalOperator> ExpressionHelper::ParseLogicalTree(string query) {
 	Parser parser;
 	parser.ParseQuery(query.c_str());
-	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() == 0 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		return nullptr;
 	}
 	Planner planner(*con.context);

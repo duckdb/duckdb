@@ -25,6 +25,7 @@ struct AlterTableInfo;
 struct CreateIndexInfo;
 struct CreateTableFunctionInfo;
 struct CreateFunctionInfo;
+struct CreateCollationInfo;
 struct CreateViewInfo;
 struct BoundCreateTableInfo;
 struct CreateSequenceInfo;
@@ -47,6 +48,8 @@ public:
 	CatalogSet functions;
 	//! The catalog set holding the sequences
 	CatalogSet sequences;
+	//! The catalog set holding the collations
+	CatalogSet collations;
 
 public:
 	//! Creates a table with the given name in the schema
@@ -61,6 +64,8 @@ public:
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a scalar or aggregate function within the given schema
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
+	//! Create a collation within the given schema
+	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);

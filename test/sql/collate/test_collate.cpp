@@ -24,7 +24,8 @@ TEST_CASE("Test case insensitive collation", "[collate]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE collate_join_table(s VARCHAR, i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO collate_join_table VALUES ('HeLlO', 1), ('mÜHLEISEN', 3)"));
 
-	result = con.Query("SELECT collate_test.s, collate_join_table.s, i FROM collate_test JOIN collate_join_table ON (collate_test.s=collate_join_table.s) ORDER BY i");
+	result = con.Query("SELECT collate_test.s, collate_join_table.s, i FROM collate_test JOIN collate_join_table ON "
+	                   "(collate_test.s=collate_join_table.s) ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello", "Mühleisen"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"HeLlO", "mÜHLEISEN"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 3}));
@@ -56,7 +57,6 @@ TEST_CASE("Test case insensitive collation", "[collate]") {
 	// REQUIRE(CHECK_COLUMN(result, 0, {"Hallo", "hallo"}));
 }
 
-
 TEST_CASE("Test accent insensitive collation", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -77,7 +77,8 @@ TEST_CASE("Test accent insensitive collation", "[collate]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE collate_join_table(s VARCHAR, i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO collate_join_table VALUES ('Hello', 1), ('Muhleisen', 3)"));
 
-	result = con.Query("SELECT collate_test.s, collate_join_table.s, i FROM collate_test JOIN collate_join_table ON (collate_test.s=collate_join_table.s) ORDER BY 1");
+	result = con.Query("SELECT collate_test.s, collate_join_table.s, i FROM collate_test JOIN collate_join_table ON "
+	                   "(collate_test.s=collate_join_table.s) ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {"Hëllö", "Mühleisen"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Hello", "Muhleisen"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, 3}));
@@ -159,7 +160,7 @@ TEST_CASE("Test COLLATE in individual expressions", "[collate]") {
 TEST_CASE("Test default collations", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DBConfig config;
-	config.collation = CollationType::COLLATE_NOCASE;
+	config.collation = "NOCASE";
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 
@@ -183,13 +184,26 @@ TEST_CASE("Test default collations", "[collate]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"hEllO", "WöRlD", "wozld"}));
 }
 
+TEST_CASE("Get list of collations", "[collate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query("PRAGMA collations");
+	REQUIRE(CHECK_COLUMN(result, 0, {"noaccent", "nocase"}));
+
+	REQUIRE_FAIL(con.Query("PRAGMA collations=3"));
+}
+
 TEST_CASE("Test unsupported collations", "[collate]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE blabla)"));
-	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE NOCASE.NOCASE)"));
+	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE 1)"));
 	REQUIRE_FAIL(con.Query("CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')"));
+
+	REQUIRE_FAIL(con.Query("PRAGMA default_collation='blabla'"));
 }

@@ -10,8 +10,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -32,9 +34,18 @@ void BuiltinFunctions::Initialize() {
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
+
+	// initialize collations
+	AddCollation("nocase", LowerFun::GetFunction(), true);
+	AddCollation("noaccent", StripAccentsFun::GetFunction());
 }
 
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
+}
+
+void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable) {
+	CreateCollationInfo info(move(name), move(function), combinable);
+	catalog.CreateCollation(context, &info);
 }
 
 void BuiltinFunctions::AddFunction(AggregateFunctionSet set) {
@@ -53,7 +64,7 @@ void BuiltinFunctions::AddFunction(ScalarFunction function) {
 }
 
 void BuiltinFunctions::AddFunction(vector<string> names, ScalarFunction function) {
-	for(auto &name: names) {
+	for (auto &name : names) {
 		function.name = name;
 		AddFunction(function);
 	}
