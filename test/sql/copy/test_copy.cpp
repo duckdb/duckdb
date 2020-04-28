@@ -1613,6 +1613,7 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 
 // http://www.unicode.org/Public/UCD/latest/ucd/NormalizationTest.txt
 TEST_CASE("Test CSV with Unicode NFC Normalization test suite", "[copy]") {
+	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
