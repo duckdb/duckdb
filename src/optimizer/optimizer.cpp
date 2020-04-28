@@ -28,6 +28,7 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_unique<ComparisonSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_unique<MoveConstantsRule>(rewriter));
 	rewriter.rules.push_back(make_unique<LikeOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_unique<EmptyNeedleRemovalRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {

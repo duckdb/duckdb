@@ -31,25 +31,15 @@ static void current_timestamp_function(DataChunk &input, ExpressionState &state,
 }
 
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet current_time("current_time");
-	current_time.AddFunction(ScalarFunction({}, SQLType::TIME, current_time_function));
-	set.AddFunction(current_time);
+	set.AddFunction(ScalarFunction("current_time", {}, SQLType::TIME, current_time_function));
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet current_date("current_date");
-	current_date.AddFunction(ScalarFunction({}, SQLType::DATE, current_date_function));
-	set.AddFunction(current_date);
+	set.AddFunction(ScalarFunction("current_date", {}, SQLType::DATE, current_date_function));
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet current_timestamp("current_timestamp");
-	current_timestamp.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
-	set.AddFunction(current_timestamp);
-
-	ScalarFunctionSet now("now");
-	now.AddFunction(ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
-	set.AddFunction(now);
+	set.AddFunction({"now", "current_timestamp"}, ScalarFunction({}, SQLType::TIMESTAMP, current_timestamp_function));
 }
 
 } // namespace duckdb

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
-    : Relation(child_p->context, RelationType::ORDER), orders(move(orders)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
 	// bind the expressions
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);

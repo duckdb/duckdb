@@ -47,7 +47,7 @@ void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 	}
 	auto &transaction = Transaction::GetTransaction(context);
 	if (!state->initialized) {
-		table.InitializeScan(transaction, state->scan_offset, column_ids);
+		table.InitializeScan(transaction, state->scan_offset, column_ids, &table_filters);
 		state->initialized = true;
 	}
 	table.Scan(transaction, chunk, state->scan_offset, table_filters);

@@ -86,6 +86,9 @@ public:
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
 
+	//! Create a blob value
+	static Value BLOB(string value);
+
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value

@@ -8,7 +8,7 @@
 namespace duckdb {
 
 FilterRelation::FilterRelation(shared_ptr<Relation> child_p, unique_ptr<ParsedExpression> condition_p)
-    : Relation(child_p->context, RelationType::FILTER), condition(move(condition_p)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::FILTER_RELATION), condition(move(condition_p)), child(move(child_p)) {
 	vector<ColumnDefinition> dummy_columns;
 	context.TryBindRelation(*this, dummy_columns);
 }
@@ -18,7 +18,7 @@ unique_ptr<QueryNode> FilterRelation::GetQueryNode() {
 	while (child_ptr->InheritsColumnBindings()) {
 		child_ptr = child_ptr->ChildRelation();
 	}
-	if (child_ptr->type == RelationType::JOIN) {
+	if (child_ptr->type == RelationType::JOIN_RELATION) {
 		// child node is a join: push filter into WHERE clause of select node
 		auto child_node = child->GetQueryNode();
 		assert(child_node->type == QueryNodeType::SELECT_NODE);

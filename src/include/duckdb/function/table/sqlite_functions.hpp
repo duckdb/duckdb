@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+struct PragmaCollations {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct PragmaTableInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -11,7 +11,7 @@ namespace duckdb {
 
 ReadCSVRelation::ReadCSVRelation(ClientContext &context, string csv_file_p, vector<ColumnDefinition> columns_p,
                                  string alias_p)
-    : Relation(context, RelationType::READ_CSV), csv_file(move(csv_file_p)), alias(move(alias_p)),
+    : Relation(context, RelationType::READ_CSV_RELATION), csv_file(move(csv_file_p)), alias(move(alias_p)),
       columns(move(columns_p)) {
 	if (alias.empty()) {
 		alias = StringUtil::Split(csv_file, ".")[0];

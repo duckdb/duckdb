@@ -7,7 +7,7 @@ namespace duckdb {
 
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions)
-    : Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)), child(move(child_p)) {
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)), child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
 }
@@ -15,7 +15,7 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
                                      vector<unique_ptr<ParsedExpression>> parsed_expressions,
                                      vector<unique_ptr<ParsedExpression>> groups_p)
-    : Relation(child_p->context, RelationType::AGGREGATE), expressions(move(parsed_expressions)),
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(move(parsed_expressions)),
       groups(move(groups_p)), child(move(child_p)) {
 	// bind the expressions
 	context.TryBindRelation(*this, this->columns);
@@ -27,7 +27,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		child_ptr = child_ptr->ChildRelation();
 	}
 	unique_ptr<QueryNode> result;
-	if (child_ptr->type == RelationType::JOIN) {
+	if (child_ptr->type == RelationType::JOIN_RELATION) {
 		// child node is a join: push projection into the child query node
 		result = child->GetQueryNode();
 	} else {

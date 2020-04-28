@@ -104,15 +104,13 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	}
 
 	// figure out the types of the setop result by picking the max of both
-	vector<TypeId> internal_types;
 	for (idx_t i = 0; i < result->left->types.size(); i++) {
 		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
-		internal_types.push_back(GetInternalType(result_type));
 	}
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
-	BindModifierTypes(*result, internal_types, result->setop_index);
+	BindModifierTypes(*result, result->types, result->setop_index);
 	return move(result);
 }
 

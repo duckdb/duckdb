@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/extension.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -43,6 +44,8 @@ public:
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
 	string temporary_directory;
+	//! The collation type of the database
+	string collation = string();
 
 private:
 	// FIXME: don't set this as a user: used internally (only for now)
@@ -71,6 +74,13 @@ public:
 	idx_t checkpoint_wal_size;
 	idx_t maximum_memory;
 	string temporary_directory;
+	string collation;
+
+public:
+	template <class T> void LoadExtension() {
+		T extension;
+		extension.Load(*this);
+	}
 
 private:
 	void Configure(DBConfig &config);

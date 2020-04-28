@@ -49,7 +49,7 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(string select_l
 	Parser parser;
 	parser.ParseQuery(mock_query);
 	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = (SelectStatement &)*parser.statements[0];
@@ -67,7 +67,7 @@ vector<OrderByNode> Parser::ParseOrderList(string select_list) {
 	Parser parser;
 	parser.ParseQuery(mock_query);
 	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = (SelectStatement &)*parser.statements[0];
@@ -90,7 +90,7 @@ void Parser::ParseUpdateList(string update_list, vector<string> &update_columns,
 	Parser parser;
 	parser.ParseQuery(mock_query);
 	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::UPDATE_STATEMENT) {
 		throw ParserException("Expected a single UPDATE statement");
 	}
 	auto &update = (UpdateStatement &)*parser.statements[0];
@@ -105,7 +105,7 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(string valu
 	Parser parser;
 	parser.ParseQuery(mock_query);
 	// check the statements
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = (SelectStatement &)*parser.statements[0];
@@ -124,7 +124,7 @@ vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
 	string mock_query = "CREATE TABLE blabla (" + column_list + ")";
 	Parser parser;
 	parser.ParseQuery(mock_query);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
 		throw ParserException("Expected a single CREATE statement");
 	}
 	auto &create = (CreateStatement &)*parser.statements[0];

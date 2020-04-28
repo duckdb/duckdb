@@ -18,13 +18,13 @@ TEST_CASE("Test parser", "[parser]") {
 		                  "COMMIT;");
 
 		REQUIRE(parser.statements.size() == 7);
-		REQUIRE(parser.statements[0]->type == StatementType::CREATE);
-		REQUIRE(parser.statements[1]->type == StatementType::TRANSACTION);
-		REQUIRE(parser.statements[2]->type == StatementType::INSERT);
-		REQUIRE(parser.statements[3]->type == StatementType::INSERT);
-		REQUIRE(parser.statements[4]->type == StatementType::INSERT);
-		REQUIRE(parser.statements[5]->type == StatementType::INSERT);
-		REQUIRE(parser.statements[6]->type == StatementType::TRANSACTION);
+		REQUIRE(parser.statements[0]->type == StatementType::CREATE_STATEMENT);
+		REQUIRE(parser.statements[1]->type == StatementType::TRANSACTION_STATEMENT);
+		REQUIRE(parser.statements[2]->type == StatementType::INSERT_STATEMENT);
+		REQUIRE(parser.statements[3]->type == StatementType::INSERT_STATEMENT);
+		REQUIRE(parser.statements[4]->type == StatementType::INSERT_STATEMENT);
+		REQUIRE(parser.statements[5]->type == StatementType::INSERT_STATEMENT);
+		REQUIRE(parser.statements[6]->type == StatementType::TRANSACTION_STATEMENT);
 	}
 
 	SECTION("Wrong query") {

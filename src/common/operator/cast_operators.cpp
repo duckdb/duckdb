@@ -642,13 +642,13 @@ struct DateToStringCast {
 			length += 5;
 			date[0] = -date[0];
 			add_bc = true;
-		} else {
-			// potentially add extra characters depending on length of year
-			year_length += date[0] >= 10000;
-			year_length += date[0] >= 100000;
-			year_length += date[0] >= 1000000;
-			year_length += date[0] >= 10000000;
 		}
+
+		// potentially add extra characters depending on length of year
+		year_length += date[0] >= 10000;
+		year_length += date[0] >= 100000;
+		year_length += date[0] >= 1000000;
+		year_length += date[0] >= 10000000;
 		length += year_length;
 		return length;
 	}
