@@ -549,6 +549,15 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
 	}
 
+	unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+		vector<Value> params;
+		params.push_back(Value(filename));
+		return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
+	}
+
 	DuckDBPyConnection *unregister_df(string name) {
 		registered_dfs[name] = py::none();
 		return this;
@@ -701,6 +710,10 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df);
 	}
 
+	static unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
+		return default_connection()->from_csv_auto(filename);
+	}
+
 	unique_ptr<DuckDBPyRelation> project(string expr) {
 		return make_unique<DuckDBPyRelation>(rel->Project(expr));
 	}
@@ -846,6 +859,8 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("table_function", &DuckDBPyConnection::table_function, "some doc string for table_function",
 	             py::arg("name"), py::arg("parameters") = py::list())
 	        .def("from_df", &DuckDBPyConnection::from_df, "some doc string for from_df", py::arg("value"))
+	        .def("from_csv_auto", &DuckDBPyConnection::from_csv_auto, "some doc string for from_csv_auto",
+	             py::arg("filename"))
 	        .def("df", &DuckDBPyConnection::from_df, "some doc string for df", py::arg("value"))
 	        .def("commit", &DuckDBPyConnection::commit)
 	        .def("rollback", &DuckDBPyConnection::rollback)
@@ -898,6 +913,7 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("__repr__", &DuckDBPyRelation::print, "some doc string for repr");
 
 	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
+	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "some doc string for from_csv_auto", py::arg("filename"));
 	m.def("df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("filter", &DuckDBPyRelation::filter_df, "some doc string for filter", py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "some doc string for project", py::arg("df"),

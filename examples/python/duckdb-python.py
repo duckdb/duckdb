@@ -30,7 +30,6 @@ print(conn.execute("SELECT * FROM test_table").fetchnumpy())
 # we can query pandas data frames as if they were SQL views
 # create a sample pandas data frame
 import pandas as pd
-
 test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
 
 # make this data frame available as a view in duckdb
@@ -46,6 +45,17 @@ print(rel)
 
 # alternative shorthand, use a built-in default connection to create a relation from a pandas data frame
 rel = duckdb.df(test_df)
+print(rel)
+
+# create a relation from a CSV file
+
+# first create a CSV file from our pandas example 
+import tempfile, os
+temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+test_df.to_csv(temp_file_name, index=False)
+
+# now create a relation from it
+rel = duckdb.from_csv_auto(temp_file_name)
 print(rel)
 
 # create a relation from an existing table
