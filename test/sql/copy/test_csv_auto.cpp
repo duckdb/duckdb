@@ -9,6 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
+#if STANDARD_VECTOR_SIZE >= 16
+
 TEST_CASE("Test copy into auto from lineitem csv", "[copy]") {
 	FileSystem fs;
 	unique_ptr<QueryResult> result;
@@ -700,3 +702,5 @@ TEST_CASE("Test csv type detection with sampling", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {1.0, 2.0, 3.5}));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
+
+#endif

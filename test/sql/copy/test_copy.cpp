@@ -1612,7 +1612,6 @@ TEST_CASE("Test CSV with UTF8 NFC Normalization", "[copy]") {
 }
 
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
-	FileSystem fs;
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;
