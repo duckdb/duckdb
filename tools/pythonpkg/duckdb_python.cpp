@@ -894,7 +894,8 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("create_view", &DuckDBPyRelation::create_view, "some doc string for create_view", py::arg("view_name"),
 	         py::arg("replace") = true)
 	    .def("df", &DuckDBPyRelation::to_df, "some doc string for df")
-	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print");
+	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print")
+	    .def("__repr__", &DuckDBPyRelation::print, "some doc string for repr");
 
 	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
