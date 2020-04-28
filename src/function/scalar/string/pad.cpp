@@ -125,7 +125,7 @@ template <class Op> static void pad_function(DataChunk &args, ExpressionState &s
 	vector<char> buffer;
 	TernaryExecutor::Execute<string_t, int64_t, string_t, string_t>(
 	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int64_t len, string_t pad) {
-		    len = max(len, 0ll);
+		    len = max(len, int64_t(0));
 		    return StringVector::AddString(result, Op::Operation(str, len, pad, buffer));
 	    });
 }
