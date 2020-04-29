@@ -13,7 +13,7 @@ namespace duckdb {
 
 struct SpaceChar {
 	static char Operation(utf8proc_int32_t codepoint) {
-		return isspace(codepoint);
+		return UTF8PROC_CATEGORY_ZS == utf8proc_category(codepoint);
 	}
 };
 
