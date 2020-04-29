@@ -14,7 +14,7 @@ using namespace duckdb;
 using namespace std;
 
 unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
-                                                       string collation) {
+                                                       string collation, bool equality_only) {
 	// replace default collation with system collation
 	if (collation.empty()) {
 		collation = context.db.collation;
@@ -40,6 +40,9 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		}
 	}
 	for (auto &collation_entry : entries) {
+		if (equality_only && collation_entry->not_required_for_equality) {
+			continue;
+		}
 		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, collation_entry->function);
 		function->children.push_back(move(source));
 		function->arguments.push_back({SQLType::VARCHAR});
@@ -88,8 +91,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), right.sql_type, input_type);
 	if (input_type.id == SQLTypeId::VARCHAR) {
 		// handle collation
-		left.expr = PushCollation(context, move(left.expr), input_type.collation);
-		right.expr = PushCollation(context, move(right.expr), input_type.collation);
+		left.expr = PushCollation(context, move(left.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr = PushCollation(context, move(right.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)),

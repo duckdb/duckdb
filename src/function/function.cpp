@@ -43,8 +43,8 @@ void BuiltinFunctions::Initialize() {
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
 }
 
-void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable) {
-	CreateCollationInfo info(move(name), move(function), combinable);
+void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable, bool not_required_for_equality) {
+	CreateCollationInfo info(move(name), move(function), combinable, not_required_for_equality);
 	catalog.CreateCollation(context, &info);
 }
 
