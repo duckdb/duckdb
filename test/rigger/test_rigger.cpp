@@ -652,4 +652,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value(), "0"}));
 	}
+	SECTION("602") {
+		// GROUP BY does not take COLLATE into account
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR COLLATE NOCASE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES ('a'), ('A');"));
+		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
+	}
 }

@@ -240,6 +240,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
 			assert(bound_expr->return_type != TypeId::INVALID);
 			info.group_types.push_back(group_type);
+			// push a potential collation, if necessary
+			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), group_type.collation);
 			result->groups.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
