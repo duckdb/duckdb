@@ -10,10 +10,10 @@ using namespace std;
 
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-class PhysicalPiecewiseMergeJoinState : public PhysicalComparisonJoinState {
+class PhysicalPiecewiseMergeJoinState : public PhysicalOperatorState {
 public:
 	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false), left_position(0), right_position(0),
+	    : PhysicalOperatorState(nullptr /* left, right, conditions */), initialized(false), left_position(0), right_position(0),
 	      right_chunk_index(0), has_null(false) {
 	}
 
@@ -46,140 +46,155 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 	children.push_back(move(right));
 }
 
+unique_ptr<GlobalOperatorState> PhysicalPiecewiseMergeJoin::GetGlobalState(ClientContext &context) {
+	throw NotImplementedException("MJ");
+}
+
+unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+	throw NotImplementedException("MJ");
+}
+void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+	throw NotImplementedException("MJ");
+}
+void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+	throw NotImplementedException("MJ");
+}
+
 void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
                                                   PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
-	assert(conditions.size() == 1);
-	if (!state->initialized) {
-		// create the sorted pieces
-		auto right_state = children[1]->GetOperatorState();
-		auto types = children[1]->GetTypes();
+	throw NotImplementedException("MJ");
+	// auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
+	// assert(conditions.size() == 1);
+	// if (!state->initialized) {
+	// 	// create the sorted pieces
+	// 	auto right_state = children[1]->GetOperatorState();
+	// 	auto types = children[1]->GetTypes();
 
-		DataChunk right_chunk;
-		right_chunk.Initialize(types);
-		state->join_keys.Initialize(join_key_types);
-		// first fetch the entire right side
-		while (true) {
-			children[1]->GetChunk(context, right_chunk, right_state.get());
-			if (right_chunk.size() == 0) {
-				break;
-			}
-			// resolve the join keys for this chunk
-			state->rhs_executor.SetChunk(right_chunk);
+	// 	DataChunk right_chunk;
+	// 	right_chunk.Initialize(types);
+	// 	state->join_keys.Initialize(join_key_types);
+	// 	// first fetch the entire right side
+	// 	while (true) {
+	// 		children[1]->GetChunk(context, right_chunk, right_state.get());
+	// 		if (right_chunk.size() == 0) {
+	// 			break;
+	// 		}
+	// 		// resolve the join keys for this chunk
+	// 		state->rhs_executor.SetChunk(right_chunk);
 
-			state->join_keys.Reset();
-			state->join_keys.SetCardinality(right_chunk);
-			for (idx_t k = 0; k < conditions.size(); k++) {
-				// resolve the join key
-				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
-			}
-			// append the join keys and the chunk to the chunk collection
-			state->right_chunks.Append(right_chunk);
-			state->right_conditions.Append(state->join_keys);
-		}
-		if (state->right_chunks.count == 0 && (type == JoinType::INNER || type == JoinType::SEMI)) {
-			// empty RHS with INNER or SEMI join means empty result set
-			return;
-		}
-		// now order all the chunks
-		state->right_orders.resize(state->right_conditions.chunks.size());
-		for (idx_t i = 0; i < state->right_conditions.chunks.size(); i++) {
-			auto &chunk_to_order = *state->right_conditions.chunks[i];
-			assert(chunk_to_order.column_count() == 1);
-			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
-				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), state->right_orders[i]);
-				if (state->right_orders[i].count < chunk_to_order.size()) {
-					// the amount of entries in the order vector is smaller than the amount of entries in the vector
-					// this only happens if there are NULL values in the right-hand side
-					// hence we set the has_null to true (this is required for the MARK join)
-					state->has_null = true;
-				}
-			}
-		}
-		state->right_chunk_index = state->right_orders.size();
-		state->initialized = true;
-	}
+	// 		state->join_keys.Reset();
+	// 		state->join_keys.SetCardinality(right_chunk);
+	// 		for (idx_t k = 0; k < conditions.size(); k++) {
+	// 			// resolve the join key
+	// 			state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
+	// 		}
+	// 		// append the join keys and the chunk to the chunk collection
+	// 		state->right_chunks.Append(right_chunk);
+	// 		state->right_conditions.Append(state->join_keys);
+	// 	}
+	// 	if (state->right_chunks.count == 0 && (type == JoinType::INNER || type == JoinType::SEMI)) {
+	// 		// empty RHS with INNER or SEMI join means empty result set
+	// 		return;
+	// 	}
+	// 	// now order all the chunks
+	// 	state->right_orders.resize(state->right_conditions.chunks.size());
+	// 	for (idx_t i = 0; i < state->right_conditions.chunks.size(); i++) {
+	// 		auto &chunk_to_order = *state->right_conditions.chunks[i];
+	// 		assert(chunk_to_order.column_count() == 1);
+	// 		for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
+	// 			OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), state->right_orders[i]);
+	// 			if (state->right_orders[i].count < chunk_to_order.size()) {
+	// 				// the amount of entries in the order vector is smaller than the amount of entries in the vector
+	// 				// this only happens if there are NULL values in the right-hand side
+	// 				// hence we set the has_null to true (this is required for the MARK join)
+	// 				state->has_null = true;
+	// 			}
+	// 		}
+	// 	}
+	// 	state->right_chunk_index = state->right_orders.size();
+	// 	state->initialized = true;
+	// }
 
-	do {
-		// check if we have to fetch a child from the left side
-		if (state->right_chunk_index == state->right_orders.size()) {
-			// fetch the chunk from the left side
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				return;
-			}
+	// do {
+	// 	// check if we have to fetch a child from the left side
+	// 	if (state->right_chunk_index == state->right_orders.size()) {
+	// 		// fetch the chunk from the left side
+	// 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+	// 		if (state->child_chunk.size() == 0) {
+	// 			return;
+	// 		}
 
-			// resolve the join keys for the left chunk
-			state->join_keys.Reset();
-			state->lhs_executor.SetChunk(state->child_chunk);
-			state->join_keys.SetCardinality(state->child_chunk);
-			for (idx_t k = 0; k < conditions.size(); k++) {
-				state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
-				// sort by join key
-				OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
-			}
-			state->right_chunk_index = 0;
-			state->left_position = 0;
-			state->right_position = 0;
-		}
+	// 		// resolve the join keys for the left chunk
+	// 		state->join_keys.Reset();
+	// 		state->lhs_executor.SetChunk(state->child_chunk);
+	// 		state->join_keys.SetCardinality(state->child_chunk);
+	// 		for (idx_t k = 0; k < conditions.size(); k++) {
+	// 			state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
+	// 			// sort by join key
+	// 			OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
+	// 		}
+	// 		state->right_chunk_index = 0;
+	// 		state->left_position = 0;
+	// 		state->right_position = 0;
+	// 	}
 
-		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
+	// 	ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
 
-		// first check if the join type is MARK, SEMI or ANTI
-		// in this case we loop over the entire right collection immediately
-		// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
-		switch (type) {
-		case JoinType::MARK: {
-			// MARK join
-			if (state->right_chunks.count > 0) {
-				ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
-				// first perform the MARK join
-				// this method uses the LHS to loop over the entire RHS looking for matches
-				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
-				// now construct the mark join result from the found matches
-				PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk,
-				                                      right_info.found_match, state->has_null);
-			} else {
-				// RHS empty: result is false for everything
-				chunk.Reference(state->child_chunk);
-				auto &mark_vector = chunk.data.back();
-				mark_vector.vector_type = VectorType::CONSTANT_VECTOR;
-				mark_vector.SetValue(0, Value::BOOLEAN(false));
-			}
-			state->right_chunk_index = state->right_orders.size();
-			return;
-		}
-		default:
-			// INNER, LEFT OUTER, etc... join that can return >STANDARD_VECTOR_SIZE entries
-			break;
-		}
+	// 	// first check if the join type is MARK, SEMI or ANTI
+	// 	// in this case we loop over the entire right collection immediately
+	// 	// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
+	// 	switch (type) {
+	// 	case JoinType::MARK: {
+	// 		// MARK join
+	// 		if (state->right_chunks.count > 0) {
+	// 			ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
+	// 			// first perform the MARK join
+	// 			// this method uses the LHS to loop over the entire RHS looking for matches
+	// 			MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
+	// 			// now construct the mark join result from the found matches
+	// 			PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk,
+	// 			                                      right_info.found_match, state->has_null);
+	// 		} else {
+	// 			// RHS empty: result is false for everything
+	// 			chunk.Reference(state->child_chunk);
+	// 			auto &mark_vector = chunk.data.back();
+	// 			mark_vector.vector_type = VectorType::CONSTANT_VECTOR;
+	// 			mark_vector.SetValue(0, Value::BOOLEAN(false));
+	// 		}
+	// 		state->right_chunk_index = state->right_orders.size();
+	// 		return;
+	// 	}
+	// 	default:
+	// 		// INNER, LEFT OUTER, etc... join that can return >STANDARD_VECTOR_SIZE entries
+	// 		break;
+	// 	}
 
-		// perform the actual merge join
-		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk_index];
-		auto &right_condition_chunk = *state->right_conditions.chunks[state->right_chunk_index];
-		auto &right_orders = state->right_orders[state->right_chunk_index];
+	// 	// perform the actual merge join
+	// 	auto &right_chunk = *state->right_chunks.chunks[state->right_chunk_index];
+	// 	auto &right_condition_chunk = *state->right_conditions.chunks[state->right_chunk_index];
+	// 	auto &right_orders = state->right_orders[state->right_chunk_index];
 
-		ScalarMergeInfo right(right_orders, right_condition_chunk.data[0].type, state->right_position);
-		// perform the merge join
-		switch (type) {
-		case JoinType::INNER: {
-			idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
-			if (result_count == 0) {
-				// exhausted this chunk on the right side
-				// move to the next
-				state->right_chunk_index++;
-				state->left_position = 0;
-				state->right_position = 0;
-			} else {
-				chunk.Slice(state->child_chunk, left_info.result, result_count);
-				chunk.Slice(right_chunk, right.result, result_count, state->child_chunk.column_count());
-			}
-			break;
-		}
-		default:
-			throw NotImplementedException("Unimplemented join type for merge join");
-		}
-	} while (chunk.size() == 0);
+	// 	ScalarMergeInfo right(right_orders, right_condition_chunk.data[0].type, state->right_position);
+	// 	// perform the merge join
+	// 	switch (type) {
+	// 	case JoinType::INNER: {
+	// 		idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
+	// 		if (result_count == 0) {
+	// 			// exhausted this chunk on the right side
+	// 			// move to the next
+	// 			state->right_chunk_index++;
+	// 			state->left_position = 0;
+	// 			state->right_position = 0;
+	// 		} else {
+	// 			chunk.Slice(state->child_chunk, left_info.result, result_count);
+	// 			chunk.Slice(right_chunk, right.result, result_count, state->child_chunk.column_count());
+	// 		}
+	// 		break;
+	// 	}
+	// 	default:
+	// 		throw NotImplementedException("Unimplemented join type for merge join");
+	// 	}
+	// } while (chunk.size() == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState() {

@@ -56,8 +56,8 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 	return move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
-	auto &sink = (HashJoinGlobalState&) *sink_state;
+unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &sink_state) {
+	auto &sink = (HashJoinGlobalState&) sink_state;
 	auto state = make_unique<HashJoinLocalState>();
 	if (right_projection_map.size() > 0) {
 		state->build_chunk.Initialize(sink.hash_table->build_types);

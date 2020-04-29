@@ -53,23 +53,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 			// we need these to correctly deal with the cases of either:
 			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			auto &info = hash_join.hash_table->correlated_mark_join_info;
+			throw NotImplementedException("delim join");
+			// auto &info = hash_join.hash_table->correlated_mark_join_info;
 
-			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
-			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
-			vector<BoundAggregateExpression *> correlated_aggregates;
-			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
-				correlated_aggregates.push_back(&*aggr);
-				info.correlated_aggregates.push_back(move(aggr));
-			}
-			info.correlated_counts =
-			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
-			info.correlated_types = delim_types;
-			// FIXME: these can be initialized "empty" (without allocating empty vectors)
-			info.group_chunk.Initialize(delim_types);
-			info.payload_chunk.Initialize(payload_types);
-			info.result_chunk.Initialize(payload_types);
+			// vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
+			// vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
+			// vector<BoundAggregateExpression *> correlated_aggregates;
+			// for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
+			// 	auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
+			// 	correlated_aggregates.push_back(&*aggr);
+			// 	info.correlated_aggregates.push_back(move(aggr));
+			// }
+			// info.correlated_counts =
+			//     make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
+			// info.correlated_types = delim_types;
+			// // FIXME: these can be initialized "empty" (without allocating empty vectors)
+			// info.group_chunk.Initialize(delim_types);
+			// info.payload_chunk.Initialize(payload_types);
+			// info.result_chunk.Initialize(payload_types);
 		}
 	}
 	// now create the duplicate eliminated join
