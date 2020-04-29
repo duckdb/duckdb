@@ -303,6 +303,70 @@ bool SQLType::IsNumeric() const {
 	}
 }
 
+bool SQLType::IsMoreGenericThan(SQLType &other) const {
+	if (other.id == id) {
+		return false;
+	}
+
+	if (other.id == SQLTypeId::SQLNULL) {
+		return true;
+	}
+
+	switch (id) {
+	case SQLTypeId::SMALLINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::INTEGER:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::BIGINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::DOUBLE:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	case SQLTypeId::DATE:
+		return false;
+	case SQLTypeId::TIMESTAMP:
+		switch (other.id) {
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
 TypeId GetInternalType(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
