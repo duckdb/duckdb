@@ -117,7 +117,7 @@ public:
 	virtual void Sink(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate, DataChunk &input) = 0;
 	virtual void Finalize(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate){}
 
-	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) {
 		return make_unique<LocalSinkState>();
 	}
 	virtual unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) {

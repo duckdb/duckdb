@@ -11,7 +11,7 @@ Pipeline::Pipeline(ExecutionContext &execution_context) :
 void Pipeline::Execute(ClientContext &context) {
 	assert(dependents.size() == 0);
 	auto state = child->GetOperatorState();
-	auto lstate = sink->GetLocalSinkState(context, *sink_state);
+	auto lstate = sink->GetLocalSinkState(context);
 	// incrementally process the pipeline
 	DataChunk intermediate;
 	child->InitializeChunk(intermediate);

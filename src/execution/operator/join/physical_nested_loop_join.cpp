@@ -122,7 +122,7 @@ unique_ptr<GlobalOperatorState> PhysicalNestedLoopJoin::GetGlobalState(ClientCon
 	throw NotImplementedException("NLJ");
 }
 
-unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ClientContext &context) {
 	throw NotImplementedException("NLJ");
 }
 void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {

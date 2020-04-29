@@ -41,16 +41,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// at least one equality is necessary
 	assert(equality_types.size() > 0);
 
-	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
-		// for ANTI, SEMI and MARK join, we only need to store the keys
-		build_size = 0;
-		build_types.clear();
-	} else {
-		// otherwise we need to store the entire build side for reconstruction
-		// purposes
-		for (idx_t i = 0; i < build_types.size(); i++) {
-			build_size += GetTypeIdSize(build_types[i]);
-		}
+	for (idx_t i = 0; i < build_types.size(); i++) {
+		build_size += GetTypeIdSize(build_types[i]);
 	}
 	tuple_size = condition_size + build_size;
 	// entry size is the tuple size and the size of the hash/next pointer

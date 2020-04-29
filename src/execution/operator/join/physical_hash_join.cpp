@@ -41,6 +41,15 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	children.push_back(move(right));
 
 	assert(left_projection_map.size() == 0);
+	for (auto &condition : conditions) {
+		condition_types.push_back(condition.left->return_type);
+	}
+
+	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
+	if (type != JoinType::ANTI && type != JoinType::SEMI && type != JoinType::MARK) {
+		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
+	}
+
 }
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -50,22 +59,20 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 
 unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<HashJoinGlobalState>();
-	state->hash_table =
-	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions,
-	                               LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map), type);
+	state->hash_table = make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, type);
 	return move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &sink_state) {
+unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context) {
 	auto &sink = (HashJoinGlobalState&) sink_state;
 	auto state = make_unique<HashJoinLocalState>();
 	if (right_projection_map.size() > 0) {
-		state->build_chunk.Initialize(sink.hash_table->build_types);
+		state->build_chunk.Initialize(build_types);
 	}
 	for (auto &cond : conditions) {
 		state->build_executor.AddExpression(*cond.right);
 	}
-	state->join_keys.Initialize(sink.hash_table->condition_types);
+	state->join_keys.Initialize(condition_types);
 	return move(state);
 }
 
@@ -96,9 +103,8 @@ void PhysicalHashJoin::Finalize(ClientContext &context, GlobalOperatorState &sta
 
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	auto state = make_unique<PhysicalHashJoinState>(children[0].get(), children[1].get(), conditions);
-	auto &sink = (HashJoinGlobalState&) state;
 	state->cached_chunk.Initialize(types);
-	state->join_keys.Initialize(sink.hash_table->condition_types);
+	state->join_keys.Initialize(condition_types);
 	for (auto &cond : conditions) {
 		state->probe_executor.AddExpression(*cond.left);
 	}
@@ -165,7 +171,6 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		// remove any selection vectors
 		if (sink.hash_table->size() == 0) {
 			// empty hash table, special case
 			if (sink.hash_table->join_type == JoinType::ANTI) {

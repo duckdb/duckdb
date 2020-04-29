@@ -50,7 +50,7 @@ unique_ptr<GlobalOperatorState> PhysicalPiecewiseMergeJoin::GetGlobalState(Clien
 	throw NotImplementedException("MJ");
 }
 
-unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ClientContext &context) {
 	throw NotImplementedException("MJ");
 }
 void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {

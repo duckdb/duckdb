@@ -42,7 +42,7 @@ unique_ptr<GlobalOperatorState> PhysicalBlockwiseNLJoin::GetGlobalState(ClientCo
 	throw NotImplementedException("Blockwise NLJ");
 }
 
-unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ClientContext &context, GlobalOperatorState &state) {
+unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ClientContext &context) {
 	throw NotImplementedException("Blockwise NLJ");
 }
 void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
