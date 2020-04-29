@@ -637,4 +637,19 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
 	}
+	SECTION("596") {
+		// STDDEV_POP unexpectedly does not fetch any rows
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DOUBLE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(1E200), (0);"));
+		REQUIRE_FAIL(con.Query("SELECT STDDEV_POP(c0) FROM t0;"));
+	}
+	SECTION("599") {
+		// UPDATE results in crash or ASan error
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0, 0), (NULL, 0);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = c0;"));
+		result = con.Query("SELECT * FROM t0 ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), "0"}));
+	}
 }
