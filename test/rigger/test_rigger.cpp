@@ -659,4 +659,11 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
 	}
+	SECTION("603") {
+		// BETWEEN with COLLATE NOACCENT.NOCASE expression results in a segfault/ASan failure
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL), ('2000-01-01');"));
+		result = con.Query("SELECT * FROM t0 WHERE 'a' BETWEEN c0 AND c1 COLLATE NOACCENT.NOCASE;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
 }
