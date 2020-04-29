@@ -62,11 +62,30 @@ print(rel)
 rel = conn.table("test_table")
 print(rel)
 
+# a relation has an alias (like a table name)
+print(rel.alias)
+
+# we can change the alias, useful for (self)joins for example
+rel2 = rel.set_alias('new_alias')
+print(rel2.alias)
+
+# we can inspect the type of a relation
+print(rel.type)
+
+# or the column names that are in it
+print(rel.columns)
+
+# or the types of those columns
+print(rel.types)
+
 # now we can apply some operators to the relation
 # filter the relation
 print(rel.filter('i > 1'))
 
-# filter the relation
+# project the relation, get some columns
+print(rel.project('i, j'))
+
+# or transform them
 print(rel.project('i + 1'))
 
 # order the relation
@@ -99,7 +118,7 @@ rel2 = conn.from_df(test_df)
 print(rel.join(rel2, 'i'))
 
 # for explicit join conditions the relations can be named using alias()
-print(rel.alias('a').join(rel.alias('b'), 'a.i=b.i'))
+print(rel.set_alias('a').join(rel.set_alias('b'), 'a.i=b.i'))
 
 
 # there are also shorthand methods to directly create a relation and apply an operator from pandas data frame objects

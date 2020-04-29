@@ -102,19 +102,20 @@ struct PandasScanFunction : public TableFunction {
 		// Hey, it works (TM)
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
+		/* TODO this fails on Python2 for some reason
 		auto pandas_mod = py::module::import("pandas.core.frame");
 		auto df_class = pandas_mod.attr("DataFrame");
 
 		if (!df.get_type().is(df_class)) {
-			throw Exception("parameter is not a DataFrame");
-		}
+		    throw Exception("parameter is not a DataFrame");
+		} */
 
 		auto df_names = py::list(df.attr("columns"));
 		auto df_types = py::list(df.attr("dtypes"));
 		// TODO support masked arrays as well
 		// TODO support dicts of numpy arrays as well
 		if (py::len(df_names) == 0 || py::len(df_types) == 0 || py::len(df_names) != py::len(df_types)) {
-			throw runtime_error("need a dataframe with at least one column");
+			throw runtime_error("Need a DataFrame with at least one column");
 		}
 		for (idx_t col_idx = 0; col_idx < py::len(df_names); col_idx++) {
 			auto col_type = string(py::str(df_types[col_idx]));
@@ -843,6 +844,28 @@ struct DuckDBPyRelation {
 		return "";
 	}
 
+	py::object getattr(py::str key) {
+		auto key_s = key.cast<string>();
+		if (key_s == "alias") {
+			return py::str(string(rel->GetAlias()));
+		} else if (key_s == "type") {
+			return py::str(RelationTypeToString(rel->type));
+		} else if (key_s == "columns") {
+			py::list res;
+			for (auto &col : rel->Columns()) {
+				res.append(col.name);
+			}
+			return move(res);
+		} else if (key_s == "types" || key_s == "dtypes") {
+			py::list res;
+			for (auto &col : rel->Columns()) {
+				res.append(SQLTypeToString(col.type));
+			}
+			return move(res);
+		}
+		return py::none();
+	}
+
 	shared_ptr<Relation> rel;
 };
 
@@ -890,7 +913,7 @@ PYBIND11_MODULE(duckdb, m) {
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
 	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::project, "some doc string for project", py::arg("project_expr"))
-	    .def("alias", &DuckDBPyRelation::alias, "some doc string for alias", py::arg("alias"))
+	    .def("set_alias", &DuckDBPyRelation::alias, "some doc string for alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::order, "some doc string for order", py::arg("order_expr"))
 	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
@@ -910,7 +933,8 @@ PYBIND11_MODULE(duckdb, m) {
 	         py::arg("replace") = true)
 	    .def("df", &DuckDBPyRelation::to_df, "some doc string for df")
 	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print")
-	    .def("__repr__", &DuckDBPyRelation::print, "some doc string for repr");
+	    .def("__repr__", &DuckDBPyRelation::print, "some doc string for repr")
+	    .def("__getattr__", &DuckDBPyRelation::getattr);
 
 	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "some doc string for from_csv_auto", py::arg("filename"));

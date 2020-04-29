@@ -9,7 +9,7 @@ class TestRelationApi(object):
 		test_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "j":["one", "two", "three"]})
 
 		def test_rel(rel, duckdb_cursor):
-			res = rel.filter('i < 3').order('j').project('i').union(rel.filter('i > 2').project('i')).join(rel.alias('a1'), 'i').project('CAST(i as BIGINT) i, j').order('i')
+			res = rel.filter('i < 3').order('j').project('i').union(rel.filter('i > 2').project('i')).join(rel.set_alias('a1'), 'i').project('CAST(i as BIGINT) i, j').order('i')
 			pd.testing.assert_frame_equal(res.to_df(), test_df)
 			res3 = duckdb_cursor.from_df(res.to_df()).to_df()
 			pd.testing.assert_frame_equal(res3, test_df)
