@@ -41,4 +41,6 @@ enum class RelationType : uint8_t {
 	VIEW_RELATION
 };
 
+string RelationTypeToString(RelationType type);
+
 } // namespace duckdb

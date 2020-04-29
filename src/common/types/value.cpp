@@ -517,21 +517,28 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-Value Value::CastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 	if (source_type == target_type) {
 		return Copy();
 	}
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type, 1);
+	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(TypeId target_type, bool strict) const {
+	if (target_type == type) {
+		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+	}
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type), strict);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
 	Value new_value;
 	try {
-		new_value = CastAs(source_type, target_type);
+		new_value = CastAs(source_type, target_type, strict);
 	} catch (Exception &) {
 		return false;
 	}
@@ -542,13 +549,6 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
 	return true;
-}
-
-Value Value::CastAs(TypeId target_type) const {
-	if (target_type == type) {
-		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
-	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
 }
 
 void Value::Serialize(Serializer &serializer) {
