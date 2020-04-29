@@ -682,9 +682,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			for (idx_t i = 0; i < count; i++) {
-				update_min_max(strings[i].GetData(), min, max);
-			}
+			update_min_max(strings[i].GetData(), min, max);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
