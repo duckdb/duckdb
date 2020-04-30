@@ -87,7 +87,7 @@ void ICUExtension::Load(DuckDB &db) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, get_icu_function(collation), false);
+		CreateCollationInfo info(collation, get_icu_function(collation), false, true);
 		info.on_conflict = OnCreateConflict::IGNORE;
 		db.catalog->CreateCollation(*con.context, &info);
 	}
