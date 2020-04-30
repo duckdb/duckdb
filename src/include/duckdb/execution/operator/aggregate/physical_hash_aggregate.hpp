@@ -16,7 +16,7 @@ namespace duckdb {
 
 //! PhysicalHashAggregate is an group-by and aggregate implementation that uses
 //! a hash table to perform the grouping
-class PhysicalHashAggregate : public PhysicalOperator {
+class PhysicalHashAggregate : public PhysicalSink {
 public:
 	PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
@@ -28,11 +28,25 @@ public:
 	vector<unique_ptr<Expression>> groups;
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+	//! Whether or not the aggregate is an implicit (i.e. ungrouped) aggregate
 	bool is_implicit_aggr;
 
-public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	//! The group types
+	vector<TypeId> group_types;
+	//! The payload types
+	vector<TypeId> payload_types;
+	//! The aggregate return types
+	vector<TypeId> aggregate_types;
 
+	//! Pointers to the aggregates
+	vector<BoundAggregateExpression *> bindings;
+public:
+	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+
+	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
+	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

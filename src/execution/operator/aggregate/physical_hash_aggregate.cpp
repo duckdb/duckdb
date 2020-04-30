@@ -9,35 +9,14 @@
 using namespace duckdb;
 using namespace std;
 
-class PhysicalHashAggregateState : public PhysicalOperatorState {
-public:
-	PhysicalHashAggregateState(PhysicalHashAggregate *parent, PhysicalOperator *child);
-
-	//! Materialized GROUP BY expression
-	DataChunk group_chunk;
-	//! Materialized aggregates
-	DataChunk aggregate_chunk;
-	//! The current position to scan the HT for output tuples
-	idx_t ht_scan_position;
-	idx_t tuples_scanned;
-	//! The HT
-	unique_ptr<SuperLargeHashTable> ht;
-	//! The payload chunk, only used while filling the HT
-	DataChunk payload_chunk;
-	//! Expression executor for the GROUP BY chunk
-	ExpressionExecutor group_executor;
-	//! Expression state for the payload
-	ExpressionExecutor payload_executor;
-};
-
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                              PhysicalOperatorType type)
     : PhysicalHashAggregate(types, move(expressions), {}, type) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
-                                             vector<unique_ptr<Expression>> groups, PhysicalOperatorType type)
-    : PhysicalOperator(type, types), groups(move(groups)) {
+                                             vector<unique_ptr<Expression>> groups_p, PhysicalOperatorType type)
+    : PhysicalSink(type, types), groups(move(groups_p)) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.size() == 0) {
@@ -47,58 +26,147 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 	} else {
 		is_implicit_aggr = false;
 	}
+	for (auto &expr : groups) {
+		group_types.push_back(expr->return_type);
+	}
 	for (auto &expr : expressions) {
 		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		assert(expr->IsAggregate());
+		auto &aggr = (BoundAggregateExpression &)*expr;
+		bindings.push_back(&aggr);
+
+		aggregate_types.push_back(aggr.return_type);
+		if (aggr.children.size()) {
+			for (idx_t i = 0; i < aggr.children.size(); ++i) {
+				payload_types.push_back(aggr.children[i]->return_type);
+			}
+		} else {
+			// COUNT(*)
+			payload_types.push_back(TypeId::INT64);
+		}
 		aggregates.push_back(move(expr));
 	}
 }
 
-void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalHashAggregateState *>(state_);
-	do {
-		// resolve the child chunk if there is one
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			break;
-		}
-		// aggregation with groups
-		DataChunk &group_chunk = state->group_chunk;
-		DataChunk &payload_chunk = state->payload_chunk;
-		state->group_executor.Execute(state->child_chunk, group_chunk);
-		state->payload_executor.SetChunk(state->child_chunk);
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class HashAggregateGlobalState : public GlobalOperatorState {
+public:
+	HashAggregateGlobalState(vector<TypeId> &group_types, vector<TypeId> &payload_types, vector<BoundAggregateExpression *> &bindings) : is_empty(true) {
+		ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, bindings);
+	}
 
-		payload_chunk.Reset();
-		idx_t payload_idx = 0, payload_expr_idx = 0;
-		payload_chunk.SetCardinality(group_chunk);
-		for (idx_t i = 0; i < aggregates.size(); i++) {
-			auto &aggr = (BoundAggregateExpression &)*aggregates[i];
-			if (aggr.children.size()) {
-				for (idx_t j = 0; j < aggr.children.size(); ++j) {
-					state->payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
-					payload_idx++;
-					payload_expr_idx++;
+	//! The lock for updating the global aggregate state
+	std::mutex lock;
+	//! The aggregate HT
+	unique_ptr<SuperLargeHashTable> ht;
+	//! Whether or not any tuples were added to the HT
+	bool is_empty;
+};
+
+class HashAggregateLocalState : public LocalSinkState {
+public:
+	HashAggregateLocalState(vector<unique_ptr<Expression>> &groups, vector<BoundAggregateExpression *> &aggregates, vector<TypeId> &group_types, vector<TypeId> &payload_types) :
+		group_executor(groups) {
+		for (auto &aggr : aggregates) {
+			if (aggr->children.size()) {
+				for (idx_t i = 0; i < aggr->children.size(); ++i) {
+					payload_executor.AddExpression(*aggr->children[i]);
 				}
-			} else {
-				payload_idx++;
 			}
 		}
+		group_chunk.Initialize(group_types);
+		if (payload_types.size() > 0) {
+			payload_chunk.Initialize(payload_types);
+		}
+	}
 
-		group_chunk.Verify();
-		payload_chunk.Verify();
-		assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
+	//! Expression executor for the GROUP BY chunk
+	ExpressionExecutor group_executor;
+	//! Expression state for the payload
+	ExpressionExecutor payload_executor;
+	//! Materialized GROUP BY expression
+	DataChunk group_chunk;
+	//! The payload chunk
+	DataChunk payload_chunk;
+};
 
-		state->ht->AddChunk(group_chunk, payload_chunk);
-		state->tuples_scanned += state->child_chunk.size();
-	} while (state->child_chunk.size() > 0);
 
-	state->group_chunk.Reset();
-	state->aggregate_chunk.Reset();
-	idx_t elements_found = state->ht->Scan(state->ht_scan_position, state->group_chunk, state->aggregate_chunk);
+unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
+	return make_unique<HashAggregateGlobalState>(group_types, payload_types, bindings);
+}
+
+unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ClientContext &context) {
+	return make_unique<HashAggregateLocalState>(groups, bindings, group_types, payload_types);
+}
+
+void PhysicalHashAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+	auto &gstate = (HashAggregateGlobalState &) state;
+	auto &sink = (HashAggregateLocalState &) lstate;
+
+	DataChunk &group_chunk = sink.group_chunk;
+	DataChunk &payload_chunk = sink.payload_chunk;
+	sink.group_executor.Execute(input, group_chunk);
+	sink.payload_executor.SetChunk(input);
+
+	payload_chunk.Reset();
+	idx_t payload_idx = 0, payload_expr_idx = 0;
+	payload_chunk.SetCardinality(group_chunk);
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = (BoundAggregateExpression &)*aggregates[i];
+		if (aggr.children.size()) {
+			for (idx_t j = 0; j < aggr.children.size(); ++j) {
+				sink.payload_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx]);
+				payload_idx++;
+				payload_expr_idx++;
+			}
+		} else {
+			payload_idx++;
+		}
+	}
+
+	group_chunk.Verify();
+	payload_chunk.Verify();
+	assert(payload_chunk.column_count() == 0 || group_chunk.size() == payload_chunk.size());
+
+	lock_guard<mutex> glock(gstate.lock);
+	gstate.ht->AddChunk(group_chunk, payload_chunk);
+	gstate.is_empty = false;
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+class PhysicalHashAggregateState : public PhysicalOperatorState {
+public:
+	PhysicalHashAggregateState(vector<TypeId> &group_types, vector<TypeId> &aggregate_types, PhysicalOperator *child) :
+		PhysicalOperatorState(child), ht_scan_position(0) {
+		group_chunk.Initialize(group_types);
+		if (aggregate_types.size() > 0) {
+			aggregate_chunk.Initialize(aggregate_types);
+		}
+	}
+
+	//! Materialized GROUP BY expression
+	DataChunk group_chunk;
+	//! Materialized aggregates
+	DataChunk aggregate_chunk;
+	//! The current position to scan the HT for output tuples
+	idx_t ht_scan_position;
+};
+
+void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+	auto &gstate = (HashAggregateGlobalState &) *sink_state;
+	auto &state = (PhysicalHashAggregateState &) *state_;
+
+	state.group_chunk.Reset();
+	state.aggregate_chunk.Reset();
+	idx_t elements_found = gstate.ht->Scan(state.ht_scan_position, state.group_chunk, state.aggregate_chunk);
 
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
-	if (elements_found == 0 && state->tuples_scanned == 0 && is_implicit_aggr) {
+	if (elements_found == 0 && gstate.is_empty && is_implicit_aggr) {
 		assert(chunk.column_count() == aggregates.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
@@ -111,72 +179,29 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, chunk.data[i], 1);
 		}
-		state->finished = true;
+		state.finished = true;
 		return;
 	}
-	if (elements_found == 0 && !state->finished) {
-		state->finished = true;
+	if (elements_found == 0 && !state.finished) {
+		state.finished = true;
 		return;
 	}
-	// we finished the child chunk
-	// actually compute the final projection list now
+	// compute the final projection list
 	idx_t chunk_index = 0;
 	chunk.SetCardinality(elements_found);
-	if (state->group_chunk.column_count() + state->aggregate_chunk.column_count() == chunk.column_count()) {
-		for (idx_t col_idx = 0; col_idx < state->group_chunk.column_count(); col_idx++) {
-			chunk.data[chunk_index++].Reference(state->group_chunk.data[col_idx]);
+	if (state.group_chunk.column_count() + state.aggregate_chunk.column_count() == chunk.column_count()) {
+		for (idx_t col_idx = 0; col_idx < state.group_chunk.column_count(); col_idx++) {
+			chunk.data[chunk_index++].Reference(state.group_chunk.data[col_idx]);
 		}
 	} else {
-		assert(state->aggregate_chunk.column_count() == chunk.column_count());
+		assert(state.aggregate_chunk.column_count() == chunk.column_count());
 	}
 
-	for (idx_t col_idx = 0; col_idx < state->aggregate_chunk.column_count(); col_idx++) {
-		chunk.data[chunk_index++].Reference(state->aggregate_chunk.data[col_idx]);
+	for (idx_t col_idx = 0; col_idx < state.aggregate_chunk.column_count(); col_idx++) {
+		chunk.data[chunk_index++].Reference(state.aggregate_chunk.data[col_idx]);
 	}
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	assert(children.size() > 0);
-	auto state = make_unique<PhysicalHashAggregateState>(this, children[0].get());
-	state->tuples_scanned = 0;
-	vector<TypeId> group_types, payload_types;
-	vector<BoundAggregateExpression *> aggregate_kind;
-	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
-	}
-	for (auto &expr : aggregates) {
-		assert(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &aggr = (BoundAggregateExpression &)*expr;
-		aggregate_kind.push_back(&aggr);
-		if (aggr.children.size()) {
-			for (idx_t i = 0; i < aggr.children.size(); ++i) {
-				payload_types.push_back(aggr.children[i]->return_type);
-				state->payload_executor.AddExpression(*aggr.children[i]);
-			}
-		} else {
-			// COUNT(*)
-			payload_types.push_back(TypeId::INT64);
-		}
-	}
-	if (payload_types.size() > 0) {
-		state->payload_chunk.Initialize(payload_types);
-	}
-
-	state->ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, aggregate_kind);
-	return move(state);
-}
-
-PhysicalHashAggregateState::PhysicalHashAggregateState(PhysicalHashAggregate *parent, PhysicalOperator *child)
-    : PhysicalOperatorState(child), ht_scan_position(0), tuples_scanned(0), group_executor(parent->groups) {
-	vector<TypeId> group_types, aggregate_types;
-	for (auto &expr : parent->groups) {
-		group_types.push_back(expr->return_type);
-	}
-	group_chunk.Initialize(group_types);
-	for (auto &expr : parent->aggregates) {
-		aggregate_types.push_back(expr->return_type);
-	}
-	if (aggregate_types.size() > 0) {
-		aggregate_chunk.Initialize(aggregate_types);
-	}
+	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types, children[0].get());
 }

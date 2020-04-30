@@ -49,6 +49,7 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pi
 		case PhysicalOperatorType::UPDATE:
 		case PhysicalOperatorType::CREATE:
 		case PhysicalOperatorType::HASH_GROUP_BY:
+		case PhysicalOperatorType::DISTINCT:
 		case PhysicalOperatorType::SIMPLE_AGGREGATE:
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
