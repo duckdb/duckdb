@@ -22,6 +22,8 @@ public:
 	vector<JoinCondition> conditions;
 public:
 	string ExtraRenderInformation() const override;
+
+	static void ConstructEmptyJoinResult(JoinType type, bool has_null, DataChunk &input, DataChunk &result);
 };
 
 } // namespace duckdb
