@@ -1,5 +1,7 @@
 add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
 
+add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
+
 set(SHELL_SOURCES shell.c)
 if(NOT WIN32)
   add_definitions(-DHAVE_LINENOISE=1)

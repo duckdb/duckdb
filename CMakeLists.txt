@@ -93,7 +93,6 @@ execute_process(COMMAND git
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                 OUTPUT_VARIABLE GIT_COMMIT_HASH
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
