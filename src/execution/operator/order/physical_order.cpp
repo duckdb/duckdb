@@ -9,12 +9,6 @@
 using namespace duckdb;
 using namespace std;
 
-class OrderByGlobalOperatorState : public GlobalOperatorState {
-public:
-	ChunkCollection sorted_data;
-	unique_ptr<idx_t[]> sorted_vector;
-};
-
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalOrderOperatorState(PhysicalOperator *child) : PhysicalOperatorState(child), position(0) {
@@ -23,13 +17,29 @@ public:
 	idx_t position;
 };
 
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class OrderByGlobalOperatorState : public GlobalOperatorState {
+public:
+	ChunkCollection sorted_data;
+	unique_ptr<idx_t[]> sorted_vector;
+};
+
+unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
+	return make_unique<OrderByGlobalOperatorState>();
+}
+
 void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
 	// concatenate all the data of the child chunks
 	auto &sink = (OrderByGlobalOperatorState&) state;
 	sink.sorted_data.Append(input);
 }
 
-void PhysicalOrder::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+//===--------------------------------------------------------------------===//
+// Finalize
+//===--------------------------------------------------------------------===//
+void PhysicalOrder::Finalize(ClientContext &context, GlobalOperatorState &state) {
 	// finalize: perform the actual sorting
 	auto &sink = (OrderByGlobalOperatorState&) state;
 	ChunkCollection &big_data = sink.sorted_data;
@@ -61,10 +71,9 @@ void PhysicalOrder::Finalize(ClientContext &context, GlobalOperatorState &state,
 	sort_collection.Sort(order_types, sink.sorted_vector.get());
 }
 
-unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
-	return make_unique<OrderByGlobalOperatorState>();
-}
-
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	auto &sink = (OrderByGlobalOperatorState&) *this->sink_state;

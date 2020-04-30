@@ -53,7 +53,7 @@ void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &) state;
 	if (type == JoinType::OUTER) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);

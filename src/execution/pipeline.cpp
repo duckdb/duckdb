@@ -18,7 +18,8 @@ void Pipeline::Execute(ClientContext &context) {
 	while(true) {
 		child->GetChunk(context, intermediate, state.get());
 		if (intermediate.size() == 0) {
-			sink->Finalize(context, *sink_state, *lstate);
+			sink->Combine(context, *sink_state, *lstate);
+			sink->Finalize(context, *sink_state);
 			break;
 		}
 		sink->Sink(context, *sink_state, *lstate, intermediate);

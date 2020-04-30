@@ -89,7 +89,7 @@ void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalHashJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
 	auto &sink = (HashJoinGlobalState&) state;
 	sink.hash_table->Finalize();
 }

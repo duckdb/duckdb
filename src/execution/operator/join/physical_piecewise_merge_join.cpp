@@ -89,7 +89,7 @@ void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
 	auto &gstate = (MergeJoinGlobalState &) state;
 	if (gstate.right_conditions.chunks.size() == 0) {
 		return;

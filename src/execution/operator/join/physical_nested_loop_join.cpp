@@ -159,13 +159,6 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ClientConte
 }
 
 //===--------------------------------------------------------------------===//
-// Finalize
-//===--------------------------------------------------------------------===//
-void PhysicalNestedLoopJoin::Finalize(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
-	// finalize is a NOP for the NLJ
-}
-
-//===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 class PhysicalNestedLoopJoinState : public PhysicalOperatorState {
