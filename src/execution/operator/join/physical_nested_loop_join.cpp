@@ -135,7 +135,6 @@ void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &s
 	auto &gstate = (NestedLoopJoinGlobalState &) state;
 	auto &nlj_state = (NestedLoopJoinLocalState &) lstate;
 
-
 	// resolve the join expression of the right side
 	nlj_state.rhs_executor.Execute(input, nlj_state.right_condition);
 
