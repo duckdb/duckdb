@@ -22,7 +22,11 @@ public:
 //===--------------------------------------------------------------------===//
 class OrderByGlobalOperatorState : public GlobalOperatorState {
 public:
+	//! The lock for updating the global aggregate state
+	mutex lock;
+	//! The sorted data
 	ChunkCollection sorted_data;
+	//! The sorted vector
 	unique_ptr<idx_t[]> sorted_vector;
 };
 
@@ -32,8 +36,9 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
 	// concatenate all the data of the child chunks
-	auto &sink = (OrderByGlobalOperatorState&) state;
-	sink.sorted_data.Append(input);
+	auto &gstate = (OrderByGlobalOperatorState&) state;
+	lock_guard<mutex> glock(gstate.lock);
+	gstate.sorted_data.Append(input);
 }
 
 //===--------------------------------------------------------------------===//
