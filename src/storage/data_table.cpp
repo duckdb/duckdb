@@ -41,7 +41,7 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	}
 }
 
-DataTable::DataTable(DataTable &parent, ColumnDefinition &new_column, Expression *default_value) :
+DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value) :
 	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
@@ -57,16 +57,14 @@ DataTable::DataTable(DataTable &parent, ColumnDefinition &new_column, Expression
 	column_data->column_idx = new_column_idx;
 	columns.push_back(move(column_data));
 
-	// now write a bunch of NULL values to this column
+	// fill the column with its DEFAULT value, or NULL if none is specified
 	idx_t rows_to_write = persistent_manager->max_row + transient_manager->max_row;
 	if (rows_to_write > 0) {
 		ExpressionExecutor executor;
 		DataChunk dummy_chunk;
-		vector<TypeId> types { new_column_type };
-		DataChunk result;
-		result.Initialize(types);
+		Vector result(new_column_type);
 		if (!default_value) {
-			FlatVector::Nullmask(result.data[0]).set();
+			FlatVector::Nullmask(result).set();
 		} else {
 			executor.AddExpression(*default_value);
 		}
@@ -77,14 +75,16 @@ DataTable::DataTable(DataTable &parent, ColumnDefinition &new_column, Expression
 			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t) STANDARD_VECTOR_SIZE);
 			if (default_value) {
 				dummy_chunk.SetCardinality(rows_in_this_vector);
-				executor.Execute(&dummy_chunk, result);
+				executor.ExecuteExpression(dummy_chunk, result);
 			}
-			columns[new_column_idx]->Append(state, result.data[0], rows_in_this_vector);
+			columns[new_column_idx]->Append(state, result, rows_in_this_vector);
 		}
 	}
+	// also add this column to client local storage
+	Transaction::GetTransaction(context).storage.AddColumn(&parent, this, new_column, default_value);
 }
 
-DataTable::DataTable(DataTable &parent, idx_t removed_column) :
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column) :
 	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);

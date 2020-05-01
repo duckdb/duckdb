@@ -350,3 +350,37 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 		table->RevertAppend(*entry.second);
 	}
 }
+
+void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	// take over the storage from the old entry
+	auto new_storage = move(entry->second);
+
+	// now add the new column filled with the default value to all chunks
+	auto new_column_type = GetInternalType(new_column.type);
+	ExpressionExecutor executor;
+	DataChunk dummy_chunk;
+	if (default_value) {
+		executor.AddExpression(*default_value);
+	}
+
+	new_storage->collection.types.push_back(new_column_type);
+	for(idx_t chunk_idx = 0; chunk_idx < new_storage->collection.chunks.size(); chunk_idx++) {
+		auto &chunk = new_storage->collection.chunks[chunk_idx];
+		Vector result(new_column_type);
+		if (default_value) {
+			dummy_chunk.SetCardinality(chunk->size());
+			executor.ExecuteExpression(dummy_chunk, result);
+		} else {
+			FlatVector::Nullmask(result).set();
+		}
+		chunk->data.push_back(move(result));
+	}
+
+	table_storage.erase(entry);
+	table_storage[new_dt] = move(new_storage);
+}

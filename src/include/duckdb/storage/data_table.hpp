@@ -67,9 +67,9 @@ public:
 	//! Constructs a new data table from an (optional) set of persistent segments
 	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, persistent_data_t data);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
-	DataTable(DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
+	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
-	DataTable(DataTable &parent, idx_t removed_column);
+	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 
 	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table

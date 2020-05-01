@@ -153,34 +153,67 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
 
-	result = con.Query("SELECT * FROM test");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	SECTION("Standard ADD COLUMN") {
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
 
-	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+	}
+	SECTION("ADD COLUMN with default value") {
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3"));
 
-	result = con.Query("SELECT * FROM test");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {3, 3}));
+	}
+	SECTION("ADD COLUMN with sequence as default value") {
+		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval('seq')"));
 
-	// add a column with a default value
-	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3"));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {1, 2}));
+	}
+	SECTION("ADD COLUMN with data inside local storage") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3)"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
 
-	result = con.Query("SELECT * FROM test");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
-	REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));
 
-	// default value as a sequence
-	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
-	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval('seq')"));
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
 
-	result = con.Query("SELECT * FROM test");
-	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
-	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
-	REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
-	REQUIRE(CHECK_COLUMN(result, 4, {1, 2}));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(result->names.size() == 2);
+	}
+	SECTION("multiple ADD COLUMN in the same transaction") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3)"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN m INTEGER DEFAULT 3"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value(), Value()}));
+		REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value(), Value()}));
+		REQUIRE(CHECK_COLUMN(result, 4, {3, 3, 3}));
+
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(result->names.size() == 2);
+	}
 }

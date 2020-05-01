@@ -68,6 +68,7 @@ public:
 		return table_storage.size() > 0;
 	}
 
+	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 
