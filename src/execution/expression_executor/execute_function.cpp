@@ -36,11 +36,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 #ifdef DEBUG
 			if (expr.arguments[i].id == SQLTypeId::VARCHAR) {
-				if (sel) {
-					arguments.data[i].UTFVerify(*sel, count);
-				} else {
-					arguments.data[i].UTFVerify(count);
-				}
+				arguments.data[i].UTFVerify(count);
 			}
 #endif
 		}

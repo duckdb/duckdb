@@ -199,3 +199,13 @@ TEST_CASE("Test insert with too few or too many cols", "[simpleinserts]") {
 	// also with queries
 	REQUIRE_FAIL(con.Query("INSERT INTO a SELECT 42"));
 }
+
+TEST_CASE("Test insert with long string constant", "[simpleinserts]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// found by Pedro Holanda
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS presentations(presentation_date Date NOT NULL UNIQUE, author VARCHAR NOT NULL, title VARCHAR NOT NULL, bio VARCHAR, abstract VARCHAR, zoom_link VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("insert into presentations values ('2020-05-29', 'Eduardo Pena', 'Analytical Query Processing Based on Continuous Compression of Intermediates', NULL, 'Modern in-memory column-stores are widely accepted as the adequate database architecture for the efficient processing of complex analytical queries over large relational data volumes. These systems keep their entire data in main memory and typically employ lightweight compression to address the bottleneck between main memory and CPU. Numerous lightweight compression algorithms have been proposed in the past years, but none of them is suitable in all cases. While lightweight compression is already well established for base data, the efficient representation of intermediate results generated during query processing has attracted insufficient attention so far, although in in-memory systems, accessing intermeFdiates is as expensive as accessing base data. Thus, our vision is a continuous use of lightweight compression for all intermediates in a query execution plan, whereby a suitable compression algorithm should be selected for each intermediate. In this talk, I will provide an overview of our research in the context of this vision, including an experimental survey of lightweight compression algorithms, our compression-enabled processing model, and our compression-aware query optimization strategies.', 'https://zoom.us/j/7845983526');"));
+}
