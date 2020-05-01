@@ -6,59 +6,85 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+namespace duckdb {
 
-	int64_t insert_count = 0;
-	// create the chunk to insert from
-	DataChunk insert_chunk;
-	auto types = table->GetTypes();
-
-	// initialize executor for bound default expressions
-	ExpressionExecutor default_executor(bound_defaults);
-
-	insert_chunk.Initialize(types);
-	while (true) {
-		// scan the children for chunks to insert
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			break;
-		}
-		auto &chunk = state->child_chunk;
-
-		chunk.Normalify();
-		default_executor.SetChunk(chunk);
-
-		insert_chunk.Reset();
-		insert_chunk.SetCardinality(chunk);
-		if (column_index_map.size() > 0) {
-			// columns specified by the user, use column_index_map
-			for (idx_t i = 0; i < table->columns.size(); i++) {
-				if (column_index_map[i] == INVALID_INDEX) {
-					// insert default value
-					default_executor.ExecuteExpression(i, insert_chunk.data[i]);
-				} else {
-					// get value from child chunk
-					assert((idx_t)column_index_map[i] < chunk.column_count());
-					assert(insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
-					insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
-				}
-			}
-		} else {
-			// no columns specified, just append directly
-			for (idx_t i = 0; i < insert_chunk.column_count(); i++) {
-				assert(insert_chunk.data[i].type == chunk.data[i].type);
-				insert_chunk.data[i].Reference(chunk.data[i]);
-			}
-		}
-		table->storage->Append(*table, context, insert_chunk);
-		insert_count += chunk.size();
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class InsertGlobalState : public GlobalOperatorState {
+public:
+	InsertGlobalState() : insert_count(0) {
 	}
 
+	std::mutex lock;
+	idx_t insert_count;
+};
+
+class InsertLocalState : public LocalSinkState {
+public:
+	InsertLocalState(vector<TypeId> types, vector<unique_ptr<Expression>> &bound_defaults) : default_executor(bound_defaults) {
+		insert_chunk.Initialize(types);
+	}
+
+	DataChunk insert_chunk;
+	ExpressionExecutor default_executor;
+};
+
+void PhysicalInsert::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &chunk) {
+	auto &gstate = (InsertGlobalState &) state;
+	auto &istate = (InsertLocalState &) lstate;
+
+	chunk.Normalify();
+	istate.default_executor.SetChunk(chunk);
+
+	istate.insert_chunk.Reset();
+	istate.insert_chunk.SetCardinality(chunk);
+	if (column_index_map.size() > 0) {
+		// columns specified by the user, use column_index_map
+		for (idx_t i = 0; i < table->columns.size(); i++) {
+			if (column_index_map[i] == INVALID_INDEX) {
+				// insert default value
+				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
+			} else {
+				// get value from child chunk
+				assert((idx_t)column_index_map[i] < chunk.column_count());
+				assert(istate.insert_chunk.data[i].type == chunk.data[column_index_map[i]].type);
+				istate.insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
+			}
+		}
+	} else {
+		// no columns specified, just append directly
+		for (idx_t i = 0; i < istate.insert_chunk.column_count(); i++) {
+			assert(istate.insert_chunk.data[i].type == chunk.data[i].type);
+			istate.insert_chunk.data[i].Reference(chunk.data[i]);
+		}
+	}
+
+	lock_guard<mutex> glock(gstate.lock);
+	table->storage->Append(*table, context, istate.insert_chunk);
+	gstate.insert_count += chunk.size();
+}
+
+unique_ptr<GlobalOperatorState> PhysicalInsert::GetGlobalState(ClientContext &context) {
+	return make_unique<InsertGlobalState>();
+}
+
+unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ClientContext &context) {
+	return make_unique<InsertLocalState>(table->GetTypes(), bound_defaults);
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+	auto &gstate = (InsertGlobalState &) *sink_state;
+
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(insert_count));
+	chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
 
 	state->finished = true;
+}
+
 }

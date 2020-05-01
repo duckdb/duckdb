@@ -5,8 +5,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
@@ -190,4 +191,6 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 		state->scan_structure = sink.hash_table->Probe(state->join_keys);
 		state->scan_structure->Next(state->join_keys, state->child_chunk, chunk);
 	} while (chunk.size() == 0);
+}
+
 }

@@ -5,8 +5,9 @@
 #include "duckdb/execution/merge_join.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
@@ -355,4 +356,6 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	default:
 		throw NotImplementedException("Unimplemented type for sort");
 	}
+}
+
 }

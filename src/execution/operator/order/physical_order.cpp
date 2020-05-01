@@ -6,8 +6,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
@@ -93,4 +94,6 @@ void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(children[0].get());
+}
+
 }
