@@ -658,10 +658,10 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 		transaction.storage.Delete(this, row_identifiers, count);
 	} else if ((idx_t)first_id < persistent_manager->max_row) {
 		// deletion is in persistent storage: delete in the persistent version manager
-		persistent_manager->Delete(transaction, row_identifiers, count);
+		persistent_manager->Delete(transaction, this, row_identifiers, count);
 	} else {
 		// deletion is in transient storage: delete in the persistent version manager
-		transient_manager->Delete(transaction, row_identifiers, count);
+		transient_manager->Delete(transaction, this, row_identifiers, count);
 	}
 }
 

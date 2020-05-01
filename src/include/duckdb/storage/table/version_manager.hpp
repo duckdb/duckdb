@@ -46,7 +46,7 @@ public:
 	bool Fetch(Transaction &transaction, idx_t row);
 
 	//! Delete the given set of rows in the version manager
-	void Delete(Transaction &transaction, Vector &row_ids, idx_t count);
+	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 	//! Append a set of rows to the version manager, setting their inserted id to the given commit_id
 	void Append(Transaction &transaction, row_t row_start, idx_t count, transaction_t commit_id);
 	//! Revert a set of appends made to the version manager from the rows [row_start] until [row_end]
