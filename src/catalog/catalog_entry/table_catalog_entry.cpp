@@ -130,9 +130,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		add_info->new_column.oid = columns.size();
 		create_info->columns.push_back(add_info->new_column.Copy());
 
-		auto new_storage = make_shared<DataTable>(*storage, GetInternalType(add_info->new_column.type));
 		Binder binder(context);
 		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+		auto new_storage = make_shared<DataTable>(*storage, add_info->new_column, bound_create_info->bound_defaults.back().get());
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	}
 	default:

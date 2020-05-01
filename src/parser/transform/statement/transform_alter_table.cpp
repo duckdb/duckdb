@@ -26,7 +26,12 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			auto cdef = (PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 			if (cdef->constraints) {
-				throw ParserException("Adding columns with constraints not yet supported");
+				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
+					auto constraint = TransformConstraint(constr, centry, 0);
+					if (constraint) {
+						throw ParserException("Adding columns with constraints not yet supported");
+					}
+				}
 			}
 			result->info = make_unique<AddColumnInfo>(basetable.schema_name, basetable.table_name, move(centry));
 			break;

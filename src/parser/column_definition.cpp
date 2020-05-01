@@ -7,7 +7,7 @@ ColumnDefinition ColumnDefinition::Copy() {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
 	copy.default_value = default_value ? default_value->Copy() : nullptr;
-	return move(copy);
+	return copy;
 }
 
 void ColumnDefinition::Serialize(Serializer &serializer) {

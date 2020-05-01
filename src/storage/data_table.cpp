@@ -41,14 +41,16 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	}
 }
 
-DataTable::DataTable(DataTable &parent, TypeId new_column_type) :
+DataTable::DataTable(DataTable &parent, ColumnDefinition &new_column, Expression *default_value) :
 	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// set this table as the child of the previous table, this prevents any appends being made
 	parent.child = this;
 	// add the new column to this DataTable
+	auto new_column_type = GetInternalType(new_column.type);
 	idx_t new_column_idx = columns.size();
+
 	types.push_back(new_column_type);
 	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
 	column_data->type = new_column_type;
@@ -58,14 +60,26 @@ DataTable::DataTable(DataTable &parent, TypeId new_column_type) :
 	// now write a bunch of NULL values to this column
 	idx_t rows_to_write = persistent_manager->max_row + transient_manager->max_row;
 	if (rows_to_write > 0) {
-		Vector null_vector(new_column_type, nullptr);
-		FlatVector::Nullmask(null_vector).set();
+		ExpressionExecutor executor;
+		DataChunk dummy_chunk;
+		vector<TypeId> types { new_column_type };
+		DataChunk result;
+		result.Initialize(types);
+		if (!default_value) {
+			FlatVector::Nullmask(result.data[0]).set();
+		} else {
+			executor.AddExpression(*default_value);
+		}
 
 		ColumnAppendState state;
 		columns[new_column_idx]->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t) STANDARD_VECTOR_SIZE);
-			columns[new_column_idx]->Append(state, null_vector, rows_in_this_vector);
+			if (default_value) {
+				dummy_chunk.SetCardinality(rows_in_this_vector);
+				executor.Execute(&dummy_chunk, result);
+			}
+			columns[new_column_idx]->Append(state, result.data[0], rows_in_this_vector);
 		}
 	}
 }

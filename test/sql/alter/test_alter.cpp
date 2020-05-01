@@ -164,12 +164,23 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
 
-	// // add a column with a default value
-	// REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3"));
+	// add a column with a default value
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3"));
 
-	// result = con.Query("SELECT * FROM test");
-	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
-	// REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
-	// REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
-	// REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
+
+	// default value as a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN m INTEGER DEFAULT nextval('seq')"));
+
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 4, {1, 2}));
 }
