@@ -11,15 +11,14 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 
 class AlterTableStatement : public SQLStatement {
 public:
-	AlterTableStatement(unique_ptr<AlterTableInfo> info) : SQLStatement(StatementType::ALTER_STATEMENT), info(std::move(info)){};
+	AlterTableStatement() : SQLStatement(StatementType::ALTER_STATEMENT) { }
+	AlterTableStatement(unique_ptr<AlterTableInfo> info) : SQLStatement(StatementType::ALTER_STATEMENT), info(std::move(info)){}
 
-	unique_ptr<TableRef> table;
 	unique_ptr<AlterTableInfo> info;
 };
 

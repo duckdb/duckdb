@@ -26,11 +26,13 @@
 namespace duckdb {
 class ClientContext;
 class ColumnDefinition;
+class DataTable;
 class StorageManager;
 class TableCatalogEntry;
 class Transaction;
 
 typedef unique_ptr<vector<unique_ptr<PersistentSegment>>[]> persistent_data_t;
+
 //! TableFilter represents a filter pushed down into the table scan.
 class TableFilter {
 public:
@@ -41,10 +43,8 @@ public:
 	idx_t column_index;
 };
 
-//! DataTable represents a physical table on disk
-class DataTable {
-public:
-	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, persistent_data_t data);
+struct DataTableInfo {
+	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {}
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
@@ -53,12 +53,29 @@ public:
 	string schema;
 	// name of the table
 	string table;
+	//! Indexes associated with the current table
+	vector<unique_ptr<Index>> indexes;
+
+	bool IsTemporary() {
+		return schema == TEMP_SCHEMA;
+	}
+};
+
+//! DataTable represents a physical table on disk
+class DataTable {
+public:
+	//! Constructs a new data table from an (optional) set of persistent segments
+	DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types, persistent_data_t data);
+	//! Constructs a DataTable as a delta on an existing data table with a newly added column
+	DataTable(DataTable &parent, TypeId new_column);
+	//! Constructs a DataTable as a delta on an existing data table but with one column removed
+	DataTable(DataTable &parent, idx_t removed_column);
+
+	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table
 	vector<TypeId> types;
 	//! A reference to the base storage manager
 	StorageManager &storage;
-	//! Indexes
-	vector<unique_ptr<Index>> indexes;
 
 public:
 	void InitializeScan(TableScanState &state, vector<column_t> column_ids,
@@ -114,9 +131,6 @@ public:
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
-	//! Is this a temporary table?
-	bool IsTemporary();
-
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -141,13 +155,17 @@ private:
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);
 	void CreateIndexScan(CreateIndexScanState &structure, DataChunk &result);
+
+private:
 	//! Lock for appending entries to the table
 	std::mutex append_lock;
 	//! The version manager of the persistent segments of the tree
-	VersionManager persistent_manager;
+	shared_ptr<VersionManager> persistent_manager;
 	//! The version manager of the transient segments of the tree
-	VersionManager transient_manager;
+	shared_ptr<VersionManager> transient_manager;
 	//! The physical columns of the table
-	unique_ptr<ColumnData[]> columns;
+	vector<shared_ptr<ColumnData>> columns;
+	//! The child data table, if any
+	DataTable *child;
 };
 } // namespace duckdb

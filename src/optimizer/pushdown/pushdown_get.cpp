@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 	}
 	//! FIXME: We only need to skip if the index is in the column being filtered
-	if (!get.table || !get.table->storage->indexes.empty()) {
+	if (!get.table || !get.table->storage->info->indexes.empty()) {
 		//! now push any existing filters
 		if (filters.empty()) {
 			//! no filters to push

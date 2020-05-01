@@ -22,11 +22,11 @@ class VersionManager;
 
 class VersionManager {
 public:
-	VersionManager(DataTable &table) : table(table), max_row(0), base_row(0) {
+	VersionManager(DataTableInfo &table_info) : table_info(table_info), max_row(0), base_row(0) {
 	}
 
-	//! The DataTable
-	DataTable &table;
+	//! The DataTableInfo
+	DataTableInfo &table_info;
 	//! The read/write lock for the delete info and insert info
 	StorageLock lock;
 	//! The info for each of the chunks

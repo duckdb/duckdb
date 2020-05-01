@@ -143,3 +143,33 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN on a table with constraints", "[alter]
 	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
 	// REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (100, 2)"));
 }
+
+TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// CREATE TABLE AND ALTER IT TO RENAME A COLUMN
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
+
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+
+	// // add a column with a default value
+	// REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3"));
+
+	// result = con.Query("SELECT * FROM test");
+	// REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+	// REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	// REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+	// REQUIRE(CHECK_COLUMN(result, 3, {3, 3}));
+}

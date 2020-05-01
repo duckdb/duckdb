@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
-	for (auto &index : table.indexes) {
+	for (auto &index : table.info->indexes) {
 		assert(index->type == IndexType::ART);
 		auto &art = (ART &)*index;
 		if (art.is_unique) {
@@ -299,8 +299,8 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 		commit_state.append_states[table] = move(append_state_ptr);
 		table->InitializeAppend(append_state);
 
-		if (log && !table->IsTemporary()) {
-			log->WriteSetTable(table->schema, table->table);
+		if (log && !table->info->IsTemporary()) {
+			log->WriteSetTable(table->info->schema, table->info->table);
 		}
 
 		// scan all chunks in this storage
@@ -313,7 +313,7 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 			// append to base table
 			table->Append(transaction, commit_id, chunk, append_state);
 			// if there is a WAL, write the chunk to there as well
-			if (log && !table->IsTemporary()) {
+			if (log && !table->info->IsTemporary()) {
 				log->WriteInsert(chunk);
 			}
 			return true;
@@ -331,7 +331,7 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 		auto table = entry.first;
 		auto storage = table_storage[table].get();
 		auto &append_state = *entry.second;
-		if (table->indexes.size() > 0 && !(table->schema == "temp")) {
+		if (table->info->indexes.size() > 0 && !table->info->IsTemporary()) {
 			row_t current_row = append_state.row_start;
 			// remove the data from the indexes, if there are any indexes
 			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {

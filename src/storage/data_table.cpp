@@ -9,6 +9,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -16,28 +17,70 @@ using namespace chrono;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
-    : cardinality(0), schema(schema), table(table), types(types_), storage(storage), persistent_manager(*this),
-      transient_manager(*this) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage), persistent_manager(make_shared<VersionManager>(*info)),
+      transient_manager(make_shared<VersionManager>(*info)), child(nullptr) {
 	// set up the segment trees for the column segments
-	columns = unique_ptr<ColumnData[]>(new ColumnData[types.size()]);
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].type = types[i];
-		columns[i].table = this;
-		columns[i].column_idx = i;
+		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
+		column_data->type = types[i];
+		column_data->column_idx = i;
+		columns.push_back(move(column_data));
 	}
 
 	// initialize the table with the existing data from disk, if any
 	if (data && data[0].size() > 0) {
 		// first append all the segments to the set of column segments
 		for (idx_t i = 0; i < types.size(); i++) {
-			columns[i].Initialize(data[i]);
-			if (columns[i].persistent_rows != columns[0].persistent_rows) {
+			columns[i]->Initialize(data[i]);
+			if (columns[i]->persistent_rows != columns[0]->persistent_rows) {
 				throw Exception("Column length mismatch in table load!");
 			}
 		}
-		persistent_manager.max_row = columns[0].persistent_rows;
-		transient_manager.base_row = persistent_manager.max_row;
+		persistent_manager->max_row = columns[0]->persistent_rows;
+		transient_manager->base_row = persistent_manager->max_row;
 	}
+}
+
+DataTable::DataTable(DataTable &parent, TypeId new_column_type) :
+	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
+	// prevent any new tuples from being added to the parent
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	// set this table as the child of the previous table, this prevents any appends being made
+	parent.child = this;
+	// add the new column to this DataTable
+	idx_t new_column_idx = columns.size();
+	types.push_back(new_column_type);
+	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
+	column_data->type = new_column_type;
+	column_data->column_idx = new_column_idx;
+	columns.push_back(move(column_data));
+
+	// now write a bunch of NULL values to this column
+	idx_t rows_to_write = persistent_manager->max_row + transient_manager->max_row;
+	if (rows_to_write > 0) {
+		Vector null_vector(new_column_type, nullptr);
+		FlatVector::Nullmask(null_vector).set();
+
+		ColumnAppendState state;
+		columns[new_column_idx]->InitializeAppend(state);
+		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
+			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t) STANDARD_VECTOR_SIZE);
+			columns[new_column_idx]->Append(state, null_vector, rows_in_this_vector);
+		}
+	}
+}
+
+DataTable::DataTable(DataTable &parent, idx_t removed_column) :
+	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
+	// prevent any new tuples from being added to the parent
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	// set this table as the child of the previous table, this prevents any appends being made to that table
+	parent.child = this;
+	// erase the column from this DataTable
+	assert(removed_column < types.size());
+	types.erase(types.begin() + removed_column);
+	// columns.erase(columns.begin() + removed_column);
+	throw Exception("");
 }
 
 //===--------------------------------------------------------------------===//
@@ -50,16 +93,16 @@ void DataTable::InitializeScan(TableScanState &state, vector<column_t> column_id
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			columns[column].InitializeScan(state.column_scans[i]);
+			columns[column]->InitializeScan(state.column_scans[i]);
 		}
 	}
 	state.column_ids = move(column_ids);
 	// initialize the chunk scan state
 	state.offset = 0;
 	state.current_persistent_row = 0;
-	state.max_persistent_row = persistent_manager.max_row;
+	state.max_persistent_row = persistent_manager->max_row;
 	state.current_transient_row = 0;
-	state.max_transient_row = transient_manager.max_row;
+	state.max_transient_row = transient_manager->max_row;
 	if (table_filters && table_filters->size() > 0) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
@@ -75,14 +118,14 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	// scan the persistent segments
 	while (ScanBaseTable(transaction, result, state, state.current_persistent_row, state.max_persistent_row, 0,
-	                     persistent_manager, table_filters)) {
+	                     *persistent_manager, table_filters)) {
 		if (result.size() > 0) {
 			return;
 		}
 	}
 	// scan the transient segments
 	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row,
-	                     persistent_manager.max_row, transient_manager, table_filters)) {
+	                     persistent_manager->max_row, *transient_manager, table_filters)) {
 		if (result.size() > 0) {
 			return;
 		}
@@ -237,7 +280,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 				assert(result.data[i].type == ROW_TYPE);
 				result.data[i].Sequence(base_row + current_row, 1);
 			} else {
-				columns[column].Scan(transaction, state.column_scans[i], result.data[i]);
+				columns[column]->Scan(transaction, state.column_scans[i], result.data[i]);
 			}
 		}
 	} else {
@@ -253,7 +296,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		auto start_time = high_resolution_clock::now();
 		for (idx_t i = 0; i < table_filters.size(); i++) {
 			auto tf_idx = state.adaptive_filter->permutation[i];
-			columns[tf_idx].Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
+			columns[tf_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
 			                       approved_tuple_count, table_filters[tf_idx]);
 		}
 		for (auto &table_filter : table_filters) {
@@ -271,7 +314,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 						result_data[sel_idx] = base_row + current_row + sel.get_index(sel_idx);
 					}
 				} else {
-					columns[column].FilterScan(transaction, state.column_scans[i], result.data[i], sel,
+					columns[column]->FilterScan(transaction, state.column_scans[i], result.data[i], sel,
 					                           approved_tuple_count);
 				}
 			}
@@ -353,7 +396,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 			// regular column: fetch data from the base column
 			for (idx_t i = 0; i < count; i++) {
 				auto row_id = rows[i];
-				columns[column].FetchRow(state.fetch_state, transaction, row_id, result.data[col_idx], i);
+				columns[column]->FetchRow(state.fetch_state, transaction, row_id, result.data[col_idx], i);
 			}
 		}
 	}
@@ -363,8 +406,8 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 	assert(row_identifiers.type == ROW_TYPE);
 
 	// obtain a read lock on the version managers
-	auto l1 = persistent_manager.lock.GetSharedLock();
-	auto l2 = transient_manager.lock.GetSharedLock();
+	auto l1 = persistent_manager->lock.GetSharedLock();
+	auto l2 = transient_manager->lock.GetSharedLock();
 
 	// now iterate over the row ids and figure out which rows to use
 	idx_t count = 0;
@@ -373,12 +416,12 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 	for (idx_t i = 0; i < fetch_count; i++) {
 		auto row_id = row_ids[i];
 		bool use_row;
-		if ((idx_t)row_id < persistent_manager.max_row) {
+		if ((idx_t)row_id < persistent_manager->max_row) {
 			// persistent row: use persistent manager
-			use_row = persistent_manager.Fetch(transaction, row_id);
+			use_row = persistent_manager->Fetch(transaction, row_id);
 		} else {
 			// transient row: use transient manager
-			use_row = transient_manager.Fetch(transaction, row_id);
+			use_row = transient_manager->Fetch(transaction, row_id);
 		}
 		if (use_row) {
 			// row is not deleted; use the row
@@ -435,7 +478,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chu
 		}
 		case ConstraintType::UNIQUE: {
 			//! check whether or not the chunk can be inserted into the indexes
-			for (auto &index : indexes) {
+			for (auto &index : info->indexes) {
 				index->VerifyAppend(chunk);
 			}
 			break;
@@ -454,6 +497,9 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	if (chunk.column_count() != table.columns.size()) {
 		throw CatalogException("Mismatch in column count for append");
 	}
+	if (this->child) {
+		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+	}
 
 	chunk.Verify();
 
@@ -468,56 +514,62 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 void DataTable::InitializeAppend(TableAppendState &state) {
 	// obtain the append lock for this table
 	state.append_lock = unique_lock<mutex>(append_lock);
+	if (this->child) {
+		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
+	}
 	// obtain locks on all indexes for the table
-	state.index_locks = unique_ptr<IndexLock[]>(new IndexLock[indexes.size()]);
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->InitializeLock(state.index_locks[i]);
+	state.index_locks = unique_ptr<IndexLock[]>(new IndexLock[info->indexes.size()]);
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
+		info->indexes[i]->InitializeLock(state.index_locks[i]);
 	}
 	// for each column, initialize the append state
 	state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[types.size()]);
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].InitializeAppend(state.states[i]);
+		columns[i]->InitializeAppend(state.states[i]);
 	}
-	state.row_start = transient_manager.max_row;
+	state.row_start = transient_manager->max_row;
 	state.current_row = state.row_start;
 }
 
 void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state) {
+	assert(!child);
 	assert(chunk.column_count() == types.size());
 	chunk.Verify();
 
 	// set up the inserted info in the version manager
-	transient_manager.Append(transaction, state.current_row, chunk.size(), commit_id);
+	transient_manager->Append(transaction, state.current_row, chunk.size(), commit_id);
 
 	// append the physical data to each of the entries
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].Append(state.states[i], chunk.data[i], chunk.size());
+		columns[i]->Append(state.states[i], chunk.data[i], chunk.size());
 	}
-	cardinality += chunk.size();
+	info->cardinality += chunk.size();
 	state.current_row += chunk.size();
 }
 
 void DataTable::RevertAppend(TableAppendState &state) {
+	assert(!child);
 	if (state.row_start == state.current_row) {
 		// nothing to revert!
 		return;
 	}
 	// revert changes in the base columns
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].RevertAppend(state.row_start);
+		columns[i]->RevertAppend(state.row_start);
 	}
 	// adjust the cardinality
-	cardinality -= state.current_row - state.row_start;
-	transient_manager.max_row = state.row_start;
+	info->cardinality -= state.current_row - state.row_start;
+	transient_manager->max_row = state.row_start;
 	// revert changes in the transient manager
-	transient_manager.RevertAppend(state.row_start, state.current_row);
+	transient_manager->RevertAppend(state.row_start, state.current_row);
 }
 
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
 bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	if (indexes.size() == 0) {
+	assert(!child);
+	if (info->indexes.size() == 0) {
 		return true;
 	}
 	// first generate the vector of row identifiers
@@ -526,8 +578,8 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 
 	idx_t failed_index = INVALID_INDEX;
 	// now append the entries to the indices
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		if (!indexes[i]->Append(state.index_locks[i], chunk, row_identifiers)) {
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
+		if (!info->indexes[i]->Append(state.index_locks[i], chunk, row_identifiers)) {
 			failed_index = i;
 			break;
 		}
@@ -536,7 +588,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		// constraint violation!
 		// remove any appended entries from previous indexes (if any)
 		for (idx_t i = 0; i < failed_index; i++) {
-			indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
+			info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 		}
 		return false;
 	}
@@ -544,7 +596,8 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	if (indexes.size() == 0) {
+	assert(!child);
+	if (info->indexes.size() == 0) {
 		return;
 	}
 	// first generate the vector of row identifiers
@@ -556,12 +609,14 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
+	assert(!child);
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
+		info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 	}
 }
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
+	assert(!child);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	// create a selection vector from the row_ids
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -575,11 +630,11 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	auto states = unique_ptr<ColumnScanState[]>(new ColumnScanState[types.size()]);
 	for (idx_t i = 0; i < types.size(); i++) {
-		columns[i].Fetch(states[i], row_ids[0], result.data[i]);
+		columns[i]->Fetch(states[i], row_ids[0], result.data[i]);
 	}
 	result.Slice(sel, count);
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		indexes[i]->Delete(result, row_identifiers);
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
+		info->indexes[i]->Delete(result, row_identifiers);
 	}
 }
 
@@ -601,12 +656,12 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 	if (first_id >= MAX_ROW_ID) {
 		// deletion is in transaction-local storage: push delete into local chunk collection
 		transaction.storage.Delete(this, row_identifiers, count);
-	} else if ((idx_t)first_id < persistent_manager.max_row) {
+	} else if ((idx_t)first_id < persistent_manager->max_row) {
 		// deletion is in persistent storage: delete in the persistent version manager
-		persistent_manager.Delete(transaction, row_identifiers, count);
+		persistent_manager->Delete(transaction, row_identifiers, count);
 	} else {
 		// deletion is in transient storage: delete in the persistent version manager
-		transient_manager.Delete(transaction, row_identifiers, count);
+		transient_manager->Delete(transaction, row_identifiers, count);
 	}
 }
 
@@ -682,8 +737,8 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 	// update should not be called for indexed columns!
 	// instead update should have been rewritten to delete + update on higher layer
 #ifdef DEBUG
-	for (idx_t i = 0; i < indexes.size(); i++) {
-		assert(!indexes[i]->IndexIsUpdated(column_ids));
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
+		assert(!info->indexes[i]->IndexIsUpdated(column_ids));
 	}
 #endif
 }
@@ -716,7 +771,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		auto column = column_ids[i];
 		assert(column != COLUMN_IDENTIFIER_ROW_ID);
 
-		columns[column].Update(transaction, updates.data[i], row_ids, updates.size());
+		columns[column]->Update(transaction, updates.data[i], row_ids, updates.size());
 	}
 }
 
@@ -727,8 +782,8 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, vector<co
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
 	state.append_lock = unique_lock<mutex>(append_lock);
 	// get a read lock on the VersionManagers to prevent any further deletions
-	state.locks.push_back(persistent_manager.lock.GetSharedLock());
-	state.locks.push_back(transient_manager.lock.GetSharedLock());
+	state.locks.push_back(persistent_manager->lock.GetSharedLock());
+	state.locks.push_back(transient_manager->lock.GetSharedLock());
 
 	InitializeScan(state, column_ids);
 }
@@ -763,7 +818,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
-			columns[column].IndexScan(state.column_scans[i], result.data[i]);
+			columns[column]->IndexScan(state.column_scans[i], result.data[i]);
 		}
 	}
 	result.SetCardinality(count);
@@ -811,9 +866,5 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 			throw ConstraintException("Cant create unique index, table contains duplicate data on indexed column(s)");
 		}
 	}
-	indexes.push_back(move(index));
-}
-
-bool DataTable::IsTemporary() {
-	return schema.compare(TEMP_SCHEMA) == 0;
+	info->indexes.push_back(move(index));
 }

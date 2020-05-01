@@ -91,9 +91,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		create_info->temporary = temporary;
 		bool found = false;
 		for (idx_t i = 0; i < columns.size(); i++) {
-			ColumnDefinition copy(columns[i].name, columns[i].type);
-			copy.oid = columns[i].oid;
-			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+			ColumnDefinition copy = columns[i].Copy();
 
 			create_info->columns.push_back(move(copy));
 			if (rename_info->name == columns[i].name) {
@@ -120,6 +118,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto copied_table = Copy(context);
 		copied_table->name = rename_info->new_table_name;
 		return copied_table;
+	}
+	case AlterTableType::ADD_COLUMN: {
+		auto add_info = (AddColumnInfo *)table_info;
+
+		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+		create_info->temporary = temporary;
+		for (idx_t i = 0; i < columns.size(); i++) {
+			create_info->columns.push_back(columns[i].Copy());
+		}
+		add_info->new_column.oid = columns.size();
+		create_info->columns.push_back(add_info->new_column.Copy());
+
+		auto new_storage = make_shared<DataTable>(*storage, GetInternalType(add_info->new_column.type));
+		Binder binder(context);
+		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
@@ -160,9 +174,7 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	assert(columns.size() <= std::numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
-		serializer.WriteString(column.name);
-		column.type.Serialize(serializer);
-		serializer.WriteOptional(column.default_value);
+		column.Serialize(serializer);
 	}
 	assert(constraints.size() <= std::numeric_limits<uint32_t>::max());
 	serializer.Write<uint32_t>((uint32_t)constraints.size());
@@ -179,10 +191,8 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 	auto column_count = source.Read<uint32_t>();
 
 	for (uint32_t i = 0; i < column_count; i++) {
-		auto column_name = source.Read<string>();
-		auto column_type = SQLType::Deserialize(source);
-		auto default_value = source.ReadOptional<ParsedExpression>();
-		info->columns.push_back(ColumnDefinition(column_name, column_type, move(default_value)));
+		auto column = ColumnDefinition::Deserialize(source);
+		info->columns.push_back(move(column));
 	}
 	auto constraint_count = source.Read<uint32_t>();
 
