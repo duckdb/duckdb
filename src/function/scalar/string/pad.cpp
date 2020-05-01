@@ -57,7 +57,7 @@ static bool insert_padding(const idx_t len, const string_t &pad, vector<char> &r
 	return true;
 }
 
-static string_t lpad(const string_t &str, const int64_t len, const string_t &pad, vector<char> &result) {
+static string_t lpad(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
 	//  Reuse the buffer
 	result.clear();
 
@@ -80,13 +80,13 @@ static string_t lpad(const string_t &str, const int64_t len, const string_t &pad
 }
 
 struct LpadOperator {
-	static inline string_t Operation(const string_t &str, const int64_t len, const string_t &pad,
+	static inline string_t Operation(const string_t &str, const int32_t len, const string_t &pad,
 	                                 vector<char> &result) {
 		return lpad(str, len, pad, result);
 	}
 };
 
-static string_t rpad(const string_t &str, const int64_t len, const string_t &pad, vector<char> &result) {
+static string_t rpad(const string_t &str, const int32_t len, const string_t &pad, vector<char> &result) {
 	//  Reuse the buffer
 	result.clear();
 
@@ -109,38 +109,38 @@ static string_t rpad(const string_t &str, const int64_t len, const string_t &pad
 }
 
 struct RpadOperator {
-	static inline string_t Operation(const string_t &str, const int64_t len, const string_t &pad,
+	static inline string_t Operation(const string_t &str, const int32_t len, const string_t &pad,
 	                                 vector<char> &result) {
 		return rpad(str, len, pad, result);
 	}
 };
 
 template <class Op> static void pad_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT64 &&
+	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
 	       args.data[2].type == TypeId::VARCHAR);
 	auto &str_vector = args.data[0];
 	auto &len_vector = args.data[1];
 	auto &pad_vector = args.data[2];
 
 	vector<char> buffer;
-	TernaryExecutor::Execute<string_t, int64_t, string_t, string_t>(
-	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int64_t len, string_t pad) {
-		    len = max(len, int64_t(0));
+	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
+	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
+		    len = max(len, int32_t(0));
 		    return StringVector::AddString(result, Op::Operation(str, len, pad, buffer));
 	    });
 }
 
 void LpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("lpad",                             // name of the function
-	                               {SQLType::VARCHAR, SQLType::BIGINT, // argument list
+	set.AddFunction(ScalarFunction("lpad",                              // name of the function
+	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
 	                                SQLType::VARCHAR},
 	                               SQLType::VARCHAR,             // return type
 	                               pad_function<LpadOperator>)); // pointer to function implementation
 }
 
 void RpadFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("rpad",                             // name of the function
-	                               {SQLType::VARCHAR, SQLType::BIGINT, // argument list
+	set.AddFunction(ScalarFunction("rpad",                              // name of the function
+	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
 	                                SQLType::VARCHAR},
 	                               SQLType::VARCHAR,             // return type
 	                               pad_function<RpadOperator>)); // pointer to function implementation

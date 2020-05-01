@@ -274,11 +274,13 @@ TEST_CASE("LPAD/RPAD test", "[function]") {
 	REQUIRE_FAIL(con.Query("select LPAD(1)"));
 	REQUIRE_FAIL(con.Query("select LPAD(1, 2)"));
 	REQUIRE_FAIL(con.Query("select LPAD('Hello', 10, '')"));
+	REQUIRE_FAIL(con.Query("select LPAD('a', 100000000000000000, 0)"));
 
 	REQUIRE_FAIL(con.Query("select RPAD()"));
 	REQUIRE_FAIL(con.Query("select RPAD(1)"));
 	REQUIRE_FAIL(con.Query("select RPAD(1, 2)"));
 	REQUIRE_FAIL(con.Query("select RPAD('Hello', 10, '')"));
+	REQUIRE_FAIL(con.Query("select RPAD('a', 100000000000000000, 0)"));
 }
 
 TEST_CASE("REPEAT test", "[function]") {
