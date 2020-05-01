@@ -22,9 +22,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
 			int new_sz = utf8proc_codepoint_length(converted_codepoint);
-			if (new_sz < 0) {
-				throw InternalException("Invalid UTF8 encountered!");
-			}
+			assert(new_sz >= 0);
 			output_length += new_sz;
 			i += sz;
 		} else {
@@ -42,9 +40,8 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 			int sz = 0, new_sz = 0;
 			int codepoint = utf8proc_codepoint(input_data + i, sz);
 			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
-			if (!utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data)) {
-				throw InternalException("Invalid UTF8 encountered!");
-			}
+			const auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
+			assert(success);
 			result_data += new_sz;
 			i += sz;
 		} else {
