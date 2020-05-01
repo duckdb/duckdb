@@ -128,7 +128,22 @@ public:
 		case SQLTypeId::DECIMAL:
 			return UnaryAggregate<double, double, double, OP>(type, type);
 		default:
-			throw NotImplementedException("Unimplemented numeric type");
+			throw NotImplementedException("Unimplemented numeric type for unary aggregate");
+		}
+	}
+
+	template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(SQLType type) {
+		switch (type.id) {
+		case SQLTypeId::TINYINT:
+			return UnaryAggregate<uint8_t,  int8_t,  int8_t,  OP>(type, type);
+		case SQLTypeId::SMALLINT:
+			return UnaryAggregate<uint16_t, int16_t, int16_t, OP>(type, type);
+		case SQLTypeId::INTEGER:
+			return UnaryAggregate<uint32_t, int32_t, int32_t, OP>(type, type);
+		case SQLTypeId::BIGINT:
+			return UnaryAggregate<uint64_t, int64_t, int64_t, OP>(type, type);
+		default:
+			throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
 		}
 	}
 
