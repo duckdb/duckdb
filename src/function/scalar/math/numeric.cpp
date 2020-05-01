@@ -67,6 +67,29 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 //===--------------------------------------------------------------------===//
+// bit_count
+//===--------------------------------------------------------------------===//
+struct BitCntOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+	using TU = typename make_unsigned<TA>::type;
+		TR  count = 0;
+		for (auto value = TU(input); value > 0; value >>= 1) {
+			count += TR(value & 1);
+		}
+		return count;
+	}
+};
+
+void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet functions("bit_count");
+	for (auto &type : SQLType::INTEGRAL) {
+		functions.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
+		                      ScalarFunction::GetScalarIntegerUnaryFunctionFixedReturn<int8_t, BitCntOperator>(type)));
+	}
+	set.AddFunction(functions);
+}
+
+//===--------------------------------------------------------------------===//
 // sign
 //===--------------------------------------------------------------------===//
 struct SignOperator {
