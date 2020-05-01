@@ -9,6 +9,21 @@ using namespace std;
 
 namespace duckdb {
 
+template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(SQLType type) {
+	switch (type.id) {
+	case SQLTypeId::TINYINT:
+		return AggregateFunction::UnaryAggregate<uint8_t, int8_t, int8_t, OP>(type, type);
+	case SQLTypeId::SMALLINT:
+		return AggregateFunction::UnaryAggregate<uint16_t, int16_t, int16_t, OP>(type, type);
+	case SQLTypeId::INTEGER:
+		return AggregateFunction::UnaryAggregate<uint32_t, int32_t, int32_t, OP>(type, type);
+	case SQLTypeId::BIGINT:
+		return AggregateFunction::UnaryAggregate<uint64_t, int64_t, int64_t, OP>(type, type);
+	default:
+		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
+	}
+}
+
 struct BitAndOperation {
 	template <class STATE> static void Initialize(STATE *state) {
 		//  If there are no matching rows, BIT_AND() returns a neutral value (all bits set to 1)
@@ -34,7 +49,7 @@ struct BitAndOperation {
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-	    *target &= source;
+		*target &= source;
 	}
 
 	static bool IgnoreNull() {
@@ -45,7 +60,7 @@ struct BitAndOperation {
 void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_and("bit_and");
 	for (auto type : SQLType::INTEGRAL) {
-		bit_and.AddFunction(AggregateFunction::GetBitfieldUnaryAggregate<BitAndOperation>(type));
+		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
 	set.AddFunction(bit_and);
 }
@@ -74,7 +89,7 @@ struct BitOrOperation {
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-	    *target |= source;
+		*target |= source;
 	}
 
 	static bool IgnoreNull() {
@@ -85,7 +100,7 @@ struct BitOrOperation {
 void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_or("bit_or");
 	for (auto type : SQLType::INTEGRAL) {
-		bit_or.AddFunction(AggregateFunction::GetBitfieldUnaryAggregate<BitOrOperation>(type));
+		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
 	set.AddFunction(bit_or);
 }
@@ -114,7 +129,7 @@ struct BitXorOperation {
 	}
 
 	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-	    *target ^= source;
+		*target ^= source;
 	}
 
 	static bool IgnoreNull() {
@@ -125,7 +140,7 @@ struct BitXorOperation {
 void BitXorFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_xor("bit_xor");
 	for (auto type : SQLType::INTEGRAL) {
-		bit_xor.AddFunction(AggregateFunction::GetBitfieldUnaryAggregate<BitXorOperation>(type));
+		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	set.AddFunction(bit_xor);
 }
