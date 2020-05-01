@@ -60,7 +60,7 @@ void DataTable::InitializeScan(TableScanState &state, vector<column_t> column_id
 	state.max_persistent_row = persistent_manager.max_row;
 	state.current_transient_row = 0;
 	state.max_transient_row = transient_manager.max_row;
-	if (table_filters) {
+	if (table_filters && table_filters->size() > 0) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
 }
