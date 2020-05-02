@@ -111,51 +111,6 @@ public:
 	};
 
 public:
-	template <class OP> static AggregateFunction GetNumericUnaryAggregate(SQLType type) {
-		switch (type.id) {
-		case SQLTypeId::TINYINT:
-			return UnaryAggregate<int8_t, int8_t, int8_t, OP>(type, type);
-		case SQLTypeId::SMALLINT:
-			return UnaryAggregate<int16_t, int16_t, int16_t, OP>(type, type);
-		case SQLTypeId::INTEGER:
-			return UnaryAggregate<int32_t, int32_t, int32_t, OP>(type, type);
-		case SQLTypeId::BIGINT:
-			return UnaryAggregate<int64_t, int64_t, int64_t, OP>(type, type);
-		case SQLTypeId::FLOAT:
-			return UnaryAggregate<float, float, float, OP>(type, type);
-		case SQLTypeId::DOUBLE:
-			return UnaryAggregate<double, double, double, OP>(type, type);
-		case SQLTypeId::DECIMAL:
-			return UnaryAggregate<double, double, double, OP>(type, type);
-		default:
-			throw NotImplementedException("Unimplemented numeric type");
-		}
-	}
-
-	template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
-		switch (type.id) {
-		case SQLTypeId::BOOLEAN:
-			return UnaryAggregate<int8_t, int8_t, int8_t, OP>(type, type);
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
-		case SQLTypeId::BIGINT:
-		case SQLTypeId::FLOAT:
-		case SQLTypeId::DOUBLE:
-		case SQLTypeId::DECIMAL:
-			return GetNumericUnaryAggregate<OP>(type);
-		case SQLTypeId::DATE:
-			return UnaryAggregate<date_t, date_t, date_t, OP>(type, type);
-		case SQLTypeId::TIMESTAMP:
-			return UnaryAggregate<timestamp_t, timestamp_t, timestamp_t, OP>(type, type);
-		case SQLTypeId::VARCHAR:
-			return UnaryAggregate<string_t, string_t, string_t, OP>(type, type);
-		default:
-			throw NotImplementedException("Unimplemented type for unary aggregate");
-		}
-	}
-
-public:
 	template <class STATE> static idx_t StateSize() {
 		return sizeof(STATE);
 	}
