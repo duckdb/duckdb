@@ -57,6 +57,10 @@ TEST_CASE("DATE_PART test", "[date]") {
 	result = con.Query("SELECT MONTHNAME(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"January", "March", "May"}));
 
+	//  dayname
+	result = con.Query("SELECT DAYNAME(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"Wednesday", "Tuesday", "Tuesday"}));
+
 	//  yearweek
 	result = con.Query("SELECT YEARWEEK(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {199201, 199209, 199218}));

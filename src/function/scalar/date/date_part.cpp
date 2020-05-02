@@ -315,6 +315,14 @@ struct MonthNameOperator {
 	}
 };
 
+static string_t s_dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+struct DayNameOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return s_dayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
+	}
+};
+
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	AddDatePartOperator<YearOperator>(set, "year");
@@ -359,6 +367,14 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR,
 	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
 	set.AddFunction(monthname);
+
+	//  register the dayname function
+	ScalarFunctionSet dayname("dayname");
+	dayname.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::VARCHAR,
+	                                   ScalarFunction::UnaryFunction<date_t, string_t, DayNameOperator, true>));
+	dayname.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR,
+	                                   ScalarFunction::UnaryFunction<timestamp_t, string_t, DayNameOperator, true>));
+	set.AddFunction(dayname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
