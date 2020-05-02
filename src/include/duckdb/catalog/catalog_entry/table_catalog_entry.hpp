@@ -21,6 +21,7 @@ class ColumnStatistics;
 class DataTable;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
+struct RemoveColumnInfo;
 
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
@@ -60,5 +61,7 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 
 	void SetAsRoot() override;
+private:
+	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo& info);
 };
 } // namespace duckdb

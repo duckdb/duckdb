@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -59,13 +60,6 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				}
 				// create an adaptive radix tree around the expressions
 				auto art = make_unique<ART>(*storage, column_ids, move(unbound_expressions), true);
-
-				if (unique.is_primary_key) {
-					// if this is a primary key index, also create a NOT NULL constraint for each of the columns
-					for (auto &column_index : unique.keys) {
-						bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column_index));
-					}
-				}
 				storage->AddIndex(move(art), bound_expressions);
 			}
 		}
@@ -79,9 +73,6 @@ bool TableCatalogEntry::ColumnExists(const string &name) {
 unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
 	if (info->type != AlterType::ALTER_TABLE) {
 		throw CatalogException("Can only modify table with ALTER TABLE statement");
-	}
-	if (constraints.size() > 0) {
-		throw CatalogException("Cannot modify a table with constraints");
 	}
 	auto table_info = (AlterTableInfo *)info;
 	switch (table_info->alter_table_type) {
@@ -103,7 +94,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		if (!found) {
 			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
 		}
-		assert(constraints.size() == 0);
+		// FIXME
+		if (constraints.size() > 0) {
+			throw CatalogException("Cannot modify a table with constraints");
+		}
 		// create_info->constraints.resize(constraints.size());
 		// for (idx_t i = 0; i < constraints.size(); i++) {
 		// 	create_info->constraints[i] = constraints[i]->Copy();
@@ -135,9 +129,84 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto new_storage = make_shared<DataTable>(context, *storage, add_info->new_column, bound_create_info->bound_defaults.back().get());
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 	}
+	case AlterTableType::REMOVE_COLUMN: {
+		auto remove_info = (RemoveColumnInfo *)table_info;
+		return RemoveColumn(context, *remove_info);
+	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
 	}
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo& info) {
+	idx_t removed_index = INVALID_INDEX;
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (columns[i].name == info.removed_column) {
+			assert(removed_index == INVALID_INDEX);
+			removed_index = i;
+			continue;
+		}
+		create_info->columns.push_back(columns[i].Copy());
+	}
+	if (removed_index == INVALID_INDEX) {
+		if (!info.if_exists) {
+			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column.c_str());
+		}
+		return nullptr;
+	}
+	if (create_info->columns.size() == 0) {
+		throw CatalogException("Cannot drop column: table only has one column remaining!");
+	}
+	// handle constraints for the new table
+	assert(constraints.size() == bound_constraints.size());
+	for(idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
+		auto &constraint = constraints[constr_idx];
+		auto &bound_constraint = bound_constraints[constr_idx];
+		switch(bound_constraint->type) {
+		case ConstraintType::NOT_NULL: {
+			auto &not_null_constraint = (BoundNotNullConstraint&) *bound_constraint;
+			if (not_null_constraint.index != removed_index) {
+				// the constraint is not about this column: we need to copy it
+				// we might need to shift the index back by one though, to account for the removed column
+				idx_t new_index = not_null_constraint.index;
+				if (not_null_constraint.index > removed_index) {
+					new_index -= 1;
+				}
+				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
+			}
+			break;
+		}
+		case ConstraintType::CHECK: {
+			// CHECK constraint
+			auto &bound_check = (BoundCheckConstraint &) *bound_constraint;
+			// check if the removed column is part of the check constraint
+			if (bound_check.bound_columns.find(removed_index) != bound_check.bound_columns.end()) {
+				if (bound_check.bound_columns.size() > 1) {
+					// CHECK constraint that concerns mult
+					throw CatalogException("Cannot drop column \"%s\" because there is a CHECK constraint that depends on it", info.removed_column.c_str());
+				} else {
+					// CHECK constraint that ONLY concerns this column, strip the constraint
+				}
+			} else {
+				// check constraint does not concern the removed column: simply re-add it
+				create_info->constraints.push_back(constraint->Copy());
+			}
+			break;
+		}
+		case ConstraintType::UNIQUE:
+			create_info->constraints.push_back(constraint->Copy());
+			break;
+		default:
+			throw CatalogException("Unsupported constraint for entry!");
+		}
+	}
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {

@@ -36,7 +36,10 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			result->info = make_unique<AddColumnInfo>(basetable.schema_name, basetable.table_name, move(centry));
 			break;
 		}
-		case PG_AT_DropColumn:
+		case PG_AT_DropColumn: {
+			result->info = make_unique<RemoveColumnInfo>(basetable.schema_name, basetable.table_name, command->name, command->missing_ok);
+			break;
+		}
 		case PG_AT_AlterColumnType:
 		default:
 			throw NotImplementedException(

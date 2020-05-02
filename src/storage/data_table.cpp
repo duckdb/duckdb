@@ -88,13 +88,22 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
+	// first check if there are any indexes that exist that point to the removed column
+	for(auto &index : info->indexes) {
+		for(auto &column_id : index->column_ids) {
+			if (column_id == removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on it!");
+			} else if (column_id > removed_column) {
+				throw CatalogException("Cannot drop this column: an index depends on a column after it!");
+			}
+		}
+	}
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 	// erase the column from this DataTable
 	assert(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
-	// columns.erase(columns.begin() + removed_column);
-	throw Exception("");
+	columns.erase(columns.begin() + removed_column);
 }
 
 //===--------------------------------------------------------------------===//
@@ -858,6 +867,10 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	// initialize an index scan
 	CreateIndexScanState state;
 	InitializeCreateIndexScan(state, column_ids);
+
+	if (!is_root) {
+		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+	}
 
 	// now start incrementally building the index
 	IndexLock lock;

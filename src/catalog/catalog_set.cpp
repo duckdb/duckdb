@@ -90,6 +90,10 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	// set the timestamp to the timestamp of the current transaction
 	// and point it to the updated table node
 	auto value = current.AlterEntry(context, alter_info);
+	if (!value) {
+		// alter failed, but did not result in an error
+		return true;
+	}
 
 	// now transfer all dependencies from the old table to the new table
 	catalog.dependency_manager.AlterObject(transaction, data[name].get(), value.get());

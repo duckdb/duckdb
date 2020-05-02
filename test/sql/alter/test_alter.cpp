@@ -325,3 +325,216 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN with multiple transactions", "[alter]") {
 		REQUIRE_FAIL(con2.Query("COMMIT"));
 	}
 }
+
+TEST_CASE("Test ALTER TABLE DROP COLUMN", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
+
+	SECTION("Standard DROP COLUMN") {
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(result->names.size() == 1);
+	}
+	SECTION("Rollback of DROP COLUMN") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(result->names.size() == 1);
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(result->names.size() == 2);
+	}
+	SECTION("Cannot DROP COLUMN which has an index built on it") {
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON test(j)"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+
+		// we can remove the column after dropping the index
+		REQUIRE_NO_FAIL(con.Query("DROP INDEX i_index"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+	}
+	SECTION("DROP COLUMN with check constraint on single column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER, j INTEGER CHECK(j < 10))"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1), (2, 2)"));
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+		// we can drop a column that has a single check constraint on it
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN j"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (3)"));
+
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(result->names.size() == 1);
+	}
+	SECTION("DROP COLUMN with check constraint on multiple columns") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER, j INTEGER CHECK(i+j < 10))"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1), (2, 2)"));
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+		// we CANNOT drop one of the columns, because the CHECK constraint depends on both
+		REQUIRE_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN j"));
+	}
+	SECTION("DROP COLUMN with NOT NULL constraint") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER, j INTEGER NOT NULL)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1), (2, 2)"));
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN j"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (3)"));
+
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(result->names.size() == 1);
+	}
+	SECTION("DROP COLUMN with check constraint on subsequent column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER, j INTEGER CHECK(j < 10))"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1), (2, 2)"));
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+
+		// we can drop a column that has a single check constraint on it
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN i"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test2 VALUES (20)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (3)"));
+
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(result->names.size() == 1);
+	}
+	SECTION("DROP COLUMN with NOT NULL constraint on subsequent column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER, j INTEGER, k INTEGER NOT NULL)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1, 11), (2, 2, 12)"));
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {11, 12}));
+
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN j"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test2 VALUES (3, NULL)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (3, 13)"));
+
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {11, 12, 13}));
+		REQUIRE(result->names.size() == 2);
+	}
+	SECTION("DROP COLUMN with index built on subsequent column") {
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON test(j)"));
+
+		// cannot drop indexed column
+		REQUIRE_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+		// we also cannot drop the column i (for now) because an index depends on a subsequent column
+		REQUIRE_FAIL(con.Query("ALTER TABLE test DROP COLUMN i"));
+	}
+	SECTION("DROP COLUMN from table with primary key constraint") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test2(i INTEGER PRIMARY KEY, j INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (1, 1), (2, 2)"));
+
+		// cannot drop primary key column
+		REQUIRE_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN i"));
+		// but we can drop column "i"
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test2 DROP COLUMN j"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test2 VALUES (3)"));
+
+		result = con.Query("SELECT * FROM test2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(result->names.size() == 1);
+	}
+	SECTION("DROP COLUMN errors") {
+		// cannot drop column which does not exist
+		REQUIRE_FAIL(con.Query("ALTER TABLE test DROP COLUMN blabla"));
+		// unless IF EXISTS is specified
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN IF EXISTS blabla"));
+
+		// cannot drop ALL columns of a table
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN i"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+	}
+}
+
+TEST_CASE("Test ALTER TABLE DROP COLUMN with multiple transactions", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
+
+	SECTION("Only one pending table alter can be active at a time") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		// con removes a column to test
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN j"));
+		// con2 cannot add a new column now!
+		REQUIRE_FAIL(con2.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// we can add the column after the commit
+		REQUIRE_NO_FAIL(con2.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+	}
+	SECTION("Can only append to newest table") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		// con removes a column from test
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN i"));
+
+		// con2 cannot append now!
+		REQUIRE_FAIL(con2.Query("INSERT INTO test (i, j) VALUES (3, 3)"));
+		// but we can delete rows!
+		REQUIRE_NO_FAIL(con2.Query("DELETE FROM test WHERE i=1"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+
+		result = con2.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+		// we can also update rows
+		REQUIRE_NO_FAIL(con2.Query("UPDATE test SET j=100"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+
+		result = con2.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {100}));
+
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {100}));
+	}
+	SECTION("Alter table while other transaction still has pending appends") {
+		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con2.Query("INSERT INTO test VALUES (3, 3)"));
+
+		// now con adds a column
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test DROP COLUMN i"));
+
+		// cannot commit con2! conflict on append
+		REQUIRE_FAIL(con2.Query("COMMIT"));
+	}
+	SECTION("Create index on column that has been removed by other transaction") {
+		// con2 removes a column
+		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con2.Query("ALTER TABLE test DROP COLUMN j"));
+
+		// now con tries to add an index to that column: this should fail
+		REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON test(j"));
+	}
+}
