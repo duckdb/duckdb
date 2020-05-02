@@ -101,7 +101,7 @@ struct MinOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value < source.value) {
+		} else if (target->value > source.value) {
 			target->value = source.value;
 		}
 	}
@@ -122,7 +122,7 @@ struct MaxOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value > source.value) {
+		} else if (target->value < source.value) {
 			target->value = source.value;
 		}
 	}
