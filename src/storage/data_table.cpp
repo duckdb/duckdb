@@ -106,6 +106,67 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	columns.erase(columns.begin() + removed_column);
 }
 
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type, vector<column_t> bound_columns, Expression &cast_expr)  :
+	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
+
+	// prevent any new tuples from being added to the parent
+	lock_guard<mutex> parent_lock(parent.append_lock);
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
+	// first check if there are any indexes that exist that point to the changed column
+	for(auto &index : info->indexes) {
+		for(auto &column_id : index->column_ids) {
+			if (column_id == changed_idx) {
+				throw CatalogException("Cannot change the type of this column: an index depends on it!");
+			}
+		}
+	}
+	// change the type in this DataTable
+	auto new_type = GetInternalType(target_type);
+	types[changed_idx] = new_type;
+
+	// construct a new column data for this type
+	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
+	column_data->type = new_type;
+	column_data->column_idx = changed_idx;
+
+	ColumnAppendState append_state;
+	column_data->InitializeAppend(append_state);
+
+	// scan the original table, and fill the new column with the transformed value
+	auto &transaction = Transaction::GetTransaction(context);
+	TableScanState scan_state;
+
+	vector<TypeId> types;
+	for(idx_t i = 0; i < bound_columns.size(); i++) {
+		types.push_back(parent.types[i]);
+	}
+	parent.InitializeScan(transaction, scan_state, bound_columns, nullptr);
+
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(types);
+	unordered_map<idx_t, vector<TableFilter>> dummy_filters;
+
+	ExpressionExecutor executor;
+	executor.AddExpression(cast_expr);
+
+	Vector append_vector(new_type);
+	while(true) {
+		// scan the table
+		parent.Scan(transaction, scan_chunk, scan_state, dummy_filters);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		// execute the expression
+		executor.ExecuteExpression(scan_chunk, append_vector);
+		column_data->Append(append_state, append_vector, scan_chunk.size());
+	}
+	// also add this column to client local storage
+	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
+
+	columns[changed_idx] = move(column_data);
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//

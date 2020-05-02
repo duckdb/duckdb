@@ -20,6 +20,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/expression_binder/alter_binder.hpp"
 
 #include <algorithm>
 
@@ -100,8 +101,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto set_default_info = (SetDefaultInfo *)table_info;
 		return SetDefault(context, *set_default_info);
 	}
+	case AlterTableType::ALTER_COLUMN_TYPE: {
+		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
+		return ChangeColumnType(context, *change_type_info);
+	}
 	default:
-		throw CatalogException("Unrecognized alter table type!");
+		throw InternalException("Unrecognized alter table type!");
 	}
 }
 
@@ -244,7 +249,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(constraint->Copy());
 			break;
 		default:
-			throw CatalogException("Unsupported constraint for entry!");
+			throw InternalException("Unsupported constraint for entry!");
 		}
 	}
 
@@ -256,17 +261,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo& info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	bool found = false;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		ColumnDefinition copy(columns[i].name, columns[i].type);
-		copy.oid = columns[i].oid;
+		auto copy = columns[i].Copy();
 		if (info.column_name == copy.name) {
 			// set the default value of this column
 			copy.default_value = info.expression ? info.expression->Copy() : nullptr;
-		} else {
-			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+			found = true;
 		}
 		create_info->columns.push_back(move(copy));
 	}
+	if (!found) {
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(), info.column_name.c_str());
+	}
+
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -276,6 +284,59 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 	Binder binder(context);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo& info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	idx_t change_idx = INVALID_INDEX;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		if (info.column_name == copy.name) {
+			// set the default value of this column
+			change_idx = i;
+			copy.type = info.target_type;
+		}
+		create_info->columns.push_back(move(copy));
+	}
+	if (change_idx == INVALID_INDEX) {
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(), info.column_name.c_str());
+	}
+
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		switch(constraint->type) {
+		case ConstraintType::CHECK: {
+			auto &bound_check = (BoundCheckConstraint &) *bound_constraints[i];
+			if (bound_check.bound_columns.find(change_idx) != bound_check.bound_columns.end()) {
+				throw BinderException("Cannot change the type of a column that has a CHECK constraint specified");
+			}
+			break;
+		}
+		case ConstraintType::NOT_NULL:
+			break;
+		case ConstraintType::UNIQUE: {
+			auto &bound_unique = (BoundUniqueConstraint &) *bound_constraints[i];
+			if (bound_unique.keys.find(change_idx) != bound_unique.keys.end()) {
+				throw BinderException("Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
+			}
+			break;
+		}
+		default:
+			throw InternalException("Unsupported constraint for entry!");
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	Binder binder(context);
+	// bind the specified expression
+	vector<column_t> bound_columns;
+	AlterBinder expr_binder(binder, context, name, columns, bound_columns, info.target_type);
+	auto expression = info.expression->Copy();
+	auto bound_expression = expr_binder.Bind(expression);
+	auto new_storage = make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
+
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
@@ -344,10 +405,7 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source)
 unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	for (idx_t i = 0; i < columns.size(); i++) {
-		ColumnDefinition copy(columns[i].name, columns[i].type);
-		copy.oid = columns[i].oid;
-		copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
-		create_info->columns.push_back(move(copy));
+		create_info->columns.push_back(columns[i].Copy());
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {

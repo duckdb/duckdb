@@ -1,6 +1,8 @@
 #include "duckdb/parser/statement/alter_table_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 
 using namespace std;
 
@@ -45,9 +47,23 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			result->info = make_unique<SetDefaultInfo>(basetable.schema_name, basetable.table_name, command->name, move(expr));
 			break;
 		}
+		case PG_AT_AlterColumnType: {
+			auto cdef = (PGColumnDef *)command->def;
+			SQLType target_type = TransformTypeName(cdef->typeName);
+			target_type.collation = TransformCollation(cdef->collClause);
+
+			unique_ptr<ParsedExpression> expr;
+			if (cdef->raw_default) {
+				expr = TransformExpression(cdef->raw_default);
+			} else {
+				auto colref = make_unique<ColumnRefExpression>(command->name);
+				expr = make_unique<CastExpression>(target_type, move(colref));
+			}
+			result->info = make_unique<ChangeColumnTypeInfo>(basetable.schema_name, basetable.table_name, command->name, target_type, move(expr));
+			break;
+		}
 		case PG_AT_DropConstraint:
 		case PG_AT_DropNotNull:
-		case PG_AT_AlterColumnType:
 		default:
 			throw NotImplementedException(
 				"ALTER TABLE option not supported yet!");

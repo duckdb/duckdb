@@ -384,3 +384,12 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	table_storage.erase(entry);
 	table_storage[new_dt] = move(new_storage);
 }
+
+void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type, vector<column_t> bound_columns, Expression &cast_expr) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
+}

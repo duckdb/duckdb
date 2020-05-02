@@ -26,6 +26,7 @@ struct RenameColumnInfo;
 struct AddColumnInfo;
 struct RemoveColumnInfo;
 struct SetDefaultInfo;
+struct ChangeColumnTypeInfo;
 
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
@@ -70,5 +71,6 @@ private:
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo& info);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo& info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo& info);
+	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo& info);
 };
 } // namespace duckdb
