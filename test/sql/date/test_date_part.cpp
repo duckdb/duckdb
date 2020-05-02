@@ -53,6 +53,10 @@ TEST_CASE("DATE_PART test", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {Date::FromDate(1992, 1, 31), Date::FromDate(1992, 3, 31), Date::FromDate(1992, 5, 31)}));
 
+	//  monthname
+	result = con.Query("SELECT MONTHNAME(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"January", "March", "May"}));
+
 	//  yearweek
 	result = con.Query("SELECT YEARWEEK(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {199201, 199209, 199218}));

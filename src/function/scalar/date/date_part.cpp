@@ -175,21 +175,6 @@ struct YearWeekOperator {
 	}
 };
 
-struct LastDayOperator {
-	template <class TA, class TR> static inline TR Operation(TA input) {
-		int32_t yyyy, mm, dd;
-		Date::Convert(input, yyyy, mm, dd);
-		yyyy += (mm / 12);
-		mm %= 12;
-		++mm;
-		return Date::FromDate(yyyy, mm, 1) - 1;
-	}
-};
-
-template <> date_t LastDayOperator::Operation(timestamp_t input) {
-	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
-}
-
 struct EpochOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::Epoch(input);
@@ -306,6 +291,30 @@ template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, strin
 	set.AddFunction(operator_set);
 }
 
+struct LastDayOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		int32_t yyyy, mm, dd;
+		Date::Convert(input, yyyy, mm, dd);
+		yyyy += (mm / 12);
+		mm %= 12;
+		++mm;
+		return Date::FromDate(yyyy, mm, 1) - 1;
+	}
+};
+
+template <> date_t LastDayOperator::Operation(timestamp_t input) {
+	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
+}
+
+static string_t s_monthNames[] = {"January", "February", "March",     "April",   "May",      "June",
+                                  "July",    "August",   "September", "October", "November", "December"};
+
+struct MonthNameOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return s_monthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
+	}
+};
+
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
 	AddDatePartOperator<YearOperator>(set, "year");
@@ -341,6 +350,15 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	last_day.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::DATE,
 	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
 	set.AddFunction(last_day);
+
+	//  register the monthname function
+	ScalarFunctionSet monthname("monthname");
+	monthname.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::VARCHAR,
+	                                     ScalarFunction::UnaryFunction<date_t, string_t, MonthNameOperator, true>));
+	monthname.AddFunction(
+	    ScalarFunction({SQLType::TIMESTAMP}, SQLType::VARCHAR,
+	                   ScalarFunction::UnaryFunction<timestamp_t, string_t, MonthNameOperator, true>));
+	set.AddFunction(monthname);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
