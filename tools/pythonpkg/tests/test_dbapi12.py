@@ -14,7 +14,7 @@ class TestRelationApi(object):
 			res3 = duckdb_cursor.from_df(res.to_df()).to_df()
 			pd.testing.assert_frame_equal(res3, test_df)
 
-			df_sql = res.create_view('x').query('select CAST(i as BIGINT) i, j from x')
+			df_sql = res.query('x', 'select CAST(i as BIGINT) i, j from x')
 			pd.testing.assert_frame_equal(df_sql.fetchdf(), test_df)
 
 			res2 = res.aggregate('i, count(j) as cj', 'i').order('i')

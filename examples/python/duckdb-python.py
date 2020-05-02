@@ -133,8 +133,17 @@ print(duckdb.distinct(test_df))
 # when chaining only the first call needs to include the data frame parameter
 print(duckdb.filter(test_df, 'i > 1').project('i + 1').order('j').limit(2))
 
-
 # turn the relation into something else again
+
+
+
+
+# compute the query result from the relation 
+res = rel.execute()
+print(res)
+# res is a query result, you can call fetchdf() or fetchnumpy() or fetchone() on it
+print(res.fetchone())
+print(res.fetchall())
 
 # convert a relation back to a pandas data frame
 print(rel.to_df())
@@ -151,5 +160,21 @@ print(rel.insert("test_table3"))
 
 # create a SQL-accessible view of the relation
 print(rel.create_view('test_view'))
+
+
+# we can also directly run SQL queries on relation objects without explicitly creating a view
+# the first parameter gives the rel object a view name so we can refer to it in queries
+res = rel.query('my_name_for_rel', 'SELECT * FROM my_name_for_rel')
+print(res)
+# res is a query result, we can fetch with the methods described above, e.g.
+print(res.fetchone())
+print(res.fetchdf())
+# or just use df(), a shorthand for fetchdf() on query results
+print(res.df())
+
+# this also works directly on data frames
+res = duckdb.query(test_df, 'my_name_for_test_df', 'SELECT * FROM my_name_for_test_df')
+print(res.df())
+
 
 
