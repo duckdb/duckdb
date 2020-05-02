@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test date part functionality", "[date]") {
+TEST_CASE("DATE_PART test", "[date]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -20,6 +20,7 @@ TEST_CASE("Test date part functionality", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
 	result = con.Query("SELECT date_part(s, NULL::TIMESTAMP) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
+
 	// dates
 	result = con.Query("SELECT date_part(NULL, d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
@@ -29,6 +30,7 @@ TEST_CASE("Test date part functionality", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 1992, 1992}));
 	result = con.Query("SELECT date_part(s, d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 3, 5}));
+
 	// timestamps
 	result = con.Query("SELECT date_part(NULL, d::TIMESTAMP) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), Value(), Value()}));
@@ -38,4 +40,10 @@ TEST_CASE("Test date part functionality", "[date]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 1992, 1992}));
 	result = con.Query("SELECT date_part(s, d::TIMESTAMP) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 3, 5}));
+
+	//  aliases
+	result = con.Query("SELECT DAYOFMONTH(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 5}));
+	result = con.Query("SELECT WEEKDAY(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 2, 2}));
 }

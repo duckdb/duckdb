@@ -305,6 +305,10 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<MinutesOperator>(set, "minute");
 	AddDatePartOperator<HoursOperator>(set, "hour");
 
+	//  register various aliases
+	AddDatePartOperator<DayOperator>(set, "dayofmonth");
+	AddDatePartOperator<DayOfWeekOperator>(set, "weekday");
+
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
