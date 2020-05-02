@@ -41,9 +41,15 @@ TEST_CASE("DATE_PART test", "[date]") {
 	result = con.Query("SELECT date_part(s, d::TIMESTAMP) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 3, 5}));
 
+	//  combinations
+	result = con.Query("SELECT YEARWEEK(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {199201, 199209, 199218}));
+
 	//  aliases
 	result = con.Query("SELECT DAYOFMONTH(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 3, 5}));
 	result = con.Query("SELECT WEEKDAY(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {3, 2, 2}));
+	result = con.Query("SELECT WEEKOFYEAR(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 9, 18}));
 }

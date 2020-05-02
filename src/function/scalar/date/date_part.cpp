@@ -169,6 +169,12 @@ template <> int64_t WeekOperator::Operation(timestamp_t input) {
 	return WeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
+struct YearWeekOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return YearOperator::Operation<TA, TR>(input) * 100 + WeekOperator::Operation<TA, TR>(input);
+	}
+};
+
 struct EpochOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::Epoch(input);
@@ -305,9 +311,13 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<MinutesOperator>(set, "minute");
 	AddDatePartOperator<HoursOperator>(set, "hour");
 
+	//  register combinations
+	AddDatePartOperator<YearWeekOperator>(set, "yearweek");
+
 	//  register various aliases
 	AddDatePartOperator<DayOperator>(set, "dayofmonth");
 	AddDatePartOperator<DayOfWeekOperator>(set, "weekday");
+	AddDatePartOperator<WeekOperator>(set, "weekofyear"); //  Note that WeekOperator is ISO-8601, not US
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
