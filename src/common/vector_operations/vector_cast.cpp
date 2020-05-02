@@ -130,6 +130,11 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::INT64);
 		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestamp, true>(source, result, count);
 		break;
+//	case SQLTypeId::BLOB:
+//		assert(result.type == TypeId::VARCHAR);
+//		// No need for cast, internally BLOB is VARCHAR
+////		UnaryExecutor::Execute<string_t, string_t, duckdb::Cast, true>(source, result, count);
+//		break;
 	default:
 		null_cast(source, result, source_type, target_type, count);
 		break;
@@ -234,6 +239,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		timestamp_cast_switch(source, result, source_type, target_type, count);
 		break;
 	case SQLTypeId::VARCHAR:
+	case SQLTypeId::BLOB:
 		assert(source.type == TypeId::VARCHAR);
 		string_cast_switch(source, result, source_type, target_type, count);
 		break;

@@ -98,9 +98,11 @@ struct MaxOperationString : public StringMinMaxBase {
 
 template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : SQLType::ALL_TYPES) {
-		if (type.id == SQLTypeId::VARCHAR) {
+		if (type.id == SQLTypeId::VARCHAR || type.id == SQLTypeId::BLOB) {
+//			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<string_t, string_t, string_t, OP_STRING>(
+//			    SQLType::VARCHAR, SQLType::VARCHAR));
 			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<string_t, string_t, string_t, OP_STRING>(
-			    SQLType::VARCHAR, SQLType::VARCHAR));
+					type.id, type.id));
 		} else {
 			set.AddFunction(AggregateFunction::GetUnaryAggregate<OP>(type));
 		}

@@ -189,6 +189,7 @@ enum class SQLTypeId : uint8_t {
 	CHAR = 21,
 	VARCHAR = 22,
 	VARBINARY = 23,
+	BLOB = 24,
 
 	STRUCT = 100,
 	LIST = 101
@@ -237,6 +238,7 @@ public:
 	static const SQLType STRUCT;
 	static const SQLType LIST;
 	static const SQLType ANY;
+	static const SQLType BLOB;
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

@@ -29,7 +29,10 @@ Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
-		throw Exception("String value is not valid UTF8");
+		str_value = val;
+		// Fixme: remove validation to support BLOB type
+//		throw Exception("String value is not valid UTF8");
+		break;
 	case UnicodeType::ASCII:
 		str_value = val;
 		break;
@@ -236,6 +239,14 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
+Value Value::BLOB(string data) {
+	Value result(TypeId::VARCHAR);
+	result.sql_type = SQLType::BLOB;
+	result.str_value = data;
+	result.is_null = false;
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -393,6 +404,7 @@ string Value::ToString(SQLType sql_type) const {
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
+	case SQLTypeId::BLOB:
 		return str_value;
 	case SQLTypeId::STRUCT: {
 		string ret = "<";

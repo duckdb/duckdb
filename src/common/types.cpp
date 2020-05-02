@@ -25,6 +25,8 @@ const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 
+const SQLType SQLType::BLOB = SQLType(SQLTypeId::BLOB);
+
 // TODO these are incomplete and should maybe not exist as such
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
 const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
@@ -40,7 +42,7 @@ const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, 
 const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
     SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
-    SQLType::VARCHAR};
+    SQLType::VARCHAR, SQLType::BLOB};
 // TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;
@@ -194,6 +196,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "DECIMAL";
 	case SQLTypeId::VARCHAR:
 		return "VARCHAR";
+	case SQLTypeId::BLOB:
+		return "BLOB";
 	case SQLTypeId::VARBINARY:
 		return "VARBINARY";
 	case SQLTypeId::CHAR:
@@ -248,6 +252,8 @@ SQLType TransformStringToSQLType(string str) {
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
 	           lower_str == "char") {
 		return SQLType::VARCHAR;
+	} else if (lower_str == "blob") {
+		return SQLType::BLOB;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
 		return SQLType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
@@ -325,6 +331,7 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::DOUBLE;
 	case SQLTypeId::VARCHAR:
 	case SQLTypeId::CHAR:
+	case SQLTypeId::BLOB:
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;

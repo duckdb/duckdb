@@ -136,6 +136,7 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
+    void RegisterBlobFunctions();
 };
 
 } // namespace duckdb

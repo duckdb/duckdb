@@ -32,6 +32,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
+    RegisterBlobFunctions();
 }
 
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {

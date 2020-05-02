@@ -11,6 +11,7 @@ unique_ptr<ParsedExpression> Transformer::TransformValue(PGValue val) {
 		assert(val.val.ival <= numeric_limits<int32_t>::max());
 		return make_unique<ConstantExpression>(SQLType::INTEGER, Value::INTEGER((int32_t)val.val.ival));
 	case T_PGBitString: // FIXME: this should actually convert to BLOB
+		return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(val.val.str)));
 	case T_PGString:
 		return make_unique<ConstantExpression>(SQLType::VARCHAR, Value(string(val.val.str)));
 	case T_PGFloat: {

@@ -95,6 +95,10 @@ public:
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
 
+	//! Create a blob Value from a specified value
+	static Value BLOB(string data);
+
+
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
 	}

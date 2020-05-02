@@ -4,6 +4,7 @@ add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(nested)
+add_subdirectory(blob)
 
 add_library_unity(duckdb_func_scalar
                   OBJECT
@@ -13,7 +14,8 @@ add_library_unity(duckdb_func_scalar
                   math_functions.cpp
                   operators.cpp
                   sequence_functions.cpp
-                  trigonometrics_functions.cpp)
+                  trigonometrics_functions.cpp
+                  blob_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
     PARENT_SCOPE)
