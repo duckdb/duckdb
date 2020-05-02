@@ -9,6 +9,9 @@ using namespace std;
 namespace duckdb {
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
+	Register<BitAndFun>();
+	Register<BitOrFun>();
+	Register<BitXorFun>();
 	Register<CountStarFun>();
 	Register<CountFun>();
 	Register<FirstFun>();

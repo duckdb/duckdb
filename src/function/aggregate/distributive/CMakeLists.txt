@@ -1,5 +1,6 @@
 add_library_unity(duckdb_aggr_distr
                   OBJECT
+                  bitagg.cpp
                   count.cpp
                   first.cpp
                   minmax.cpp
