@@ -128,7 +128,7 @@ public:
 		case SQLTypeId::DECIMAL:
 			return UnaryAggregate<double, double, double, OP>(type, type);
 		default:
-			throw NotImplementedException("Unimplemented numeric type");
+			throw NotImplementedException("Unimplemented numeric type for unary aggregate");
 		}
 	}
 

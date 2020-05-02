@@ -463,6 +463,42 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world')"));
 }
 
+TEST_CASE("BIT_LENGTH test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test on scalars
+	result = con.Query("select BIT_LENGTH(NULL), BIT_LENGTH(''), BIT_LENGTH('\x24'), "
+	                   "BIT_LENGTH('\xC2\xA2'), BIT_LENGTH('\xE2\x82\xAC'), BIT_LENGTH('\xF0\x90\x8D\x88')");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0*8}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1*8}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2*8}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3*8}));
+	REQUIRE(CHECK_COLUMN(result, 5, {4*8}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES "
+	                          "('', 'Zero'), ('\x24', NULL), ('\xC2\xA2','Two'), "
+	                          "('\xE2\x82\xAC', NULL), ('\xF0\x90\x8D\x88','Four')"));
+
+	result = con.Query("select BIT_LENGTH(a) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {0*8, 1*8, 2*8, 3*8, 4*8}));
+
+	result = con.Query("select BIT_LENGTH(b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {4*8, Value(), 3*8, Value(), 4*8}));
+
+	result = con.Query("select BIT_LENGTH(a) FROM strings WHERE b IS NOT NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {0*8, 2*8, 4*8}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("select BIT_LENGTH()"));
+	REQUIRE_FAIL(con.Query("select BIT_LENGTH(1, 2)"));
+}
+
 TEST_CASE("UNICODE test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

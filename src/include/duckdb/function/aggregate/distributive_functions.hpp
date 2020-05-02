@@ -47,6 +47,18 @@ struct StandardDistributiveFunction {
 	}
 };
 
+struct BitAndFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct BitOrFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct BitXorFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CountStarFun {
 	static AggregateFunction GetFunction();
 
