@@ -96,6 +96,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto remove_info = (RemoveColumnInfo *)table_info;
 		return RemoveColumn(context, *remove_info);
 	}
+	case AlterTableType::SET_DEFAULT: {
+		auto set_default_info = (SetDefaultInfo *)table_info;
+		return SetDefault(context, *set_default_info);
+	}
 	default:
 		throw CatalogException("Unrecognized alter table type!");
 	}
@@ -248,6 +252,30 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo& info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		ColumnDefinition copy(columns[i].name, columns[i].type);
+		copy.oid = columns[i].oid;
+		if (info.column_name == copy.name) {
+			// set the default value of this column
+			copy.default_value = info.expression ? info.expression->Copy() : nullptr;
+		} else {
+			copy.default_value = columns[i].default_value ? columns[i].default_value->Copy() : nullptr;
+		}
+		create_info->columns.push_back(move(copy));
+	}
+
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {

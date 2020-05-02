@@ -40,6 +40,13 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			result->info = make_unique<RemoveColumnInfo>(basetable.schema_name, basetable.table_name, command->name, command->missing_ok);
 			break;
 		}
+		case PG_AT_ColumnDefault: {
+			auto expr = TransformExpression(command->def);
+			result->info = make_unique<SetDefaultInfo>(basetable.schema_name, basetable.table_name, command->name, move(expr));
+			break;
+		}
+		case PG_AT_DropConstraint:
+		case PG_AT_DropNotNull:
 		case PG_AT_AlterColumnType:
 		default:
 			throw NotImplementedException(

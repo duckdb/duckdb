@@ -564,3 +564,33 @@ TEST_CASE("Test ALTER TABLE DROP COLUMN with multiple transactions", "[alter]") 
 		REQUIRE_FAIL(con.Query("CREATE INDEX i_index ON test(j"));
 	}
 }
+
+TEST_CASE("Test ALTER TABLE SET DEFAULT", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
+
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ALTER j SET DEFAULT 3"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i) VALUES (3)"));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ALTER COLUMN j DROP DEFAULT"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i) VALUES (4)"));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, Value()}));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq"));
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ALTER j SET DEFAULT nextval('seq')"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i) VALUES (5), (6)"));
+	result = con.Query("SELECT * FROM test");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, 4, 5, 6}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3, Value(), 1, 2}));
+
+}
