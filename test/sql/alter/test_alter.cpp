@@ -229,6 +229,11 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3, 3)"));
 
+		result = con.Query("SELECT * FROM test WHERE k=2");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {2, 2}));
+
 		result = con.Query("SELECT * FROM test WHERE k=3");
 		REQUIRE(CHECK_COLUMN(result, 0, {3}));
 		REQUIRE(CHECK_COLUMN(result, 1, {3}));
