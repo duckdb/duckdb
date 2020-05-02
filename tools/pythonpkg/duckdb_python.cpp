@@ -817,9 +817,18 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df)->create_view(view_name, replace);
 	}
 
-	unique_ptr<DuckDBPyResult> query(string sql_query) {
+	unique_ptr<DuckDBPyResult> query(string view_name, string sql_query) {
 		auto res = make_unique<DuckDBPyResult>();
-		res->result = rel->Query(sql_query);
+		res->result = rel->Query(view_name, sql_query);
+		if (!res->result->success) {
+			throw runtime_error(res->result->error);
+		}
+		return res;
+	}
+
+	unique_ptr<DuckDBPyResult> execute() {
+		auto res = make_unique<DuckDBPyResult>();
+		res->result = rel->Execute();
 		if (!res->result->success) {
 			throw runtime_error(res->result->error);
 		}
@@ -827,7 +836,7 @@ struct DuckDBPyRelation {
 	}
 
 	static unique_ptr<DuckDBPyResult> query_df(py::object df, string view_name, string sql_query) {
-		return default_connection()->from_df(df)->create_view(view_name, true)->query(sql_query);
+		return default_connection()->from_df(df)->query(view_name, sql_query);
 	}
 
 	void insert(string table) {
@@ -924,7 +933,9 @@ PYBIND11_MODULE(duckdb, m) {
 	         py::arg("join_condition"))
 	    .def("distinct", &DuckDBPyRelation::distinct, "some doc string for distinct")
 	    .def("limit", &DuckDBPyRelation::limit, "some doc string for limit", py::arg("n"))
-	    .def("query", &DuckDBPyRelation::query, "some doc string for query", py::arg("sql_query"))
+	    .def("query", &DuckDBPyRelation::query, "some doc string for query", py::arg("virtual_table_name"),
+	         py::arg("sql_query"))
+	    .def("execute", &DuckDBPyRelation::execute, "some doc string for execute")
 	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
 	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("table_name"))
 	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))

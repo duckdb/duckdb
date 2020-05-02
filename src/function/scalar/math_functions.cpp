@@ -26,4 +26,6 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<SqrtFun>();
 
 	Register<PiFun>();
+
+	Register<BitCountFun>();
 }
