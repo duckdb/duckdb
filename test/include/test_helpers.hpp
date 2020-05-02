@@ -11,10 +11,10 @@
 #undef RemoveDirectory
 #endif
 
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types.hpp"
 #include "compare_result.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -24,6 +24,10 @@ void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
+
+string GetCSVPath();
+void WriteCSV(string path, const char *csv);
+void WriteBinary(string path, const uint8_t *data, uint64_t length);
 
 bool NO_FAIL(QueryResult &result);
 bool NO_FAIL(unique_ptr<QueryResult> result);

@@ -2,6 +2,7 @@ add_library_unity(duckdb_expression
                   OBJECT
                   case_expression.cpp
                   cast_expression.cpp
+                  collate_expression.cpp
                   conjunction_expression.cpp
                   columnref_expression.cpp
                   comparison_expression.cpp

@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test basic parqet reading", "[parquet]") {
+TEST_CASE("Test basic parquet reading", "[parquet]") {
 	DuckDB db(nullptr);
 	Parquet::Init(db);
 

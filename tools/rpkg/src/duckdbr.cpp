@@ -597,7 +597,7 @@ struct DataFrameScanFunction : public TableFunction {
 	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> inputs,
 	                                                    vector<SQLType> &return_types, vector<string> &names) {
 		// TODO have a better way to pass this pointer
-		SEXP df((SEXP)stoul(inputs[0].GetValue<string>(), nullptr, 16));
+		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		auto df_names = GET_NAMES(df);
 		vector<RType> rtypes;

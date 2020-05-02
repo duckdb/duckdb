@@ -10,8 +10,13 @@ add_library_unity(
   regexp.cpp
   substring.cpp
   instr.cpp
+  pad.cpp
   prefix.cpp
+  repeat.cpp
+  replace.cpp
+  strip_accents.cpp
   suffix.cpp
+  trim.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string>

@@ -7,7 +7,7 @@ namespace duckdb {
 
 ProjectionRelation::ProjectionRelation(shared_ptr<Relation> child_p,
                                        vector<unique_ptr<ParsedExpression>> parsed_expressions, vector<string> aliases)
-    : Relation(child_p->context, RelationType::PROJECTION), expressions(move(parsed_expressions)),
+    : Relation(child_p->context, RelationType::PROJECTION_RELATION), expressions(move(parsed_expressions)),
       child(move(child_p)) {
 	if (aliases.size() > 0) {
 		if (aliases.size() != expressions.size()) {
@@ -27,7 +27,7 @@ unique_ptr<QueryNode> ProjectionRelation::GetQueryNode() {
 		child_ptr = child_ptr->ChildRelation();
 	}
 	unique_ptr<QueryNode> result;
-	if (child_ptr->type == RelationType::JOIN) {
+	if (child_ptr->type == RelationType::JOIN_RELATION) {
 		// child node is a join: push projection into the child query node
 		result = child->GetQueryNode();
 	} else {

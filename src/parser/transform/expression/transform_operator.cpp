@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -172,7 +173,6 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 	default:
 		break;
 	}
-
 	auto left_expr = TransformExpression(root->lexpr);
 	auto right_expr = TransformExpression(root->rexpr);
 

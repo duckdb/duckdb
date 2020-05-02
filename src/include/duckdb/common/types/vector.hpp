@@ -109,6 +109,8 @@ public:
 	//! FUNCTION ONLY!
 	void Verify(idx_t count);
 	void Verify(const SelectionVector &sel, idx_t count);
+	void UTFVerify(idx_t count);
+	void UTFVerify(const SelectionVector &sel, idx_t count);
 
 	//! Returns the [index] element of the Vector as a Value.
 	Value GetValue(idx_t index) const;
@@ -225,6 +227,8 @@ struct StringVector {
 	static string_t AddString(Vector &vector, string_t data);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	static string_t AddString(Vector &vector, const string &data);
+	//! Add a blob to the string heap of the vector (auxiliary data)
+	static string_t AddBlob(Vector &vector, string_t data);
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	static string_t EmptyString(Vector &vector, idx_t len);

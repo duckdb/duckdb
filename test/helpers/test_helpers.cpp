@@ -10,6 +10,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 
 #include <cmath>
+#include <fstream>
 
 using namespace std;
 
@@ -64,6 +65,28 @@ unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_unique<DBConfig>();
 	result->checkpoint_wal_size = 0;
 	return result;
+}
+
+string GetCSVPath() {
+	FileSystem fs;
+	string csv_path = TestCreatePath("csv_files");
+	if (fs.DirectoryExists(csv_path)) {
+		fs.RemoveDirectory(csv_path);
+	}
+	fs.CreateDirectory(csv_path);
+	return csv_path;
+}
+
+void WriteCSV(string path, const char *csv) {
+	ofstream csv_writer(path);
+	csv_writer << csv;
+	csv_writer.close();
+}
+
+void WriteBinary(string path, const uint8_t *data, uint64_t length) {
+	ofstream binary_writer(path, ios::binary);
+	binary_writer.write((const char *)data, length);
+	binary_writer.close();
 }
 
 bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {

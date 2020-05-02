@@ -96,8 +96,12 @@ void SegmentStatistics::Reset() {
 		initialize_max_min<double>(minimum.get(), maximum.get());
 		break;
 	case TypeId::VARCHAR: {
+		//! This marks the min/max was not initialized
+		char marker = '1';
 		memset(minimum.get(), padding, min_max_size);
 		memset(maximum.get(), padding, min_max_size);
+		minimum.get()[1] = marker;
+		maximum.get()[1] = marker;
 		break;
 	}
 	default:

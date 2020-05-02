@@ -34,9 +34,12 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	    constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
 		//! Here we check if we can apply the expression on the constant side
 		auto cast_expression = (BoundCastExpression *)column_ref_expr;
+		if (!BoundCastExpression::CastIsInvertible(cast_expression->source_type, cast_expression->target_type)) {
+			return nullptr;
+		}
 		auto bound_const_expr = (BoundConstantExpression *)constant_expr;
-		auto new_constant = (BoundConstantExpression *)bound_const_expr->value.TryCastAs(
-		    cast_expression->target_type.id, cast_expression->source_type.id);
+		auto new_constant =
+		    bound_const_expr->value.TryCastAs(cast_expression->target_type.id, cast_expression->source_type.id);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);
 			constant_expr->return_type = bound_const_expr->value.type;

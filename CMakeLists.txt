@@ -93,7 +93,6 @@ execute_process(COMMAND git
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                 OUTPUT_VARIABLE GIT_COMMIT_HASH
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 
 option(AMALGAMATION_BUILD
        "Build from the amalgamation files, rather than from the normal sources."
@@ -202,10 +201,17 @@ function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
       )
   endforeach(source_file)
 
-  execute_process( COMMAND ${CMAKE_COMMAND} -E compare_files ${unit_build_file} ${temp_unit_build_file} RESULT_VARIABLE compare_result OUTPUT_VARIABLE bla ERROR_VARIABLE bla)
-  if( compare_result EQUAL 0)
+  execute_process(COMMAND ${CMAKE_COMMAND}
+                          -E
+                          compare_files
+                          ${unit_build_file}
+                          ${temp_unit_build_file}
+                  RESULT_VARIABLE compare_result
+                  OUTPUT_VARIABLE bla
+                  ERROR_VARIABLE bla)
+  if(compare_result EQUAL 0)
     # files are identical: do nothing
-  elseif( compare_result EQUAL 1)
+  elseif(compare_result EQUAL 1)
     # files are different: rebuild
     set(rebuild TRUE)
   else()
@@ -246,6 +252,7 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+add_subdirectory(extension)
 add_subdirectory(src)
 add_subdirectory(third_party)
 add_subdirectory(test)

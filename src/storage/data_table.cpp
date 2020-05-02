@@ -60,7 +60,7 @@ void DataTable::InitializeScan(TableScanState &state, vector<column_t> column_id
 	state.max_persistent_row = persistent_manager.max_row;
 	state.current_transient_row = 0;
 	state.max_transient_row = transient_manager.max_row;
-	if (table_filters) {
+	if (table_filters && table_filters->size() > 0) {
 		state.adaptive_filter = make_unique<AdaptiveFilter>(*table_filters);
 	}
 }
@@ -120,13 +120,11 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 	case ExpressionType::COMPARE_EQUAL:
 		return min_comp <= 0 && max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return max_comp >= 0;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return max_comp > 0;
+		return max_comp >= 0;
+	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return min_comp <= 0;
-	case ExpressionType::COMPARE_LESSTHAN:
-		return min_comp < 0;
 	default:
 		throw NotImplementedException("Operation not implemented");
 	}

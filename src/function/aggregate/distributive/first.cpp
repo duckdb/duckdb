@@ -106,7 +106,7 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(SQLType t
 AggregateFunction FirstFun::GetFunction(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
-		return GetFirstAggregateTemplated<bool>(type);
+		return GetFirstAggregateTemplated<int8_t>(type);
 	case SQLTypeId::TINYINT:
 		return GetFirstAggregateTemplated<int8_t>(type);
 	case SQLTypeId::SMALLINT:

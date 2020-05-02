@@ -9,6 +9,21 @@ using namespace std;
 
 namespace duckdb {
 
+template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(SQLType type) {
+	switch (type.id) {
+	case SQLTypeId::TINYINT:
+		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+	case SQLTypeId::SMALLINT:
+		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+	case SQLTypeId::INTEGER:
+		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+	case SQLTypeId::BIGINT:
+		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+	default:
+		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunctionFixedReturn");
+	}
+}
+
 struct UnaryDoubleWrapper {
 	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, nullmask_t &nullmask, idx_t idx) {
@@ -64,6 +79,29 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 		abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 	}
 	set.AddFunction(abs);
+}
+
+//===--------------------------------------------------------------------===//
+// bit_count
+//===--------------------------------------------------------------------===//
+struct BitCntOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		using TU = typename make_unsigned<TA>::type;
+		TR count = 0;
+		for (auto value = TU(input); value > 0; value >>= 1) {
+			count += TR(value & 1);
+		}
+		return count;
+	}
+};
+
+void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
+	ScalarFunctionSet functions("bit_count");
+	for (auto &type : SQLType::INTEGRAL) {
+		functions.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
+		                                     GetScalarIntegerUnaryFunctionFixedReturn<int8_t, BitCntOperator>(type)));
+	}
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -258,12 +296,8 @@ struct Log10Operator {
 };
 
 void Log10Fun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction log_function("log10", {SQLType::DOUBLE}, SQLType::DOUBLE,
-	                            UnaryDoubleFunctionWrapper<double, Log10Operator>);
-	set.AddFunction(log_function);
-	// "log" is an alias for "log10"
-	log_function.name = "log";
-	set.AddFunction(log_function);
+	set.AddFunction({"log10", "log"}, ScalarFunction({SQLType::DOUBLE}, SQLType::DOUBLE,
+	                                                 UnaryDoubleFunctionWrapper<double, Log10Operator>));
 }
 
 //===--------------------------------------------------------------------===//

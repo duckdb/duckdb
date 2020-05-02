@@ -86,21 +86,6 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 
 			string range_min, range_max;
 			auto range_success = re->PossibleMatchRange(&range_min, &range_max, 1000);
-			if (range_success) {
-				// there can be null terminators in the produced range value: remove them
-				range_min = string(range_min.c_str());
-				range_max = string(range_max.c_str());
-				if (range_min.size() == 0 || range_max.size() == 0) {
-					range_success = false;
-				}
-				// range_min and range_max might produce non-valid UTF8 strings, e.g. in the case of 'a.*'
-				// in this case we don't push a range filter
-				if (Utf8Proc::Analyze(range_min) == UnicodeType::INVALID ||
-				    Utf8Proc::Analyze(range_max) == UnicodeType::INVALID) {
-					range_success = false;
-				}
-			}
-
 			return make_unique<RegexpMatchesBindData>(move(re), range_min, range_max, range_success);
 		}
 	}

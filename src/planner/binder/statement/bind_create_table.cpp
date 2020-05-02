@@ -138,5 +138,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// bind the default values
 		BindDefaultValues(base.columns, result->bound_defaults);
 	}
+	// bind collations to detect any unsupported collation errors
+	for (auto &column : base.columns) {
+		ExpressionBinder::PushCollation(context, nullptr, column.type.collation);
+	}
 	return result;
 }

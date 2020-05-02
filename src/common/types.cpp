@@ -24,6 +24,7 @@ const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
 const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
 
 const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
+const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
 
 const SQLType SQLType::BLOB = SQLType(SQLTypeId::BLOB);
 
@@ -161,13 +162,15 @@ void SQLType::Serialize(Serializer &serializer) {
 	serializer.Write(id);
 	serializer.Write(width);
 	serializer.Write(scale);
+	serializer.WriteString(collation);
 }
 
 SQLType SQLType::Deserialize(Deserializer &source) {
 	auto id = source.Read<SQLTypeId>();
 	auto width = source.Read<uint16_t>();
 	auto scale = source.Read<uint8_t>();
-	return SQLType(id, width, scale);
+	auto collation = source.Read<string>();
+	return SQLType(id, width, scale, collation);
 }
 
 string SQLTypeIdToString(SQLTypeId id) {
@@ -306,6 +309,70 @@ bool SQLType::IsNumeric() const {
 	}
 }
 
+bool SQLType::IsMoreGenericThan(SQLType &other) const {
+	if (other.id == id) {
+		return false;
+	}
+
+	if (other.id == SQLTypeId::SQLNULL) {
+		return true;
+	}
+
+	switch (id) {
+	case SQLTypeId::SMALLINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::INTEGER:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::BIGINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::DOUBLE:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	case SQLTypeId::DATE:
+		return false;
+	case SQLTypeId::TIMESTAMP:
+		switch (other.id) {
+		case SQLTypeId::TIME:
+		case SQLTypeId::DATE:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
 TypeId GetInternalType(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -351,7 +418,7 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 		return right;
 	} else if (right.id < left.id) {
 		return left;
-	} else if (left.width > right.width) {
+	} else if (left.width > right.width || left.collation > right.collation) {
 		return left;
 	} else {
 		return right;

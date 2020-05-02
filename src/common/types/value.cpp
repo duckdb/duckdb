@@ -29,10 +29,7 @@ Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
-		str_value = val;
-		// Fixme: remove validation to support BLOB type
-//		throw Exception("String value is not valid UTF8");
-		break;
+		throw Exception("String value is not valid UTF8");
 	case UnicodeType::ASCII:
 		str_value = val;
 		break;
@@ -144,6 +141,14 @@ Value Value::BIGINT(int64_t value) {
 	Value result(TypeId::INT64);
 	result.value_.bigint = value;
 	result.is_null = false;
+	return result;
+}
+
+Value Value::BLOB(string value) {
+	Value result(TypeId::VARCHAR);
+	result.str_value = value;
+	result.is_null = false;
+	result.sql_type = SQLType::VARBINARY;
 	return result;
 }
 
@@ -521,21 +526,28 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-Value Value::CastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 	if (source_type == target_type) {
 		return Copy();
 	}
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type, 1);
+	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(TypeId target_type, bool strict) const {
+	if (target_type == type) {
+		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+	}
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type), strict);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
 	Value new_value;
 	try {
-		new_value = CastAs(source_type, target_type);
+		new_value = CastAs(source_type, target_type, strict);
 	} catch (Exception &) {
 		return false;
 	}
@@ -546,13 +558,6 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
 	return true;
-}
-
-Value Value::CastAs(TypeId target_type) const {
-	if (target_type == type) {
-		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
-	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
 }
 
 void Value::Serialize(Serializer &serializer) {

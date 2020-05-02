@@ -65,4 +65,5 @@ void DuckDB::Configure(DBConfig &config) {
 	use_direct_io = config.use_direct_io;
 	maximum_memory = config.maximum_memory;
 	temporary_directory = config.temporary_directory;
+	collation = config.collation;
 }

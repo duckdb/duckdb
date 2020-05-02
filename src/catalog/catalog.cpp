@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -50,6 +51,11 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return schema->CreateFunction(context, info);
+}
+
+CatalogEntry *Catalog::CreateCollation(ClientContext &context, CreateCollationInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateCollation(context, info);
 }
 
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
@@ -167,6 +173,11 @@ AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string 
 		throw CatalogException("%s is not an aggregate function", name.c_str());
 	}
 	return (AggregateFunctionCatalogEntry *)entry;
+}
+
+template <>
+CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists) {
+	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION, move(schema_name), name, if_exists);
 }
 
 void Catalog::AlterTable(ClientContext &context, AlterTableInfo *info) {

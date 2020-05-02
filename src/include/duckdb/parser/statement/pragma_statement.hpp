@@ -15,7 +15,7 @@ namespace duckdb {
 
 class PragmaStatement : public SQLStatement {
 public:
-	PragmaStatement() : SQLStatement(StatementType::PRAGMA), info(make_unique<PragmaInfo>()){};
+	PragmaStatement() : SQLStatement(StatementType::PRAGMA_STATEMENT), info(make_unique<PragmaInfo>()){};
 
 	unique_ptr<PragmaInfo> info;
 };
