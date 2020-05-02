@@ -17,7 +17,9 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -78,34 +80,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	switch (table_info->alter_table_type) {
 	case AlterTableType::RENAME_COLUMN: {
 		auto rename_info = (RenameColumnInfo *)table_info;
-		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-		create_info->temporary = temporary;
-		bool found = false;
-		for (idx_t i = 0; i < columns.size(); i++) {
-			ColumnDefinition copy = columns[i].Copy();
-
-			create_info->columns.push_back(move(copy));
-			if (rename_info->name == columns[i].name) {
-				assert(!found);
-				create_info->columns[i].name = rename_info->new_name;
-				found = true;
-			}
-		}
-		if (!found) {
-			throw CatalogException("Table does not have a column with name \"%s\"", rename_info->name.c_str());
-		}
-		// FIXME
-		if (constraints.size() > 0) {
-			throw CatalogException("Cannot modify a table with constraints");
-		}
-		// create_info->constraints.resize(constraints.size());
-		// for (idx_t i = 0; i < constraints.size(); i++) {
-		// 	create_info->constraints[i] = constraints[i]->Copy();
-		// }
-		Binder binder(context);
-		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
-		                                      storage);
+		return RenameColumn(context, *rename_info);
 	}
 	case AlterTableType::RENAME_TABLE: {
 		auto rename_info = (RenameTableInfo *)table_info;
@@ -115,19 +90,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 	case AlterTableType::ADD_COLUMN: {
 		auto add_info = (AddColumnInfo *)table_info;
-
-		auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-		create_info->temporary = temporary;
-		for (idx_t i = 0; i < columns.size(); i++) {
-			create_info->columns.push_back(columns[i].Copy());
-		}
-		add_info->new_column.oid = columns.size();
-		create_info->columns.push_back(add_info->new_column.Copy());
-
-		Binder binder(context);
-		auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-		auto new_storage = make_shared<DataTable>(context, *storage, add_info->new_column, bound_create_info->bound_defaults.back().get());
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+		return AddColumn(context, *add_info);
 	}
 	case AlterTableType::REMOVE_COLUMN: {
 		auto remove_info = (RemoveColumnInfo *)table_info;
@@ -136,6 +99,84 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	default:
 		throw CatalogException("Unrecognized alter table type!");
 	}
+}
+
+static void RenameExpression(ParsedExpression &expr, RenameColumnInfo& info) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &) expr;
+		if (colref.column_name == info.name) {
+			colref.column_name = info.new_name;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		RenameExpression((ParsedExpression &) child, info);
+	});
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo& info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+	bool found = false;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		ColumnDefinition copy = columns[i].Copy();
+
+		create_info->columns.push_back(move(copy));
+		if (info.name == columns[i].name) {
+			assert(!found);
+			create_info->columns[i].name = info.new_name;
+			found = true;
+		}
+	}
+	if (!found) {
+		throw CatalogException("Table does not have a column with name \"%s\"", info.name.c_str());
+	}
+	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
+		auto copy = constraints[c_idx]->Copy();
+		switch(copy->type) {
+		case ConstraintType::NOT_NULL:
+			// NOT NULL constraint: no adjustments necessary
+			break;
+		case ConstraintType::CHECK: {
+			// CHECK constraint: need to rename column references that refer to the renamed column
+			auto &check = (CheckConstraint &) *copy;
+			RenameExpression(*check.expression, info);
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			// UNIQUE constraint: possibly need to rename columns
+			auto &unique = (UniqueConstraint &) *copy;
+			for(idx_t i = 0; i < unique.columns.size(); i++) {
+				if (unique.columns[i] == info.name) {
+					unique.columns[i] = info.new_name;
+				}
+			}
+			break;
+		}
+		default:
+			throw CatalogException("Unsupported constraint for entry!");
+
+		}
+		create_info->constraints.push_back(move(copy));
+	}
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+											storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo& info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		create_info->columns.push_back(columns[i].Copy());
+	}
+	info.new_column.oid = columns.size();
+	create_info->columns.push_back(info.new_column.Copy());
+
+	Binder binder(context);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	auto new_storage = make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo& info) {

@@ -131,17 +131,43 @@ TEST_CASE("Test ALTER TABLE RENAME COLUMN on a table with constraints", "[alter]
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// create a table with a check constraint referencing the to-be-renamed column
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER CHECK(i < 10), j INTEGER)"));
-	// insert some elements
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 2), (2, 3)"));
-	REQUIRE_FAIL(con.Query("INSERT INTO test (i, j) VALUES (100, 2)"));
-	// now alter the column name
-	// currently, we don't support altering tables with constraints
-	REQUIRE_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
-	// the check should still work after the alter table
-	// REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
-	// REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (100, 2)"));
+	SECTION("CHECK constraint") {
+		// create a table with a check constraint referencing the to-be-renamed column
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER CHECK(i < 10), j INTEGER)"));
+		// insert some elements
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 2), (2, 3)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (i, j) VALUES (100, 2)"));
+		// now alter the column name
+		// currently, we don't support altering tables with constraints
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+		// the check should still work after the alter table
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (100, 2)"));
+	}
+	SECTION("NOT NULL constraint") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER NOT NULL, j INTEGER)"));
+		// insert some elements
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 2), (2, 3)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (i, j) VALUES (NULL, 2)"));
+		// now alter the column name
+		// currently, we don't support altering tables with constraints
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+		// the check should still work after the alter table
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 2), (2, 3)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (NULL, 2)"));
+	}
+	SECTION("UNIQUE constraint") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER, PRIMARY KEY(i, j))"));
+		// insert some elements
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 1), (2, 2)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (i, j) VALUES (1, 1)"));
+		// now alter the column name
+		// currently, we don't support altering tables with constraints
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME COLUMN i TO k"));
+		// the check should still work after the alter table
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test (k, j) VALUES (3, 3), (4, 4)"));
+		REQUIRE_FAIL(con.Query("INSERT INTO test (k, j) VALUES (1, 1)"));
+	}
 }
 
 TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
