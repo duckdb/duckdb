@@ -221,3 +221,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
+
+void TableCatalogEntry::SetAsRoot() {
+	storage->SetAsRoot();
+}

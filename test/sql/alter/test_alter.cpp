@@ -149,7 +149,6 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// CREATE TABLE AND ALTER IT TO RENAME A COLUMN
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
 
@@ -194,6 +193,11 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 		REQUIRE(result->names.size() == 2);
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3)"));
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
 	}
 	SECTION("multiple ADD COLUMN in the same transaction") {
 		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -215,5 +219,104 @@ TEST_CASE("Test ALTER TABLE ADD COLUMN", "[alter]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 		REQUIRE(result->names.size() == 2);
+	}
+	SECTION("ADD COLUMN with index") {
+		// what if we create an index on the new column, then rollback
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 2"));
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON test(k)"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3, 3)"));
+
+		result = con.Query("SELECT * FROM test WHERE k=3");
+		REQUIRE(CHECK_COLUMN(result, 0, {3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {3}));
+		REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	}
+	SECTION("ADD COLUMN rollback with index") {
+		// what if we create an index on the new column, then rollback
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON test(k)"));
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3, 3)"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
+	}
+	SECTION("Incorrect usage") {
+		// cannot add a column that already exists!
+		REQUIRE_FAIL(con.Query("ALTER TABLE test ADD COLUMN i INTEGER"));
+	}
+}
+
+TEST_CASE("Test ALTER TABLE ADD COLUMN with multiple transactions", "[alter]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db), con2(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (1, 1), (2, 2)"));
+
+	SECTION("Only one pending table alter can be active at a time") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		// con adds a column to test
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+		// con2 cannot add a new column now!
+		REQUIRE_FAIL(con2.Query("ALTER TABLE test ADD COLUMN l INTEGER"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// after a commit, con2 can add a new column again
+		REQUIRE_NO_FAIL(con2.Query("ALTER TABLE test ADD COLUMN l INTEGER"));
+	}
+	SECTION("Can only append to newest table") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		// con adds a column to test
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+
+		// con2 cannot append now!
+		REQUIRE_FAIL(con2.Query("INSERT INTO test (i, j) VALUES (3, 3)"));
+		// but we can delete rows!
+		REQUIRE_NO_FAIL(con2.Query("DELETE FROM test WHERE i=1"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+
+		result = con2.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {2}));
+
+		// we can also update rows
+		REQUIRE_NO_FAIL(con2.Query("UPDATE test SET j=100"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), Value()}));
+
+		result = con2.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {100}));
+
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+
+		result = con.Query("SELECT * FROM test");
+		REQUIRE(CHECK_COLUMN(result, 0, {2}));
+		REQUIRE(CHECK_COLUMN(result, 1, {100}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	}
+	SECTION("Alter table while other transaction still has pending appends") {
+		REQUIRE_NO_FAIL(con2.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con2.Query("INSERT INTO test VALUES (3, 3)"));
+
+		// now con adds a column
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE test ADD COLUMN k INTEGER"));
+
+		// cannot commit con2! conflict on append
+		REQUIRE_FAIL(con2.Query("COMMIT"));
 	}
 }

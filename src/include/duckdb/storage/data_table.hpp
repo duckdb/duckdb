@@ -131,6 +131,10 @@ public:
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers);
 	//! Remove the row identifiers from all the indexes of the table
 	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
+
+	void SetAsRoot() {
+		this->is_root = true;
+	}
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -165,7 +169,7 @@ private:
 	shared_ptr<VersionManager> transient_manager;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
-	//! The child data table, if any
-	DataTable *child;
+	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version that can be appended to
+	bool is_root;
 };
 } // namespace duckdb

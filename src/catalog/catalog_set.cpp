@@ -228,6 +228,7 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	} else {
 		// otherwise we need to update the base entry tables
 		auto &name = entry->name;
+		to_be_removed_node->child->SetAsRoot();
 		data[name] = move(to_be_removed_node->child);
 		entry->parent = nullptr;
 	}

@@ -34,6 +34,10 @@ public:
 	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) {
 		throw CatalogException("Unsupported copy type for catalog entry!");
 	}
+	//! Sets the CatalogEntry as the new root entry (i.e. the newest entry) - this is called on a rollback to an AlterEntry
+	virtual void SetAsRoot() {
+	}
+
 	//! The type of this catalog entry
 	CatalogType type;
 	//! Reference to the catalog this entry belongs to

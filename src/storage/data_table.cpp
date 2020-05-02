@@ -18,7 +18,7 @@ using namespace chrono;
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage), persistent_manager(make_shared<VersionManager>(*info)),
-      transient_manager(make_shared<VersionManager>(*info)), child(nullptr) {
+      transient_manager(make_shared<VersionManager>(*info)), is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
@@ -42,11 +42,11 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value) :
-	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
+	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// set this table as the child of the previous table, this prevents any appends being made
-	parent.child = this;
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 	// add the new column to this DataTable
 	auto new_column_type = GetInternalType(new_column.type);
 	idx_t new_column_idx = columns.size();
@@ -85,11 +85,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column) :
-	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns) {
+	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// set this table as the child of the previous table, this prevents any appends being made to that table
-	parent.child = this;
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 	// erase the column from this DataTable
 	assert(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
@@ -511,7 +511,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 	if (chunk.column_count() != table.columns.size()) {
 		throw CatalogException("Mismatch in column count for append");
 	}
-	if (this->child) {
+	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 
@@ -528,7 +528,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 void DataTable::InitializeAppend(TableAppendState &state) {
 	// obtain the append lock for this table
 	state.append_lock = unique_lock<mutex>(append_lock);
-	if (this->child) {
+	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
 	// obtain locks on all indexes for the table
@@ -546,7 +546,7 @@ void DataTable::InitializeAppend(TableAppendState &state) {
 }
 
 void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataChunk &chunk, TableAppendState &state) {
-	assert(!child);
+	assert(is_root);
 	assert(chunk.column_count() == types.size());
 	chunk.Verify();
 
@@ -562,11 +562,11 @@ void DataTable::Append(Transaction &transaction, transaction_t commit_id, DataCh
 }
 
 void DataTable::RevertAppend(TableAppendState &state) {
-	assert(!child);
 	if (state.row_start == state.current_row) {
 		// nothing to revert!
 		return;
 	}
+	assert(is_root);
 	// revert changes in the base columns
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns[i]->RevertAppend(state.row_start);
@@ -582,7 +582,7 @@ void DataTable::RevertAppend(TableAppendState &state) {
 // Indexes
 //===--------------------------------------------------------------------===//
 bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	assert(!child);
+	assert(is_root);
 	if (info->indexes.size() == 0) {
 		return true;
 	}
@@ -610,7 +610,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	assert(!child);
+	assert(is_root);
 	if (info->indexes.size() == 0) {
 		return;
 	}
@@ -623,14 +623,14 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vector &row_identifiers) {
-	assert(!child);
+	assert(is_root);
 	for (idx_t i = 0; i < info->indexes.size(); i++) {
 		info->indexes[i]->Delete(state.index_locks[i], chunk, row_identifiers);
 	}
 }
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
-	assert(!child);
+	assert(is_root);
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	// create a selection vector from the row_ids
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
