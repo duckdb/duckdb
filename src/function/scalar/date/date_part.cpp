@@ -175,6 +175,21 @@ struct YearWeekOperator {
 	}
 };
 
+struct LastDayOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		int32_t yyyy, mm, dd;
+		Date::Convert(input, yyyy, mm, dd);
+		yyyy += (mm / 12);
+		mm %= 12;
+		++mm;
+		return Date::FromDate(yyyy, mm, 1) - 1;
+	}
+};
+
+template <> date_t LastDayOperator::Operation(timestamp_t input) {
+	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
+}
+
 struct EpochOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
 		return Date::Epoch(input);
@@ -318,6 +333,14 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DayOperator>(set, "dayofmonth");
 	AddDatePartOperator<DayOfWeekOperator>(set, "weekday");
 	AddDatePartOperator<WeekOperator>(set, "weekofyear"); //  Note that WeekOperator is ISO-8601, not US
+
+	//  register the last_day function
+	ScalarFunctionSet last_day("last_day");
+	last_day.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::DATE,
+	                                    ScalarFunction::UnaryFunction<date_t, date_t, LastDayOperator, true>));
+	last_day.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::DATE,
+	                                    ScalarFunction::UnaryFunction<timestamp_t, date_t, LastDayOperator, true>));
+	set.AddFunction(last_day);
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");

@@ -41,7 +41,19 @@ TEST_CASE("DATE_PART test", "[date]") {
 	result = con.Query("SELECT date_part(s, d::TIMESTAMP) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1992, 3, 5}));
 
-	//  combinations
+	//  last_day
+	result = con.Query("SELECT LAST_DAY(DATE '1900-02-12'), LAST_DAY(DATE '1992-02-12'), LAST_DAY(DATE '2000-02-12');");
+	REQUIRE(CHECK_COLUMN(result, 0, {Date::FromDate(1900, 2, 28)}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Date::FromDate(1992, 2, 29)}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Date::FromDate(2000, 2, 29)}));
+	result = con.Query("SELECT LAST_DAY(d) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Date::FromDate(1992, 1, 31), Date::FromDate(1992, 3, 31), Date::FromDate(1992, 5, 31)}));
+	result = con.Query("SELECT LAST_DAY(d::timestamp) FROM dates;");
+	REQUIRE(CHECK_COLUMN(result, 0,
+	                     {Date::FromDate(1992, 1, 31), Date::FromDate(1992, 3, 31), Date::FromDate(1992, 5, 31)}));
+
+	//  yearweek
 	result = con.Query("SELECT YEARWEEK(d) FROM dates;");
 	REQUIRE(CHECK_COLUMN(result, 0, {199201, 199209, 199218}));
 
