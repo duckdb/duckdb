@@ -540,8 +540,8 @@ matrix:
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp27-manylinux_x86_64'
-      python: 2.7
+        - CIBW_BUILD='cp27-*'
+      python: 2.7.10
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
