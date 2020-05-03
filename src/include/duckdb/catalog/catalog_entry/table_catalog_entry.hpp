@@ -66,11 +66,12 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
 
 	void SetAsRoot() override;
+
 private:
-	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo& info);
-	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo& info);
-	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo& info);
-	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo& info);
-	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo& info);
+	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
+	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
+	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
+	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
+	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
 };
 } // namespace duckdb

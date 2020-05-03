@@ -112,11 +112,11 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			}
 		}
 	}
-	if (count == 0){
-	    // all entries in this chunk were filtered:: Continue on next chunk
-			state.chunk_index++;
-			Scan(state, column_ids, result, table_filters);
-			return;
+	if (count == 0) {
+		// all entries in this chunk were filtered:: Continue on next chunk
+		state.chunk_index++;
+		Scan(state, column_ids, result, table_filters);
+		return;
 	}
 	if (count == chunk_count) {
 		result.SetCardinality(count);
@@ -351,7 +351,8 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 	}
 }
 
-void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value) {
+void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
+                             Expression *default_value) {
 	// check if there are any pending appends for the old version of the table
 	auto entry = table_storage.find(old_dt);
 	if (entry == table_storage.end()) {
@@ -369,7 +370,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	}
 
 	new_storage->collection.types.push_back(new_column_type);
-	for(idx_t chunk_idx = 0; chunk_idx < new_storage->collection.chunks.size(); chunk_idx++) {
+	for (idx_t chunk_idx = 0; chunk_idx < new_storage->collection.chunks.size(); chunk_idx++) {
 		auto &chunk = new_storage->collection.chunks[chunk_idx];
 		Vector result(new_column_type);
 		if (default_value) {
@@ -385,7 +386,8 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	table_storage[new_dt] = move(new_storage);
 }
 
-void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type, vector<column_t> bound_columns, Expression &cast_expr) {
+void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type,
+                              vector<column_t> bound_columns, Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
 	auto entry = table_storage.find(old_dt);
 	if (entry == table_storage.end()) {

@@ -7,7 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info) : table_info(table_info), manager(manager), persistent_rows(0) {
+ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
+    : table_info(table_info), manager(manager), persistent_rows(0) {
 }
 
 void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {

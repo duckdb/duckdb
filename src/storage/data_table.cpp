@@ -17,8 +17,9 @@ using namespace chrono;
 
 DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
-    : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage), persistent_manager(make_shared<VersionManager>(*info)),
-      transient_manager(make_shared<VersionManager>(*info)), is_root(true) {
+    : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
+      persistent_manager(make_shared<VersionManager>(*info)), transient_manager(make_shared<VersionManager>(*info)),
+      is_root(true) {
 	// set up the segment trees for the column segments
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
@@ -41,8 +42,9 @@ DataTable::DataTable(StorageManager &storage, string schema, string table, vecto
 	}
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value) :
-	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
+DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
+    : info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager),
+      transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
@@ -72,7 +74,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 		ColumnAppendState state;
 		columns[new_column_idx]->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
-			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t) STANDARD_VECTOR_SIZE);
+			idx_t rows_in_this_vector = std::min(rows_to_write - i, (idx_t)STANDARD_VECTOR_SIZE);
 			if (default_value) {
 				dummy_chunk.SetCardinality(rows_in_this_vector);
 				executor.ExecuteExpression(dummy_chunk, result);
@@ -84,13 +86,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	Transaction::GetTransaction(context).storage.AddColumn(&parent, this, new_column, default_value);
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column) :
-	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
+    : info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager),
+      transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// first check if there are any indexes that exist that point to the removed column
-	for(auto &index : info->indexes) {
-		for(auto &column_id : index->column_ids) {
+	for (auto &index : info->indexes) {
+		for (auto &column_id : index->column_ids) {
 			if (column_id == removed_column) {
 				throw CatalogException("Cannot drop this column: an index depends on it!");
 			} else if (column_id > removed_column) {
@@ -106,16 +109,18 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	columns.erase(columns.begin() + removed_column);
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type, vector<column_t> bound_columns, Expression &cast_expr)  :
-	info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager), transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+                     vector<column_t> bound_columns, Expression &cast_expr)
+    : info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager),
+      transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 	// first check if there are any indexes that exist that point to the changed column
-	for(auto &index : info->indexes) {
-		for(auto &column_id : index->column_ids) {
+	for (auto &index : info->indexes) {
+		for (auto &column_id : index->column_ids) {
 			if (column_id == changed_idx) {
 				throw CatalogException("Cannot change the type of this column: an index depends on it!");
 			}
@@ -138,7 +143,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	TableScanState scan_state;
 
 	vector<TypeId> types;
-	for(idx_t i = 0; i < bound_columns.size(); i++) {
+	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		types.push_back(parent.types[i]);
 	}
 	parent.InitializeScan(transaction, scan_state, bound_columns, nullptr);
@@ -151,7 +156,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	executor.AddExpression(cast_expr);
 
 	Vector append_vector(new_type);
-	while(true) {
+	while (true) {
 		// scan the table
 		parent.Scan(transaction, scan_chunk, scan_state, dummy_filters);
 		if (scan_chunk.size() == 0) {
@@ -381,7 +386,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		for (idx_t i = 0; i < table_filters.size(); i++) {
 			auto tf_idx = state.adaptive_filter->permutation[i];
 			columns[tf_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-			                       approved_tuple_count, table_filters[tf_idx]);
+			                        approved_tuple_count, table_filters[tf_idx]);
 		}
 		for (auto &table_filter : table_filters) {
 			result.data[table_filter.first].Slice(sel, approved_tuple_count);
@@ -399,7 +404,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 					}
 				} else {
 					columns[column]->FilterScan(transaction, state.column_scans[i], result.data[i], sel,
-					                           approved_tuple_count);
+					                            approved_tuple_count);
 				}
 			}
 		}

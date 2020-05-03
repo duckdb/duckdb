@@ -37,8 +37,8 @@ bool VersionManager::Fetch(Transaction &transaction, idx_t row) {
 class VersionDeleteState {
 public:
 	VersionDeleteState(VersionManager &manager, Transaction &transaction, DataTable *table, idx_t base_row)
-	    : manager(manager), transaction(transaction), table(table), current_info(nullptr), current_chunk((idx_t)-1), count(0),
-	      base_row(base_row) {
+	    : manager(manager), transaction(transaction), table(table), current_info(nullptr), current_chunk((idx_t)-1),
+	      count(0), base_row(base_row) {
 	}
 
 	VersionManager &manager;

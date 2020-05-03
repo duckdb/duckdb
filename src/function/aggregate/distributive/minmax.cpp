@@ -10,8 +10,7 @@ using namespace std;
 
 namespace duckdb {
 
-template<class T>
-struct min_max_state_t {
+template <class T> struct min_max_state_t {
 	T value;
 	bool isset;
 };
@@ -37,7 +36,8 @@ template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
 	case SQLTypeId::DATE:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<date_t>, date_t, date_t, OP>(type, type);
 	case SQLTypeId::TIMESTAMP:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type, type);
+		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type,
+		                                                                                                     type);
 	default:
 		throw NotImplementedException("Unimplemented type for unary aggregate");
 	}
@@ -190,8 +190,9 @@ struct MaxOperationString : public StringMinMaxBase {
 template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : SQLType::ALL_TYPES) {
 		if (type.id == SQLTypeId::VARCHAR) {
-			set.AddFunction(AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
-			    SQLType::VARCHAR, SQLType::VARCHAR));
+			set.AddFunction(
+			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
+			        SQLType::VARCHAR, SQLType::VARCHAR));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

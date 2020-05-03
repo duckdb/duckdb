@@ -23,4 +23,4 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	return ColumnDefinition(column_name, column_type, move(default_value));
 }
 
-}
+} // namespace duckdb

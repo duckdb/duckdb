@@ -94,7 +94,7 @@ TEST_CASE("Add column to persistent table", "[storage]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {2, 2, 2}));
 	}
 	// now reload
-	for(idx_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 
@@ -130,7 +130,7 @@ TEST_CASE("Remove column from persistent table", "[storage]") {
 		REQUIRE(result->names.size() == 1);
 	}
 	// now reload
-	for(idx_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 
@@ -168,7 +168,7 @@ TEST_CASE("Alter column type of persistent table", "[storage]") {
 		REQUIRE(result->names.size() == 2);
 	}
 	// now reload
-	for(idx_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 

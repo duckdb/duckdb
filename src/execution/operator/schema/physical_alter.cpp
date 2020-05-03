@@ -7,9 +7,9 @@ using namespace std;
 namespace duckdb {
 
 void PhysicalAlter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	auto table_info = (AlterTableInfo *) info.get();
+	auto table_info = (AlterTableInfo *)info.get();
 	context.catalog.AlterTable(context, table_info);
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

@@ -116,7 +116,8 @@ public:
 //===--------------------------------------------------------------------===//
 struct RemoveColumnInfo : public AlterTableInfo {
 	RemoveColumnInfo(string schema, string table, string removed_column, bool if_exists)
-	    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, schema, table), removed_column(move(removed_column)), if_exists(if_exists) {
+	    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, schema, table), removed_column(move(removed_column)),
+	      if_exists(if_exists) {
 	}
 	~RemoveColumnInfo() override {
 	}
@@ -135,8 +136,10 @@ public:
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
-	ChangeColumnTypeInfo(string schema, string table, string column_name, SQLType target_type, unique_ptr<ParsedExpression> expression)
-	    : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, schema, table), column_name(move(column_name)), target_type(move(target_type)), expression(move(expression)) {
+	ChangeColumnTypeInfo(string schema, string table, string column_name, SQLType target_type,
+	                     unique_ptr<ParsedExpression> expression)
+	    : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, schema, table), column_name(move(column_name)),
+	      target_type(move(target_type)), expression(move(expression)) {
 	}
 	~ChangeColumnTypeInfo() override {
 	}
@@ -147,6 +150,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	SQLType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+
 public:
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);
@@ -157,7 +161,8 @@ public:
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
 	SetDefaultInfo(string schema, string table, string column_name, unique_ptr<ParsedExpression> new_default)
-	    : AlterTableInfo(AlterTableType::SET_DEFAULT, schema, table), column_name(move(column_name)), expression(move(new_default)) {
+	    : AlterTableInfo(AlterTableType::SET_DEFAULT, schema, table), column_name(move(column_name)),
+	      expression(move(new_default)) {
 	}
 	~SetDefaultInfo() override {
 	}
@@ -166,6 +171,7 @@ struct SetDefaultInfo : public AlterTableInfo {
 	string column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+
 public:
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, string schema, string table);

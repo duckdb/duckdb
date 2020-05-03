@@ -8,7 +8,7 @@ IndexCatalogEntry::~IndexCatalogEntry() {
 	if (!info || !index) {
 		return;
 	}
-	for(idx_t i = 0; i < info->indexes.size(); i++) {
+	for (idx_t i = 0; i < info->indexes.size(); i++) {
 		if (info->indexes[i].get() == index) {
 			info->indexes.erase(info->indexes.begin() + i);
 			break;
@@ -16,4 +16,4 @@ IndexCatalogEntry::~IndexCatalogEntry() {
 	}
 }
 
-}
+} // namespace duckdb

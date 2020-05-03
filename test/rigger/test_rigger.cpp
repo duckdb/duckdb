@@ -630,9 +630,9 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"112356-06-10 (BC)"}));
 	}
-	SECTION("592"){
-	    // Expression with LIKE and comparison causes an assertion failure
-	    REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+	SECTION("592") {
+		// Expression with LIKE and comparison causes an assertion failure
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
@@ -669,11 +669,12 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 	SECTION("609") {
 		// Incorrect result for MIN() on expression involving rowid
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 INT);"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0),  (0), (0), (0), (0), (0), (0), (NULL), (NULL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), "
+		                          "(0), (0), (0), (0), (0),  (0), (0), (0), (0), (0), (0), (NULL), (NULL);"));
 		REQUIRE_NO_FAIL(con.Query("CREATE INDEX b ON t0(c1);"));
 		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = NULL;"));
 		result = con.Query("SELECT MIN(100000000000000000<<t0.rowid) FROM t0;");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-9223372036854775807LL-1)}));
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-9223372036854775807LL - 1)}));
 		result = con.Query("SELECT MIN(100000000000000000<<t0.rowid) FROM t0 WHERE NOT c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-8802109549835190272LL)}));
 	}

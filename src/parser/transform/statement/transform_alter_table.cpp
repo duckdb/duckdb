@@ -18,11 +18,11 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 	auto table = TransformRangeVar(stmt->relation);
 	assert(table->type == TableReferenceType::BASE_TABLE);
 
-	auto &basetable = (BaseTableRef&) *table;
+	auto &basetable = (BaseTableRef &)*table;
 	// first we check the type of ALTER
 	for (auto c = stmt->cmds->head; c != NULL; c = c->next) {
 		auto command = reinterpret_cast<PGAlterTableCmd *>(lfirst(c));
-		//TODO: Include more options for command->subtype
+		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
 		case PG_AT_AddColumn: {
 			auto cdef = (PGColumnDef *)command->def;
@@ -39,12 +39,14 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 			break;
 		}
 		case PG_AT_DropColumn: {
-			result->info = make_unique<RemoveColumnInfo>(basetable.schema_name, basetable.table_name, command->name, command->missing_ok);
+			result->info = make_unique<RemoveColumnInfo>(basetable.schema_name, basetable.table_name, command->name,
+			                                             command->missing_ok);
 			break;
 		}
 		case PG_AT_ColumnDefault: {
 			auto expr = TransformExpression(command->def);
-			result->info = make_unique<SetDefaultInfo>(basetable.schema_name, basetable.table_name, command->name, move(expr));
+			result->info =
+			    make_unique<SetDefaultInfo>(basetable.schema_name, basetable.table_name, command->name, move(expr));
 			break;
 		}
 		case PG_AT_AlterColumnType: {
@@ -59,18 +61,18 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
 				expr = make_unique<CastExpression>(target_type, move(colref));
 			}
-			result->info = make_unique<ChangeColumnTypeInfo>(basetable.schema_name, basetable.table_name, command->name, target_type, move(expr));
+			result->info = make_unique<ChangeColumnTypeInfo>(basetable.schema_name, basetable.table_name, command->name,
+			                                                 target_type, move(expr));
 			break;
 		}
 		case PG_AT_DropConstraint:
 		case PG_AT_DropNotNull:
 		default:
-			throw NotImplementedException(
-				"ALTER TABLE option not supported yet!");
+			throw NotImplementedException("ALTER TABLE option not supported yet!");
 		}
 	}
 
 	return result;
 }
 
-}
+} // namespace duckdb

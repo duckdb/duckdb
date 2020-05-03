@@ -15,7 +15,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	}
 
 	auto &schema = *table.schema;
-	auto index_entry = (IndexCatalogEntry*) schema.CreateIndex(context, info.get());
+	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context, info.get());
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return;
@@ -39,4 +39,4 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

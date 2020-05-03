@@ -332,7 +332,7 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	string expected_large_value;
 	Appender appender(con, "strings");
 	for (idx_t i = 0; i < 10000; i++) {
-		appender.AppendRow((int) i, "hello");
+		appender.AppendRow((int)i, "hello");
 		expected_g.push_back(Value::INTEGER(i));
 		expected_h.push_back(Value("hello"));
 		expected_large_value += (i > 0 ? "," : "") + string("hello");
@@ -516,8 +516,8 @@ TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
 	Appender appender(con, "integers");
 	for (idx_t i = 0; i < 10000; i++) {
-		appender.AppendRow((int) i, (int) 1);
-		appender.AppendRow((int) i, (int) 2);
+		appender.AppendRow((int)i, (int)1);
+		appender.AppendRow((int)i, (int)2);
 	}
 	appender.Close();
 	result = con.Query("SELECT SUM(i), SUM(sums) FROM (SELECT i, SUM(j) AS sums FROM integers GROUP BY i) tbl1");

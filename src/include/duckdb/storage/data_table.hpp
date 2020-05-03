@@ -44,7 +44,8 @@ public:
 };
 
 struct DataTableInfo {
-	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {}
+	DataTableInfo(string schema, string table) : cardinality(0), schema(move(schema)), table(move(table)) {
+	}
 
 	//! The amount of elements in the table. Note that this number signifies the amount of COMMITTED entries in the
 	//! table. It can be inaccurate inside of transactions. More work is needed to properly support that.
@@ -71,7 +72,8 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
-	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type, vector<column_t> bound_columns, Expression &cast_expr);
+	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+	          vector<column_t> bound_columns, Expression &cast_expr);
 
 	shared_ptr<DataTableInfo> info;
 	//! Types managed by data table
@@ -137,6 +139,7 @@ public:
 	void SetAsRoot() {
 		this->is_root = true;
 	}
+
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, DataChunk &chunk);
@@ -171,7 +174,8 @@ private:
 	shared_ptr<VersionManager> transient_manager;
 	//! The physical columns of the table
 	vector<shared_ptr<ColumnData>> columns;
-	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version that can be appended to
+	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
+	//! that can be appended to
 	bool is_root;
 };
 } // namespace duckdb

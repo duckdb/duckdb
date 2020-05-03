@@ -110,19 +110,18 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 }
 
-static void RenameExpression(ParsedExpression &expr, RenameColumnInfo& info) {
+static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &) expr;
+		auto &colref = (ColumnRefExpression &)expr;
 		if (colref.column_name == info.name) {
 			colref.column_name = info.new_name;
 		}
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-		RenameExpression((ParsedExpression &) child, info);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	bool found = false;
@@ -141,20 +140,20 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
-		switch(copy->type) {
+		switch (copy->type) {
 		case ConstraintType::NOT_NULL:
 			// NOT NULL constraint: no adjustments necessary
 			break;
 		case ConstraintType::CHECK: {
 			// CHECK constraint: need to rename column references that refer to the renamed column
-			auto &check = (CheckConstraint &) *copy;
+			auto &check = (CheckConstraint &)*copy;
 			RenameExpression(*check.expression, info);
 			break;
 		}
 		case ConstraintType::UNIQUE: {
 			// UNIQUE constraint: possibly need to rename columns
-			auto &unique = (UniqueConstraint &) *copy;
-			for(idx_t i = 0; i < unique.columns.size(); i++) {
+			auto &unique = (UniqueConstraint &)*copy;
+			for (idx_t i = 0; i < unique.columns.size(); i++) {
 				if (unique.columns[i] == info.name) {
 					unique.columns[i] = info.new_name;
 				}
@@ -163,17 +162,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 		default:
 			throw CatalogException("Unsupported constraint for entry!");
-
 		}
 		create_info->constraints.push_back(move(copy));
 	}
 	Binder binder(context);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
-											storage);
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -184,11 +181,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 
 	Binder binder(context);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-	auto new_storage = make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+	auto new_storage =
+	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+	                                      new_storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
 	idx_t removed_index = INVALID_INDEX;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
@@ -211,12 +210,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	}
 	// handle constraints for the new table
 	assert(constraints.size() == bound_constraints.size());
-	for(idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
+	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
 		auto &constraint = constraints[constr_idx];
 		auto &bound_constraint = bound_constraints[constr_idx];
-		switch(bound_constraint->type) {
+		switch (bound_constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null_constraint = (BoundNotNullConstraint&) *bound_constraint;
+			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
 			if (not_null_constraint.index != removed_index) {
 				// the constraint is not about this column: we need to copy it
 				// we might need to shift the index back by one though, to account for the removed column
@@ -230,12 +229,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 		case ConstraintType::CHECK: {
 			// CHECK constraint
-			auto &bound_check = (BoundCheckConstraint &) *bound_constraint;
+			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
 			// check if the removed column is part of the check constraint
 			if (bound_check.bound_columns.find(removed_index) != bound_check.bound_columns.end()) {
 				if (bound_check.bound_columns.size() > 1) {
 					// CHECK constraint that concerns mult
-					throw CatalogException("Cannot drop column \"%s\" because there is a CHECK constraint that depends on it", info.removed_column.c_str());
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
+					    info.removed_column.c_str());
 				} else {
 					// CHECK constraint that ONLY concerns this column, strip the constraint
 				}
@@ -256,10 +257,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	Binder binder(context);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+	                                      new_storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	bool found = false;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -272,9 +274,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(), info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
+		                      info.column_name.c_str());
 	}
-
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -286,7 +288,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo& info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	idx_t change_idx = INVALID_INDEX;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -299,14 +301,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(), info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
+		                      info.column_name.c_str());
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
-		switch(constraint->type) {
+		switch (constraint->type) {
 		case ConstraintType::CHECK: {
-			auto &bound_check = (BoundCheckConstraint &) *bound_constraints[i];
+			auto &bound_check = (BoundCheckConstraint &)*bound_constraints[i];
 			if (bound_check.bound_columns.find(change_idx) != bound_check.bound_columns.end()) {
 				throw BinderException("Cannot change the type of a column that has a CHECK constraint specified");
 			}
@@ -315,9 +318,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		case ConstraintType::NOT_NULL:
 			break;
 		case ConstraintType::UNIQUE: {
-			auto &bound_unique = (BoundUniqueConstraint &) *bound_constraints[i];
+			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
 			if (bound_unique.keys.find(change_idx) != bound_unique.keys.end()) {
-				throw BinderException("Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
+				throw BinderException(
+				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
 			break;
 		}
@@ -333,10 +337,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	AlterBinder expr_binder(binder, context, name, columns, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
-	auto new_storage = make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
+	auto new_storage =
+	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), new_storage);
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+	                                      new_storage);
 }
 
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
