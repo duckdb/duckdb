@@ -150,13 +150,8 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	template <class T> static void scan_pandas_column(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
-
 		auto src_ptr = (T *)numpy_col.data();
-		auto tgt_ptr = FlatVector::GetData<T>(out);
-
-		for (idx_t row = 0; row < count; row++) {
-			tgt_ptr[row] = src_ptr[row + offset];
-		}
+		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
 	}
 
 	static void pandas_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
@@ -212,17 +207,35 @@ struct PandasScanFunction : public TableFunction {
 				break;
 			} break;
 			case SQLTypeId::VARCHAR: {
-				auto src_ptr = (py::object *)numpy_col.data();
+				auto src_ptr = (PyObject **)numpy_col.data();
 				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
 					auto val = src_ptr[row + data.position];
 
-					if (!py::isinstance<py::str>(val)) {
+#if PY_MAJOR_VERSION >= 3
+					if (!PyUnicode_Check(val)) {
 						FlatVector::SetNull(output.data[col_idx], row, true);
 						continue;
 					}
-					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], val.cast<string>());
+					if (PyUnicode_READY(val) != 0) {
+						throw runtime_error("failure in PyUnicode_READY");
+					}
+					if (PyUnicode_KIND(val) == PyUnicode_1BYTE_KIND) {
+						auto ucs1 = PyUnicode_1BYTE_DATA(val);
+						auto length = PyUnicode_GET_LENGTH(val);
+						tgt_ptr[row] = string_t((const char*) ucs1, length);
+					} else {
+						tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+					}
+#else
+					if (!py::isinstance<py::str>(*((py::object*) &val))) {
+						FlatVector::SetNull(output.data[col_idx], row, true);
+						continue;
+					}
+
+					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+#endif
 				}
 				break;
 			}
