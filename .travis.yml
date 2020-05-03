@@ -537,7 +537,7 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
-      language: python
+      language: generic
       cache: pip
       env:
         - CIBW_BUILD='cp27-*'
