@@ -536,7 +536,7 @@ matrix:
       name: Python 2 Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      dist: trusty
+      dist: bionic
       language: python
       cache: pip
       env:
