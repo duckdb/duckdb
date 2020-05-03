@@ -10,7 +10,7 @@ env:
     - CIBW_BUILD='cp37-* cp27-*'
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "cmake==3.13.3" && pip install "pybind11>=2.4"'
-    - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
+    - CIBW_TEST_COMMAND='pytest {project}/tests'
 
 
 matrix:
