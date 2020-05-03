@@ -3,6 +3,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 using namespace std;
 

@@ -20,6 +20,8 @@ class DataTable;
 class Transaction;
 class VersionManager;
 
+struct DataTableInfo;
+
 class VersionManager {
 public:
 	VersionManager(DataTableInfo &table_info) : table_info(table_info), max_row(0), base_row(0) {
