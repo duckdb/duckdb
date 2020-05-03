@@ -213,7 +213,6 @@ struct PandasScanFunction : public TableFunction {
 					date_t date = Date::EpochToDate(ms / 1000);
 					dtime_t time = (dtime_t)(ms % ms_per_day);
 					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
-					;
 				}
 				break;
 			} break;
