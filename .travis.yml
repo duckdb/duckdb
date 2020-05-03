@@ -544,14 +544,14 @@ matrix:
       python: 2.7
 
       script:
-        - pip install cibuildwheel==0.14.0 boto3 numpy pandas pytest
+        - pip install boto3 numpy pandas pytest
         - cd tools/pythonpkg
         - python setup.py install
         - python -m pytest tests
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        python tools/upload-s3.py python tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: osx
