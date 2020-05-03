@@ -540,17 +540,18 @@ matrix:
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp27-*'
-      python: 3.7
+        - CIBW_BUILD='cp27-manylinux_x86_64'
+      python: 2.7
 
       script:
         - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
       after_success:
-        python tools/upload-s3.py tools/pythonpkg/dist/duckdb-*.tar.gz
+        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: osx
