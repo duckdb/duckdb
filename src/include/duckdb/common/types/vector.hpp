@@ -187,6 +187,10 @@ struct FlatVector {
 	template <class T> static inline T *GetData(Vector &vector) {
 		return ConstantVector::GetData<T>(vector);
 	}
+	static inline void SetData(Vector &vector, data_ptr_t data) {
+		assert(vector.vector_type == VectorType::FLAT_VECTOR);
+		vector.data = data;
+	}
 	template <class T> static inline T GetValue(Vector &vector, idx_t idx) {
 		assert(vector.vector_type == VectorType::FLAT_VECTOR);
 		return FlatVector::GetData<T>(vector)[idx];

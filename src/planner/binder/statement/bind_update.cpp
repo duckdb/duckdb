@@ -73,7 +73,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
 	// index columns
 	update.is_index_update = false;
-	for (auto &index : table.storage->indexes) {
+	for (auto &index : table.storage->info->indexes) {
 		if (index->IndexIsUpdated(update.columns)) {
 			update.is_index_update = true;
 		}

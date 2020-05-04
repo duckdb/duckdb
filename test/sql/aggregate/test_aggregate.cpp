@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -329,12 +330,14 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR);"));
 	vector<Value> expected_g, expected_h;
 	string expected_large_value;
+	Appender appender(con, "strings");
 	for (idx_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int)i, "hello"));
+		appender.AppendRow((int)i, "hello");
 		expected_g.push_back(Value::INTEGER(i));
 		expected_h.push_back(Value("hello"));
 		expected_large_value += (i > 0 ? "," : "") + string("hello");
 	}
+	appender.Close();
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// many small groups
@@ -511,9 +514,12 @@ TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
+	Appender appender(con, "integers");
 	for (idx_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ", 1), (" + to_string(i) + ", 2);"));
+		appender.AppendRow((int)i, (int)1);
+		appender.AppendRow((int)i, (int)2);
 	}
+	appender.Close();
 	result = con.Query("SELECT SUM(i), SUM(sums) FROM (SELECT i, SUM(j) AS sums FROM integers GROUP BY i) tbl1");
 	REQUIRE(CHECK_COLUMN(result, 0, {49995000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {30000}));

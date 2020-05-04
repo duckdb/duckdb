@@ -31,5 +31,12 @@ public:
 	SQLType type;
 	//! The default value of the column (if any)
 	unique_ptr<ParsedExpression> default_value;
+
+public:
+	ColumnDefinition Copy();
+
+	void Serialize(Serializer &serializer);
+	static ColumnDefinition Deserialize(Deserializer &source);
 };
+
 } // namespace duckdb

@@ -33,6 +33,13 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(PGCollateClause *
 	return make_unique<CollateExpression>(collation, move(child));
 }
 
+ColumnDefinition Transformer::TransformColumnDefinition(PGColumnDef *cdef) {
+	SQLType target_type = TransformTypeName(cdef->typeName);
+	target_type.collation = TransformCollation(cdef->collClause);
+
+	return ColumnDefinition(cdef->colname, target_type);
+}
+
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateStmt *>(node);
 	assert(stmt);
@@ -65,11 +72,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 		switch (node->type) {
 		case T_PGColumnDef: {
 			auto cdef = (PGColumnDef *)c->data.ptr_value;
-			SQLType target_type = TransformTypeName(cdef->typeName);
-			target_type.collation = TransformCollation(cdef->collClause);
-
-			auto centry = ColumnDefinition(cdef->colname, target_type);
-
+			auto centry = TransformColumnDefinition(cdef);
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.size());

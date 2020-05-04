@@ -14,39 +14,6 @@
 
 namespace duckdb {
 
-struct StandardDistributiveFunction {
-	template <class STATE> static void Initialize(STATE *state) {
-		*state = NullValue<STATE>();
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
-		if (IsNullValue<INPUT_TYPE>(*state)) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
-		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
-		}
-	}
-
-	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-		if (IsNullValue<STATE>(source)) {
-			// source is NULL, nothing to do
-			return;
-		}
-		if (IsNullValue<STATE>(*target)) {
-			// target is NULL, use source value directly
-			*target = source;
-		} else {
-			// else perform the operation
-			OP::template Execute<STATE, STATE>(target, source);
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
-
 struct BitAndFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

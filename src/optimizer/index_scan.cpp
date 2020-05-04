@@ -56,14 +56,14 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 
 	auto &storage = *get->table->storage;
 
-	if (storage.indexes.size() == 0) {
+	if (storage.info->indexes.size() == 0) {
 		// no indexes on the table, can't rewrite
 		return op;
 	}
 
 	// check all the indexes
-	for (size_t j = 0; j < storage.indexes.size(); j++) {
-		auto &index = storage.indexes[j];
+	for (size_t j = 0; j < storage.info->indexes.size(); j++) {
+		auto &index = storage.info->indexes[j];
 
 		//		assert(index->unbound_expressions.size() == 1);
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table

@@ -46,7 +46,7 @@ void LogicalGet::ResolveTypes() {
 
 idx_t LogicalGet::EstimateCardinality() {
 	if (table) {
-		return table->storage->cardinality;
+		return table->storage->info->cardinality;
 	} else {
 		return 1;
 	}
