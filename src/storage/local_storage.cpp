@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
-	for (auto &index : table.indexes) {
+	for (auto &index : table.info->indexes) {
 		assert(index->type == IndexType::ART);
 		auto &art = (ART &)*index;
 		if (art.is_unique) {
@@ -112,11 +112,11 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			}
 		}
 	}
-	if (count == 0){
-	    // all entries in this chunk were filtered:: Continue on next chunk
-			state.chunk_index++;
-			Scan(state, column_ids, result, table_filters);
-			return;
+	if (count == 0) {
+		// all entries in this chunk were filtered:: Continue on next chunk
+		state.chunk_index++;
+		Scan(state, column_ids, result, table_filters);
+		return;
 	}
 	if (count == chunk_count) {
 		result.SetCardinality(count);
@@ -299,8 +299,8 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 		commit_state.append_states[table] = move(append_state_ptr);
 		table->InitializeAppend(append_state);
 
-		if (log && !table->IsTemporary()) {
-			log->WriteSetTable(table->schema, table->table);
+		if (log && !table->info->IsTemporary()) {
+			log->WriteSetTable(table->info->schema, table->info->table);
 		}
 
 		// scan all chunks in this storage
@@ -313,7 +313,7 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 			// append to base table
 			table->Append(transaction, commit_id, chunk, append_state);
 			// if there is a WAL, write the chunk to there as well
-			if (log && !table->IsTemporary()) {
+			if (log && !table->info->IsTemporary()) {
 				log->WriteInsert(chunk);
 			}
 			return true;
@@ -331,7 +331,7 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 		auto table = entry.first;
 		auto storage = table_storage[table].get();
 		auto &append_state = *entry.second;
-		if (table->indexes.size() > 0 && !(table->schema == "temp")) {
+		if (table->info->indexes.size() > 0 && !table->info->IsTemporary()) {
 			row_t current_row = append_state.row_start;
 			// remove the data from the indexes, if there are any indexes
 			ScanTableStorage(table, storage, [&](DataChunk &chunk) -> bool {
@@ -349,4 +349,49 @@ void LocalStorage::RevertCommit(LocalStorage::CommitState &commit_state) {
 
 		table->RevertAppend(*entry.second);
 	}
+}
+
+void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
+                             Expression *default_value) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	// take over the storage from the old entry
+	auto new_storage = move(entry->second);
+
+	// now add the new column filled with the default value to all chunks
+	auto new_column_type = GetInternalType(new_column.type);
+	ExpressionExecutor executor;
+	DataChunk dummy_chunk;
+	if (default_value) {
+		executor.AddExpression(*default_value);
+	}
+
+	new_storage->collection.types.push_back(new_column_type);
+	for (idx_t chunk_idx = 0; chunk_idx < new_storage->collection.chunks.size(); chunk_idx++) {
+		auto &chunk = new_storage->collection.chunks[chunk_idx];
+		Vector result(new_column_type);
+		if (default_value) {
+			dummy_chunk.SetCardinality(chunk->size());
+			executor.ExecuteExpression(dummy_chunk, result);
+		} else {
+			FlatVector::Nullmask(result).set();
+		}
+		chunk->data.push_back(move(result));
+	}
+
+	table_storage.erase(entry);
+	table_storage[new_dt] = move(new_storage);
+}
+
+void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type,
+                              vector<column_t> bound_columns, Expression &cast_expr) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
 }

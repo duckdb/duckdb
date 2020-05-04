@@ -33,6 +33,12 @@ struct DateConvert {
 	}
 };
 
+struct TimeConvert {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(time_t val) {
+		return py::str(duckdb::Time::ToString(val).c_str());
+	}
+};
+
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
 		return py::str(val.GetData());
@@ -312,7 +318,16 @@ struct DuckDBPyResult {
 
 				break;
 			}
-
+			case SQLTypeId::TIME: {
+				if (result->types[col_idx] != TypeId::INT32) {
+					throw runtime_error("expected int32 for time");
+				}
+				int32_t hour, min, sec, msec;
+				auto time = val.GetValue<int32_t>();
+				duckdb::Time::Convert(time, hour, min, sec, msec);
+				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
+				break;
+			}
 			case SQLTypeId::DATE: {
 				if (result->types[col_idx] != TypeId::INT32) {
 					throw runtime_error("expected int32 for date");
@@ -392,7 +407,10 @@ struct DuckDBPyResult {
 				col_res = duckdb_py_convert::fetch_column<date_t, int64_t, duckdb_py_convert::DateConvert>(
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
-
+			case SQLTypeId::TIME:
+				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
+				    "object", mres->collection, col_idx);
+				break;
 			case SQLTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
 				    "object", mres->collection, col_idx);

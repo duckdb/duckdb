@@ -14,20 +14,22 @@
 #include "duckdb/storage/table/persistent_segment.hpp"
 
 namespace duckdb {
-class DataTable;
 class PersistentSegment;
 class Transaction;
 
+struct DataTableInfo;
+
 class ColumnData {
 public:
-	ColumnData();
+	ColumnData(BufferManager &manager, DataTableInfo &table_info);
 	//! Set up the column data with the set of persistent segments, returns the amount of rows
 	void Initialize(vector<unique_ptr<PersistentSegment>> &segments);
 
+	DataTableInfo &table_info;
 	//! The type of the column
 	TypeId type;
-	//! The table of the column
-	DataTable *table;
+	//! The buffer manager
+	BufferManager &manager;
 	//! The column index of the column
 	idx_t column_idx;
 	//! The segments holding the data of the column

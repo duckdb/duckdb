@@ -151,6 +151,7 @@ private:
 
 	string TransformCollation(PGCollateClause *collate);
 
+	ColumnDefinition TransformColumnDefinition(PGColumnDef *cdef);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
