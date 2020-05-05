@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace re2 {
 class RE2;
@@ -48,6 +48,10 @@ struct LengthFun {
 };
 
 struct LikeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct LikeEscapeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

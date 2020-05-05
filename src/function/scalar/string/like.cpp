@@ -1,13 +1,26 @@
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
 static bool like_operator(const char *s, const char *pattern, const char *escape);
+
+struct LikeEscapeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		auto escape = right.GetData();
+		return like_operator(left.GetData(), right.GetData(), escape);
+	}
+};
+
+struct NotLikeEscapeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+		auto escape = right.GetData();
+		return !like_operator(left.GetData(), right.GetData(), escape);
+	}
+};
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
@@ -26,12 +39,11 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 
 	t = s;
 	for (p = pattern; *p && *t; p++) {
-		if (escape && *p == *escape) {
-			p++;
+		if (escape && *t == *escape) {
+			t++;
 			if (*p != *t) {
 				return false;
 			}
-			t++;
 		} else if (*p == '_') {
 			t++;
 		} else if (*p == '%') {
@@ -68,6 +80,14 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
 	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
+}
+
+void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeEscapeOperator, true>));
+	set.AddFunction(
+	    ScalarFunction("!like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                   ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeEscapeOperator, true>));
 }
 
 } // namespace duckdb
