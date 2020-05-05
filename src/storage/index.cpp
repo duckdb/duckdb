@@ -8,9 +8,9 @@
 using namespace duckdb;
 using namespace std;
 
-Index::Index(IndexType type, DataTable &table, vector<column_t> column_ids,
+Index::Index(IndexType type, vector<column_t> column_ids,
              vector<unique_ptr<Expression>> unbound_expressions)
-    : type(type), table(table), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
+    : type(type), column_ids(column_ids), unbound_expressions(move(unbound_expressions)) {
 	for (auto &expr : this->unbound_expressions) {
 		types.push_back(expr->return_type);
 		bound_expressions.push_back(BindExpression(expr->Copy()));

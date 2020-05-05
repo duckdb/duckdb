@@ -451,7 +451,7 @@ void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableInde
 	// clear any previously pinned blocks
 	state.fetch_state.handles.clear();
 	// scan the index
-	state.index->Scan(transaction, state, result);
+	state.index->Scan(transaction, *this, state, result);
 	if (result.size() > 0) {
 		return;
 	}
