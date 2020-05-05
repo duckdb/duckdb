@@ -2,12 +2,18 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "util.hpp"
 #include "utf8proc.hpp"
 
 using namespace std;
 
 namespace duckdb {
+
+// length returns the size in characters
+struct StringLengthOperator {
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return LengthFun::Length<TA, TR>(input);
+	}
+};
 
 // strlen returns the size in bytes
 struct StrLenOperator {

@@ -477,12 +477,20 @@ TEST_CASE("LEFT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"abc"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {"abc"}));
 
-	result = con.Query("SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)");
+	result = con.Query(
+	    "SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"🦆"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"🦆a"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"🦆ab"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {"🦆ab"}));
+
+	result = con.Query(
+	    "SELECT LEFT('🦆🤦S̈', 0), LEFT('🦆🤦S̈', 1), LEFT('🦆🤦S̈', 2), LEFT('🦆🤦S̈', 3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"🦆🤦"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"🦆🤦S̈"}));
 
 	// test LEFT on negative positions
 	result = con.Query("SELECT LEFT('abcd', 0), LEFT('abc', -1), LEFT('abc', -2), LEFT('abc', -3), LEFT('abc', -4)");
@@ -492,12 +500,20 @@ TEST_CASE("LEFT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {""}));
 	REQUIRE(CHECK_COLUMN(result, 4, {""}));
 
-	result = con.Query("SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)");
+	result = con.Query(
+	    "SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"🦆a"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"🦆"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {""}));
 	REQUIRE(CHECK_COLUMN(result, 4, {""}));
+
+	result = con.Query(
+	    "SELECT LEFT('🦆🤦S̈', 0), LEFT('🦆🤦S̈', -1), LEFT('🦆🤦S̈', -2), LEFT('🦆🤦S̈', -3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆🤦"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"🦆"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
 
 	// test LEFT on NULL values
 	result = con.Query("SELECT LEFT(NULL, 0), LEFT('abc', NULL), LEFT(NULL, NULL)");
@@ -513,13 +529,15 @@ TEST_CASE("LEFT test", "[function]") {
 	// test on tables
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)"));
 	result = con.Query("SELECT LEFT(a, b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"", "a", "ab", "abc", "abc"}));
 
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)"));
 	result = con.Query("SELECT LEFT(a, b) FROM strings");
 	REQUIRE(CHECK_COLUMN(result, 0, {"", "ab", "a", "", ""}));
 
@@ -540,11 +558,11 @@ TEST_CASE("BIT_LENGTH test", "[function]") {
 	result = con.Query("select BIT_LENGTH(NULL), BIT_LENGTH(''), BIT_LENGTH('\x24'), "
 	                   "BIT_LENGTH('\xC2\xA2'), BIT_LENGTH('\xE2\x82\xAC'), BIT_LENGTH('\xF0\x90\x8D\x88')");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-	REQUIRE(CHECK_COLUMN(result, 1, {0*8}));
-	REQUIRE(CHECK_COLUMN(result, 2, {1*8}));
-	REQUIRE(CHECK_COLUMN(result, 3, {2*8}));
-	REQUIRE(CHECK_COLUMN(result, 4, {3*8}));
-	REQUIRE(CHECK_COLUMN(result, 5, {4*8}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0 * 8}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1 * 8}));
+	REQUIRE(CHECK_COLUMN(result, 3, {2 * 8}));
+	REQUIRE(CHECK_COLUMN(result, 4, {3 * 8}));
+	REQUIRE(CHECK_COLUMN(result, 5, {4 * 8}));
 
 	// test on tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
@@ -553,13 +571,13 @@ TEST_CASE("BIT_LENGTH test", "[function]") {
 	                          "('\xE2\x82\xAC', NULL), ('\xF0\x90\x8D\x88','Four')"));
 
 	result = con.Query("select BIT_LENGTH(a) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {0*8, 1*8, 2*8, 3*8, 4*8}));
+	REQUIRE(CHECK_COLUMN(result, 0, {0 * 8, 1 * 8, 2 * 8, 3 * 8, 4 * 8}));
 
 	result = con.Query("select BIT_LENGTH(b) FROM strings");
-	REQUIRE(CHECK_COLUMN(result, 0, {4*8, Value(), 3*8, Value(), 4*8}));
+	REQUIRE(CHECK_COLUMN(result, 0, {4 * 8, Value(), 3 * 8, Value(), 4 * 8}));
 
 	result = con.Query("select BIT_LENGTH(a) FROM strings WHERE b IS NOT NULL");
-	REQUIRE(CHECK_COLUMN(result, 0, {0*8, 2*8, 4*8}));
+	REQUIRE(CHECK_COLUMN(result, 0, {0 * 8, 2 * 8, 4 * 8}));
 
 	// test incorrect usage
 	REQUIRE_FAIL(con.Query("select BIT_LENGTH()"));
