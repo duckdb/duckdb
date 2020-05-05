@@ -49,7 +49,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli DuckDBJ-linux-amd64.jar=build/release/tools/jdbc/DuckDBJ.jar
+        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb.so duckdb_cli-linux-amd64=build/release/duckdb_cli DuckDBJ-linux-amd64.jar=build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: osx
@@ -293,7 +293,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
-        - python scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb*.so duckdb_cli-linux-i386=build/release/duckdb_cli
+        - python scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
 
 
     - os: windows
