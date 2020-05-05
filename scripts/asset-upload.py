@@ -63,13 +63,16 @@ upload_url = resp['upload_url'].split('{')[0] # gah
 
 files = sys.argv[1:]
 for filename in files:
-	mime_type = mimetypes.guess_type(filename)[0]
+	parts = filename.split("=")
+	local_filename = parts[1]
+	asset_filename = parts[0]
+	mime_type = mimetypes.guess_type(local_filename)[0]
 	if mime_type is None:
 		mime_type = "application/octet-stream"
 
 	header["Content-Type"] = mime_type
-	with open(filename, 'rb') as f:
-	    resp = requests.post(upload_url + '?name=%s' % os.path.basename(filename), data=f, headers=header).json()
+	with open(local_filename, 'rb') as f:
+	    resp = requests.post(upload_url + '?name=%s' % asset_filename, data=f, headers=header).json()
 	    if 'id' not in resp:
 	    	raise ValueError('upload failed :/ ' + str(resp))
 	    print(resp['browser_download_url'])

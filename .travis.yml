@@ -46,7 +46,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python scripts/asset-upload.py build/release/src/libduckdb*.so build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
+        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli DuckDBJ-linux-amd64.jar=build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: osx
@@ -57,7 +57,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3
+        - python3 -m pip install --user boto3 requests
 
       script:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
@@ -68,6 +68,7 @@ matrix:
 
       after_success:
         - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
+        - python scripts/asset-upload.py libduckdb-osx.so=build/release/src/libduckdb*.so duckdb_cli-osx=build/release/duckdb_cli DuckDBJ-osx.jar=build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: windows
