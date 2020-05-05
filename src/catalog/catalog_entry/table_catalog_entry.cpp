@@ -350,6 +350,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	if (bound_columns.size() == 0) {
+		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	}
 
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);

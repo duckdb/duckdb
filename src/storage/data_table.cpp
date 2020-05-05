@@ -145,7 +145,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	vector<TypeId> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-		types.push_back(parent.types[bound_columns[i]]);
+		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
+			types.push_back(ROW_TYPE);
+		} else {
+			types.push_back(parent.types[bound_columns[i]]);
+		}
 	}
 
 	DataChunk scan_chunk;
