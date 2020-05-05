@@ -156,7 +156,12 @@ print(rel.create("test_table2"))
 
 # insert the relation's data into an existing table
 conn.execute("CREATE TABLE test_table3 (i INTEGER, j STRING)")
-print(rel.insert("test_table3"))
+print(rel.copy_to("test_table3"))
+
+# Inserting elements into table_3
+print(conn.values([5, 'five']).copy_to("test_table3"))
+rel_3 = conn.table("test_table3")
+rel_3.insert([5,'five'])
 
 # create a SQL-accessible view of the relation
 print(rel.create_view('test_view'))

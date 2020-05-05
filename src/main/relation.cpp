@@ -198,7 +198,7 @@ void Relation::Insert(string table_name) {
 }
 
 void Relation::Insert(string schema_name, string table_name) {
-	auto insert = make_unique<InsertRelation>(shared_from_this(), schema_name, table_name);
+	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
 	insert->Execute();
 }
 
