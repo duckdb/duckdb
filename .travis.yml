@@ -12,14 +12,12 @@ env:
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "cmake==3.13.3" && pip install "pybind11>=2.4"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
 
-# exclude this because its a tag used for master builds
-if: tag != master-builds
-
 
 matrix:
   include:
 
     - os: linux
+      if: tag != master-builds
       dist: bionic
       name: GCC 9
       python: 3.7
@@ -53,8 +51,8 @@ matrix:
 
 
     - os: osx
+      if: tag != master-builds
       name: Xcode 11.3
-
       osx_image: xcode11.3
 
       before_install:
@@ -75,6 +73,7 @@ matrix:
 
 
     - os: windows
+      if: tag != master-builds
       name: VS 2017
       filter_secrets: false
 
@@ -104,6 +103,7 @@ matrix:
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
 
     - os: linux
+      if: tag != master-builds
       dist: xenial
       name: GCC 9 Debug
 
@@ -434,6 +434,7 @@ matrix:
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/DuckDBJ.jar test)
 
     - os: linux
+      if: tag != master-builds
       name: R Package
 
       dist: xenial
@@ -522,8 +523,8 @@ matrix:
 
 
     - os: linux
+      if: tag != master-builds
       name: Python 3 Package
-
       dist: xenial
       language: python
       cache: pip

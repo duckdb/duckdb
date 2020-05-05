@@ -9,6 +9,7 @@ if(NOT JNI_FOUND OR NOT Java_FOUND)
 endif()
 
 include(UseJava)
+include(JNI)
 project(DuckDBJDummy NONE)
 
 file(GLOB JAVA_SRC_FILES src/main/java/nl/cwi/da/duckdb/*.java)
