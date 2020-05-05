@@ -1,14 +1,9 @@
 #include "duckdb/function/scalar/string_functions.hpp"
-
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 #include <string.h>
 #include <ctype.h>
-#include <unordered_map>
-#include <algorithm>    // std::max
-#include <iostream>
+#include <algorithm>    // std::max and std::min
 
 using namespace std;
 
