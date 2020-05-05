@@ -12,6 +12,9 @@ env:
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "cmake==3.13.3" && pip install "pybind11>=2.4"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
 
+# exclude this because its a tag used for master builds
+if: NOT tag =~ /^master-builds$/
+
 
 matrix:
   include:
@@ -95,6 +98,7 @@ matrix:
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/DuckDBJ.jar
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe DuckDBJ-windows-amd64.jar=tools/jdbc/DuckDBJ.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
@@ -232,6 +236,7 @@ matrix:
       after_success:
         - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
         - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+        - python scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 
 
     - os: osx
@@ -280,7 +285,7 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
+        - pip install --user boto3 requests
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
@@ -288,6 +293,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
+        - python scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb*.so duckdb_cli-linux-i386=build/release/duckdb_cli
 
 
     - os: windows
@@ -354,7 +360,7 @@ matrix:
       script:
         - python scripts/amalgamation.py > /dev/null
         - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest --exclude=third_party/imdb .  root@localhost:/duckdb
-        - travis_wait 30 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+        - travis_wait 50 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
         - $SCMD /duckdb/build/test/unittest "~[copy]~[file_system]~[.]"
 
 
@@ -385,7 +391,7 @@ matrix:
       script:
         - python scripts/amalgamation.py > /dev/null
         - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest .  root@localhost:/home/duckdb
-        - travis_wait 30 $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+        - travis_wait 50 $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
         - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
 
 
@@ -435,7 +441,7 @@ matrix:
       r: devel
 
       before_install:
-        - pip install --user boto3
+        - pip install --user boto3 requests
         - cd tools/rpkg
         - R -f dependencies.R
 
@@ -466,7 +472,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3
+        - python3 -m pip install --user boto3 requests
         - cd tools/rpkg
         - R -f dependencies.R
 
