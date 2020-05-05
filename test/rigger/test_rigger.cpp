@@ -710,4 +710,13 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES(NULL);"));
 		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;"));
 	}
+	SECTION("625") {
+		// DROP column results in an assertion failure unique.index < base.columns.size()
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c INT UNIQUE);"));
+		// we don't support this case yet
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 DROP c0;"));
+		// check that unique constraint still works
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
+	}
 }

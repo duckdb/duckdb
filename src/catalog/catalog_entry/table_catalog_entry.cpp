@@ -246,9 +246,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			}
 			break;
 		}
-		case ConstraintType::UNIQUE:
-			create_info->constraints.push_back(constraint->Copy());
+		case ConstraintType::UNIQUE: {
+			auto copy = constraint->Copy();
+			auto &unique = (UniqueConstraint &) *copy;
+			if (unique.index != INVALID_INDEX && unique.index > removed_index) {
+				unique.index--;
+			}
+			create_info->constraints.push_back(move(copy));
 			break;
+		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
