@@ -696,11 +696,18 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 	}
 	SECTION("622") {
+		// UPDATE on altered table results in an error "Could not find node in column segment tree"
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 TIMESTAMP);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
 		REQUIRE_NO_FAIL(con.Query("DELETE FROM t0;"));
 		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE DATE;"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
 		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0 = '1969-12-18'; "));
+	}
+	SECTION("624") {
+		// ALTER TABLE results in an assertion failure "Assertion `expr.return_type == vector.type' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;"));
 	}
 }
