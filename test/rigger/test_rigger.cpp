@@ -678,4 +678,21 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT MIN(100000000000000000<<t0.rowid) FROM t0 WHERE NOT c0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-8802109549835190272LL)}));
 	}
+	SECTION("618") {
+		// Failed ALTER COLUMN results in a "Transaction conflict" error that cannot be aborted
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (DATE '2000-01-01');"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 ALTER COLUMN c0 SET DATA TYPE INT;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (DEFAULT);"));
+	}
+	SECTION("619") {
+		// Query on altered table results in a segmentation fault
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT UNIQUE, c1 DATE);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c1 TYPE INT;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(-1);"));
+
+		result = con.Query("SELECT * FROM t0 WHERE c0 < 0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	}
 }
