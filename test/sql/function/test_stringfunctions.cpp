@@ -477,6 +477,13 @@ TEST_CASE("LEFT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {"abc"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {"abc"}));
 
+	result = con.Query("SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"🦆a"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"🦆ab"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"🦆ab"}));
+
 	// test LEFT on negative positions
 	result = con.Query("SELECT LEFT('abcd', 0), LEFT('abc', -1), LEFT('abc', -2), LEFT('abc', -3), LEFT('abc', -4)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
@@ -485,8 +492,20 @@ TEST_CASE("LEFT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {""}));
 	REQUIRE(CHECK_COLUMN(result, 4, {""}));
 
+	result = con.Query("SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🦆a"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"🦆"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+	REQUIRE(CHECK_COLUMN(result, 4, {""}));
+
 	// test LEFT on NULL values
 	result = con.Query("SELECT LEFT(NULL, 0), LEFT('abc', NULL), LEFT(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+
+	result = con.Query("SELECT LEFT(NULL, 0), LEFT('🦆ab', NULL), LEFT(NULL, NULL)");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {""}));
 	REQUIRE(CHECK_COLUMN(result, 2, {""}));

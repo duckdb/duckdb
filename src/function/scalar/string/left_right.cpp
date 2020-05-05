@@ -1,35 +1,38 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "util.h"
 
 #include <string.h>
 #include <ctype.h>
 #include <algorithm>	// std::max and std::min
 
+#include <iostream>
+
 using namespace std;
 
 namespace duckdb {
 
-static string_t left_scalar_function(const string_t& str, const int64_t pos, vector<char> &result) {
-	auto str_data = str.GetData();
-	int64_t str_size = str.GetSize();
+static string_t left_scalar_function(Vector &result, const string_t str, int64_t pos) {
+	idx_t current_len = 0;
+	unique_ptr<char[]> output;
 
 	if (pos >= 0) {
-		return string_t(str_data, min(pos, str_size));
+		return substring_scalar_function(result, str, 1, pos, output, current_len);
 	}
 
-	int64_t remaining = str_size + pos;
-	return string_t(str_data, max(remaining, int64_t(0)));
+	int64_t num_characters = StringLengthOperator::Operation<string_t, int64_t>(str);
+	pos = std::max(int64_t(0), num_characters + pos);
+	return substring_scalar_function(result, str, 1, pos, output, current_len);
 }
 
-static void (left_function)(DataChunk &args, ExpressionState &state, Vector &result) {
+static void left_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 2 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT64);
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 
-	vector<char> buffer;
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(str_vec, pos_vec, result, args.size(),
 		[&](string_t str, int64_t pos) {
-			return StringVector::AddString(result, left_scalar_function(str, pos, buffer));
+			return left_scalar_function(result, str, pos);
 		}
 	);
 }
