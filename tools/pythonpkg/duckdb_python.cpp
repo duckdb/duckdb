@@ -877,7 +877,7 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df)->query(view_name, sql_query);
 	}
 
-	void copy_to(string table) {
+	void insert_into(string table) {
 		rel->Insert(table);
 	}
 
@@ -981,7 +981,7 @@ PYBIND11_MODULE(duckdb, m) {
 	         py::arg("sql_query"))
 	    .def("execute", &DuckDBPyRelation::execute, "some doc string for execute")
 	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
-	    .def("copy_to", &DuckDBPyRelation::copy_to, "some doc string for copy_to", py::arg("table_name"))
+	    .def("insert_into", &DuckDBPyRelation::copy_to, "some doc string for insert_into", py::arg("table_name"))
 	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("values"))
 	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
 	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")

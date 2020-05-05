@@ -27,7 +27,7 @@ class TestRelationApi(object):
 
 			duckdb_cursor.execute('DROP TABLE IF EXISTS a3')
 			duckdb_cursor.execute('CREATE TABLE a3 (i INTEGER, j STRING)')
-			rel.copy_to('a3')
+			rel.insert_into('a3')
 			rel_a3 = duckdb_cursor.table('a3').project('CAST(i as BIGINT) i, j').to_df()
 			pd.testing.assert_frame_equal(rel_a3, test_df)
 
