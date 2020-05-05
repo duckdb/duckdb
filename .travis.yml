@@ -69,7 +69,7 @@ matrix:
 
       after_success:
         - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python scripts/asset-upload.py libduckdb-osx.so=build/release/src/libduckdb*.so duckdb_cli-osx=build/release/duckdb_cli DuckDBJ-osx.jar=build/release/tools/jdbc/DuckDBJ.jar
+        - python3 scripts/asset-upload.py libduckdb-osx.so=build/release/src/libduckdb*.so duckdb_cli-osx=build/release/duckdb_cli DuckDBJ-osx.jar=build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: windows
