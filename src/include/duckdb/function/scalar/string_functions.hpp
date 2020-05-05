@@ -59,6 +59,10 @@ struct LtrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct LeftFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

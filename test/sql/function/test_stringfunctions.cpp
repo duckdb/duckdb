@@ -463,6 +463,54 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world')"));
 }
 
+TEST_CASE("LEFT test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test LEFT on positive positions
+	result = con.Query("SELECT LEFT('abcd', 0), LEFT('abc', 1), LEFT('abc', 2), LEFT('abc', 3), LEFT('abc', 4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"a"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"ab"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"abc"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"abc"}));
+
+	// test LEFT on negative positions
+	result = con.Query("SELECT LEFT('abcd', 0), LEFT('abc', -1), LEFT('abc', -2), LEFT('abc', -3), LEFT('abc', -4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ab"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"a"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+	REQUIRE(CHECK_COLUMN(result, 4, {""}));
+
+	// test LEFT on NULL values
+	result = con.Query("SELECT LEFT(NULL, 0), LEFT('abc', NULL), LEFT(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)"));
+	result = con.Query("SELECT LEFT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "a", "ab", "abc", "abc"}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)"));
+	result = con.Query("SELECT LEFT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "ab", "a", "", ""}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)"));
+	result = con.Query("SELECT LEFT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "", ""}));
+}
+
 TEST_CASE("BIT_LENGTH test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
