@@ -32,7 +32,7 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
+        - pip install --user boto3 requests
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
@@ -46,7 +46,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python scripts/asset-upload.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
+        - python scripts/asset-upload.py build/release/src/libduckdb*.so build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
 
 
     - os: osx
