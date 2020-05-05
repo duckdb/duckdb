@@ -695,4 +695,12 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {-1}));
 		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
 	}
+	SECTION("622") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 TIMESTAMP);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM t0;"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE DATE;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0 = '1969-12-18'; "));
+	}
 }

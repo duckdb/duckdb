@@ -117,7 +117,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
-	lock_guard<mutex> parent_lock(parent.append_lock);
+	CreateIndexScanState scan_state;
+	parent.InitializeCreateIndexScan(scan_state, bound_columns);
+
 	// first check if there are any indexes that exist that point to the changed column
 	for (auto &index : info->indexes) {
 		for (auto &column_id : index->column_ids) {
@@ -140,17 +142,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
-	TableScanState scan_state;
 
 	vector<TypeId> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		types.push_back(parent.types[i]);
 	}
-	parent.InitializeScan(transaction, scan_state, bound_columns, nullptr);
 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(types);
-	unordered_map<idx_t, vector<TableFilter>> dummy_filters;
 
 	ExpressionExecutor executor;
 	executor.AddExpression(cast_expr);
@@ -158,7 +157,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	Vector append_vector(new_type);
 	while (true) {
 		// scan the table
-		parent.Scan(transaction, scan_chunk, scan_state, dummy_filters);
+		scan_chunk.Reset();
+		parent.CreateIndexScan(scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
