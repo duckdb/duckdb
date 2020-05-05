@@ -719,4 +719,14 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
 		REQUIRE_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
 	}
+	SECTION("628") {
+		// DROP column results in an assertion failure unique.index < base.columns.size()
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 INT UNIQUE);"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 DROP c1;"));
+	}
+	SECTION("629") {
+		// ALTER TYPE with USING results in an assertion failure "types.size() > 0"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE VARCHAR USING ''; "));
+	}
 }

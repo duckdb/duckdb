@@ -249,8 +249,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		case ConstraintType::UNIQUE: {
 			auto copy = constraint->Copy();
 			auto &unique = (UniqueConstraint &) *copy;
-			if (unique.index != INVALID_INDEX && unique.index > removed_index) {
-				unique.index--;
+			if (unique.index != INVALID_INDEX) {
+				if (unique.index == removed_index) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
+					    info.removed_column.c_str());
+				} else if (unique.index > removed_index) {
+					unique.index--;
+				}
 			}
 			create_info->constraints.push_back(move(copy));
 			break;
