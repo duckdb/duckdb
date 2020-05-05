@@ -13,7 +13,7 @@ env:
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
 
 # exclude this because its a tag used for master builds
-if: NOT tag =~ /^master-builds$/
+if: tag != master-builds
 
 
 matrix:
