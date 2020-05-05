@@ -9,7 +9,7 @@ using namespace std;
 
 namespace duckdb {
 
-static string_t substring_ascii_only(Vector &result, const char *input_data, int offset, int length) {
+string_t SubstringFun::substring_ascii_only(Vector &result, const char *input_data, int offset, int length) {
 	auto result_string = StringVector::EmptyString(result, length);
 	auto result_data = result_string.GetData();
 	memcpy(result_data, input_data + offset, length);
@@ -17,8 +17,8 @@ static string_t substring_ascii_only(Vector &result, const char *input_data, int
 	return result_string;
 }
 
-static string_t substring_scalar_function(Vector &result, string_t input, int offset, int length,
-                                          unique_ptr<char[]> &output, idx_t &current_len) {
+string_t SubstringFun::substring_scalar_function(Vector &result, string_t input, int offset, int length,
+                                                 unique_ptr<char[]> &output, idx_t &current_len) {
 	// reduce offset by one because SQL starts counting at 1
 	offset--;
 	if (offset < 0 || length < 0) {
@@ -36,13 +36,20 @@ static string_t substring_scalar_function(Vector &result, string_t input, int of
 			break;
 		}
 	}
+
+	if (length == 0) {
+		auto result_string = StringVector::EmptyString(result, 0);
+		result_string.Finalize();
+		return result_string;
+	}
+
 	if (ascii_only) {
 		// ascii only
 		length = std::min(offset + length, (int)input_size);
 		if (offset >= length) {
 			return string_t((uint32_t)0);
 		}
-		return substring_ascii_only(result, input_data, offset, length - offset);
+		return SubstringFun::substring_ascii_only(result, input_data, offset, length - offset);
 	}
 
 	// size is at most the input size: alloc it
@@ -82,7 +89,7 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 	TernaryExecutor::Execute<string_t, int, int, string_t>(
 	    input_vector, offset_vector, length_vector, result, args.size(),
 	    [&](string_t input_string, int offset, int length) {
-		    return substring_scalar_function(result, input_string, offset, length, output, current_len);
+		    return SubstringFun::substring_scalar_function(result, input_string, offset, length, output, current_len);
 	    });
 }
 
