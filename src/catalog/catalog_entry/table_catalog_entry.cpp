@@ -337,10 +337,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	AlterBinder expr_binder(binder, context, name, columns, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
-
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }

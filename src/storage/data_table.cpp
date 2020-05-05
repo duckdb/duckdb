@@ -47,8 +47,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
 	// add the new column to this DataTable
 	auto new_column_type = GetInternalType(new_column.type);
 	idx_t new_column_idx = columns.size();
@@ -84,6 +82,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	}
 	// also add this column to client local storage
 	Transaction::GetTransaction(context).storage.AddColumn(&parent, this, new_column, default_value);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
@@ -101,12 +102,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 			}
 		}
 	}
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
 	// erase the column from this DataTable
 	assert(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
 	columns.erase(columns.begin() + removed_column);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
@@ -116,8 +118,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
 	// first check if there are any indexes that exist that point to the changed column
 	for (auto &index : info->indexes) {
 		for (auto &column_id : index->column_ids) {
@@ -170,6 +170,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
 
 	columns[changed_idx] = move(column_data);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 //===--------------------------------------------------------------------===//
