@@ -465,6 +465,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
+        - python ../../scripts/asset-upload.py duckdb_r.tar.gz=duckdb_*.tar.gz
 
 
     - os: osx
@@ -495,6 +496,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
         - python3 ../upload-s3.py rstats duckdb_*.tgz
+        - python ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows
@@ -525,6 +527,7 @@ matrix:
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/3.6 duckdb_*.zip PACKAGES*
+        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
 
 
     - os: linux
@@ -546,7 +549,7 @@ matrix:
         - cd ../..
       after_success:
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-        - python scripts/asset-upload.py tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python scripts/asset-upload.py duckdb_python.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: linux
@@ -567,8 +570,6 @@ matrix:
         - python -m pytest tests
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-      after_success:
-        - python tools/upload-s3.py python tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: osx
@@ -592,7 +593,7 @@ matrix:
 
       after_success:
         - python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-        - python3 scripts/asset-upload.py tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python3 scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: windows
@@ -615,15 +616,16 @@ matrix:
         - choco install curl -y --force
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
         - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
-        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4"
+        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4" "requests"
 
       script:
         - cd tools/pythonpkg
-        - C:/Python37-x64/python.exe  setup.py sdist
+        - C:/Python37-x64/python.exe setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
       after_success:
-        C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - C:/Python37-x64/python.exe scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
