@@ -80,6 +80,10 @@ struct LeftFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RightFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
