@@ -6,8 +6,8 @@ api_url = 'https://api.github.com/repos/cwida/duckdb/'
 tag = 'master-builds'
 
 if (len(sys.argv) < 2):
-    print("Usage: [filename1] [filename2] ... ")
-    exit(1)
+	print("Usage: [filename1] [filename2] ... ")
+	exit(1)
 
 # this essentially should run on release tag builds to fill up release assets and master
 # so check travis tag?
@@ -121,7 +121,7 @@ for filename in files:
 		if asset['name'] == asset_filename:
 			gh_api('releases/assets/%s' % asset['id'], method='DELETE')
 
-    resp = gh_api(upload_url + '?name=%s' % asset_filename, filename=local_filename)
-    if 'id' not in resp:
-    	raise ValueError('upload failed :/ ' + str(resp))
-    print(resp['browser_download_url'])
+	resp = gh_api(upload_url + '?name=%s' % asset_filename, filename=local_filename)
+	if 'id' not in resp:
+		raise ValueError('upload failed :/ ' + str(resp))
+	print(resp['browser_download_url'])
