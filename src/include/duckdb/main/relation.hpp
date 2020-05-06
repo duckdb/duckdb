@@ -102,7 +102,8 @@ public:
 	//! Insert the data from this relation into a table
 	void Insert(string table_name);
 	void Insert(string schema_name, string table_name);
-
+	//! Insert a row (i.e.,list of values) into a table
+    void Insert(vector<vector<Value>> values);
 	//! Create a table and insert the data from this relation into that table
 	void Create(string table_name);
 	void Create(string schema_name, string table_name);
