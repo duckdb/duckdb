@@ -33,7 +33,7 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
-        - pip install --user boto3 requests
+        - pip install --user boto3
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
@@ -58,7 +58,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3 requests
+        - python3 -m pip install --user boto3
 
       script:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
@@ -82,8 +82,6 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install jdk8 --version 8.0.211 -y --force
-        - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install requests
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1
@@ -229,7 +227,7 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
-        - pip install --user boto3 requests
+        - pip install --user boto3
 
       script:
         - python scripts/amalgamation.py
@@ -289,7 +287,7 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
-        - pip install --user boto3 requests
+        - pip install --user boto3
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
@@ -447,7 +445,7 @@ matrix:
       r: devel
 
       before_install:
-        - pip install --user boto3 requests
+        - pip install --user boto3
         - cd tools/rpkg
         - R -f dependencies.R
 
@@ -479,7 +477,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3 requests
+        - python3 -m pip install --user boto3
         - cd tools/rpkg
         - R -f dependencies.R
 
@@ -541,7 +539,7 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.2 boto3 requests
+        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
@@ -582,7 +580,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 boto3 requests
+        - python3 -m pip install cibuildwheel==0.10.2 boto3
 
       script:
         - cd tools/pythonpkg
@@ -616,7 +614,7 @@ matrix:
         - choco install curl -y --force
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
         - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2"
-        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4" "requests"
+        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4"
 
       script:
         - cd tools/pythonpkg
