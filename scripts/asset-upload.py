@@ -1,4 +1,4 @@
-import json, os, sys, mimetypes, urllib.request
+import json, os, sys, glob, mimetypes, urllib.request
 
 api_url = 'https://api.github.com/repos/cwida/duckdb/'
 tag = 'master-builds'
@@ -108,11 +108,14 @@ files = sys.argv[1:]
 for filename in files:
 	if '=' in filename:
 		parts = filename.split("=")
-		local_filename = parts[1]
 		asset_filename = parts[0]
+		paths = glob.glob(parts[1])
+		if len(paths) != 1:
+			raise ValueError("Could not find file for pattern %s" % local_filename)
+		local_filename = paths[0]
 	else :
-		local_filename = filename
 		asset_filename = os.path.basename(filename)
+		local_filename = filename
 
 	# delete if present
 	for asset in assets:
@@ -122,4 +125,4 @@ for filename in files:
 	resp = gh_api(upload_url + '?name=%s' % asset_filename, filename=local_filename)
 	if 'id' not in resp:
 		raise ValueError('upload failed :/ ' + str(resp))
-	print(resp['browser_download_url'])
+	print("%s -> %s" % (local_filename, resp['browser_download_url']))
