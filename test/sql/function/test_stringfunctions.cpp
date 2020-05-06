@@ -548,6 +548,92 @@ TEST_CASE("LEFT test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"", "", ""}));
 }
 
+TEST_CASE("RIGHT test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// test RIGHT on positive positions
+	result = con.Query("SELECT RIGHT('abcd', 0), RIGHT('abc', 1), RIGHT('abc', 2), RIGHT('abc', 3), RIGHT('abc', 4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"c"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"bc"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"abc"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"abc"}));
+
+	result = con.Query(
+	    "SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', 1), RIGHT('🦆ab', 2), RIGHT('🦆ab', 3), RIGHT('🦆ab', 4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"b"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"ab"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"🦆ab"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"🦆ab"}));
+
+	result = con.Query(
+	    "SELECT RIGHT('🦆🤦S̈', 0), RIGHT('🦆🤦S̈', 1), RIGHT('🦆🤦S̈', 2), RIGHT('🦆🤦S̈', 3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"S̈"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"🤦S̈"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"🦆🤦S̈"}));
+
+	// test RIGHT on negative positions
+	result =
+	    con.Query("SELECT RIGHT('abcd', 0), RIGHT('abc', -1), RIGHT('abc', -2), RIGHT('abc', -3), RIGHT('abc', -4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"bc"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"c"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+	REQUIRE(CHECK_COLUMN(result, 4, {""}));
+
+	result = con.Query("SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', -1), RIGHT('🦆ab', -2), RIGHT('🦆ab', -3), "
+	                   "RIGHT('🦆ab', -4)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ab"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"b"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+	REQUIRE(CHECK_COLUMN(result, 4, {""}));
+
+	result = con.Query(
+	    "SELECT RIGHT('🦆🤦S̈', 0), RIGHT('🦆🤦S̈', -1), RIGHT('🦆🤦S̈', -2), RIGHT('🦆🤦S̈', -3)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"🤦S̈"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"S̈"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {""}));
+
+	// test RIGHT on NULL values
+	result = con.Query("SELECT RIGHT(NULL, 0), RIGHT('abc', NULL), RIGHT(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+
+	result = con.Query("SELECT RIGHT(NULL, 0), RIGHT('🦆ab', NULL), RIGHT(NULL, NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {""}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', 1), ('abc', 2), ('abc', 3), ('abc', 4)"));
+	result = con.Query("SELECT RIGHT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "c", "bc", "abc", "abc"}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO STRINGS VALUES ('abcd', 0), ('abc', -1), ('abc', -2), ('abc', -3), ('abc', -4)"));
+	result = con.Query("SELECT RIGHT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "bc", "c", "", ""}));
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE IF EXISTS strings"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO STRINGS VALUES (NULL, 0), ('abc', NULL), (NULL, NULL)"));
+	result = con.Query("SELECT RIGHT(a, b) FROM strings");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "", ""}));
+}
+
 TEST_CASE("BIT_LENGTH test", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

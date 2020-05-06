@@ -16,6 +16,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<LpadFun>();
 	Register<LtrimFun>();
 	Register<LeftFun>();
+	Register<RightFun>();
 	Register<PrintfFun>();
 	Register<RegexpFun>();
 	Register<SubstringFun>();
