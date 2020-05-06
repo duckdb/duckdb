@@ -10,13 +10,14 @@ TEST_CASE("Test scalar LIKE statement with custom ESCAPE", "[like]") {
 	Connection con(db);
 
 	// scalar like with escape
-	result = con.Query("SELECT '+++' LIKE '*+++' ESCAPE '*';");
+	con.Query("EXPLAIN SELECT '%++' LIKE '*%++' ESCAPE '*';")->Print();
+	result = con.Query("SELECT '%++' LIKE '*%++' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = con.Query("SELECT '\' LIKE '\\' ESCAPE '\';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = con.Query("SELECt '%' LIKE '*%' ESCAPE '*';");
+	result = con.Query("SELECT '%' LIKE '*%' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = con.Query("SELECT '_ ' LIKE '*_ ' ESCAPE '*';");
@@ -32,15 +33,15 @@ TEST_CASE("Test LIKE statement with ESCAPE", "[like]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s STRING, pat STRING);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('abab', 'ab*%%'), "
-	                          "('aaa', 'a*__a'), ('aaa', '*%%b%');"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('abab', 'ab%'), "
+	                          "('aaa', 'a*_a'), ('aaa', '*%b'), ('bbb', 'a%');"));
 
-	result = con.Query("SELECT s FROM strings WHERE s LIKE 'ab%' ESCAPE '*'");
-	REQUIRE(CHECK_COLUMN(result, 0, {"abab"}));
+	result = con.Query("SELECT s FROM strings WHERE pat LIKE 'a*%' ESCAPE '*'");
+	REQUIRE(CHECK_COLUMN(result, 0, {"bbb"}));
 
 	result = con.Query("SELECT s FROM strings WHERE 'aba' LIKE pat ESCAPE '*'");
-	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa", "aaa"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"abab"}));
 
 	result = con.Query("SELECT s FROM strings WHERE s LIKE pat ESCAPE '*'");
-	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "aaa"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"abab"}));
 }

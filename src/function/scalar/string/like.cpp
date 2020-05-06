@@ -9,28 +9,38 @@ namespace duckdb {
 static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 struct LikeEscapeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TC, class TR> static inline TR Operation(TA left, TB right, TC escape) {
+		auto s = left.GetData();
+		auto pattern = right.GetData();
 		auto escape = right.GetData();
-		return like_operator(left.GetData(), right.GetData(), escape);
+		return like_operator(s, pattern, escape);
 	}
 };
 
 struct NotLikeEscapeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TC, class TR> static inline TR Operation(TA left, TB right, TC escape) {
+		auto s = left.GetData();
+		auto pattern = right.GetData();
 		auto escape = right.GetData();
-		return !like_operator(left.GetData(), right.GetData(), escape);
+		return !like_operator(s, pattern, escape);
 	}
 };
 
 struct LikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return like_operator(left.GetData(), right.GetData(), nullptr);
+		auto s = left.GetData();
+		auto pattern = right.GetData();
+		auto escape = nullptr;
+		return like_operator(s, pattern, escape);
 	}
 };
 
 struct NotLikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		return !like_operator(left.GetData(), right.GetData(), nullptr);
+		auto s = left.GetData();
+		auto pattern = right.GetData();
+		auto escape = nullptr;
+		return !like_operator(s, pattern, escape);
 	}
 };
 
@@ -39,11 +49,12 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 
 	t = s;
 	for (p = pattern; *p && *t; p++) {
-		if (escape && *t == *escape) {
-			t++;
+		if (escape && *p == *escape) {
+			p++;
 			if (*p != *t) {
 				return false;
 			}
+			t++;
 		} else if (*p == '_') {
 			t++;
 		} else if (*p == '%') {
@@ -83,11 +94,12 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeEscapeOperator, true>));
+	set.AddFunction(ScalarFunction("like_escape", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                               SQLType::VARCHAR,
+	                               ScalarFunction::TernaryFunction<string_t, string_t, string_t, bool, LikeEscapeOperator, true>));
 	set.AddFunction(
-	    ScalarFunction("!like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                   ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeEscapeOperator, true>));
+	    ScalarFunction("!like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR,
+	                   ScalarFunction::TernaryFunction<string_t, string_t, string_t, bool, NotLikeEscapeOperator, true>));
 }
 
 } // namespace duckdb

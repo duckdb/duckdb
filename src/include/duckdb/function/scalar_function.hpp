@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/ternary_executor.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 class BoundFunctionExpression;
@@ -79,6 +80,14 @@ public:
 		assert(input.column_count() == 2);
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], result,
 		                                                             input.size());
+	};
+
+	template <class TA, class TB, class TC, class TR, class OP, bool IGNORE_NULL = false>
+	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+		auto func = OP();
+		assert(input.column_count() == 3);
+		TernaryExecutor::Execute<TA, TB, TC, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], input.data[2], result,
+		                                                      input.size(), std::function<void>(func));
 	};
 
 public:
