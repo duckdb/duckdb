@@ -63,9 +63,14 @@ upload_url = resp['upload_url'].split('{')[0] # gah
 
 files = sys.argv[1:]
 for filename in files:
-	parts = filename.split("=")
-	local_filename = parts[1]
-	asset_filename = parts[0]
+	if '=' in filename:
+		parts = filename.split("=")
+		local_filename = parts[1]
+		asset_filename = parts[0]
+	else :
+		local_filename = filename
+		asset_filename = os.path.basename(filename)
+
 	mime_type = mimetypes.guess_type(local_filename)[0]
 	if mime_type is None:
 		mime_type = "application/octet-stream"

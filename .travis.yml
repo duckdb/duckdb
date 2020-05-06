@@ -229,6 +229,8 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
+        - pip install --user boto3 requests
+
       script:
         - python scripts/amalgamation.py
         - mkdir -p build/release
@@ -435,6 +437,7 @@ matrix:
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
+
     - os: linux
       if: tag != master-builds
       name: R Package
@@ -535,14 +538,16 @@ matrix:
       python: 3.7
 
       script:
-        - pip install cibuildwheel==0.10.2 boto3
+        - pip install cibuildwheel==0.10.2 boto3 requests
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python scripts/asset-upload.py tools/pythonpkg/dist/duckdb-*.tar.gz
+
 
     - os: linux
       name: Python 2 Package
@@ -563,7 +568,7 @@ matrix:
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python tools/upload-s3.py python tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: osx
@@ -576,7 +581,7 @@ matrix:
       before_install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 boto3
+        - python3 -m pip install cibuildwheel==0.10.2 boto3 requests
 
       script:
         - cd tools/pythonpkg
@@ -586,7 +591,8 @@ matrix:
         - cd ../..
 
       after_success:
-        python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - python3 scripts/asset-upload.py tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: windows
