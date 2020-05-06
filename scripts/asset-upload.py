@@ -1,6 +1,4 @@
-import json, os, sys, mimetypes
-import urllib.request
-import json
+import json, os, sys, mimetypes, urllib.request
 
 api_url = 'https://api.github.com/repos/cwida/duckdb/'
 tag = 'master-builds'

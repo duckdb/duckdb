@@ -47,7 +47,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
-        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        - python3 scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: osx
@@ -238,7 +238,7 @@ matrix:
       after_success:
         - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
         - python tools/upload-s3.py src-amalgamation build/duckdb.zip
-        - python scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
+        - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 
 
     - os: osx
@@ -295,7 +295,7 @@ matrix:
 
       after_success:
         - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
-        - python scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
+        - python3 scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
 
 
     - os: windows
@@ -463,7 +463,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
-        - python ../../scripts/asset-upload.py duckdb_r.tar.gz=duckdb_*.tar.gz
+        - python3 ../../scripts/asset-upload.py duckdb_r.tar.gz=duckdb_*.tar.gz
 
 
     - os: osx
@@ -494,7 +494,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
         - python3 ../upload-s3.py rstats duckdb_*.tgz
-        - python ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows
@@ -547,7 +547,7 @@ matrix:
         - cd ../..
       after_success:
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-        - python scripts/asset-upload.py duckdb_python.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
+        - python3 scripts/asset-upload.py duckdb_python.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: linux
