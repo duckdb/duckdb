@@ -21,6 +21,7 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 
 namespace duckdb {
 
