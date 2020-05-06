@@ -729,4 +729,18 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
 		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE VARCHAR USING ''; "));
 	}
+	SECTION("629") {
+		// ALTER TYPE with USING results in an assertion failure "types.size() > 0"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE VARCHAR USING ''; "));
+	}
+	SECTION("633") {
+		// Query using LEFT() results in a segmentation fault
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL);"));
+		result = con.Query("SELECT LEFT(t0.c0, -1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		result = con.Query("SELECT RIGHT(t0.c0, -1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
 }

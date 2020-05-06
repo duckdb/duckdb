@@ -26,7 +26,7 @@ static void left_function(DataChunk &args, ExpressionState &state, Vector &resul
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
 
-	BinaryExecutor::Execute<string_t, int64_t, string_t>(
+	BinaryExecutor::Execute<string_t, int64_t, string_t, true>(
 	    str_vec, pos_vec, result, args.size(),
 	    [&](string_t str, int64_t pos) { return left_scalar_function(result, str, pos, output, current_len); });
 }
@@ -56,7 +56,7 @@ static void right_function(DataChunk &args, ExpressionState &state, Vector &resu
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
 
-	BinaryExecutor::Execute<string_t, int64_t, string_t>(
+	BinaryExecutor::Execute<string_t, int64_t, string_t, true>(
 	    str_vec, pos_vec, result, args.size(),
 	    [&](string_t str, int64_t pos) { return right_scalar_function(result, str, pos, output, current_len); });
 }
