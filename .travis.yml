@@ -42,12 +42,12 @@ matrix:
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb.so duckdb_cli-linux-amd64=build/release/duckdb_cli DuckDBJ-linux-amd64.jar=build/release/tools/jdbc/DuckDBJ.jar
+        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        - python scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: osx
@@ -64,12 +64,12 @@ matrix:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
 
       after_success:
-        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
-        - python3 scripts/asset-upload.py libduckdb-osx.so=build/release/src/libduckdb*.so duckdb_cli-osx=build/release/duckdb_cli DuckDBJ-osx.jar=build/release/tools/jdbc/DuckDBJ.jar
+        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        - python3 scripts/asset-upload.py libduckdb-osx.dylib=build/release/src/libduckdb*.dylib duckdb_cli-osx=build/release/duckdb_cli duckdb_jdbc-osx.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: windows
@@ -94,12 +94,12 @@ matrix:
         - cmake --build . --target icu_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
-        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb-jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/DuckDBJ.jar
-        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe DuckDBJ-windows-amd64.jar=tools/jdbc/DuckDBJ.jar
+        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
@@ -431,9 +431,9 @@ matrix:
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
-        - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/DuckDBJ.jar test)
+        - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
     - os: linux
       if: tag != master-builds
