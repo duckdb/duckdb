@@ -47,8 +47,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
 	// add the new column to this DataTable
 	auto new_column_type = GetInternalType(new_column.type);
 	idx_t new_column_idx = columns.size();
@@ -84,6 +82,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	}
 	// also add this column to client local storage
 	Transaction::GetTransaction(context).storage.AddColumn(&parent, this, new_column, default_value);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
@@ -101,12 +102,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 			}
 		}
 	}
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
 	// erase the column from this DataTable
 	assert(removed_column < types.size());
 	types.erase(types.begin() + removed_column);
 	columns.erase(columns.begin() + removed_column);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
@@ -115,9 +117,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {
 
 	// prevent any new tuples from being added to the parent
-	lock_guard<mutex> parent_lock(parent.append_lock);
-	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	parent.is_root = false;
+	CreateIndexScanState scan_state;
+	parent.InitializeCreateIndexScan(scan_state, bound_columns);
+
 	// first check if there are any indexes that exist that point to the changed column
 	for (auto &index : info->indexes) {
 		for (auto &column_id : index->column_ids) {
@@ -140,17 +142,18 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
-	TableScanState scan_state;
 
 	vector<TypeId> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
-		types.push_back(parent.types[i]);
+		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
+			types.push_back(ROW_TYPE);
+		} else {
+			types.push_back(parent.types[bound_columns[i]]);
+		}
 	}
-	parent.InitializeScan(transaction, scan_state, bound_columns, nullptr);
 
 	DataChunk scan_chunk;
 	scan_chunk.Initialize(types);
-	unordered_map<idx_t, vector<TableFilter>> dummy_filters;
 
 	ExpressionExecutor executor;
 	executor.AddExpression(cast_expr);
@@ -158,7 +161,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	Vector append_vector(new_type);
 	while (true) {
 		// scan the table
-		parent.Scan(transaction, scan_chunk, scan_state, dummy_filters);
+		scan_chunk.Reset();
+		parent.CreateIndexScan(scan_state, scan_chunk);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -170,6 +174,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	transaction.storage.ChangeType(&parent, this, changed_idx, target_type, bound_columns, cast_expr);
 
 	columns[changed_idx] = move(column_data);
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.is_root = false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -448,7 +455,7 @@ void DataTable::IndexScan(Transaction &transaction, DataChunk &result, TableInde
 	// clear any previously pinned blocks
 	state.fetch_state.handles.clear();
 	// scan the index
-	state.index->Scan(transaction, state, result);
+	state.index->Scan(transaction, *this, state, result);
 	if (result.size() > 0) {
 		return;
 	}
