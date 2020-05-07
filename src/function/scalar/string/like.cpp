@@ -80,6 +80,7 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 		} else {
 			return false;
 		}
+		is_escaped = false;
 	}
 	if (*p == '%' && *(p + 1) == 0) {
 		return true;
@@ -87,15 +88,14 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 	return *t == 0 && *p == 0;
 }
 
-static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
+template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::VARCHAR &&
 	       args.data[2].type == TypeId::VARCHAR);
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
 
-	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(str, pattern, escape, result, args.size(),
-	                                                                 LikeEscapeOperator());
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(str, pattern, escape, result, args.size(), Func());
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -107,8 +107,8 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                                                SQLType::BOOLEAN, like_escape_function));
+	                                                SQLType::BOOLEAN, like_escape_function<LikeEscapeOperator>));
 	set.AddFunction({"!like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                                                 SQLType::BOOLEAN, like_escape_function));
+	                                                 SQLType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
 }
 } // namespace duckdb
