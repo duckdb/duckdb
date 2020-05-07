@@ -92,7 +92,7 @@ matrix:
         - cmake --build . --target icu_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
-        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb-jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
 
       after_success:
@@ -463,7 +463,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
-        - python3 ../../scripts/asset-upload.py duckdb_r.tar.gz=duckdb_*.tar.gz
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
 
     - os: osx
@@ -547,7 +547,7 @@ matrix:
         - cd ../..
       after_success:
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-        - python3 scripts/asset-upload.py duckdb_python.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
+       # - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: linux
@@ -591,7 +591,7 @@ matrix:
 
       after_success:
         - python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-        - python3 scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
+       # - python3 scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: windows
@@ -625,5 +625,5 @@ matrix:
 
       after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-        - C:/Python37-x64/python.exe scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
+        # - C:/Python37-x64/python.exe scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 

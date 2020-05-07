@@ -13,8 +13,8 @@ if (len(sys.argv) < 2):
 # TODO check TRAVIS_TAG
 
 branch = os.getenv("TRAVIS_BRANCH", "")
-if branch != "ghassets":
-	print("Only running on ghassets branch for now. Exiting.")
+if branch != "master":
+	print("Only running on master branch for now. Exiting.")
 	exit(0)
 
 # sha = os.getenv("TRAVIS_COMMIT", "")
