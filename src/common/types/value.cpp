@@ -26,6 +26,7 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	str_value = val;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -38,6 +39,19 @@ Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 		break;
 	}
 }
+
+//void Value::ValidateString() {
+//	auto utf_type = Utf8Proc::Analyze(str_value);
+//	switch (utf_type) {
+//	case UnicodeType::INVALID:
+//		throw Exception("String value is not valid UTF8");
+//	case UnicodeType::ASCII:
+//		break;
+//	case UnicodeType::UNICODE:
+//		str_value = Utf8Proc::Normalize(str_value);
+//		break;
+//	}
+//}
 
 Value Value::MinimumValue(TypeId type) {
 	Value result;
@@ -144,13 +158,13 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
-Value Value::BLOB(string value) {
-	Value result(TypeId::VARCHAR);
-	result.str_value = value;
-	result.is_null = false;
-	result.sql_type = SQLType::VARBINARY;
-	return result;
-}
+//Value Value::BLOB(string value) {
+//	Value result(TypeId::VARCHAR);
+//	result.str_value = value;
+//	result.is_null = false;
+//	result.sql_type = SQLType::VARBINARY;
+//	return result;
+//}
 
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));

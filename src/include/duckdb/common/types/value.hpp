@@ -51,6 +51,8 @@ public:
 	//! Create a VARCHAR value
 	Value(string val);
 
+//	void ValidateString();
+
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
 	//! Create the highest possible value of a given type (numeric only)
@@ -85,9 +87,6 @@ public:
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
-
-	//! Create a blob value
-	static Value BLOB(string value);
 
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
