@@ -62,7 +62,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 					column_ids.push_back(key);
 				}
 				// create an adaptive radix tree around the expressions
-				auto art = make_unique<ART>(*storage, column_ids, move(unbound_expressions), true);
+				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true);
 				storage->AddIndex(move(art), bound_expressions);
 			}
 		}
@@ -246,9 +246,21 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			}
 			break;
 		}
-		case ConstraintType::UNIQUE:
-			create_info->constraints.push_back(constraint->Copy());
+		case ConstraintType::UNIQUE: {
+			auto copy = constraint->Copy();
+			auto &unique = (UniqueConstraint &) *copy;
+			if (unique.index != INVALID_INDEX) {
+				if (unique.index == removed_index) {
+					throw CatalogException(
+					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
+					    info.removed_column.c_str());
+				} else if (unique.index > removed_index) {
+					unique.index--;
+				}
+			}
+			create_info->constraints.push_back(move(copy));
 			break;
+		}
 		default:
 			throw InternalException("Unsupported constraint for entry!");
 		}
@@ -337,10 +349,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	AlterBinder expr_binder(binder, context, name, columns, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
+	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
+	if (bound_columns.size() == 0) {
+		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	}
+
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
-
-	auto bound_create_info = binder.BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
