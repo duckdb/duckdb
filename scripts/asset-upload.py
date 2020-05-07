@@ -17,6 +17,11 @@ if branch != "master":
 	print("Only running on master branch for now. Exiting.")
 	exit(0)
 
+pr = os.getenv("TRAVIS_PULL_REQUEST", "")
+if pr != "false":
+	print("Not running on PRs. Exiting.")
+	exit(0)
+
 # sha = os.getenv("TRAVIS_COMMIT", "")
 # if sha == "":
 # 	raise ValueError('need a commit ID in TRAVIS_COMMIT')
