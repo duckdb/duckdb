@@ -41,6 +41,7 @@ matrix:
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
+        - (cd examples/jdbc; make)
         - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
 
