@@ -9,19 +9,19 @@ namespace duckdb {
 static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 struct LikeEscapeOperator {
-	template <class TA, class TB, class TC, class TR> static inline TR Operation(TA left, TB right, TC escape) {
+	template <class TA, class TB, class TC> inline bool operator()(TA left, TB right, TC esc) {
 		auto s = left.GetData();
 		auto pattern = right.GetData();
-		auto escape = right.GetData();
+		auto escape = esc.GetData();
 		return like_operator(s, pattern, escape);
 	}
 };
 
 struct NotLikeEscapeOperator {
-	template <class TA, class TB, class TC, class TR> static inline TR Operation(TA left, TB right, TC escape) {
+	template <class TA, class TB, class TC> inline bool operator()(TA left, TB right, TC esc) {
 		auto s = left.GetData();
 		auto pattern = right.GetData();
-		auto escape = right.GetData();
+		auto escape = esc.GetData();
 		return !like_operator(s, pattern, escape);
 	}
 };

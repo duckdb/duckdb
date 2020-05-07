@@ -84,10 +84,9 @@ public:
 
 	template <class TA, class TB, class TC, class TR, class OP, bool IGNORE_NULL = false>
 	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto func = OP();
 		assert(input.column_count() == 3);
-		TernaryExecutor::Execute<TA, TB, TC, TR, OP, IGNORE_NULL>(input.data[0], input.data[1], input.data[2], result,
-		                                                      input.size(), std::function<void>(func));
+		TernaryExecutor::Execute<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result,
+		                                                      input.size(), OP());
 	};
 
 public:

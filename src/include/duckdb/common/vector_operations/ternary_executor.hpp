@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include <functional>
+#include <iostream>
 
 namespace duckdb {
 
@@ -58,6 +59,7 @@ public:
 				auto cdata = ConstantVector::GetData<C_TYPE>(c);
 				auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 				result_data[0] = fun(*adata, *bdata, *cdata);
+				std::cout << result_data[0] << std::endl;
 			}
 		} else {
 			result.vector_type = VectorType::FLAT_VECTOR;
