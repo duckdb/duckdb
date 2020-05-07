@@ -46,18 +46,19 @@ struct NotLikeOperator {
 
 bool like_operator(const char *s, const char *pattern, const char *escape) {
 	const char *t, *p;
-
+	bool is_escaped{false};
 	t = s;
 	for (p = pattern; *p && *t; p++) {
 		if (escape && *p == *escape) {
+			is_escaped = true;
 			p++;
 			if (*p != *t) {
 				return false;
 			}
 			t++;
-		} else if (*p == '_') {
+		} else if (*p == '_' && !is_escaped) {
 			t++;
-		} else if (*p == '%') {
+		} else if (*p == '%' && !is_escaped) {
 			p++;
 			while (*p == '%') {
 				p++;
@@ -86,6 +87,17 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 	return *t == 0 && *p == 0;
 }
 
+static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::VARCHAR &&
+	       args.data[2].type == TypeId::VARCHAR);
+	auto &str = args.data[0];
+	auto &pattern = args.data[1];
+	auto &escape = args.data[2];
+
+	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(str, pattern, escape, result, args.size(),
+	                                                                 LikeEscapeOperator());
+}
+
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
@@ -94,12 +106,9 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("like_escape", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                               SQLType::VARCHAR,
-	                               ScalarFunction::TernaryFunction<string_t, string_t, string_t, bool, LikeEscapeOperator, true>));
-	set.AddFunction(
-	    ScalarFunction("!like_escape", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR,
-	                   ScalarFunction::TernaryFunction<string_t, string_t, string_t, bool, NotLikeEscapeOperator, true>));
+	set.AddFunction({"like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                                                SQLType::BOOLEAN, like_escape_function));
+	set.AddFunction({"!like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                                                 SQLType::BOOLEAN, like_escape_function));
 }
-
 } // namespace duckdb

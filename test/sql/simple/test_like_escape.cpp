@@ -10,12 +10,14 @@ TEST_CASE("Test scalar LIKE statement with custom ESCAPE", "[like]") {
 	Connection con(db);
 
 	// scalar like with escape
-	con.Query("EXPLAIN SELECT '%++' LIKE '*%++' ESCAPE '*';")->Print();
 	result = con.Query("SELECT '%++' LIKE '*%++' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
 	result = con.Query("SELECT '\' LIKE '\\' ESCAPE '\';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT '\\' LIKE '\\' ESCAPE '\';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
 
 	result = con.Query("SELECT '%' LIKE '*%' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
@@ -25,6 +27,14 @@ TEST_CASE("Test scalar LIKE statement with custom ESCAPE", "[like]") {
 
 	result = con.Query("SELECT ' a ' LIKE '*_ ' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+
+	result = con.Query("SELECT '\%_' LIKE '\%_' ESCAPE '';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT '\%_' LIKE '\%_';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
+
+	REQUIRE_FAIL(con.Query("SELECT '\%_' LIKE '\%_' ESCAPE '\\';"));
 }
 
 TEST_CASE("Test LIKE statement with ESCAPE", "[like]") {
