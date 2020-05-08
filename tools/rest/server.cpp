@@ -30,7 +30,9 @@ void print_help() {
 	fprintf(stderr, "          --read_only           open database in read-only mode\n");
 	fprintf(stderr, "          --query_timeout=[sec] query timeout in seconds\n");
 	fprintf(stderr, "          --fetch_timeout=[sec] result set timeout in seconds\n");
-	fprintf(stderr, "          --log=[file]          log queries to file\n");
+	fprintf(stderr, "          --log=[file]          log queries to file\n\n");
+	fprintf(stderr, "Version: %s\n", DUCKDB_SOURCE_ID);
+
 }
 
 // https://stackoverflow.com/a/12468109/2652376
@@ -129,6 +131,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 
 void serialize_json(const Request &req, Response &resp, json &j) {
 	auto return_type = ReturnContentType::JSON;
+	j["duckdb_version"] = DUCKDB_SOURCE_ID;
 
 	if (req.has_header("Accept")) {
 		auto accept = req.get_header_value("Accept");
