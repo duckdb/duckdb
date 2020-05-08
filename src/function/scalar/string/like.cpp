@@ -9,54 +9,35 @@ namespace duckdb {
 static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 struct LikeEscapeOperator {
-	template <class TA, class TB, class TC> inline bool operator()(TA left, TB right, TC esc) {
-		auto s = left.GetData();
-		auto pattern = right.GetData();
-		auto escape = esc.GetData();
-		return like_operator(s, pattern, escape);
+	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
+		// Only one escape character should be allowed
+		if (escape.GetSize() > 1) {
+			throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
+		}
+		return like_operator(str.GetData(), pattern.GetData(), escape.GetData());
 	}
 };
 
 struct NotLikeEscapeOperator {
-	template <class TA, class TB, class TC> inline bool operator()(TA left, TB right, TC esc) {
-		auto s = left.GetData();
-		auto pattern = right.GetData();
-		auto escape = esc.GetData();
-		return !like_operator(s, pattern, escape);
+	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
+		return !LikeEscapeOperator::Operation(str, pattern, escape);
 	}
 };
 
 struct LikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		auto s = left.GetData();
-		auto pattern = right.GetData();
-		auto escape = nullptr;
-		return like_operator(s, pattern, escape);
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return like_operator(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 
 struct NotLikeOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
-		auto s = left.GetData();
-		auto pattern = right.GetData();
-		auto escape = nullptr;
-		return !like_operator(s, pattern, escape);
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		return !like_operator(str.GetData(), pattern.GetData(), nullptr);
+		;
 	}
 };
 
 bool like_operator(const char *s, const char *pattern, const char *escape) {
-	// Only one escape character should be allowed
-	if (escape && (*escape == '\\' || *(escape + 1) != '\0')) {
-		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
-	}
-	// Edge cases where pattern is '\' and both escape and select are filled with '\' or only escape.
-	if (escape && *pattern == '\\') {
-		if (*s == '\0' && *escape == '\0') {
-			return true;
-		} else if (*s == '\\') {
-			return false;
-		}
-	}
 	// Default LIKE and LIKE with ESCAPE
 	const char *t, *p;
 	bool is_escaped{false};
@@ -109,7 +90,8 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
 
-	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(str, pattern, escape, result, args.size(), Func());
+	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(
+	    str, pattern, escape, result, args.size(), Func::template Operation<string_t, string_t, string_t>);
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -122,7 +104,7 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
 	                                                SQLType::BOOLEAN, like_escape_function<LikeEscapeOperator>));
-	set.AddFunction({"!like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                                                 SQLType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
+	set.AddFunction({"not_like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                                                    SQLType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
 }
 } // namespace duckdb

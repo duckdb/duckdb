@@ -1652,7 +1652,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				}
 			| a_expr NOT_LA LIKE a_expr ESCAPE a_expr			%prec NOT_LA
 				{
-					PGFuncCall *n = makeFuncCall(SystemFuncName("!like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("not_like_escape"),
 											   list_make3($1, $4, $6),
 											   @2);
 					$$ = (PGNode *) n;
@@ -1677,7 +1677,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				}
 			| a_expr NOT_LA ILIKE a_expr ESCAPE a_expr			%prec NOT_LA
 				{
-					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("not_like_escape"),
 											   list_make2($4, $6),
 											   @2);
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "!~~*",

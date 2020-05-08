@@ -16,10 +16,10 @@ TEST_CASE("Test scalar LIKE statement with custom ESCAPE", "[like]") {
 	result = con.Query("SELECT '%++' NOT LIKE '*%++' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
 	// Default tests
-	result = con.Query("SELECT '\' LIKE '\\' ESCAPE '\';");
+	result = con.Query("SELECT '\\' LIKE '\\\\' ESCAPE '\\';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	result = con.Query("SELECT '\\' LIKE '\\' ESCAPE '\';");
+	result = con.Query("SELECT '\\\\' LIKE '\\\\' ESCAPE '\\';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(false)}));
 
 	result = con.Query("SELECT '%' LIKE '*%' ESCAPE '*';");
@@ -37,8 +37,8 @@ TEST_CASE("Test scalar LIKE statement with custom ESCAPE", "[like]") {
 	result = con.Query("SELECT '*%' NOT LIKE '*%' ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
 
-	// It should fail when more the one escape character is specified
-	REQUIRE_FAIL(con.Query("SELECT '\%_' LIKE '\%_' ESCAPE '\\';"));
+	// It should fail when more than one escape character is specified
+	REQUIRE_FAIL(con.Query("SELECT '\%_' LIKE '\%_' ESCAPE '\\\\';"));
 	REQUIRE_FAIL(con.Query("SELECT '\%_' LIKE '\%_' ESCAPE '**';"));
 }
 
@@ -58,7 +58,7 @@ TEST_CASE("Test LIKE statement with ESCAPE in the middle of the pattern", "[like
 	REQUIRE(CHECK_COLUMN(result, 0, {"ab%", "a*_a", "*%b", "a%"}));
 
 	result = con.Query("SELECT s FROM strings WHERE pat LIKE 'a*%' ESCAPE '*';");
-	// REQUIRE(CHECK_COLUMN(result, 0, {"bbb"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"bbb"}));
 
 	result = con.Query("SELECT s FROM strings WHERE 'aba' LIKE pat ESCAPE '*';");
 	REQUIRE(CHECK_COLUMN(result, 0, {"abab", "bbb"}));

@@ -13,7 +13,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
-#include <iostream>
 
 namespace duckdb {
 

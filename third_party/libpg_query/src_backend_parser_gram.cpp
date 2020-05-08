@@ -18523,7 +18523,7 @@ yyreduce:
   case 696:
 #line 1654 "third_party/libpg_query/grammar/statements/select.y"
     {
-					PGFuncCall *n = makeFuncCall(SystemFuncName("!like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("not_like_escape"),
 											   list_make3((yyvsp[(1) - (6)].node), (yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 											   (yylsp[(2) - (6)]));
 					(yyval.node) = (PGNode *) n;
@@ -18560,7 +18560,7 @@ yyreduce:
   case 700:
 #line 1679 "third_party/libpg_query/grammar/statements/select.y"
     {
-					PGFuncCall *n = makeFuncCall(SystemFuncName("like_escape"),
+					PGFuncCall *n = makeFuncCall(SystemFuncName("not_like_escape"),
 											   list_make2((yyvsp[(4) - (6)].node), (yyvsp[(6) - (6)].node)),
 											   (yylsp[(2) - (6)]));
 					(yyval.node) = (PGNode *) makeSimpleAExpr(PG_AEXPR_ILIKE, "!~~*",
