@@ -48,7 +48,7 @@ matrix:
         - (cd examples/jdbc; make)
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        #- python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
         - python3 scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
@@ -70,7 +70,7 @@ matrix:
         - build/release/extension/icu/test/icu_test
 
       after_success:
-        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        #- python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
         - python3 scripts/asset-upload.py libduckdb-osx-amd64.dylib=build/release/src/libduckdb*.dylib duckdb_cli-osx-amd64=build/release/duckdb_cli duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
@@ -98,7 +98,7 @@ matrix:
         - extension/icu/test/Release/icu_test.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
+        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
         - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
 
@@ -239,7 +239,7 @@ matrix:
 
       after_success:
         - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
-        - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+        # - python tools/upload-s3.py src-amalgamation build/duckdb.zip
         - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 
 
@@ -296,7 +296,7 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
+        #- python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
         - python3 scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
 
 
@@ -321,7 +321,7 @@ matrix:
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb_cli.exe
+        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb_cli.exe
         - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-i386.dll=src/Release/duckdb.dll duckdb_cli-windows-i386.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
 
@@ -400,7 +400,7 @@ matrix:
     #     - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
 
 
-# APIs: r / python packages
+# APIs: jdbc/ r / python packages
 
     - os: linux
       dist: xenial
