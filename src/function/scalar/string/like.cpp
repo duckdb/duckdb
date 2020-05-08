@@ -38,21 +38,19 @@ struct NotLikeOperator {
 };
 
 bool like_operator(const char *s, const char *pattern, const char *escape) {
-	// Default LIKE and LIKE with ESCAPE
 	const char *t, *p;
-	bool is_escaped{false};
+
 	t = s;
 	for (p = pattern; *p && *t; p++) {
 		if (escape && *p == *escape) {
-			is_escaped = true;
 			p++;
 			if (*p != *t) {
 				return false;
 			}
 			t++;
-		} else if (*p == '_' && !is_escaped) {
+		} else if (*p == '_') {
 			t++;
-		} else if (*p == '%' && !is_escaped) {
+		} else if (*p == '%') {
 			p++;
 			while (*p == '%') {
 				p++;
@@ -74,12 +72,11 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 		} else {
 			return false;
 		}
-		is_escaped = false;
 	}
 	if (*p == '%' && *(p + 1) == 0) {
 		return true;
 	}
-	return bool(*t == 0 && *p == 0);
+	return *t == 0 && *p == 0;
 } // namespace duckdb
 
 // This can be moved to the scalar_function class
