@@ -1,6 +1,8 @@
 include_directories(.)
 include_directories(../../third_party/dbgen/include)
 
+add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
+
 add_executable(duckdb_rest_server server.cpp)
 
 if(${BUILD_SUN})

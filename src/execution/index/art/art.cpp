@@ -7,9 +7,9 @@
 using namespace duckdb;
 using namespace std;
 
-ART::ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
+ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
          bool is_unique)
-    : Index(IndexType::ART, table, column_ids, move(unbound_expressions)), is_unique(is_unique) {
+    : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	tree = nullptr;
 	expression_result.Initialize(types);
 	int n = 1;
@@ -724,7 +724,7 @@ void ART::SearchCloseRange(vector<row_t> &result_ids, ARTIndexScanState *state, 
 	}
 }
 
-void ART::Scan(Transaction &transaction, TableIndexScanState &table_state, DataChunk &result) {
+void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &table_state, DataChunk &result) {
 	auto state = (ARTIndexScanState *)table_state.index_state.get();
 
 	// scan the index

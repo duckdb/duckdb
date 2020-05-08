@@ -19,7 +19,6 @@
 namespace duckdb {
 
 class ClientContext;
-class DataTable;
 class Transaction;
 
 struct IndexLock;
@@ -27,7 +26,7 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, DataTable &table, vector<column_t> column_ids,
+	Index(IndexType type, vector<column_t> column_ids,
 	      vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
@@ -35,8 +34,6 @@ public:
 	std::mutex lock;
 	//! The type of the index
 	IndexType type;
-	//! The table
-	DataTable &table;
 	//! Column identifiers to extract from the base table
 	vector<column_t> column_ids;
 	//! unordered_set of column_ids used by the index
@@ -59,7 +56,7 @@ public:
 	                                                               ExpressionType low_expression_type, Value high_value,
 	                                                               ExpressionType high_expression_type) = 0;
 	//! Perform a lookup on the index
-	virtual void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) = 0;
+	virtual void Scan(Transaction &transaction, DataTable &table, TableIndexScanState &state, DataChunk &result) = 0;
 
 	//! Obtain a lock on the index
 	virtual void InitializeLock(IndexLock &state);
