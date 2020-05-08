@@ -54,8 +54,7 @@ struct ARTIndexScanState : public IndexScanState {
 
 class ART : public Index {
 public:
-	ART(DataTable &table, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
-	    bool is_unique = false);
+	ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique = false);
 	~ART();
 
 	//! Root of the tree
@@ -79,7 +78,7 @@ public:
 	                                                       ExpressionType high_expression_type) override;
 
 	//! Perform a lookup on the index
-	void Scan(Transaction &transaction, TableIndexScanState &state, DataChunk &result) override;
+	void Scan(Transaction &transaction, DataTable &table, TableIndexScanState &state, DataChunk &result) override;
 	//! Append entries to the index
 	bool Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Verify that data can be appended to the index
