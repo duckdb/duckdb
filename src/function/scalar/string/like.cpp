@@ -45,6 +45,19 @@ struct NotLikeOperator {
 };
 
 bool like_operator(const char *s, const char *pattern, const char *escape) {
+	// Only one escape character should be allowed
+	if (escape && (*escape == '\\' || *(escape + 1) != '\0')) {
+		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
+	}
+	// Edge cases where pattern is '\' and both escape and select are filled with '\' or only escape.
+	if (escape && *pattern == '\\') {
+		if (*s == '\0' && *escape == '\0') {
+			return true;
+		} else if (*s == '\\') {
+			return false;
+		}
+	}
+	// Default LIKE and LIKE with ESCAPE
 	const char *t, *p;
 	bool is_escaped{false};
 	t = s;
@@ -85,9 +98,10 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 	if (*p == '%' && *(p + 1) == 0) {
 		return true;
 	}
-	return *t == 0 && *p == 0;
-}
+	return bool(*t == 0 && *p == 0);
+} // namespace duckdb
 
+// This can be moved to the scalar_function class
 template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::VARCHAR &&
 	       args.data[2].type == TypeId::VARCHAR);
@@ -95,7 +109,7 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
 
-	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(str, pattern, escape, result, args.size(), Func());
+	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(str, pattern, escape, result, args.size(), Func());
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {

@@ -82,13 +82,6 @@ public:
 		                                                             input.size());
 	};
 
-	template <class TA, class TB, class TC, class TR, class OP, bool IGNORE_NULL = false>
-	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		assert(input.column_count() == 3);
-		TernaryExecutor::Execute<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result,
-		                                                      input.size(), OP());
-	};
-
 public:
 	template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
 		switch (type.id) {
