@@ -68,6 +68,10 @@ public:
 		return table_storage.size() > 0;
 	}
 
+	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
+	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type,
+	                vector<column_t> bound_columns, Expression &cast_expr);
+
 private:
 	LocalTableStorage *GetStorage(DataTable *table);
 

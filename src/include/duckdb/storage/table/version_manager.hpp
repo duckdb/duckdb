@@ -20,13 +20,15 @@ class DataTable;
 class Transaction;
 class VersionManager;
 
+struct DataTableInfo;
+
 class VersionManager {
 public:
-	VersionManager(DataTable &table) : table(table), max_row(0), base_row(0) {
+	VersionManager(DataTableInfo &table_info) : table_info(table_info), max_row(0), base_row(0) {
 	}
 
-	//! The DataTable
-	DataTable &table;
+	//! The DataTableInfo
+	DataTableInfo &table_info;
 	//! The read/write lock for the delete info and insert info
 	StorageLock lock;
 	//! The info for each of the chunks
@@ -46,7 +48,7 @@ public:
 	bool Fetch(Transaction &transaction, idx_t row);
 
 	//! Delete the given set of rows in the version manager
-	void Delete(Transaction &transaction, Vector &row_ids, idx_t count);
+	void Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count);
 	//! Append a set of rows to the version manager, setting their inserted id to the given commit_id
 	void Append(Transaction &transaction, row_t row_start, idx_t count, transaction_t commit_id);
 	//! Revert a set of appends made to the version manager from the rows [row_start] until [row_end]

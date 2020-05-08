@@ -1,5 +1,6 @@
 add_library_unity(duckdb_catalog_entries
                   OBJECT
+                  index_catalog_entry.cpp
                   schema_catalog_entry.cpp
                   sequence_catalog_entry.cpp
                   table_catalog_entry.cpp

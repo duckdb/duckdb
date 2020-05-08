@@ -33,6 +33,12 @@ struct DateConvert {
 	}
 };
 
+struct TimeConvert {
+	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(time_t val) {
+		return py::str(duckdb::Time::ToString(val).c_str());
+	}
+};
+
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T> static py::str convert_value(string_t val) {
 		return py::str(val.GetData());
@@ -150,13 +156,8 @@ struct PandasScanFunction : public TableFunction {
 	}
 
 	template <class T> static void scan_pandas_column(py::array numpy_col, idx_t count, idx_t offset, Vector &out) {
-
 		auto src_ptr = (T *)numpy_col.data();
-		auto tgt_ptr = FlatVector::GetData<T>(out);
-
-		for (idx_t row = 0; row < count; row++) {
-			tgt_ptr[row] = src_ptr[row + offset];
-		}
+		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
 	}
 
 	static void pandas_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
@@ -207,22 +208,39 @@ struct PandasScanFunction : public TableFunction {
 					date_t date = Date::EpochToDate(ms / 1000);
 					dtime_t time = (dtime_t)(ms % ms_per_day);
 					tgt_ptr[row] = Timestamp::FromDatetime(date, time);
-					;
 				}
 				break;
 			} break;
 			case SQLTypeId::VARCHAR: {
-				auto src_ptr = (py::object *)numpy_col.data();
+				auto src_ptr = (PyObject **)numpy_col.data();
 				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
 					auto val = src_ptr[row + data.position];
 
-					if (!py::isinstance<py::str>(val)) {
+#if PY_MAJOR_VERSION >= 3
+					if (!PyUnicode_Check(val)) {
 						FlatVector::SetNull(output.data[col_idx], row, true);
 						continue;
 					}
-					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], val.cast<string>());
+					if (PyUnicode_READY(val) != 0) {
+						throw runtime_error("failure in PyUnicode_READY");
+					}
+					if (PyUnicode_KIND(val) == PyUnicode_1BYTE_KIND) {
+						auto ucs1 = PyUnicode_1BYTE_DATA(val);
+						auto length = PyUnicode_GET_LENGTH(val);
+						tgt_ptr[row] = string_t((const char*) ucs1, length);
+					} else {
+						tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+					}
+#else
+					if (!py::isinstance<py::str>(*((py::object*) &val))) {
+						FlatVector::SetNull(output.data[col_idx], row, true);
+						continue;
+					}
+
+					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
+#endif
 				}
 				break;
 			}
@@ -300,7 +318,16 @@ struct DuckDBPyResult {
 
 				break;
 			}
-
+			case SQLTypeId::TIME: {
+				if (result->types[col_idx] != TypeId::INT32) {
+					throw runtime_error("expected int32 for time");
+				}
+				int32_t hour, min, sec, msec;
+				auto time = val.GetValue<int32_t>();
+				duckdb::Time::Convert(time, hour, min, sec, msec);
+				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
+				break;
+			}
 			case SQLTypeId::DATE: {
 				if (result->types[col_idx] != TypeId::INT32) {
 					throw runtime_error("expected int32 for date");
@@ -380,7 +407,10 @@ struct DuckDBPyResult {
 				col_res = duckdb_py_convert::fetch_column<date_t, int64_t, duckdb_py_convert::DateConvert>(
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
-
+			case SQLTypeId::TIME:
+				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
+				    "object", mres->collection, col_idx);
+				break;
 			case SQLTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
 				    "object", mres->collection, col_idx);
@@ -521,6 +551,14 @@ struct DuckDBPyConnection {
 			throw runtime_error("connection closed");
 		}
 		return make_unique<DuckDBPyRelation>(connection->Table(tname));
+	}
+
+	unique_ptr<DuckDBPyRelation> values(py::object params = py::list()) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		}
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		return make_unique<DuckDBPyRelation>(connection->Values(values));
 	}
 
 	unique_ptr<DuckDBPyRelation> view(string vname) {
@@ -839,8 +877,13 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df)->query(view_name, sql_query);
 	}
 
-	void insert(string table) {
+	void insert_into(string table) {
 		rel->Insert(table);
+	}
+
+	void insert(py::object params = py::list()) {
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		rel->Insert(values);
 	}
 
 	void create(string table) {
@@ -887,6 +930,7 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("cursor", &DuckDBPyConnection::cursor)
 	        .def("begin", &DuckDBPyConnection::begin)
 	        .def("table", &DuckDBPyConnection::table, "some doc string for table", py::arg("name"))
+	        .def("values", &DuckDBPyConnection::values, "some doc string for table", py::arg("values"))
 	        .def("view", &DuckDBPyConnection::view, "some doc string for view", py::arg("name"))
 	        .def("table_function", &DuckDBPyConnection::table_function, "some doc string for table_function",
 	             py::arg("name"), py::arg("parameters") = py::list())
@@ -937,7 +981,8 @@ PYBIND11_MODULE(duckdb, m) {
 	         py::arg("sql_query"))
 	    .def("execute", &DuckDBPyRelation::execute, "some doc string for execute")
 	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
-	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("table_name"))
+	    .def("insert_into", &DuckDBPyRelation::insert_into, "some doc string for insert_into", py::arg("table_name"))
+	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("values"))
 	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
 	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")
 	    .def("create_view", &DuckDBPyRelation::create_view, "some doc string for create_view", py::arg("view_name"),

@@ -56,8 +56,8 @@ void CleanupState::CleanupUpdate(UpdateInfo *info) {
 }
 
 void CleanupState::CleanupDelete(DeleteInfo *info) {
-	auto version_table = &info->GetTable();
-	if (version_table->indexes.size() == 0) {
+	auto version_table = info->table;
+	if (version_table->info->indexes.size() == 0) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}

@@ -5,8 +5,13 @@ import socket
 import time
 from contextlib import closing
 import urllib.parse
+import sys
 
-BIN_PREFIX="../../build/debug/tools/rest"
+if (len(sys.argv) < 2):
+	print("Usage: test_the_rest.py [path_to_tools_rest_binaries]")
+	sys.exit(-1)
+
+BIN_PREFIX=sys.argv[1]
 DBFILE = "tpch_sf01.duckdb"
 
 
@@ -17,12 +22,10 @@ def find_free_port():
         return s.getsockname()[1]
 
 
-# create binary
-process = subprocess.Popen("make debug -C ../..".split(' '))
-process.wait()
+# check for binary
 server_binary = "%s/duckdb_rest_server" % BIN_PREFIX
-if process.returncode != 0 or not os.path.isfile(server_binary):
-	raise Exception('build failed')
+if not os.path.isfile(server_binary):
+	raise Exception('could not find rest binary')
 
 
 # create database if not exists

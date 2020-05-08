@@ -1,6 +1,6 @@
 # date type
 
-import numpy 
+import numpy
 import datetime
 import pandas
 
