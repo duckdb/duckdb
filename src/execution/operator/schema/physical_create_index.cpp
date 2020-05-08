@@ -24,7 +24,7 @@ void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &ch
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(*table.storage, column_ids, move(unbound_expressions), info->unique);
+		index = make_unique<ART>(column_ids, move(unbound_expressions), info->unique);
 		break;
 	}
 	default:

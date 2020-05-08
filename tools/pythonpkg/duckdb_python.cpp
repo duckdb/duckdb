@@ -553,6 +553,14 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->Table(tname));
 	}
 
+	unique_ptr<DuckDBPyRelation> values(py::object params = py::list()) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		}
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		return make_unique<DuckDBPyRelation>(connection->Values(values));
+	}
+
 	unique_ptr<DuckDBPyRelation> view(string vname) {
 		if (!connection) {
 			throw runtime_error("connection closed");
@@ -869,8 +877,13 @@ struct DuckDBPyRelation {
 		return default_connection()->from_df(df)->query(view_name, sql_query);
 	}
 
-	void insert(string table) {
+	void insert_into(string table) {
 		rel->Insert(table);
+	}
+
+	void insert(py::object params = py::list()) {
+		vector<vector<Value>> values {DuckDBPyConnection::transform_python_param_list(params)};
+		rel->Insert(values);
 	}
 
 	void create(string table) {
@@ -917,6 +930,7 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("cursor", &DuckDBPyConnection::cursor)
 	        .def("begin", &DuckDBPyConnection::begin)
 	        .def("table", &DuckDBPyConnection::table, "some doc string for table", py::arg("name"))
+	        .def("values", &DuckDBPyConnection::values, "some doc string for table", py::arg("values"))
 	        .def("view", &DuckDBPyConnection::view, "some doc string for view", py::arg("name"))
 	        .def("table_function", &DuckDBPyConnection::table_function, "some doc string for table_function",
 	             py::arg("name"), py::arg("parameters") = py::list())
@@ -967,7 +981,8 @@ PYBIND11_MODULE(duckdb, m) {
 	         py::arg("sql_query"))
 	    .def("execute", &DuckDBPyRelation::execute, "some doc string for execute")
 	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
-	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("table_name"))
+	    .def("insert_into", &DuckDBPyRelation::insert_into, "some doc string for insert_into", py::arg("table_name"))
+	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("values"))
 	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
 	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")
 	    .def("create_view", &DuckDBPyRelation::create_view, "some doc string for create_view", py::arg("view_name"),
