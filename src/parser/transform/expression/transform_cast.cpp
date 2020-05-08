@@ -14,21 +14,15 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	auto type_name = root->typeName;
 	SQLType target_type = TransformTypeName(type_name);
 
-	//check by a constant BLOB value, then change PGAConstant value type to T_PGBitString
+	//check for a constant BLOB value, then return ConstantExpression with BLOB
 	if(target_type == SQLType::BLOB && root->arg->type == T_PGAConst) {
 		PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
-		c->val.type = T_PGBitString;
+		return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(c->val.val.str)));
 	}
 
 	// transform the expression node
 	auto expression = TransformExpression(root->arg);
 
-//	//check by a constant VARCHAR value
-//	if(expression->type == ExpressionType::VALUE_CONSTANT && target_type == SQLType::VARCHAR) {
-//		auto constant_expression_ptr = static_cast<ConstantExpression*>(expression.get());
-//		//validating VARCHAR and scape BLOB strings
-//		constant_expression_ptr->value.ValidateString();
-//	}
 	// now create a cast operation
 	return make_unique<CastExpression>(target_type, move(expression));
 }
