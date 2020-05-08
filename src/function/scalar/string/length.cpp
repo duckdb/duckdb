@@ -50,6 +50,9 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 	set.AddFunction(ScalarFunction("bit_length", {SQLType::VARCHAR}, SQLType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator, true>));
+	// length for BLOB type
+	set.AddFunction(ScalarFunction("octet_length", {SQLType::VARCHAR}, SQLType::BIGINT,
+	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 }
 
 struct UnicodeOperator {
