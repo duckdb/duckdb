@@ -192,7 +192,7 @@ template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunc
 		if (type.id == SQLTypeId::VARCHAR || type.id == SQLTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
-			        SQLType::VARCHAR, SQLType::VARCHAR));
+			    	type.id, type.id));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}
