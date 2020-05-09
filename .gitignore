@@ -189,6 +189,9 @@ local.properties
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 
+# RStudio specific
+.Rproj.user
+
 # Java annotation processor (APT)
 .factorypath
 
