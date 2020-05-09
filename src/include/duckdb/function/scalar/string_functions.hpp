@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "utf8proc.hpp"
 
@@ -65,6 +64,10 @@ struct LengthFun {
 };
 
 struct LikeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct LikeEscapeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

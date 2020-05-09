@@ -13,6 +13,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<ContainsFun>();
 	Register<LengthFun>();
 	Register<LikeFun>();
+	Register<LikeEscapeFun>();
 	Register<LpadFun>();
 	Register<LtrimFun>();
 	Register<LeftFun>();
