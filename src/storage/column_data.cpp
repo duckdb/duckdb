@@ -7,7 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-ColumnData::ColumnData() : persistent_rows(0) {
+ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
+    : table_info(table_info), manager(manager), persistent_rows(0) {
 }
 
 void ColumnData::Initialize(vector<unique_ptr<PersistentSegment>> &segments) {
@@ -173,6 +174,6 @@ void ColumnData::FetchRow(ColumnFetchState &state, Transaction &transaction, row
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(*table->storage.buffer_manager, type, start_row);
+	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
 	data.AppendSegment(move(new_segment));
 }

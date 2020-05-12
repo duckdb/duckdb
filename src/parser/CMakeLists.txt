@@ -12,6 +12,7 @@ add_subdirectory(transform)
 add_library_unity(duckdb_parser
                   OBJECT
                   base_expression.cpp
+                  column_definition.cpp
                   constraint.cpp
                   expression_util.cpp
                   parsed_expression.cpp

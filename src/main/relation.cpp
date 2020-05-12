@@ -21,6 +21,7 @@
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/main/relation/join_relation.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
 
 namespace duckdb {
 
@@ -200,6 +201,12 @@ void Relation::Insert(string table_name) {
 void Relation::Insert(string schema_name, string table_name) {
 	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
 	insert->Execute();
+}
+
+void Relation::Insert(vector<vector<Value>> values){
+	vector<string> column_names;
+	auto rel = make_shared<ValueRelation>(context, move(values), move(column_names), "values");
+	rel->Insert(GetAlias());
 }
 
 void Relation::Create(string table_name) {

@@ -189,6 +189,9 @@ local.properties
 # JDT-specific (Eclipse Java Development Tools)
 .classpath
 
+# RStudio specific
+.Rproj.user
+
 # Java annotation processor (APT)
 .factorypath
 
@@ -305,3 +308,7 @@ benchmark_results/
 duckdb_unittest_tempdir/
 grammar.y.tmp
 src/amalgamation/
+# single file compile
+amalgamation.cache
+dependencies.d
+deps.s
