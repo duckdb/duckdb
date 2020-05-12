@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import numpy
 import sys
 import subprocess
 import shutil
@@ -36,10 +35,6 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 class get_pybind_include(object):
-    """Helper class to determine the pybind11 include path
-    The purpose of this class is to postpone importing pybind11
-    until it is actually installed, so that the ``get_include()``
-    method can be invoked. """
 
     def __init__(self, user=False):
         self.user = user
@@ -48,9 +43,14 @@ class get_pybind_include(object):
         import pybind11
         return pybind11.get_include(self.user)
 
+class get_numpy_include(object):
+    def __str__(self):
+        import numpy
+        return numpy.get_include()
+
 
 libduckdb = Extension('duckdb',
-    include_dirs=[numpy.get_include(), '.', get_pybind_include(), get_pybind_include(user=True)],
+    include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
     sources=['duckdb_python.cpp', 'duckdb.cpp'],
     extra_compile_args=toolchain_args,
     extra_link_args=toolchain_args,

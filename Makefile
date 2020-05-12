@@ -64,10 +64,11 @@ amaldebug:
 	cmake --build .
 
 jdbc:
-	mkdir -p build/jdbc && \
-	cd build/jdbc && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	mkdir -p build/release && \
+	cd build/release && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DJDBC_DRIVER=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
+
 
 jdbcdebug:
 	mkdir -p build/jdbcdebug && \

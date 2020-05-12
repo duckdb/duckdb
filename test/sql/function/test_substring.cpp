@@ -14,6 +14,11 @@ TEST_CASE("Substring test", "[function]") {
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES ('hello', 1, 2), "
 	                          "('world', 2, 3), ('b', 1, 1), (NULL, 2, 2)"));
 
+    // test zero length
+	result = con.Query("SELECT SUBSTRING('🦆ab', 1, 0), SUBSTRING('abc', 1, 0)");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {""}));
+
 	// constant offset/length
 	// normal substring
 	result = con.Query("SELECT substring(s from 1 for 2) FROM strings");

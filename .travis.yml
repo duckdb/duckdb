@@ -17,6 +17,7 @@ matrix:
   include:
 
     - os: linux
+      if: tag != master-builds
       dist: bionic
       name: GCC 9
       python: 3.7
@@ -38,18 +39,22 @@ matrix:
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb_cli
+        - build/release/extension/icu/test/icu_test
+        - python3.7 tools/rest/test_the_rest.py build/release/tools/rest
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
-        - build/release/extension/icu/test/icu_test
+        - (cd examples/jdbc; make)
 
       after_success:
-        - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
+        #- python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        - python3 scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
 
     - os: osx
+      if: tag != master-builds
       name: Xcode 11.3
-
       osx_image: xcode11.3
 
       before_install:
@@ -61,14 +66,16 @@ matrix:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
 
       after_success:
-        - python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/DuckDBJ.jar
+        #- python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
+        - python3 scripts/asset-upload.py libduckdb-osx-amd64.dylib=build/release/src/libduckdb*.dylib duckdb_cli-osx-amd64=build/release/duckdb_cli duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: windows
+      if: tag != master-builds
       name: VS 2017
       filter_secrets: false
 
@@ -87,16 +94,18 @@ matrix:
         - cmake --build . --target icu_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
-        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/DuckDBJ.jar
+        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
 
     - os: linux
+      if: tag != master-builds
       dist: xenial
       name: GCC 9 Debug
 
@@ -220,6 +229,8 @@ matrix:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
         - eval "${MATRIX_EVAL}"
+        - pip install --user boto3
+
       script:
         - python scripts/amalgamation.py
         - mkdir -p build/release
@@ -228,7 +239,8 @@ matrix:
 
       after_success:
         - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
-        - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+        # - python tools/upload-s3.py src-amalgamation build/duckdb.zip
+        - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 
 
     - os: osx
@@ -284,7 +296,8 @@ matrix:
         - build/release/test/unittest "*"
 
       after_success:
-        - python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
+        #- python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
+        - python3 scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
 
 
     - os: windows
@@ -308,7 +321,8 @@ matrix:
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
 
       after_success:
-        - C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb_cli.exe
+        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb_cli.exe
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-i386.dll=src/Release/duckdb.dll duckdb_cli-windows-i386.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
 
     - os: linux
@@ -351,59 +365,42 @@ matrix:
       script:
         - python scripts/amalgamation.py > /dev/null
         - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest --exclude=third_party/imdb .  root@localhost:/duckdb
-        - travis_wait 30 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+        - travis_wait 50 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
         - $SCMD /duckdb/build/test/unittest "~[copy]~[file_system]~[.]"
 
 
-    - os: linux
-      dist: bionic
-      name: OpenBSD VM
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      sudo: true
+    # - os: linux
+    #   dist: bionic
+    #   name: OpenBSD VM
+    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #   sudo: true
 
-      install:
-        - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
-        - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
-        - sudo apt-get update > /dev/null
-        - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
-        - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/OpenBSD.ova"
-        - VBoxManage import OpenBSD.ova
-        - rm OpenBSD.ova
-        - VBoxManage modifyvm "OpenBSD" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
-        - VBoxManage startvm "OpenBSD" --type headless
-        - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEA0I/POwsFY/l5DGvybl1amd9pqzP5ADPQGWupcNuKbSYq+sD4g5Jr\nqZ0vG9sULeYlZZFHzdbUqzdbK9rMZZOUwUwHbxViS2UlhCo0onB9bbzm6kQ2gSBaXxa8SC\nwllEdHq6c/kK50MZKVwqpBrxIJtGN08pNauhMPNMdniQZD5slkKrneTgGYnm30xNtkHStB\nY/btURWNlVd8Qedx8gSEV5628cAeKJAPOn4nrCYvy7uMWBOYqrqZii38uxdrhnZKKKENcA\ndUuFRdmFDK/0d+/0PeUYUacZm3HRU5F21440u51OdBMzBYe9AaQXQGrwKwY+YxlczlVh8g\n9XMWYBzJ3wAAA9B959FqfefRagAAAAdzc2gtcnNhAAABAQDQj887CwVj+XkMa/JuXVqZ32\nmrM/kAM9AZa6lw24ptJir6wPiDkmupnS8b2xQt5iVlkUfN1tSrN1sr2sxlk5TBTAdvFWJL\nZSWEKjSicH1tvObqRDaBIFpfFrxILCWUR0erpz+QrnQxkpXCqkGvEgm0Y3Tyk1q6Ew80x2\neJBkPmyWQqud5OAZiebfTE22QdK0Fj9u1RFY2VV3xB53HyBIRXnrbxwB4okA86fiesJi/L\nu4xYE5iqupmKLfy7F2uGdkoooQ1wB1S4VF2YUMr/R37/Q95RhRpxmbcdFTkXbXjjS7nU50\nEzMFh70BpBdAavArBj5jGVzOVWHyD1cxZgHMnfAAAAAwEAAQAAAQB6iVPfQ81p/MRDKRUq\nBM1bhKkH/qQ4mziUBu5psYN2N6ue4kvgueFpqUFpY2FKymKEd0QxyxvucLqvXIEk2P3YR/\nxCJtU2qPnO2iFMozz+gbNGRsejPEf8gFYlLVLy+KJCVySAtA7upUo6MmAfJUDwbFLkxvDS\nTKptfw70seqpJ/CdUXqrd/YAfwqGO0ZgQC59MDTGS1rXViRbTEMOxbWg9TMmvWb36vJG8i\nvSGimXL0gvhB7himZzK0z9tl8r3gHIHpiKy+67tzXyDdzXxpTJ7krBIwVgMgHwZpSy++c6\n9e6ag9LH217gWSDX4C0tAnHhjc5QqlCBwZVe/n2Kyg3pAAAAgQC1zeKHT3XLt9NfBVjhfq\nS3lMByGNCR90RS1vZe+wYVuChFCs7ztraWgMX9n7m3HvaGj+lqDPBD6mkoaYFCqKVr5GcH\nq1fij2sZeEpymhOUjX/aWGr9kdnxkvpSzYt33OU7hQIv34ViSXuyiEVb/SYXxqmwaYhCbW\noAlXqS57U3ZAAAAIEA58ImmEbbHDbA+mUZ1xugtb2heIQyVm+B1FtWtOY3B7LKgfgP5kaw\nhhVAlOfpxSyn/aNWdokE6JsFU/Vs/eiEXmn253ofF0J2kQuVD8+0m+yUMkbDYbfyc9FPsR\n1OS4cqjM8ET77EvLiqIHXO8aWr4eCOJxjDJLC0xVKOicgk/JUAAACBAOZghEZOuUgLjB1K\nQ0kMX+CTNvyKB44eY24kbp22KI4hsEw4BwyqPvCyRZsx7EBGXdGO0giVc41T6WJxwLVCbW\nmG1AC03KQ/lPXf/lzuwT4/N52hw+s4EmHlcPfoPyRFtbZuUyJqlhL4txWZdI31Ot0jxiQK\nxePoxUuMva2261ujAAAAFWhhbm5lc0BoZXJiZXJ0Mi5sb2NhbAECAwQF\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_openbsd
-        - chmod 400 id_rsa_openbsd
-        - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_openbsd"
-        - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
-        - sleep 60
-        - while ! $SCMD ls ; do sleep 30 ; done
-        - $SCMD pkg_add gmake rsync-3.1.3
+    #   install:
+    #     - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
+    #     - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
+    #     - sudo apt-get update > /dev/null
+    #     - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
+    #     - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/OpenBSD.ova"
+    #     - VBoxManage import OpenBSD.ova
+    #     - rm OpenBSD.ova
+    #     - VBoxManage modifyvm "OpenBSD" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
+    #     - VBoxManage startvm "OpenBSD" --type headless
+    #     - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEA0I/POwsFY/l5DGvybl1amd9pqzP5ADPQGWupcNuKbSYq+sD4g5Jr\nqZ0vG9sULeYlZZFHzdbUqzdbK9rMZZOUwUwHbxViS2UlhCo0onB9bbzm6kQ2gSBaXxa8SC\nwllEdHq6c/kK50MZKVwqpBrxIJtGN08pNauhMPNMdniQZD5slkKrneTgGYnm30xNtkHStB\nY/btURWNlVd8Qedx8gSEV5628cAeKJAPOn4nrCYvy7uMWBOYqrqZii38uxdrhnZKKKENcA\ndUuFRdmFDK/0d+/0PeUYUacZm3HRU5F21440u51OdBMzBYe9AaQXQGrwKwY+YxlczlVh8g\n9XMWYBzJ3wAAA9B959FqfefRagAAAAdzc2gtcnNhAAABAQDQj887CwVj+XkMa/JuXVqZ32\nmrM/kAM9AZa6lw24ptJir6wPiDkmupnS8b2xQt5iVlkUfN1tSrN1sr2sxlk5TBTAdvFWJL\nZSWEKjSicH1tvObqRDaBIFpfFrxILCWUR0erpz+QrnQxkpXCqkGvEgm0Y3Tyk1q6Ew80x2\neJBkPmyWQqud5OAZiebfTE22QdK0Fj9u1RFY2VV3xB53HyBIRXnrbxwB4okA86fiesJi/L\nu4xYE5iqupmKLfy7F2uGdkoooQ1wB1S4VF2YUMr/R37/Q95RhRpxmbcdFTkXbXjjS7nU50\nEzMFh70BpBdAavArBj5jGVzOVWHyD1cxZgHMnfAAAAAwEAAQAAAQB6iVPfQ81p/MRDKRUq\nBM1bhKkH/qQ4mziUBu5psYN2N6ue4kvgueFpqUFpY2FKymKEd0QxyxvucLqvXIEk2P3YR/\nxCJtU2qPnO2iFMozz+gbNGRsejPEf8gFYlLVLy+KJCVySAtA7upUo6MmAfJUDwbFLkxvDS\nTKptfw70seqpJ/CdUXqrd/YAfwqGO0ZgQC59MDTGS1rXViRbTEMOxbWg9TMmvWb36vJG8i\nvSGimXL0gvhB7himZzK0z9tl8r3gHIHpiKy+67tzXyDdzXxpTJ7krBIwVgMgHwZpSy++c6\n9e6ag9LH217gWSDX4C0tAnHhjc5QqlCBwZVe/n2Kyg3pAAAAgQC1zeKHT3XLt9NfBVjhfq\nS3lMByGNCR90RS1vZe+wYVuChFCs7ztraWgMX9n7m3HvaGj+lqDPBD6mkoaYFCqKVr5GcH\nq1fij2sZeEpymhOUjX/aWGr9kdnxkvpSzYt33OU7hQIv34ViSXuyiEVb/SYXxqmwaYhCbW\noAlXqS57U3ZAAAAIEA58ImmEbbHDbA+mUZ1xugtb2heIQyVm+B1FtWtOY3B7LKgfgP5kaw\nhhVAlOfpxSyn/aNWdokE6JsFU/Vs/eiEXmn253ofF0J2kQuVD8+0m+yUMkbDYbfyc9FPsR\n1OS4cqjM8ET77EvLiqIHXO8aWr4eCOJxjDJLC0xVKOicgk/JUAAACBAOZghEZOuUgLjB1K\nQ0kMX+CTNvyKB44eY24kbp22KI4hsEw4BwyqPvCyRZsx7EBGXdGO0giVc41T6WJxwLVCbW\nmG1AC03KQ/lPXf/lzuwT4/N52hw+s4EmHlcPfoPyRFtbZuUyJqlhL4txWZdI31Ot0jxiQK\nxePoxUuMva2261ujAAAAFWhhbm5lc0BoZXJiZXJ0Mi5sb2NhbAECAwQF\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_openbsd
+    #     - chmod 400 id_rsa_openbsd
+    #     - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_openbsd"
+    #     - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
+    #     - sleep 60
+    #     - while ! $SCMD ls ; do sleep 30 ; done
+    #     - $SCMD pkg_add gmake rsync-3.1.3
 
-      script:
-        - python scripts/amalgamation.py > /dev/null
-        - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest .  root@localhost:/home/duckdb
-        - travis_wait 30 $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
-        - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
-
-
-# APIs: REST, r / python packages
+    #   script:
+    #     - python scripts/amalgamation.py > /dev/null
+    #     - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest .  root@localhost:/home/duckdb
+    #     - travis_wait 60 $SCMD 'rm -rf /home/duckdb/build && mkdir -p /home/duckdb/build && cd /home/duckdb/build && cmake -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+    #     - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
 
 
-    - os: linux
-      dist: xenial
-      name: REST Server
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      before_install:
-        - pip install --user boto3
-
-      script:
-        - cd tools/rest
-        - python3 test_the_rest.py
-
-      # after_success:
-      #   - python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a
-
+# APIs: jdbc/ r / python packages
 
     - os: linux
       dist: xenial
@@ -420,11 +417,13 @@ matrix:
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
-        - java -cp build/release/tools/jdbc/DuckDBJ.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
-        - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/DuckDBJ.jar test)
+        - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+
 
     - os: linux
+      if: tag != master-builds
       name: R Package
 
       dist: xenial
@@ -450,6 +449,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
 
     - os: osx
@@ -480,6 +480,7 @@ matrix:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
         - python3 ../upload-s3.py rstats duckdb_*.tgz
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
 
 
     - os: windows
@@ -510,11 +511,12 @@ matrix:
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/3.6 duckdb_*.zip PACKAGES*
+        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
 
 
     - os: linux
+      if: tag != master-builds
       name: Python 3 Package
-
       dist: xenial
       language: python
       cache: pip
@@ -530,7 +532,9 @@ matrix:
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
       after_success:
-        python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+        - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+       # - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
+
 
     - os: linux
       name: Python 2 Package
@@ -550,8 +554,6 @@ matrix:
         - python -m pytest tests
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-      after_success:
-        python tools/upload-s3.py python tools/pythonpkg/dist/duckdb-*.tar.gz
 
 
     - os: osx
@@ -574,7 +576,8 @@ matrix:
         - cd ../..
 
       after_success:
-        python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+       # - python3 scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: windows
@@ -601,11 +604,12 @@ matrix:
 
       script:
         - cd tools/pythonpkg
-        - C:/Python37-x64/python.exe  setup.py sdist
+        - C:/Python37-x64/python.exe setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
       after_success:
-        C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        - C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
+        # - C:/Python37-x64/python.exe scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
