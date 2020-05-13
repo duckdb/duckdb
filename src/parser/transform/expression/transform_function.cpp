@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -163,12 +164,37 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		return move(expr);
 	}
 
+	//  TransformExpressionList??
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
 			auto child_expr = TransformExpression((PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
+	}
+
+	if (lowercase_name == "if") {
+		if (children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		auto expr = make_unique<CaseExpression>();
+		expr->check = move(children[0]);
+		expr->result_if_true = move(children[1]);
+		expr->result_if_false = move(children[2]);
+		return move(expr);
+	}
+
+	else if (lowercase_name == "ifnull") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+
+		//  Two-argument COALESCE
+		auto expr = make_unique<CaseExpression>();
+		expr->check = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, children[0]->Copy());
+		expr->result_if_true = move(children[0]);
+		expr->result_if_false = move(children[1]);
+		return move(expr);
 	}
 
 	return make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, root->agg_distinct);
