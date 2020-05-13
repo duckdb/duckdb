@@ -16,5 +16,4 @@ add_library(miniparquet STATIC
             thrift/transport/TBufferTransports.cpp
             snappy/snappy.cc
             snappy/snappy-sinksource.cc
-            miniparquet.cpp
             duckdb_miniparquet.cpp)

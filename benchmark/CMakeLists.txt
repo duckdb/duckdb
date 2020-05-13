@@ -17,6 +17,7 @@ target_link_libraries(benchmark_runner
                       duckdb
                       dbgen
                       dsdgen
+                      miniparquet
                       imdb
                       test_helpers
                       tpce
