@@ -38,7 +38,7 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("bit_length", {SQLType::VARCHAR}, SQLType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator, true>));
 	// length for BLOB type
-	set.AddFunction(ScalarFunction("octet_length", {SQLType::VARCHAR}, SQLType::BIGINT,
+	set.AddFunction(ScalarFunction("octet_length", {SQLType::BLOB}, SQLType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 }
 
