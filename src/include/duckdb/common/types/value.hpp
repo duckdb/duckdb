@@ -51,8 +51,6 @@ public:
 	//! Create a VARCHAR value
 	Value(string val);
 
-//	void ValidateString();
-
 	//! Create the lowest possible value of a given type (numeric only)
 	static Value MinimumValue(TypeId type);
 	//! Create the highest possible value of a given type (numeric only)
@@ -198,6 +196,10 @@ public:
 
 private:
 	SQLType sql_type = SQLType(SQLTypeId::INVALID);
+
+	//! The hexadecimal value of the object used only for BLOB values
+	//! It's need for heap allocation
+	string hexa_str_value;
 
 private:
 	template <class T> T GetValueInternal();
