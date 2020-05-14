@@ -205,4 +205,17 @@ template <> duckdb::dtime_t CastTimestampToTime::Operation(duckdb::timestamp_t i
 template <> duckdb::string_t CastFromTimestamp::Operation(duckdb::timestamp_t input, Vector &result);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(string_t input);
 
+struct CastFromBlob {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from blob could not be performed!");
+	}
+
+	template <class SRC> static inline void ToHexaString(SRC input, SRC &output) {
+		throw duckdb::NotImplementedException("Blob to hexadecimal string could not be performed!");
+	}
+};
+
+template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
+template <> void CastFromBlob::ToHexaString(duckdb::string_t input, duckdb::string_t &output);
+
 } // namespace duckdb

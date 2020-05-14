@@ -820,4 +820,40 @@ template <> timestamp_t CastToTimestamp::Operation(string_t input) {
 	return Timestamp::FromString(input.GetData());
 }
 
+//===--------------------------------------------------------------------===//
+// Cast From Blob
+//===--------------------------------------------------------------------===//
+template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
+	idx_t input_size = input.GetSize();
+	auto input_data = input.GetData();
+	// Check if the input is already a hexa string, i.e., avoiding a double convertion
+	// Returns just a copy of the input
+	if(input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
+		string_t result = StringVector::EmptyString(vector, input_size);
+		auto res_data = result.GetData();
+		auto in_data  = input.GetData();
+		memcpy(res_data, in_data, input_size + 1); // plus one to copy \0 at the end
+		return result;
+	}
+
+	string_t result = StringVector::EmptyString(vector, input_size * 2 + 2);
+	CastFromBlob::ToHexaString(input, result);
+	return result;
+}
+
+template <> void CastFromBlob::ToHexaString(string_t input, string_t &output) {
+	const char hexa_table[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+	idx_t input_size = input.GetSize();
+	assert(output.GetSize() == (input_size * 2 + 2));
+	auto input_data = input.GetData();
+	auto hexa_data  = output.GetData();
+	// Adding hexadecimal identification, i.e., "\x"
+	hexa_data[0] = '\\'; hexa_data[1] = 'x';
+	for(idx_t idx = 0; idx < input_size; ++idx) {
+		hexa_data[idx * 2 + 2]     = hexa_table[(input_data[idx] >> 4) & 0x0F];
+		hexa_data[idx * 2 + 2 + 1] = hexa_table[input_data[idx] & 0x0F];
+	}
+	output.Finalize();
+}
+
 } // namespace duckdb
