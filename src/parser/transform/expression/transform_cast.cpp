@@ -17,7 +17,9 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	//check for a constant BLOB value, then return ConstantExpression with BLOB
 	if(target_type == SQLType::BLOB && root->arg->type == T_PGAConst) {
 		PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
-		return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(c->val.val.str)));
+		if(c->val.type == T_PGString) {
+			return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(c->val.val.str)));
+		}
 	}
 
 	// transform the expression node
