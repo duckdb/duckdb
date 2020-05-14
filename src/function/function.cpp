@@ -34,7 +34,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
-    RegisterBlobFunctions();
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
