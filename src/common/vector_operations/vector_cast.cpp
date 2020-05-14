@@ -131,11 +131,12 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::INT64);
 		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestamp, true>(source, result, count);
 		break;
+	case SQLTypeId::BLOB:
+		assert(result.type == TypeId::VARCHAR);
+		// NOP cast
+		result.Reference(source);
+		break;
 	default:
-		if(source_type == SQLType::BLOB && target_type == SQLType::VARCHAR) {
-			UnaryExecutor::Execute<string_t, string_t, duckdb::Cast, true>(source, result, count);
-			break;
-		}
 		null_cast(source, result, source_type, target_type, count);
 		break;
 	}
@@ -193,6 +194,20 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 	}
 }
 
+static void blob_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
+                                  idx_t count) {
+	// now switch on the result type
+	switch (target_type.id) {
+	case SQLTypeId::VARCHAR:
+		// blob to varchar
+		string_cast<string_t, duckdb::CastFromBlob>(source, result, count);
+		break;
+	default:
+		null_cast(source, result, source_type, target_type, count);
+		break;
+	}
+}
+
 void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count,
                             bool strict) {
 	assert(source_type != target_type);
@@ -240,13 +255,16 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		timestamp_cast_switch(source, result, source_type, target_type, count);
 		break;
 	case SQLTypeId::VARCHAR:
-	case SQLTypeId::BLOB:
 		assert(source.type == TypeId::VARCHAR);
 		if (strict) {
 			string_cast_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
 		} else {
 			string_cast_switch<duckdb::Cast>(source, result, source_type, target_type, count);
 		}
+		break;
+	case SQLTypeId::BLOB:
+		assert(source.type == TypeId::VARCHAR);
+		blob_cast_switch(source, result, source_type, target_type, count);
 		break;
 	case SQLTypeId::SQLNULL: {
 		// cast a NULL to another type, just copy the properties and change the type
