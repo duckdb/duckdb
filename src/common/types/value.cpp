@@ -26,7 +26,6 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-	str_value = val;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -39,19 +38,6 @@ Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 		break;
 	}
 }
-
-//void Value::ValidateString() {
-//	auto utf_type = Utf8Proc::Analyze(str_value);
-//	switch (utf_type) {
-//	case UnicodeType::INVALID:
-//		throw Exception("String value is not valid UTF8");
-//	case UnicodeType::ASCII:
-//		break;
-//	case UnicodeType::UNICODE:
-//		str_value = Utf8Proc::Normalize(str_value);
-//		break;
-//	}
-//}
 
 Value Value::MinimumValue(TypeId type) {
 	Value result;
@@ -262,6 +248,10 @@ Value Value::BLOB(string data) {
 	Value result(TypeId::VARCHAR);
 	result.sql_type = SQLType::BLOB;
 	result.str_value = data;
+	// pre-allocate to hexadeximal cast in ToString or in CastFromBlob
+	// it should have a double size of the original value plus two for hex identification, i.e., "\x"
+	//! It's need for heap allocation
+	result.hexa_str_value.resize(data.size() * 2 + 2);
 	result.is_null = false;
 	return result;
 }
@@ -294,7 +284,7 @@ template <> Value Value::CreateValue(const char *value) {
 }
 
 template <> Value Value::CreateValue(string value) {
-	return Value(value);
+	return Value::BLOB(value);
 }
 
 template <> Value Value::CreateValue(string_t value) {
@@ -423,8 +413,17 @@ string Value::ToString(SQLType sql_type) const {
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
-	case SQLTypeId::BLOB:
 		return str_value;
+	case SQLTypeId::BLOB: {
+		// Check if the value is already a hexadecimal string, i.e., avoiding a double convertion
+		if(str_value.size() >= 2 && (str_value.substr(0,2) == "\\x")) {
+			return str_value;
+		}
+		string_t hexa_str(hexa_str_value);
+		CastFromBlob::ToHexaString(string_t(str_value), hexa_str);
+		string result(hexa_str.GetData());
+		return result;
+	}
 	case SQLTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
