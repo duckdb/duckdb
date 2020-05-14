@@ -345,9 +345,8 @@ struct ParquetScanColumnData {
 
 	Encoding::type page_encoding;
 	// these point into buf or decompressed_buf
-//	unique_ptr<RleBpDecoder> defined_decoder;
-//	unique_ptr<RleBpDecoder> dict_decoder;
-	ByteBuffer defined_buf;
+	unique_ptr<RleBpDecoder> defined_decoder;
+	unique_ptr<RleBpDecoder> dict_decoder;
 	ByteBuffer offset_buf;
 	const char *payload_ptr; // for plain pages
 
@@ -497,7 +496,7 @@ struct ParquetScanFunction: public TableFunction {
 	}
 
 	template<class T>
-	static void fill_from_dict(const char *dict_ptr,
+	static void _fill_from_dict(const char *dict_ptr,
 			const uint32_t *offsets_ptr, idx_t count, Vector &target,
 			idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
@@ -507,7 +506,7 @@ struct ParquetScanFunction: public TableFunction {
 
 	}
 
-	static bool prepare_buffers(ParquetScanFunctionData &data, idx_t col_idx) {
+	static bool _prepare_page_buffers(ParquetScanFunctionData &data, idx_t col_idx) {
 		auto &col_data = data.column_data[col_idx];
 		auto &chunk =
 				data.file_meta_data.row_groups[data.current_group].columns[col_idx];
@@ -697,13 +696,8 @@ struct ParquetScanFunction: public TableFunction {
 				memcpy(&def_length, payload_ptr, sizeof(def_length));
 				payload_ptr += sizeof(def_length);
 
-				col_data.defined_buf.resize(col_data.page_value_count);
-				RleBpDecoder define_decoder(
+				col_data.dict_decoder = make_unique<RleBpDecoder>(
 						(const uint8_t*) payload_ptr, def_length, 1);
-
-				// TODO stream decode, but need to respect byte boundaries with this
-				auto n_decode = define_decoder.GetBatch<uint8_t>((unsigned char *)col_data.defined_buf.ptr, col_data.page_value_count);
-				assert(n_decode == col_data.page_value_count);
 
 				payload_ptr += def_length;
 			}
@@ -726,6 +720,12 @@ struct ParquetScanFunction: public TableFunction {
 				RleBpDecoder dict_decoder(
 						(const uint8_t*) payload_ptr,
 						page_hdr.uncompressed_page_size, enc_length);
+
+				col_data.defined_decoder = make_unique<RleBpDecoder>(
+						(const uint8_t*) payload_ptr,
+						page_hdr.uncompressed_page_size, enc_length);
+
+
 				// TODO fix for NULLs with GetBatchSpaced
 				auto n_decode = dict_decoder.GetBatch<uint32_t>((unsigned int *)col_data.offset_buf.ptr, col_data.page_value_count);
 				assert(n_decode == col_data.page_value_count);
@@ -753,6 +753,37 @@ struct ParquetScanFunction: public TableFunction {
 		return true;
 	}
 
+	static void _prepare_chunk_buffer(ParquetScanFunctionData &data, idx_t col_idx) {
+		auto &chunk =
+				data.file_meta_data.row_groups[data.current_group].columns[col_idx];
+		if (chunk.__isset.file_path) {
+			throw runtime_error(
+					"Only inlined data files are supported (no references)");
+		}
+
+		if (chunk.meta_data.path_in_schema.size() != 1) {
+			throw runtime_error(
+					"Only flat tables are supported (no nesting)");
+		}
+
+		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
+		auto chunk_start = chunk.meta_data.data_page_offset;
+		if (chunk.meta_data.__isset.dictionary_page_offset
+				&& chunk.meta_data.dictionary_page_offset >= 4) {
+			// this assumes the data pages follow the dict pages directly.
+			chunk_start = chunk.meta_data.dictionary_page_offset;
+		}
+		auto chunk_len = chunk.meta_data.total_compressed_size;
+
+		// read entire chunk into RAM
+		data.pfile.seekg(chunk_start);
+		data.column_data[col_idx].buf.resize(chunk_len);
+		data.pfile.read(data.column_data[col_idx].buf.ptr, chunk_len);
+		if (!data.pfile) {
+			throw runtime_error("Could not read chunk. File corrupt?");
+		}
+	}
+
 	static void parquet_scan_function(ClientContext &context,
 			vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
 		auto &data = *((ParquetScanFunctionData*) dataptr);
@@ -778,34 +809,7 @@ struct ParquetScanFunction: public TableFunction {
 			// read each column chunk into RAM
 			for (idx_t col_idx = 0; col_idx < output.column_count();
 					col_idx++) {
-				auto &chunk =
-						data.file_meta_data.row_groups[data.current_group].columns[col_idx];
-				if (chunk.__isset.file_path) {
-					throw runtime_error(
-							"Only inlined data files are supported (no references)");
-				}
-
-				if (chunk.meta_data.path_in_schema.size() != 1) {
-					throw runtime_error(
-							"Only flat tables are supported (no nesting)");
-				}
-
-				// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
-				auto chunk_start = chunk.meta_data.data_page_offset;
-				if (chunk.meta_data.__isset.dictionary_page_offset
-						&& chunk.meta_data.dictionary_page_offset >= 4) {
-					// this assumes the data pages follow the dict pages directly.
-					chunk_start = chunk.meta_data.dictionary_page_offset;
-				}
-				auto chunk_len = chunk.meta_data.total_compressed_size;
-
-				// read entire chunk into RAM
-				data.pfile.seekg(chunk_start);
-				data.column_data[col_idx].buf.resize(chunk_len);
-				data.pfile.read(data.column_data[col_idx].buf.ptr, chunk_len);
-				if (!data.pfile) {
-					throw runtime_error("Could not read chunk. File corrupt?");
-				}
+				_prepare_chunk_buffer(data, col_idx);
 				// trigger the reading of a new page below
 				// TODO this is a bit dirty
 				data.column_data[col_idx].page_value_count = 0;
@@ -829,7 +833,7 @@ struct ParquetScanFunction: public TableFunction {
 				if (col_data.page_offset >= col_data.page_value_count) {
 
 					// read dictionaries and data page headers so that we are ready to go for scan
-					if (!prepare_buffers(data, col_idx)) {
+					if (!_prepare_page_buffers(data, col_idx)) {
 						continue;
 					}
 					col_data.page_offset = 0;
@@ -840,16 +844,13 @@ struct ParquetScanFunction: public TableFunction {
 
 				assert(current_batch_size > 0);
 
-				auto defined_ptr = (uint8_t*) col_data.defined_buf.ptr + col_data.page_offset;
 
+				ByteBuffer defined;
+				defined.resize(current_batch_size * 4);
+				auto n_decoded = col_data.dict_decoder->GetBatch(defined.ptr, current_batch_size);
+				assert(n_decoded == current_batch_size);
+				// TODO should we just increment a pointer on non-null?
 
-				// TODO get the null count from GetBatch as well
-//				idx_t null_count = 0;
-//				for (idx_t i = 0; i < current_batch_size; i++) {
-//					if (!defined.ptr[i]) {
-//						null_count++;
-//					}
-//				}
 
 				switch (col_data.page_encoding) {
 				case Encoding::RLE_DICTIONARY:
@@ -857,34 +858,33 @@ struct ParquetScanFunction: public TableFunction {
 					// TODO uuugly
 					auto offsets_ptr = (uint32_t*) (col_data.offset_buf.ptr + col_data.page_offset * 4);
 
-
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
 					// TODO NULLs for primitive types
 
 					switch (data.sql_types[col_idx].id) {
 					case SQLTypeId::BOOLEAN:
-						fill_from_dict<bool>(col_data.dict.ptr, offsets_ptr,
+						_fill_from_dict<bool>(col_data.dict.ptr, offsets_ptr,
 								current_batch_size, output.data[col_idx], output_offset);
 						break;
 					case SQLTypeId::INTEGER:
-						fill_from_dict<int32_t>(col_data.dict.ptr, offsets_ptr,
+						_fill_from_dict<int32_t>(col_data.dict.ptr, offsets_ptr,
 								current_batch_size, output.data[col_idx], output_offset);
 						break;
 					case SQLTypeId::BIGINT:
-						fill_from_dict<int64_t>(col_data.dict.ptr, offsets_ptr,
+						_fill_from_dict<int64_t>(col_data.dict.ptr, offsets_ptr,
 								current_batch_size, output.data[col_idx], output_offset);
 						break;
 					case SQLTypeId::FLOAT:
-						fill_from_dict<float>(col_data.dict.ptr, offsets_ptr,
+						_fill_from_dict<float>(col_data.dict.ptr, offsets_ptr,
 								current_batch_size, output.data[col_idx], output_offset);
 						break;
 					case SQLTypeId::DOUBLE:
-						fill_from_dict<double>(col_data.dict.ptr, offsets_ptr,
+						_fill_from_dict<double>(col_data.dict.ptr, offsets_ptr,
 								current_batch_size, output.data[col_idx], output_offset);
 						break;
 					case SQLTypeId::TIMESTAMP:
-						fill_from_dict<timestamp_t>(col_data.dict.ptr,
+						_fill_from_dict<timestamp_t>(col_data.dict.ptr,
 								offsets_ptr, current_batch_size, output.data[col_idx],
 								output_offset);
 						break;
@@ -898,7 +898,7 @@ struct ParquetScanFunction: public TableFunction {
 						}
 
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							if (!defined_ptr[i]) {
+							if (!defined.ptr[i]) {
 								FlatVector::SetNull(output.data[col_idx], i + output_offset,
 										true);
 							} else {
@@ -946,7 +946,7 @@ struct ParquetScanFunction: public TableFunction {
 						auto payload_ptr = col_data.payload_ptr;
 						for (int32_t i = 0; i < current_batch_size; i++) {
 
-							if (!defined_ptr[i]) {
+							if (!defined.ptr[i]) {
 								continue;
 							}
 							target_ptr[i + output_offset] = (*payload_ptr >> byte_pos)

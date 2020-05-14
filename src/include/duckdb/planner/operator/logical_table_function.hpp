@@ -36,6 +36,8 @@ public:
 	vector<SQLType> return_types;
 	//! The set of returned column names
 	vector<string> names;
+	//! Bound column IDs
+	vector<column_t> column_ids;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

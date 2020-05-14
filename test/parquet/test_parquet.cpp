@@ -87,7 +87,7 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	}
 }
 
-TEST_CASE("Test TPCH SF1 from parquet file", "[parquet]") {
+TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	DuckDB db(nullptr);
 	Parquet::Init(db);
 	Connection con(db);
@@ -97,3 +97,4 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet]") {
 	auto result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
 }
+
