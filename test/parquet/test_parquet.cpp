@@ -82,7 +82,7 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	}
 
 	SECTION("userdata1.parquet") {
-		auto result = con.Query("SELECT count(*) FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+		auto result = con.Query("SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 	}
 }
@@ -98,3 +98,16 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
 }
 
+TEST_CASE("XXX", "[parquet][.]") {
+	DuckDB db(nullptr);
+	Parquet::Init(db);
+	Connection con(db);
+
+	auto result = con.Query(
+	    "SELECT first_name, last_name FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet') limit 10");
+	result->Print();
+
+	con.Query("CREATE VIEW userdata AS SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+	result = con.Query("SELECT first_name, last_name FROM userdata limit 10");
+	result->Print();
+}

@@ -70,6 +70,72 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
+// TODO clean this up, extend GenericBinding
+// TODO unify with generic binding because code duplication
+
+TableFunctionBinding::TableFunctionBinding(const string &alias, BoundTableFunction &function, idx_t index)
+    : Binding(BindingType::TABLE_FUNCTION, alias, index), function(function) {
+	assert(function.names.size() == function.return_types.size());
+	for (idx_t i = 0; i < function.names.size(); i++) {
+		auto &name = function.names[i];
+		assert(!name.empty());
+		if (name_map.find(name) != name_map.end()) {
+			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
+		}
+		name_map[name] = i;
+	}
+}
+
+bool TableFunctionBinding::HasMatchingBinding(const string &column_name) {
+	auto entry = name_map.find(column_name);
+	return entry != name_map.end();
+}
+
+BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+	auto column_entry = name_map.find(colref.column_name);
+	if (column_entry == name_map.end()) {
+		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),
+		                                     colref.column_name.c_str()));
+	}
+	ColumnBinding binding;
+	binding.table_index = index;
+	auto col_index = column_entry->second;
+
+	if (function.function->supports_projection) {
+		auto &column_ids = ((TableFunctionData &)*function.bind_data).column_ids;
+
+		binding.column_index = column_ids.size();
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (column_ids[i] == col_index) {
+				binding.column_index = i;
+				break;
+			}
+		}
+		if (binding.column_index == column_ids.size()) {
+			// column binding not found: add it to the list of bindings
+			column_ids.push_back(col_index);
+		}
+
+	} else {
+		binding.column_index = col_index;
+	}
+
+	SQLType sql_type = function.return_types[column_entry->second];
+
+	return BindResult(
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
+}
+void TableFunctionBinding::GenerateAllColumnExpressions(BindContext &context,
+                                                        vector<unique_ptr<ParsedExpression>> &select_list) {
+	for (auto &column_name : function.names) {
+		assert(!column_name.empty());
+		if (context.BindingIsHidden(alias, column_name)) {
+			continue;
+		}
+		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
+	}
+}
+
 GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, idx_t index)
     : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());

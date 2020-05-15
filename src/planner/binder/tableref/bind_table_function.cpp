@@ -38,7 +38,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	assert(result->return_types.size() == result->names.size());
 	assert(result->return_types.size() > 0);
 	// now add the table function to the bind context so its columns can be bound
-	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,
-	                               result->return_types);
+	bind_context.AddTableFunctionBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, *result);
+
 	return move(result);
 }

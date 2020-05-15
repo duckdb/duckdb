@@ -365,13 +365,15 @@ struct ParquetScanFunctionData: public TableFunctionData {
 	bool finished;
 };
 
-struct ParquetScanFunction: public TableFunction {
+class ParquetScanFunction: public TableFunction {
+public:
 	ParquetScanFunction() :
 			TableFunction("parquet_scan", { SQLType::VARCHAR },
 					parquet_scan_bind, parquet_scan_function, nullptr) {
 	}
 	;
 
+private:
 	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context,
 			vector<Value> inputs, vector<SQLType> &return_types,
 			vector<string> &names) {
@@ -506,7 +508,8 @@ struct ParquetScanFunction: public TableFunction {
 
 	}
 
-	static bool _prepare_page_buffers(ParquetScanFunctionData &data, idx_t col_idx) {
+	static bool _prepare_page_buffers(ParquetScanFunctionData &data,
+			idx_t col_idx) {
 		auto &col_data = data.column_data[col_idx];
 		auto &chunk =
 				data.file_meta_data.row_groups[data.current_group].columns[col_idx];
@@ -717,17 +720,17 @@ struct ParquetScanFunction: public TableFunction {
 				payload_ptr += sizeof(uint8_t);
 
 				col_data.offset_buf.resize(col_data.page_value_count * 4);
-				RleBpDecoder dict_decoder(
-						(const uint8_t*) payload_ptr,
+				RleBpDecoder dict_decoder((const uint8_t*) payload_ptr,
 						page_hdr.uncompressed_page_size, enc_length);
 
 				col_data.defined_decoder = make_unique<RleBpDecoder>(
 						(const uint8_t*) payload_ptr,
 						page_hdr.uncompressed_page_size, enc_length);
 
-
 				// TODO fix for NULLs with GetBatchSpaced
-				auto n_decode = dict_decoder.GetBatch<uint32_t>((unsigned int *)col_data.offset_buf.ptr, col_data.page_value_count);
+				auto n_decode = dict_decoder.GetBatch<uint32_t>(
+						(unsigned int*) col_data.offset_buf.ptr,
+						col_data.page_value_count);
 				assert(n_decode == col_data.page_value_count);
 
 				break;
@@ -753,7 +756,8 @@ struct ParquetScanFunction: public TableFunction {
 		return true;
 	}
 
-	static void _prepare_chunk_buffer(ParquetScanFunctionData &data, idx_t col_idx) {
+	static void _prepare_chunk_buffer(ParquetScanFunctionData &data,
+			idx_t col_idx) {
 		auto &chunk =
 				data.file_meta_data.row_groups[data.current_group].columns[col_idx];
 		if (chunk.__isset.file_path) {
@@ -762,8 +766,7 @@ struct ParquetScanFunction: public TableFunction {
 		}
 
 		if (chunk.meta_data.path_in_schema.size() != 1) {
-			throw runtime_error(
-					"Only flat tables are supported (no nesting)");
+			throw runtime_error("Only flat tables are supported (no nesting)");
 		}
 
 		// ugh. sometimes there is an extra offset for the dict. sometimes it's wrong.
@@ -807,24 +810,29 @@ struct ParquetScanFunction: public TableFunction {
 
 			// TODO column projections and filters
 			// read each column chunk into RAM
-			for (idx_t col_idx = 0; col_idx < output.column_count();
-					col_idx++) {
-				_prepare_chunk_buffer(data, col_idx);
+
+			for (idx_t out_col_idx = 0; out_col_idx < output.column_count();
+					out_col_idx++) {
+				auto file_col_idx = data.column_ids[out_col_idx];
+
+				_prepare_chunk_buffer(data, file_col_idx);
 				// trigger the reading of a new page below
 				// TODO this is a bit dirty
-				data.column_data[col_idx].page_value_count = 0;
+				data.column_data[file_col_idx].page_value_count = 0;
 			}
 		}
 
 		auto current_group = data.file_meta_data.row_groups[data.current_group];
-		output.SetCardinality(std::min((int64_t) STANDARD_VECTOR_SIZE,
-				current_group.num_rows - data.group_offset));
+		output.SetCardinality(
+				std::min((int64_t) STANDARD_VECTOR_SIZE,
+						current_group.num_rows - data.group_offset));
 		assert(output.size() > 0);
 
-
 		// TODO column projections and filters
-		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
-			auto &col_data = data.column_data[col_idx];
+		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+			auto file_col_idx = data.column_ids[out_col_idx];
+
+			auto &col_data = data.column_data[file_col_idx];
 
 			// we might need to read multiple pages to fill the data chunk
 			idx_t output_offset = 0;
@@ -833,88 +841,95 @@ struct ParquetScanFunction: public TableFunction {
 				if (col_data.page_offset >= col_data.page_value_count) {
 
 					// read dictionaries and data page headers so that we are ready to go for scan
-					if (!_prepare_page_buffers(data, col_idx)) {
+					if (!_prepare_page_buffers(data, file_col_idx)) {
 						continue;
 					}
 					col_data.page_offset = 0;
 				}
 
-				auto current_batch_size = std::min(col_data.page_value_count
-						- col_data.page_offset, output.size() - output_offset);
+				auto current_batch_size = std::min(
+						col_data.page_value_count - col_data.page_offset,
+						output.size() - output_offset);
 
 				assert(current_batch_size > 0);
 
-
 				ByteBuffer defined;
 				defined.resize(current_batch_size * 4);
-				auto n_decoded = col_data.dict_decoder->GetBatch(defined.ptr, current_batch_size);
+				auto n_decoded = col_data.dict_decoder->GetBatch(defined.ptr,
+						current_batch_size);
 				assert(n_decoded == current_batch_size);
 				// TODO should we just increment a pointer on non-null?
-
 
 				switch (col_data.page_encoding) {
 				case Encoding::RLE_DICTIONARY:
 				case Encoding::PLAIN_DICTIONARY: {
 					// TODO uuugly
-					auto offsets_ptr = (uint32_t*) (col_data.offset_buf.ptr + col_data.page_offset * 4);
+					auto offsets_ptr = (uint32_t*) (col_data.offset_buf.ptr
+							+ col_data.page_offset * 4);
 
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
 					// TODO NULLs for primitive types
 
-					switch (data.sql_types[col_idx].id) {
+					switch (data.sql_types[file_col_idx].id) {
 					case SQLTypeId::BOOLEAN:
 						_fill_from_dict<bool>(col_data.dict.ptr, offsets_ptr,
-								current_batch_size, output.data[col_idx], output_offset);
+								current_batch_size, output.data[out_col_idx],
+								output_offset);
 						break;
 					case SQLTypeId::INTEGER:
 						_fill_from_dict<int32_t>(col_data.dict.ptr, offsets_ptr,
-								current_batch_size, output.data[col_idx], output_offset);
+								current_batch_size, output.data[out_col_idx],
+								output_offset);
 						break;
 					case SQLTypeId::BIGINT:
 						_fill_from_dict<int64_t>(col_data.dict.ptr, offsets_ptr,
-								current_batch_size, output.data[col_idx], output_offset);
+								current_batch_size, output.data[out_col_idx],
+								output_offset);
 						break;
 					case SQLTypeId::FLOAT:
 						_fill_from_dict<float>(col_data.dict.ptr, offsets_ptr,
-								current_batch_size, output.data[col_idx], output_offset);
+								current_batch_size, output.data[out_col_idx],
+								output_offset);
 						break;
 					case SQLTypeId::DOUBLE:
 						_fill_from_dict<double>(col_data.dict.ptr, offsets_ptr,
-								current_batch_size, output.data[col_idx], output_offset);
+								current_batch_size, output.data[out_col_idx],
+								output_offset);
 						break;
 					case SQLTypeId::TIMESTAMP:
 						_fill_from_dict<timestamp_t>(col_data.dict.ptr,
-								offsets_ptr, current_batch_size, output.data[col_idx],
-								output_offset);
+								offsets_ptr, current_batch_size,
+								output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::VARCHAR: {
 						assert(col_data.string_collection); // TODO make this an exception
 
 						// the strings can be anywhere in the collection so just reference it all
 						for (auto &chunk : col_data.string_collection->chunks) {
-							StringVector::AddHeapReference(output.data[col_idx],
+							StringVector::AddHeapReference(output.data[out_col_idx],
 									chunk->data[0]);
 						}
 
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (!defined.ptr[i]) {
-								FlatVector::SetNull(output.data[col_idx], i + output_offset,
-										true);
+								FlatVector::SetNull(output.data[out_col_idx],
+										i + output_offset, true);
 							} else {
 								// TODO this should be an exception, too
 								auto dict_offset = offsets_ptr[i];
 								//FlatVector::SetNull(output.data[col_idx], i + output_offset, true);
 
-
-								assert(dict_offset < col_data.string_collection->count);
+								assert(
+										dict_offset
+												< col_data.string_collection->count);
 								auto &chunk =
 										col_data.string_collection->chunks[dict_offset
 												/ STANDARD_VECTOR_SIZE];
 								auto &vec = chunk->data[0];
 
 								FlatVector::GetData<string_t>(
-										output.data[col_idx])[i + output_offset] =
+										output.data[out_col_idx])[i + output_offset] =
 										FlatVector::GetData<string_t>(vec)[dict_offset
 												% STANDARD_VECTOR_SIZE];
 							}
@@ -923,7 +938,7 @@ struct ParquetScanFunction: public TableFunction {
 						break;
 					default:
 						throw runtime_error(
-								SQLTypeToString(data.sql_types[col_idx]));
+								SQLTypeToString(data.sql_types[file_col_idx]));
 					}
 
 //					for (idx_t i = n_read; i < n_read + this_n; i++) {
@@ -931,16 +946,16 @@ struct ParquetScanFunction: public TableFunction {
 //					}
 					break;
 				}
-				// TODO various issues remain here
+					// TODO various issues remain here
 				case Encoding::PLAIN:
 
 					assert(col_data.payload_ptr); // TODO clean
 
-					switch (data.sql_types[col_idx].id) {
+					switch (data.sql_types[file_col_idx].id) {
 					case SQLTypeId::BOOLEAN: {
 
 						auto target_ptr = FlatVector::GetData<bool>(
-								output.data[col_idx]);
+								output.data[out_col_idx]);
 
 						int byte_pos = 0;
 						auto payload_ptr = col_data.payload_ptr;
@@ -949,8 +964,8 @@ struct ParquetScanFunction: public TableFunction {
 							if (!defined.ptr[i]) {
 								continue;
 							}
-							target_ptr[i + output_offset] = (*payload_ptr >> byte_pos)
-									& 1;
+							target_ptr[i + output_offset] = (*payload_ptr
+									>> byte_pos) & 1;
 							byte_pos++;
 							if (byte_pos == 8) {
 								byte_pos = 0;
@@ -963,7 +978,7 @@ struct ParquetScanFunction: public TableFunction {
 					case SQLTypeId::INTEGER: {
 						auto plain_ptr = (int32_t*) col_data.payload_ptr;
 						auto target_ptr = FlatVector::GetData<int32_t>(
-								output.data[col_idx]);
+								output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							target_ptr[i + output_offset] = plain_ptr[i
 									+ col_data.page_offset];
@@ -976,11 +991,10 @@ struct ParquetScanFunction: public TableFunction {
 						break;
 					case SQLTypeId::DOUBLE:
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							FlatVector::GetData<double>(
-															output.data[col_idx])[i + output_offset] = 0;//((double*) col_data.payload_ptr)[i
-			//						+ col_data.page_offset];
+							FlatVector::GetData<double>(output.data[out_col_idx])[i
+									+ output_offset] = 0; //((double*) col_data.payload_ptr)[i
+							//						+ col_data.page_offset];
 						}
-
 
 						break;
 						/*	case SQLTypeId::TIMESTAMP:
@@ -989,13 +1003,14 @@ struct ParquetScanFunction: public TableFunction {
 					case SQLTypeId::VARCHAR: {
 						// except for strings we directly fill a string heap that we can use for the vectors later
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							FlatVector::SetNull(output.data[col_idx], i + output_offset, true);
+							FlatVector::SetNull(output.data[out_col_idx],
+									i + output_offset, true);
 						}
 					}
 						break;
 					default:
 						throw runtime_error(
-								SQLTypeToString(data.sql_types[col_idx]));
+								SQLTypeToString(data.sql_types[file_col_idx]));
 					}
 
 					break;
@@ -1015,7 +1030,7 @@ struct ParquetScanFunction: public TableFunction {
 
 void Parquet::Init(DuckDB &db) {
 	ParquetScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun);
+	CreateTableFunctionInfo info(scan_fun, true);
 
 	Connection conn(db);
 	conn.context->transaction.BeginTransaction();

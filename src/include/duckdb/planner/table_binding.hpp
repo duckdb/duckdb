@@ -22,6 +22,7 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
+class BoundTableFunction;
 
 enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, GENERIC = 3 };
 
@@ -49,6 +50,17 @@ struct TableBinding : public Binding {
 
 	TableCatalogEntry &table;
 	LogicalGet &get;
+
+public:
+	bool HasMatchingBinding(const string &column_name) override;
+	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
+	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
+};
+
+struct TableFunctionBinding : public Binding {
+	TableFunctionBinding(const string &alias, BoundTableFunction &function, idx_t index);
+	BoundTableFunction &function;
+	unordered_map<string, uint64_t> name_map;
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;

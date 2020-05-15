@@ -147,6 +147,27 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
+	case LogicalOperatorType::TABLE_FUNCTION: {
+		auto &fun = (LogicalTableFunction &)op;
+
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		if (!everything_referenced && fun.function->supports_projection) {
+			// table scan: figure out which columns are referenced
+			auto &bind_data = (TableFunctionData &)*fun.bind_data;
+			ClearUnusedExpressions(bind_data.column_ids, fun.table_index);
+			// rewrite the bind data output
+			auto return_types = fun.return_types;
+			auto names = fun.names;
+			fun.return_types.clear();
+			fun.names.clear();
+			// FIXME we need a map here to recreate the names and return types correctly
+			for (auto &col_idx : bind_data.column_ids) {
+				fun.return_types.push_back(return_types[col_idx]);
+				fun.names.push_back(names[col_idx]);
+			}
+		}
+		return;
+	}
 	case LogicalOperatorType::DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children

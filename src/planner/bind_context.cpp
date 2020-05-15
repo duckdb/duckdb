@@ -123,6 +123,10 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
+void BindContext::AddTableFunctionBinding(idx_t index, const string &alias, BoundTableFunction &function) {
+	AddBinding(alias, make_unique<TableFunctionBinding>(alias, function, index));
+}
+
 void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
