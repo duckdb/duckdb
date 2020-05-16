@@ -104,26 +104,13 @@ static void concat_operator(DataChunk &args, ExpressionState &state, Vector &res
 		    auto b_data = b.GetData();
 		    auto a_length = a.GetSize();
 		    auto b_length = b.GetSize();
-		    bool is_hexa = (a_length >= 2 && a_data[0] == '\\' && a_data[1] == 'x' &&
-		    				b_length >= 2 && b_data[0] == '\\' && b_data[1] == 'x');
 
 		    auto target_length = a_length + b_length;
-		    // Check by hexadecimal string
-		    if(is_hexa) {
-		    	// suppressing the hexa identification from the second hexa string
-		    	target_length = a_length + b_length - 2;
-		    }
-
 		    auto target = StringVector::EmptyString(result, target_length);
 		    auto target_data = target.GetData();
 
 		    memcpy(target_data, a_data, a_length);
-		    if(is_hexa) {
-				// suppressing the hexa identification from the second hexa string
-				memcpy(target_data + a_length, b_data + 2, b_length - 2);
-		    } else {
-		    	memcpy(target_data + a_length, b_data, b_length);
-		    }
+		    memcpy(target_data + a_length, b_data, b_length);
 		    target.Finalize();
 		    return target;
 	    });
@@ -261,12 +248,11 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat);
 
-	set.AddFunction(ScalarFunction("||", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
+    ScalarFunctionSet concat_op("||");
+    concat_op.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
+    concat_op.AddFunction(ScalarFunction({SQLType::BLOB, SQLType::BLOB}, SQLType::BLOB, concat_operator));
+    set.AddFunction(concat_op);
 
-	// FIXME: there needs to be a specialized concat function for BLOB because the conventional function,
-	// i.e., '||', will cast (CastFromBlob) the two inputs from BLOB to VARCHAR, which will result in a
-	// hexadecimal string
-	set.AddFunction(ScalarFunction("concat_blob", {SQLType::BLOB, SQLType::BLOB}, SQLType::BLOB, concat_operator));
 
 	ScalarFunction concat_ws =
 	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
