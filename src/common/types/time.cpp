@@ -57,7 +57,7 @@ static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertTime(const char *buf, dtime_t &result) {
+static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
 	idx_t pos = 0;
 	int sep;
@@ -112,15 +112,25 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 		}
 	}
 
+	if (strict) {
+		// skip trailing spaces
+		while (std::isspace((unsigned char)buf[pos])) {
+			pos++;
+		}
+		if (std::isdigit((unsigned char)buf[pos])) {
+			return false;
+		}
+	}
+
 	result = Time::FromTime(hour, min, sec, msec);
 	return true;
 }
 
-dtime_t Time::FromCString(const char *buf) {
+dtime_t Time::FromCString(const char *buf, bool strict) {
 	dtime_t result;
-	if (!TryConvertTime(buf, result)) {
+	if (!TryConvertTime(buf, result, strict)) {
 		// last chance, check if we can parse as timestamp
-		if (strlen(buf) > 10) {
+		if (strlen(buf) > 10 && !strict) {
 			return Timestamp::GetTime(Timestamp::FromString(buf));
 		}
 		throw ConversionException("time field value out of range: \"%s\", "
@@ -130,8 +140,8 @@ dtime_t Time::FromCString(const char *buf) {
 	return result;
 }
 
-dtime_t Time::FromString(string str) {
-	return Time::FromCString(str.c_str());
+dtime_t Time::FromString(string str, bool strict) {
+	return Time::FromCString(str.c_str(), strict);
 }
 
 string Time::ToString(dtime_t time) {

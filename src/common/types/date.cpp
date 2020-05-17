@@ -110,11 +110,16 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertDate(const char *buf, date_t &result) {
+static bool TryConvertDate(const char *buf, date_t &result, bool strict = false) {
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
 	idx_t pos = 0;
 	int sep;
+
+	// skip leading spaces
+	while (std::isspace((unsigned char)buf[pos])) {
+		pos++;
+	}
 
 	if (yearneg == 0 && !std::isdigit((unsigned char)buf[0])) {
 		return false;
@@ -149,6 +154,13 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 		return false;
 	}
 
+	if (strict) {
+		// skip trailing spaces
+		while (std::isspace((unsigned char)buf[pos])) {
+			pos++;
+		}
+	}
+
 	if (std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
@@ -157,9 +169,9 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 	return true;
 }
 
-date_t Date::FromCString(const char *buf) {
+date_t Date::FromCString(const char *buf, bool strict) {
 	date_t result;
-	if (!TryConvertDate(buf, result)) {
+	if (!TryConvertDate(buf, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
 		                          buf);
@@ -167,8 +179,8 @@ date_t Date::FromCString(const char *buf) {
 	return result;
 }
 
-date_t Date::FromString(string str) {
-	return Date::FromCString(str.c_str());
+date_t Date::FromString(string str, bool strict) {
+	return Date::FromCString(str.c_str(), strict);
 }
 
 string Date::ToString(int32_t date) {
