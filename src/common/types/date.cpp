@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <cstring>
 #include <cctype>
 #include <iomanip>
 #include <iostream>
