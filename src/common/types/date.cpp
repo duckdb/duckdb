@@ -121,12 +121,12 @@ static bool TryConvertDate(const char *buf, date_t &result, bool strict = false)
 		pos++;
 	}
 
-	if (yearneg == 0 && !std::isdigit((unsigned char)buf[0])) {
+	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
@@ -154,15 +154,21 @@ static bool TryConvertDate(const char *buf, date_t &result, bool strict = false)
 		return false;
 	}
 
+	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
 		while (std::isspace((unsigned char)buf[pos])) {
 			pos++;
 		}
-	}
-
-	if (std::isdigit((unsigned char)buf[pos])) {
-		return false;
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < strlen(buf)) {
+			return false;
+		}
+	} else {
+		// in non-strict mode, check for any direct trailing digits
+		if (std::isdigit((unsigned char)buf[pos])) {
+			return false;
+		}
 	}
 
 	result = Date::FromDate(yearneg ? -year : year, month, day);

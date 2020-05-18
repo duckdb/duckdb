@@ -112,12 +112,14 @@ static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false
 		}
 	}
 
+	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces
 		while (std::isspace((unsigned char)buf[pos])) {
 			pos++;
 		}
-		if (std::isdigit((unsigned char)buf[pos])) {
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < strlen(buf)) {
 			return false;
 		}
 	}
