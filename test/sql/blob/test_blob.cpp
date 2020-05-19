@@ -12,13 +12,33 @@ TEST_CASE("Cast BLOB values", "[blob]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// Test BLOB to VARCHAR -> CastFromBlob
+	// BLOB to VARCHAR -> CastFromBlob, it always results in a hex representation
 	result = con.Query("SELECT 'a'::BYTEA::VARCHAR");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\x61")}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("\\x61")}));
 
-	// Test VARCHAR to BLOB -> nop cast
+	// VARCHAR to BLOB -> CastToBlob
 	result = con.Query("SELECT 'a'::VARCHAR::BYTEA");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("a")}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
+
+	// Hex string with BLOB
+	result = con.Query("SELECT '\\xAAFFAAAAFFAAAAFFAA'::BYTEA");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xAAFFAAAAFFAAAAFFAA")}));
+
+	// CastFromBlob with hex string
+	result = con.Query("SELECT '\\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("\\xAAFFAAAAFFAAAAFFAA")}));
+
+	// CastFromBlob and after CastToBlob with hex string
+	result = con.Query("SELECT '\\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR::BLOB");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xAAFFAAAAFFAAAAFFAA")}));
+
+	// CastFromBlob -> CastToBlob -> CastFromBlob with hex string
+	result = con.Query("SELECT '\\xAAFFAAAAFFAAAAFFAA'::BLOB::VARCHAR::BLOB::VARCHAR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value("\\xAAFFAAAAFFAAAAFFAA")}));
+
+	// CastToBlob -> CastFromBlob -> CastToBlob with hex string
+	result = con.Query("SELECT '\\xAAFFAAAAFFAAAAFFAA'::VARCHAR::BLOB::VARCHAR::BLOB");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xAAFFAAAAFFAAAAFFAA")}));
 
 	REQUIRE_FAIL(con.Query("SELECT 1::BYTEA"));
 	REQUIRE_FAIL(con.Query("SELECT 1.0::BYTEA"));
@@ -30,7 +50,7 @@ TEST_CASE("Cast BLOB values", "[blob]") {
 	}
 }
 
-TEST_CASE("Insert BLOB values from string", "[blob]") {
+TEST_CASE("Insert BLOB values from normal strings", "[blob]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -38,33 +58,56 @@ TEST_CASE("Insert BLOB values from string", "[blob]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 	// insert BLOB from string
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('aaaaaaaaaa')"));
-	// sizes: 22, 202, 20002, 20002 -> double plus two due to hexadecimal representation
+	// sizes: 10, 100, 1000, 10000 -> double plus two due to hexadecimal representation
 	for (idx_t i = 0; i < 3; i++) {
 		// The concat function casts BLOB to VARCHAR,resulting in a hex string
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs "
-								  "WHERE LENGTH(b)=(SELECT MAX(LENGTH(b)) FROM blobs)"));
+								  "WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)"));
 	}
 
-	result = con.Query("SELECT LENGTH(b) FROM blobs ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {10*2 + 2, 100*2 + 2, 1000*2 + 2, 10000*2 + 2}));
+	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs ORDER BY 1");
+	REQUIRE(CHECK_COLUMN(result, 0, {10, 100, 1000, 10000}));
 }
 
-TEST_CASE("Insert BLOB values", "[blob]") {
+TEST_CASE("Insert BLOB values from hex strings and others", "[blob]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
-	// insert BLOB
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('aaaaaaaaaa'::BYTEA)"));
+
+	// Insert valid hex strings
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES('\\xAAFFAA'), ('\\xAAFFAAAAFFAA'), ('\\xAAFFAAAAFFAAAAFFAA')"));
+	result = con.Query("SELECT * FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xAAFFAA"), Value::BLOB("\\xAAFFAAAAFFAA"), Value::BLOB("\\xAAFFAAAAFFAAAAFFAA")}));
+
+	// Insert valid hex strings, lower case
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM blobs"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES('\\xaaffaa'), ('\\xaaffaaaaffaa'), ('\\xaaffaaaaffaaaaffaa')"));
+	result = con.Query("SELECT * FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xaaffaa"), Value::BLOB("\\xaaffaaaaffaa"), Value::BLOB("\\xaaffaaaaffaaaaffaa")}));
+
+	// Insert valid hex strings with number and letters
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM blobs"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES('\\xaa1199'), ('\\xaa1199aa1199'), ('\\xaa1199aa1199aa1199')"));
+	result = con.Query("SELECT * FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xaa1199"), Value::BLOB("\\xaa1199aa1199"), Value::BLOB("\\xaa1199aa1199aa1199")}));
+
+	// Insert INvalid hex strings (invalid hex chars: G, H, I)
+	REQUIRE_FAIL(con.Query("INSERT INTO blobs VALUES('\\xGAFFAA'), ('\\xHAFFAAAAFFAA'), ('\\xIAFFAAAAFFAAAAFFAA')"));
+
+	// Insert INvalid hex strings (odd # of chars)
+	REQUIRE_FAIL(con.Query("INSERT INTO blobs VALUES('\\xAAAFFAA'), ('\\xAAAFFAAAAFFAA'), ('\\xAAAFFAAAAFFAAAAFFAA')"));
+
 	// insert BLOB with “non-printable” octets
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\153\154\155 \052\251\124'::BYTEA)"));
 
 	// insert BLOB with “non-printable” octets, but now using VARCHAR string (should fail)
 	REQUIRE_FAIL(con.Query("INSERT INTO blobs VALUES ('\153\154\155 \052\251\124'::VARCHAR)"));
-
-	// insert BLOB with “non-printable” octets, but now using string (should fail)
 	REQUIRE_FAIL(con.Query("INSERT INTO blobs VALUES ('\153\154\155 \052\251\124')"));
+
+	// insert BLOB with “non-printable” octets, but now using string
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\153\154\155 \052\251\124'::BLOB)"));
 }
 
 TEST_CASE("Select BLOB values", "[blob]") {
@@ -73,11 +116,11 @@ TEST_CASE("Select BLOB values", "[blob]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('a a'::BYTEA)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\\xFF00AA'), ('a a'::BYTEA)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\153\154\155 \052\251\124'::BYTEA)"));
 
 	result = con.Query("SELECT * FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("a a"), Value::BLOB("\153\154\155 \052\251\124")}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xFF00AA"), Value::BLOB("a a"), Value::BLOB("\153\154\155 \052\251\124")}));
 
 	//BLOB with “non-printable” octets
 	REQUIRE_NO_FAIL(con.Query("SELECT 'abc \201'::BYTEA;"));
@@ -160,21 +203,16 @@ TEST_CASE("BLOB with Functions", "[blob]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('a'::BYTEA)"));
 
-	// conventional concat, (cast BLOB to VARCHAR generating a hex string)
+	// conventional concat
 	result = con.Query("SELECT b || 'ZZ'::BYTEA FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\x615A5A")}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("aZZ")}));
 
 	REQUIRE_NO_FAIL(con.Query("SELECT 'abc '::BYTEA || '\153\154\155 \052\251\124'::BYTEA"));
 	result = con.Query("SELECT 'abc '::BYTEA || '\153\154\155 \052\251\124'::BYTEA");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\x616263206B6C6D202AA954")}));
-
-	// specialized concat BLOB
-	result = con.Query("SELECT concat_blob(b, 'ZZ'::BYTEA) FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("aZZ")}));
-
-	result = con.Query("SELECT concat_blob('abc '::BYTEA, '\153\154\155 \052\251\124'::BYTEA)");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("abc \153\154\155 \052\251\124")}));
 
+	result = con.Query("SELECT 'abc '::BYTEA || '\153\154\155 \052\251\124'::BYTEA");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("abc \153\154\155 \052\251\124")}));
 
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('abc \153\154\155 \052\251\124'::BYTEA)"));
 
@@ -185,7 +223,27 @@ TEST_CASE("BLOB with Functions", "[blob]") {
 	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 11}));
 
-	// length
-	result = con.Query("SELECT LENGTH(b) FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {1*2 + 2, 11*2 + 2}));
+	// HEX strings
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM blobs"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\\xFF'::BYTEA)"));
+
+	result = con.Query("SELECT b || 'ZZ'::BYTEA FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xFF5A5A")}));
+
+	result = con.Query("SELECT b || '\\x5A5A'::BYTEA FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB("\\xFF5A5A")}));
+
+	// BLOB || VARCHAR is not allowed, should fail
+	REQUIRE_FAIL(con.Query("SELECT b || '5A5A'::VARCHAR FROM blobs"));
+
+	// Octet Length tests
+	REQUIRE_NO_FAIL(con.Query("DELETE FROM blobs"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\\xFF'::BYTEA)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('FF'::BYTEA)"));
+
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('\\x55AAFF55AAFF55AAFF01'::BYTEA)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('55AAFF55AAFF55AAFF01'::BYTEA)"));
+
+	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 10, 20}));
 }
