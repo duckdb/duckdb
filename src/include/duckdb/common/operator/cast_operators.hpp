@@ -216,7 +216,6 @@ struct CastFromBlob {
 	template <class SRC> static inline string FromHexToBytes(SRC input) {
 		throw duckdb::NotImplementedException("Blob from hex string to bytes could not be performed!");
 	}
-
 };
 
 template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
