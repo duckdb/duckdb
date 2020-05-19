@@ -255,7 +255,7 @@ SQLType TransformStringToSQLType(string str) {
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
 	           lower_str == "char") {
 		return SQLType::VARCHAR;
-	} else if (lower_str == "bytea") {
+	} else if (lower_str == "bytea" || lower_str == "blob") {
 		return SQLType::BLOB;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
 		return SQLType::BIGINT;
