@@ -133,8 +133,7 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		break;
 	case SQLTypeId::BLOB:
 		assert(result.type == TypeId::VARCHAR);
-		// NOP cast
-		result.Reference(source);
+		string_cast<string_t, duckdb::CastToBlob>(source, result, count);
 		break;
 	default:
 		null_cast(source, result, source_type, target_type, count);
