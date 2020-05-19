@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <cstring>
 #include <cctype>
 #include <iomanip>
 #include <iostream>
@@ -110,18 +111,23 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertDate(const char *buf, date_t &result) {
+static bool TryConvertDate(const char *buf, date_t &result, bool strict = false) {
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
 	idx_t pos = 0;
 	int sep;
 
-	if (yearneg == 0 && !std::isdigit((unsigned char)buf[0])) {
+	// skip leading spaces
+	while (std::isspace((unsigned char)buf[pos])) {
+		pos++;
+	}
+
+	if (yearneg == 0 && !std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 
 	// first parse the year
-	for (pos = yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
+	for (pos = pos + yearneg; std::isdigit((unsigned char)buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
 		if (year > YEAR_MAX) {
 			break;
@@ -149,17 +155,30 @@ static bool TryConvertDate(const char *buf, date_t &result) {
 		return false;
 	}
 
-	if (std::isdigit((unsigned char)buf[pos])) {
-		return false;
+	// in strict mode, check remaining string for non-space characters
+	if (strict) {
+		// skip trailing spaces
+		while (std::isspace((unsigned char)buf[pos])) {
+			pos++;
+		}
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < strlen(buf)) {
+			return false;
+		}
+	} else {
+		// in non-strict mode, check for any direct trailing digits
+		if (std::isdigit((unsigned char)buf[pos])) {
+			return false;
+		}
 	}
 
 	result = Date::FromDate(yearneg ? -year : year, month, day);
 	return true;
 }
 
-date_t Date::FromCString(const char *buf) {
+date_t Date::FromCString(const char *buf, bool strict) {
 	date_t result;
-	if (!TryConvertDate(buf, result)) {
+	if (!TryConvertDate(buf, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
 		                          buf);
@@ -167,8 +186,8 @@ date_t Date::FromCString(const char *buf) {
 	return result;
 }
 
-date_t Date::FromString(string str) {
-	return Date::FromCString(str.c_str());
+date_t Date::FromString(string str, bool strict) {
+	return Date::FromCString(str.c_str(), strict);
 }
 
 string Date::ToString(int32_t date) {

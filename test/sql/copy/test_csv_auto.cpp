@@ -659,7 +659,7 @@ TEST_CASE("Test csv header completion", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
 
-TEST_CASE("Test csv type detection with sampling", "[copy]") {
+TEST_CASE("Test csv type detection", "[copy]") {
 	FileSystem fs;
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -700,6 +700,47 @@ TEST_CASE("Test csv type detection with sampling", "[copy]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {27001, 27002, 27003}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"1", "2", "3"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1.0, 2.0, 3.5}));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// generate a CSV file containing time, date and timestamp columns
+	ofstream csv_file2(fs.JoinPath(csv_path, "test.csv"));
+	csv_file2 << "a,b,t,d,ts" << endl;
+	csv_file2 << "123,TEST2,12:12:12,2000-01-01,2000-01-01 12:12:00" << endl;
+	csv_file2 << "345,TEST2,14:15:30,2002-02-02,2002-02-02 14:15:00" << endl;
+	csv_file2 << "346,TEST2,15:16:17,2004-12-13,2004-12-13 15:16:00" << endl;
+	csv_file2.close();
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('" + fs.JoinPath(csv_path, "test.csv") + "');"));
+	result = con.Query("SELECT a, b, t, d, ts FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {123, 345, 346}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"TEST2", "TEST2", "TEST2"}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 2, {Value::TIME(12, 12, 12, 0), Value::TIME(14, 15, 30, 0), Value::TIME(15, 16, 17, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::DATE(2000, 01, 01), Value::DATE(2002, 02, 02), Value::DATE(2004, 12, 13)}));
+	REQUIRE(CHECK_COLUMN(result, 4,
+	                     {Value::TIMESTAMP(2000, 01, 01, 12, 12, 0, 0), Value::TIMESTAMP(2002, 02, 02, 14, 15, 0, 0),
+	                      Value::TIMESTAMP(2004, 12, 13, 15, 16, 0, 0)}));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// generate a CSV file containing time and date columns with leading/trailing chars
+	ofstream csv_file3(fs.JoinPath(csv_path, "test.csv"));
+	csv_file3 << "a,b,t,tf,d,df" << endl;
+	csv_file3 << "123,TEST2,\"  12:12:12  \",\"12:12:12\",\"  2000-01-01   \",\"2000-01-01\"" << endl;
+	csv_file3 << "345,TEST2,\"  14:15:30\",\"14:15:30\",\"  2002-02-02   \",\"2000-01-01 a\"" << endl;
+	csv_file3 << "346,TEST2,\" 15:16:17  \",\"15:16:17 01\",\"  2004-12-13  \",\"2000-01-01\"" << endl;
+	csv_file3.close();
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('" + fs.JoinPath(csv_path, "test.csv") + "');"));
+	result = con.Query("SELECT a, b, t, tf, d, df FROM test ORDER BY a;");
+	REQUIRE(CHECK_COLUMN(result, 0, {123, 345, 346}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"TEST2", "TEST2", "TEST2"}));
+	REQUIRE(
+	    CHECK_COLUMN(result, 2, {Value::TIME(12, 12, 12, 0), Value::TIME(14, 15, 30, 0), Value::TIME(15, 16, 17, 0)}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"12:12:12", "14:15:30", "15:16:17 01"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::DATE(2000, 01, 01), Value::DATE(2002, 02, 02), Value::DATE(2004, 12, 13)}));
+	REQUIRE(CHECK_COLUMN(result, 5, {"2000-01-01", "2000-01-01 a", "2000-01-01"}));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
 

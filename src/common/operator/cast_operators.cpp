@@ -706,6 +706,10 @@ template <> date_t CastToDate::Operation(string_t input) {
 	return Date::FromCString(input.GetData());
 }
 
+template <> date_t StrictCastToDate::Operation(string_t input) {
+	return Date::FromCString(input.GetData(), true);
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
@@ -769,6 +773,10 @@ template <> string_t CastFromTime::Operation(dtime_t input, Vector &vector) {
 //===--------------------------------------------------------------------===//
 template <> dtime_t CastToTime::Operation(string_t input) {
 	return Time::FromCString(input.GetData());
+}
+
+template <> dtime_t StrictCastToTime::Operation(string_t input) {
+	return Time::FromCString(input.GetData(), true);
 }
 
 template <> timestamp_t CastDateToTimestamp::Operation(date_t input) {
