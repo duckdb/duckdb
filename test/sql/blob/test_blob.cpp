@@ -7,6 +7,24 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("BLOB null and empty values", "[blob]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	result = con.Query("SELECT ''::BLOB");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+
+	result = con.Query("SELECT NULL::BLOB");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr)}));
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES(''), (''::BLOB)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES(NULL), (NULL::BLOB)"));
+
+	result = con.Query("SELECT * FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {"", "", Value(nullptr), Value(nullptr)}));
+}
+
 TEST_CASE("Cast BLOB values", "[blob]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
