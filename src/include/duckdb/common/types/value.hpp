@@ -96,8 +96,7 @@ public:
 	static Value LIST(std::vector<Value> values);
 
 	//! Create a blob Value from a specified value
-	static Value BLOB(string data);
-
+	static Value BLOB(string data, bool must_cast = true);
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
@@ -196,10 +195,6 @@ public:
 
 private:
 	SQLType sql_type = SQLType(SQLTypeId::INVALID);
-
-	//! The hexadecimal value of the object used only for BLOB values
-	//! It's need for heap allocation
-	string hexa_str_value;
 
 private:
 	template <class T> T GetValueInternal();

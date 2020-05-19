@@ -244,15 +244,20 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::BLOB(string data) {
+Value Value::BLOB(string data, bool must_cast) {
 	Value result(TypeId::VARCHAR);
 	result.sql_type = SQLType::BLOB;
-	result.str_value = data;
-	// pre-allocate to hexadeximal cast in ToString or in CastFromBlob
-	// it should have a double size of the original value plus two for hex identification, i.e., "\x"
-	//! It's need for heap allocation
-	result.hexa_str_value.resize(data.size() * 2 + 2);
 	result.is_null = false;
+	// hex string identifier: "\\x", must be double '\'
+	// single '\x' is a special char for hex chars in C++,
+	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
+	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
+	if(must_cast && data.size() >= 2 && data.substr(0,2) == "\\x") {
+		result.str_value = CastFromBlob::FromHexToBytes(data);
+	} else {
+		// raw string
+		result.str_value = data;
+	}
 	return result;
 }
 
@@ -415,13 +420,10 @@ string Value::ToString(SQLType sql_type) const {
 	case SQLTypeId::VARCHAR:
 		return str_value;
 	case SQLTypeId::BLOB: {
-		// Check if the value is already a hexadecimal string, i.e., avoiding a double convertion
-		if(str_value.size() >= 2 && (str_value.substr(0,2) == "\\x")) {
-			return str_value;
-		}
-		string_t hexa_str(hexa_str_value);
-		CastFromBlob::ToHexaString(string_t(str_value), hexa_str);
-		string result(hexa_str.GetData());
+		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
+		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
+		CastFromBlob::ToHexString(string_t(str_value), hex_str);
+		string result(hex_str.GetData());
 		return result;
 	}
 	case SQLTypeId::STRUCT: {
