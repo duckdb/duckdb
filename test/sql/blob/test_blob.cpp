@@ -170,7 +170,7 @@ TEST_CASE("Test BLOB with PreparedStatement from a file", "[blob]") {
 	}
 	ofs_blob_file.close();
 
-	// DuckDB readme file
+	// Blob file with all ascii chars, except '\0'
 	ifstream ifs(blob_file_path, ifstream::binary);
 	REQUIRE(ifs.is_open());
 
@@ -185,10 +185,11 @@ TEST_CASE("Test BLOB with PreparedStatement from a file", "[blob]") {
 	unique_ptr<char[]> buffer(new char[size + 1]);
 
 	// get file data
-	file_buf->sgetn (buffer.get(), size);
+	file_buf->sgetn(buffer.get(), size);
 
 	ifs.close();
 
+	buffer[size] = '\0';
 	string str_buffer(buffer.get(), size);
 
 	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
