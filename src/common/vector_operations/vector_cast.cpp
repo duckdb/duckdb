@@ -3,10 +3,9 @@
 // Description: This file contains the implementation of the different casts
 //===--------------------------------------------------------------------===//
 #include "duckdb/common/operator/cast_operators.hpp"
-
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -87,7 +86,8 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 }
 
 template <class OP>
-static void string_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+static void string_cast_numric_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
+                                      idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -119,20 +119,42 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		assert(result.type == TypeId::DOUBLE);
 		UnaryExecutor::Execute<string_t, double, OP, true>(source, result, count);
 		break;
+	default:
+		null_cast(source, result, source_type, target_type, count);
+		break;
+	}
+}
+
+static void string_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count,
+                               bool strict = false) {
+	// now switch on the result type
+	switch (target_type.id) {
 	case SQLTypeId::DATE:
 		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, date_t, duckdb::CastToDate, true>(source, result, count);
+		if (strict) {
+			UnaryExecutor::Execute<string_t, date_t, duckdb::StrictCastToDate, true>(source, result, count);
+		} else {
+			UnaryExecutor::Execute<string_t, date_t, duckdb::CastToDate, true>(source, result, count);
+		}
 		break;
 	case SQLTypeId::TIME:
 		assert(result.type == TypeId::INT32);
-		UnaryExecutor::Execute<string_t, dtime_t, duckdb::CastToTime, true>(source, result, count);
+		if (strict) {
+			UnaryExecutor::Execute<string_t, dtime_t, duckdb::StrictCastToTime, true>(source, result, count);
+		} else {
+			UnaryExecutor::Execute<string_t, dtime_t, duckdb::CastToTime, true>(source, result, count);
+		}
 		break;
 	case SQLTypeId::TIMESTAMP:
 		assert(result.type == TypeId::INT64);
 		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestamp, true>(source, result, count);
 		break;
 	default:
-		null_cast(source, result, source_type, target_type, count);
+		if (strict) {
+			string_cast_numric_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
+		} else {
+			string_cast_numric_switch<duckdb::Cast>(source, result, source_type, target_type, count);
+		}
 		break;
 	}
 }
@@ -237,11 +259,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		break;
 	case SQLTypeId::VARCHAR:
 		assert(source.type == TypeId::VARCHAR);
-		if (strict) {
-			string_cast_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
-		} else {
-			string_cast_switch<duckdb::Cast>(source, result, source_type, target_type, count);
-		}
+		string_cast_switch(source, result, source_type, target_type, count, strict);
 		break;
 	case SQLTypeId::SQLNULL: {
 		// cast a NULL to another type, just copy the properties and change the type
