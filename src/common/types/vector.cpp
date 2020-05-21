@@ -272,14 +272,8 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::DOUBLE(((double *)data)[index]);
 	case TypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		auto data_str = str.GetData();
 		// avoiding implicit cast and double conversion
-		if(str.GetSize() >= 2 && data_str[0] == '\\' && data_str[1] == 'x') {
-			return Value::BLOB(str.GetString(), false);
-		}
-		else {
-			return Value::BLOB(str.GetString(), true);
-		}
+		return Value::BLOB(str.GetString(), false);
 	}
 	case TypeId::STRUCT: {
 		Value ret(TypeId::STRUCT);
