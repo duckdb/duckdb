@@ -25,6 +25,34 @@ TEST_CASE("BLOB null and empty values", "[blob]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"", "", Value(nullptr), Value(nullptr)}));
 }
 
+TEST_CASE("Test BLOBs with persistent storage", "[blob]") {
+	auto config = GetTestConfig();
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("blob_storage_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BLOB);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES('a'), ('\\xAA'), ('\\xAAFFAA'),  (''),"
+								  "(NULL), ('55AAFF55AAFF55AAFF01'), ('\\x55AAFF55AAFF55AAFF01'),"
+								  "('abc \153\154\155 \052\251\124'::BLOB)"));
+	}
+	// reload the database from disk a few times
+	for (idx_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		result = con.Query("SELECT * FROM blobs");
+		REQUIRE(CHECK_COLUMN(result, 0, {"a", Value::BLOB("\\xAA"), Value::BLOB("\\xAAFFAA"), (""),
+							Value(nullptr), ("55AAFF55AAFF55AAFF01"), Value::BLOB("\\x55AAFF55AAFF55AAFF01"),
+							Value::BLOB("abc \153\154\155 \052\251\124") }));
+	}
+	DeleteDatabase(storage_database);
+}
+
 TEST_CASE("Cast BLOB values", "[blob]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -154,65 +182,86 @@ TEST_CASE("Select BLOB values", "[blob]") {
 	REQUIRE_FAIL(con.Query("SELECT 'abc \153\154\155 \052\251\124'::VARCHAR;"));
 }
 
-TEST_CASE("Test BLOB with PreparedStatement from a file", "[blob]") {
+TEST_CASE("Test BLOB with COPY INTO", "[blob]") {
 	unique_ptr<QueryResult> result;
-	unique_ptr<QueryResult> result_other;
 	DuckDB db(nullptr);
 	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
-	string blob_file_path = TestCreatePath("blob_file.txt");
-    ofstream ofs_blob_file(blob_file_path, std::ofstream::out | std::ofstream::app);
-    // Insert all ASCII chars from 1 to 255, avoiding only the '\0' char
-	char ch = '\1';
+	// Creating a blob buffer with almost ALL ASCII chars
+	uint8_t num_chars = 256 - 4; // skipping: '\0', '\n', '\15', ','
+	unique_ptr<char[]> blob_chars(new char[num_chars + 1]);
+	char ch = '\0';
+	idx_t buf_idx = 0;
 	for(idx_t i = 0; i < 255; ++i, ++ch) {
-    	ofs_blob_file << ch;
+		// skip '\0', new line, shift in, and comma chars
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',') {
+			continue;
+		}
+		blob_chars[buf_idx] = ch;
+    	++buf_idx;
 	}
+	blob_chars[num_chars] = '\0';
+
+	// Wrinting BLOB values to a csv file
+	string blob_file_path = TestCreatePath("blob_file.csv");
+    ofstream ofs_blob_file(blob_file_path, std::ofstream::out | std::ofstream::app);
+    // Insert all ASCII chars from 1 to 255, skipping '\0', '\n', '\15', and ',' chars
+   	ofs_blob_file << blob_chars.get();
 	ofs_blob_file.close();
 
-	// Blob file with all ascii chars, except '\0'
-	ifstream ifs(blob_file_path, ifstream::binary);
-	REQUIRE(ifs.is_open());
+	// COPY INTO
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
+    result = con.Query("COPY blobs FROM '" + blob_file_path + "';");
+    REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	// get pointer to associated buffer object
-	filebuf *file_buf = ifs.rdbuf();
+    // Testing if the system load/store correctly the bytes
+	string blob_str(blob_chars.get(), num_chars);
+	result = con.Query("SELECT b FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(blob_str)}));
 
-	// get file size using buffer's members
-	size_t size = file_buf->pubseekoff(0, ifs.end, ifs.in);
-	file_buf->pubseekpos (0, ifs.in);
+	blob_chars.reset();
+	TestDeleteFile(blob_file_path);
+}
 
-	// allocate memory to contain file data
-	unique_ptr<char[]> buffer(new char[size + 1]);
+TEST_CASE("Test BLOB with PreparedStatement from a file", "[blob]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
 
-	// get file data
-	file_buf->sgetn(buffer.get(), size);
+	// Creating a blob buffer with almost ALL ASCII chars
+	uint8_t num_chars = 256 - 4; // skipping: '\0', '\n', '\15', ','
+	unique_ptr<char[]> blob_chars(new char[num_chars]);
+	char ch = '\0';
+	idx_t buf_idx = 0;
+	for(idx_t i = 0; i < 255; ++i, ++ch) {
+		// skip '\0', new line, shift in, and comma chars
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',') {
+			continue;
+		}
+		blob_chars[buf_idx] = ch;
+    	++buf_idx;
+	}
 
-	ifs.close();
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
-	buffer[size] = '\0';
-	string str_buffer(buffer.get(), size);
-
+	// Insert blob values through a PreparedStatement
+	string str_blob(blob_chars.get(), num_chars);
 	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
-	ps->Execute(str_buffer);
+	ps->Execute(str_blob);
 	REQUIRE(ps->success);
 	ps.reset();
 
+	// Testing if the bytes are stored correctly
 	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {255}));
+	REQUIRE(CHECK_COLUMN(result, 0, {num_chars}));
 
 	result = con.Query("SELECT count(b) FROM blobs");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-	ch = '\1';
-	for(idx_t i = 0; i < 255; ++i, ++ch) {
-    	buffer[i] = ch;
-	}
-	string blob_str(buffer.get(), 255);
-
 	result = con.Query("SELECT b FROM blobs");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(blob_str)}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(str_blob)}));
 
-	TestDeleteFile(blob_file_path);
+	blob_chars.reset();
 }
 
 TEST_CASE("BLOB with Functions", "[blob]") {
@@ -265,4 +314,43 @@ TEST_CASE("BLOB with Functions", "[blob]") {
 
 	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 10, 20}));
+}
+
+TEST_CASE("Test BLOBs with various SQL operators", "[blob]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA, g INTEGER);"));
+    // strings: hello -> \x68656C6C6F, r -> \x72
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('hello', 0), ('\\xAAFFAA', 1), (NULL, 0), ('r', 1)"));
+
+    // simple aggregates only
+    result = con.Query("SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM blobs");
+    REQUIRE(CHECK_COLUMN(result, 0, {4}));
+    REQUIRE(CHECK_COLUMN(result, 1, {3}));
+    REQUIRE(CHECK_COLUMN(result, 2, {"hello"}));
+    REQUIRE(CHECK_COLUMN(result, 3, {Value::BLOB("\\xAAFFAA")}));
+
+    // ORDER BY
+    result = con.Query("SELECT * FROM blobs ORDER BY b");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr), "hello", "r", Value::BLOB("\\xAAFFAA")}));
+
+    // GROUP BY
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES ('hello', 3), ('\\xAAFFAA', 9), (NULL, 0), ('r', 19)"));
+    result = con.Query("SELECT SUM(g) FROM blobs GROUP BY b ORDER BY b");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(0.0), Value(3.0), Value(20.0), Value(10.0)}));
+
+    // JOIN
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs2 (b BYTEA, g INTEGER);"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs2 VALUES ('hello', 0), ('\\xAAFFAA', 100), (NULL, 0), ('r', 200)"));
+
+    // group by blobs.b, explicit JOIN
+    result = con.Query("SELECT R.b, SUM(R.g) FROM blobs as R JOIN blobs2 AS L ON R.b=L.b GROUP BY R.b ORDER BY R.b");
+    REQUIRE(CHECK_COLUMN(result, 0, {"hello", 	"r", 		  Value::BLOB("\\xAAFFAA")}));
+    REQUIRE(CHECK_COLUMN(result, 1, {Value(3.0), Value(20.0), Value(10.0)}));
+
+    // group by blobs2.b, implicit JOIN
+    result = con.Query("SELECT L.b, SUM(L.g) FROM blobs as R, blobs2 AS L WHERE R.b=L.b GROUP BY L.b ORDER BY L.b");
+    REQUIRE(CHECK_COLUMN(result, 0, {"hello", 	"r", 		   Value::BLOB("\\xAAFFAA")}));
+    REQUIRE(CHECK_COLUMN(result, 1, {Value(0.0), Value(400.0), Value(200.0)}));
 }
