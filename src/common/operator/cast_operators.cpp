@@ -831,7 +831,7 @@ template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	return result;
 }
 
-template <> void CastFromBlob::ToHexString(string_t input, string_t &output) {
+void CastFromBlob::ToHexString(string_t input, string_t &output) {
 	const char hexa_table[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 	idx_t input_size = input.GetSize();
 	assert(output.GetSize() == (input_size * 2 + 2));
@@ -847,7 +847,7 @@ template <> void CastFromBlob::ToHexString(string_t input, string_t &output) {
 	output.Finalize();
 }
 
-template <> string CastFromBlob::FromHexToBytes(string input) {
+string CastFromBlob::FromHexToBytes(string input) {
 	// removing '\x'
 	string sub_str = input.substr(2, input.size());
 	string_t str_hex(sub_str);
@@ -898,15 +898,13 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 	idx_t input_size = input.GetSize();
 	auto input_data = input.GetData();
 	string_t result;
-	//Check by a hex string
+	// Check by a hex string
 	if(input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
 		auto aux = CastFromBlob::FromHexToBytes(string(input_data));
-		// double chars for hex string plus two because of hex identifier ('\x')
-//		result = StringVector::EmptyString(vector, aux.size());
-		result = string_t(aux);
+		result = StringVector::AddBlob(vector, string_t(aux));
 	} else {
 		// raw string
-		result = string_t(input_data, input_size);
+		result = StringVector::AddBlob(vector, input);
 	}
 	return result;
 }

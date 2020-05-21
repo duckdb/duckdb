@@ -210,17 +210,10 @@ struct CastFromBlob {
 		throw duckdb::NotImplementedException("Cast from blob could not be performed!");
 	}
 
-	template <class SRC> static inline void ToHexString(SRC input, SRC &output) {
-		throw duckdb::NotImplementedException("Blob to hexadecimal string could not be performed!");
-	}
-	template <class SRC> static inline string FromHexToBytes(SRC input) {
-		throw duckdb::NotImplementedException("Blob from hex string to bytes could not be performed!");
-	}
+	static void ToHexString(duckdb::string_t input, duckdb::string_t &output);
+	static string FromHexToBytes(string input);
 };
-
 template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
-template <> void CastFromBlob::ToHexString(duckdb::string_t input, duckdb::string_t &output);
-template <> string CastFromBlob::FromHexToBytes(string input);
 
 struct CastToBlob {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
