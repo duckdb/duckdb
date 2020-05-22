@@ -188,13 +188,13 @@ TEST_CASE("Test BLOB with COPY INTO", "[blob]") {
 	Connection con(db);
 
 	// Creating a blob buffer with almost ALL ASCII chars
-	uint8_t num_chars = 256 - 4; // skipping: '\0', '\n', '\15', ','
+	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
 	unique_ptr<char[]> blob_chars(new char[num_chars + 1]);
 	char ch = '\0';
 	idx_t buf_idx = 0;
 	for(idx_t i = 0; i < 255; ++i, ++ch) {
-		// skip '\0', new line, shift in, and comma chars
-		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',') {
+		// skip chars: '\0', new line, shift in, comma, and crtl+Z
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
 			continue;
 		}
 		blob_chars[buf_idx] = ch;
@@ -229,13 +229,13 @@ TEST_CASE("Test BLOB with PreparedStatement from a file", "[blob]") {
 	Connection con(db);
 
 	// Creating a blob buffer with almost ALL ASCII chars
-	uint8_t num_chars = 256 - 4; // skipping: '\0', '\n', '\15', ','
+	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
 	unique_ptr<char[]> blob_chars(new char[num_chars]);
 	char ch = '\0';
 	idx_t buf_idx = 0;
 	for(idx_t i = 0; i < 255; ++i, ++ch) {
-		// skip '\0', new line, shift in, and comma chars
-		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',') {
+		// skip chars: '\0', new line, shift in, comma, and crtl+Z
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
 			continue;
 		}
 		blob_chars[buf_idx] = ch;
