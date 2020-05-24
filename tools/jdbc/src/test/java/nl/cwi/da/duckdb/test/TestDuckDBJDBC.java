@@ -411,7 +411,11 @@ public class TestDuckDBJDBC {
 		Connection con = DriverManager.getConnection("jdbc:duckdb:");
 		for (String s : fileContent.split("\n")) {
 			Statement st = con.createStatement();
-			st.execute(s);
+			try {
+				st.execute(s);
+			} catch (Exception e) {
+				// e.printStackTrace();
+			}
 		}
 		con.close();
 
