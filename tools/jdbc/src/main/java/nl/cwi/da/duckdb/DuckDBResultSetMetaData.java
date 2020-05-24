@@ -37,24 +37,23 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
 	public int getColumnType(int column) throws SQLException {
 		String type_name = getColumnTypeName(column);
-		switch (type_name) {
-		case "BOOLEAN":
+		if (type_name.equals("BOOLEAN")) {
 			return Types.BOOLEAN;
-		case "TINYINT":
+		} else if (type_name.equals("TINYINT")) {
 			return Types.TINYINT;
-		case "SMALLINT":
+		} else if (type_name.equals("SMALLINT")) {
 			return Types.SMALLINT;
-		case "INTEGER":
+		} else if (type_name.equals("INTEGER")) {
 			return Types.INTEGER;
-		case "BIGINT":
+		} else if (type_name.equals("BIGINT")) {
 			return Types.BIGINT;
-		case "FLOAT":
+		} else if (type_name.equals("FLOAT")) {
 			return Types.FLOAT;
-		case "DOUBLE":
+		} else if (type_name.equals("DOUBLE")) {
 			return Types.DOUBLE;
-		case "VARCHAR":
+		} else if (type_name.equals("VARCHAR")) {
 			return Types.VARCHAR;
-		default:
+		} else {
 			throw new SQLException("Unknown type " + type_name);
 		}
 	}

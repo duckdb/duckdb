@@ -112,25 +112,25 @@ public class DuckDBResultSet implements ResultSet {
 		if (was_null) {
 			return null;
 		}
-		switch (meta.column_types[columnIndex - 1]) {
-		case "BOOLEAN":
+		String column_type = meta.column_types[columnIndex - 1];
+		if (column_type.equals("BOOLEAN")) {
 			return getBoolean(columnIndex);
-		case "TINYINT":
+		} else if (column_type.equals("TINYINT")) {
 			return getByte(columnIndex);
-		case "SMALLINT":
+		} else if (column_type.equals("SMALLINT")) {
 			return getShort(columnIndex);
-		case "INTEGER":
+		} else if (column_type.equals("INTEGER")) {
 			return getInt(columnIndex);
-		case "BIGINT":
+		} else if (column_type.equals("BIGINT")) {
 			return getLong(columnIndex);
-		case "FLOAT":
+		} else if (column_type.equals("FLOAT")) {
 			return getFloat(columnIndex);
-		case "DOUBLE":
+		} else if (column_type.equals("DOUBLE")) {
 			return getDouble(columnIndex);
-		case "VARCHAR":
+		} else if (column_type.equals("VARCHAR")) {
 			return getString(columnIndex);
-		default:
-			throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
+		 } else {
+		 	throw new SQLException("Not implemented type: " + meta.column_types[columnIndex - 1]);
 		}
 	}
 
