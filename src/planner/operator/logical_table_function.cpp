@@ -10,7 +10,14 @@ vector<ColumnBinding> LogicalTableFunction::GetColumnBindings() {
 }
 
 void LogicalTableFunction::ResolveTypes() {
+	if (column_ids.size() == 0) {
+		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	}
 	for (auto &type : return_types) {
 		types.push_back(GetInternalType(type));
 	}
+}
+
+string LogicalTableFunction::ParamsToString() const {
+	return "(" + function->name + ")";
 }

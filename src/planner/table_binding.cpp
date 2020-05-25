@@ -101,7 +101,8 @@ BindResult TableFunctionBinding::Bind(ColumnRefExpression &colref, idx_t depth) 
 	binding.table_index = index;
 	auto col_index = column_entry->second;
 
-	if (function.function->supports_projection) {
+	// TODO check if this is required here in the first place
+	if (false || function.function->supports_projection) {
 		auto &column_ids = ((TableFunctionData &)*function.bind_data).column_ids;
 
 		binding.column_index = column_ids.size();

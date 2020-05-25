@@ -1,3 +1,5 @@
+#include <map>
+
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -34,7 +36,7 @@ template <class T> void RemoveUnusedColumns::ClearUnusedExpressions(vector<T> &l
 		auto current_binding = ColumnBinding(table_idx, col_idx + offset);
 		auto entry = column_references.find(current_binding);
 		if (entry == column_references.end()) {
-			// this entry is not referred to, erase it from the set of expresisons
+			// this entry is not referred to, erase it from the set of expressions
 			list.erase(list.begin() + col_idx);
 			offset++;
 			col_idx--;
@@ -148,22 +150,36 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		}
 		return;
 	case LogicalOperatorType::TABLE_FUNCTION: {
-		auto &fun = (LogicalTableFunction &)op;
-
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+		auto &fun = (LogicalTableFunction &)op;
 		if (!everything_referenced && fun.function->supports_projection) {
-			// table scan: figure out which columns are referenced
+			// table producing function: figure out which columns are referenced
 			auto &bind_data = (TableFunctionData &)*fun.bind_data;
+
+			// FIXME this is ugly :/
+			map<idx_t, string> name_map;
+			map<idx_t, SQLType> type_map;
+			for (idx_t i = 0; i < bind_data.column_ids.size(); i++) {
+				name_map[bind_data.column_ids[i]] = fun.names[i];
+				type_map[bind_data.column_ids[i]] = fun.return_types[i];
+			}
+
 			ClearUnusedExpressions(bind_data.column_ids, fun.table_index);
-			// rewrite the bind data output
-			auto return_types = fun.return_types;
-			auto names = fun.names;
-			fun.return_types.clear();
+
 			fun.names.clear();
-			// FIXME we need a map here to recreate the names and return types correctly
-			for (auto &col_idx : bind_data.column_ids) {
-				fun.return_types.push_back(return_types[col_idx]);
-				fun.names.push_back(names[col_idx]);
+			fun.return_types.clear();
+
+			for (idx_t i = 0; i < bind_data.column_ids.size(); i++) {
+				fun.names.push_back(name_map[bind_data.column_ids[i]]);
+				fun.return_types.push_back(type_map[bind_data.column_ids[i]]);
+			}
+
+			if (bind_data.column_ids.size() == 0) {
+				// see above for this special case
+				bind_data.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+				fun.names.push_back("count_dummy");
+				fun.return_types.push_back(SQLType::BIGINT);
+				fun.ResolveOperatorTypes();
 			}
 		}
 		return;

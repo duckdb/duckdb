@@ -12,78 +12,131 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	Parquet::Init(db);
 
 	Connection con(db);
+
 	con.EnableQueryVerification();
 
-	SECTION("Exception on missing file") {
-		REQUIRE_THROWS(con.Query("SELECT * FROM parquet_scan('does_not_exist')"));
-	}
-
-	SECTION("alltypes_plain.parquet") {
-		auto result = con.Query("SELECT * FROM parquet_scan('third_party/miniparquet/test/alltypes_plain.parquet')");
-		REQUIRE(CHECK_COLUMN(result, 0, {4, 5, 6, 7, 2, 3, 0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 1, {true, false, true, false, true, false, true, false}));
-		REQUIRE(CHECK_COLUMN(result, 2, {0, 1, 0, 1, 0, 1, 0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 3, {0, 1, 0, 1, 0, 1, 0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 4, {0, 1, 0, 1, 0, 1, 0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 5, {0, 10, 0, 10, 0, 10, 0, 10}));
-		REQUIRE(CHECK_COLUMN(result, 6, {0.0, 1.1, 0.0, 1.1, 0.0, 1.1, 0.0, 1.1}));
-		REQUIRE(CHECK_COLUMN(result, 7, {0.0, 10.1, 0.0, 10.1, 0.0, 10.1, 0.0, 10.1}));
-		REQUIRE(CHECK_COLUMN(
-		    result, 8,
-		    {"03/01/09", "03/01/09", "04/01/09", "04/01/09", "02/01/09", "02/01/09", "01/01/09", "01/01/09"}));
-		REQUIRE(CHECK_COLUMN(result, 9, {"0", "1", "0", "1", "0", "1", "0", "1"}));
-
-		REQUIRE(CHECK_COLUMN(result, 10,
-		                     {Value::BIGINT(Timestamp::FromString("2009-03-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-03-01 00:01:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-04-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-04-01 00:01:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-02-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-02-01 00:01:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-01-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-01-01 00:01:00"))}));
-	}
-
-	SECTION("alltypes_plain.snappy.parquet") {
-		auto result =
-		    con.Query("SELECT * FROM parquet_scan('third_party/miniparquet/test/alltypes_plain.snappy.parquet')");
-		REQUIRE(CHECK_COLUMN(result, 0, {6, 7}));
-		REQUIRE(CHECK_COLUMN(result, 1, {true, false}));
-		REQUIRE(CHECK_COLUMN(result, 2, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 3, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 4, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 5, {0, 10}));
-		REQUIRE(CHECK_COLUMN(result, 6, {0.0, 1.1}));
-		REQUIRE(CHECK_COLUMN(result, 7, {0.0, 10.1}));
-		REQUIRE(CHECK_COLUMN(result, 8, {"04/01/09", "04/01/09"}));
-		REQUIRE(CHECK_COLUMN(result, 9, {"0", "1"}));
-		REQUIRE(CHECK_COLUMN(result, 10,
-		                     {Value::BIGINT(Timestamp::FromString("2009-04-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-04-01 00:01:00"))}));
-	}
-
-	SECTION("alltypes_dictionary.parquet") {
-		auto result =
-		    con.Query("SELECT * FROM parquet_scan('third_party/miniparquet/test/alltypes_dictionary.parquet')");
-
-		REQUIRE(CHECK_COLUMN(result, 0, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 1, {true, false}));
-		REQUIRE(CHECK_COLUMN(result, 2, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 3, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 4, {0, 1}));
-		REQUIRE(CHECK_COLUMN(result, 5, {0, 10}));
-		REQUIRE(CHECK_COLUMN(result, 6, {0.0, 1.1}));
-		REQUIRE(CHECK_COLUMN(result, 7, {0.0, 10.1}));
-		REQUIRE(CHECK_COLUMN(result, 8, {"01/01/09", "01/01/09"}));
-		REQUIRE(CHECK_COLUMN(result, 9, {"0", "1"}));
-		REQUIRE(CHECK_COLUMN(result, 10,
-		                     {Value::BIGINT(Timestamp::FromString("2009-01-01 00:00:00")),
-		                      Value::BIGINT(Timestamp::FromString("2009-01-01 00:01:00"))}));
-	}
-
 	SECTION("userdata1.parquet") {
-		auto result = con.Query("SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+
+		auto result = con.Query("SELECT COUNT(*) FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
+
+		con.Query(
+		    "CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+
+		result = con.Query("SELECT COUNT(*) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
+
+		result = con.Query("SELECT COUNT(registration_dttm), COUNT(id), COUNT(first_name), COUNT(last_name), "
+		                   "COUNT(email), COUNT(gender), COUNT(ip_address), COUNT(cc), COUNT(country), "
+		                   "COUNT(birthdate), COUNT(salary), COUNT(title), COUNT(comments) FROM userdata1");
+
+		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 2, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 3, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 4, {0}));
+		REQUIRE(CHECK_COLUMN(result, 5, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 6, {0}));
+		REQUIRE(CHECK_COLUMN(result, 7, {0}));
+		REQUIRE(CHECK_COLUMN(result, 8, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 9, {0}));
+		REQUIRE(CHECK_COLUMN(result, 10, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 11, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 12, {994}));
+
+		result = con.Query("SELECT MIN(registration_dttm), MAX(registration_dttm) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("2016-02-03 00:01:00"))}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2016-02-03 23:59:55"))}));
+
+		result = con.Query("SELECT MIN(id), MAX(id) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1000}));
+
+		result = con.Query(
+		    "SELECT FIRST(id) OVER w, LAST(id) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED "
+		    "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {1000}));
+
+		result = con.Query("SELECT MIN(first_name), MAX(first_name) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Willie"}));
+
+		result = con.Query("SELECT FIRST(first_name) OVER w, LAST(first_name) OVER w FROM userdata1 WINDOW w AS (ORDER "
+		                   "BY id RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Amanda"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Julie"}));
+
+		result = con.Query("SELECT MIN(last_name), MAX(last_name) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Adams"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Young"}));
+
+		result = con.Query("SELECT FIRST(last_name) OVER w, LAST(last_name) OVER w FROM userdata1 WINDOW w AS (ORDER "
+		                   "BY id RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Jordan"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Meyer"}));
+
+		result = con.Query("SELECT MIN(email), MAX(email) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+		result = con.Query("SELECT MIN(gender), MAX(gender) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Male"}));
+
+		result = con.Query("SELECT FIRST(gender) OVER w, LAST(gender) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		                   "RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Female"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Female"}));
+
+		result = con.Query("SELECT MIN(ip_address), MAX(ip_address) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+		result = con.Query("SELECT MIN(cc), MAX(cc) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+		result = con.Query("SELECT MIN(country), MAX(country) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"\"Bonaire"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Zimbabwe"}));
+
+		result = con.Query("SELECT FIRST(country) OVER w, LAST(country) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		                   "RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Indonesia"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"China"}));
+
+		result = con.Query("SELECT MIN(birthdate), MAX(birthdate) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+
+		result = con.Query("SELECT MIN(salary), MAX(salary) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+
+		result = con.Query("SELECT MIN(title), MAX(title) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"Web Developer IV"}));
+
+		result = con.Query("SELECT FIRST(title) OVER w, LAST(title) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		                   "RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"Internal Auditor"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {""}));
+
+		result = con.Query("SELECT MIN(comments), MAX(comments) FROM userdata1");
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"𠜎𠜱𠝹𠱓𠱸𠲖𠳏"}));
+
+		result = con.Query("SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS (ORDER BY "
+		                   "id RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"1E+02"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"1E+02"}));
 	}
 }
 
@@ -96,18 +149,4 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	          "parquet_scan('third_party/miniparquet/test/lineitemsf1.snappy.parquet')");
 	auto result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
-}
-
-TEST_CASE("XXX", "[parquet][.]") {
-	DuckDB db(nullptr);
-	Parquet::Init(db);
-	Connection con(db);
-
-	auto result = con.Query(
-	    "SELECT first_name, last_name FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet') limit 10");
-	result->Print();
-
-	con.Query("CREATE VIEW userdata AS SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
-	result = con.Query("SELECT first_name, last_name FROM userdata limit 10");
-	result->Print();
 }

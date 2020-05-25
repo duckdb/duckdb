@@ -22,6 +22,8 @@
 
 #include "snappy/snappy.h"
 
+//#include "lemire_fastunpack.hpp"
+
 using namespace duckdb;
 using namespace std;
 
@@ -40,6 +42,41 @@ public:
 	char *ptr = nullptr;
 	uint64_t len = 0;
 
+	ByteBuffer() {
+	}
+	;
+	ByteBuffer(char *ptr, uint64_t len) :
+			ptr(ptr), len(len) {
+	}
+	;
+
+	void inc(uint64_t increment) {
+		available(increment);
+		len -= increment;
+		ptr += increment;
+	}
+
+	template<class T> T read() {
+		available(sizeof(T));
+		T val = *(T*) ptr;
+		inc(sizeof(T));
+		return val;
+	}
+
+	void copy_to(char *dest, uint64_t len) {
+		available(len);
+		memcpy(dest, ptr, len);
+	}
+
+	void available(uint64_t req_len) {
+		if (req_len > len) {
+			throw runtime_error("Out of buffer");
+		}
+	}
+};
+
+class ResizeableBuffer: public ByteBuffer {
+public:
 	void resize(uint64_t new_size) {
 		if (new_size > len) {
 			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
@@ -48,12 +85,6 @@ public:
 		}
 		len = new_size;
 	}
-
-	void inc(uint64_t increment) {
-		len -= increment;
-		ptr += increment;
-	}
-
 private:
 	std::unique_ptr<char[]> holder = nullptr;
 };
@@ -96,8 +127,7 @@ public:
 	}
 
 	/// Gets a batch of values.  Returns the number of decoded elements.
-	template<typename T>
-	inline int GetBatch(T *values, uint32_t batch_size) {
+	template<typename T> void GetBatch(T *values, uint32_t batch_size) {
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
@@ -120,96 +150,18 @@ public:
 				literal_count_ -= literal_batch;
 				values_read += literal_batch;
 			} else {
-				if (!NextCounts<T>())
-					return values_read;
+				if (!NextCounts<T>()) {
+					if (values_read != batch_size) {
+						throw runtime_error(
+								"RLE decode did not find enough values");
+					}
+					return;
+				}
 			}
 		}
-		return values_read;
-	}
-
-	template<typename T>
-	inline int GetBatchSpaced(uint32_t batch_size, uint32_t null_count,
-			const uint8_t *defined, T *out) {
-		//  DCHECK_GE(bit_width_, 0);
-
-		// TODO call GetBatch instead if null_count == 0
-
-		uint32_t values_read = 0;
-		uint32_t remaining_nulls = null_count;
-
-		uint32_t d_off = 0; // defined_offset
-
-		while (values_read < batch_size) {
-			bool is_valid = defined[d_off++];
-
-			if (is_valid) {
-				if ((repeat_count_ == 0) && (literal_count_ == 0)) {
-					if (!NextCounts<T>())
-						return values_read;
-				}
-				if (repeat_count_ > 0) {
-					// The current index is already valid, we don't need to check that again
-					uint32_t repeat_batch = 1;
-					repeat_count_--;
-
-					while (repeat_count_ > 0
-							&& (values_read + repeat_batch) < batch_size) {
-						if (defined[d_off]) {
-							repeat_count_--;
-						} else {
-							remaining_nulls--;
-						}
-						repeat_batch++;
-
-						d_off++;
-					}
-					std::fill(out, out + repeat_batch,
-							static_cast<T>(current_value_));
-					out += repeat_batch;
-					values_read += repeat_batch;
-				} else if (literal_count_ > 0) {
-					uint32_t literal_batch = std::min(
-							batch_size - values_read - remaining_nulls,
-							static_cast<uint32_t>(literal_count_));
-
-					// Decode the literals
-					constexpr uint32_t kBufferSize = 1024;
-					T indices[kBufferSize];
-					literal_batch = std::min(literal_batch, kBufferSize);
-					auto actual_read = BitUnpack<T>(indices, literal_batch);
-
-					if (actual_read != literal_batch) {
-						throw runtime_error("Did not find enough values");
-
-					}
-
-					uint32_t skipped = 0;
-					uint32_t literals_read = 1;
-					*out++ = indices[0];
-
-					// Read the first bitset to the end
-					while (literals_read < literal_batch) {
-						if (defined[d_off]) {
-							*out = indices[literals_read];
-							literals_read++;
-						} else {
-							skipped++;
-						}
-						++out;
-						d_off++;
-					}
-					literal_count_ -= literal_batch;
-					values_read += literal_batch + skipped;
-					remaining_nulls -= skipped;
-				}
-			} else {
-				++out;
-				values_read++;
-				remaining_nulls--;
-			}
+		if (values_read != batch_size) {
+			throw runtime_error("RLE decode did not find enough values");
 		}
-
-		return values_read;
 	}
 
 private:
@@ -338,16 +290,16 @@ struct ParquetScanColumnData {
 
 	idx_t dict_size;
 
-	ByteBuffer buf;
-	ByteBuffer decompressed_buf; // only used for compressed files
+	ResizeableBuffer buf;
+	ResizeableBuffer decompressed_buf; // only used for compressed files
+	ResizeableBuffer dict;
 
-	ByteBuffer dict;
+	ResizeableBuffer offset_buf;
 
 	Encoding::type page_encoding;
 	// these point into buf or decompressed_buf
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> dict_decoder;
-	ByteBuffer offset_buf;
 	const char *payload_ptr; // for plain pages
 
 	unique_ptr<ChunkCollection> string_collection;
@@ -384,9 +336,9 @@ private:
 		auto &pfile = res->pfile;
 		auto &file_meta_data = res->file_meta_data;
 
-		ByteBuffer buf;
 		pfile.open(file_name, std::ios::binary);
 
+		ResizeableBuffer buf;
 		buf.resize(4);
 		memset(buf.ptr, '\0', 4);
 		// check for magic bytes at start of file
@@ -421,9 +373,6 @@ private:
 		thrift_unpack((const uint8_t*) buf.ptr, (uint32_t*) &footer_len,
 				&file_meta_data);
 
-		//	file_meta_data.printTo(cerr);
-		//	cerr << "\n";
-
 		if (file_meta_data.__isset.encryption_algorithm) {
 			throw runtime_error("Encrypted Parquet files are not supported");
 		}
@@ -437,8 +386,6 @@ private:
 			throw runtime_error("Only flat tables are supported (no nesting)");
 		}
 
-		// TODO assert that the first col is root
-
 		// skip the first column its the root and otherwise useless
 		for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size();
 				col_idx++) {
@@ -448,10 +395,10 @@ private:
 				throw runtime_error(
 						"Only flat tables are supported (no nesting)");
 			}
-			// TODO if this is REQUIRED, there are no defined levels in file, support this
+			// if this is REQUIRED, there are no defined levels in file, seems unused
 			// if field is REPEATED, no bueno
 			if (s_ele.repetition_type != FieldRepetitionType::OPTIONAL) {
-				throw runtime_error("Only OPTIONAL fields support for now");
+				throw runtime_error("Only OPTIONAL fields support");
 			}
 
 			names.push_back(s_ele.name);
@@ -518,8 +465,10 @@ private:
 		col_data.payload_ptr = nullptr;
 
 		auto page_header_len = col_data.buf.len;
-		// TODO this should not be 0
-
+		if (page_header_len < 1) {
+			throw runtime_error(
+					"Ran out of bytes to read header from. File corrupt?");
+		}
 		PageHeader page_hdr;
 		thrift_unpack((const uint8_t*) col_data.buf.ptr + col_data.chunk_offset,
 				(uint32_t*) &page_header_len, &page_hdr);
@@ -527,15 +476,13 @@ private:
 		// the payload starts behind the header, obvsl.
 		col_data.buf.inc(page_header_len);
 
-//					page_hdr.printTo(cerr);
-//					cerr << "\n";
-
-		const char *payload_ptr = nullptr;
+		ByteBuffer payload;
+		payload.len = page_hdr.uncompressed_page_size;
 
 		// handle compression, in the end we expect a pointer to uncompressed parquet data in payload_ptr
 		switch (chunk.meta_data.codec) {
 		case CompressionCodec::UNCOMPRESSED:
-			payload_ptr = col_data.buf.ptr;
+			payload.ptr = col_data.buf.ptr;
 			break;
 
 		case CompressionCodec::SNAPPY: {
@@ -551,14 +498,13 @@ private:
 			if (!res) {
 				throw runtime_error("Decompression failure");
 			}
-			payload_ptr = col_data.decompressed_buf.ptr;
+			payload.ptr = col_data.decompressed_buf.ptr;
 			break;
 		}
 		default:
 			throw runtime_error(
 					"Unsupported compression codec. Try uncompressed or snappy");
 		}
-		assert(payload_ptr);
 		col_data.buf.inc(page_hdr.compressed_page_size);
 
 		// handle page contents
@@ -586,9 +532,8 @@ private:
 			col_data.dict_size = page_hdr.dictionary_page_header.num_values;
 			auto dict_byte_size = col_data.dict_size
 					* GetTypeIdSize(GetInternalType(data.sql_types[col_idx]));
-			col_data.dict.resize(dict_byte_size);
 
-			col_data.string_collection.reset();
+			col_data.dict.resize(dict_byte_size);
 
 			switch (data.sql_types[col_idx].id) {
 			case SQLTypeId::BOOLEAN:
@@ -596,14 +541,17 @@ private:
 			case SQLTypeId::BIGINT:
 			case SQLTypeId::FLOAT:
 			case SQLTypeId::DOUBLE:
-				memcpy(col_data.dict.ptr, payload_ptr, dict_byte_size);
+				payload.available(dict_byte_size);
+				// TODO this copy could be avoided if we use different buffers for dicts
+				payload.copy_to(col_data.dict.ptr, dict_byte_size);
 				break;
 			case SQLTypeId::TIMESTAMP:
+				payload.available(dict_byte_size);
 				// immediately convert timestamps to duckdb format, potentially fewer conversions
 				for (idx_t dict_index = 0; dict_index < col_data.dict_size;
 						dict_index++) {
 					auto impala_ns = impala_timestamp_to_nanoseconds(
-							((Int96*) payload_ptr)[dict_index]);
+							((Int96*) payload.ptr)[dict_index]);
 
 					auto ms = impala_ns / 1000000; // nanoseconds
 					auto ms_per_day = (int64_t) 60 * 60 * 24 * 1000;
@@ -616,10 +564,9 @@ private:
 				break;
 			case SQLTypeId::VARCHAR: {
 				// strings we directly fill a string heap that we can use for the vectors later
-
 				col_data.string_collection = make_unique<ChunkCollection>();
 
-				// below we hand-roll a chunk collection to avoid copying strings
+				// we hand-roll a chunk collection to avoid copying strings
 				auto append_chunk = make_unique<DataChunk>();
 				vector<TypeId> types = { TypeId::VARCHAR };
 				col_data.string_collection->types = types;
@@ -627,12 +574,10 @@ private:
 
 				for (idx_t dict_index = 0; dict_index < col_data.dict_size;
 						dict_index++) {
-					uint32_t str_len = *((uint32_t*) payload_ptr);
-					payload_ptr += sizeof(str_len);
-					// TODO check for overflow
+					uint32_t str_len = payload.read<uint32_t>();
+					payload.available(str_len);
 
 					if (append_chunk->size() == STANDARD_VECTOR_SIZE) {
-						// TODO make this an AppendAligned method or so
 						col_data.string_collection->count +=
 								append_chunk->size();
 						col_data.string_collection->chunks.push_back(
@@ -641,33 +586,34 @@ private:
 						append_chunk->Initialize(types);
 					}
 
-					auto utf_type = Utf8Proc::Analyze(payload_ptr, str_len);
+					auto utf_type = Utf8Proc::Analyze(payload.ptr, str_len);
 					switch (utf_type) {
 					case UnicodeType::ASCII:
 						FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
 								StringVector::AddString(append_chunk->data[0],
-										payload_ptr, str_len);
+										payload.ptr, str_len);
 						break;
 					case UnicodeType::UNICODE:
 						// this regrettably copies to normalize
 						FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
 								StringVector::AddString(append_chunk->data[0],
 										Utf8Proc::Normalize(
-												string(payload_ptr, str_len)));
+												string(payload.ptr, str_len)));
 
 						break;
 					case UnicodeType::INVALID:
-						assert(0); // FIXME throw exception
+						throw runtime_error("invalid string encoding");
 					}
 
 					append_chunk->SetCardinality(append_chunk->size() + 1);
-					payload_ptr += str_len;
+					payload.inc(str_len);
 				}
 				// FLUSH last chunk!
-				col_data.string_collection->count += append_chunk->size();
-				col_data.string_collection->chunks.push_back(
-						move(append_chunk));
-
+				if (append_chunk->size() > 0) {
+					col_data.string_collection->count += append_chunk->size();
+					col_data.string_collection->chunks.push_back(
+							move(append_chunk));
+				}
 				col_data.string_collection->Verify();
 			}
 				break;
@@ -694,15 +640,11 @@ private:
 			switch (page_hdr.data_page_header.definition_level_encoding) {
 			case Encoding::RLE: {
 				// read length of define payload, always
-				// TODO why is this not just a load?
-				uint32_t def_length;
-				memcpy(&def_length, payload_ptr, sizeof(def_length));
-				payload_ptr += sizeof(def_length);
-
+				uint32_t def_length = payload.read<uint32_t>();
+				payload.available(def_length);
 				col_data.dict_decoder = make_unique<RleBpDecoder>(
-						(const uint8_t*) payload_ptr, def_length, 1);
-
-				payload_ptr += def_length;
+						(const uint8_t*) payload.ptr, def_length, 1);
+				payload.inc(def_length);
 			}
 				break;
 			default:
@@ -712,32 +654,24 @@ private:
 
 			switch (page_hdr.data_page_header.encoding) {
 			case Encoding::RLE_DICTIONARY:
-			case Encoding::PLAIN_DICTIONARY: {		// deprecated
-
-				// TODO need to set this page size correctly too
-				auto enc_length = *((uint8_t*) payload_ptr);
-				//printf("col_idx=%llu\tenc_length = %d\n", col_idx, enc_length);
-				payload_ptr += sizeof(uint8_t);
+			case Encoding::PLAIN_DICTIONARY: {
+				auto enc_length = payload.read<uint8_t>();
 
 				col_data.offset_buf.resize(col_data.page_value_count * 4);
-				RleBpDecoder dict_decoder((const uint8_t*) payload_ptr,
-						page_hdr.uncompressed_page_size, enc_length);
 
-				col_data.defined_decoder = make_unique<RleBpDecoder>(
-						(const uint8_t*) payload_ptr,
-						page_hdr.uncompressed_page_size, enc_length);
+				RleBpDecoder dict_decoder((const uint8_t*) payload.ptr,
+						payload.len, enc_length);
 
-				// TODO fix for NULLs with GetBatchSpaced
-				auto n_decode = dict_decoder.GetBatch<uint32_t>(
+				dict_decoder.GetBatch<uint32_t>(
 						(unsigned int*) col_data.offset_buf.ptr,
 						col_data.page_value_count);
-				assert(n_decode == col_data.page_value_count);
 
 				break;
 			}
 			case Encoding::PLAIN:
 				// nothing here, see below
-				col_data.payload_ptr = payload_ptr;
+				// TODO
+				col_data.payload_ptr = payload.ptr;
 				break;
 
 			default:
@@ -808,12 +742,14 @@ private:
 				return;
 			}
 
-			// TODO column projections and filters
-			// read each column chunk into RAM
-
 			for (idx_t out_col_idx = 0; out_col_idx < output.column_count();
 					out_col_idx++) {
 				auto file_col_idx = data.column_ids[out_col_idx];
+
+				// this is a special case where we are not interested in the actual contents of the file
+				if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+					continue;
+				}
 
 				_prepare_chunk_buffer(data, file_col_idx);
 				// trigger the reading of a new page below
@@ -828,9 +764,14 @@ private:
 						current_group.num_rows - data.group_offset));
 		assert(output.size() > 0);
 
-		// TODO column projections and filters
-		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
+		for (idx_t out_col_idx = 0; out_col_idx < output.column_count();
+				out_col_idx++) {
 			auto file_col_idx = data.column_ids[out_col_idx];
+			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				Value constant_42 = Value::BIGINT(42);
+				output.data[out_col_idx].Reference(constant_42);
+				continue;
+			}
 
 			auto &col_data = data.column_data[file_col_idx];
 
@@ -853,19 +794,17 @@ private:
 
 				assert(current_batch_size > 0);
 
-				ByteBuffer defined;
+				ResizeableBuffer defined;
 				defined.resize(current_batch_size * 4);
-				auto n_decoded = col_data.dict_decoder->GetBatch(defined.ptr,
+				col_data.dict_decoder->GetBatch(defined.ptr,
 						current_batch_size);
-				assert(n_decoded == current_batch_size);
 				// TODO should we just increment a pointer on non-null?
 
 				switch (col_data.page_encoding) {
 				case Encoding::RLE_DICTIONARY:
 				case Encoding::PLAIN_DICTIONARY: {
-					// TODO uuugly
 					auto offsets_ptr = (uint32_t*) (col_data.offset_buf.ptr
-							+ col_data.page_offset * 4);
+							+ col_data.page_offset * sizeof(uint32_t));
 
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
@@ -907,31 +846,32 @@ private:
 
 						// the strings can be anywhere in the collection so just reference it all
 						for (auto &chunk : col_data.string_collection->chunks) {
-							StringVector::AddHeapReference(output.data[out_col_idx],
-									chunk->data[0]);
+							StringVector::AddHeapReference(
+									output.data[out_col_idx], chunk->data[0]);
 						}
 
+						auto out_data_ptr = FlatVector::GetData<string_t>(
+								output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (!defined.ptr[i]) {
 								FlatVector::SetNull(output.data[out_col_idx],
 										i + output_offset, true);
 							} else {
-								// TODO this should be an exception, too
-								auto dict_offset = offsets_ptr[i];
-								//FlatVector::SetNull(output.data[col_idx], i + output_offset, true);
-
-								assert(
-										dict_offset
-												< col_data.string_collection->count);
+								if (offsets_ptr[i]
+										>= col_data.string_collection->count) {
+									throw runtime_error(
+											"string dictionary offset out of bounds");
+								}
 								auto &chunk =
-										col_data.string_collection->chunks[dict_offset
+										col_data.string_collection->chunks[offsets_ptr[i]
 												/ STANDARD_VECTOR_SIZE];
 								auto &vec = chunk->data[0];
 
-								FlatVector::GetData<string_t>(
-										output.data[out_col_idx])[i + output_offset] =
-										FlatVector::GetData<string_t>(vec)[dict_offset
+								out_data_ptr[i + output_offset] =
+										FlatVector::GetData<string_t>(vec)[offsets_ptr[i]
 												% STANDARD_VECTOR_SIZE];
+
+								// TODO two passes with gather?
 							}
 						}
 					}
@@ -941,9 +881,6 @@ private:
 								SQLTypeToString(data.sql_types[file_col_idx]));
 					}
 
-//					for (idx_t i = n_read; i < n_read + this_n; i++) {
-//						FlatVector::SetNull(output.data[col_idx], i, true);
-//					}
 					break;
 				}
 					// TODO various issues remain here
@@ -991,8 +928,9 @@ private:
 						break;
 					case SQLTypeId::DOUBLE:
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							FlatVector::GetData<double>(output.data[out_col_idx])[i
-									+ output_offset] = 0; //((double*) col_data.payload_ptr)[i
+							FlatVector::GetData<double>(
+									output.data[out_col_idx])[i + output_offset] =
+									0; //((double*) col_data.payload_ptr)[i
 							//						+ col_data.page_offset];
 						}
 
