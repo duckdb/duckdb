@@ -1,5 +1,6 @@
 add_subdirectory(aggregate)
 add_subdirectory(append)
+add_subdirectory(blob)
 add_subdirectory(catalog)
 add_subdirectory(collate)
 add_subdirectory(create)

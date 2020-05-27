@@ -1,4 +1,5 @@
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -96,6 +97,10 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 	if (from.id == SQLTypeId::SQLNULL || from.id == SQLTypeId::UNKNOWN) {
 		// NULL expression or parameter expression can be cast to anything
 		return TargetTypeCost(to);
+	}
+	if (from.id == SQLTypeId::BLOB && to.id == SQLTypeId::VARCHAR) {
+		//Implicit cast not allowed from BLOB to VARCHAR
+		return -1;
 	}
 	if (to.id == SQLTypeId::VARCHAR) {
 		// everything can be cast to VARCHAR, but this cast has a high cost
