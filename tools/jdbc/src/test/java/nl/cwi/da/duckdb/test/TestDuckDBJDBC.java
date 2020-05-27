@@ -410,12 +410,11 @@ public class TestDuckDBJDBC {
 				+ "SELECT t0.c0 FROM t0, t1;";
 		Connection con = DriverManager.getConnection("jdbc:duckdb:");
 		for (String s : fileContent.split("\n")) {
-			try (Statement st = con.createStatement()) {
-				try {
-					st.execute(s);
-				} catch (Exception e) {
-					// e.printStackTrace();
-				}
+			Statement st = con.createStatement();
+			try {
+				st.execute(s);
+			} catch (Exception e) {
+				// e.printStackTrace();
 			}
 		}
 		con.close();
