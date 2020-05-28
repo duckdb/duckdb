@@ -345,12 +345,12 @@ TEST_CASE("Test BLOBs with various SQL operators", "[blob]") {
     REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs2 VALUES ('hello', 0), ('\\xAAFFAA', 100), (NULL, 0), ('r', 200)"));
 
     // group by blobs.b, explicit JOIN
-    result = con.Query("SELECT R.b, SUM(R.g) FROM blobs as R JOIN blobs2 AS L ON R.b=L.b GROUP BY R.b ORDER BY R.b");
+    result = con.Query("SELECT L.b, SUM(L.g) FROM blobs as L JOIN blobs2 AS R ON L.b=R.b GROUP BY L.b ORDER BY L.b");
     REQUIRE(CHECK_COLUMN(result, 0, {"hello", 	"r", 		  Value::BLOB("\\xAAFFAA")}));
     REQUIRE(CHECK_COLUMN(result, 1, {Value(3.0), Value(20.0), Value(10.0)}));
 
     // group by blobs2.b, implicit JOIN
-    result = con.Query("SELECT L.b, SUM(L.g) FROM blobs as R, blobs2 AS L WHERE R.b=L.b GROUP BY L.b ORDER BY L.b");
+    result = con.Query("SELECT R.b, SUM(R.g) FROM blobs as L, blobs2 AS R WHERE L.b=R.b GROUP BY R.b ORDER BY R.b");
     REQUIRE(CHECK_COLUMN(result, 0, {"hello", 	"r", 		   Value::BLOB("\\xAAFFAA")}));
     REQUIRE(CHECK_COLUMN(result, 1, {Value(0.0), Value(400.0), Value(200.0)}));
 }
