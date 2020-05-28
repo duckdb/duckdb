@@ -211,7 +211,7 @@ struct CastFromBlob {
 	}
 
 	static void ToHexString(duckdb::string_t input, duckdb::string_t &output);
-	static string FromHexToBytes(string input);
+	static void FromHexToBytes(duckdb::string_t input, duckdb::string_t &output);
 };
 template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
 
