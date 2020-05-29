@@ -253,7 +253,11 @@ Value Value::BLOB(string data, bool must_cast) {
 	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
 	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
 	if(must_cast && data.size() >= 2 && data.substr(0,2) == "\\x") {
-		result.str_value = CastFromBlob::FromHexToBytes(data);
+		size_t hex_size = (data.size() - 2) / 2;
+		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
+		string_t hex_str(hex_data.get(), hex_size);
+		CastFromBlob::FromHexToBytes(string_t(data), hex_str);
+		result.str_value = string(hex_str.GetData());
 	} else {
 		// raw string
 		result.str_value = data;
