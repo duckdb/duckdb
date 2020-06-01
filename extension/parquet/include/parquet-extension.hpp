@@ -9,5 +9,4 @@ public:
 	void Load(DuckDB &db) override;
 };
 
-
 } // namespace duckdb

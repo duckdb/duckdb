@@ -5,15 +5,9 @@ include_directories(../../../test/include)
 add_executable(parquet_test parquet_test.cpp)
 
 if(NOT WIN32 AND NOT SUN)
-  target_link_libraries(parquet_test
-                        parquet_extension
-                        duckdb
-                        test_helpers
+  target_link_libraries(parquet_test parquet_extension duckdb test_helpers
                         dbgen)
 else()
-target_link_libraries(parquet_test
-                      parquet_extension
-                      duckdb_static
-                      test_helpers
-                      dbgen)
+  target_link_libraries(parquet_test parquet_extension duckdb_static
+                        test_helpers dbgen)
 endif()

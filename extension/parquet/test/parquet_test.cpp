@@ -12,7 +12,6 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	DuckDB db(nullptr);
 	db.LoadExtension<ParquetExtension>();
 
-
 	Connection con(db);
 
 	con.EnableQueryVerification();
@@ -148,7 +147,7 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	Connection con(db);
 
 	auto result = con.Query("SELECT * FROM "
-	          "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet') limit 10");
+	                        "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet') limit 10");
 	result->Print();
 
 	con.Query("CREATE VIEW lineitem AS SELECT * FROM "
@@ -156,4 +155,3 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
 }
-
