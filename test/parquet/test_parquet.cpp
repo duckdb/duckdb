@@ -9,7 +9,8 @@ using namespace std;
 
 TEST_CASE("Test basic parquet reading", "[parquet]") {
 	DuckDB db(nullptr);
-	Parquet::Init(db);
+	db.LoadExtension<ParquetExtension>();
+
 
 	Connection con(db);
 

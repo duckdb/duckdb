@@ -22,8 +22,6 @@
 
 #include "snappy/snappy.h"
 
-//#include "lemire_fastunpack.hpp"
-
 using namespace duckdb;
 using namespace std;
 
@@ -670,7 +668,6 @@ private:
 			}
 			case Encoding::PLAIN:
 				// nothing here, see below
-				// TODO
 				col_data.payload_ptr = payload.ptr;
 				break;
 
@@ -753,7 +750,6 @@ private:
 
 				_prepare_chunk_buffer(data, file_col_idx);
 				// trigger the reading of a new page below
-				// TODO this is a bit dirty
 				data.column_data[file_col_idx].page_value_count = 0;
 			}
 		}
@@ -798,7 +794,7 @@ private:
 				defined.resize(current_batch_size * 4);
 				col_data.dict_decoder->GetBatch(defined.ptr,
 						current_batch_size);
-				// TODO should we just increment a pointer on non-null?
+				// TODO just increment a pointer on non-null?
 
 				switch (col_data.page_encoding) {
 				case Encoding::RLE_DICTIONARY:
@@ -842,7 +838,9 @@ private:
 								output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::VARCHAR: {
-						assert(col_data.string_collection); // TODO make this an exception
+						if (!col_data.string_collection) {
+							throw runtime_error("Did not see a dictionary for strings. Corrupt file?");
+						}
 
 						// the strings can be anywhere in the collection so just reference it all
 						for (auto &chunk : col_data.string_collection->chunks) {
@@ -870,8 +868,6 @@ private:
 								out_data_ptr[i + output_offset] =
 										FlatVector::GetData<string_t>(vec)[offsets_ptr[i]
 												% STANDARD_VECTOR_SIZE];
-
-								// TODO two passes with gather?
 							}
 						}
 					}
@@ -966,7 +962,7 @@ private:
 	}
 };
 
-void Parquet::Init(DuckDB &db) {
+void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun, true);
 
@@ -975,3 +971,4 @@ void Parquet::Init(DuckDB &db) {
 	conn.context->catalog.CreateTableFunction(*conn.context, &info);
 	conn.context->transaction.Commit();
 }
+

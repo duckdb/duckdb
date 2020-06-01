@@ -1,10 +1,13 @@
 #pragma once
 
+#include "duckdb/main/extension.hpp"
+
 namespace duckdb {
-class DuckDB;
-class Parquet {
+
+class ParquetExtension : public Extension {
 public:
-	static void Init(DuckDB& db);
+	void Load(DuckDB &db) override;
 };
 
-}
+
+} // namespace duckdb

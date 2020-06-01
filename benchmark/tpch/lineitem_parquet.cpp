@@ -31,7 +31,7 @@ FINISH_BENCHMARK(LineitemParquet)
 
 DUCKDB_BENCHMARK(LineitemParquetProjectionDirect, "[parquet]")
 void Load(DuckDBBenchmarkState *state) override {
-	Parquet::Init(state->db);
+	state->db.LoadExtension<ParquetExtension>();
 }
 string GetQuery() override {
 	return "SELECT SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM "
@@ -50,7 +50,7 @@ FINISH_BENCHMARK(LineitemParquetProjectionDirect)
 
 DUCKDB_BENCHMARK(LineitemParquetProjectionView, "[parquet]")
 void Load(DuckDBBenchmarkState *state) override {
-	Parquet::Init(state->db);
+	state->db.LoadExtension<ParquetExtension>();
 	auto res = state->conn.Query("CREATE OR REPLACE VIEW lineitem AS SELECT * FROM "
 	                             "parquet_scan('third_party/miniparquet/test/lineitemsf1.snappy.parquet')");
 }
