@@ -1,4 +1,5 @@
-#include "duckdb.h"
+#include "duckdb.hpp"
+#include "parquet-extension.hpp"
 
 #include <Rdefines.h>
 #include <algorithm>
@@ -720,6 +721,7 @@ SEXP duckdb_startup_R(SEXP dbdirsexp, SEXP readonlysexp) {
 	} catch (...) {
 		Rf_error("duckdb_startup_R: Failed to open database");
 	}
+	dbaddr->LoadExtension<ParquetExtension>();
 
 	DataFrameScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
