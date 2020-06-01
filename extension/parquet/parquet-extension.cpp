@@ -1,4 +1,4 @@
-#include "duckdb_miniparquet.hpp"
+#include "parquet-extension.hpp"
 
 #include <string>
 #include <vector>
@@ -11,10 +11,10 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb.hpp"
 
 #include "parquet/parquet_types.h"
 #include "protocol/TCompactProtocol.h"
@@ -201,10 +201,7 @@ private:
 		// The int is encoded as a vlq-encoded value.
 		uint32_t indicator_value;
 
-		// TODO check in varint decode if we have enough buffer left
 		buffer += VarintDecode(buffer, &indicator_value);
-
-		// TODO check a bunch of lengths here against the standard
 
 		// lsb indicates if it is a literal run or repeated run
 		bool is_literal = indicator_value & 1;

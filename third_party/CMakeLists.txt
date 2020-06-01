@@ -20,5 +20,3 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(tpce-tool)
 
 endif()
-
-add_subdirectory(miniparquet)

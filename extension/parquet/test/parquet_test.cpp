@@ -1,11 +1,12 @@
-#include "duckdb_miniparquet.hpp"
+#define CATCH_CONFIG_MAIN
 #include "catch.hpp"
+#include "parquet-extension.hpp"
+#include "duckdb.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "dbgen.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test basic parquet reading", "[parquet]") {
 	DuckDB db(nullptr);
@@ -143,11 +144,16 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 
 TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	DuckDB db(nullptr);
-	Parquet::Init(db);
+	db.LoadExtension<ParquetExtension>();
 	Connection con(db);
 
+	auto result = con.Query("SELECT * FROM "
+	          "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet') limit 10");
+	result->Print();
+
 	con.Query("CREATE VIEW lineitem AS SELECT * FROM "
-	          "parquet_scan('third_party/miniparquet/test/lineitemsf1.snappy.parquet')");
-	auto result = con.Query(tpch::get_query(1));
+	          "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet')");
+	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
 }
+

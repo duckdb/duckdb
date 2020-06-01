@@ -2,7 +2,7 @@
 #include "compare_result.hpp"
 #include "dbgen.hpp"
 #include "duckdb_benchmark_macro.hpp"
-#include "duckdb_miniparquet.hpp"
+#include "parquet-extension.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -11,9 +11,9 @@ using namespace std;
 
 DUCKDB_BENCHMARK(LineitemParquet, "[parquet]")
 void Load(DuckDBBenchmarkState *state) override {
-	Parquet::Init(state->db);
+	state->db.LoadExtension<ParquetExtension>();
 	auto res = state->conn.Query("CREATE OR REPLACE VIEW lineitem AS SELECT * FROM "
-	                             "parquet_scan('third_party/miniparquet/test/lineitemsf1.snappy.parquet')");
+	                             "parquet_scan('third_party/miniparquet/test/lineitem-sf1.uncompressed.parquet')");
 }
 string GetQuery() override {
 	return tpch::get_query(1);

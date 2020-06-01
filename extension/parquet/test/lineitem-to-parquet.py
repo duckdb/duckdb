@@ -4,7 +4,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import *
 import glob
 
-parquet_compression = 'uncompressed'
+parquet_compression = 'snappy'
 
 outdir = tempfile.mkdtemp()
 parquet_folder = os.path.join(outdir, "out.parquet")
