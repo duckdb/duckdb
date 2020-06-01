@@ -27,7 +27,7 @@ def generate_amalgamation(source_file, header_file):
     # now concat all the source/header files while removing known files
 
     out = open(temp_source, "w")
-    out.write("// Parquet reader amalgamation\n\n")
+    out.write("// Parquet reader amalgamation\n\n#include \"%s\"\n" % os.path.basename(header_file))
     out.close()
 
     def myglob(path, pattern):
@@ -37,7 +37,7 @@ def generate_amalgamation(source_file, header_file):
         os.chdir(wd)
         return files
 
-    headers = myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h")
+    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h")
 
     def rewrite(file_in, file_out):
         print(file_in)
@@ -96,6 +96,7 @@ if __name__ == "__main__":
             header_file = os.path.join(*arg.split('=', 1)[1].split('/'))
         elif arg.startswith('--source='):
             source_file = os.path.join(*arg.split('=', 1)[1].split('/'))
+
     if not os.path.exists(amal_dir):
         os.makedirs(amal_dir)
 
