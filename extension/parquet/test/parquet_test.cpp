@@ -18,11 +18,11 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 
 	SECTION("userdata1.parquet") {
 
-		auto result = con.Query("SELECT COUNT(*) FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+		auto result = con.Query("SELECT COUNT(*) FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 
 		con.Query(
-		    "CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('third_party/miniparquet/test/userdata1.parquet')");
+		    "CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
 
 		result = con.Query("SELECT COUNT(*) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
@@ -147,11 +147,11 @@ TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 	Connection con(db);
 
 	auto result = con.Query("SELECT * FROM "
-	                        "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet') limit 10");
+	                        "parquet_scan('extension/parquet/test/lineitem-sf1.snappy.parquet') limit 10");
 	result->Print();
 
 	con.Query("CREATE VIEW lineitem AS SELECT * FROM "
-	          "parquet_scan('third_party/miniparquet/test/lineitem-sf1.snappy.parquet')");
+	          "parquet_scan('extension/parquet/test/lineitem-sf1.snappy.parquet')");
 	result = con.Query(tpch::get_query(1));
 	COMPARE_CSV(result, tpch::get_answer(1, 1), true);
 }
