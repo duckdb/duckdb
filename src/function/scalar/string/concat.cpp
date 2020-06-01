@@ -248,7 +248,11 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat.varargs = SQLType::VARCHAR;
 	set.AddFunction(concat);
 
-	set.AddFunction(ScalarFunction("||", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
+    ScalarFunctionSet concat_op("||");
+    concat_op.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
+    concat_op.AddFunction(ScalarFunction({SQLType::BLOB, SQLType::BLOB}, SQLType::BLOB, concat_operator));
+    set.AddFunction(concat_op);
+
 
 	ScalarFunction concat_ws =
 	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);

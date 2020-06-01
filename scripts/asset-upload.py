@@ -1,16 +1,13 @@
 import json, os, sys, glob, mimetypes, urllib.request
 
 api_url = 'https://api.github.com/repos/cwida/duckdb/'
-tag = 'master-builds'
 
 if (len(sys.argv) < 2):
 	print("Usage: [filename1] [filename2] ... ")
 	exit(1)
 
 # this essentially should run on release tag builds to fill up release assets and master
-# so check travis tag?
 
-# TODO check TRAVIS_TAG
 
 branch = os.getenv("TRAVIS_BRANCH", "")
 if branch != "master":
@@ -21,6 +18,9 @@ pr = os.getenv("TRAVIS_PULL_REQUEST", "")
 if pr != "false":
 	print("Not running on PRs. Exiting.")
 	exit(0)
+
+tag = os.getenv("TRAVIS_TAG", "master-builds")
+print("Running on tag %s" % tag)
 
 # sha = os.getenv("TRAVIS_COMMIT", "")
 # if sha == "":
