@@ -7,6 +7,7 @@
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
+#include "parquet-extension.hpp"
 
 namespace py = pybind11;
 
@@ -597,6 +598,17 @@ struct DuckDBPyConnection {
 		return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 	}
 
+
+	unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
+		if (!connection) {
+			throw runtime_error("connection closed");
+		};
+		vector<Value> params;
+		params.push_back(Value(filename));
+		return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
+	}
+
+
 	DuckDBPyConnection *unregister_df(string name) {
 		registered_dfs[name] = py::none();
 		return this;
@@ -677,6 +689,7 @@ struct DuckDBPyConnection {
 		if (read_only)
 			config.access_mode = AccessMode::READ_ONLY;
 		res->database = make_unique<DuckDB>(database, &config);
+		res->database->LoadExtension<ParquetExtension>();
 		res->connection = make_unique<Connection>(*res->database);
 
 		PandasScanFunction scan_fun;
@@ -751,6 +764,10 @@ struct DuckDBPyRelation {
 
 	static unique_ptr<DuckDBPyRelation> from_csv_auto(string filename) {
 		return default_connection()->from_csv_auto(filename);
+	}
+
+	static unique_ptr<DuckDBPyRelation> from_parquet(string filename) {
+		return default_connection()->from_parquet(filename);
 	}
 
 	unique_ptr<DuckDBPyRelation> project(string expr) {
@@ -937,6 +954,8 @@ PYBIND11_MODULE(duckdb, m) {
 	        .def("from_df", &DuckDBPyConnection::from_df, "some doc string for from_df", py::arg("value"))
 	        .def("from_csv_auto", &DuckDBPyConnection::from_csv_auto, "some doc string for from_csv_auto",
 	             py::arg("filename"))
+	       	.def("from_parquet", &DuckDBPyConnection::from_parquet, "some doc string for from_parquet",
+	             py::arg("filename"))
 	        .def("df", &DuckDBPyConnection::from_df, "some doc string for df", py::arg("value"))
 	        .def("commit", &DuckDBPyConnection::commit)
 	        .def("rollback", &DuckDBPyConnection::rollback)
@@ -994,6 +1013,7 @@ PYBIND11_MODULE(duckdb, m) {
 
 	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "some doc string for from_csv_auto", py::arg("filename"));
+	m.def("from_parquet", &DuckDBPyRelation::from_parquet, "some doc string for from_parquet", py::arg("filename"));
 	m.def("df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
 	m.def("filter", &DuckDBPyRelation::filter_df, "some doc string for filter", py::arg("df"), py::arg("filter_expr"));
 	m.def("project", &DuckDBPyRelation::project_df, "some doc string for project", py::arg("df"),

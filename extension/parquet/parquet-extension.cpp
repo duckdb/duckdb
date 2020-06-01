@@ -1,5 +1,3 @@
-#include "parquet-extension.hpp"
-
 #include <string>
 #include <vector>
 #include <bitset>
@@ -7,6 +5,9 @@
 #include <cstring>
 #include <iostream>
 
+#include "parquet-extension.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -14,12 +15,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
+#endif
 
-#include "parquet/parquet_types.h"
-#include "protocol/TCompactProtocol.h"
-#include "transport/TBufferTransports.h"
-
-#include "snappy/snappy.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/transport/TBufferTransports.h"
+#include "parquet_types.h"
+#include "snappy.h"
 
 using namespace duckdb;
 using namespace std;

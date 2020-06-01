@@ -21,8 +21,7 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		auto result = con.Query("SELECT COUNT(*) FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 
-		con.Query(
-		    "CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
+		con.Query("CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
 
 		result = con.Query("SELECT COUNT(*) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
