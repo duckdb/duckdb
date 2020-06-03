@@ -25,10 +25,33 @@ add_jar(duckdb_jdbc
         GENERATE_NATIVE_HEADERS
         duckdb-native)
 
+set(OS_NAME "")
+if (APPLE)
+	set(OS_NAME "osx")
+endif()
+if (WIN32)
+	set(OS_NAME "windows")
+endif()
+if (UNIX AND NOT APPLE)
+	set(OS_NAME "linux") # sorry BSD
+endif()
+
+set(JVM_BITNESS "")
+execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d64 -version RESULT_VARIABLE JAVA_64_RES ERROR_QUIET)
+if (${JAVA_64_RES} EQUAL 0)
+	set(JVM_BITNESS "amd64")
+endif()
+
+execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d32 -version RESULT_VARIABLE JAVA_32_RES ERROR_QUIET)
+if (${JVM_BITNESS} STREQUAL "" AND ${JAVA_32_RES} EQUAL 0)
+	set(JVM_BITNESS "i386")
+endif()
+
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native duckdb_static)
-set_target_properties(duckdb_java PROPERTIES SUFFIX ".so")
+string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
+set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
 add_custom_command(OUTPUT dummy_jdbc_target

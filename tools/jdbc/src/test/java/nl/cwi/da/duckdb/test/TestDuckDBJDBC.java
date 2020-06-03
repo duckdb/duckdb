@@ -579,7 +579,6 @@ public class TestDuckDBJDBC {
 	}
 
 	public static void main(String[] args) throws Exception {
-				
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
 		for (Method m : methods) {
