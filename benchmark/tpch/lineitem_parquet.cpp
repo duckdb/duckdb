@@ -35,7 +35,7 @@ void Load(DuckDBBenchmarkState *state) override {
 }
 string GetQuery() override {
 	return "SELECT SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM "
-	       "parquet_scan('extension/parquet/test/lineitemsf1.snappy.parquet')";
+	       "parquet_scan('extension/parquet/test/lineitem-sf1.uncompressed.parquet')";
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
@@ -52,7 +52,7 @@ DUCKDB_BENCHMARK(LineitemParquetProjectionView, "[parquet]")
 void Load(DuckDBBenchmarkState *state) override {
 	state->db.LoadExtension<ParquetExtension>();
 	auto res = state->conn.Query("CREATE OR REPLACE VIEW lineitem AS SELECT * FROM "
-	                             "parquet_scan('extension/parquet/test/lineitemsf1.snappy.parquet')");
+	                             "parquet_scan('extension/parquet/test/lineitem-sf1.uncompressed.parquet')");
 }
 string GetQuery() override {
 	return "SELECT SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM lineitem";
