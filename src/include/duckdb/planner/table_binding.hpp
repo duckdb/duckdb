@@ -57,17 +57,6 @@ public:
 	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
 };
 
-struct TableFunctionBinding : public Binding {
-	TableFunctionBinding(const string &alias, BoundTableFunction &function, idx_t index);
-	BoundTableFunction &function;
-	unordered_map<string, uint64_t> name_map;
-
-public:
-	bool HasMatchingBinding(const string &column_name) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	void GenerateAllColumnExpressions(BindContext &context, vector<unique_ptr<ParsedExpression>> &select_list) override;
-};
-
 //! Represents a generic binding with types and names
 struct GenericBinding : public Binding {
 	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, idx_t index);

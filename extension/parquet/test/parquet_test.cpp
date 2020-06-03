@@ -103,15 +103,17 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	}
 
 	SECTION("userdata1.parquet") {
-		con.DisableQueryVerification(); // TOO slow
 
 		auto result = con.Query("SELECT COUNT(*) FROM  parquet_scan('extension/parquet/test/userdata1.parquet')");
+
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 
 		con.Query("CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
 
 		result = con.Query("SELECT COUNT(*) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
+
+		con.DisableQueryVerification(); // TOO slow
 
 		result = con.Query("SELECT COUNT(registration_dttm), COUNT(id), COUNT(first_name), COUNT(last_name), "
 		                   "COUNT(email), COUNT(gender), COUNT(ip_address), COUNT(cc), COUNT(country), "

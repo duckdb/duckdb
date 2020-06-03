@@ -154,32 +154,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		auto &fun = (LogicalTableFunction &)op;
 		if (!everything_referenced && fun.function->supports_projection) {
 			// table producing function: figure out which columns are referenced
-			auto &bind_data = (TableFunctionData &)*fun.bind_data;
-
-			// FIXME this is ugly :/
-			map<idx_t, string> name_map;
-			map<idx_t, SQLType> type_map;
-			for (idx_t i = 0; i < bind_data.column_ids.size(); i++) {
-				name_map[bind_data.column_ids[i]] = fun.names[i];
-				type_map[bind_data.column_ids[i]] = fun.return_types[i];
-			}
-
-			ClearUnusedExpressions(bind_data.column_ids, fun.table_index);
-
-			fun.names.clear();
-			fun.return_types.clear();
-
-			for (idx_t i = 0; i < bind_data.column_ids.size(); i++) {
-				fun.names.push_back(name_map[bind_data.column_ids[i]]);
-				fun.return_types.push_back(type_map[bind_data.column_ids[i]]);
-			}
-
-			if (bind_data.column_ids.size() == 0) {
-				// see above for this special case
-				bind_data.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-				fun.names.push_back("count_dummy");
-				fun.return_types.push_back(SQLType::BIGINT);
-				fun.ResolveOperatorTypes();
+			ClearUnusedExpressions(fun.column_ids, fun.table_index);
+			// see above for this special case
+			if (fun.column_ids.size() == 0) {
+				fun.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 			}
 		}
 		return;

@@ -7,20 +7,10 @@ using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableFunction &ref) {
 
-	vector<SQLType> return_types;
-	vector<string> names;
-
-	if (ref.function->supports_projection) {
-		auto &column_ids = ((TableFunctionData &)*ref.bind_data).column_ids;
-		for (auto &col_idx : column_ids) {
-			return_types.push_back(ref.return_types[col_idx]);
-			names.push_back(ref.names[col_idx]);
-		}
-	} else {
-		return_types = ref.return_types;
-		names = ref.names;
+	auto logical_fun = make_unique<LogicalTableFunction>(ref.function, ref.bind_index, move(ref.bind_data),
+	                                                     move(ref.parameters), ref.return_types, ref.names);
+	for (idx_t i = 0; i < ref.return_types.size(); i++) {
+		logical_fun->column_ids.push_back(i);
 	}
-
-	return make_unique<LogicalTableFunction>(ref.function, ref.bind_index, move(ref.bind_data), move(ref.parameters),
-	                                         return_types, names);
+	return logical_fun;
 }

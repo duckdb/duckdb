@@ -6,15 +6,20 @@ using namespace duckdb;
 using namespace std;
 
 vector<ColumnBinding> LogicalTableFunction::GetColumnBindings() {
-	return GenerateColumnBindings(table_index, return_types.size());
+	vector<ColumnBinding> result;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		result.push_back(ColumnBinding(table_index, i));
+	}
+	return result;
 }
 
 void LogicalTableFunction::ResolveTypes() {
-	if (column_ids.size() == 0) {
-		column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	}
-	for (auto &type : return_types) {
-		types.push_back(GetInternalType(type));
+	for (auto col_idx : column_ids) {
+		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			types.push_back(TypeId::INT64);
+			continue;
+		}
+		types.push_back(GetInternalType(return_types[col_idx]));
 	}
 }
 

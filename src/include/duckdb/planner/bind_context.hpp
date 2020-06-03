@@ -51,8 +51,6 @@ public:
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
 
-	void AddTableFunctionBinding(idx_t index, const string &alias, BoundTableFunction &function);
-
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
