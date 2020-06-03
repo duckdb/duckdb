@@ -237,12 +237,13 @@ matrix:
 
       script:
         - python scripts/amalgamation.py
+        - python extension/parquet/parquet_amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
-        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
+        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.* parquet-extension.*)
         # - python tools/upload-s3.py src-amalgamation build/duckdb.zip
         - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 
