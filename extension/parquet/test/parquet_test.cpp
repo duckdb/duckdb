@@ -81,9 +81,31 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		                      Value::BIGINT(Timestamp::FromString("2009-01-01 00:01:00"))}));
 	}
 
-	SECTION("userdata1.parquet") {
+	// this file was created with spark using the data-types.py script
+	SECTION("data-types.parquet") {
+		auto result = con.Query("SELECT * FROM parquet_scan('extension/parquet/test/data-types.parquet')");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 42, -127, 127, Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), 43, -32767, 32767, Value()}));
+		REQUIRE(CHECK_COLUMN(result, 2, {Value(), 44, -2147483647, 2147483647, Value()}));
+		REQUIRE(CHECK_COLUMN(
+		    result, 3,
+		    {Value(), 45, Value::BIGINT(-9223372036854775807), Value::BIGINT(9223372036854775807), Value()}));
+		REQUIRE(CHECK_COLUMN(result, 4, {Value(), 4.6, -4.6, Value(), Value()}));
+		REQUIRE(CHECK_COLUMN(result, 5, {Value(), 4.7, -4.7, Value(), Value()}));
+		// REQUIRE(CHECK_COLUMN(result, 6, {Value(), 4.8, -128, 127, Value()})); // decimal :/
+		REQUIRE(CHECK_COLUMN(result, 7, {Value(), "49", Value(), Value(), Value()}));
+		// REQUIRE(CHECK_COLUMN(result, 8, {Value(), "50", -128, 127, Value()})); // blob :/
+		REQUIRE(CHECK_COLUMN(result, 9, {Value(), true, false, Value(), Value()}));
+		REQUIRE(CHECK_COLUMN(
+		    result, 10,
+		    {Value(), Value::BIGINT(Timestamp::FromString("2019-11-26 20:11:42.501")), Value(), Value(), Value()}));
+		// REQUIRE(CHECK_COLUMN(result, 11, {Value(), false, -128, 127, Value()})); // date :/
+	}
 
-		auto result = con.Query("SELECT COUNT(*) FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
+	SECTION("userdata1.parquet") {
+		con.DisableQueryVerification(); // TOO slow
+
+		auto result = con.Query("SELECT COUNT(*) FROM  parquet_scan('extension/parquet/test/userdata1.parquet')");
 		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
 
 		con.Query("CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('extension/parquet/test/userdata1.parquet')");
@@ -99,13 +121,13 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {1000}));
 		REQUIRE(CHECK_COLUMN(result, 2, {1000}));
 		REQUIRE(CHECK_COLUMN(result, 3, {1000}));
-		REQUIRE(CHECK_COLUMN(result, 4, {0}));
+		REQUIRE(CHECK_COLUMN(result, 4, {1000}));
 		REQUIRE(CHECK_COLUMN(result, 5, {1000}));
-		REQUIRE(CHECK_COLUMN(result, 6, {0}));
-		REQUIRE(CHECK_COLUMN(result, 7, {0}));
+		REQUIRE(CHECK_COLUMN(result, 6, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 7, {1000}));
 		REQUIRE(CHECK_COLUMN(result, 8, {1000}));
-		REQUIRE(CHECK_COLUMN(result, 9, {0}));
-		REQUIRE(CHECK_COLUMN(result, 10, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 9, {1000}));
+		REQUIRE(CHECK_COLUMN(result, 10, {932}));
 		REQUIRE(CHECK_COLUMN(result, 11, {1000}));
 		REQUIRE(CHECK_COLUMN(result, 12, {994}));
 
@@ -144,8 +166,14 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {"Meyer"}));
 
 		result = con.Query("SELECT MIN(email), MAX(email) FROM userdata1");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"wweaver2r@google.de"}));
+
+		result = con.Query("SELECT FIRST(email) OVER w, LAST(email) OVER w FROM userdata1 WINDOW w AS (ORDER "
+		                   "BY id RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"ajordan0@com.com"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"jmeyerrr@flavors.me"}));
 
 		result = con.Query("SELECT MIN(gender), MAX(gender) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {""}));
@@ -158,12 +186,25 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {"Female"}));
 
 		result = con.Query("SELECT MIN(ip_address), MAX(ip_address) FROM userdata1");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 0, {"0.14.221.162"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"99.159.168.233"}));
+
+		result = con.Query(
+		    "SELECT FIRST(ip_address) OVER w, LAST(ip_address) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		    "RANGE BETWEEN UNBOUNDED "
+		    "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"1.197.201.2"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"217.1.147.132"}));
 
 		result = con.Query("SELECT MIN(cc), MAX(cc) FROM userdata1");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"67718647521473678"}));
+
+		result = con.Query("SELECT FIRST(cc) OVER w, LAST(cc) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		                   "RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"6759521864920116"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"374288099198540"}));
 
 		result = con.Query("SELECT MIN(country), MAX(country) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {"\"Bonaire"}));
@@ -176,12 +217,25 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {"China"}));
 
 		result = con.Query("SELECT MIN(birthdate), MAX(birthdate) FROM userdata1");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
-		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 0, {""}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"9/9/1981"}));
+
+		result =
+		    con.Query("SELECT FIRST(birthdate) OVER w, LAST(birthdate) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		              "RANGE BETWEEN UNBOUNDED "
+		              "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {"3/8/1971"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {""}));
 
 		result = con.Query("SELECT MIN(salary), MAX(salary) FROM userdata1");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-		REQUIRE(CHECK_COLUMN(result, 1, {0}));
+		REQUIRE(CHECK_COLUMN(result, 0, {12380.490000}));
+		REQUIRE(CHECK_COLUMN(result, 1, {286592.990000}));
+
+		result = con.Query("SELECT FIRST(salary) OVER w, LAST(salary) OVER w FROM userdata1 WINDOW w AS (ORDER BY id "
+		                   "RANGE BETWEEN UNBOUNDED "
+		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {49756.530000}));
+		REQUIRE(CHECK_COLUMN(result, 1, {222561.130000}));
 
 		result = con.Query("SELECT MIN(title), MAX(title) FROM userdata1");
 		REQUIRE(CHECK_COLUMN(result, 0, {""}));
@@ -201,7 +255,7 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		                   "id RANGE BETWEEN UNBOUNDED "
 		                   "PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1");
 		REQUIRE(CHECK_COLUMN(result, 0, {"1E+02"}));
-		REQUIRE(CHECK_COLUMN(result, 1, {"1E+02"}));
+		REQUIRE(CHECK_COLUMN(result, 1, {""}));
 	}
 }
 //
