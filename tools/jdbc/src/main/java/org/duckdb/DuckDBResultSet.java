@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.Array;
@@ -160,7 +161,7 @@ public class DuckDBResultSet implements ResultSet {
 	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
 		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
 		buf.order(ByteOrder.LITTLE_ENDIAN);
-		buf.position((chunk_idx - 1) * typeWidth);
+		((Buffer)buf).position((chunk_idx - 1) * typeWidth);
 		return buf;
 	}
 
