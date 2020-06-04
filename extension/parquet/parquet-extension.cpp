@@ -15,12 +15,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
-#endif
 
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 #include "parquet_types.h"
 #include "snappy.h"
+#endif
 
 using namespace duckdb;
 using namespace std;
