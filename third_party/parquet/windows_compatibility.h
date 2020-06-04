@@ -39,5 +39,7 @@
 
 #undef OPTIONAL // WTF?!
 #undef Realloc
+#undef min
+#undef max
 
 #endif  // _WIN32

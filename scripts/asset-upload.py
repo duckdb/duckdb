@@ -8,12 +8,6 @@ if (len(sys.argv) < 2):
 
 # this essentially should run on release tag builds to fill up release assets and master
 
-
-branch = os.getenv("TRAVIS_BRANCH", "")
-if branch != "master":
-	print("Only running on master branch for now. Exiting.")
-	exit(0)
-
 pr = os.getenv("TRAVIS_PULL_REQUEST", "")
 if pr != "false":
 	print("Not running on PRs. Exiting.")
@@ -21,6 +15,10 @@ if pr != "false":
 
 tag = os.getenv("TRAVIS_TAG", "master-builds")
 print("Running on tag %s" % tag)
+
+if tag == "master-builds" && os.getenv("TRAVIS_BRANCH", "") != "master":
+	print("Only running on master branch for %s tag. Exiting." % tag)
+	exit(0)
 
 # sha = os.getenv("TRAVIS_COMMIT", "")
 # if sha == "":
@@ -76,25 +74,27 @@ if 'sha' not in gh_api('commits/%s' % sha):
 # check if tag exists with the correct hash already, if not, recreate tag & release
 resp = gh_api('git/ref/tags/%s' % tag)
 if 'object' not in resp or 'sha' not in resp['object'] : # or resp['object']['sha'] != sha
-	print("re-creating tag & release")
-	# clean up, delete release if exists and tag
-	# this creates a potential race condition, use travis stages?
-	resp = gh_api('releases/tags/%s' % tag)
-	if "id" in resp:
-		gh_api('releases/%s' % resp["id"], method='DELETE')
+	raise ValueError('tag %s not found' % tag)
 
-	gh_api('git/refs/tags/%s' % tag, method='DELETE')
+	# print("re-creating tag & release")
+	# # clean up, delete release if exists and tag
+	# # this creates a potential race condition, use travis stages?
+	# resp = gh_api('releases/tags/%s' % tag)
+	# if "id" in resp:
+	# 	gh_api('releases/%s' % resp["id"], method='DELETE')
 
-	payload = {
-	  "tag_name": tag,
-	  "target_commitish": sha, # what a wonderful key name
-	  "name": "Development builds from `master`",
-	  "body": "This release contains builds for the latest commit to the master branch. They are meant for testing.",
-	  "draft": False,
-	  "prerelease": True
-	}
-	resp = gh_api('releases', payload=payload)
-	print(resp)
+	# gh_api('git/refs/tags/%s' % tag, method='DELETE')
+
+	# payload = {
+	#   "tag_name": tag,
+	#   "target_commitish": sha, # what a wonderful key name
+	#   "name": "Development builds from `master`",
+	#   "body": "This release contains builds for the latest commit to the master branch. They are meant for testing.",
+	#   "draft": False,
+	#   "prerelease": True
+	# }
+	# resp = gh_api('releases', payload=payload)
+	# print(resp)
 
 resp = gh_api('releases/tags/%s' % tag)
 if 'id' not in resp or 'upload_url' not in resp:
