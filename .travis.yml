@@ -42,7 +42,7 @@ matrix:
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
         - python3.7 tools/rest/test_the_rest.py build/release/tools/rest
-        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
@@ -67,7 +67,7 @@ matrix:
         - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
-        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
 
@@ -97,7 +97,7 @@ matrix:
         - cmake --build . --target parquet_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
-        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
         - extension/parquet/test/Release/parquet_test.exe
 
@@ -422,7 +422,7 @@ matrix:
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
-        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 

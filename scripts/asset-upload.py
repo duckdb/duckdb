@@ -16,7 +16,7 @@ if pr != "false":
 tag = os.getenv("TRAVIS_TAG", "master-builds")
 print("Running on tag %s" % tag)
 
-if tag == "master-builds" && os.getenv("TRAVIS_BRANCH", "") != "master":
+if tag == "master-builds" and os.getenv("TRAVIS_BRANCH", "") != "master":
 	print("Only running on master branch for %s tag. Exiting." % tag)
 	exit(0)
 

@@ -1,4 +1,4 @@
-package nl.cwi.da.duckdb;
+package org.duckdb;
 
 import java.io.InputStream;
 import java.io.Reader;
