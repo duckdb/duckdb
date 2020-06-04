@@ -38,13 +38,13 @@ endif()
 
 set(JVM_BITNESS "")
 execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d64 -version RESULT_VARIABLE JAVA_64_RES ERROR_QUIET)
+# execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d32 -version RESULT_VARIABLE JAVA_32_RES ERROR_QUIET)
 if (${JAVA_64_RES} EQUAL 0)
 	set(JVM_BITNESS "amd64")
-endif()
-
-execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d32 -version RESULT_VARIABLE JAVA_32_RES ERROR_QUIET)
-if (${JVM_BITNESS} STREQUAL "" AND ${JAVA_32_RES} EQUAL 0)
-	set(JVM_BITNESS "i386")
+# elseif(${JAVA_32_RES} EQUAL 0)
+#  set(JVM_BITNESS "i386")
+else()
+  message( FATAL_ERROR "Only 64 bit JVMs supported for now" )
 endif()
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
