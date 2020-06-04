@@ -12,5 +12,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableFunction &ref) {
 	for (idx_t i = 0; i < ref.return_types.size(); i++) {
 		logical_fun->column_ids.push_back(i);
 	}
-	return logical_fun;
+	return move(logical_fun);
 }
