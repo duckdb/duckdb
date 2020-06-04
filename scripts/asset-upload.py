@@ -13,7 +13,9 @@ if pr != "false":
 	print("Not running on PRs. Exiting.")
 	exit(0)
 
-tag = os.getenv("TRAVIS_TAG", "master-builds")
+tag = os.getenv("TRAVIS_TAG", '') # this env var is always present just not always used
+if tag == '':
+	tag = 'master-builds'
 print("Running on tag %s" % tag)
 
 if tag == "master-builds" and os.getenv("TRAVIS_BRANCH", "") != "master":
