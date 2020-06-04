@@ -32,6 +32,7 @@ public:
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	string ExtraRenderInformation() const override;
 };
 
 } // namespace duckdb

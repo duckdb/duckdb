@@ -22,6 +22,7 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
+class BoundTableFunction;
 
 enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, GENERIC = 3 };
 

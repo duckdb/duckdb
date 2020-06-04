@@ -1,2 +1,2 @@
 PKG_CXXFLAGS = -I.
-OBJECTS=duckdbr.o duckdb.o
+OBJECTS=duckdbr.o parquet-extension.o duckdb.o

@@ -25,6 +25,13 @@ if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     sys.path.append('scripts')
     import amalgamation
     amalgamation.generate_amalgamation(target_source, target_header)
+
+    sys.path.append('extension/parquet')
+    import parquet_amalgamation
+    ext_target_header = os.path.join(prev_wd, 'parquet-extension.hpp')
+    ext_target_source = os.path.join(prev_wd, 'parquet-extension.cpp')
+    parquet_amalgamation.generate_amalgamation(ext_target_source, ext_target_header)
+
     os.chdir(prev_wd)
 
 
@@ -51,7 +58,7 @@ class get_numpy_include(object):
 
 libduckdb = Extension('duckdb',
     include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
-    sources=['duckdb_python.cpp', 'duckdb.cpp'],
+    sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
     extra_compile_args=toolchain_args,
     extra_link_args=toolchain_args,
     language='c++')

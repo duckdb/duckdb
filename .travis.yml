@@ -36,10 +36,11 @@ matrix:
         - pip install --user boto3
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb_cli
         - build/release/extension/icu/test/icu_test
+        - build/release/extension/parquet/test/parquet_test
         - python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
@@ -63,11 +64,12 @@ matrix:
         - python3 -m pip install --user boto3
 
       script:
-        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
+        - build/release/extension/parquet/test/parquet_test
 
       after_success:
         #- python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
@@ -86,16 +88,18 @@ matrix:
         - choco install jdk8 --version 8.0.211 -y --force
 
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
         - cmake --build . --target jdbc --config Release
         - cmake --build . --target icu_test --config Release
+        - cmake --build . --target parquet_test --config Release
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
         - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
+        - extension/parquet/test/Release/parquet_test.exe
 
       after_success:
         #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
@@ -233,12 +237,13 @@ matrix:
 
       script:
         - python scripts/amalgamation.py
+        - python extension/parquet/parquet_amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
-        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.*)
+        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.* parquet-extension.*)
         # - python tools/upload-s3.py src-amalgamation build/duckdb.zip
         - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
 

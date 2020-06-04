@@ -28,7 +28,7 @@ include_paths = [include_dir, fmt_include_dir, hll_dir, re2_dir, miniz_dir, utf8
 compile_directories = [src_dir, fmt_dir, hll_dir, miniz_dir, re2_dir, utf8proc_dir, pg_query_dir]
 
 # files always excluded
-always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp']
+always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']
 # files excluded from the amalgamation
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
 # files excluded from individual file compilation during test_compile
@@ -131,6 +131,7 @@ def generate_amalgamation(source_file, header_file):
     print("-----------------------")
     with open(temp_header, 'w+') as hfile:
         hfile.write("#pragma once\n")
+        hfile.write("#define DUCKDB_AMALGAMATION 1\n")
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 
