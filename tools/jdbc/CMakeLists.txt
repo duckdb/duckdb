@@ -14,8 +14,8 @@ endif()
 include(UseJava)
 project(DuckDBJDummy NONE)
 
-file(GLOB JAVA_SRC_FILES src/main/java/nl/cwi/da/duckdb/*.java)
-file(GLOB JAVA_TEST_FILES src/test/java/nl/cwi/da/duckdb/test/*.java)
+file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
+file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
 set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7)
 

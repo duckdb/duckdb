@@ -1,4 +1,4 @@
-package nl.cwi.da.duckdb.test;
+package org.duckdb.test;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
@@ -39,7 +39,7 @@ public class TestDuckDBJDBC {
 
 	static {
 		try {
-			Class.forName("nl.cwi.da.duckdb.DuckDBDriver");
+			Class.forName("org.duckdb.DuckDBDriver");
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
 		}

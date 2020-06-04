@@ -1,4 +1,4 @@
-#include "nl_cwi_da_duckdb_DuckDBNative.h"
+#include "org_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -20,7 +20,7 @@ static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
 	return ret;
 }
 
-JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass,
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass,
                                                                                    jbyteArray database_j,
                                                                                    jboolean read_only) {
 	auto database = byte_array_to_string(env, database_j);
@@ -28,7 +28,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1start
 	return env->NewDirectByteBuffer(db, 0);
 }
 
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown(JNIEnv *env, jclass,
                                                                                  jobject db_ref_buf) {
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	if (db_ref) {
@@ -36,14 +36,14 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1shutdown
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv *env, jclass,
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNIEnv *env, jclass,
                                                                                    jobject db_ref_buf) {
 	auto db_ref = (DuckDB *)env->GetDirectBufferAddress(db_ref_buf);
 	auto conn = new Connection(*db_ref);
 	return env->NewDirectByteBuffer(conn, 0);
 }
 
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
                                                                                           jobject conn_ref_buf,
                                                                                           jboolean auto_commit) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
@@ -54,7 +54,7 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1set_1aut
 	conn_ref->context->transaction.SetAutoCommit(auto_commit);
 }
 
-JNIEXPORT jboolean JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
+JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
                                                                                               jobject conn_ref_buf) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
@@ -64,7 +64,7 @@ JNIEXPORT jboolean JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1get_
 	return conn_ref->context->transaction.IsAutoCommit();
 }
 
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
                                                                                    jobject conn_ref_buf) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (conn_ref) {
@@ -78,7 +78,7 @@ struct StatementHolder {
 
 #include "utf8proc_wrapper.hpp"
 
-JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass,
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass,
                                                                                    jobject conn_ref_buf,
                                                                                    jbyteArray query_j) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
@@ -105,7 +105,7 @@ struct ResultHolder {
 	unique_ptr<DataChunk> chunk;
 };
 
-JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv *env, jclass,
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv *env, jclass,
                                                                                    jobject stmt_ref_buf,
                                                                                    jobjectArray params) {
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
@@ -187,7 +187,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1execu
 	return env->NewDirectByteBuffer(res_ref, 0);
 }
 
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv *env, jclass,
                                                                                 jobject stmt_ref_buf) {
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (stmt_ref) {
@@ -195,7 +195,7 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1release(
 	}
 }
 
-JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(JNIEnv *env, jclass,
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(JNIEnv *env, jclass,
                                                                                      jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (res_ref) {
@@ -203,7 +203,7 @@ JNIEXPORT void JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1free_1re
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass,
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass,
                                                                                 jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
@@ -212,7 +212,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta(
 		env->ThrowNew(Exception, "Invalid statement");
 	}
 
-	jclass meta = env->FindClass("nl/cwi/da/duckdb/DuckDBResultSetMetaData");
+	jclass meta = env->FindClass("org/duckdb/DuckDBResultSetMetaData");
 	jmethodID meta_construct = env->GetMethodID(meta, "<init>", "(II[Ljava/lang/String;[Ljava/lang/String;)V");
 
 	auto column_count = stmt_ref->stmt->names.size();
@@ -229,7 +229,7 @@ JNIEXPORT jobject JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1meta(
 	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array);
 }
 
-JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
+JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
                                                                                       jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || !res_ref->res->success) {
@@ -241,7 +241,7 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 	auto row_count = res_ref->chunk->size();
 
 	auto vec_array = (jobjectArray)env->NewObjectArray(res_ref->chunk->column_count(),
-	                                                   env->FindClass("nl/cwi/da/duckdb/DuckDBVector"), nullptr);
+	                                                   env->FindClass("org/duckdb/DuckDBVector"), nullptr);
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->column_count(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
 		auto type_str = env->NewStringUTF(TypeIdToString(vec.type).c_str());
@@ -253,7 +253,7 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 		}
 		env->ReleaseBooleanArrayElements(null_array, null_array_ptr, 0);
 
-		jclass vec_class = env->FindClass("nl/cwi/da/duckdb/DuckDBVector");
+		jclass vec_class = env->FindClass("org/duckdb/DuckDBVector");
 		jmethodID vec_construct = env->GetMethodID(vec_class, "<init>", "(Ljava/lang/String;I[Z)V");
 		auto jvec = env->NewObject(vec_class, vec_construct, type_str, (int)row_count, null_array);
 
@@ -309,11 +309,11 @@ JNIEXPORT jobjectArray JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1
 	return vec_array;
 }
 
-JNIEXPORT jint JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
+JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
 	return STANDARD_VECTOR_SIZE;
 }
 
-JNIEXPORT jstring JNICALL Java_nl_cwi_da_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1type(JNIEnv *env, jclass,
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1type(JNIEnv *env, jclass,
                                                                                          jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);

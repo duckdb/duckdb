@@ -1,4 +1,4 @@
-package nl.cwi.da.duckdb;
+package org.duckdb;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
