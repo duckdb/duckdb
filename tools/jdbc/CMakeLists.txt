@@ -21,11 +21,11 @@ set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7)
 
 add_jar(duckdb_jdbc
         ${JAVA_SRC_FILES}
-        ${JAVA_TEST_FILES}
+        ${JAVA_TEST_FILES} META-INF/services/java.sql.Driver
         GENERATE_NATIVE_HEADERS
         duckdb-native)
 
-set(OS_NAME "")
+set(OS_NAME "unknown")
 if (APPLE)
 	set(OS_NAME "osx")
 endif()
@@ -36,15 +36,11 @@ if (UNIX AND NOT APPLE)
 	set(OS_NAME "linux") # sorry BSD
 endif()
 
-set(JVM_BITNESS "")
+set(JVM_BITNESS "unknown")
 execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d64 -version RESULT_VARIABLE JAVA_64_RES ERROR_QUIET)
 # execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d32 -version RESULT_VARIABLE JAVA_32_RES ERROR_QUIET)
 if (${JAVA_64_RES} EQUAL 0)
 	set(JVM_BITNESS "amd64")
-# elseif(${JAVA_32_RES} EQUAL 0)
-#  set(JVM_BITNESS "i386")
-else()
-  message( FATAL_ERROR "Only 64 bit JVMs supported for now" )
 endif()
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
