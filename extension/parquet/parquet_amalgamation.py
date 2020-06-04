@@ -35,7 +35,7 @@ def generate_amalgamation(source_file, header_file):
         os.chdir(path)
         files = glob.glob(pattern)
         os.chdir(wd)
-        return files
+        return [f.replace('\\', '/') for f in files]
 
     headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h")
 
