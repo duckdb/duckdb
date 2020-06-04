@@ -36,12 +36,8 @@ if (UNIX AND NOT APPLE)
 	set(OS_NAME "linux") # sorry BSD
 endif()
 
-set(JVM_BITNESS "unknown")
-execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d64 -version RESULT_VARIABLE JAVA_64_RES ERROR_QUIET)
-# execute_process(COMMAND ${Java_JAVA_EXECUTABLE} -d32 -version RESULT_VARIABLE JAVA_32_RES ERROR_QUIET)
-if (${JAVA_64_RES} EQUAL 0)
-	set(JVM_BITNESS "amd64")
-endif()
+set(JVM_BITNESS "amd64")
+# TODO handle 32 bit architectures
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
