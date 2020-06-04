@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
