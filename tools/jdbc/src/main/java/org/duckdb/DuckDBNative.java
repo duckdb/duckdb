@@ -3,6 +3,7 @@ package org.duckdb;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,11 +28,14 @@ public class DuckDBNative {
 			} else if (os_name_detect.startsWith("linux")) {
 				os_name = "linux";
 			}
-			String lib_resource_name = "/libduckdb_java.so" + "_" + os_name + "_" + os_arch;
+			String lib_res_name = "/libduckdb_java.so" + "_" + os_name + "_" + os_arch;
 
 			Path lib_file = Files.createTempFile("libduckdb_java", ".so");
-			InputStream in = DuckDBNative.class.getResource(lib_resource_name).openStream();
-			Files.copy(in, lib_file, StandardCopyOption.REPLACE_EXISTING);
+			URL lib_res = DuckDBNative.class.getResource(lib_res_name);
+			if (lib_res == null) {
+				throw new IOException(lib_res_name + " not found");
+			}
+			Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
 			new File(lib_file.toString()).deleteOnExit();
 			System.load(lib_file.toString());
 		} catch (IOException e) {
