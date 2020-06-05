@@ -657,6 +657,18 @@ TEST_CASE("Test csv header completion", "[copy]") {
 	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('" + fs.JoinPath(csv_path, "test.csv") + "');"));
 	REQUIRE_NO_FAIL(con.Query("SELECT a_0, a_8, a_9, column12_0, column11, column12_1 FROM test;"));
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
+
+	// generate CSV file with 12 unnamed columns and check for correct naming
+	ofstream csv_file7(fs.JoinPath(csv_path, "test.csv"));
+	csv_file7 << "123,TEST2,text1,,,,,,,,,,value1" << endl;
+	csv_file7 << "345,TEST2,text2,,,,,,,,,,value2" << endl;
+	csv_file7.close();
+
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE test AS SELECT * FROM read_csv_auto ('" + fs.JoinPath(csv_path, "test.csv") + "');"));
+	REQUIRE_NO_FAIL(con.Query("SELECT column00, column01, column02, column03, column04, column05, column06, column07, "
+	                          "column08, column09, column10, column11, column12 FROM test;"));
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
 
 TEST_CASE("Test csv type detection", "[copy]") {

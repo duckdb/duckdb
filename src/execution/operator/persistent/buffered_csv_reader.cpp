@@ -26,7 +26,7 @@ static char is_newline(char c) {
 // Helper function to generate column names
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string prefix = "column") {
 	uint8_t max_digits = total_cols > 10 ? (int)log10((double)total_cols - 1) + 1 : 1;
-	uint8_t digits = col_number > 10 ? (int)log10((double)col_number) + 1 : 1;
+	uint8_t digits = col_number >= 10 ? (int)log10((double)col_number) + 1 : 1;
 	string leading_zeros = string("0", max_digits - digits);
 	string value = std::to_string(col_number);
 	return string(prefix + leading_zeros + value);
