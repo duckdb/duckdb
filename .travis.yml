@@ -46,7 +46,7 @@ matrix:
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
-        - (cd examples/jdbc; make)
+        - (cd examples/jdbc; make; make maven)
 
       after_success:
         #- python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
