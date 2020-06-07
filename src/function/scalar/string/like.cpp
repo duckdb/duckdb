@@ -6,6 +6,16 @@ using namespace std;
 
 namespace duckdb {
 
+namespace {
+
+std::string tolower(string_t& str) {
+	std::string s(str.GetData(), str.GetSize());
+	std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+	return s;
+}
+
+}
+
 static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 struct LikeEscapeOperator {
@@ -21,6 +31,22 @@ struct LikeEscapeOperator {
 struct NotLikeEscapeOperator {
 	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
 		return !LikeEscapeOperator::Operation(str, pattern, escape);
+	}
+};
+
+struct ILikeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		const std::string& s = tolower(str);
+		const std::string& p = tolower(pattern);
+		return like_operator(s.data(), p.data(), nullptr);
+	}
+};
+
+struct NotILikeOperator {
+	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
+		const std::string& s = tolower(str);
+		const std::string& p = tolower(pattern);
+		return !like_operator(s.data(), p.data(), nullptr);
 	}
 };
 
@@ -92,6 +118,10 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>));
+	set.AddFunction(ScalarFunction("!~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>));
 	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
 	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,

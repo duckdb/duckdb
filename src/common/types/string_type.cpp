@@ -4,6 +4,12 @@
 
 namespace duckdb {
 
+std::ostream& operator<<(std::ostream& os, const string_t& str)
+{
+	os << std::string(str.GetData(), str.GetSize());
+	return os;
+}
+
 void string_t::Verify() {
 	auto dataptr = GetData();
 	(void)dataptr;

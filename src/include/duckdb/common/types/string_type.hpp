@@ -100,4 +100,6 @@ private:
 	} value_;
 };
 
+std::ostream& operator<<(std::ostream& os, const string_t& str);
+
 }; // namespace duckdb
