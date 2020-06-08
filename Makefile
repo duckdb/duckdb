@@ -29,7 +29,7 @@ debug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
-release:
+releaseexpand:
 	mkdir -p build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Release ../.. && \
@@ -49,7 +49,7 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
-amalgamation:
+release:
 	mkdir -p build/amalgamation && \
 	python scripts/amalgamation.py && \
 	cd build/amalgamation && \
