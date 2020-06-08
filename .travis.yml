@@ -225,15 +225,15 @@ matrix:
         - export CC=gcc-9 CXX=g++-9
 
       script:
-        - python scripts/amalgamation.py
-        - python extension/parquet/parquet_amalgamation.py
+        - python3 scripts/amalgamation.py
+        - python3 extension/parquet/parquet_amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
         - build/release/test/unittest "*"
 
         - zip -j libduckdb_src.zip src/amalgamation/duckdb.*
-        - python scripts/asset-upload.py duckdb_amalgamation.zip
+        - python3 scripts/asset-upload.py duckdb_amalgamation.zip
 
 
     - os: osx
@@ -303,6 +303,7 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
+        - choco install zip -y --force
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32
