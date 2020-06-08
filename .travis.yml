@@ -34,13 +34,14 @@ matrix:
 
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - python3 scripts/amalgamation.py
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
        
         - build/release/test/unittest "*"
-        - python3.7 tools/shell/shell-test.py build/release/duckdb
+        - python3 tools/shell/shell-test.py build/release/duckdb
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
-        - python3.7 tools/rest/test_the_rest.py build/release/tools/rest
+        - python3 tools/rest/test_the_rest.py build/release/tools/rest
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
@@ -48,8 +49,10 @@ matrix:
         - (cd examples/jdbc; make; make maven)
 
         - zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        - zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so
-        - python3 scripts/asset-upload.py libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        - zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp
+        - zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp
+
+        - python3 scripts/asset-upload.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: osx
@@ -57,7 +60,9 @@ matrix:
       osx_image: xcode11.3
 
       script:
-        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - mkdir -p build/release
+        - python3 scripts/amalgamation.py
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb
@@ -66,7 +71,7 @@ matrix:
         - build/release/extension/parquet/test/parquet_test
 
         - zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
-        - zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib
+        - zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp
         - python3 scripts/asset-upload.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
@@ -82,6 +87,7 @@ matrix:
         - choco install zip -y --force
 
       script:
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
@@ -97,7 +103,7 @@ matrix:
         - extension/parquet/test/Release/parquet_test.exe
 
         - zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll
+        - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp
         - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
@@ -205,63 +211,6 @@ matrix:
             - g++-4.9 binutils-2.26
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
-
-# amalgamations
-
-    - os: linux
-      dist: xenial
-      name: GCC 9 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-9
-
-      before_install:
-        - export CC=gcc-9 CXX=g++-9
-
-      script:
-        - python3 scripts/amalgamation.py
-        - python3 extension/parquet/parquet_amalgamation.py
-        - mkdir -p build/release
-        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-        - build/release/test/unittest "*"
-
-        - zip -j libduckdb_src.zip src/amalgamation/duckdb.*
-        - python3 scripts/asset-upload.py duckdb_amalgamation.zip
-
-
-    - os: osx
-      name: Xcode 11.3 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      osx_image: xcode11.3
-      script:
-        - python3 scripts/amalgamation.py
-        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-        - build/release/test/unittest
-
-
-    - os: windows
-      name: VS 2017 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      filter_secrets: false
-      language: c
-      before_script:
-        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-      script:
-        - C:/Python37-x64/python.exe scripts/amalgamation.py
-        - cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target duckdb --config Release
-        - cmake --build . --target unittest --config Release
-        - test/Release/unittest.exe
-
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
