@@ -25,5 +25,5 @@ target_link_libraries(
   sqlite_transfer)
 
 if(${BUILD_PARQUET_EXTENSION})
-  target_link_libraries(benchmark_runner parquet_extension)
+  target_link_libraries(benchmark_runner parquet_extension_static)
 endif()
