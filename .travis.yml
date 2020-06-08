@@ -57,9 +57,10 @@ matrix:
 
       deploy:
         provider: releases
-        tag_name: master-builds
         on:
-          branch: libduckdbpackaging
+          branch: libduckdbpackaging # TODO
+        tag_name: master-builds
+
         api_key:
           secure: J0vWrGxHDNlIjytVFLpU+Q/OPt3Nj5gB0y6vavDLs9kM6j98TrmsPn6jVIYAMqSyEk0SqphYzO/jd/CzxJnORC16/UGzhoZoqQXQsAoAiz+lyxT3lnyJ2ltS9Bjw/gFkLjhO/kLtSaOFqJSfgoNHshvdq3k5GqagDjXSyHKLG9Xvua195aoAaXsxIP/QJVQIJ6lZpYzwHLQtKBgAuoe9VTSxOH7d75xvG6SOgGZOHHKD7hP1tYczZnd6XdPZz/rczTLt1x9XN134FKLoXm0xE6Up60zmF+g4r4uOKvH/b7+gbD9U09zK1HpIdqwZGvoJvCWZeoVxCPNZLYC68BcnvOfQSi6dbh0jCLc54YpvKVcnQEeB/uwb4tBH5m19y94MHoZ7W+I/ykY5F2v1akVla2m3E4Ph8D29RU2TSFSNMGgaU8Tq+aogVtWOiaFyoveJZU8Um0OeoJ6hg1algAEICJEtIfSaBBhgNBZdbSeSzOgungeqPJnJT67N2MR0x/4CgVcNpJOZmDoratlG/cop/uhNhop2U7jI4B6UE1KsxC5hKfVZHqWtVcVu1A5aoEwqFw1yVA5hAPhmbn5tyshEXfKjxwtCY5homIcKCezPaXJPpOGbaUA/jz0ZkOt09TNoMvpvmlc0tC5XD2cnDQbQFsFOFwa9+jAfWuvSk7BV2GI=
 

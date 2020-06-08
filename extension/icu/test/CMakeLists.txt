@@ -5,12 +5,12 @@ add_executable(icu_test icu_test.cpp)
 
 if(NOT WIN32 AND NOT SUN)
   target_link_libraries(icu_test
-                        icu_extension
+                        icu_extension_static
                         duckdb
                         test_helpers)
 else()
 target_link_libraries(icu_test
-                      icu_extension
+                      icu_extension_static
                       duckdb_static
                       test_helpers)
 endif()

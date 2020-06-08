@@ -29,9 +29,9 @@ debug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
-releaseexpand:
-	mkdir -p build/release && \
-	cd build/release && \
+release_expand:
+	mkdir -p build/release_expand && \
+	cd build/release_expand && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
@@ -50,9 +50,9 @@ doxygen: docs
 	open build/docs/html/index.html
 
 release:
-	mkdir -p build/amalgamation && \
+	mkdir -p build/release && \
 	python scripts/amalgamation.py && \
-	cd build/amalgamation && \
+	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
