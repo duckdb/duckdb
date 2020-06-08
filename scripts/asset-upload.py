@@ -60,11 +60,6 @@ def gh_api(suburl, filename='', method='GET'):
 	else:
 		return {}
 
-
-# find out if commit exists in the first place
-if 'sha' not in gh_api('commits/%s' % sha):
-	raise ValueError('commit %s not found' % sha)
-
 # check if tag exists
 resp = gh_api('git/ref/tags/%s' % tag)
 if 'object' not in resp or 'sha' not in resp['object'] : # or resp['object']['sha'] != sha
