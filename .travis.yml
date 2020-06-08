@@ -36,6 +36,7 @@ matrix:
         - eval "${MATRIX_EVAL}"
 
       script:
+        - python3.7 scripts/amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest "*"
@@ -65,6 +66,7 @@ matrix:
         - python3 /tmp/get-pip.py
 
       script:
+        - python scripts/amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
@@ -91,7 +93,8 @@ matrix:
         - choco install jdk8 --version 8.0.211 -y --force
 
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
