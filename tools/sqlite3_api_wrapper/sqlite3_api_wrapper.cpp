@@ -65,24 +65,7 @@ void sqlite3_randomness(int N, void *pBuf) {
 int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
                  sqlite3 **ppDb        /* OUT: SQLite db handle */
 ) {
-	if (filename && strcmp(filename, ":memory:") == 0) {
-		filename = NULL;
-	}
-	*ppDb = nullptr;
-
-	sqlite3 *pDb = nullptr;
-	try {
-		pDb = new sqlite3();
-		pDb->db = make_unique<DuckDB>(filename);
-		pDb->con = make_unique<Connection>(*pDb->db);
-	} catch (std::exception &ex) {
-		if (pDb) {
-			pDb->last_error = ex.what();
-		}
-		return SQLITE_ERROR;
-	}
-	*ppDb = pDb;
-	return SQLITE_OK;
+	return sqlite3_open_v2(filename, ppDb, 0, NULL);
 }
 
 int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
@@ -90,7 +73,31 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     int flags,            /* Flags */
                     const char *zVfs      /* Name of VFS module to use */
 ) {
-	return sqlite3_open(filename, ppDb);
+	if (filename && strcmp(filename, ":memory:") == 0) {
+			filename = NULL;
+		}
+		*ppDb = nullptr;
+		if (zVfs) { /* unsupported so if set we complain */
+			return SQLITE_ERROR;
+		}
+		sqlite3 *pDb = nullptr;
+		try {
+			pDb = new sqlite3();
+			DBConfig config;
+			config.access_mode = AccessMode::AUTOMATIC;
+			if (flags & SQLITE_OPEN_READONLY) {
+				config.access_mode = AccessMode::READ_ONLY;
+			}
+			pDb->db = make_unique<DuckDB>(filename, &config);
+			pDb->con = make_unique<Connection>(*pDb->db);
+		} catch (std::exception &ex) {
+			if (pDb) {
+				pDb->last_error = ex.what();
+			}
+			return SQLITE_ERROR;
+		}
+		*ppDb = pDb;
+		return SQLITE_OK;
 }
 
 int sqlite3_close(sqlite3 *db) {
