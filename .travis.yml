@@ -259,6 +259,7 @@ matrix:
         - choco install zip -y --force
 
       script:
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
