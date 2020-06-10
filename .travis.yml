@@ -231,6 +231,7 @@ matrix:
         - export CC=gcc-9 CXX=g++-9
 
       script:
+        - python3 scripts/amalgamation.py
         - mkdir -p build/release
         - (cd build/release && cmake  -DAMALGAMATION_BUILD=1  -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
@@ -254,7 +255,7 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
-        - choco install jdk8 --version 8.0.211 -y --force
+        - choco install jdk8 --version 8.0.211 --x86 -y --force 
         - choco install zip -y --force
 
       script:
