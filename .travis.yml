@@ -104,7 +104,7 @@ matrix:
 
         - zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp
-        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
@@ -465,7 +465,7 @@ matrix:
         - cd ../..
 
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-
+        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
 
     - os: linux
       name: Python 2 Package
