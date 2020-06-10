@@ -22,16 +22,12 @@ if tag == "master-builds" and os.getenv("TRAVIS_BRANCH", "") != "master":
 	print("Only running on master branch for %s tag. Exiting." % tag)
 	exit(0)
 
-# sha = os.getenv("TRAVIS_COMMIT", "")
-# if sha == "":
-# 	raise ValueError('need a commit ID in TRAVIS_COMMIT')
-sha = 'ba75d81601913782d28a3878707d135319f38bdd'
 
 token = os.getenv("GH_TOKEN", "")
 if token == "":
 	raise ValueError('need a GitHub token in GH_TOKEN')
 
-def gh_api(suburl, payload={}, filename='', method='GET'):
+def gh_api(suburl, filename='', method='GET'):
 	url = api_url + suburl
 	headers = {
 		"Content-Type": "application/json",
@@ -39,10 +35,6 @@ def gh_api(suburl, payload={}, filename='', method='GET'):
 	}
 
 	body_data = b''
-	if len(payload) > 0:
-		method = 'POST'
-		body_data = json.dumps(payload).encode("utf-8")
-		headers["Content-Length"] = len(body_data)
 
 	if len(filename) > 0:
 		method = 'POST'
@@ -68,35 +60,10 @@ def gh_api(suburl, payload={}, filename='', method='GET'):
 	else:
 		return {}
 
-
-# find out if commit exists in the first place
-if 'sha' not in gh_api('commits/%s' % sha):
-	raise ValueError('commit %s not found' % sha)
-
-# check if tag exists with the correct hash already, if not, recreate tag & release
+# check if tag exists
 resp = gh_api('git/ref/tags/%s' % tag)
 if 'object' not in resp or 'sha' not in resp['object'] : # or resp['object']['sha'] != sha
 	raise ValueError('tag %s not found' % tag)
-
-	# print("re-creating tag & release")
-	# # clean up, delete release if exists and tag
-	# # this creates a potential race condition, use travis stages?
-	# resp = gh_api('releases/tags/%s' % tag)
-	# if "id" in resp:
-	# 	gh_api('releases/%s' % resp["id"], method='DELETE')
-
-	# gh_api('git/refs/tags/%s' % tag, method='DELETE')
-
-	# payload = {
-	#   "tag_name": tag,
-	#   "target_commitish": sha, # what a wonderful key name
-	#   "name": "Development builds from `master`",
-	#   "body": "This release contains builds for the latest commit to the master branch. They are meant for testing.",
-	#   "draft": False,
-	#   "prerelease": True
-	# }
-	# resp = gh_api('releases', payload=payload)
-	# print(resp)
 
 resp = gh_api('releases/tags/%s' % tag)
 if 'id' not in resp or 'upload_url' not in resp:

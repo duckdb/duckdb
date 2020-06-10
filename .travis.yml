@@ -17,7 +17,6 @@ matrix:
   include:
 
     - os: linux
-      if: tag != master-builds
       dist: bionic
       name: GCC 9
       python: 3.7
@@ -29,55 +28,54 @@ matrix:
             - sourceline: 'ppa:deadsnakes/ppa'
           packages:
             - g++-9 python3.7
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-      before_install:
-        - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
+
+      before_script:
+        - export CC=gcc-9 CXX=g++-9
+
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - python3 scripts/amalgamation.py
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
+       
         - build/release/test/unittest "*"
-        - python3.7 tools/shell/shell-test.py build/release/duckdb_cli
+        - python3.7 tools/shell/shell-test.py build/release/duckdb
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
-        - python3.7 tools/rest/test_the_rest.py build/release/tools/rest
+        - python3 tools/rest/test_the_rest.py build/release/tools/rest
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
         - (cd examples/programmatic-querying; make)
         - (cd examples/jdbc; make; make maven)
 
-      after_success:
-        #- python tools/upload-s3.py lib-linux-amd64 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
-        - python3 scripts/asset-upload.py libduckdb-linux-amd64.so=build/release/src/libduckdb*.so duckdb_cli-linux-amd64=build/release/duckdb_cli duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        - zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+        - zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp
+        - zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp
+
+        - python3 scripts/asset-upload.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: osx
-      if: tag != master-builds
-      name: Xcode 11.3
-      osx_image: xcode11.3
-
-      before_install:
-        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-        - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3
+      name: Xcode 11.5
+      osx_image: xcode11.5
 
       script:
-        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - mkdir -p build/release
+        - python3 scripts/amalgamation.py
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        
         - build/release/test/unittest
-        - python3 tools/shell/shell-test.py build/release/duckdb_cli
+        - python3 tools/shell/shell-test.py build/release/duckdb
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
 
-      after_success:
-        #- python3 tools/upload-s3.py lib-osx build/release/src/libduckdb.dylib build/release/src/libduckdb_static.a build/release/duckdb_cli build/release/tools/jdbc/duckdb_jdbc.jar
-        - python3 scripts/asset-upload.py libduckdb-osx-amd64.dylib=build/release/src/libduckdb*.dylib duckdb_cli-osx-amd64=build/release/duckdb_cli duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        - zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
+        - zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp
+        - python3 scripts/asset-upload.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: windows
-      if: tag != master-builds
       name: VS 2017
       filter_secrets: false
 
@@ -86,8 +84,10 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install jdk8 --version 8.0.211 -y --force
+        - choco install zip -y --force
 
       script:
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
@@ -95,21 +95,20 @@ matrix:
         - cmake --build . --target jdbc --config Release
         - cmake --build . --target icu_test --config Release
         - cmake --build . --target parquet_test --config Release
+
         - test/Release/unittest.exe
-        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb.exe
         - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - extension/icu/test/Release/icu_test.exe
         - extension/parquet/test/Release/parquet_test.exe
 
-      after_success:
-        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-amd64 src/Release/duckdb.dll Release/duckdb_cli.exe tools/jdbc/duckdb_jdbc.jar
-        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.dll=src/Release/duckdb.dll duckdb_cli-windows-amd64.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+        - zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+        - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp
+        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
-
     - os: linux
-      if: tag != master-builds
       dist: xenial
       name: GCC 9 Debug
 
@@ -124,10 +123,10 @@ matrix:
         - TREAT_WARNINGS_AS_ERRORS=1
 
     - os: osx
-      name: Xcode 11.3 Debug
+      name: Xcode 11.5 Debug
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
-      osx_image: xcode11.3
+      osx_image: xcode11.5
 
 
     - os: linux
@@ -147,8 +146,6 @@ matrix:
         - mkdir -p build/coverage
         - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
-
-      after_success:
         - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp'
 
 
@@ -172,7 +169,7 @@ matrix:
 
     - os: linux
       dist: bionic
-      name: GCC 9 (Vector Sizes)
+      name: Vector Sizes
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       python: 3.7
@@ -215,66 +212,6 @@ matrix:
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
-
-# amalgamations
-
-    - os: linux
-      dist: xenial
-      name: GCC 9 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-9
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
-      before_install:
-        - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
-
-      script:
-        - python scripts/amalgamation.py
-        - python extension/parquet/parquet_amalgamation.py
-        - mkdir -p build/release
-        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-        - build/release/test/unittest "*"
-
-      after_success:
-        - (cd src/amalgamation; zip ../../build/duckdb.zip duckdb.* parquet-extension.*)
-        # - python tools/upload-s3.py src-amalgamation build/duckdb.zip
-        - python3 scripts/asset-upload.py duckdb_amalgamation.zip=build/duckdb.zip
-
-
-    - os: osx
-      name: Xcode 11.3 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      osx_image: xcode11.3
-      script:
-        - python3 scripts/amalgamation.py
-        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-        - build/release/test/unittest
-
-
-    - os: windows
-      name: VS 2017 (Amalgamation)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      filter_secrets: false
-      language: c
-      before_script:
-        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-      script:
-        - C:/Python37-x64/python.exe scripts/amalgamation.py
-        - cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64
-        - cmake --build . --target duckdb --config Release
-        - cmake --build . --target unittest --config Release
-        - test/Release/unittest.exe
-
-
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
 
@@ -290,19 +227,18 @@ matrix:
           packages:
             - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
 
-      env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
       before_install:
-        - eval "${MATRIX_EVAL}"
-        - pip install --user boto3
+        - export CC=gcc-9 CXX=g++-9
+
       script:
         - mkdir -p build/release
         - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
-      after_success:
-        #- python tools/upload-s3.py lib-linux-i386 build/release/src/libduckdb*.so build/release/src/libduckdb*.a build/release/duckdb_cli
-        - python3 scripts/asset-upload.py libduckdb-linux-i386.so=build/release/src/libduckdb.so duckdb_cli-linux-i386=build/release/duckdb_cli
+        - zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so
+        - zip -j duckdb_cli-linux-i386.zip build/release/duckdb
+
+        - python3 scripts/asset-upload.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
 
 
     - os: windows
@@ -316,18 +252,20 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
+        - choco install zip -y --force
 
       script:
         - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
-        - test/Release/unittest.exe
-        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb_cli.exe
 
-      after_success:
-        #- C:/Python37-x64/python.exe tools/upload-s3.py lib-windows-i386 src/Release/duckdb.dll Release/duckdb_cli.exe
-        - C:/Python37-x64/python.exe scripts/asset-upload.py libduckdb-windows-i386.dll=src/Release/duckdb.dll duckdb_cli-windows-i386.exe=Release/duckdb_cli.exe duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+        - test/Release/unittest.exe
+        - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb.exe
+
+        - zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll
+        - zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
+        - C:/Python37-x64/python.exe scripts/asset-upload.py duckdb_cli-windows-i386.zip libduckdb-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
 
     - os: linux
@@ -415,7 +353,7 @@ matrix:
       env:
         - JAVA_HOME='/usr/lib/jvm/java-8-openjdk-amd64'
 
-      before_install:
+      install:
         - sudo apt-get update > /dev/null
         - sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
 
@@ -428,29 +366,24 @@ matrix:
 
 
     - os: linux
-      if: tag != master-builds
       name: R Package
 
       dist: xenial
       language: r
       r: devel
 
-      before_install:
-        - pip install --user boto3
+      install:
         - cd tools/rpkg
         - R -f dependencies.R
 
-      install:
+      script:
         - ./configure
         - R CMD build .
         - R CMD INSTALL duckdb_*.tar.gz
-
-      script:
         - (cd tests && R -f testthat.R)
         - R -f ../../examples/R/dbi.R
         - R -f ../../examples/R/dplyr.R
 
-      after_success:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
@@ -458,30 +391,24 @@ matrix:
 
 
     - os: osx
-      osx_image: xcode11.3
+      osx_image: xcode11.5
       name: R Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
       #r: devel
 
-      before_install:
-        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-        - python3 /tmp/get-pip.py
-        - python3 -m pip install --user boto3
+      install:
         - cd tools/rpkg
         - R -f dependencies.R
 
-      install:
+      script:
         - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
-
-      script:
         - (cd tests && R -f testthat.R)
 
-      after_success:
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/el-capitan/contrib/3.6 duckdb_*.tgz PACKAGES*
         - python3 ../upload-s3.py rstats duckdb_*.tgz
@@ -495,7 +422,7 @@ matrix:
 
       language: cpp
 
-      before_script:
+      install:
         - choco install r.project -y --version 3.6.0
         - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
         - choco install rtools -s rtools.3.5.0.nupkg -f -y
@@ -512,7 +439,6 @@ matrix:
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
         - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
 
-      after_success:
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/3.6 duckdb_*.zip PACKAGES*
@@ -520,7 +446,6 @@ matrix:
 
 
     - os: linux
-      if: tag != master-builds
       name: Python 3 Package
       dist: xenial
       language: python
@@ -529,16 +454,17 @@ matrix:
         - CIBW_BUILD='cp37-*'
       python: 3.7
 
+      install:
+        - pip install cibuildwheel==0.10.2
+
       script:
-        - pip install cibuildwheel==0.10.2 boto3
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
-      after_success:
+
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-       # - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: linux
@@ -552,8 +478,10 @@ matrix:
         - CIBW_BUILD='cp27-*'
       python: 2.7
 
+      install:
+        - pip install numpy pandas pytest
+
       script:
-        - pip install boto3 numpy pandas pytest
         - cd tools/pythonpkg
         - python setup.py install
         - python -m pytest tests
@@ -566,12 +494,12 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: generic
-      osx_image: xcode11.3
+      osx_image: xcode11.5
 
-      before_install:
+      install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 boto3
+        - python3 -m pip install cibuildwheel==0.10.2
 
       script:
         - cd tools/pythonpkg
@@ -580,9 +508,7 @@ matrix:
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
-      after_success:
         - python3 tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-       # - python3 scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
 
 
     - os: windows
@@ -595,7 +521,7 @@ matrix:
       env:
         - CIBW_BUILD='cp37-*'
 
-      before_install:
+      install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
         - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
         - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
@@ -614,7 +540,4 @@ matrix:
         - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
-      after_success:
         - C:/Python37-x64/python.exe tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl
-        # - C:/Python37-x64/python.exe scripts/asset-upload.py tools/pythonpkg/wheelhouse/*.whl
-
