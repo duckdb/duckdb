@@ -53,12 +53,13 @@ void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
-	auto &gstate = (BlockwiseNLJoinGlobalState &) state;
-	if (type == JoinType::OUTER) {
+void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	auto &gstate = (BlockwiseNLJoinGlobalState &) *state;
+	if (join_type == JoinType::OUTER) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
 	}
+	PhysicalSink::Finalize(context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -66,10 +67,10 @@ void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, GlobalOperatorSta
 //===--------------------------------------------------------------------===//
 class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
 public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, JoinType type, Expression &condition)
+	PhysicalBlockwiseNLJoinState(PhysicalOperator *left, JoinType join_type, Expression &condition)
 	    : PhysicalOperatorState(left), left_position(0), right_position(0), fill_in_rhs(false),
 	      checked_found_match(false), executor(condition) {
-		if (type == JoinType::LEFT || type == JoinType::OUTER) {
+		if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
 			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 		}
 	}
@@ -90,11 +91,11 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 
 	if (gstate.right_chunks.count == 0) {
 		// empty RHS
-		if (type == JoinType::SEMI || type == JoinType::INNER) {
+		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
 			// for SEMI or INNER join: empty RHS means empty result
 			return;
 		}
-		assert(type == JoinType::LEFT || type == JoinType::OUTER || type == JoinType::ANTI);
+		assert(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI);
 		// pull a chunk from the LHS
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 		if (state->child_chunk.size() == 0) {
@@ -106,7 +107,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			chunk.data[i].Reference(state->child_chunk.data[i]);
 		}
 		chunk.SetCardinality(state->child_chunk.size());
-		if (type == JoinType::LEFT || type == JoinType::OUTER) {
+		if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
 			// LEFT OUTER or FULL OUTER join with empty RHS
 			// fill any columns from the RHS with NULLs
 			for (; i < chunk.column_count(); i++) {
@@ -153,7 +154,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			// no more data on LHS, if FULL OUTER JOIN iterate over RHS
 			if (state->child_chunk.size() == 0) {
-				if (type == JoinType::OUTER) {
+				if (join_type == JoinType::OUTER) {
 					state->fill_in_rhs = true;
 					continue;
 				} else {
@@ -218,11 +219,11 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
-	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), type, *condition);
+	return make_unique<PhysicalBlockwiseNLJoinState>(children[0].get(), join_type, *condition);
 }
 
 string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {
-	string extra_info = JoinTypeToString(type) + "\n";
+	string extra_info = JoinTypeToString(join_type) + "\n";
 	extra_info += condition->GetName();
 	return extra_info;
 }

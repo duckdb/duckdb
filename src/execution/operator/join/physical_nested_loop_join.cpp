@@ -139,7 +139,7 @@ void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &s
 	nlj_state.rhs_executor.Execute(input, nlj_state.right_condition);
 
 	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in this chunk
-	if (type == JoinType::MARK && !gstate.has_null) {
+	if (join_type == JoinType::MARK && !gstate.has_null) {
 		if (HasNullValues(nlj_state.right_condition)) {
 			gstate.has_null = true;
 		}
@@ -203,7 +203,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		if (state->fetch_next_left) {
 			// we exhausted all chunks on the right: move to the next chunk on the left
 			do {
-				if (type == JoinType::LEFT) {
+				if (join_type == JoinType::LEFT) {
 					// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 					// have a match found
 					if (state->left_found_match) {
@@ -231,7 +231,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				}
 				if (gstate.right_chunks.count == 0) {
 					// RHS is empty! return a result based on the join type
-					ConstructEmptyJoinResult(type, gstate.has_null, state->child_chunk, chunk);
+					ConstructEmptyJoinResult(join_type, gstate.has_null, state->child_chunk, chunk);
 					return;
 				}
 				// resolve the left join condition for the current chunk
@@ -239,20 +239,20 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 
 				// MARK, SEMI and ANTI joins are handled separately because they scan the whole RHS in one go
 				// we can resolve them here in their entirety
-				switch (type) {
+				switch (join_type) {
 				case JoinType::SEMI:
 				case JoinType::ANTI:
 				case JoinType::MARK: {
 					bool found_match[STANDARD_VECTOR_SIZE] = {false};
 					NestedLoopJoinMark::Perform(state->left_condition, gstate.right_chunks, found_match, conditions);
-					if (type == JoinType::MARK) {
+					if (join_type == JoinType::MARK) {
 						// now construct the mark join result from the found matches
 						PhysicalJoin::ConstructMarkJoinResult(state->left_condition, state->child_chunk, chunk,
 															found_match, gstate.has_null);
-					} else if (type == JoinType::SEMI) {
+					} else if (join_type == JoinType::SEMI) {
 						// construct the semi join result from the found matches
 						PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
-					} else if (type == JoinType::ANTI) {
+					} else if (join_type == JoinType::ANTI) {
 						PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
 					}
 					// move to the next LHS chunk in the next iteration
@@ -286,7 +286,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		right_data.Verify();
 
 		// now perform the join
-		switch (type) {
+		switch (join_type) {
 		case JoinType::LEFT:
 		case JoinType::INNER: {
 			SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);

@@ -90,26 +90,26 @@ void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
+void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (MergeJoinGlobalState &) state;
-	if (gstate.right_conditions.chunks.size() == 0) {
-		return;
-	}
-	// now order all the chunks
-	gstate.right_orders.resize(gstate.right_conditions.chunks.size());
-	for (idx_t i = 0; i < gstate.right_conditions.chunks.size(); i++) {
-		auto &chunk_to_order = *gstate.right_conditions.chunks[i];
-		assert(chunk_to_order.column_count() == 1);
-		for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
-			OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), gstate.right_orders[i]);
-			if (gstate.right_orders[i].count < chunk_to_order.size()) {
-				// the amount of entries in the order vector is smaller than the amount of entries in the vector
-				// this only happens if there are NULL values in the right-hand side
-				// hence we set the has_null to true (this is required for the MARK join)
-				gstate.has_null = true;
+	if (gstate.right_conditions.chunks.size() > 0) {
+		// now order all the chunks
+		gstate.right_orders.resize(gstate.right_conditions.chunks.size());
+		for (idx_t i = 0; i < gstate.right_conditions.chunks.size(); i++) {
+			auto &chunk_to_order = *gstate.right_conditions.chunks[i];
+			assert(chunk_to_order.column_count() == 1);
+			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
+				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), gstate.right_orders[i]);
+				if (gstate.right_orders[i].count < chunk_to_order.size()) {
+					// the amount of entries in the order vector is smaller than the amount of entries in the vector
+					// this only happens if there are NULL values in the right-hand side
+					// hence we set the has_null to true (this is required for the MARK join)
+					gstate.has_null = true;
+				}
 			}
 		}
 	}
+	PhysicalSink::Finalize(context, move(state));
 }
 
 //===--------------------------------------------------------------------===//
@@ -154,7 +154,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			}
 			if (gstate.right_chunks.count == 0) {
 				// empty RHS: construct empty result
-				ConstructEmptyJoinResult(type, gstate.has_null, state->child_chunk, chunk);
+				ConstructEmptyJoinResult(join_type, gstate.has_null, state->child_chunk, chunk);
 				return;
 			}
 
@@ -178,7 +178,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		// check if the join type is MARK, SEMI or ANTI
 		// in this case we loop over the entire right collection immediately
 		// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
-		switch (type) {
+		switch (join_type) {
 		case JoinType::MARK: {
 			// MARK join
 			ChunkMergeInfo right_info(gstate.right_conditions, gstate.right_orders);
@@ -203,7 +203,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 
 		ScalarMergeInfo right(right_orders, right_condition_chunk.data[0].type, state->right_position);
 		// perform the merge join
-		switch (type) {
+		switch (join_type) {
 		case JoinType::INNER: {
 			idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {

@@ -1,5 +1,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -24,10 +26,12 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	context.profiler.Initialize(physical_plan.get());
 
-	BuildPipelines(physical_plan.get(), pipelines);
+	BuildPipelines(physical_plan.get(), nullptr);
 	// schedule pipelines that do not have dependents
 	for(auto &pipeline : pipelines) {
-		Schedule(pipeline.get());
+		if (pipeline->dependencies.size() == 0) {
+			Schedule(pipeline.get());
+		}
 	}
 }
 
@@ -37,12 +41,16 @@ void ExecutionContext::Reset() {
 }
 
 
-void ExecutionContext::BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pipeline>> &pipelines) {
+void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_unique<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink*) op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
+		if (parent) {
+			// the parent is dependent on this pipeline to complete
+			parent->AddDependency(pipeline.get());
+		}
 		switch(op->type) {
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE:
@@ -64,34 +72,50 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pi
 			// regular join, create a pipeline with RHS source that sinks into this pipeline
 			pipeline->child = op->children[1].get();
 			// on the LHS (probe child), we recurse with the current set of pipelines
-			BuildPipelines(op->children[0].get(), pipelines);
+			BuildPipelines(op->children[0].get(), parent);
 			break;
+		case PhysicalOperatorType::DELIM_JOIN: {
+			// duplicate eliminated join
+			auto &delim_join = (PhysicalDelimJoin &) *op;
+			// create a pipeline with the duplicate eliminated path as source
+			pipeline->child = op->children[0].get();
+			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+			// we add an entry to the mapping of (ChunkCollection*) -> (Pipeline*)
+			delim_join_dependencies[&delim_join.delim_data] = pipeline.get();
+			// recurse into the actual join; any pipelines in there depend on the main pipeline
+			BuildPipelines(delim_join.join.get(), parent);
+			break;
+		}
 		default:
 			throw NotImplementedException("Unimplemented sink type!");
 		}
 		// recurse into the pipeline child
-		BuildPipelines(pipeline->child, pipeline->dependents);
-		for(auto &child : pipeline->dependents) {
-			child->parent = pipeline.get();
-		}
+		BuildPipelines(pipeline->child, pipeline.get());
 		pipelines.push_back(move(pipeline));
 	} else {
 		// operator is not a sink! recurse in children
+		// first check if there is any additional action we need to do depending on the type
+		if (op->type == PhysicalOperatorType::DELIM_SCAN) {
+			auto &chunk_scan = (PhysicalChunkScan&) *op;
+			// check if this chunk scan scans a duplicate eliminated join collection
+			auto entry = delim_join_dependencies.find(chunk_scan.collection);
+			assert(entry != delim_join_dependencies.end());
+				// this chunk scan introduces a dependency to the current pipeline
+			// namely a dependency on the duplicate elimination pipeline to finish
+			assert(parent);
+			//if (parent) {
+			parent->AddDependency(entry->second);
+			//}
+		}
 		for(auto &child : op->children) {
-			BuildPipelines(child.get(), pipelines);
+			BuildPipelines(child.get(), parent);
 		}
 	}
 };
 
 void ExecutionContext::Schedule(Pipeline *pipeline) {
-	if (pipeline->dependents.size() > 0) {
-		// cannot schedule this pipeline: try to schedule its dependents
-		for(auto &dependent : pipeline->dependents) {
-			Schedule(dependent.get());
-		}
-	} else {
-		scheduled_pipelines.push(pipeline);
-	}
+	assert(pipeline->dependencies.size() == 0);
+	scheduled_pipelines.push(pipeline);
 }
 
 vector<TypeId> ExecutionContext::GetTypes() {
@@ -119,11 +143,10 @@ unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
 	return chunk;
 }
 
-void ExecutionContext::EraseDependent(Pipeline *pipeline) {
+void ExecutionContext::ErasePipeline(Pipeline *pipeline) {
 	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),  [&](std::unique_ptr<Pipeline>& p) {
 		return p.get() == pipeline;
 	}));
-
 }
 
 }

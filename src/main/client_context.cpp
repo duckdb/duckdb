@@ -566,6 +566,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		copied_result->error = ex.what();
+		copied_result->success = false;
 	}
 	// now execute the deserialized statement
 	try {
@@ -573,6 +574,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		deserialized_result->error = ex.what();
+		deserialized_result->success = false;
 	}
 	// now execute the unoptimized statement
 	enable_optimizer = false;
@@ -581,6 +583,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		unoptimized_result->error = ex.what();
+		unoptimized_result->success = false;
 	}
 
 	enable_optimizer = true;

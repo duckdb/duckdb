@@ -45,9 +45,9 @@ void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, Loc
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::Finalize(ClientContext &context, GlobalOperatorState &state) {
+void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
-	auto &sink = (OrderByGlobalOperatorState&) state;
+	auto &sink = (OrderByGlobalOperatorState&) *state;
 	ChunkCollection &big_data = sink.sorted_data;
 
 	// compute the sorting columns from the input data
@@ -75,6 +75,8 @@ void PhysicalOrder::Finalize(ClientContext &context, GlobalOperatorState &state)
 	// now perform the actual sort
 	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
 	sort_collection.Sort(order_types, sink.sorted_vector.get());
+
+	PhysicalSink::Finalize(context, move(state));
 }
 
 //===--------------------------------------------------------------------===//

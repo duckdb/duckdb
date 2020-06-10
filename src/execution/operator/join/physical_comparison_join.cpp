@@ -22,7 +22,7 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 }
 
 string PhysicalComparisonJoin::ExtraRenderInformation() const {
-	string extra_info = JoinTypeToString(type) + "\n";
+	string extra_info = JoinTypeToString(join_type) + "\n";
 	for (auto &it : conditions) {
 		string op = ExpressionTypeToOperator(it.comparison);
 		extra_info += it.left->GetName() + op + it.right->GetName() + "\n";

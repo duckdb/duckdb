@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 
 using namespace std;
 
@@ -23,7 +24,7 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	}
 
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
-	if (type != JoinType::ANTI && type != JoinType::SEMI && type != JoinType::MARK) {
+	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
 
@@ -51,7 +52,37 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<HashJoinGlobalState>();
-	state->hash_table = make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, type);
+	state->hash_table = make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
+	if (delim_types.size() > 0 && join_type == JoinType::MARK) {
+		// correlated MARK join
+		if (delim_types.size() + 1 == conditions.size()) {
+			// the correlated MARK join has one more condition than the amount of correlated columns
+			// this is the case in a correlated ANY() expression
+			// in this case we need to keep track of additional entries, namely:
+			// - (1) the total amount of elements per group
+			// - (2) the amount of non-null elements per group
+			// we need these to correctly deal with the cases of either:
+			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
+			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
+			auto &info = state->hash_table->correlated_mark_join_info;
+
+			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
+			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
+			vector<BoundAggregateExpression *> correlated_aggregates;
+			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
+				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
+				correlated_aggregates.push_back(&*aggr);
+				info.correlated_aggregates.push_back(move(aggr));
+			}
+			info.correlated_counts =
+			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
+			info.correlated_types = delim_types;
+			// FIXME: these can be initialized "empty" (without allocating empty vectors)
+			info.group_chunk.Initialize(delim_types);
+			info.payload_chunk.Initialize(payload_types);
+			info.result_chunk.Initialize(payload_types);
+		}
+	}
 	return move(state);
 }
 
@@ -90,9 +121,11 @@ void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, GlobalOperatorState &state) {
-	auto &sink = (HashJoinGlobalState&) state;
+void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	auto &sink = (HashJoinGlobalState&) *state;
 	sink.hash_table->Finalize();
+
+	PhysicalSink::Finalize(context, move(state));
 }
 
 //===--------------------------------------------------------------------===//

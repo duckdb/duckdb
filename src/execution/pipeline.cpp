@@ -1,15 +1,16 @@
 #include "duckdb/execution/pipeline.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
 Pipeline::Pipeline(ExecutionContext &execution_context) :
-	execution_context(execution_context), parent(nullptr) {
+	execution_context(execution_context) {
 
 }
 
 void Pipeline::Execute(ClientContext &context) {
-	assert(dependents.size() == 0);
+	assert(dependencies.size() == 0);
 	auto state = child->GetOperatorState();
 	auto lstate = sink->GetLocalSinkState(context);
 	// incrementally process the pipeline
@@ -19,7 +20,7 @@ void Pipeline::Execute(ClientContext &context) {
 		child->GetChunk(context, intermediate, state.get());
 		if (intermediate.size() == 0) {
 			sink->Combine(context, *sink_state, *lstate);
-			sink->Finalize(context, *sink_state);
+			sink->Finalize(context, move(sink_state));
 			break;
 		}
 		sink->Sink(context, *sink_state, *lstate, intermediate);
@@ -27,31 +28,43 @@ void Pipeline::Execute(ClientContext &context) {
 	Finish();
 }
 
-void Pipeline::EraseDependent(Pipeline *pipeline) {
-	assert(std::find_if(dependents.begin(), dependents.end(), [&](std::unique_ptr<Pipeline>& p) {
-		return p.get() == pipeline;
-	}) != dependents.end());
+void Pipeline::AddDependency(Pipeline *pipeline) {
+	this->dependencies.insert(pipeline);
+	pipeline->parents.insert(this);
+}
 
-	dependents.erase(std::find_if(dependents.begin(), dependents.end(), [&](std::unique_ptr<Pipeline>& p) {
-		return p.get() == pipeline;
-	}));
-	if (dependents.size() == 0) {
+void Pipeline::EraseDependency(Pipeline *pipeline) {
+	assert(dependencies.count(pipeline) == 1);
+
+	dependencies.erase(dependencies.find(pipeline));
+	if (dependencies.size() == 0) {
 		// no more dependents: schedule this pipeline
 		execution_context.Schedule(this);
 	}
 }
 
 void Pipeline::Finish() {
-	sink->sink_state = move(sink_state);
-
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
-	if (parent) {
+	for(auto &parent : parents) {
 		// parent: remove this entry from the dependents
-		parent->EraseDependent(this);
-	} else {
-		// no parent: erase pipeline from the execution context
-		execution_context.EraseDependent(this);
+		parent->EraseDependency(this);
 	}
+	// erase pipeline from the execution context
+	execution_context.ErasePipeline(this);
+}
+
+string Pipeline::ToString() const {
+	string str = PhysicalOperatorToString(sink->type);
+	auto node = this->child;
+	while(node) {
+		str = PhysicalOperatorToString(node->type) + " -> " + str;
+		node = node->children[0].get();
+	}
+	return str;
+}
+
+void Pipeline::Print() const {
+	Printer::Print(ToString());
 }
 
 }

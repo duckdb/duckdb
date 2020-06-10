@@ -26,7 +26,7 @@ public:
 
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
-	void BuildPipelines(PhysicalOperator *op, vector<unique_ptr<Pipeline>> &pipelines);
+	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
 	void Reset();
 
@@ -36,7 +36,7 @@ public:
 private:
 	void Schedule(Pipeline *pipeline);
 
-	void EraseDependent(Pipeline *pipeline);
+	void ErasePipeline(Pipeline *pipeline);
 
 	std::queue<Pipeline*> scheduled_pipelines;
 private:
@@ -44,5 +44,6 @@ private:
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 	vector<unique_ptr<Pipeline>> pipelines;
+	unordered_map<ChunkCollection*, Pipeline*> delim_join_dependencies;
 };
 } // namespace duckdb

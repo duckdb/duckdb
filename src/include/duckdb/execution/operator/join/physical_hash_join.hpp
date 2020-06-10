@@ -26,20 +26,21 @@ public:
 	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
 	vector<idx_t> right_projection_map;
+	//! The types of the keys
+	vector<TypeId> condition_types;
+	//! The types of all conditions
+	vector<TypeId> build_types;
+	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
+	vector<TypeId> delim_types;
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
 	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
-	void Finalize(ClientContext &context, GlobalOperatorState &state) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-private:
-	//! The types of the keys
-	vector<TypeId> condition_types;
-	//! The types of all conditions
-	vector<TypeId> build_types;
 private:
 	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 };
