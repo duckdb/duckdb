@@ -4,6 +4,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 #include <iostream>
@@ -122,15 +123,6 @@ void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 		assert(tree_map.count(execution_stack.top()) > 0);
 		auto &info = tree_map[execution_stack.top()]->info;
 		info.time += op.Elapsed();
-	}
-	if (tree_map.count(phys_op) == 0) {
-		// element does not exist in the tree! this only happens with a subquery
-		// create a new tree
-		assert(execution_stack.size() > 0);
-		auto node = tree_map[execution_stack.top()];
-		auto new_tree = CreateTree(phys_op, node->depth + 1);
-		// add it to the current node
-		node->children.push_back(move(new_tree));
 	}
 	assert(tree_map.count(phys_op) != 0);
 	execution_stack.push(phys_op);
@@ -283,6 +275,13 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	tree_map[root] = node.get();
 	for (auto &child : root->children) {
 		auto child_node = CreateTree(child.get(), depth + 1);
+		node->children.push_back(move(child_node));
+	}
+	if (root->type == PhysicalOperatorType::DELIM_JOIN) {
+		auto &delim_join = (PhysicalDelimJoin&) *root;
+		auto child_node = CreateTree((PhysicalOperator*) delim_join.join.get(), depth + 1);
+		node->children.push_back(move(child_node));
+		child_node = CreateTree((PhysicalOperator*) delim_join.distinct.get(), depth + 1);
 		node->children.push_back(move(child_node));
 	}
 	return node;
