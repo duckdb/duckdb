@@ -38,7 +38,7 @@ matrix:
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
        
         - build/release/test/unittest "*"
-        - python3 tools/shell/shell-test.py build/release/duckdb
+        - python3.7 tools/shell/shell-test.py build/release/duckdb
         - build/release/extension/icu/test/icu_test
         - build/release/extension/parquet/test/parquet_test
         - python3 tools/rest/test_the_rest.py build/release/tools/rest
