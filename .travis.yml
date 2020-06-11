@@ -88,7 +88,7 @@ matrix:
 
       script:
         - C:/Python37-x64/python.exe scripts/amalgamation.py
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DAMALGAMATION_BUILD=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
@@ -231,14 +231,17 @@ matrix:
         - export CC=gcc-9 CXX=g++-9
 
       script:
+        - python3 scripts/amalgamation.py
         - mkdir -p build/release
-        - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - (cd build/release && cmake  -DAMALGAMATION_BUILD=1  -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
+        - build/release/extension/icu/test/icu_test
+        - build/release/extension/parquet/test/parquet_test
 
         - zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so
         - zip -j duckdb_cli-linux-i386.zip build/release/duckdb
 
-        - python3 scripts/asset-upload.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
+        - python3 scripts/asset-upload.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
 
     - os: windows
@@ -252,13 +255,16 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
+        - choco install jdk8 --version 8.0.211 --x86 -y --force 
         - choco install zip -y --force
 
       script:
-        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32
+        - C:/Python37-x64/python.exe scripts/amalgamation.py
+        - cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1
         - cmake --build . --target duckdb --config Release
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
+        - cmake --build . --target jdbc --config Release
 
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb.exe
