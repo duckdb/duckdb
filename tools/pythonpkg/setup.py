@@ -69,6 +69,10 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
 else:
     setup_requires = []
 
+setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
+if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
+    setuptools_scm_conf['local_scheme'] = 'no-local-version'
+
 setup(
     name = "duckdb",
     description = 'DuckDB embedded database',
@@ -82,7 +86,7 @@ setup(
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
-    use_scm_version = {"root": "../..", "relative_to": __file__},
+    use_scm_version = setuptools_scm_conf,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
