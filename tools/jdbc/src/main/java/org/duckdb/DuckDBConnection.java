@@ -5,6 +5,7 @@ import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
 import java.sql.Clob;
+import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
@@ -36,6 +37,10 @@ public class DuckDBConnection implements java.sql.Connection {
 			throw new SQLException("Connection was closed");
 		}
 		return new DuckDBPreparedStatement(this);
+	}
+
+	public Connection duplicate() {
+		return new DuckDBConnection(db);
 	}
 
 	public void commit() throws SQLException {
