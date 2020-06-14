@@ -14,6 +14,12 @@ if(${BUILD_PARQUET_EXTENSION})
     target_link_libraries(sqlite3_api_wrapper_static parquet_extension)
 endif()
 
+if(${BUILD_ICU_EXTENSION})
+	include_directories(../../extension/icu/include)
+    target_link_libraries(sqlite3_api_wrapper icu_extension)
+    target_link_libraries(sqlite3_api_wrapper_static icu_extension)
+endif()
+
 include_directories(../../third_party/catch)
 
 add_executable(test_sqlite3_api_wrapper test_sqlite3_api_wrapper.cpp)

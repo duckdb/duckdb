@@ -874,5 +874,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	Connection conn(db);
 	conn.context->transaction.BeginTransaction();
 	conn.context->catalog.CreateTableFunction(*conn.context, &info);
+	info.name = "read_parquet"; // ok we will have this alias
+	conn.context->catalog.CreateTableFunction(*conn.context, &info);
+
 	conn.context->transaction.Commit();
 }
