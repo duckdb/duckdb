@@ -68,6 +68,14 @@ int sqlite3_open(const char *filename, /* Database filename (UTF-8) */
 	return sqlite3_open_v2(filename, ppDb, 0, NULL);
 }
 
+#ifdef BUILD_ICU_EXTENSION
+#include "icu-extension.hpp"
+#endif
+
+#ifdef BUILD_PARQUET_EXTENSION
+#include "parquet-extension.hpp"
+#endif
+
 int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     sqlite3 **ppDb,       /* OUT: SQLite db handle */
                     int flags,            /* Flags */
@@ -90,6 +98,13 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			}
 			pDb->db = make_unique<DuckDB>(filename, &config);
 			pDb->con = make_unique<Connection>(*pDb->db);
+
+#ifdef BUILD_ICU_EXTENSION
+			pDb->db->LoadExtension<ICUExtension>();
+#endif
+#ifdef BUILD_PARQUET_EXTENSION
+			pDb->db->LoadExtension<ParquetExtension>();
+#endif
 		} catch (std::exception &ex) {
 			if (pDb) {
 				pDb->last_error = ex.what();

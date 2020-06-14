@@ -252,6 +252,18 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+
+option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
+if(${BUILD_ICU_EXTENSION})
+	add_definitions( -DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION} )
+endif()
+
+option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
+if(${BUILD_PARQUET_EXTENSION})
+	add_definitions( -DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION} )
+endif()
+
+
 add_subdirectory(extension)
 add_subdirectory(src)
 add_subdirectory(third_party)

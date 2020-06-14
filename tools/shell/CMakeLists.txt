@@ -16,6 +16,7 @@ target_link_libraries(shell sqlite3_api_wrapper_static)
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
   target_link_libraries(shell utf8proc)
 endif()
+
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell
                       PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
