@@ -8,6 +8,8 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 
+import org.duckdb.DuckDBConnection;
+
 public class TestDuckDBJDBC {
 
 	private static void assertTrue(boolean val) throws Exception {
@@ -28,7 +30,6 @@ public class TestDuckDBJDBC {
 		assertTrue(a == null);
 	}
 
-	
 	private static void assertEquals(double a, double b, double epsilon) throws Exception {
 		assertTrue(Math.abs(a - b) < epsilon);
 	}
@@ -181,7 +182,14 @@ public class TestDuckDBJDBC {
 		rs.close();
 
 		stmt.close();
+		// test duplication
+		Connection conn2 = ((DuckDBConnection) conn).duplicate();
+		ResultSet rs_conn2 = conn2.createStatement().executeQuery("SELECT 42");
+		rs_conn2.next();
+		assertEquals(42, rs_conn2.getInt(1));
+		rs_conn2.close();
 		conn.close();
+		conn2.close();
 	}
 
 	public static void test_empty_table() throws Exception {
