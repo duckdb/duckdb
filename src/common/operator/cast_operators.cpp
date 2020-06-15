@@ -175,7 +175,7 @@ template <class T> static T try_strict_cast_string(string_t input) {
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
-	idx_t pos = NEGATIVE ? 1 : 0;
+	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	while (buf[pos]) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
@@ -309,7 +309,7 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx
 }
 
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result, bool strict) {
-	idx_t pos = NEGATIVE ? 1 : 0;
+	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (buf[pos]) {
