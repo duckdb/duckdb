@@ -617,7 +617,8 @@ public class TestDuckDBJDBC {
 		} catch (Exception e) {
 		}
 
-		conn_rw.close();
+		// hard shutdown to not have to wait on gc
+		((DuckDBConnection) conn_rw).getDatabase().shutdown();
 
 		// we can create two parallel read only connections and query them, too
 		Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);

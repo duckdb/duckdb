@@ -43,6 +43,10 @@ public class DuckDBConnection implements java.sql.Connection {
 		return new DuckDBConnection(db);
 	}
 
+	public DuckDBDatabase getDatabase() {
+		return db;
+	}
+
 	public void commit() throws SQLException {
 		Statement s = createStatement();
 		s.execute("COMMIT");

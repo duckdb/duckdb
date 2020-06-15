@@ -22,6 +22,13 @@ public class DuckDBDatabase {
 		db_ref = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), read_only);
 	}
 
+	public synchronized void shutdown() {
+		try {
+			finalize();
+		} catch (Throwable e) {
+		}
+	}
+
 	protected synchronized void finalize() throws Throwable {
 		if (db_ref != null) {
 			DuckDBNative.duckdb_jdbc_shutdown(db_ref);
