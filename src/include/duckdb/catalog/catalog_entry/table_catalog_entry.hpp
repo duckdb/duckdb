@@ -58,6 +58,9 @@ public:
 	//! Returns a list of types of the specified columns of the table
 	vector<TypeId> GetTypes(const vector<column_t> &column_ids);
 
+	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
+	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);
+
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo

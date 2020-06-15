@@ -24,8 +24,30 @@
 
 #include <algorithm>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
+
+void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &name_map) {
+	unordered_map<string, column_t> extra_lowercase_names;
+	for(auto &entry : name_map) {
+		auto lcase = StringUtil::Lower(entry.first);
+		// check the lowercase name map if there already exists a lowercase version
+		if (extra_lowercase_names.find(lcase) == extra_lowercase_names.end()) {
+			// not yet: add the mapping
+			extra_lowercase_names[lcase] = entry.second;
+		} else {
+			// the lowercase already exists: set it to invalid index
+			extra_lowercase_names[lcase] = INVALID_INDEX;
+		}
+	}
+	// for any new lowercase names, add them to the original name map
+	for(auto &entry : extra_lowercase_names) {
+		if (entry.second != INVALID_INDEX) {
+			name_map[entry.first] = entry.second;
+		}
+	}
+}
 
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
@@ -33,6 +55,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
 	this->temporary = info->Base().temporary;
+	// add lower case aliases
+	AddLowerCaseAliases(name_map);
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -441,4 +465,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::Copy(ClientContext &context) {
 
 void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
+}
+
 }
