@@ -10,6 +10,8 @@ import java.util.logging.Logger;
 
 public class DuckDBDriver implements java.sql.Driver {
 
+	static final String DUCKDB_READONLY_PROPERTY = "duckdb.read_only";
+
 	static {
 		try {
 			DriverManager.registerDriver(new DuckDBDriver());
@@ -19,7 +21,15 @@ public class DuckDBDriver implements java.sql.Driver {
 	}
 
 	public Connection connect(String url, Properties info) throws SQLException {
-		DuckDBDatabase db = new DuckDBDatabase(url);
+		boolean read_only = false;
+		if (info != null) {
+			String prop_val = info.getProperty(DUCKDB_READONLY_PROPERTY);
+			if (prop_val != null) {
+				String prop_clean = prop_val.trim().toLowerCase();
+				read_only = prop_clean.equals("1") || prop_clean.equals("true") || prop_clean.equals("yes");
+			}
+		}
+		DuckDBDatabase db = new DuckDBDatabase(url, read_only);
 		return new DuckDBConnection(db);
 	}
 

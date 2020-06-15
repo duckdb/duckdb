@@ -1,12 +1,16 @@
 package org.duckdb.test;
 
+import java.io.File;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
 
@@ -583,6 +587,77 @@ public class TestDuckDBJDBC {
 		stmt.close();
 
 		conn.close();
+
+	}
+
+	public static void test_read_only() throws Exception {
+		Path database_file = Files.createTempFile("duckdb-jdbc-test-", ".duckdb");
+		database_file.toFile().delete();
+
+		String jdbc_url = "jdbc:duckdb:" + database_file.toString();
+		Properties ro_prop = new Properties();
+		ro_prop.setProperty("duckdb.read_only", "true");
+
+		Connection conn_rw = DriverManager.getConnection(jdbc_url);
+		assertFalse(conn_rw.isReadOnly());
+		Statement stmt = conn_rw.createStatement();
+		stmt.execute("CREATE TABLE test (i INTEGER)");
+		stmt.execute("INSERT INTO test VALUES (42)");
+		stmt.close();
+		// we cannot create other connections, be it read-write or read-only right now
+		try {
+			Connection conn2 = DriverManager.getConnection(jdbc_url);
+			fail();
+		} catch (Exception e) {
+		}
+
+		try {
+			Connection conn2 = DriverManager.getConnection(jdbc_url, ro_prop);
+			fail();
+		} catch (Exception e) {
+		}
+
+		// hard shutdown to not have to wait on gc
+		((DuckDBConnection) conn_rw).getDatabase().shutdown();
+
+		try {
+			Statement stmt2 = conn_rw.createStatement();
+			stmt2.executeQuery("SELECT 42");
+			stmt2.close();
+			fail();
+		} catch (Exception e) {
+		}
+
+		try {
+			Connection conn_dup = ((DuckDBConnection) conn_rw).duplicate();
+			conn_dup.close();
+			fail();
+		} catch (Exception e) {
+		}
+
+		// we can create two parallel read only connections and query them, too
+		Connection conn_ro1 = DriverManager.getConnection(jdbc_url, ro_prop);
+		Connection conn_ro2 = DriverManager.getConnection(jdbc_url, ro_prop);
+
+		assertTrue(conn_ro1.isReadOnly());
+		assertTrue(conn_ro2.isReadOnly());
+
+		Statement stmt1 = conn_ro1.createStatement();
+		ResultSet rs1 = stmt1.executeQuery("SELECT * FROM test");
+		rs1.next();
+		assertEquals(rs1.getInt(1), 42);
+		rs1.close();
+		stmt1.close();
+
+		Statement stmt2 = conn_ro2.createStatement();
+		ResultSet rs2 = stmt2.executeQuery("SELECT * FROM test");
+		rs2.next();
+		assertEquals(rs2.getInt(1), 42);
+		rs2.close();
+		stmt2.close();
+
+		conn_ro1.close();
+		conn_ro2.close();
 
 	}
 
