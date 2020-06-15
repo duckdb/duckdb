@@ -107,13 +107,13 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setReadOnly(boolean readOnly) throws SQLException {
-		if (readOnly) {
-			throw new SQLFeatureNotSupportedException("Invidual connections can't be read-only");
+		if (readOnly != db.read_only) {
+			throw new SQLFeatureNotSupportedException("Can't change read-only status on connection level.");
 		}
 	}
 
 	public boolean isReadOnly() throws SQLException {
-		return false;
+		return db.read_only;
 	}
 
 	// at some point we will implement this
