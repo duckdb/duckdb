@@ -26,7 +26,10 @@ public class DuckDBConnection implements java.sql.Connection {
 	protected ByteBuffer conn_ref = null;
 	protected DuckDBDatabase db;
 
-	public DuckDBConnection(DuckDBDatabase db) {
+	public DuckDBConnection(DuckDBDatabase db) throws SQLException {
+		if (db.db_ref == null) {
+			throw new SQLException("Database was shutdown");
+		}
 		conn_ref = DuckDBNative.duckdb_jdbc_connect(db.db_ref);
 		DuckDBNative.duckdb_jdbc_set_auto_commit(conn_ref, true);
 		this.db = db;
@@ -39,7 +42,13 @@ public class DuckDBConnection implements java.sql.Connection {
 		return new DuckDBPreparedStatement(this);
 	}
 
-	public Connection duplicate() {
+	public Connection duplicate() throws SQLException {
+		if (db == null) {
+			throw new SQLException("Connection was closed");
+		}
+		if (db.db_ref == null) {
+			throw new SQLException("Database was shutdown");
+		}
 		return new DuckDBConnection(db);
 	}
 

@@ -22,7 +22,7 @@ public class DuckDBDatabase {
 		db_ref = DuckDBNative.duckdb_jdbc_startup(db_dir.getBytes(StandardCharsets.UTF_8), read_only);
 	}
 
-	public synchronized void shutdown() {
+	public void shutdown() {
 		try {
 			finalize();
 		} catch (Throwable e) {
