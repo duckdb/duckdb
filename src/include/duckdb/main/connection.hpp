@@ -16,6 +16,7 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/function/udf_function.hpp"
 
 namespace duckdb {
 
@@ -102,7 +103,16 @@ public:
 	void Commit();
 	void Rollback();
 
+	template<typename TR, typename... Args>
+//	void CreateFunction(string name, void *udf_func) { // !this does not compile
+	void CreateFunction(string name, TR (*udf_func)(Args...)) {
+		udf_wrapper.CreateFunction<TR, Args...>(name, udf_func);
+	}
+
 private:
+	//! UDFWrapper to create temporary udf functions with this connection
+	UDFWrapper udf_wrapper;
+
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
 	template <typename T, typename... Args>

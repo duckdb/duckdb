@@ -14,7 +14,8 @@
 using namespace duckdb;
 using namespace std;
 
-Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)) {
+Connection::Connection(DuckDB &database) : db(database), context(make_unique<ClientContext>(database)),
+										   udf_wrapper(UDFWrapper(*context)) {
 	db.connection_manager->AddConnection(this);
 #ifdef DEBUG
 	EnableProfiling();
