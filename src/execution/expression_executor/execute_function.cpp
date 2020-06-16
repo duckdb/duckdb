@@ -1,5 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;
@@ -42,7 +43,11 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		}
 		arguments.Verify();
 	}
-	expr.function.function(arguments, *state, result);
+	if(expr.function.function) {
+		expr.function.function(arguments, *state, result);
+	} else {
+		expr.function.udf_function(arguments, *state, result);
+	}
 	if (result.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.type,
 		                            "expected function to return the former "
