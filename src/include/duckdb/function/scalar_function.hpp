@@ -15,6 +15,9 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/function.hpp"
 
+#include <iostream>
+using namespace std;
+
 namespace duckdb {
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
@@ -26,19 +29,22 @@ typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpressi
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
+//! The type of UDF functions
+typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> udf_function_t;
+
 class ScalarFunction : public SimpleFunction {
 public:
 	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr)
+	               dependency_function_t dependency = nullptr, udf_function_t udf_function = nullptr)
 	    : SimpleFunction(name, arguments, return_type, has_side_effects), function(function), bind(bind),
-	      dependency(dependency) {
+	      dependency(dependency), udf_function(udf_function) {
 	}
 
 	ScalarFunction(vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr)
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency) {
+	               dependency_function_t dependency = nullptr, udf_function_t udf_function = nullptr)
+	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, udf_function) {
 	}
 
 	//! The main scalar function to execute
@@ -47,6 +53,9 @@ public:
 	bind_scalar_function_t bind;
 	// The dependency function (if any)
 	dependency_function_t dependency;
+
+	//! An UDF function to execute
+	udf_function_t udf_function;
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<SQLType> &arguments,
