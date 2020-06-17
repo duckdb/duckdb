@@ -26,7 +26,6 @@ public:
 	UDFWrapper(ClientContext &context);
 
 	template<typename TR, typename... Args> void CreateFunction(string name, TR (*udf_func)(Args...)) {
-//	template<class TR, class... Args> void CreateFunction(string name, void *func) { // !this does not compile
 		const std::size_t num_template_argc = sizeof...(Args);
 		switch(num_template_argc) {
 			case 1:
@@ -43,12 +42,12 @@ public:
 		}
 	}
 
-	template<class TR, class... Args> void
-		CreateFunction(string name, TR (*udf_func)(Args...), vector<SQLType> args, SQLType return_type);
+	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func);
 
 private:
 	ClientContext &_context;
 
+	//-------------------------------- Templated functions --------------------------------//
 	template<typename TR, typename... Args>
 	void CreateUnaryFunction(string name, TR (*udf_func)(Args...)) {
 		CreateUnaryFunction<TR, Args...>(name, udf_func);
@@ -105,10 +104,10 @@ private:
 	    vector<SQLType> arguments;
 	    GetArgumentTypesRecursive<Args...>(arguments);
 
-	    SQLType return_type = GetArgumentType<TR>();
+	    SQLType ret_type = GetArgumentType<TR>();
 
-		ScalarFunction scalar_function = ScalarFunction(name, arguments, return_type, nullptr,
-														false, nullptr, nullptr, udf_function);
+		ScalarFunction scalar_function = ScalarFunction(name, arguments, ret_type, nullptr, false,
+														nullptr, nullptr, udf_function);
 		CreateScalarFunctionInfo info(scalar_function);
 
 		_context.transaction.BeginTransaction();
@@ -142,6 +141,89 @@ private:
 		arguments.push_back(GetArgumentType<TA>());
 	}
 
+private:
+	//-------------------------------- Argumented functions --------------------------------//
+
+	void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type, udf_function_t udf_function) {
+		ScalarFunction scalar_function = ScalarFunction(name, args, ret_type, nullptr, false,
+														nullptr, nullptr, udf_function);
+		CreateScalarFunctionInfo info(scalar_function);
+
+		_context.transaction.BeginTransaction();
+		_context.catalog.CreateFunction(_context, &info);
+		_context.transaction.Commit();
+	}
+
+	template <class TR>
+	void CreateFunctionInitial(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
+		if(args.size() == 0) {
+			return;
+		}
+		switch(args[0].id) {
+		case SQLTypeId::INTEGER:
+			CreateUnaryFunction<TR, int>(name, args, ret_type, udf_func);
+			break;
+		}
+	}
+
+	template <class TR, class TA>
+	void CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
+		if(args.size() == 1) {
+			auto func_ptr = (TR(*)(TA)) udf_func;
+		    udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
+											UnaryExecutor::Execute<TA, TR>(input.data[0],
+																		   result,
+																		   input.size(),
+																		   func_ptr);
+										};
+			RegisterFunction(name, args, ret_type, udf_function);
+			return;
+		}
+		switch(args[1].id) {
+		case SQLTypeId::INTEGER:
+			CreateBinaryFunction<TR, TA, int>(name, args, ret_type, udf_func);
+			break;
+		}
+	}
+
+	template <class TR, class TA, class TB>
+	void CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
+		if(args.size() == 2) {
+			auto func_ptr = (TR(*)(TA, TB)) udf_func;
+			udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
+											BinaryExecutor::Execute<TA, TB, TR>(input.data[0],
+																				input.data[1],
+																				result,
+																				input.size(),
+																				func_ptr);
+										};
+			RegisterFunction(name, args, ret_type, udf_function);
+			return;
+		}
+		switch(args[2].id) {
+		case SQLTypeId::INTEGER:
+			CreateTernaryFunction<TR, TA, TB, int>(name, args, ret_type, udf_func);
+			break;
+		}
+	}
+
+	template <class TR, class TA, class TB, class TC>
+	void CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
+		if(args.size() == 3) {
+			auto func_ptr = (TR(*)(TA, TB, TC)) udf_func;
+			udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
+											TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0],
+																					 input.data[1],
+																					 input.data[2],
+																					 result,
+																					 input.size(),
+																					 func_ptr);
+										};
+			RegisterFunction(name, args, ret_type, udf_function);
+			return;
+		}
+		throw duckdb::Exception(ExceptionType::EXECUTOR, "UDF function only supported until ternary!");
+	}
 
 }; // end UDFWrapper
 
