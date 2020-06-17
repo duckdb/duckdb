@@ -261,15 +261,14 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	}
 }
 
- TEST_CASE("Parquet file with random NULLs", "[parquet]") {
+TEST_CASE("Parquet file with random NULLs", "[parquet]") {
 	DuckDB db(nullptr);
 	db.LoadExtension<ParquetExtension>();
 	Connection con(db);
 	con.EnableQueryVerification();
 
 	auto result = con.Query("select count(col1) from parquet_scan('extension/parquet/test/bug687_nulls.parquet')");
-	result->Print();
-
+	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
 }
 
 //
