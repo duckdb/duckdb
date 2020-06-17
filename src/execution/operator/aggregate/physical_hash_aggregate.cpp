@@ -92,7 +92,6 @@ public:
 	DataChunk payload_chunk;
 };
 
-
 unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
 	return make_unique<HashAggregateGlobalState>(group_types, payload_types, bindings);
 }
@@ -203,5 +202,5 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types, children[0].get());
+	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types, children.size() == 0 ? nullptr : children[0].get());
 }

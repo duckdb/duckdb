@@ -6,6 +6,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -36,8 +37,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 		return plan;
 	}
 	vector<TypeId> delim_types;
+	vector<unique_ptr<Expression>> distinct_groups, distinct_expressions;
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
-		delim_types.push_back(delim_expr->return_type);
+		assert(delim_expr->type == ExpressionType::BOUND_REF);
+		auto &bound_ref = (BoundReferenceExpression&) *delim_expr;
+		delim_types.push_back(bound_ref.return_type);
+		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
 	if (op.join_type == JoinType::MARK) {
 		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
@@ -47,17 +52,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	// now create the duplicate eliminated join
 	auto delim_join = make_unique<PhysicalDelimJoin>(op, move(plan), delim_scans);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	// we create a ChunkCollectionScan that pulls from the delim_join LHS
-	auto chunk_scan =
-	    make_unique<PhysicalChunkScan>(delim_join->children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN);
-	chunk_scan->collection = &delim_join->lhs_data;
-	// now we need to create a projection that projects only the duplicate eliminated columns
-	assert(op.duplicate_eliminated_columns.size() > 0);
-	auto projection = make_unique<PhysicalProjection>(delim_types, move(op.duplicate_eliminated_columns));
-	projection->children.push_back(move(chunk_scan));
-	// finally create the distinct clause on top of the projection
-	auto distinct = CreateDistinct(move(projection));
-	assert(distinct->type == PhysicalOperatorType::DISTINCT);
-	delim_join->distinct = unique_ptr_cast<PhysicalOperator, PhysicalHashAggregate>(move(distinct));
+	delim_join->distinct = make_unique<PhysicalHashAggregate>(delim_types, move(distinct_expressions), move(distinct_groups), PhysicalOperatorType::DISTINCT);
 	return move(delim_join);
 }
