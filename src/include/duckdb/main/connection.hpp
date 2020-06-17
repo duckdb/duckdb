@@ -109,6 +109,11 @@ public:
 		udf_wrapper.CreateFunction<TR, Args...>(name, udf_func);
 	}
 
+	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
+		udf_wrapper.CreateFunction(name, args, ret_type, udf_func);
+	}
+
+
 private:
 	//! UDFWrapper to create temporary udf functions with this connection
 	UDFWrapper udf_wrapper;
