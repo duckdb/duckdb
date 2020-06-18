@@ -59,8 +59,14 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
 		assert(end - begin <= STANDARD_VECTOR_SIZE);
-		data_ptr_t ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
-		Vector v(result_type, ptr);
+		// find out where the states begin
+		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
+		// set up a vector of pointers that point towards the set of states
+		Vector v(TypeId::POINTER);
+		auto pdata = FlatVector::GetData<data_ptr_t>(v);
+		for(idx_t i = 0; i < inputs.size(); i++) {
+			pdata[i] = begin_ptr + i * state.size();
+		}
 		v.Verify(inputs.size());
 		aggregate.combine(v, s, inputs.size());
 	}
