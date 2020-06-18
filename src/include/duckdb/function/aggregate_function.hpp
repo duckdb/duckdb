@@ -103,13 +103,6 @@ public:
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
 	};
-	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction BinaryAggregateDestructor(SQLType a_type, SQLType b_type, SQLType return_type) {
-		auto aggregate = BinaryAggregate<STATE, A_TYPE, B_TYPE, RESULT_TYPE, OP>(a_type, b_type, return_type);
-		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
-		return aggregate;
-	};
-
 public:
 	template <class OP> static AggregateFunction GetNumericUnaryAggregate(SQLType type) {
 		switch (type.id) {

@@ -16,10 +16,12 @@ namespace duckdb {
 //! without any DISTINCT aggregates
 class PhysicalSimpleAggregate : public PhysicalSink {
 public:
-	PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions);
+	PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, bool all_combinable);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+	//! Whether or not all aggregates are trivially combinable. Aggregates that are trivially combinable can be parallelized.
+	bool all_combinable;
 public:
 	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;

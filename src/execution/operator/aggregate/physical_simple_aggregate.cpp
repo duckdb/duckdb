@@ -8,8 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions)
-    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)) {
+PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, bool all_combinable)
+    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)), all_combinable(all_combinable) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -37,6 +37,11 @@ struct AggregateState {
 
 			destructors[i](state_vector, 1);
 		}
+	}
+
+	void Move(AggregateState &other) {
+		other.aggregates = move(aggregates);
+		other.destructors = move(destructors);
 	}
 	void Clear() {
 		aggregates.clear();
@@ -136,15 +141,23 @@ void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorStat
 	auto &source = (SimpleAggregateLocalState &) lstate;
 
 	// finalize: combine the local state into the global state
-	lock_guard<mutex> glock(gstate.lock);
-	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
-		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
-		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+	if (all_combinable) {
+		// all aggregates are combinable: we might be doing a parallel aggregate
+		// use the combine method to combine the partial aggregates
+		lock_guard<mutex> glock(gstate.lock);
+		for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+			Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
+			Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
-		aggregate.function.combine(source_state, dest_state, 1);
+			aggregate.function.combine(source_state, dest_state, 1);
+		}
+		source.state.Clear();
+	} else {
+		// complex aggregates: this is necessarily a non-parallel aggregate
+		// simply move over the source state into the global state
+		source.state.Move(gstate.state);
 	}
-	source.state.Clear();
 }
 
 //===--------------------------------------------------------------------===//
