@@ -38,6 +38,11 @@ struct AggregateState {
 			destructors[i](state_vector, 1);
 		}
 	}
+	void Clear() {
+		aggregates.clear();
+		destructors.clear();
+	}
+
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
 	// The destructors
@@ -139,6 +144,7 @@ void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorStat
 
 		aggregate.function.combine(source_state, dest_state, 1);
 	}
+	source.state.Clear();
 }
 
 //===--------------------------------------------------------------------===//
