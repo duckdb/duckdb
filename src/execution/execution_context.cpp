@@ -2,6 +2,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
@@ -95,17 +96,26 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	} else {
 		// operator is not a sink! recurse in children
 		// first check if there is any additional action we need to do depending on the type
-		if (op->type == PhysicalOperatorType::DELIM_SCAN) {
+		switch(op->type) {
+		case PhysicalOperatorType::DELIM_SCAN: {
 			auto &chunk_scan = (PhysicalChunkScan&) *op;
 			// check if this chunk scan scans a duplicate eliminated join collection
 			auto entry = delim_join_dependencies.find(chunk_scan.collection);
 			assert(entry != delim_join_dependencies.end());
-				// this chunk scan introduces a dependency to the current pipeline
+			// this chunk scan introduces a dependency to the current pipeline
 			// namely a dependency on the duplicate elimination pipeline to finish
 			assert(parent);
-			//if (parent) {
 			parent->AddDependency(entry->second);
-			//}
+			break;
+		}
+		case PhysicalOperatorType::EXECUTE: {
+			// EXECUTE statement: build pipeline on child
+			auto &execute = (PhysicalExecute &) *op;
+			BuildPipelines(execute.plan, parent);
+			break;
+		}
+		default:
+			break;
 		}
 		for(auto &child : op->children) {
 			BuildPipelines(child.get(), parent);

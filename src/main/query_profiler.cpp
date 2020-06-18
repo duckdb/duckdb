@@ -5,6 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 #include <iostream>
@@ -19,9 +20,6 @@ constexpr idx_t MAX_EXTRA_LINES = 10;
 
 void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	if (!enabled) {
-		return;
-	}
-	if (statement.type != StatementType::SELECT_STATEMENT && statement.type != StatementType::EXECUTE_STATEMENT) {
 		return;
 	}
 	this->running = true;
@@ -277,12 +275,23 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(move(child_node));
 	}
-	if (root->type == PhysicalOperatorType::DELIM_JOIN) {
+	switch(root->type) {
+	case PhysicalOperatorType::DELIM_JOIN: {
 		auto &delim_join = (PhysicalDelimJoin&) *root;
 		auto child_node = CreateTree((PhysicalOperator*) delim_join.join.get(), depth + 1);
 		node->children.push_back(move(child_node));
 		child_node = CreateTree((PhysicalOperator*) delim_join.distinct.get(), depth + 1);
 		node->children.push_back(move(child_node));
+		break;
+	}
+	case PhysicalOperatorType::EXECUTE: {
+		auto &execute = (PhysicalExecute &) *root;
+		auto child_node = CreateTree((PhysicalOperator*) execute.plan, depth + 1);
+		node->children.push_back(move(child_node));
+		break;
+	}
+	default:
+		break;
 	}
 	return node;
 }
