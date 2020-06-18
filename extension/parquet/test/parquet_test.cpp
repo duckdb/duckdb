@@ -260,6 +260,17 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 		REQUIRE(CHECK_COLUMN(result, 1, {""}));
 	}
 }
+
+TEST_CASE("Parquet file with random NULLs", "[parquet]") {
+	DuckDB db(nullptr);
+	db.LoadExtension<ParquetExtension>();
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	auto result = con.Query("select count(col1) from parquet_scan('extension/parquet/test/bug687_nulls.parquet')");
+	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
+}
+
 //
 // TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 //	DuckDB db(nullptr);

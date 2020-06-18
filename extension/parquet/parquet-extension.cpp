@@ -74,9 +74,9 @@ public:
 		if (new_size > len) {
 			auto new_holder = std::unique_ptr<char[]>(new char[new_size]);
 			holder = move(new_holder);
-			ptr = holder.get();
 		}
 		len = new_size;
+		ptr = holder.get();
 	}
 
 private:
@@ -116,7 +116,8 @@ public:
 	}
 
 	/// Gets a batch of values.  Returns the number of decoded elements.
-	template <typename T> void GetBatch(T *values, uint32_t batch_size) {
+	template <typename T> void GetBatch(char *values_target_ptr, uint32_t batch_size) {
+		auto values = (T *)values_target_ptr;
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
@@ -158,6 +159,8 @@ private:
 	uint8_t byte_encoded_len;
 	uint32_t max_val;
 
+	int8_t bitpack_pos = 0;
+
 	// this is slow but whatever, calls are rare
 	static uint8_t VarintDecode(const uint8_t *source, uint32_t *result_out) {
 		uint32_t result = 0;
@@ -184,7 +187,10 @@ private:
 		// Read the next run's indicator int, it could be a literal or repeated run.
 		// The int is encoded as a vlq-encoded value.
 		uint32_t indicator_value;
-
+		if (bitpack_pos != 0) {
+			buffer++;
+			bitpack_pos = 0;
+		}
 		buffer += VarintDecode(buffer, &indicator_value);
 
 		// lsb indicates if it is a literal run or repeated run
@@ -215,21 +221,18 @@ private:
 	template <typename T> uint32_t BitUnpack(T *dest, uint32_t count) {
 		assert(bit_width_ < 32);
 
-		int8_t bitpack_pos = 0;
-		auto source = buffer;
+		// auto source = buffer;
 		auto mask = BITPACK_MASKS[bit_width_];
 
 		for (uint32_t i = 0; i < count; i++) {
-			T val = (*source >> bitpack_pos) & mask;
+			T val = (*buffer >> bitpack_pos) & mask;
 			bitpack_pos += bit_width_;
 			while (bitpack_pos > BITPACK_DLEN) {
-				val |= (*++source << (BITPACK_DLEN - (bitpack_pos - bit_width_))) & mask;
+				val |= (*++buffer << (BITPACK_DLEN - (bitpack_pos - bit_width_))) & mask;
 				bitpack_pos -= BITPACK_DLEN;
 			}
 			dest[i] = val;
 		}
-
-		buffer += bit_width_ * count / 8;
 		return count;
 	}
 };
@@ -264,6 +267,7 @@ struct ParquetScanColumnData {
 	ResizeableBuffer decompressed_buf; // only used for compressed files
 	ResizeableBuffer dict;
 	ResizeableBuffer offset_buf;
+	ResizeableBuffer defined_buf;
 
 	ByteBuffer payload;
 
@@ -406,11 +410,15 @@ private:
 	}
 
 	template <class T>
-	static void _fill_from_dict(ParquetScanColumnData &col_data, const char *defined_ptr, idx_t count, Vector &target,
-	                            idx_t target_offset) {
+	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
-			if (defined_ptr[i]) {
+			if (col_data.defined_buf.ptr[i]) {
 				auto offset = col_data.offset_buf.read<int32_t>();
+				if (offset > col_data.dict_size) {
+					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
+					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
+					                    ". Corrupt file?");
+				}
 				((T *)FlatVector::GetData(target))[i + target_offset] = ((const T *)col_data.dict.ptr)[offset];
 			} else {
 				FlatVector::SetNull(target, i + target_offset, true);
@@ -418,12 +426,10 @@ private:
 		}
 	}
 
-	// TODO make payload a buffer object
 	template <class T>
-	static void _fill_from_plain(ParquetScanColumnData &col_data, const char *defined_ptr, idx_t count, Vector &target,
-	                             idx_t target_offset) {
+	static void _fill_from_plain(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
-			if (defined_ptr[i]) {
+			if (col_data.defined_buf.ptr[i]) {
 				((T *)FlatVector::GetData(target))[i + target_offset] = col_data.payload.read<T>();
 			} else {
 				FlatVector::SetNull(target, i + target_offset, true);
@@ -435,9 +441,11 @@ private:
 		auto &col_data = data.column_data[col_idx];
 		auto &chunk = data.file_meta_data.row_groups[data.current_group].columns[col_idx];
 
-		// clean up a bit to avoid surprises
+		// clean up a bit to avoid nasty surprises
 		col_data.payload.ptr = nullptr;
 		col_data.payload.len = 0;
+		col_data.dict_decoder = nullptr;
+		col_data.defined_decoder = nullptr;
 
 		auto page_header_len = col_data.buf.len;
 		if (page_header_len < 1) {
@@ -478,7 +486,6 @@ private:
 		col_data.buf.inc(page_hdr.compressed_page_size);
 
 		// handle page contents
-
 		switch (page_hdr.type) {
 		case PageType::DICTIONARY_PAGE: {
 			// fill the dictionary vector
@@ -598,7 +605,8 @@ private:
 				// read length of define payload, always
 				uint32_t def_length = col_data.payload.read<uint32_t>();
 				col_data.payload.available(def_length);
-				col_data.dict_decoder = make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
+				col_data.defined_decoder =
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
 				col_data.payload.inc(def_length);
 			} break;
 			default:
@@ -609,10 +617,8 @@ private:
 			case Encoding::RLE_DICTIONARY:
 			case Encoding::PLAIN_DICTIONARY: {
 				auto enc_length = col_data.payload.read<uint8_t>();
-				col_data.offset_buf.resize(col_data.page_value_count * sizeof(uint32_t));
-				RleBpDecoder dict_decoder((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
-				dict_decoder.GetBatch<uint32_t>((unsigned int *)col_data.offset_buf.ptr, col_data.page_value_count);
-
+				col_data.dict_decoder =
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
 				break;
 			}
 			case Encoding::PLAIN:
@@ -699,8 +705,6 @@ private:
 		output.SetCardinality(std::min((int64_t)STANDARD_VECTOR_SIZE, current_group.num_rows - data.group_offset));
 		assert(output.size() > 0);
 
-		// TODO assert that we are reading a page sequentially and not omit anything
-
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
 			auto file_col_idx = data.column_ids[out_col_idx];
 			if (file_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
@@ -729,40 +733,44 @@ private:
 
 				assert(current_batch_size > 0);
 
-				ResizeableBuffer defined;
-				defined.resize(current_batch_size * sizeof(uint32_t));
-				col_data.dict_decoder->GetBatch(defined.ptr, current_batch_size);
+				col_data.defined_buf.resize(current_batch_size);
+				col_data.defined_decoder->GetBatch<uint8_t>(col_data.defined_buf.ptr, current_batch_size);
 
 				switch (col_data.page_encoding) {
 				case Encoding::RLE_DICTIONARY:
 				case Encoding::PLAIN_DICTIONARY: {
 
+					idx_t null_count = 0;
+					for (idx_t i = 0; i < current_batch_size; i++) {
+						if (!col_data.defined_buf.ptr[i]) {
+							null_count++;
+						}
+					}
+
+					col_data.offset_buf.resize(current_batch_size * sizeof(uint32_t));
+					col_data.dict_decoder->GetBatch<uint32_t>(col_data.offset_buf.ptr, current_batch_size - null_count);
+
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
 					switch (data.sql_types[file_col_idx].id) {
 					case SQLTypeId::BOOLEAN:
-						_fill_from_dict<bool>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                      output_offset);
+						_fill_from_dict<bool>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::INTEGER:
-						_fill_from_dict<int32_t>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                         output_offset);
+						_fill_from_dict<int32_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::BIGINT:
-						_fill_from_dict<int64_t>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                         output_offset);
+						_fill_from_dict<int64_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::FLOAT:
-						_fill_from_dict<float>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                       output_offset);
+						_fill_from_dict<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::DOUBLE:
-						_fill_from_dict<double>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                        output_offset);
+						_fill_from_dict<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::TIMESTAMP:
-						_fill_from_dict<timestamp_t>(col_data, defined.ptr, current_batch_size,
-						                             output.data[out_col_idx], output_offset);
+						_fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx],
+						                             output_offset);
 						break;
 					case SQLTypeId::VARCHAR: {
 						if (!col_data.string_collection) {
@@ -776,7 +784,7 @@ private:
 
 						auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							if (defined.ptr[i]) {
+							if (col_data.defined_buf.ptr[i]) {
 								auto offset = col_data.offset_buf.read<int32_t>();
 								if (offset >= col_data.string_collection->count) {
 									throw runtime_error("string dictionary offset out of bounds");
@@ -805,7 +813,7 @@ private:
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
 						int byte_pos = 0;
 						for (int32_t i = 0; i < current_batch_size; i++) {
-							if (!defined.ptr[i]) {
+							if (!col_data.defined_buf.ptr[i]) {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 								continue;
 							}
@@ -820,24 +828,22 @@ private:
 						break;
 					}
 					case SQLTypeId::INTEGER:
-						_fill_from_plain<int32_t>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
+						_fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx],
 						                          output_offset);
 						break;
 					case SQLTypeId::BIGINT:
-						_fill_from_plain<int64_t>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
+						_fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx],
 						                          output_offset);
 						break;
 					case SQLTypeId::FLOAT:
-						_fill_from_plain<float>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                        output_offset);
+						_fill_from_plain<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::DOUBLE:
-						_fill_from_plain<double>(col_data, defined.ptr, current_batch_size, output.data[out_col_idx],
-						                         output_offset);
+						_fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
 					case SQLTypeId::VARCHAR: {
 						for (idx_t i = 0; i < current_batch_size; i++) {
-							if (defined.ptr[i]) {
+							if (col_data.defined_buf.ptr[i]) {
 								uint32_t str_len = col_data.payload.read<uint32_t>();
 								col_data.payload.available(str_len);
 								FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
