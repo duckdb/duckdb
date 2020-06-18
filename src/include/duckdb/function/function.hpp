@@ -37,6 +37,8 @@ struct TableFunctionData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override {
 		throw NotImplementedException("Copy not required for table-producing function");
 	}
+	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
+	vector<idx_t> column_ids;
 };
 
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
@@ -111,7 +113,8 @@ public:
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
 
-	void AddCollation(string name, ScalarFunction function, bool combinable = false);
+	void AddCollation(string name, ScalarFunction function, bool combinable = false,
+	                  bool not_required_for_equality = false);
 
 private:
 	ClientContext &context;

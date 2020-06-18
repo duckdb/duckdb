@@ -137,7 +137,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 				auto &bound_colref = (BoundColumnRefExpression &)*distinct.target_distincts[i];
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id == SQLTypeId::VARCHAR) {
-					distinct.target_distincts[i] = ExpressionBinder::PushCollation(context, move(distinct.target_distincts[i]), sql_type.collation);
+					distinct.target_distincts[i] = ExpressionBinder::PushCollation(context, move(distinct.target_distincts[i]), sql_type.collation, true);
 				}
 			}
 			break;
@@ -240,6 +240,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
 			assert(bound_expr->return_type != TypeId::INVALID);
 			info.group_types.push_back(group_type);
+			// push a potential collation, if necessary
+			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), group_type.collation, true);
 			result->groups.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs

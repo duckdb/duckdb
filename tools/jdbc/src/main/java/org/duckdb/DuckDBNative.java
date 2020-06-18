@@ -1,0 +1,87 @@
+package org.duckdb;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+
+public class DuckDBNative {
+	static {
+		try {
+			String os_name = "";
+			String os_arch = "";
+			String os_name_detect = System.getProperty("os.name").toLowerCase().trim();
+			String os_arch_detect = System.getProperty("os.arch").toLowerCase().trim();
+			if (os_arch_detect.equals("x86_64") || os_arch_detect.equals("amd64")) {
+				os_arch = "amd64";
+			}
+			// TODO 32 bit gunk
+
+			if (os_name_detect.startsWith("windows")) {
+				os_name = "windows";
+			} else if (os_name_detect.startsWith("mac")) {
+				os_name = "osx";
+			} else if (os_name_detect.startsWith("linux")) {
+				os_name = "linux";
+			}
+			String lib_res_name = "/libduckdb_java.so" + "_" + os_name + "_" + os_arch;
+
+			Path lib_file = Files.createTempFile("libduckdb_java", ".so");
+			URL lib_res = DuckDBNative.class.getResource(lib_res_name);
+			if (lib_res == null) {
+				throw new IOException(lib_res_name + " not found");
+			}
+			Files.copy(lib_res.openStream(), lib_file, StandardCopyOption.REPLACE_EXISTING);
+			new File(lib_file.toString()).deleteOnExit();
+			System.load(lib_file.toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+	}
+	// We use zero-length ByteBuffer-s as a hacky but cheap way to pass C++ pointers
+	// back and forth
+
+	/*
+	 * NB: if you change anything below, run `javah` on this class to re-generate
+	 * the C header. CMake does this as well
+	 */
+
+	// results db_ref database reference object
+	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only);
+
+	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
+
+	// returns conn_ref connection reference object
+	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref);
+
+	protected static native void duckdb_jdbc_set_auto_commit(ByteBuffer conn_ref, boolean auto_commit);
+
+	protected static native boolean duckdb_jdbc_get_auto_commit(ByteBuffer conn_ref);
+
+	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
+
+	// returns stmt_ref result reference object
+	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query);
+
+	protected static native String duckdb_jdbc_prepare_type(ByteBuffer stmt_ref);
+
+	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
+
+	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref);
+
+	
+	// returns res_ref result reference object
+	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
+
+
+	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
+
+	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
+	
+	protected static native int duckdb_jdbc_fetch_size();
+}

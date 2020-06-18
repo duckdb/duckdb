@@ -38,7 +38,8 @@ add_library_unity(test_sql_simple
                   test_similar.cpp
                   test_default.cpp
                   test_rowid.cpp
-                  test_value_list.cpp)
+                  test_value_list.cpp
+                  test_like_escape.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_simple>
     PARENT_SCOPE)

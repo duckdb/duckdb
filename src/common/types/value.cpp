@@ -144,13 +144,13 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
-Value Value::BLOB(string value) {
-	Value result(TypeId::VARCHAR);
-	result.str_value = value;
-	result.is_null = false;
-	result.sql_type = SQLType::VARBINARY;
-	return result;
-}
+//Value Value::BLOB(string value) {
+//	Value result(TypeId::VARCHAR);
+//	result.str_value = value;
+//	result.is_null = false;
+//	result.sql_type = SQLType::VARBINARY;
+//	return result;
+//}
 
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
@@ -244,6 +244,27 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
+Value Value::BLOB(string data, bool must_cast) {
+	Value result(TypeId::VARCHAR);
+	result.sql_type = SQLType::BLOB;
+	result.is_null = false;
+	// hex string identifier: "\\x", must be double '\'
+	// single '\x' is a special char for hex chars in C++,
+	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
+	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
+	if(must_cast && data.size() >= 2 && data.substr(0,2) == "\\x") {
+		size_t hex_size = (data.size() - 2) / 2;
+		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
+		string_t hex_str(hex_data.get(), hex_size);
+		CastFromBlob::FromHexToBytes(string_t(data), hex_str);
+		result.str_value = string(hex_str.GetData());
+	} else {
+		// raw string
+		result.str_value = data;
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -272,7 +293,7 @@ template <> Value Value::CreateValue(const char *value) {
 }
 
 template <> Value Value::CreateValue(string value) {
-	return Value(value);
+	return Value::BLOB(value);
 }
 
 template <> Value Value::CreateValue(string_t value) {
@@ -402,6 +423,13 @@ string Value::ToString(SQLType sql_type) const {
 		return Timestamp::ToString(value_.bigint);
 	case SQLTypeId::VARCHAR:
 		return str_value;
+	case SQLTypeId::BLOB: {
+		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
+		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
+		CastFromBlob::ToHexString(string_t(str_value), hex_str);
+		string result(hex_str.GetData());
+		return result;
+	}
 	case SQLTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
@@ -517,21 +545,28 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-Value Value::CastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 	if (source_type == target_type) {
 		return Copy();
 	}
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(GetInternalType(target_type));
-	VectorOperations::Cast(input, result, source_type, target_type, 1);
+	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
+Value Value::CastAs(TypeId target_type, bool strict) const {
+	if (target_type == type) {
+		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+	}
+	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type), strict);
+}
+
+bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
 	Value new_value;
 	try {
-		new_value = CastAs(source_type, target_type);
+		new_value = CastAs(source_type, target_type, strict);
 	} catch (Exception &) {
 		return false;
 	}
@@ -542,13 +577,6 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type) {
 	struct_value = new_value.struct_value;
 	list_value = new_value.list_value;
 	return true;
-}
-
-Value Value::CastAs(TypeId target_type) const {
-	if (target_type == type) {
-		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
-	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type));
 }
 
 void Value::Serialize(Serializer &serializer) {

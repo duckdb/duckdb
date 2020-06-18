@@ -3,3 +3,5 @@
 dependencies\.R
 git
 configure
+^.*\.Rproj$
+^\.Rproj\.user$

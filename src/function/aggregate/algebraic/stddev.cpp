@@ -69,6 +69,9 @@ struct VarSampOperation : public STDDevBaseOperation {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->count > 1 ? (state->dsquared / (state->count - 1)) : 0;
+			if (!Value::DoubleIsValid(target[idx])) {
+				throw OutOfRangeException("VARSAMP is out of range!");
+			}
 		}
 	}
 };
@@ -80,6 +83,9 @@ struct VarPopOperation : public STDDevBaseOperation {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->count > 1 ? (state->dsquared / state->count) : 0;
+			if (!Value::DoubleIsValid(target[idx])) {
+				throw OutOfRangeException("VARPOP is out of range!");
+			}
 		}
 	}
 };
@@ -91,6 +97,9 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->count > 1 ? sqrt(state->dsquared / (state->count - 1)) : 0;
+			if (!Value::DoubleIsValid(target[idx])) {
+				throw OutOfRangeException("STDDEV_SAMP is out of range!");
+			}
 		}
 	}
 };
@@ -102,6 +111,9 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 			nullmask[idx] = true;
 		} else {
 			target[idx] = state->count > 1 ? sqrt(state->dsquared / state->count) : 0;
+			if (!Value::DoubleIsValid(target[idx])) {
+				throw OutOfRangeException("STDDEV_POP is out of range!");
+			}
 		}
 	}
 };

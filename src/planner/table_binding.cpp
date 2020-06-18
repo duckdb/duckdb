@@ -81,6 +81,7 @@ GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, ve
 		}
 		name_map[name] = i;
 	}
+	TableCatalogEntry::AddLowerCaseAliases(name_map);
 }
 
 bool GenericBinding::HasMatchingBinding(const string &column_name) {

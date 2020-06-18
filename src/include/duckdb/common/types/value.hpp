@@ -86,9 +86,6 @@ public:
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
 
-	//! Create a blob value
-	static Value BLOB(string value);
-
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
@@ -97,6 +94,9 @@ public:
 	static Value STRUCT(child_list_t<Value> values);
 	//! Create a list value with the given entries
 	static Value LIST(std::vector<Value> values);
+
+	//! Create a blob Value from a specified value
+	static Value BLOB(string data, bool must_cast = true);
 
 	template <class T> T GetValue() {
 		throw NotImplementedException("Unimplemented template type for Value::GetValue");
@@ -116,11 +116,12 @@ public:
 	string ToString(SQLType type) const;
 
 	//! Cast this value to another type
-	Value CastAs(TypeId target_type) const;
+	Value CastAs(TypeId target_type, bool strict = false) const;
 	//! Cast this value to another type
-	Value CastAs(SQLType source_type, SQLType target_type);
+	Value CastAs(SQLType source_type, SQLType target_type, bool strict = false);
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(SQLType source_type, SQLType target_type);
+	bool TryCastAs(SQLType source_type, SQLType target_type, bool strict = false);
+
 	//! The type of the value
 	TypeId type;
 	//! Whether or not the value is NULL

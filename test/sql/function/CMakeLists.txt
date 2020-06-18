@@ -10,6 +10,7 @@ add_library_unity(test_sql_function
                   test_regex.cpp
                   test_stringfunctions.cpp
                   test_trigo.cpp
+                  test_if.cpp
                   test_instr.cpp
                   test_prefix.cpp
                   test_suffix.cpp

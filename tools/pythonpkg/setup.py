@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import os
-import numpy
 import sys
 import subprocess
 import shutil
@@ -26,6 +25,13 @@ if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     sys.path.append('scripts')
     import amalgamation
     amalgamation.generate_amalgamation(target_source, target_header)
+
+    sys.path.append('extension/parquet')
+    import parquet_amalgamation
+    ext_target_header = os.path.join(prev_wd, 'parquet-extension.hpp')
+    ext_target_source = os.path.join(prev_wd, 'parquet-extension.cpp')
+    parquet_amalgamation.generate_amalgamation(ext_target_source, ext_target_header)
+
     os.chdir(prev_wd)
 
 
@@ -36,10 +42,6 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 class get_pybind_include(object):
-    """Helper class to determine the pybind11 include path
-    The purpose of this class is to postpone importing pybind11
-    until it is actually installed, so that the ``get_include()``
-    method can be invoked. """
 
     def __init__(self, user=False):
         self.user = user
@@ -48,10 +50,15 @@ class get_pybind_include(object):
         import pybind11
         return pybind11.get_include(self.user)
 
+class get_numpy_include(object):
+    def __str__(self):
+        import numpy
+        return numpy.get_include()
+
 
 libduckdb = Extension('duckdb',
-    include_dirs=[numpy.get_include(), '.', get_pybind_include(), get_pybind_include(user=True)],
-    sources=['duckdb_python.cpp', 'duckdb.cpp'],
+    include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+    sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
     extra_compile_args=toolchain_args,
     extra_link_args=toolchain_args,
     language='c++')
@@ -61,6 +68,10 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
     setup_requires = ['pytest-runner']
 else:
     setup_requires = []
+
+setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
+if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
+    setuptools_scm_conf['local_scheme'] = 'no-local-version'
 
 setup(
     name = "duckdb",
@@ -75,7 +86,7 @@ setup(
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
-    use_scm_version = {"root": "../..", "relative_to": __file__},
+    use_scm_version = setuptools_scm_conf,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',

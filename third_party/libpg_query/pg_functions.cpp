@@ -161,7 +161,7 @@ void* palloc0fast(size_t n) { // very fast
     return palloc(n);
 }
 void* repalloc(void* ptr, size_t n) {
-    throw std::runtime_error("repalloc NOT IMPLEMENTED");
+	return palloc(n);
 }
 char *NameListToString(PGList *names) {
     throw std::runtime_error("NameListToString NOT IMPLEMENTED");

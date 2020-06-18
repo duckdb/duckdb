@@ -22,6 +22,12 @@ class DataTable;
 struct CreateTableInfo;
 struct BoundCreateTableInfo;
 
+struct RenameColumnInfo;
+struct AddColumnInfo;
+struct RemoveColumnInfo;
+struct SetDefaultInfo;
+struct ChangeColumnTypeInfo;
+
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
@@ -52,11 +58,23 @@ public:
 	//! Returns a list of types of the specified columns of the table
 	vector<TypeId> GetTypes(const vector<column_t> &column_ids);
 
+	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
+	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);
+
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source);
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
+
+	void SetAsRoot() override;
+
+private:
+	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
+	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
+	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
+	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
+	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
 };
 } // namespace duckdb

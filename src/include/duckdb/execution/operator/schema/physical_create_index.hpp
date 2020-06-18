@@ -41,8 +41,5 @@ public:
 
 public:
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
-
-private:
-	void CreateARTIndex();
 };
 } // namespace duckdb

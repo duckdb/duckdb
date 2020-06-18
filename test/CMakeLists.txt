@@ -25,7 +25,6 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(persistence)
   add_subdirectory(dbtransfer)
   add_subdirectory(nested)
-  add_subdirectory(parquet)
 endif()
 
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
@@ -38,7 +37,7 @@ if(NOT WIN32 AND NOT SUN)
                         test_helpers
                         tpce
                         sqlite_transfer
-                        miniparquet)
+                        )
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()

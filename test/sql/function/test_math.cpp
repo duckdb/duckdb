@@ -231,6 +231,24 @@ TEST_CASE("Power test", "[function]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {10.045}));
 }
 
+TEST_CASE("BIT_COUNT test", "[function]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE bits(t tinyint, s smallint, i integer, b bigint)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO bits VALUES (NULL, NULL, NULL, NULL), "
+	                                                  "(31, 1023, 11834119, 50827156903621017), "
+	                                                  "(-59, -517, -575693, -9876543210)"));
+
+	result = con.Query("select bit_count(t), bit_count(s),bit_count(i), bit_count(b) from bits");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(),  5,  4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 10, 14}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value(), 11, 24}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value(), 27, 49}));
+}
+
 TEST_CASE("Test invalid input for math functions", "[function]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

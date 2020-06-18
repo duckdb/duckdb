@@ -1,8 +1,117 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/appender.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+TEST_CASE("Test BIT_AND operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test on scalar values
+	result = con.Query("SELECT BIT_AND(3), BIT_AND(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {-1}));
+
+	// test on a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
+	result = con.Query("SELECT BIT_AND(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT BIT_AND(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// test on a set of integers
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3), (7), (15), (31), (3), (15)"));
+	result = con.Query("SELECT BIT_AND(i), BIT_AND(1), BIT_AND(DISTINCT i), BIT_AND(NULL) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {-1}));
+
+	// test on an empty set
+	result = con.Query("SELECT BIT_AND(i) FROM integers WHERE i > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("SELECT BIT_AND()"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_AND(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_AND(BIT_AND(1))"));
+}
+
+TEST_CASE("Test BIT_OR operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test on scalar values
+	result = con.Query("SELECT BIT_OR(3), BIT_OR(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+
+	// test on a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
+	result = con.Query("SELECT BIT_OR(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT BIT_OR(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// test on a set of integers
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3), (7), (15), (31), (3), (15)"));
+	result = con.Query("SELECT BIT_OR(i), BIT_OR(1), BIT_OR(DISTINCT i), BIT_OR(NULL) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {31}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {31}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
+
+	// test on an empty set
+	result = con.Query("SELECT BIT_OR(i) FROM integers WHERE i > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("SELECT BIT_OR()"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_OR(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_OR(BIT_AND(1))"));
+}
+
+TEST_CASE("Test BIT_XOR operator", "[aggregate]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// test on scalar values
+	result = con.Query("SELECT BIT_XOR(3), BIT_XOR(NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+
+	// test on a sequence
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
+	result = con.Query("SELECT BIT_XOR(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	result = con.Query("SELECT BIT_XOR(nextval('seq'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// test on a set of integers
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (3), (7), (15), (31), (3), (15)"));
+	result = con.Query("SELECT BIT_XOR(i), BIT_XOR(1), BIT_XOR(DISTINCT i), BIT_XOR(NULL) FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {24}));
+	REQUIRE(CHECK_COLUMN(result, 1, {0}));
+	REQUIRE(CHECK_COLUMN(result, 2, {20}));
+	REQUIRE(CHECK_COLUMN(result, 3, {0}));
+
+	// test on an empty set
+	result = con.Query("SELECT BIT_XOR(i) FROM integers WHERE i > 100");
+	REQUIRE(CHECK_COLUMN(result, 0, {0}));
+
+	// test incorrect usage
+	REQUIRE_FAIL(con.Query("SELECT BIT_XOR()"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_XOR(1, 2, 3)"));
+	REQUIRE_FAIL(con.Query("SELECT BIT_XOR(BIT_XOR(1))"));
+}
 
 TEST_CASE("Test COUNT operator", "[aggregate]") {
 	unique_ptr<QueryResult> result;
@@ -221,12 +330,14 @@ TEST_CASE("Test STRING_AGG operator with many groups", "[aggregate][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(g INTEGER, x VARCHAR);"));
 	vector<Value> expected_g, expected_h;
 	string expected_large_value;
+	Appender appender(con, "strings");
 	for (idx_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO strings VALUES (?, ?);", (int)i, "hello"));
+		appender.AppendRow((int)i, "hello");
 		expected_g.push_back(Value::INTEGER(i));
 		expected_h.push_back(Value("hello"));
 		expected_large_value += (i > 0 ? "," : "") + string("hello");
 	}
+	appender.Close();
 	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
 
 	// many small groups
@@ -403,9 +514,12 @@ TEST_CASE("Test GROUP BY with many groups", "[aggregate][.]") {
 	Connection con(db);
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER);"));
+	Appender appender(con, "integers");
 	for (idx_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (" + to_string(i) + ", 1), (" + to_string(i) + ", 2);"));
+		appender.AppendRow((int)i, (int)1);
+		appender.AppendRow((int)i, (int)2);
 	}
+	appender.Close();
 	result = con.Query("SELECT SUM(i), SUM(sums) FROM (SELECT i, SUM(j) AS sums FROM integers GROUP BY i) tbl1");
 	REQUIRE(CHECK_COLUMN(result, 0, {49995000}));
 	REQUIRE(CHECK_COLUMN(result, 1, {30000}));

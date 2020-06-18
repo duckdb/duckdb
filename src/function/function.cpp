@@ -1,19 +1,18 @@
 #include "duckdb/function/function.hpp"
-#include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/scalar_function.hpp"
-#include "duckdb/function/cast_rules.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -43,8 +42,9 @@ void BuiltinFunctions::Initialize() {
 BuiltinFunctions::BuiltinFunctions(ClientContext &context, Catalog &catalog) : context(context), catalog(catalog) {
 }
 
-void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable) {
-	CreateCollationInfo info(move(name), move(function), combinable);
+void BuiltinFunctions::AddCollation(string name, ScalarFunction function, bool combinable,
+                                    bool not_required_for_equality) {
+	CreateCollationInfo info(move(name), move(function), combinable, not_required_for_equality);
 	catalog.CreateCollation(context, &info);
 }
 

@@ -36,13 +36,14 @@ bool VersionManager::Fetch(Transaction &transaction, idx_t row) {
 
 class VersionDeleteState {
 public:
-	VersionDeleteState(VersionManager &manager, Transaction &transaction, idx_t base_row)
-	    : manager(manager), transaction(transaction), current_info(nullptr), current_chunk((idx_t)-1), count(0),
-	      base_row(base_row) {
+	VersionDeleteState(VersionManager &manager, Transaction &transaction, DataTable *table, idx_t base_row)
+	    : manager(manager), transaction(transaction), table(table), current_info(nullptr), current_chunk((idx_t)-1),
+	      count(0), base_row(base_row) {
 	}
 
 	VersionManager &manager;
 	Transaction &transaction;
+	DataTable *table;
 	ChunkInfo *current_info;
 	idx_t current_chunk;
 	row_t rows[STANDARD_VECTOR_SIZE];
@@ -55,8 +56,8 @@ public:
 	void Flush();
 };
 
-void VersionManager::Delete(Transaction &transaction, Vector &row_ids, idx_t count) {
-	VersionDeleteState del_state(*this, transaction, base_row);
+void VersionManager::Delete(Transaction &transaction, DataTable *table, Vector &row_ids, idx_t count) {
+	VersionDeleteState del_state(*this, transaction, table, base_row);
 
 	VectorData rdata;
 	row_ids.Orrify(count, rdata);
@@ -105,7 +106,7 @@ void VersionDeleteState::Flush() {
 	// delete in the current info
 	current_info->Delete(transaction, rows, count);
 	// now push the delete into the undo buffer
-	transaction.PushDelete(current_info, rows, count, base_row + chunk_row);
+	transaction.PushDelete(table, current_info, rows, count, base_row + chunk_row);
 	count = 0;
 }
 

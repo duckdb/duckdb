@@ -40,5 +40,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddGenericBinding(bind_index, ref.alias.empty() ? fexpr->function_name : ref.alias, result->names,
 	                               result->return_types);
+
 	return move(result);
 }

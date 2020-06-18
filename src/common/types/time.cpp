@@ -47,9 +47,9 @@ static void number_to_time(dtime_t n, int32_t &hour, int32_t &min, int32_t &sec,
 
 // TODO this is duplicated in date.cpp
 static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
-	if (std::isdigit(buf[pos])) {
+	if (std::isdigit((unsigned char)buf[pos])) {
 		result = buf[pos++] - '0';
-		if (std::isdigit(buf[pos])) {
+		if (std::isdigit((unsigned char)buf[pos])) {
 			result = (buf[pos++] - '0') + result * 10;
 		}
 		return true;
@@ -57,17 +57,17 @@ static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertTime(const char *buf, dtime_t &result) {
+static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
 	idx_t pos = 0;
 	int sep;
 
 	// skip leading spaces
-	while (std::isspace(buf[pos])) {
+	while (std::isspace((unsigned char)buf[pos])) {
 		pos++;
 	}
 
-	if (!std::isdigit(buf[pos])) {
+	if (!std::isdigit((unsigned char)buf[pos])) {
 		return false;
 	}
 
@@ -107,8 +107,20 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	sep = buf[pos++];
 	if (sep == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit(buf[pos]) && mult > 0; pos++, mult /= 10) {
+		for (; std::isdigit((unsigned char)buf[pos]) && mult > 0; pos++, mult /= 10) {
 			msec += (buf[pos] - '0') * mult;
+		}
+	}
+
+	// in strict mode, check remaining string for non-space characters
+	if (strict) {
+		// skip trailing spaces
+		while (std::isspace((unsigned char)buf[pos])) {
+			pos++;
+		}
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < strlen(buf)) {
+			return false;
 		}
 	}
 
@@ -116,11 +128,11 @@ static bool TryConvertTime(const char *buf, dtime_t &result) {
 	return true;
 }
 
-dtime_t Time::FromCString(const char *buf) {
+dtime_t Time::FromCString(const char *buf, bool strict) {
 	dtime_t result;
-	if (!TryConvertTime(buf, result)) {
+	if (!TryConvertTime(buf, result, strict)) {
 		// last chance, check if we can parse as timestamp
-		if (strlen(buf) > 10) {
+		if (strlen(buf) > 10 && !strict) {
 			return Timestamp::GetTime(Timestamp::FromString(buf));
 		}
 		throw ConversionException("time field value out of range: \"%s\", "
@@ -130,8 +142,8 @@ dtime_t Time::FromCString(const char *buf) {
 	return result;
 }
 
-dtime_t Time::FromString(string str) {
-	return Time::FromCString(str.c_str());
+dtime_t Time::FromString(string str, bool strict) {
+	return Time::FromCString(str.c_str(), strict);
 }
 
 string Time::ToString(dtime_t time) {

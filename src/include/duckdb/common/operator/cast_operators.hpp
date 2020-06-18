@@ -21,33 +21,40 @@ struct Cast {
 };
 
 struct TryCast {
-	template <class SRC, class DST> static inline bool Operation(SRC input, DST &target) {
+	template <class SRC, class DST> static inline bool Operation(SRC input, DST &target, bool strict = false) {
 		target = Cast::Operation(input);
 		return true;
+	}
+};
+
+struct StrictCast {
+	template <class SRC, class DST> static inline DST Operation(SRC input) {
+		return (DST)input;
 	}
 };
 
 //===--------------------------------------------------------------------===//
 // Numeric -> int8_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int16_t input, int8_t &result);
-template <> bool TryCast::Operation(int32_t input, int8_t &result);
-template <> bool TryCast::Operation(int64_t input, int8_t &result);
-template <> bool TryCast::Operation(float input, int8_t &result);
-template <> bool TryCast::Operation(double input, int8_t &result);
+template <> bool TryCast::Operation(int16_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(int32_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(int64_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(float input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(double input, int8_t &result, bool strict);
 
 template <> int8_t Cast::Operation(int16_t input);
 template <> int8_t Cast::Operation(int32_t input);
 template <> int8_t Cast::Operation(int64_t input);
 template <> int8_t Cast::Operation(float input);
 template <> int8_t Cast::Operation(double input);
+
 //===--------------------------------------------------------------------===//
 // Numeric -> int16_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int32_t input, int16_t &result);
-template <> bool TryCast::Operation(int64_t input, int16_t &result);
-template <> bool TryCast::Operation(float input, int16_t &result);
-template <> bool TryCast::Operation(double input, int16_t &result);
+template <> bool TryCast::Operation(int32_t input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(int64_t input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(float input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(double input, int16_t &result, bool strict);
 
 template <> int16_t Cast::Operation(int32_t input);
 template <> int16_t Cast::Operation(int64_t input);
@@ -56,9 +63,9 @@ template <> int16_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // Numeric -> int32_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(int64_t input, int32_t &result);
-template <> bool TryCast::Operation(float input, int32_t &result);
-template <> bool TryCast::Operation(double input, int32_t &result);
+template <> bool TryCast::Operation(int64_t input, int32_t &result, bool strict);
+template <> bool TryCast::Operation(float input, int32_t &result, bool strict);
+template <> bool TryCast::Operation(double input, int32_t &result, bool strict);
 
 template <> int32_t Cast::Operation(int64_t input);
 template <> int32_t Cast::Operation(float input);
@@ -66,27 +73,27 @@ template <> int32_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // Numeric -> int64_t casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(float input, int64_t &result);
-template <> bool TryCast::Operation(double input, int64_t &result);
+template <> bool TryCast::Operation(float input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(double input, int64_t &result, bool strict);
 
 template <> int64_t Cast::Operation(float input);
 template <> int64_t Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // Double -> float casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(double input, float &result);
+template <> bool TryCast::Operation(double input, float &result, bool strict);
 
 template <> float Cast::Operation(double input);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
-template <> bool TryCast::Operation(string_t input, bool &result);
-template <> bool TryCast::Operation(string_t input, int8_t &result);
-template <> bool TryCast::Operation(string_t input, int16_t &result);
-template <> bool TryCast::Operation(string_t input, int32_t &result);
-template <> bool TryCast::Operation(string_t input, int64_t &result);
-template <> bool TryCast::Operation(string_t input, float &result);
-template <> bool TryCast::Operation(string_t input, double &result);
+template <> bool TryCast::Operation(string_t input, bool &result, bool strict);
+template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, float &result, bool strict);
+template <> bool TryCast::Operation(string_t input, double &result, bool strict);
 
 template <> bool Cast::Operation(string_t input);
 template <> int8_t Cast::Operation(string_t input);
@@ -96,6 +103,16 @@ template <> int64_t Cast::Operation(string_t input);
 template <> float Cast::Operation(string_t input);
 template <> double Cast::Operation(string_t input);
 template <> string Cast::Operation(string_t input);
+
+template <> bool StrictCast::Operation(string_t input);
+template <> int8_t StrictCast::Operation(string_t input);
+template <> int16_t StrictCast::Operation(string_t input);
+template <> int32_t StrictCast::Operation(string_t input);
+template <> int64_t StrictCast::Operation(string_t input);
+template <> float StrictCast::Operation(string_t input);
+template <> double StrictCast::Operation(string_t input);
+template <> string StrictCast::Operation(string_t input);
+
 //===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
@@ -138,6 +155,12 @@ struct CastToDate {
 	}
 };
 
+struct StrictCastToDate {
+	template <class SRC, class DST> static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to date could not be performed!");
+	}
+};
+
 struct CastDateToTimestamp {
 	template <class SRC, class DST> static inline DST Operation(SRC input) {
 		throw duckdb::NotImplementedException("Cast to timestamp could not be performed!");
@@ -145,6 +168,7 @@ struct CastDateToTimestamp {
 };
 template <> duckdb::string_t CastFromDate::Operation(duckdb::date_t input, Vector &result);
 template <> duckdb::date_t CastToDate::Operation(string_t input);
+template <> duckdb::date_t StrictCastToDate::Operation(string_t input);
 template <> duckdb::timestamp_t CastDateToTimestamp::Operation(duckdb::date_t input);
 
 struct CastFromTime {
@@ -157,8 +181,14 @@ struct CastToTime {
 		throw duckdb::NotImplementedException("Cast to time could not be performed!");
 	}
 };
+struct StrictCastToTime {
+	template <class SRC, class DST> static inline DST Operation(SRC input) {
+		throw duckdb::NotImplementedException("Cast to time could not be performed!");
+	}
+};
 template <> duckdb::string_t CastFromTime::Operation(duckdb::dtime_t input, Vector &result);
 template <> duckdb::dtime_t CastToTime::Operation(string_t input);
+template <> duckdb::dtime_t StrictCastToTime::Operation(string_t input);
 
 struct CastToTimestamp {
 	template <class SRC, class DST> static inline DST Operation(SRC input) {
@@ -188,5 +218,22 @@ template <> duckdb::date_t CastTimestampToDate::Operation(duckdb::timestamp_t in
 template <> duckdb::dtime_t CastTimestampToTime::Operation(duckdb::timestamp_t input);
 template <> duckdb::string_t CastFromTimestamp::Operation(duckdb::timestamp_t input, Vector &result);
 template <> duckdb::timestamp_t CastToTimestamp::Operation(string_t input);
+
+struct CastFromBlob {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from blob could not be performed!");
+	}
+
+	static void ToHexString(duckdb::string_t input, duckdb::string_t &output);
+	static void FromHexToBytes(duckdb::string_t input, duckdb::string_t &output);
+};
+template <> duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
+
+struct CastToBlob {
+	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast to blob could not be performed!");
+	}
+};
+template <> duckdb::string_t CastToBlob::Operation(duckdb::string_t input, Vector &vector);
 
 } // namespace duckdb

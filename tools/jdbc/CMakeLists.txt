@@ -1,6 +1,9 @@
 find_package(Java 1.8)
 find_package(JNI)
 
+cmake_minimum_required(VERSION 3.11.0)
+
+
 if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR No
                       compatible
@@ -11,26 +14,43 @@ endif()
 include(UseJava)
 project(DuckDBJDummy NONE)
 
-file(GLOB JAVA_SRC_FILES src/main/java/nl/cwi/da/duckdb/*.java)
-file(GLOB JAVA_TEST_FILES src/test/java/nl/cwi/da/duckdb/test/*.java)
+file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
+file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
-add_jar(DuckDBJ
+set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7)
+
+add_jar(duckdb_jdbc
         ${JAVA_SRC_FILES}
-        ${JAVA_TEST_FILES}
+        ${JAVA_TEST_FILES} META-INF/services/java.sql.Driver
         GENERATE_NATIVE_HEADERS
         duckdb-native)
+
+set(OS_NAME "unknown")
+if (APPLE)
+	set(OS_NAME "osx")
+endif()
+if (WIN32)
+	set(OS_NAME "windows")
+endif()
+if (UNIX AND NOT APPLE)
+	set(OS_NAME "linux") # sorry BSD
+endif()
+
+set(JVM_BITNESS "amd64")
+# TODO handle 32 bit architectures
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb-native duckdb_static)
-set_target_properties(duckdb_java PROPERTIES SUFFIX ".so")
+string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
+set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
 add_custom_command(OUTPUT dummy_jdbc_target
-                   DEPENDS duckdb_java DuckDBJ
+                   DEPENDS duckdb_java duckdb_jdbc
                    COMMAND ${Java_JAR_EXECUTABLE}
                            uf
-                           DuckDBJ.jar
+                           duckdb_jdbc.jar
                            -C
                            $<TARGET_FILE_DIR:duckdb_java>
                            $<TARGET_FILE_NAME:duckdb_java>)

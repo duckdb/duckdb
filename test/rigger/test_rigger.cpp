@@ -630,11 +630,117 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT (- 41756167 + '1969-12-11 032657' ::DATE)::VARCHAR;");
 		REQUIRE(CHECK_COLUMN(result, 0, {"112356-06-10 (BC)"}));
 	}
-	SECTION("592"){
-	    // Expression with LIKE and comparison causes an assertion failure
-	    REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+	SECTION("592") {
+		// Expression with LIKE and comparison causes an assertion failure
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;");
 		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("596") {
+		// STDDEV_POP unexpectedly does not fetch any rows
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DOUBLE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(1E200), (0);"));
+		REQUIRE_FAIL(con.Query("SELECT STDDEV_POP(c0) FROM t0;"));
+	}
+	SECTION("599") {
+		// UPDATE results in crash or ASan error
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (0, 0), (NULL, 0);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = c0;"));
+		result = con.Query("SELECT * FROM t0 ORDER BY 1");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 0}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value(), "0"}));
+	}
+	SECTION("602") {
+		// GROUP BY does not take COLLATE into account
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR COLLATE NOCASE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES ('a'), ('A');"));
+		result = con.Query("SELECT t0.c0 FROM t0 GROUP BY t0.c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {"a"}));
+	}
+	SECTION("603") {
+		// BETWEEN with COLLATE NOACCENT.NOCASE expression results in a segfault/ASan failure
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL), ('2000-01-01');"));
+		result = con.Query("SELECT * FROM t0 WHERE 'a' BETWEEN c0 AND c1 COLLATE NOACCENT.NOCASE;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+	}
+	SECTION("609") {
+		// Incorrect result for MIN() on expression involving rowid
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 INT);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), (0), "
+		                          "(0), (0), (0), (0), (0),  (0), (0), (0), (0), (0), (0), (NULL), (NULL);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE INDEX b ON t0(c1);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c1 = NULL;"));
+		result = con.Query("SELECT MIN(100000000000000000<<t0.rowid) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-9223372036854775807LL - 1)}));
+		result = con.Query("SELECT MIN(100000000000000000<<t0.rowid) FROM t0 WHERE NOT c0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(-8802109549835190272LL)}));
+	}
+	SECTION("618") {
+		// Failed ALTER COLUMN results in a "Transaction conflict" error that cannot be aborted
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATE);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (DATE '2000-01-01');"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 ALTER COLUMN c0 SET DATA TYPE INT;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (DEFAULT);"));
+	}
+	SECTION("619") {
+		// Query on altered table results in a segmentation fault
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT UNIQUE, c1 DATE);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c1 TYPE INT;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES(-1);"));
+
+		result = con.Query("SELECT * FROM t0 WHERE c0 < 0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {-1}));
+		REQUIRE(CHECK_COLUMN(result, 1, {Value()}));
+	}
+	SECTION("622") {
+		// UPDATE on altered table results in an error "Could not find node in column segment tree"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 TIMESTAMP);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("DELETE FROM t0;"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE DATE;"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("UPDATE t0 SET c0 = '1969-12-18'; "));
+	}
+	SECTION("624") {
+		// ALTER TABLE results in an assertion failure "Assertion `expr.return_type == vector.type' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c1) VALUES(NULL);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c1 TYPE TIMESTAMP;"));
+	}
+	SECTION("625") {
+		// DROP column results in an assertion failure unique.index < base.columns.size()
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c INT UNIQUE);"));
+		// we don't support this case yet
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 DROP c0;"));
+		// check that unique constraint still works
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
+		REQUIRE_FAIL(con.Query("INSERT INTO t0 (c) VALUES (1);"));
+	}
+	SECTION("628") {
+		// DROP column results in an assertion failure unique.index < base.columns.size()
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT, c1 INT UNIQUE);"));
+		REQUIRE_FAIL(con.Query("ALTER TABLE t0 DROP c1;"));
+	}
+	SECTION("629") {
+		// ALTER TYPE with USING results in an assertion failure "types.size() > 0"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE VARCHAR USING ''; "));
+	}
+	SECTION("629") {
+		// ALTER TYPE with USING results in an assertion failure "types.size() > 0"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INT);"));
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE t0 ALTER c0 TYPE VARCHAR USING ''; "));
+	}
+	SECTION("633") {
+		// Query using LEFT() results in a segmentation fault
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 BOOL);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (NULL);"));
+		result = con.Query("SELECT LEFT(t0.c0, -1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		result = con.Query("SELECT RIGHT(t0.c0, -1) FROM t0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	}
 }

@@ -29,6 +29,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	bool has_primary_key = false;
+	unordered_set<idx_t> primary_keys;
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
@@ -83,12 +84,20 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					throw ParserException("table \"%s\" has more than one primary key", base.table.c_str());
 				}
 				has_primary_key = true;
+				primary_keys = keys;
 			}
 			info.bound_constraints.push_back(make_unique<BoundUniqueConstraint>(keys, unique.is_primary_key));
 			break;
 		}
 		default:
 			throw NotImplementedException("unrecognized constraint type in bind");
+		}
+	}
+	if (has_primary_key) {
+		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
+		for (auto &column_index : primary_keys) {
+			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column_index));
 		}
 	}
 }

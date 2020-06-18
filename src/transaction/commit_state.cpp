@@ -12,14 +12,14 @@ using namespace duckdb;
 using namespace std;
 
 CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_table(nullptr) {
+    : log(log), commit_id(commit_id), current_table_info(nullptr) {
 }
 
-void CommitState::SwitchTable(DataTable *table, UndoFlags new_op) {
-	if (current_table != table) {
+void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
+	if (current_table_info != table_info) {
 		// write the current table to the log
-		log->WriteSetTable(table->schema, table->table);
-		current_table = table;
+		log->WriteSetTable(table_info->schema, table_info->table);
+		current_table_info = table_info;
 	}
 }
 
@@ -80,6 +80,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::AGGREGATE_FUNCTION:
 	case CatalogType::SCALAR_FUNCTION:
 	case CatalogType::TABLE_FUNCTION:
+	case CatalogType::COLLATION:
 
 		// do nothing, we log the query to recreate this
 		break;
@@ -91,7 +92,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 void CommitState::WriteDelete(DeleteInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
-	SwitchTable(&info->GetTable(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(info->table->info.get(), UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
@@ -109,7 +110,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 void CommitState::WriteUpdate(UpdateInfo *info) {
 	assert(log);
 	// switch to the current table, if necessary
-	SwitchTable(info->column_data->table, UndoFlags::UPDATE_TUPLE);
+	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
 
 	update_chunk = make_unique<DataChunk>();
 	vector<TypeId> update_types = {info->column_data->type, ROW_TYPE};
@@ -149,8 +150,8 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = (DeleteInfo *)data;
-		info->GetTable().cardinality -= info->count;
-		if (HAS_LOG && !info->GetTable().IsTemporary()) {
+		info->table->info->cardinality -= info->count;
+		if (HAS_LOG && !info->table->info->IsTemporary()) {
 			WriteDelete(info);
 		}
 		// mark the tuples as committed
@@ -160,7 +161,7 @@ template <bool HAS_LOG> void CommitState::CommitEntry(UndoFlags type, data_ptr_t
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = (UpdateInfo *)data;
-		if (HAS_LOG && !info->column_data->table->IsTemporary()) {
+		if (HAS_LOG && !info->column_data->table_info.IsTemporary()) {
 			WriteUpdate(info);
 		}
 		info->version_number = commit_id;
@@ -184,7 +185,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = (DeleteInfo *)data;
-		info->GetTable().cardinality += info->count;
+		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
 		info->vinfo->CommitDelete(transaction_id, info->rows, info->count);
 		break;
