@@ -190,6 +190,21 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &) *sink_state;
 
+	if (gstate.right_chunks.count == 0) {
+		// empty RHS
+		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
+			// for SEMI or INNER join: empty RHS means empty result
+			return;
+		}
+		// pull a chunk from the LHS
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		if (state->child_chunk.size() == 0) {
+			return;
+		}
+		ConstructEmptyJoinResult(join_type, gstate.has_null, state->child_chunk, chunk);
+		return;
+	}
+
 	do {
 		if (state->fetch_next_right) {
 			// we exhausted the chunk on the right: move to the next chunk on the right
@@ -227,11 +242,6 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 				}
 				children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 				if (state->child_chunk.size() == 0) {
-					return;
-				}
-				if (gstate.right_chunks.count == 0) {
-					// RHS is empty! return a result based on the join type
-					ConstructEmptyJoinResult(join_type, gstate.has_null, state->child_chunk, chunk);
 					return;
 				}
 				// resolve the left join condition for the current chunk
@@ -294,19 +304,17 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition,
 			                                 right_chunk, lvector, rvector, conditions);
 			// we have finished resolving the join conditions
-			if (match_count == 0) {
-				// if there are no results, move on
-				continue;
-			}
-			// we have matching tuples!
-			// construct the result
-			if (state->left_found_match) {
-				for (idx_t i = 0; i < match_count; i++) {
-					state->left_found_match[lvector.get_index(i)] = true;
+			if (match_count > 0) {
+				// we have matching tuples!
+				// construct the result
+				if (state->left_found_match) {
+					for (idx_t i = 0; i < match_count; i++) {
+						state->left_found_match[lvector.get_index(i)] = true;
+					}
 				}
+				chunk.Slice(state->child_chunk, lvector, match_count);
+				chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 			}
-			chunk.Slice(state->child_chunk, lvector, match_count);
-			chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 			break;
 		}
 		default:

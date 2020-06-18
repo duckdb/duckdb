@@ -115,6 +115,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 				ConstantVector::SetNull(chunk.data[i], true);
 			}
 		}
+		return;
 	}
 
 	// now perform the actual join
