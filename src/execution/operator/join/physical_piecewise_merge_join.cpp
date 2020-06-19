@@ -173,6 +173,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			state->right_chunk_index = 0;
 			state->left_position = 0;
 			state->right_position = 0;
+			state->fetch_next_left = false;
 		}
 
 		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
@@ -191,6 +192,7 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
 			                                      gstate.has_null);
 			state->right_chunk_index = gstate.right_orders.size();
+			state->fetch_next_left = true;
 			return;
 		}
 		default:
@@ -210,10 +212,13 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 			idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {
 				// exhausted this chunk on the right side
-				// move to the next
-				state->right_chunk_index++;
+				// move to the next right chunk
 				state->left_position = 0;
 				state->right_position = 0;
+				state->right_chunk_index++;
+				if (state->right_chunk_index >= gstate.right_chunks.chunks.size()) {
+					state->fetch_next_left = true;
+				}
 			} else {
 				chunk.Slice(state->child_chunk, left_info.result, result_count);
 				chunk.Slice(right_chunk, right.result, result_count, state->child_chunk.column_count());

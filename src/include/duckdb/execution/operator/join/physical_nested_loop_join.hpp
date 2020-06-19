@@ -30,6 +30,11 @@ public:
 
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+private:
+	// resolve joins that output max N elements (SEMI, ANTI, MARK)
+	void ResolveSimpleJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
+	void ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 };
 
 } // namespace duckdb
