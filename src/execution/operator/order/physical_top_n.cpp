@@ -6,8 +6,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Sink
@@ -97,6 +98,7 @@ void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, L
 		position = lstate.big_data.MaterializeHeapChunk(chunk, local_heap.get(), position, local_heap_size);
 		gstate.big_data.Append(chunk);
 	}
+	gstate.heap_size += local_heap_size;
 }
 
 //===--------------------------------------------------------------------===//
@@ -131,9 +133,11 @@ void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, Ph
 		state.position = offset;
 	}
 
-	state.position += gstate.big_data.MaterializeHeapChunk(chunk, gstate.heap.get(), state.position, gstate.heap_size);
+	state.position = gstate.big_data.MaterializeHeapChunk(chunk, gstate.heap.get(), state.position, gstate.heap_size);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 	return make_unique<PhysicalTopNOperatorState>(children[0].get());
+}
+
 }
