@@ -64,7 +64,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		// set up a vector of pointers that point towards the set of states
 		Vector v(TypeId::POINTER);
 		auto pdata = FlatVector::GetData<data_ptr_t>(v);
-		for(idx_t i = 0; i < inputs.size(); i++) {
+		for (idx_t i = 0; i < inputs.size(); i++) {
 			pdata[i] = begin_ptr + i * state.size();
 		}
 		v.Verify(inputs.size());

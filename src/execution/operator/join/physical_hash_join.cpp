@@ -27,7 +27,6 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
 	}
-
 }
 
 PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -52,7 +51,8 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
 	auto state = make_unique<HashJoinGlobalState>();
-	state->hash_table = make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
+	state->hash_table =
+	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
 	if (delim_types.size() > 0 && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -98,9 +98,10 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &co
 	return move(state);
 }
 
-void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_, DataChunk &input) {
-	auto &sink = (HashJoinGlobalState&) state;
-	auto &lstate = (HashJoinLocalState&) lstate_;
+void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+                            DataChunk &input) {
+	auto &sink = (HashJoinGlobalState &)state;
+	auto &lstate = (HashJoinLocalState &)lstate_;
 	// resolve the join keys for the right chunk
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// build the HT
@@ -122,7 +123,7 @@ void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, 
 // Finalize
 //===--------------------------------------------------------------------===//
 void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	auto &sink = (HashJoinGlobalState&) *state;
+	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
 
 	PhysicalSink::Finalize(context, move(state));
@@ -155,9 +156,9 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 
 void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-	auto &sink = (HashJoinGlobalState&) *sink_state;
+	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
-		(sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
+	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
 		// empty hash table with INNER or SEMI join means empty result set
 		return;
 	}
@@ -194,7 +195,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 
 void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
-	auto &sink = (HashJoinGlobalState&) *sink_state;
+	auto &sink = (HashJoinGlobalState &)*sink_state;
 
 	if (state->child_chunk.size() > 0 && state->scan_structure) {
 		// still have elements remaining from the previous probe (i.e. we got
@@ -226,4 +227,4 @@ void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, 
 	} while (chunk.size() == 0);
 }
 
-}
+} // namespace duckdb

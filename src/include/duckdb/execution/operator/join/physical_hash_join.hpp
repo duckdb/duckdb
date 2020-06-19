@@ -32,6 +32,7 @@ public:
 	vector<TypeId> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<TypeId> delim_types;
+
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
@@ -41,6 +42,7 @@ public:
 
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
 private:
 	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 };

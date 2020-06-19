@@ -23,8 +23,9 @@ public:
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(vector<unique_ptr<Expression>> &expressions, vector<TypeId> &table_types, vector<unique_ptr<Expression>> &bound_defaults) :
-		default_executor(bound_defaults) {
+	UpdateLocalState(vector<unique_ptr<Expression>> &expressions, vector<TypeId> &table_types,
+	                 vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(bound_defaults) {
 		// initialize the update chunk
 		vector<TypeId> update_types;
 		for (auto &expr : expressions) {
@@ -40,9 +41,10 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalUpdate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &chunk) {
-	auto &gstate = (UpdateGlobalState &) state;
-	auto &ustate = (UpdateLocalState &) lstate;
+void PhysicalUpdate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                          DataChunk &chunk) {
+	auto &gstate = (UpdateGlobalState &)state;
+	auto &ustate = (UpdateLocalState &)lstate;
 
 	DataChunk &update_chunk = ustate.update_chunk;
 	DataChunk &mock_chunk = ustate.mock_chunk;
@@ -93,7 +95,7 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ClientContext &cont
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	auto &gstate = (UpdateGlobalState &) *sink_state;
+	auto &gstate = (UpdateGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.updated_count));

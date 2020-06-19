@@ -7,18 +7,15 @@
 
 namespace duckdb {
 
-ExecutionContext::ExecutionContext(ClientContext &context) :
-	context(context) {
-
+ExecutionContext::ExecutionContext(ClientContext &context) : context(context) {
 }
 
 ExecutionContext::~ExecutionContext() {
-
 }
 
 void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 	pipelines.clear();
-	while(!scheduled_pipelines.empty()) {
+	while (!scheduled_pipelines.empty()) {
 		scheduled_pipelines.pop();
 	}
 
@@ -29,7 +26,7 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	BuildPipelines(physical_plan.get(), nullptr);
 	// schedule pipelines that do not have dependents
-	for(auto &pipeline : pipelines) {
+	for (auto &pipeline : pipelines) {
 		if (pipeline->dependencies.size() == 0) {
 			Schedule(pipeline.get());
 		}
@@ -41,18 +38,17 @@ void ExecutionContext::Reset() {
 	physical_state = nullptr;
 }
 
-
 void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_unique<Pipeline>(*this);
-		pipeline->sink = (PhysicalSink*) op;
+		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
 			// the parent is dependent on this pipeline to complete
 			parent->AddDependency(pipeline.get());
 		}
-		switch(op->type) {
+		switch (op->type) {
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE:
 		case PhysicalOperatorType::UPDATE:
@@ -77,7 +73,7 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
-			auto &delim_join = (PhysicalDelimJoin &) *op;
+			auto &delim_join = (PhysicalDelimJoin &)*op;
 			// create a pipeline with the duplicate eliminated path as source
 			pipeline->child = op->children[0].get();
 			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
@@ -96,9 +92,9 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	} else {
 		// operator is not a sink! recurse in children
 		// first check if there is any additional action we need to do depending on the type
-		switch(op->type) {
+		switch (op->type) {
 		case PhysicalOperatorType::DELIM_SCAN: {
-			auto &chunk_scan = (PhysicalChunkScan&) *op;
+			auto &chunk_scan = (PhysicalChunkScan &)*op;
 			// check if this chunk scan scans a duplicate eliminated join collection
 			auto entry = delim_join_dependencies.find(chunk_scan.collection);
 			assert(entry != delim_join_dependencies.end());
@@ -110,14 +106,14 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		}
 		case PhysicalOperatorType::EXECUTE: {
 			// EXECUTE statement: build pipeline on child
-			auto &execute = (PhysicalExecute &) *op;
+			auto &execute = (PhysicalExecute &)*op;
 			BuildPipelines(execute.plan, parent);
 			break;
 		}
 		default:
 			break;
 		}
-		for(auto &child : op->children) {
+		for (auto &child : op->children) {
 			BuildPipelines(child.get(), parent);
 		}
 	}
@@ -136,7 +132,7 @@ vector<TypeId> ExecutionContext::GetTypes() {
 unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
 	if (pipelines.size() > 0) {
 		// execute scheduled pipelines until we are done
-		while(!scheduled_pipelines.empty()) {
+		while (!scheduled_pipelines.empty()) {
 			auto pipeline = scheduled_pipelines.front();
 			scheduled_pipelines.pop();
 
@@ -154,9 +150,8 @@ unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
 }
 
 void ExecutionContext::ErasePipeline(Pipeline *pipeline) {
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),  [&](std::unique_ptr<Pipeline>& p) {
-		return p.get() == pipeline;
-	}));
+	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
+	                             [&](std::unique_ptr<Pipeline> &p) { return p.get() == pipeline; }));
 }
 
-}
+} // namespace duckdb

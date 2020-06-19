@@ -25,6 +25,7 @@ public:
 	vector<BoundOrderByNode> orders;
 	idx_t limit;
 	idx_t offset;
+
 public:
 	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;

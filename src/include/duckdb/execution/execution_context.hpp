@@ -20,6 +20,7 @@ class PhysicalOperatorState;
 
 class ExecutionContext {
 	friend class Pipeline;
+
 public:
 	ExecutionContext(ClientContext &context);
 	~ExecutionContext();
@@ -33,17 +34,19 @@ public:
 	vector<TypeId> GetTypes();
 
 	unique_ptr<DataChunk> FetchChunk();
+
 private:
 	void Schedule(Pipeline *pipeline);
 
 	void ErasePipeline(Pipeline *pipeline);
 
-	std::queue<Pipeline*> scheduled_pipelines;
+	std::queue<Pipeline *> scheduled_pipelines;
+
 private:
 	ClientContext &context;
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
 	vector<unique_ptr<Pipeline>> pipelines;
-	unordered_map<ChunkCollection*, Pipeline*> delim_join_dependencies;
+	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
 };
 } // namespace duckdb

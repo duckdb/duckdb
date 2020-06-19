@@ -8,8 +8,10 @@
 using namespace duckdb;
 using namespace std;
 
-PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, bool all_combinable)
-    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)), all_combinable(all_combinable) {
+PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+                                                 bool all_combinable)
+    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
+      all_combinable(all_combinable) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -17,7 +19,7 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<un
 //===--------------------------------------------------------------------===//
 struct AggregateState {
 	AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
-		for(auto &aggregate : aggregate_expressions) {
+		for (auto &aggregate : aggregate_expressions) {
 			assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
@@ -56,8 +58,8 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalOperatorState {
 public:
-	SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) :
-		state(aggregates) { }
+	SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	}
 
 	//! The lock for updating the global aggregate state
 	std::mutex lock;
@@ -67,8 +69,7 @@ public:
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) :
-		state(aggregates) {
+	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 		vector<TypeId> payload_types;
 		for (auto &aggregate : aggregates) {
 			assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -95,7 +96,6 @@ public:
 	DataChunk payload_chunk;
 };
 
-
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
 	return make_unique<SimpleAggregateGlobalState>(aggregates);
 }
@@ -104,8 +104,9 @@ unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ClientCont
 	return make_unique<SimpleAggregateLocalState>(aggregates);
 }
 
-void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
-	auto &sink = (SimpleAggregateLocalState &) lstate;
+void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                                   DataChunk &input) {
+	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
 	DataChunk &payload_chunk = sink.payload_chunk;
@@ -118,8 +119,7 @@ void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &
 		// resolve the child expression of the aggregate (if any)
 		if (aggregate.children.size() > 0) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-				sink.child_executor.ExecuteExpression(payload_expr_idx,
-														payload_chunk.data[payload_idx + payload_cnt]);
+				sink.child_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx + payload_cnt]);
 				payload_expr_idx++;
 				payload_cnt++;
 			}
@@ -128,7 +128,7 @@ void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &
 		}
 		// perform the actual aggregation
 		aggregate.function.simple_update(&payload_chunk.data[payload_idx], payload_cnt,
-											sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
+		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
 }
@@ -137,8 +137,8 @@ void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &
 // Finalize
 //===--------------------------------------------------------------------===//
 void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
-	auto &gstate = (SimpleAggregateGlobalState &) state;
-	auto &source = (SimpleAggregateLocalState &) lstate;
+	auto &gstate = (SimpleAggregateGlobalState &)state;
+	auto &source = (SimpleAggregateLocalState &)lstate;
 
 	// finalize: combine the local state into the global state
 	if (all_combinable) {
@@ -163,9 +163,8 @@ void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state) {
-	auto &gstate = (SimpleAggregateGlobalState&) *sink_state;
+void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	if (state->finished) {
 		return;
 	}

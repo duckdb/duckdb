@@ -24,7 +24,8 @@ public:
 
 class InsertLocalState : public LocalSinkState {
 public:
-	InsertLocalState(vector<TypeId> types, vector<unique_ptr<Expression>> &bound_defaults) : default_executor(bound_defaults) {
+	InsertLocalState(vector<TypeId> types, vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(bound_defaults) {
 		insert_chunk.Initialize(types);
 	}
 
@@ -32,9 +33,10 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalInsert::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &chunk) {
-	auto &gstate = (InsertGlobalState &) state;
-	auto &istate = (InsertLocalState &) lstate;
+void PhysicalInsert::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                          DataChunk &chunk) {
+	auto &gstate = (InsertGlobalState &)state;
+	auto &istate = (InsertLocalState &)lstate;
 
 	chunk.Normalify();
 	istate.default_executor.SetChunk(chunk);
@@ -79,7 +81,7 @@ unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ClientContext &cont
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	auto &gstate = (InsertGlobalState &) *sink_state;
+	auto &gstate = (InsertGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
@@ -87,4 +89,4 @@ void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

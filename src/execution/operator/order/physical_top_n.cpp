@@ -35,7 +35,7 @@ unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &cont
 
 void PhysicalTopN::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
 	// append to the local sink state
-	auto &sink = (TopNLocalState &) lstate;
+	auto &sink = (TopNLocalState &)lstate;
 	sink.big_data.Append(input);
 }
 
@@ -78,8 +78,8 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 // Combine
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
-	auto &gstate = (TopNGlobalState &) state;
-	auto &lstate = (TopNLocalState &) lstate_;
+	auto &gstate = (TopNGlobalState &)state;
+	auto &lstate = (TopNLocalState &)lstate_;
 
 	// first construct the top n of the local sink state
 	idx_t local_heap_size;
@@ -93,7 +93,7 @@ void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, L
 	idx_t position = 0;
 	DataChunk chunk;
 	chunk.Initialize(types);
-	while(position < local_heap_size) {
+	while (position < local_heap_size) {
 		position = lstate.big_data.MaterializeHeapChunk(chunk, local_heap.get(), position, local_heap_size);
 		gstate.big_data.Append(chunk);
 	}
@@ -103,7 +103,7 @@ void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, L
 // Finalize
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	auto &gstate = (TopNGlobalState &) *state;
+	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap = ComputeTopN(gstate.big_data, gstate.heap_size);
 
@@ -122,8 +122,8 @@ public:
 };
 
 void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &state = (PhysicalTopNOperatorState &) *state_;
-	auto &gstate = (TopNGlobalState &) *sink_state;
+	auto &state = (PhysicalTopNOperatorState &)*state_;
+	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (state.position >= gstate.heap_size) {
 		return;

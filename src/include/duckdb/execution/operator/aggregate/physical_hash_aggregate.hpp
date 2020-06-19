@@ -40,6 +40,7 @@ public:
 
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
+
 public:
 	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 

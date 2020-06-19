@@ -20,8 +20,9 @@ public:
 	std::atomic<idx_t> deleted_count;
 };
 
-void PhysicalDelete::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
-	auto &gstate = (DeleteGlobalState &) state;
+void PhysicalDelete::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                          DataChunk &input) {
+	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
 	// the row ids are given to us as the last column of the child chunk
@@ -37,7 +38,7 @@ unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &co
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
 void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	auto &gstate = (DeleteGlobalState &) *sink_state;
+	auto &gstate = (DeleteGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.deleted_count));
@@ -45,4 +46,4 @@ void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

@@ -4,9 +4,7 @@
 
 namespace duckdb {
 
-Pipeline::Pipeline(ExecutionContext &execution_context) :
-	execution_context(execution_context) {
-
+Pipeline::Pipeline(ExecutionContext &execution_context) : execution_context(execution_context) {
 }
 
 void Pipeline::Execute(ClientContext &context) {
@@ -16,7 +14,7 @@ void Pipeline::Execute(ClientContext &context) {
 	// incrementally process the pipeline
 	DataChunk intermediate;
 	child->InitializeChunk(intermediate);
-	while(true) {
+	while (true) {
 		child->GetChunk(context, intermediate, state.get());
 		if (intermediate.size() == 0) {
 			sink->Combine(context, *sink_state, *lstate);
@@ -45,7 +43,7 @@ void Pipeline::EraseDependency(Pipeline *pipeline) {
 
 void Pipeline::Finish() {
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
-	for(auto &parent : parents) {
+	for (auto &parent : parents) {
 		// parent: remove this entry from the dependents
 		parent->EraseDependency(this);
 	}
@@ -56,7 +54,7 @@ void Pipeline::Finish() {
 string Pipeline::ToString() const {
 	string str = PhysicalOperatorToString(sink->type);
 	auto node = this->child;
-	while(node) {
+	while (node) {
 		str = PhysicalOperatorToString(node->type) + " -> " + str;
 		node = node->children[0].get();
 	}
@@ -67,4 +65,4 @@ void Pipeline::Print() const {
 	Printer::Print(ToString());
 }
 
-}
+} // namespace duckdb

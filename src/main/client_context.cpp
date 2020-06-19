@@ -29,8 +29,8 @@ using namespace duckdb;
 using namespace std;
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this), catalog(*database.catalog),
-      temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
+    : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this),
+      catalog(*database.catalog), temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());

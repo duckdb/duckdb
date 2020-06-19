@@ -30,8 +30,8 @@ string PhysicalComparisonJoin::ExtraRenderInformation() const {
 	return extra_info;
 }
 
-
-void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input, DataChunk &result) {
+void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
+                                                      DataChunk &result) {
 	// empty hash table, special case
 	if (join_type == JoinType::ANTI) {
 		// anti join with empty hash table, NOP join

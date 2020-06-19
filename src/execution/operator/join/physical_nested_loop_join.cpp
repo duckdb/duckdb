@@ -105,7 +105,7 @@ class NestedLoopJoinLocalState : public LocalSinkState {
 public:
 	NestedLoopJoinLocalState(vector<JoinCondition> &conditions) {
 		vector<TypeId> condition_types;
-		for(auto &cond : conditions) {
+		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
 			condition_types.push_back(cond.right->return_type);
 		}
@@ -131,14 +131,16 @@ public:
 	bool has_null;
 };
 
-void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
-	auto &gstate = (NestedLoopJoinGlobalState &) state;
-	auto &nlj_state = (NestedLoopJoinLocalState &) lstate;
+void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                                  DataChunk &input) {
+	auto &gstate = (NestedLoopJoinGlobalState &)state;
+	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
 
 	// resolve the join expression of the right side
 	nlj_state.rhs_executor.Execute(input, nlj_state.right_condition);
 
-	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in this chunk
+	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in
+	// this chunk
 	if (join_type == JoinType::MARK && !gstate.has_null) {
 		if (HasNullValues(nlj_state.right_condition)) {
 			gstate.has_null = true;
@@ -164,9 +166,10 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ClientConte
 class PhysicalNestedLoopJoinState : public PhysicalOperatorState {
 public:
 	PhysicalNestedLoopJoinState(PhysicalOperator *left, vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(left), fetch_next_left(true), fetch_next_right(false), right_chunk(0), left_tuple(0), right_tuple(0) {
+	    : PhysicalOperatorState(left), fetch_next_left(true), fetch_next_right(false), right_chunk(0), left_tuple(0),
+	      right_tuple(0) {
 		vector<TypeId> condition_types;
-		for(auto &cond : conditions) {
+		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
 			condition_types.push_back(cond.left->return_type);
 		}
@@ -188,7 +191,7 @@ public:
 
 void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
-	auto &gstate = (NestedLoopJoinGlobalState &) *sink_state;
+	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.count == 0) {
 		// empty RHS
@@ -258,7 +261,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 					if (join_type == JoinType::MARK) {
 						// now construct the mark join result from the found matches
 						PhysicalJoin::ConstructMarkJoinResult(state->left_condition, state->child_chunk, chunk,
-															found_match, gstate.has_null);
+						                                      found_match, gstate.has_null);
 					} else if (join_type == JoinType::SEMI) {
 						// construct the semi join result from the found matches
 						PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
@@ -301,8 +304,8 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		case JoinType::INNER: {
 			SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
 			idx_t match_count =
-			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition,
-			                                 right_chunk, lvector, rvector, conditions);
+			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition, right_chunk,
+			                                 lvector, rvector, conditions);
 			// we have finished resolving the join conditions
 			if (match_count > 0) {
 				// we have matching tuples!
@@ -324,7 +327,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		if (state->right_tuple >= right_chunk.size()) {
 			state->fetch_next_right = true;
 		}
-	} while(chunk.size() == 0);
+	} while (chunk.size() == 0);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalNestedLoopJoin::GetOperatorState() {

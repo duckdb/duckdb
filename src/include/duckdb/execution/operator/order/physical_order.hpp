@@ -23,6 +23,7 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
+
 public:
 	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) override;

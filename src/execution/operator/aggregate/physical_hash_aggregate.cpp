@@ -53,7 +53,9 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalOperatorState {
 public:
-	HashAggregateGlobalState(vector<TypeId> &group_types, vector<TypeId> &payload_types, vector<BoundAggregateExpression *> &bindings) : is_empty(true) {
+	HashAggregateGlobalState(vector<TypeId> &group_types, vector<TypeId> &payload_types,
+	                         vector<BoundAggregateExpression *> &bindings)
+	    : is_empty(true) {
 		ht = make_unique<SuperLargeHashTable>(1024, group_types, payload_types, bindings);
 	}
 
@@ -67,8 +69,9 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	HashAggregateLocalState(vector<unique_ptr<Expression>> &groups, vector<BoundAggregateExpression *> &aggregates, vector<TypeId> &group_types, vector<TypeId> &payload_types) :
-		group_executor(groups) {
+	HashAggregateLocalState(vector<unique_ptr<Expression>> &groups, vector<BoundAggregateExpression *> &aggregates,
+	                        vector<TypeId> &group_types, vector<TypeId> &payload_types)
+	    : group_executor(groups) {
 		for (auto &aggr : aggregates) {
 			if (aggr->children.size()) {
 				for (idx_t i = 0; i < aggr->children.size(); ++i) {
@@ -100,9 +103,10 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ClientContex
 	return make_unique<HashAggregateLocalState>(groups, bindings, group_types, payload_types);
 }
 
-void PhysicalHashAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
-	auto &gstate = (HashAggregateGlobalState &) state;
-	auto &sink = (HashAggregateLocalState &) lstate;
+void PhysicalHashAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                                 DataChunk &input) {
+	auto &gstate = (HashAggregateGlobalState &)state;
+	auto &sink = (HashAggregateLocalState &)lstate;
 
 	DataChunk &group_chunk = sink.group_chunk;
 	DataChunk &payload_chunk = sink.payload_chunk;
@@ -139,8 +143,8 @@ void PhysicalHashAggregate::Sink(ClientContext &context, GlobalOperatorState &st
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public PhysicalOperatorState {
 public:
-	PhysicalHashAggregateState(vector<TypeId> &group_types, vector<TypeId> &aggregate_types, PhysicalOperator *child) :
-		PhysicalOperatorState(child), ht_scan_position(0) {
+	PhysicalHashAggregateState(vector<TypeId> &group_types, vector<TypeId> &aggregate_types, PhysicalOperator *child)
+	    : PhysicalOperatorState(child), ht_scan_position(0) {
 		group_chunk.Initialize(group_types);
 		if (aggregate_types.size() > 0) {
 			aggregate_chunk.Initialize(aggregate_types);
@@ -156,8 +160,8 @@ public:
 };
 
 void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
-	auto &gstate = (HashAggregateGlobalState &) *sink_state;
-	auto &state = (PhysicalHashAggregateState &) *state_;
+	auto &gstate = (HashAggregateGlobalState &)*sink_state;
+	auto &state = (PhysicalHashAggregateState &)*state_;
 
 	state.group_chunk.Reset();
 	state.aggregate_chunk.Reset();
@@ -202,5 +206,6 @@ void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types, children.size() == 0 ? nullptr : children[0].get());
+	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types,
+	                                               children.size() == 0 ? nullptr : children[0].get());
 }

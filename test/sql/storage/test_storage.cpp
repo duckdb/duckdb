@@ -41,7 +41,7 @@ TEST_CASE("Test empty table", "[storage]") {
 		result = con.Query("SELECT COUNT(*) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
-	for(idx_t i = 0; i < 2; i++) {
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT COUNT(*) FROM test");

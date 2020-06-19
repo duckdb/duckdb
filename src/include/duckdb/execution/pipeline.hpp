@@ -26,9 +26,11 @@ public:
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
 	PhysicalSink *sink;
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
-	unordered_set<Pipeline*> parents;
-	//! The dependencies of this pipeline (the pipeline can only be started after the dependencies have finished executing)
-	unordered_set<Pipeline*> dependencies;
+	unordered_set<Pipeline *> parents;
+	//! The dependencies of this pipeline (the pipeline can only be started after the dependencies have finished
+	//! executing)
+	unordered_set<Pipeline *> dependencies;
+
 public:
 	//! Execute the pipeline sequentially on a single thread
 	void Execute(ClientContext &context);

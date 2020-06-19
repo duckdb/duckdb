@@ -103,6 +103,7 @@ public:
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
 	};
+
 public:
 	template <class STATE> static idx_t StateSize() {
 		return sizeof(STATE);

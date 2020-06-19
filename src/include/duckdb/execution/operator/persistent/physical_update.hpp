@@ -28,6 +28,7 @@ public:
 	vector<unique_ptr<Expression>> expressions;
 	vector<unique_ptr<Expression>> bound_defaults;
 	bool is_index_update;
+
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;

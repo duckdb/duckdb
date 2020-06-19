@@ -44,7 +44,8 @@ unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ClientContext &c
 	return distinct->GetLocalSinkState(context);
 }
 
-void PhysicalDelimJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+void PhysicalDelimJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                             DataChunk &input) {
 	lhs_data.Append(input);
 	distinct->Sink(context, state, lstate, input);
 }
@@ -56,7 +57,7 @@ void PhysicalDelimJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperat
 	DataChunk delim_chunk;
 	distinct->InitializeChunk(delim_chunk);
 	auto distinct_state = distinct->GetOperatorState();
-	while(true) {
+	while (true) {
 		distinct->GetChunk(context, delim_chunk, distinct_state.get());
 		if (delim_chunk.size() == 0) {
 			break;
@@ -83,4 +84,4 @@ string PhysicalDelimJoin::ExtraRenderInformation() const {
 	return join->ExtraRenderInformation();
 }
 
-}
+} // namespace duckdb

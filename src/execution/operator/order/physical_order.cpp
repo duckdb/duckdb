@@ -37,7 +37,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 
 void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
 	// concatenate all the data of the child chunks
-	auto &gstate = (OrderByGlobalOperatorState&) state;
+	auto &gstate = (OrderByGlobalOperatorState &)state;
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.sorted_data.Append(input);
 }
@@ -47,7 +47,7 @@ void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, Loc
 //===--------------------------------------------------------------------===//
 void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
-	auto &sink = (OrderByGlobalOperatorState&) *state;
+	auto &sink = (OrderByGlobalOperatorState &)*state;
 	ChunkCollection &big_data = sink.sorted_data;
 
 	// compute the sorting columns from the input data
@@ -84,7 +84,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 //===--------------------------------------------------------------------===//
 void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
-	auto &sink = (OrderByGlobalOperatorState&) *this->sink_state;
+	auto &sink = (OrderByGlobalOperatorState &)*this->sink_state;
 	ChunkCollection &big_data = sink.sorted_data;
 	if (state->position >= big_data.count) {
 		return;
@@ -98,4 +98,4 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(children[0].get());
 }
 
-}
+} // namespace duckdb

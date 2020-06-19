@@ -45,8 +45,9 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ClientCont
 	return make_unique<BlockwiseNLJoinLocalState>();
 }
 
-void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
-	auto &gstate = (BlockwiseNLJoinGlobalState &) state;
+void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                                   DataChunk &input) {
+	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
 	gstate.right_chunks.Append(input);
 }
 
@@ -54,7 +55,7 @@ void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &
 // Finalize
 //===--------------------------------------------------------------------===//
 void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	auto &gstate = (BlockwiseNLJoinGlobalState &) *state;
+	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.count);
@@ -87,7 +88,7 @@ public:
 void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
                                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_);
-	auto &gstate = (BlockwiseNLJoinGlobalState &) *sink_state;
+	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.count == 0) {
 		// empty RHS

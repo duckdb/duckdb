@@ -20,6 +20,7 @@ public:
 	                       JoinType join_type);
 
 	vector<JoinCondition> conditions;
+
 public:
 	string ExtraRenderInformation() const override;
 
