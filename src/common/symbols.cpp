@@ -33,6 +33,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/execution/pipeline.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
