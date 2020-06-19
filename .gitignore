@@ -312,3 +312,5 @@ src/amalgamation/
 amalgamation.cache
 dependencies.d
 deps.s
+duckdb.cpp.tmp
+duckdb.hpp.tmp

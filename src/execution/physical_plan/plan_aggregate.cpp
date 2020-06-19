@@ -27,7 +27,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
 		bool use_simple_aggregation = true;
-		bool uncombinable = false;
 		for (idx_t i = 0; i < op.expressions.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*op.expressions[i];
 			if (!aggregate.function.simple_update || aggregate.distinct) {
@@ -48,5 +47,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 		    make_unique_base<PhysicalOperator, PhysicalHashAggregate>(op.types, move(op.expressions), move(op.groups));
 	}
 	groupby->children.push_back(move(plan));
-	return move(groupby);
+	return groupby;
 }

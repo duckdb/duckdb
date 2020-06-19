@@ -6,6 +6,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/client_context.hpp"
 
 /**
@@ -189,13 +190,13 @@ int main() {
 	auto order = make_unique<PhysicalOrder>(aggr_types, move(orders));
 	order->children.push_back(move(projection));
 
-	// execute!
-	DataChunk result_chunk;
-	result_chunk.Initialize(order->types);
-	auto state = order->GetOperatorState();
+	ExecutionContext execution_context(*con.context);
+	execution_context.Initialize(move(order));
 
+	// execute!
+	unique_ptr<DataChunk> result_chunk;
 	do {
-		order->GetChunk(*con.context, result_chunk, state.get());
-		result_chunk.Print();
-	} while (result_chunk.size() > 0);
+		result_chunk = execution_context.FetchChunk();
+		result_chunk->Print();
+	} while (result_chunk->size() > 0);
 }
