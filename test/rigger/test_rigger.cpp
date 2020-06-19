@@ -743,4 +743,19 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		result = con.Query("SELECT RIGHT(t0.c0, -1) FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 	}
+	SECTION("637") {
+		// SELECT with RIGHT JOIN causes an assertion failure "Assertion `!finalized' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES('');"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES(0);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0 AS SELECT 0 FROM t0, t1 WHERE t0.c0 = t1.c0;"));
+		result = con.Query("SELECT * FROM v0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+
+		result = con.Query("SELECT * FROM v0 RIGHT JOIN t1 ON 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"0"}));
+	}
 }
