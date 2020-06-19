@@ -504,5 +504,5 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 		}
 	}
 	target.Verify();
-	return remaining_data;
+	return start_offset + remaining_data;
 }
