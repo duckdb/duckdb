@@ -71,6 +71,7 @@ public:
 	void StartPhase(string phase);
 	void EndPhase();
 
+	void Initialize(PhysicalOperator *root);
 	void StartOperator(PhysicalOperator *phys_op);
 	void EndOperator(DataChunk &chunk);
 

@@ -16,15 +16,19 @@ namespace duckdb {
 
 //! Represents a physical ordering of the data. Note that this will not change
 //! the data but only add a selection vector.
-class PhysicalOrder : public PhysicalOperator {
+class PhysicalOrder : public PhysicalSink {
 public:
 	PhysicalOrder(vector<TypeId> types, vector<BoundOrderByNode> orders)
-	    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
+	    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
 	}
 
 	vector<BoundOrderByNode> orders;
 
 public:
+	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };

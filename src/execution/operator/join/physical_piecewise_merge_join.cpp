@@ -5,30 +5,9 @@
 #include "duckdb/execution/merge_join.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
-
-class PhysicalPiecewiseMergeJoinState : public PhysicalComparisonJoinState {
-public:
-	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, PhysicalOperator *right, vector<JoinCondition> &conditions)
-	    : PhysicalComparisonJoinState(left, right, conditions), initialized(false), left_position(0), right_position(0),
-	      right_chunk_index(0), has_null(false) {
-	}
-
-	bool initialized;
-	idx_t left_position;
-	idx_t right_position;
-	idx_t right_chunk_index;
-	DataChunk left_chunk;
-	DataChunk join_keys;
-	MergeOrder left_orders;
-	ChunkCollection right_chunks;
-	ChunkCollection right_conditions;
-	vector<MergeOrder> right_orders;
-	bool has_null;
-};
+namespace duckdb {
 
 PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
@@ -46,66 +25,138 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 	children.push_back(move(right));
 }
 
-void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
-                                                  PhysicalOperatorState *state_) {
-	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
-	assert(conditions.size() == 1);
-	if (!state->initialized) {
-		// create the sorted pieces
-		auto right_state = children[1]->GetOperatorState();
-		auto types = children[1]->GetTypes();
-
-		DataChunk right_chunk;
-		right_chunk.Initialize(types);
-		state->join_keys.Initialize(join_key_types);
-		// first fetch the entire right side
-		while (true) {
-			children[1]->GetChunk(context, right_chunk, right_state.get());
-			if (right_chunk.size() == 0) {
-				break;
-			}
-			// resolve the join keys for this chunk
-			state->rhs_executor.SetChunk(right_chunk);
-
-			state->join_keys.Reset();
-			state->join_keys.SetCardinality(right_chunk);
-			for (idx_t k = 0; k < conditions.size(); k++) {
-				// resolve the join key
-				state->rhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
-			}
-			// append the join keys and the chunk to the chunk collection
-			state->right_chunks.Append(right_chunk);
-			state->right_conditions.Append(state->join_keys);
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class MergeJoinLocalState : public LocalSinkState {
+public:
+	MergeJoinLocalState(vector<JoinCondition> &conditions) {
+		vector<TypeId> condition_types;
+		for (auto &cond : conditions) {
+			rhs_executor.AddExpression(*cond.right);
+			condition_types.push_back(cond.right->return_type);
 		}
-		if (state->right_chunks.count == 0 && (type == JoinType::INNER || type == JoinType::SEMI)) {
-			// empty RHS with INNER or SEMI join means empty result set
-			return;
-		}
+		join_keys.Initialize(condition_types);
+	}
+
+	//! The chunk holding the right condition
+	DataChunk join_keys;
+	//! The executor of the RHS condition
+	ExpressionExecutor rhs_executor;
+};
+
+class MergeJoinGlobalState : public GlobalOperatorState {
+public:
+	MergeJoinGlobalState() : has_null(false) {
+	}
+
+	//! The materialized data of the RHS
+	ChunkCollection right_chunks;
+	//! The materialized join keys of the RHS
+	ChunkCollection right_conditions;
+	//! The join orders of the RHS
+	vector<MergeOrder> right_orders;
+	//! Whether or not the RHS of the nested loop join has NULL values
+	bool has_null;
+};
+
+unique_ptr<GlobalOperatorState> PhysicalPiecewiseMergeJoin::GetGlobalState(ClientContext &context) {
+	return make_unique<MergeJoinGlobalState>();
+}
+
+unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ClientContext &context) {
+	return make_unique<MergeJoinLocalState>(conditions);
+}
+
+void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                                      DataChunk &input) {
+	auto &gstate = (MergeJoinGlobalState &)state;
+	auto &mj_state = (MergeJoinLocalState &)lstate;
+
+	// resolve the join keys for this chunk
+	mj_state.rhs_executor.SetChunk(input);
+
+	mj_state.join_keys.Reset();
+	mj_state.join_keys.SetCardinality(input);
+	for (idx_t k = 0; k < conditions.size(); k++) {
+		// resolve the join key
+		mj_state.rhs_executor.ExecuteExpression(k, mj_state.join_keys.data[k]);
+	}
+	// append the join keys and the chunk to the chunk collection
+	gstate.right_chunks.Append(input);
+	gstate.right_conditions.Append(mj_state.join_keys);
+}
+
+//===--------------------------------------------------------------------===//
+// Finalize
+//===--------------------------------------------------------------------===//
+static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
+
+void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	auto &gstate = (MergeJoinGlobalState &)*state;
+	if (gstate.right_conditions.chunks.size() > 0) {
 		// now order all the chunks
-		state->right_orders.resize(state->right_conditions.chunks.size());
-		for (idx_t i = 0; i < state->right_conditions.chunks.size(); i++) {
-			auto &chunk_to_order = *state->right_conditions.chunks[i];
+		gstate.right_orders.resize(gstate.right_conditions.chunks.size());
+		for (idx_t i = 0; i < gstate.right_conditions.chunks.size(); i++) {
+			auto &chunk_to_order = *gstate.right_conditions.chunks[i];
 			assert(chunk_to_order.column_count() == 1);
 			for (idx_t col_idx = 0; col_idx < chunk_to_order.column_count(); col_idx++) {
-				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), state->right_orders[i]);
-				if (state->right_orders[i].count < chunk_to_order.size()) {
+				OrderVector(chunk_to_order.data[col_idx], chunk_to_order.size(), gstate.right_orders[i]);
+				if (gstate.right_orders[i].count < chunk_to_order.size()) {
 					// the amount of entries in the order vector is smaller than the amount of entries in the vector
 					// this only happens if there are NULL values in the right-hand side
 					// hence we set the has_null to true (this is required for the MARK join)
-					state->has_null = true;
+					gstate.has_null = true;
 				}
 			}
 		}
-		state->right_chunk_index = state->right_orders.size();
-		state->initialized = true;
 	}
+	PhysicalSink::Finalize(context, move(state));
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+class PhysicalPiecewiseMergeJoinState : public PhysicalOperatorState {
+public:
+	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(left), fetch_next_left(true), left_position(0), right_position(0),
+	      right_chunk_index(0) {
+		vector<TypeId> condition_types;
+		for (auto &cond : conditions) {
+			lhs_executor.AddExpression(*cond.left);
+			condition_types.push_back(cond.left->return_type);
+		}
+		join_keys.Initialize(condition_types);
+	}
+
+	bool fetch_next_left;
+	idx_t left_position;
+	idx_t right_position;
+	idx_t right_chunk_index;
+	DataChunk left_chunk;
+	DataChunk join_keys;
+	MergeOrder left_orders;
+	//! The executor of the RHS condition
+	ExpressionExecutor lhs_executor;
+};
+
+void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+                                                  PhysicalOperatorState *state_) {
+	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
+	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	do {
 		// check if we have to fetch a child from the left side
-		if (state->right_chunk_index == state->right_orders.size()) {
+		if (state->fetch_next_left) {
 			// fetch the chunk from the left side
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
+				return;
+			}
+			if (gstate.right_chunks.count == 0) {
+				// empty RHS: construct empty result
+				ConstructEmptyJoinResult(join_type, gstate.has_null, state->child_chunk, chunk);
 				return;
 			}
 
@@ -118,35 +169,30 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 				// sort by join key
 				OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
 			}
+
 			state->right_chunk_index = 0;
 			state->left_position = 0;
 			state->right_position = 0;
+			state->fetch_next_left = false;
 		}
 
 		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
 
-		// first check if the join type is MARK, SEMI or ANTI
+		// check if the join type is MARK, SEMI or ANTI
 		// in this case we loop over the entire right collection immediately
 		// because we can never return more than STANDARD_VECTOR_SIZE rows from a join
-		switch (type) {
+		switch (join_type) {
 		case JoinType::MARK: {
 			// MARK join
-			if (state->right_chunks.count > 0) {
-				ChunkMergeInfo right_info(state->right_conditions, state->right_orders);
-				// first perform the MARK join
-				// this method uses the LHS to loop over the entire RHS looking for matches
-				MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
-				// now construct the mark join result from the found matches
-				PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk,
-				                                      right_info.found_match, state->has_null);
-			} else {
-				// RHS empty: result is false for everything
-				chunk.Reference(state->child_chunk);
-				auto &mark_vector = chunk.data.back();
-				mark_vector.vector_type = VectorType::CONSTANT_VECTOR;
-				mark_vector.SetValue(0, Value::BOOLEAN(false));
-			}
-			state->right_chunk_index = state->right_orders.size();
+			ChunkMergeInfo right_info(gstate.right_conditions, gstate.right_orders);
+			// first perform the MARK join
+			// this method uses the LHS to loop over the entire RHS looking for matches
+			MergeJoinMark::Perform(left_info, right_info, conditions[0].comparison);
+			// now construct the mark join result from the found matches
+			PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
+			                                      gstate.has_null);
+			state->right_chunk_index = gstate.right_orders.size();
+			state->fetch_next_left = true;
 			return;
 		}
 		default:
@@ -155,21 +201,24 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 		}
 
 		// perform the actual merge join
-		auto &right_chunk = *state->right_chunks.chunks[state->right_chunk_index];
-		auto &right_condition_chunk = *state->right_conditions.chunks[state->right_chunk_index];
-		auto &right_orders = state->right_orders[state->right_chunk_index];
+		auto &right_chunk = *gstate.right_chunks.chunks[state->right_chunk_index];
+		auto &right_condition_chunk = *gstate.right_conditions.chunks[state->right_chunk_index];
+		auto &right_orders = gstate.right_orders[state->right_chunk_index];
 
 		ScalarMergeInfo right(right_orders, right_condition_chunk.data[0].type, state->right_position);
 		// perform the merge join
-		switch (type) {
+		switch (join_type) {
 		case JoinType::INNER: {
 			idx_t result_count = MergeJoinInner::Perform(left_info, right, conditions[0].comparison);
 			if (result_count == 0) {
 				// exhausted this chunk on the right side
-				// move to the next
-				state->right_chunk_index++;
+				// move to the next right chunk
 				state->left_position = 0;
 				state->right_position = 0;
+				state->right_chunk_index++;
+				if (state->right_chunk_index >= gstate.right_chunks.chunks.size()) {
+					state->fetch_next_left = true;
+				}
 			} else {
 				chunk.Slice(state->child_chunk, left_info.result, result_count);
 				chunk.Slice(right_chunk, right.result, result_count, state->child_chunk.column_count());
@@ -183,9 +232,12 @@ void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataCh
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState() {
-	return make_unique<PhysicalPiecewiseMergeJoinState>(children[0].get(), children[1].get(), conditions);
+	return make_unique<PhysicalPiecewiseMergeJoinState>(children[0].get(), conditions);
 }
 
+//===--------------------------------------------------------------------===//
+// OrderVector
+//===--------------------------------------------------------------------===//
 template <class T, class OP>
 static sel_t templated_quicksort_initial(T *data, const SelectionVector &sel, const SelectionVector &not_null_sel,
                                          idx_t count, SelectionVector &result) {
@@ -312,3 +364,5 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 		throw NotImplementedException("Unimplemented type for sort");
 	}
 }
+
+} // namespace duckdb

@@ -9,7 +9,12 @@ using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), is_operator(is_operator) {
+      function(bound_function), arguments(bound_function.arguments), sql_return_type(bound_function.return_type), is_operator(is_operator) {
+}
+
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, vector<SQLType> arguments, SQLType sql_return_type, bool is_operator)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
+      function(bound_function), arguments(move(arguments)), sql_return_type(move(sql_return_type)), is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -50,13 +55,11 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, is_operator);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, arguments, sql_return_type, is_operator);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}
 	copy->bind_info = bind_info ? bind_info->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	copy->arguments = arguments;
-	copy->sql_return_type = sql_return_type;
 	return move(copy);
 }

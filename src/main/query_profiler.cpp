@@ -4,6 +4,8 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
 #include <iostream>
@@ -18,9 +20,6 @@ constexpr idx_t MAX_EXTRA_LINES = 10;
 
 void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	if (!enabled) {
-		return;
-	}
-	if (statement.type != StatementType::SELECT_STATEMENT && statement.type != StatementType::EXECUTE_STATEMENT) {
 		return;
 	}
 	this->running = true;
@@ -103,15 +102,19 @@ void QueryProfiler::EndPhase() {
 	}
 }
 
+void QueryProfiler::Initialize(PhysicalOperator *root_op) {
+	if (!enabled || !running) {
+		return;
+	}
+	this->root = CreateTree(root_op);
+}
+
 void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 	if (!enabled || !running) {
 		return;
 	}
 
-	if (!root) {
-		// start of execution: create operator tree
-		root = CreateTree(phys_op);
-	}
+	assert(root);
 	if (!execution_stack.empty()) {
 		// add timing for the previous element
 		op.End();
@@ -119,15 +122,7 @@ void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
 		auto &info = tree_map[execution_stack.top()]->info;
 		info.time += op.Elapsed();
 	}
-	if (tree_map.count(phys_op) == 0) {
-		// element does not exist in the tree! this only happens with a subquery
-		// create a new tree
-		assert(execution_stack.size() > 0);
-		auto node = tree_map[execution_stack.top()];
-		auto new_tree = CreateTree(phys_op, node->depth + 1);
-		// add it to the current node
-		node->children.push_back(move(new_tree));
-	}
+	assert(tree_map.count(phys_op) != 0);
 	execution_stack.push(phys_op);
 
 	// start timing for current element
@@ -279,6 +274,24 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	for (auto &child : root->children) {
 		auto child_node = CreateTree(child.get(), depth + 1);
 		node->children.push_back(move(child_node));
+	}
+	switch (root->type) {
+	case PhysicalOperatorType::DELIM_JOIN: {
+		auto &delim_join = (PhysicalDelimJoin &)*root;
+		auto child_node = CreateTree((PhysicalOperator *)delim_join.join.get(), depth + 1);
+		node->children.push_back(move(child_node));
+		child_node = CreateTree((PhysicalOperator *)delim_join.distinct.get(), depth + 1);
+		node->children.push_back(move(child_node));
+		break;
+	}
+	case PhysicalOperatorType::EXECUTE: {
+		auto &execute = (PhysicalExecute &)*root;
+		auto child_node = CreateTree((PhysicalOperator *)execute.plan, depth + 1);
+		node->children.push_back(move(child_node));
+		break;
+	}
+	default:
+		break;
 	}
 	return node;
 }

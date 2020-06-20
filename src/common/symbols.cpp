@@ -33,6 +33,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/execution/pipeline.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
@@ -77,6 +78,7 @@ template class std::unique_ptr<CrossProductRef>;
 template class std::unique_ptr<JoinRef>;
 template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
+template class std::unique_ptr<Pipeline>;
 
 template class std::unique_ptr<Expression>;
 template class std::unique_ptr<BoundQueryNode>;
@@ -158,6 +160,7 @@ template class std::vector<TypeId>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Pipeline>>);
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<SQLType>;
 

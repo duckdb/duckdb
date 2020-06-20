@@ -45,8 +45,6 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		}
 		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, collation_entry->function);
 		function->children.push_back(move(source));
-		function->arguments.push_back({SQLType::VARCHAR});
-		function->sql_return_type = SQLType::VARCHAR;
 		if (collation_entry->function.bind) {
 			function->bind_info = collation_entry->function.bind(*function, context);
 		}

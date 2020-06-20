@@ -17,8 +17,9 @@ TEST_CASE("Test DISTINCT keyword", "[distinct]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 11, 13}));
 	REQUIRE(CHECK_COLUMN(result, 1, {21, 22, 22}));
 
-	// FIXME: this doesn't work because "test.a" is different from "a" in the ORDER BY
-	// result = con.Query("SELECT DISTINCT test.a, b FROM test ORDER BY a, b");
+	result = con.Query("SELECT DISTINCT test.a, b FROM test ORDER BY a, b");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 11, 13}));
+	REQUIRE(CHECK_COLUMN(result, 1, {21, 22, 22}));
 
 	result = con.Query("SELECT DISTINCT a FROM test ORDER BY a");
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 13}));
