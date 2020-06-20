@@ -7,7 +7,7 @@ using namespace std;
 
 namespace duckdb {
 
-bool like_operator(const char *s, const char *pattern, const char *escape);
+static bool like_operator(const char *s, const char *pattern, const char *escape);
 
 template <bool IS_UPPER>
 static std::unique_ptr<string_t> to_upper_case(Vector &result, const char *input_data, idx_t input_length) {
@@ -128,7 +128,7 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 			if (*p == 0) {
 				return true; /* tail is acceptable */
 			}
-			for (; *p && *t; ++t) {
+			for (; *p && *t; t++) {
 				if (like_operator(t, p, escape)) {
 					return true;
 				}
@@ -165,7 +165,7 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true, PrepILike>));
 	set.AddFunction(ScalarFunction("!~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true, PrepILike>));
 	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
 	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
