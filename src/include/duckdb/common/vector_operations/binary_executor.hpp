@@ -15,6 +15,22 @@
 
 namespace duckdb {
 
+struct nop
+{
+    template <typename T>
+    void operator() (T const &) const noexcept { }
+};
+
+template <typename T>
+using mockable_unique_ptr = std::unique_ptr<T, nop>;
+
+struct PrepNull {
+	template<class TA>
+	static inline mockable_unique_ptr<TA> Operation(Vector& input) {
+		return mockable_unique_ptr<TA>(ConstantVector::GetData<TA>(input));
+	}
+};
+
 struct DefaultNullCheckOperator {
 	template <class LEFT_TYPE, class RIGHT_TYPE> static inline bool Operation(LEFT_TYPE left, RIGHT_TYPE right) {
 		return false;
@@ -74,28 +90,26 @@ private:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
-	          bool IGNORE_NULL>
+	          bool IGNORE_NULL, class RIGHT_PREP_FUNC>
 	static void ExecuteConstant(Vector &left, Vector &right, Vector &result, FUNC fun) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;
-
-		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
-		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
-		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 
 		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right)) {
 			ConstantVector::SetNull(result, true);
 			return;
 		}
+
+		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
+		auto rdata = RIGHT_PREP_FUNC::template Operation<RIGHT_TYPE>(right);
+		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
+
 		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
 		    fun, *ldata, *rdata, ConstantVector::Nullmask(result), 0);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
-	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT>
+	          bool IGNORE_NULL, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, class RIGHT_PREP_FUNC>
 	static void ExecuteFlat(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
-		auto rdata = FlatVector::GetData<RIGHT_TYPE>(right);
-
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
 			result.vector_type = VectorType::CONSTANT_VECTOR;
@@ -103,6 +117,8 @@ private:
 			return;
 		}
 
+		auto ldata = FlatVector::GetData<LEFT_TYPE>(left);
+		auto rdata = RIGHT_PREP_FUNC::template Operation<RIGHT_TYPE>(right);
 		result.vector_type = VectorType::FLAT_VECTOR;
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		if (LEFT_CONSTANT) {
@@ -112,8 +128,9 @@ private:
 		} else {
 			FlatVector::SetNullmask(result, FlatVector::Nullmask(left) | FlatVector::Nullmask(right));
 		}
+
 		ExecuteFlatLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, LEFT_CONSTANT,
-		                RIGHT_CONSTANT>(ldata, rdata, result_data, count, FlatVector::Nullmask(result), fun);
+		                RIGHT_CONSTANT>(ldata, rdata.get(), result_data, count, FlatVector::Nullmask(result), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
@@ -146,7 +163,7 @@ private:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
-	          bool IGNORE_NULL>
+	          bool IGNORE_NULL, class RIGHT_PREP_FUNC>
 	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		VectorData ldata, rdata;
 
@@ -161,44 +178,44 @@ private:
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC,
-	          bool IGNORE_NULL>
+	          bool IGNORE_NULL, class RIGHT_PREP_FUNC>
 	static void ExecuteSwitch(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result,
+			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, RIGHT_PREP_FUNC>(left, right, result,
 			                                                                                      fun);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true>(
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, true, RIGHT_PREP_FUNC>(
 			    left, right, result, count, fun);
 		} else if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false>(
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, true, false, RIGHT_PREP_FUNC>(
 			    left, right, result, count, fun);
 		} else if (left.vector_type == VectorType::FLAT_VECTOR && right.vector_type == VectorType::FLAT_VECTOR) {
-			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false>(
+			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, false, false, RIGHT_PREP_FUNC>(
 			    left, right, result, count, fun);
 		} else {
-			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL>(left, right, result,
+			ExecuteGeneric<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, IGNORE_NULL, RIGHT_PREP_FUNC>(left, right, result,
 			                                                                                     count, fun);
 		}
 	}
 
 public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, bool IGNORE_NULL = false,
-	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
+	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>, class RIGHT_PREP_FUNC = PrepNull>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC, IGNORE_NULL>(
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC, IGNORE_NULL, RIGHT_PREP_FUNC>(
 		    left, right, result, count, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false,
-	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
+	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper, class RIGHT_PREP_FUNC = PrepNull>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL>(left, right, result, count,
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool, IGNORE_NULL, RIGHT_PREP_FUNC>(left, right, result, count,
 		                                                                                    false);
 	}
 
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false>
+	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP, bool IGNORE_NULL = false, class RIGHT_PREP_FUNC = PrepNull>
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool, IGNORE_NULL>(
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool, IGNORE_NULL, RIGHT_PREP_FUNC>(
 		    left, right, result, count, false);
 	}
 

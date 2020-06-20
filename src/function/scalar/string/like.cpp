@@ -1,22 +1,69 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "utf8proc.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-namespace {
+bool like_operator(const char *s, const char *pattern, const char *escape);
 
-std::string tolower(string_t& str) {
-	std::string s(str.GetData(), str.GetSize());
-	std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-	return s;
+template <bool IS_UPPER>
+static std::unique_ptr<string_t> to_upper_case(Vector &result, const char *input_data, idx_t input_length) {
+	// first figure out the output length
+	// optimization: if only ascii then input_length = output_length
+	idx_t output_length = 0;
+	for (idx_t i = 0; i < input_length;) {
+		if (input_data[i] & 0x80) {
+			// unicode
+			int sz = 0;
+			int codepoint = utf8proc_codepoint(input_data + i, sz);
+			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			int new_sz = utf8proc_codepoint_length(converted_codepoint);
+			assert(new_sz >= 0);
+			output_length += new_sz;
+			i += sz;
+		} else {
+			// ascii
+			output_length++;
+			i++;
+		}
+	}
+	std::unique_ptr<string_t> result_str = StringVector::EmptyStringPtr(result, output_length);
+	auto result_data = result_str->GetData();
+
+	for (idx_t i = 0; i < input_length;) {
+		if (input_data[i] & 0x80) {
+			// non-ascii character
+			int sz = 0, new_sz = 0;
+			int codepoint = utf8proc_codepoint(input_data + i, sz);
+			int converted_codepoint = IS_UPPER ? utf8proc_toupper(codepoint) : utf8proc_tolower(codepoint);
+			const auto success = utf8proc_codepoint_to_utf8(converted_codepoint, new_sz, result_data);
+			assert(success);
+			result_data += new_sz;
+			i += sz;
+		} else {
+			// ascii
+			*result_data = IS_UPPER ? toupper(input_data[i]) : tolower(input_data[i]);
+			result_data++;
+			i++;
+		}
+	}
+	result_str->Finalize();
+	return result_str;
 }
 
-}
-
-static bool like_operator(const char *s, const char *pattern, const char *escape);
+struct PrepILike {
+	template<class TA>
+	static inline std::unique_ptr<TA> Operation(Vector& pattern) {
+		assert(pattern.type == TypeId::VARCHAR);
+		auto pdata = ConstantVector::GetData<TA>(pattern);
+		auto p_data = pdata->GetData();
+		auto p_length = pdata->GetSize();
+		return to_upper_case<true>(pattern, p_data, p_length);
+	}
+};
 
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC> static inline bool Operation(TA str, TB pattern, TC escape) {
@@ -34,19 +81,16 @@ struct NotLikeEscapeOperator {
 	}
 };
 
+
 struct ILikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		const std::string& s = tolower(str);
-		const std::string& p = tolower(pattern);
-		return like_operator(s.data(), p.data(), nullptr);
+		return like_operator(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 
 struct NotILikeOperator {
 	template <class TA, class TB, class TR> static inline TR Operation(TA str, TB pattern) {
-		const std::string& s = tolower(str);
-		const std::string& p = tolower(pattern);
-		return !like_operator(s.data(), p.data(), nullptr);
+		return !like_operator(str.GetData(), pattern.GetData(), nullptr);
 	}
 };
 
@@ -84,7 +128,7 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 			if (*p == 0) {
 				return true; /* tail is acceptable */
 			}
-			for (; *p && *t; t++) {
+			for (; *p && *t; ++t) {
 				if (like_operator(t, p, escape)) {
 					return true;
 				}
@@ -119,7 +163,7 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
-	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true>));
+	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, ILikeOperator, true, PrepILike>));
 	set.AddFunction(ScalarFunction("!~~*", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotILikeOperator, true>));
 	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,

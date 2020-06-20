@@ -742,17 +742,30 @@ string_t StringVector::AddBlob(Vector &vector, string_t data) {
 	return string_buffer.AddBlob(data);
 }
 
+VectorStringBuffer& StringVector::GetBuffer(Vector &vector, idx_t len) {
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
+	return (VectorStringBuffer &)*vector.auxiliary;
+}
+
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	assert(vector.type == TypeId::VARCHAR);
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	assert(vector.auxiliary->type == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto& string_buffer = GetBuffer(vector, len);
 	return string_buffer.EmptyString(len);
+}
+
+std::unique_ptr<string_t> StringVector::EmptyStringPtr(Vector &vector, idx_t len) {
+	assert(vector.type == TypeId::VARCHAR);
+	if (len < string_t::INLINE_LENGTH) {
+		return make_unique<string_t>(len);
+	}
+	auto& string_buffer = GetBuffer(vector, len);
+	return string_buffer.EmptyStringPtr(len);
 }
 
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {

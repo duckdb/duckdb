@@ -39,7 +39,7 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 	return insert_string;
 }
 
-string_t StringHeap::EmptyString(idx_t len) {
+const char* StringHeap::EmptyStringImpl(idx_t len) {
 	assert(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
 		// have to make a new entry
@@ -50,9 +50,19 @@ string_t StringHeap::EmptyString(idx_t len) {
 			tail = chunk.get();
 		}
 	}
-	auto insert_pos = chunk->data.get() + chunk->current_position;
+	const char* insert_pos = chunk->data.get() + chunk->current_position;
 	chunk->current_position += len + 1;
+	return insert_pos;
+}
+
+string_t StringHeap::EmptyString(idx_t len) {
+	const char* insert_pos = EmptyStringImpl(len);
 	return string_t(insert_pos, len);
+}
+
+std::unique_ptr<string_t> StringHeap::EmptyStringPtr(idx_t len) {
+	const char* insert_pos = EmptyStringImpl(len);
+	return make_unique<string_t>(insert_pos, len);
 }
 
 void StringHeap::MergeHeap(StringHeap &other) {

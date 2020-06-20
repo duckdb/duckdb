@@ -89,6 +89,9 @@ public:
 	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);
 	}
+	std::unique_ptr<string_t> EmptyStringPtr(idx_t len) {
+		return heap.EmptyStringPtr(len);
+	}
 
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
 		references.push_back(move(heap));
