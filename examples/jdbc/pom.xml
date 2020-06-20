@@ -14,7 +14,7 @@
 		<dependency>
 			<groupId>org.duckdb</groupId>
 			<artifactId>duckdb_jdbc</artifactId>
-			<version>0.1.8</version>
+			<version>0.1.9</version>
 		</dependency>
 	</dependencies>
 </project>

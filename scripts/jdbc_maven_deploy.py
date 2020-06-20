@@ -30,7 +30,7 @@ if len(sys.argv) < 2 or not version_regex.match(sys.argv[1]):
 
 staging_dir = tempfile.mkdtemp()
 release_tag = sys.argv[1]
-release_version = version_regex.search(release_tag).group()
+release_version = version_regex.search(release_tag).group(1)
 
 release_prefix = 'https://github.com/cwida/duckdb/releases/download/%s' % release_tag
 
@@ -136,7 +136,7 @@ exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
 # 	</servers>
 # </settings>
 
-exit(0)
+#exit(0)
 
 print("JARs created, uploading (this can take a while!). When done, visit https://oss.sonatype.org")
 deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ -DrepositoryId=ossrh'
