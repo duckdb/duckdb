@@ -63,6 +63,9 @@ TEST_CASE("Test scalar ILIKE statement", "[ilike]") {
 
 	result = con.Query("SELECT 'ЯгAщ' ILIKE 'яГ%'");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BOOLEAN(true)}));
+
+	result = con.Query("SELECT 'AA' ILIKE NULL");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 }
 
 TEST_CASE("Test ILIKE statement", "[ilike]") {
