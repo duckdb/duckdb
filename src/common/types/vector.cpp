@@ -636,6 +636,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(*this);
+		assert(child.vector_type != VectorType::DICTIONARY_VECTOR);
 		auto &dict_sel = DictionaryVector::SelVector(*this);
 		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
@@ -647,6 +648,9 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		SelectionVector new_sel(new_buffer);
 		child.Verify(new_sel, count);
 		return;
+	}
+	if (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR) {
+		assert(!auxiliary);
 	}
 	if (type == TypeId::DOUBLE) {
 		// verify that there are no INF or NAN values
