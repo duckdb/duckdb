@@ -111,17 +111,29 @@ private:
 		CreateScalarFunctionInfo info(scalar_function);
 
 		_context.transaction.BeginTransaction();
-		_context.catalog.CreateFunction(_context, &info);
+//		_context.catalog.CreateFunction(_context, &info);
+
+		//FIXME it's not working because the catalog looks up at the default schema (main),
+		//case we create the functions into the temporary schema (TEMP) the functions won't be found
+		_context.temporary_objects.get()->CreateFunction(_context, &info);
 		_context.transaction.Commit();
 	}
 
 	template<typename T> SQLType GetArgumentType() {
-		if (std::is_same<T, int>()) {
+		if (std::is_same<T, bool>()) {
+			return SQLType::BOOLEAN;
+		} else if (std::is_same<T, int8_t>()) {
+			return SQLType::TINYINT;
+		} else if (std::is_same<T, int16_t>()) {
+			return SQLType::SMALLINT;
+		} else if (std::is_same<T, int32_t>()) {
 			return SQLType::INTEGER;
-		} else if (std::is_same<T, double>()) {
-			return SQLType::DOUBLE;
+		} else if (std::is_same<T, int64_t>()) {
+			return SQLType::BIGINT;
 		} else if (std::is_same<T, float>()) {
 			return SQLType::FLOAT;
+		} else if (std::is_same<T, double>()) {
+			return SQLType::DOUBLE;
 		} else if (std::is_same<T, string_t>()) {
 			return SQLType::VARCHAR;
 		} else {
@@ -150,7 +162,11 @@ private:
 		CreateScalarFunctionInfo info(scalar_function);
 
 		_context.transaction.BeginTransaction();
-		_context.catalog.CreateFunction(_context, &info);
+//		_context.catalog.CreateFunction(_context, &info);
+
+		//FIXME it's not working because the catalog looks up at the default schema (main),
+		//case we create the functions into the temporary schema (TEMP) the functions won't be found
+		_context.temporary_objects.get()->CreateFunction(_context, &info);
 		_context.transaction.Commit();
 	}
 
@@ -160,9 +176,41 @@ private:
 			return;
 		}
 		switch(args[0].id) {
-		case SQLTypeId::INTEGER:
-			CreateUnaryFunction<TR, int>(name, args, ret_type, udf_func);
+		case SQLTypeId::BOOLEAN:
+			CreateUnaryFunction<TR, bool>(name, args, ret_type, udf_func);
 			break;
+		case SQLTypeId::TINYINT:
+			CreateUnaryFunction<TR, int8_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::SMALLINT:
+			CreateUnaryFunction<TR, int16_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIME:
+		case SQLTypeId::INTEGER:
+			CreateUnaryFunction<TR, int32_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::TIMESTAMP:
+			CreateUnaryFunction<TR, int64_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::FLOAT:
+			CreateUnaryFunction<TR, float>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::DECIMAL:
+			CreateUnaryFunction<TR, double>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARCHAR:
+		case SQLTypeId::CHAR:
+		case SQLTypeId::BLOB:
+			CreateUnaryFunction<TR, string_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARBINARY:
+			CreateUnaryFunction<TR, blob_t>(name, args, ret_type, udf_func);
+			break;
+		default:
+			throw InvalidTypeException(GetInternalType(args[0]), "Type does not supported!");
 		}
 	}
 
@@ -180,9 +228,41 @@ private:
 			return;
 		}
 		switch(args[1].id) {
+		case SQLTypeId::BOOLEAN:
+			CreateBinaryFunction<TR, TA, bool>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::TINYINT:
+			CreateBinaryFunction<TR, TA, int8_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::SMALLINT:
+			CreateBinaryFunction<TR, TA, int16_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIME:
 		case SQLTypeId::INTEGER:
 			CreateBinaryFunction<TR, TA, int>(name, args, ret_type, udf_func);
 			break;
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::TIMESTAMP:
+			CreateBinaryFunction<TR, TA, int64_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::FLOAT:
+			CreateBinaryFunction<TR, TA, float>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::DECIMAL:
+			CreateBinaryFunction<TR, TA, double>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARCHAR:
+		case SQLTypeId::CHAR:
+		case SQLTypeId::BLOB:
+			CreateBinaryFunction<TR, TA, string_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARBINARY:
+			CreateBinaryFunction<TR, TA, blob_t>(name, args, ret_type, udf_func);
+			break;
+		default:
+			throw InvalidTypeException(GetInternalType(args[1]), "Type does not supported!");
 		}
 	}
 
@@ -201,9 +281,41 @@ private:
 			return;
 		}
 		switch(args[2].id) {
+		case SQLTypeId::BOOLEAN:
+			CreateTernaryFunction<TR, TA, TB, bool>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::TINYINT:
+			CreateTernaryFunction<TR, TA, TB, int8_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::SMALLINT:
+			CreateTernaryFunction<TR, TA, TB, int16_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DATE:
+		case SQLTypeId::TIME:
 		case SQLTypeId::INTEGER:
 			CreateTernaryFunction<TR, TA, TB, int>(name, args, ret_type, udf_func);
 			break;
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::TIMESTAMP:
+			CreateTernaryFunction<TR, TA, TB, int64_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::FLOAT:
+			CreateTernaryFunction<TR, TA, TB, float>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::DOUBLE:
+		case SQLTypeId::DECIMAL:
+			CreateTernaryFunction<TR, TA, TB, double>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARCHAR:
+		case SQLTypeId::CHAR:
+		case SQLTypeId::BLOB:
+			CreateTernaryFunction<TR, TA, TB, string_t>(name, args, ret_type, udf_func);
+			break;
+		case SQLTypeId::VARBINARY:
+			CreateTernaryFunction<TR, TA, TB, blob_t>(name, args, ret_type, udf_func);
+			break;
+		default:
+			throw InvalidTypeException(GetInternalType(args[2]), "Type does not supported!");
 		}
 	}
 
