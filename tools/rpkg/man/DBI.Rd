@@ -14,7 +14,6 @@
 \alias{dbIsValid,duckdb_connection-method}
 \alias{dbDisconnect,duckdb_connection-method}
 \alias{dbSendQuery,duckdb_connection,character-method}
-\alias{dbSendStatement,duckdb_connection,character-method}
 \alias{dbDataType,duckdb_connection-method}
 \alias{dbWriteTable,duckdb_connection,character,data.frame-method}
 \alias{dbListTables,duckdb_connection-method}
@@ -43,10 +42,10 @@
 
 \S4method{dbConnect}{duckdb_driver}(
   drv,
-  dbdir = ":memory:",
+  dbdir = DBDIR_MEMORY,
   ...,
   debug = getOption("duckdb.debug", FALSE),
-  dbname = NA
+  read_only = FALSE
 )
 
 \S4method{dbDataType}{duckdb_driver}(dbObj, obj, ...)
@@ -59,11 +58,9 @@
 
 \S4method{dbIsValid}{duckdb_connection}(dbObj, ...)
 
-\S4method{dbDisconnect}{duckdb_connection}(conn, ...)
+\S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
 
-\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ...)
-
-\S4method{dbSendStatement}{duckdb_connection,character}(conn, statement, ...)
+\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ..., immediate = FALSE)
 
 \S4method{dbDataType}{duckdb_connection}(dbObj, obj, ...)
 
@@ -134,14 +131,14 @@ or \linkS4class{DBIConnection}}
 \item{obj}{An R object whose SQL type we want to determine.}
 
 \item{conn}{A \linkS4class{DBIConnection} object, as returned by
-\code{\link[=dbConnect]{dbConnect()}}.}
+\code{\link[DBI:dbConnect]{dbConnect()}}.}
 
 \item{statement}{a character string containing SQL.}
 
 \item{name}{A character string specifying the unquoted DBMS table name,
-or the result of a call to \code{\link[=dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
+or the result of a call to \code{\link[DBI:dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
 
-\item{value}{a \link[DBI]{data.frame} (or coercible to data.frame).}
+\item{value}{a \link{data.frame} (or coercible to data.frame).}
 
 \item{overwrite}{Allow overwriting the destination table. Cannot be
 `TRUE` if `append` is also `TRUE`.}

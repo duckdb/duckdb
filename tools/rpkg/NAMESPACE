@@ -2,12 +2,7 @@
 
 export(duckdb)
 export(duckdb_shutdown)
-export(duckdb_register)
-export(duckdb_unregister)
 export(src_duckdb)
-export(read_csv_duckdb)
-export(duckdb.read.csv)
-
 exportClasses(duckdb_connection)
 exportClasses(duckdb_driver)
 exportClasses(duckdb_result)
@@ -40,4 +35,3 @@ importFrom(DBI,dbConnect)
 importFrom(dbplyr,src_dbi)
 importFrom(testthat,skip)
 importFrom(utils,head)
-useDynLib(duckdb , .registration = TRUE)
