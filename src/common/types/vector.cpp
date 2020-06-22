@@ -649,7 +649,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		child.Verify(new_sel, count);
 		return;
 	}
-	if (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR) {
+	if (TypeIsConstantSize(type) && (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
 		assert(!auxiliary);
 	}
 	if (type == TypeId::DOUBLE) {
