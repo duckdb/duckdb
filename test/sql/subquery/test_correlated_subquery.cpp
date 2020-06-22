@@ -995,3 +995,29 @@ TEST_CASE("Test correlated subquery with grouping columns", "[subquery]") {
 	REQUIRE_FAIL(con.Query("SELECT (SELECT SUM(col2) OVER (PARTITION BY SUM(col2) ORDER BY MAX(col1 + ColID) ROWS "
 	                       "UNBOUNDED PRECEDING) FROM tbl_ProductSales) FROM another_T t1 GROUP BY col1"));
 }
+
+TEST_CASE("Test nested correlated subqueries with multiple columns", "[subquery]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	con.EnableQueryVerification();
+	con.EnableProfiling();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e VARCHAR, f DATE, g TIMESTAMP)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl VALUES (1, 2, 3, 4, '5', DATE '1992-01-01', TIMESTAMP '1992-01-01 00:00:00')"));
+
+	result = con.Query("SELECT EXISTS(SELECT t1.b+t1.c) FROM tbl t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT t1.c+(SELECT t1.b FROM tbl t2 WHERE EXISTS(SELECT t1.b+t2.a)) FROM tbl t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {5}));
+	result = con.Query("SELECT 1 FROM tbl t1 JOIN tbl t2 ON (t1.d=t2.d) WHERE EXISTS(SELECT t1.c FROM tbl t3 WHERE t1.d+t3.c<100 AND EXISTS(SELECT t2.f < DATE '2000-01-01'))");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT EXISTS(SELECT 1 WHERE (t1.c>100 OR 1) AND t1.d<100) FROM tbl t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT EXISTS(SELECT t1.c,t1.d WHERE t1.d<100) FROM tbl t1");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	REQUIRE_FAIL(con.Query("SELECT * FROM tbl t1 LEFT JOIN tbl t2 ON (SELECT t2.a)<100"));
+}
