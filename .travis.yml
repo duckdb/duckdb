@@ -63,7 +63,7 @@ matrix:
         - python3 -m pip install --user boto3
 
       script:
-        - travis_wait 50 (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+          - travis_wait 50 mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .:
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
@@ -141,7 +141,7 @@ matrix:
 
       script:
         - mkdir -p build/coverage
-        - travis_wait 50 (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+        - travis_wait 50 cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make
         - build/coverage/test/unittest
 
       after_success:
@@ -234,7 +234,7 @@ matrix:
       script:
         - python scripts/amalgamation.py
         - mkdir -p build/release
-        - travis_wait 50 (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - travis_wait 50 cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .
         - build/release/test/unittest "*"
 
       after_success:
@@ -250,7 +250,7 @@ matrix:
       osx_image: xcode11.3
       script:
         - python3 scripts/amalgamation.py
-        - travis_wait 50 (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - travis_wait 50 mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .
         - build/release/test/unittest
 
 
@@ -292,7 +292,7 @@ matrix:
         - pip install --user boto3
       script:
         - mkdir -p build/release
-        - travis_wait 50 (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        - travis_wait 50 cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .
         - build/release/test/unittest "*"
 
       after_success:
@@ -334,7 +334,7 @@ matrix:
 
       script:
         - mkdir -p build/debug
-        - travis_wait 50 (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
+        - travis_wait 50 cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .
         - build/debug/test/unittest -s "[tpch]"
 
 
@@ -416,7 +416,7 @@ matrix:
 
       script:
         - mkdir -p build/release
-        - travis_wait 50 (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - travis_wait 50 cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
