@@ -583,10 +583,8 @@ TEST_CASE("Test complex correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
 	// left outer join on correlated subquery
-	result = con.Query("SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT 2*SUM(i)*s1.i FROM "
-	                   "integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 2, Value(), Value()}));
+	REQUIRE_FAIL(con.Query("SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT 2*SUM(i)*s1.i FROM "
+	                   "integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;"));
 
 	// left outer join in correlated expression
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 LEFT OUTER JOIN integers s2 ON s1.i=s2.i OR "

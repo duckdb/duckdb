@@ -11,14 +11,17 @@ sqlsmith_test_dir = 'test/sqlsmith/queries'
 
 export_queries = False
 
+con = sqlite3.connect(sqlsmith_db)
+c = con.cursor()
+
 if len(sys.argv) == 2:
 	if sys.argv[1] == '--export':
 		export_queries = True
+	elif sys.argv[1] == '--reset':
+		c.execute('DROP TABLE IF EXISTS sqlsmith_errors')
 	else:
 		print('Unknown query option ' + sys.argv[1])
-
-con = sqlite3.connect(sqlsmith_db)
-c = con.cursor()
+		exit(1)
 
 if export_queries:
 	c.execute('SELECT query FROM sqlsmith_errors')
