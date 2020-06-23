@@ -237,15 +237,25 @@ void Vector::SetValue(idx_t index, Value val) {
 }
 
 Value Vector::GetValue(idx_t index) const {
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
+	switch(vector_type) {
+	case VectorType::CONSTANT_VECTOR:
 		index = 0;
-	} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		break;
+	case VectorType::FLAT_VECTOR:
+		break;
 		// dictionary: apply dictionary and forward to child
+	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel_vector = DictionaryVector::SelVector(*this);
 		auto &child = DictionaryVector::Child(*this);
 		return child.GetValue(sel_vector.get_index(index));
-	} else {
-		assert(vector_type == VectorType::FLAT_VECTOR);
+	}
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		SequenceVector::GetSequence(*this, start, increment);
+		return Value::Numeric(type, start + increment * index);
+	}
+	default:
+		throw NotImplementedException("Unimplemented vector type for Vector::GetValue");
 	}
 
 	if (nullmask[index]) {
@@ -626,6 +636,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 	}
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(*this);
+		assert(child.vector_type != VectorType::DICTIONARY_VECTOR);
 		auto &dict_sel = DictionaryVector::SelVector(*this);
 		for (idx_t i = 0; i < count; i++) {
 			auto oidx = sel.get_index(i);
@@ -637,6 +648,9 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		SelectionVector new_sel(new_buffer);
 		child.Verify(new_sel, count);
 		return;
+	}
+	if (TypeIsConstantSize(type) && (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
+		assert(!auxiliary);
 	}
 	if (type == TypeId::DOUBLE) {
 		// verify that there are no INF or NAN values

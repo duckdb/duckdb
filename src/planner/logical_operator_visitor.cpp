@@ -52,6 +52,12 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	}
 	case LogicalOperatorType::DELIM_JOIN:
 	case LogicalOperatorType::COMPARISON_JOIN: {
+		if (op.type == LogicalOperatorType::DELIM_JOIN) {
+			auto &delim_join = (LogicalDelimJoin &)op;
+			for(auto &expr : delim_join.duplicate_eliminated_columns) {
+				VisitExpression(&expr);
+			}
+		}
 		auto &join = (LogicalComparisonJoin &)op;
 		for (auto &cond : join.conditions) {
 			VisitExpression(&cond.left);
