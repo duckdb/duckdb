@@ -218,6 +218,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 		if (result.size() > 0) {
 			return;
 		}
+		result.Reset();
 	}
 	// scan the transient segments
 	while (ScanBaseTable(transaction, result, state, state.current_transient_row, state.max_transient_row,
@@ -225,6 +226,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 		if (result.size() > 0) {
 			return;
 		}
+		result.Reset();
 	}
 
 	// scan the transaction-local segments
