@@ -1,4 +1,5 @@
 add_subdirectory(date)
+add_subdirectory(generic)
 add_subdirectory(math)
 add_subdirectory(operators)
 add_subdirectory(sequence)
@@ -8,6 +9,7 @@ add_subdirectory(nested)
 add_library_unity(duckdb_func_scalar
                   OBJECT
                   date_functions.cpp
+                  generic_functions.cpp
                   string_functions.cpp
                   nested_functions.cpp
                   math_functions.cpp

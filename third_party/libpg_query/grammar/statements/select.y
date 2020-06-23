@@ -2381,22 +2381,6 @@ func_expr_common_subexpr:
 					c->location = @1;
 					$$ = (PGNode *)c;
 				}
-			| GREATEST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = PG_IS_GREATEST;
-					v->location = @1;
-					$$ = (PGNode *)v;
-				}
-			| LEAST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = IS_LEAST;
-					v->location = @1;
-					$$ = (PGNode *)v;
-				}
 		;
 
 /* We allow several variants for SQL and other compatibility. */
