@@ -27,6 +27,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterNestedAggregates();
 
 	RegisterDateFunctions();
+	RegisterGenericFunctions();
 	RegisterMathFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();

@@ -11,6 +11,7 @@ using namespace std;
 
 namespace duckdb {
 
+const SQLType SQLType::INVALID = SQLType(SQLTypeId::INVALID);
 const SQLType SQLType::SQLNULL = SQLType(SQLTypeId::SQLNULL);
 const SQLType SQLType::BOOLEAN = SQLType(SQLTypeId::BOOLEAN);
 const SQLType SQLType::TINYINT = SQLType(SQLTypeId::TINYINT);
