@@ -362,6 +362,7 @@ matrix:
       install:
         - sudo apt-get update > /dev/null
         - sudo apt-get install -y openjdk-11-jdk openjdk-11-jre
+        - sudo update-alternatives --config java
 
       script:
         - mkdir -p build/release
