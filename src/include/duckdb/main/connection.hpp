@@ -104,15 +104,14 @@ public:
 	void Rollback();
 
 	template<typename TR, typename... Args>
-//	void CreateFunction(string name, void *udf_func) { // !this does not compile
 	void CreateFunction(string name, TR (*udf_func)(Args...)) {
 		udf_wrapper.CreateFunction<TR, Args...>(name, udf_func);
 	}
 
-	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
-		udf_wrapper.CreateFunction(name, args, ret_type, udf_func);
+	template<typename TR, typename... Args>
+	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		udf_wrapper.CreateFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
-
 
 private:
 	//! UDFWrapper to create temporary udf functions with this connection
