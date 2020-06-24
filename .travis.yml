@@ -63,8 +63,7 @@ matrix:
         - python3 -m pip install --user boto3
 
       script:
-        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../..)
-        - travis_wait 50 cmake --build .
+        - (mkdir -p build/release && cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_ICU_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb_cli
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
@@ -142,8 +141,7 @@ matrix:
 
       script:
         - mkdir -p build/coverage
-        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../..)
-        - travis_wait 50 make
+        - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
 
       after_success:
@@ -236,8 +234,7 @@ matrix:
       script:
         - python scripts/amalgamation.py
         - mkdir -p build/release
-        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../..)
-        - travis_wait 50 cmake --build .
+        - (cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
@@ -253,8 +250,7 @@ matrix:
       osx_image: xcode11.3
       script:
         - python3 scripts/amalgamation.py
-        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../..)
-        - travis_wait 50 cmake --build .
+        - (mkdir -p build/release && cd build/release && cmake -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest
 
 
@@ -296,8 +292,7 @@ matrix:
         - pip install --user boto3
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../..)
-        - travis_wait 50 cmake --build .
+        - (cd build/release && cmake -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
 
       after_success:
@@ -339,8 +334,7 @@ matrix:
 
       script:
         - mkdir -p build/debug
-        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../..)
-        - travis_wait 50 cmake --build .
+        - (cd build/debug && cmake -DEXPLICIT_EXCEPTIONS=TRUE -DCMAKE_BUILD_TYPE=Debug ../.. && cmake --build .)
         - build/debug/test/unittest -s "[tpch]"
 
 
@@ -422,8 +416,7 @@ matrix:
 
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../..)
-        - travis_wait 50 cmake --build .
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar nl.cwi.da.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
@@ -445,7 +438,7 @@ matrix:
       install:
         - ./configure
         - R CMD build .
-        - travis_wait 50 R CMD INSTALL duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tar.gz
 
       script:
         - (cd tests && R -f testthat.R)
@@ -477,7 +470,7 @@ matrix:
       install:
         - ./configure
         - R CMD build .
-        - travis_wait 50 R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
 
       script:
@@ -536,7 +529,7 @@ matrix:
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - travis_wait 50 cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
       after_success:
         - python tools/upload-s3.py python tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
@@ -579,7 +572,7 @@ matrix:
         - cd tools/pythonpkg
         - python3 setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - travis_wait 50 cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
       after_success:
