@@ -350,6 +350,30 @@ matrix:
     #     - $SCMD /home/duckdb/build/test/unittest "~[copy]~[sqlitelogic]~[sqlserver]~[parquet]~[.]"
 
 
+# Fuzzing
+    - os: linux
+      dist: bionic
+      name: SQLancer
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      addons:
+        apt:
+          packages:
+            - g++-9 openjdk-11-jdk openjdk-11-jre
+
+      env:
+        - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
+
+      script:
+        - export PATH=$JAVA_HOME/bin:$PATH
+        - mkdir -p build/release
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
+        - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+        - git clone https://github.com/sqlancer/sqlancer.git
+        - (cd sqlancer && mvn package)
+        - cp build/release/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+        - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+
 # APIs: jdbc/ r / python packages
 
     - os: linux
@@ -366,12 +390,13 @@ matrix:
 
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
+    
     - os: linux
       name: R Package
 
