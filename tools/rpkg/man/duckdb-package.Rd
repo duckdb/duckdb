@@ -7,8 +7,8 @@
 \title{duckdb: DBI Package for the DuckDB Database Management System}
 \description{
 DuckDB is an embedded analytical data management
-    system with SQL support written in C++. The R client package includes
-    all of DuckDB as well as connectors to DBI and dplyr.
+    system with SQL support. This package includes all of DuckDB as well
+    as R DBI & dplyr connectors.
 }
 \details{
 TBD.
@@ -27,6 +27,7 @@ Useful links:
 
 Authors:
 \itemize{
+  \item Mark Raasveldt \email{mark.raasveldt@cwi.nl} (\href{https://orcid.org/0000-0001-5005-6844}{ORCID})
   \item DuckDB Contributors
 }
 
