@@ -22,14 +22,6 @@ matrix:
       name: GCC 9
       python: 3.7
 
-      addons:
-        apt:
-          sources:
-            - sourceline: 'ppa:ubuntu-toolchain-r/test'
-            - sourceline: 'ppa:deadsnakes/ppa'
-          packages:
-            - g++-9 python3.7
-
       before_script:
         - export CC=gcc-9 CXX=g++-9
 
@@ -110,15 +102,9 @@ matrix:
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
     - os: linux
-      dist: xenial
+      dist: bionic
       name: GCC 9 Debug
 
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-9
       env:
         - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
         - TREAT_WARNINGS_AS_ERRORS=1
@@ -131,7 +117,7 @@ matrix:
 
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: Code Coverage
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
@@ -157,8 +143,6 @@ matrix:
 
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - valgrind
 
@@ -183,31 +167,12 @@ matrix:
         - python3 scripts/test_vector_sizes.py
 
 
-# old compilers
-
-    - os: linux
-      name: Clang 6
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      dist: xenial
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - clang-6.0
-      env:
-        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
-        - TREAT_WARNINGS_AS_ERRORS=1
-        - DISABLE_UNITY=1
-
-
+# old compiler
     - os: linux
       name: GCC 4.9
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
          apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - g++-4.9 binutils-2.26
       env:
@@ -217,16 +182,14 @@ matrix:
 
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: GCC 9 32 Bit
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
-            - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
+            - libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
 
       before_install:
         - export CC=gcc-9 CXX=g++-9
@@ -353,16 +316,17 @@ matrix:
 # APIs: jdbc/ r / python packages
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: JDBC Compliance
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
+      addons:
+        apt:
+          packages:
+            - openjdk-8-jdk openjdk-8-jre
+
       env:
         - JAVA_HOME='/usr/lib/jvm/java-8-openjdk-amd64'
-
-      install:
-        - sudo apt-get update > /dev/null
-        - sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
 
       script:
         - mkdir -p build/release
@@ -375,7 +339,7 @@ matrix:
     - os: linux
       name: R Package
 
-      dist: xenial
+      dist: bionic
       language: r
       r: devel
 
@@ -454,7 +418,7 @@ matrix:
 
     - os: linux
       name: Python 3 Package
-      dist: xenial
+      dist: bionuc
       language: python
       cache: pip
       env:
@@ -481,14 +445,14 @@ matrix:
     - os: linux
       name: Python 2 Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      dist: xenial
+      dist: bionic
       language: python
+      python: 2.7
+
       cache: pip
       env:
         - CIBW_BUILD='cp27-*'
-      python: 2.7
-
+      
       install:
         - pip install numpy pandas pytest
 
