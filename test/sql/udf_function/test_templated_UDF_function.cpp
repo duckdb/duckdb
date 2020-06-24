@@ -1,41 +1,9 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "udf_functions_to_test.hpp"
 
 using namespace duckdb;
 using namespace std;
-
-//UDF Functions to test
-bool BOOL(bool a) {return a;}
-bool BOOL(bool a, bool b) {return a & b;}
-bool BOOL(bool a, bool b, bool c) {return a & b & c;}
-
-int8_t INT8(int8_t a) {return a;}
-int8_t INT8(int8_t a, int8_t b) {return a * b;}
-int8_t INT8(int8_t a, int8_t b, int8_t c) {return a + b + c;}
-
-int16_t INT16(int16_t a) {return a;}
-int16_t INT16(int16_t a, int16_t b) {return a * b;}
-int16_t INT16(int16_t a, int16_t b, int16_t c) {return a + b + c;}
-
-int INT(int a) {return a;}
-int INT(int a, int b) {return a * b;}
-int INT(int a, int b, int c) {return a + b + c;}
-
-int64_t INT64(int64_t a) {return a;}
-int64_t INT64(int64_t a, int64_t b) {return a * b;}
-int64_t INT64(int64_t a, int64_t b, int64_t c) {return a + b + c;}
-
-float FLOAT(float a) {return a;}
-float FLOAT(float a, float b) {return a * b;}
-float FLOAT(float a, float b, float c) {return a + b + c;}
-
-double DOUBLE(double a) {return a;}
-double DOUBLE(double a, double b) {return a * b;}
-double DOUBLE(double a, double b, double c) {return a + b + c;}
-
-string_t VARCHAR(string_t a) {return a;}
-string_t VARCHAR(string_t a, string_t b) {return b;}
-string_t VARCHAR(string_t a, string_t b, string_t c) {return c;}
 
 TEST_CASE("UDF functions with template", "[udf_function]") {
 	unique_ptr<QueryResult> result;
