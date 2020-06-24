@@ -366,7 +366,7 @@ matrix:
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package)
@@ -388,7 +388,7 @@ matrix:
 
       script:
         - mkdir -p build/release
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/cwida/jdbccts.git
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
