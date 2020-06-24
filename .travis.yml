@@ -357,11 +357,11 @@ matrix:
       #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       env:
-        - JAVA_HOME='/usr/lib/jvm/java-11-openjdk'
+        - JAVA_HOME='/usr/lib/jvm/java-11'
 
       install:
         - sudo apt-get update > /dev/null
-        - sudo apt-get install -y openjdk-11-jdk
+        - sudo apt-get install -y openjdk-11-jdk openjdk-11-jre
 
       script:
         - mkdir -p build/release
