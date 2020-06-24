@@ -14,4 +14,5 @@ TBD.
 #' library(DBI)
 duckdb::duckdb()
 }
+
 }

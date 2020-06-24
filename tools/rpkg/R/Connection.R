@@ -12,12 +12,16 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
+#' @rdname DBI
+#' @export
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
   .Call(duckdb_register_R, conn@conn_ref, as.character(name), as.data.frame(df))
   invisible(TRUE)
 }
 
+#' @rdname DBI
+#' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
   .Call(duckdb_unregister_R, conn@conn_ref, as.character(name))

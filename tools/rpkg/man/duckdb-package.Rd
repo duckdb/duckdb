@@ -7,8 +7,8 @@
 \title{duckdb: DBI Package for the DuckDB Database Management System}
 \description{
 DuckDB is an embedded analytical data management
-    system with SQL support. This package includes all of DuckDB as well
-    as R DBI & dplyr connectors.
+    system with SQL support written in C++. The R client package includes
+    all of DuckDB as well as connectors to DBI and dplyr.
 }
 \details{
 TBD.

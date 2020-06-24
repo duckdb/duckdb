@@ -9,6 +9,8 @@
 \alias{dbDataType,duckdb_driver-method}
 \alias{dbIsValid,duckdb_driver-method}
 \alias{dbGetInfo,duckdb_driver-method}
+\alias{duckdb_register}
+\alias{duckdb_unregister}
 \alias{duckdb_connection-class}
 \alias{show,duckdb_connection-method}
 \alias{dbIsValid,duckdb_connection-method}
@@ -53,6 +55,10 @@
 \S4method{dbIsValid}{duckdb_driver}(dbObj, ...)
 
 \S4method{dbGetInfo}{duckdb_driver}(dbObj, ...)
+
+duckdb_register(conn, name, df)
+
+duckdb_unregister(conn, name)
 
 \S4method{show}{duckdb_connection}(object)
 
@@ -133,10 +139,10 @@ or \linkS4class{DBIConnection}}
 \item{conn}{A \linkS4class{DBIConnection} object, as returned by
 \code{\link[DBI:dbConnect]{dbConnect()}}.}
 
-\item{statement}{a character string containing SQL.}
-
 \item{name}{A character string specifying the unquoted DBMS table name,
 or the result of a call to \code{\link[DBI:dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
+
+\item{statement}{a character string containing SQL.}
 
 \item{value}{a \link{data.frame} (or coercible to data.frame).}
 
