@@ -3,58 +3,10 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "udf_functions_to_test.hpp"
 
 using namespace duckdb;
 using namespace std;
-
-//UDF Functions to test
-bool BOOL_1(bool a) {return a;}
-bool BOOL_2(bool a, bool b) {return a & b;}
-bool BOOL_3(bool a, bool b, bool c) {return a & b & c;}
-
-int8_t INT8_1(int8_t a) {return a;}
-int8_t INT8_2(int8_t a, int8_t b) {return a * b;}
-int8_t INT8_3(int8_t a, int8_t b, int8_t c) {return a + b + c;}
-
-int16_t INT16_1(int16_t a) {return a;}
-int16_t INT16_2(int16_t a, int16_t b) {return a * b;}
-int16_t INT16_3(int16_t a, int16_t b, int16_t c) {return a + b + c;}
-
-int DATE_1(int a) {return a;}
-int DATE_2(int a, int b) {return b;}
-int DATE_3(int a, int b, int c) {return c;}
-
-int TIME_1(int a) {return a;}
-int TIME_2(int a, int b) {return b;}
-int TIME_3(int a, int b, int c) {return c;}
-
-int INT_1(int a) {return a;}
-int INT_2(int a, int b) {return a * b;}
-int INT_3(int a, int b, int c) {return a + b + c;}
-
-int64_t INT64_1(int64_t a) {return a;}
-int64_t INT64_2(int64_t a, int64_t b) {return a * b;}
-int64_t INT64_3(int64_t a, int64_t b, int64_t c) {return a + b + c;}
-
-int64_t TIMESTAMP_1(int64_t a) {return a;}
-int64_t TIMESTAMP_2(int64_t a, int64_t b) {return b;}
-int64_t TIMESTAMP_3(int64_t a, int64_t b, int64_t c) {return c;}
-
-float FLOAT_1(float a) {return a;}
-float FLOAT_2(float a, float b) {return a * b;}
-float FLOAT_3(float a, float b, float c) {return a + b + c;}
-
-double DOUBLE_1(double a) {return a;}
-double DOUBLE_2(double a, double b) {return a * b;}
-double DOUBLE_3(double a, double b, double c) {return a + b + c;}
-
-double DECIMAL_1(double a) {return a;}
-double DECIMAL_2(double a, double b) {return a * b;}
-double DECIMAL_3(double a, double b, double c) {return a + b + c;}
-
-string_t VARCHAR_1(string_t a) {return a;}
-string_t VARCHAR_2(string_t a, string_t b) {return b;}
-string_t VARCHAR_3(string_t a, string_t b, string_t c) {return c;}
 
 TEST_CASE("UDF functions with arguments", "[udf_function]") {
 	unique_ptr<QueryResult> result;
@@ -87,74 +39,146 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 		switch(sql_type.id) {
 		case SQLTypeId::BOOLEAN:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::BOOLEAN}, SQLType::BOOLEAN, (void *)&BOOL_1);
-			con.CreateFunction(func_name + "_2", {SQLType::BOOLEAN, SQLType::BOOLEAN},
-												  SQLType::BOOLEAN, (void *)&BOOL_2);
-			con.CreateFunction(func_name + "_3", {SQLType::BOOLEAN, SQLType::BOOLEAN, SQLType::BOOLEAN},
-					  	  	  	  	  	  	  	  SQLType::BOOLEAN, (void *)&BOOL_3);
+			con.CreateFunction<bool, bool>(func_name + "_1",
+										   {SQLType::BOOLEAN},
+										   SQLType::BOOLEAN,
+										   &BOOL);
+
+			con.CreateFunction<bool, bool, bool>(func_name + "_2",
+												 {SQLType::BOOLEAN, SQLType::BOOLEAN},
+												 SQLType::BOOLEAN,
+												 &BOOL);
+
+			con.CreateFunction<bool, bool, bool, bool>(func_name + "_3",
+													   {SQLType::BOOLEAN, SQLType::BOOLEAN, SQLType::BOOLEAN},
+													   SQLType::BOOLEAN,
+													   &BOOL);
 			break;
 		}
 		case SQLTypeId::TINYINT:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::TINYINT}, SQLType::TINYINT, (void *)&INT8_1);
-			con.CreateFunction(func_name + "_2", {SQLType::TINYINT, SQLType::TINYINT},
-												  SQLType::TINYINT, (void *)&INT8_2);
-			con.CreateFunction(func_name + "_3", {SQLType::TINYINT, SQLType::TINYINT, SQLType::TINYINT},
-					  	  	  	  	  	  	  	  SQLType::TINYINT, (void *)&INT8_3);
+			con.CreateFunction<int8_t, int8_t>(func_name + "_1",
+											   {SQLType::TINYINT},
+											   SQLType::TINYINT,
+											   &INT8);
+
+			con.CreateFunction<int8_t, int8_t, int8_t>(func_name + "_2",
+													   {SQLType::TINYINT, SQLType::TINYINT},
+												  	   SQLType::TINYINT,
+													   &INT8);
+
+			con.CreateFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3",
+															   {SQLType::TINYINT, SQLType::TINYINT, SQLType::TINYINT},
+					  	  	  	  	  	  	  	  	  	  	   SQLType::TINYINT,
+															   &INT8);
 			break;
 		}
 		case SQLTypeId::SMALLINT:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::SMALLINT}, SQLType::SMALLINT, (void *)&INT16_1);
-			con.CreateFunction(func_name + "_2", {SQLType::SMALLINT, SQLType::SMALLINT},
-												  SQLType::SMALLINT, (void *)&INT16_2);
-			con.CreateFunction(func_name + "_3", {SQLType::SMALLINT, SQLType::SMALLINT, SQLType::SMALLINT},
-					  	  	  	  	  	  	  	  SQLType::SMALLINT, (void *)&INT16_3);
+			con.CreateFunction<int16_t, int16_t>(func_name + "_1",
+												 {SQLType::SMALLINT},
+												 SQLType::SMALLINT,
+												 &INT16);
+
+			con.CreateFunction<int16_t, int16_t, int16_t>(func_name + "_2",
+														  {SQLType::SMALLINT, SQLType::SMALLINT},
+														  SQLType::SMALLINT,
+														  &INT16);
+
+			con.CreateFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3",
+																   {SQLType::SMALLINT, SQLType::SMALLINT, SQLType::SMALLINT},
+																   SQLType::SMALLINT,
+																   &INT16);
 			break;
 		}
 		case SQLTypeId::DATE:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::DATE}, SQLType::DATE, (void *)&DATE_1);
-			con.CreateFunction(func_name + "_2", {SQLType::DATE, SQLType::DATE},
-												  SQLType::DATE, (void *)&DATE_2);
-			con.CreateFunction(func_name + "_3", {SQLType::DATE, SQLType::DATE, SQLType::DATE},
-					  	  	  	  	  	  	  	  SQLType::DATE, (void *)&DATE_3);
+			con.CreateFunction<int32_t, int32_t>(func_name + "_1",
+												 {SQLType::DATE},
+												 SQLType::DATE,
+												 &DATE);
+
+			con.CreateFunction<int32_t, int32_t, int32_t>(func_name + "_2",
+														  {SQLType::DATE, SQLType::DATE},
+														  SQLType::DATE,
+														  &DATE);
+
+			con.CreateFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3",
+																   {SQLType::DATE, SQLType::DATE, SQLType::DATE},
+																   SQLType::DATE,
+																   &DATE);
 			break;
 		}
 		case SQLTypeId::TIME:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::TIME}, SQLType::TIME, (void *)&TIME_1);
-			con.CreateFunction(func_name + "_2", {SQLType::TIME, SQLType::TIME},
-												  SQLType::TIME, (void *)&TIME_2);
-			con.CreateFunction(func_name + "_3", {SQLType::TIME, SQLType::TIME, SQLType::TIME},
-					  	  	  	  	  	  	  	  SQLType::TIME, (void *)&TIME_3);
+			con.CreateFunction<int32_t, int32_t>(func_name + "_1",
+												 {SQLType::TIME},
+												 SQLType::TIME,
+												 &TIME);
+
+			con.CreateFunction<int32_t, int32_t, int32_t>(func_name + "_2",
+														  {SQLType::TIME, SQLType::TIME},
+														  SQLType::TIME,
+														  &TIME);
+
+			con.CreateFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3",
+																   {SQLType::TIME, SQLType::TIME, SQLType::TIME},
+																   SQLType::TIME,
+																   &TIME);
 			break;
 		}
 		case SQLTypeId::INTEGER:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::INTEGER}, SQLType::INTEGER, (void *)&INT_1);
-			con.CreateFunction(func_name + "_2", {SQLType::INTEGER, SQLType::INTEGER},
-												  SQLType::INTEGER, (void *)&INT_2);
-			con.CreateFunction(func_name + "_3", {SQLType::INTEGER, SQLType::INTEGER, SQLType::INTEGER},
-					  	  	  	  	  	  	  	  SQLType::INTEGER, (void *)&INT_3);
+			con.CreateFunction<int32_t, int32_t>(func_name + "_1",
+												{SQLType::INTEGER},
+												SQLType::INTEGER,
+												&INT);
+
+			con.CreateFunction<int32_t, int32_t, int32_t>(func_name + "_2",
+														  {SQLType::INTEGER, SQLType::INTEGER},
+														  SQLType::INTEGER,
+														  &INT);
+
+			con.CreateFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3",
+																   {SQLType::INTEGER, SQLType::INTEGER, SQLType::INTEGER},
+																   SQLType::INTEGER,
+																   &INT);
 			break;
 		}
 		case SQLTypeId::BIGINT:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::BIGINT}, SQLType::BIGINT, (void *)&INT64_1);
-			con.CreateFunction(func_name + "_2", {SQLType::BIGINT, SQLType::BIGINT},
-												  SQLType::BIGINT, (void *)&INT64_2);
-			con.CreateFunction(func_name + "_3", {SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT},
-					  	  	  	  	  	  	  	  SQLType::BIGINT, (void *)&INT64_3);
+			con.CreateFunction<int64_t, int64_t>(func_name + "_1",
+												 {SQLType::BIGINT},
+												 SQLType::BIGINT,
+												 &INT64);
+
+			con.CreateFunction<int64_t, int64_t, int64_t>(func_name + "_2",
+														  {SQLType::BIGINT, SQLType::BIGINT},
+														  SQLType::BIGINT,
+														  &INT64);
+
+			con.CreateFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3",
+																   {SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT},
+																   SQLType::BIGINT,
+																   &INT64);
 			break;
 		}
 		case SQLTypeId::TIMESTAMP:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::TIMESTAMP}, SQLType::TIMESTAMP, (void *)&TIMESTAMP_1);
-			con.CreateFunction(func_name + "_2", {SQLType::TIMESTAMP, SQLType::TIMESTAMP},
-												  SQLType::TIMESTAMP, (void *)&TIMESTAMP_2);
-			con.CreateFunction(func_name + "_3", {SQLType::TIMESTAMP, SQLType::TIMESTAMP, SQLType::TIMESTAMP},
-					  	  	  	  	  	  	  	  SQLType::TIMESTAMP, (void *)&TIMESTAMP_3);
+			con.CreateFunction<int64_t, int64_t>(func_name + "_1",
+												 {SQLType::TIMESTAMP},
+												 SQLType::TIMESTAMP,
+												 &TIMESTAMP);
+
+			con.CreateFunction<int64_t, int64_t, int64_t>(func_name + "_2",
+														  {SQLType::TIMESTAMP, SQLType::TIMESTAMP},
+														  SQLType::TIMESTAMP,
+														  &TIMESTAMP);
+
+			con.CreateFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3",
+																   {SQLType::TIMESTAMP, SQLType::TIMESTAMP, SQLType::TIMESTAMP},
+																   SQLType::TIMESTAMP,
+																   &TIMESTAMP);
 			break;
 		}
 		case SQLTypeId::FLOAT:
@@ -168,39 +192,75 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 //		}
 		case SQLTypeId::DOUBLE:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::DOUBLE}, SQLType::DOUBLE, (void *)&DOUBLE_1);
-			con.CreateFunction(func_name + "_2", {SQLType::DOUBLE, SQLType::DOUBLE},
-												  SQLType::DOUBLE, (void *)&DOUBLE_2);
-			con.CreateFunction(func_name + "_3", {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
-					  	  	  	  	  	  	  	  SQLType::DOUBLE, (void *)&DOUBLE_3);
+			con.CreateFunction<double, double>(func_name + "_1",
+											   {SQLType::DOUBLE},
+											   SQLType::DOUBLE,
+											   &DOUBLE);
+
+			con.CreateFunction<double, double, double>(func_name + "_2",
+													   {SQLType::DOUBLE, SQLType::DOUBLE},
+													   SQLType::DOUBLE,
+													   &DOUBLE);
+
+			con.CreateFunction<double, double, double, double>(func_name + "_3",
+															   {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
+															   SQLType::DOUBLE,
+															   &DOUBLE);
 			break;
 		}
 		case SQLTypeId::DECIMAL:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::DOUBLE}, SQLType::DOUBLE, (void *)&DECIMAL_1);
-			con.CreateFunction(func_name + "_2", {SQLType::DOUBLE, SQLType::DOUBLE},
-												  SQLType::DOUBLE, (void *)&DECIMAL_2);
-			con.CreateFunction(func_name + "_3", {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
-					  	  	  	  	  	  	  	  SQLType::DOUBLE, (void *)&DECIMAL_3);
+			con.CreateFunction<double, double>(func_name + "_1",
+											   {SQLType::DOUBLE},
+											   SQLType::DOUBLE,
+											   &DECIMAL);
+
+			con.CreateFunction<double, double, double>(func_name + "_2",
+													   {SQLType::DOUBLE, SQLType::DOUBLE},
+													   SQLType::DOUBLE,
+													   &DECIMAL);
+
+			con.CreateFunction<double, double, double, double>(func_name + "_3",
+															   {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
+															   SQLType::DOUBLE,
+															   &DECIMAL);
 			break;
 		}
 
 		case SQLTypeId::VARCHAR:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::VARCHAR}, SQLType::VARCHAR, (void *)&VARCHAR_1);
-			con.CreateFunction(func_name + "_2", {SQLType::VARCHAR, SQLType::VARCHAR},
-												  SQLType::VARCHAR, (void *)&VARCHAR_2);
-			con.CreateFunction(func_name + "_3", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-					  	  	  	  	  	  	  	  SQLType::VARCHAR, (void *)&VARCHAR_3);
+			con.CreateFunction<string_t, string_t>(func_name + "_1",
+												   {SQLType::VARCHAR},
+												   SQLType::VARCHAR,
+												   &VARCHAR);
+
+			con.CreateFunction<string_t, string_t, string_t>(func_name + "_2",
+															 {SQLType::VARCHAR, SQLType::VARCHAR},
+															 SQLType::VARCHAR,
+															 &VARCHAR);
+
+			con.CreateFunction<string_t, string_t, string_t, string_t>(func_name + "_3",
+																	   {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+																	   SQLType::VARCHAR,
+																	   &VARCHAR);
 			break;
 		}
 		case SQLTypeId::BLOB:
 		{
-			con.CreateFunction(func_name + "_1", {SQLType::BLOB}, SQLType::BLOB, (void *)&VARCHAR_1);
-			con.CreateFunction(func_name + "_2", {SQLType::BLOB, SQLType::BLOB},
-												  SQLType::BLOB, (void *)&VARCHAR_2);
-			con.CreateFunction(func_name + "_3", {SQLType::BLOB, SQLType::BLOB, SQLType::BLOB},
-					  	  	  	  	  	  	  	  SQLType::BLOB, (void *)&VARCHAR_3);
+			con.CreateFunction<string_t, string_t>(func_name + "_1",
+												   {SQLType::BLOB},
+												   SQLType::BLOB,
+												   &VARCHAR);
+
+			con.CreateFunction<string_t, string_t, string_t>(func_name + "_2",
+															 {SQLType::BLOB, SQLType::BLOB},
+															 SQLType::BLOB,
+															 &VARCHAR);
+
+			con.CreateFunction<string_t, string_t, string_t, string_t>(func_name + "_3",
+																	   {SQLType::BLOB, SQLType::BLOB, SQLType::BLOB},
+																	   SQLType::BLOB,
+																	   &VARCHAR);
 			break;
 		}
 //		case SQLTypeId::VARBINARY:
