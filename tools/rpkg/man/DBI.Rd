@@ -9,6 +9,7 @@
 \alias{dbDataType,duckdb_driver-method}
 \alias{dbIsValid,duckdb_driver-method}
 \alias{dbGetInfo,duckdb_driver-method}
+\alias{duckdb_shutdown}
 \alias{duckdb_register}
 \alias{duckdb_unregister}
 \alias{duckdb_connection-class}
@@ -55,6 +56,8 @@
 \S4method{dbIsValid}{duckdb_driver}(dbObj, ...)
 
 \S4method{dbGetInfo}{duckdb_driver}(dbObj, ...)
+
+duckdb_shutdown(drv)
 
 duckdb_register(conn, name, df)
 

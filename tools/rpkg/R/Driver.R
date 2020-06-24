@@ -146,6 +146,7 @@ setMethod(
 )
 
 
+#' @rdname DBI
 #' @export
 duckdb_shutdown <- function(drv) {
   if (!is(drv, "duckdb_driver")) {
