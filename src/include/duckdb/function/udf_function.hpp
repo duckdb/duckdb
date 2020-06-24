@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <type_traits>
+#include<tuple>
 
 using namespace std;
 
@@ -42,7 +43,35 @@ public:
 		}
 	}
 
-	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func);
+	template<typename TR, typename... Args>
+	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		if(!TypesMatch<TR>(ret_type)) {
+			string msg("Return type doesn't match with the first template type: ");
+			msg += typeid(TR).name();
+			msg += ".";
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, msg);
+		}
+
+		const std::size_t num_template_types = sizeof...(Args);
+		if(num_template_types != args.size()) {
+			throw duckdb::Exception(ExceptionType:: MISMATCH_TYPE,
+									"The number of templated types should be the same quantity of the SQLTypes (args + ret_type)!");
+		}
+
+		switch(num_template_types) {
+			case 1:
+				CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+				break;
+			case 2:
+				CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+				break;
+			case 3:
+				CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+				break;
+			default:
+				throw duckdb::Exception(ExceptionType::EXECUTOR, "UDF function only supported until ternary!");
+		}
+	}
 
 private:
 	ClientContext &_context;
@@ -50,6 +79,7 @@ private:
 	//-------------------------------- Templated functions --------------------------------//
 	template<typename TR, typename... Args>
 	void CreateUnaryFunction(string name, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 1);
 		CreateUnaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -66,6 +96,7 @@ private:
 
 	template<typename TR, typename... Args>
 	void CreateBinaryFunction(string name, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 2);
 		CreateBinaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -73,16 +104,17 @@ private:
 	void CreateBinaryFunction(string name, TR (*udf_func)(TA, TB)) {
 	    udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) -> void {
 										BinaryExecutor::Execute<TA, TB, TR>(input.data[0],
-																		   input.data[1],
-																		   result,
-																		   input.size(),
-																		   udf_func);
+																		   	input.data[1],
+																		    result,
+																		    input.size(),
+																		    udf_func);
 									};
 	    RegisterFunction<TR, TA, TB>(name, udf_function);
 	}
 
 	template<typename TR, typename... Args>
 	void CreateTernaryFunction(string name, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 3);
 		CreateTernaryFunction<TR, Args...>(name, udf_func);
 	}
 
@@ -111,10 +143,6 @@ private:
 		CreateScalarFunctionInfo info(scalar_function);
 
 		_context.transaction.BeginTransaction();
-//		_context.catalog.CreateFunction(_context, &info);
-
-		//FIXME it's not working because the catalog looks up at the default schema (main),
-		//case we create the functions into the temporary schema (TEMP) the functions won't be found
 		_context.temporary_objects.get()->CreateFunction(_context, &info);
 		_context.transaction.Commit();
 	}
@@ -156,185 +184,132 @@ private:
 private:
 	//-------------------------------- Argumented functions --------------------------------//
 
+	template<typename TR, typename... Args>
+	void CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 1);
+		CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+	}
+
+	template<typename TR, typename TA>
+	void CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA)) {
+		if(args.size() != 1) {
+			throw duckdb::Exception(ExceptionType:: MISMATCH_TYPE,
+									"The number of SQLType arguments (\"args\") should be 1!");
+		}
+		if(!TypesMatch<TA>(args[0])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The first arguments don't match!");
+		}
+
+	    udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) -> void {
+										UnaryExecutor::Execute<TA, TR>(input.data[0],
+																	   result,
+																	   input.size(),
+																	   udf_func);
+									};
+	    RegisterFunction(name, args, ret_type, udf_function);
+	}
+
+	template<typename TR, typename... Args>
+	void CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 2);
+		CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+	}
+
+	template<typename TR, typename TA, typename TB>
+	void CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA, TB)) {
+		if(args.size() != 2) {
+			throw duckdb::Exception(ExceptionType:: MISMATCH_TYPE,
+									"The number of SQLType arguments (\"args\") should be 2!");
+		}
+		if(!TypesMatch<TA>(args[0])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The first arguments don't match!");
+		}
+		if(!TypesMatch<TB>(args[1])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The second arguments don't match!");
+		}
+
+		udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
+										BinaryExecutor::Execute<TA, TB, TR>(input.data[0],
+																			input.data[1],
+																			result,
+																			input.size(),
+																			udf_func);
+									};
+		RegisterFunction(name, args, ret_type, udf_function);
+	}
+
+	template<typename TR, typename... Args>
+	void CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		assert(sizeof...(Args) == 3);
+		CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
+	}
+
+	template<typename TR, typename TA, typename TB, typename TC>
+	void CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA, TB, TC)) {
+		if(args.size() != 3) {
+			throw duckdb::Exception(ExceptionType:: MISMATCH_TYPE,
+									"The number of SQLType arguments (\"args\") should be 3!");
+		}
+		if(!TypesMatch<TA>(args[0])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The first arguments don't match!");
+		}
+		if(!TypesMatch<TB>(args[1])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The second arguments don't match!");
+		}
+		if(!TypesMatch<TC>(args[2])) {
+			throw duckdb::Exception(ExceptionType::MISMATCH_TYPE, "The third arguments don't match!");
+		}
+
+	    udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) -> void {
+										TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0],
+																		   	   	 input.data[1],
+																		   	   	 input.data[2],
+																				 result,
+																				 input.size(),
+																				 udf_func);
+									};
+		RegisterFunction(name, args, ret_type, udf_function);
+	}
+
 	void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type, udf_function_t udf_function) {
 		ScalarFunction scalar_function = ScalarFunction(name, args, ret_type, nullptr, false,
 														nullptr, nullptr, udf_function);
 		CreateScalarFunctionInfo info(scalar_function);
 
 		_context.transaction.BeginTransaction();
-//		_context.catalog.CreateFunction(_context, &info);
-
-		//FIXME it's not working because the catalog looks up at the default schema (main),
-		//case we create the functions into the temporary schema (TEMP) the functions won't be found
 		_context.temporary_objects.get()->CreateFunction(_context, &info);
 		_context.transaction.Commit();
 	}
 
-	template <class TR>
-	void CreateFunctionInitial(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
-		if(args.size() == 0) {
-			return;
-		}
-		switch(args[0].id) {
+	template <typename T> bool TypesMatch(SQLType sql_type) {
+		switch(sql_type.id) {
 		case SQLTypeId::BOOLEAN:
-			CreateUnaryFunction<TR, bool>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, bool>();
 		case SQLTypeId::TINYINT:
-			CreateUnaryFunction<TR, int8_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, int8_t>();
 		case SQLTypeId::SMALLINT:
-			CreateUnaryFunction<TR, int16_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, int16_t>();
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
 		case SQLTypeId::INTEGER:
-			CreateUnaryFunction<TR, int32_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, int32_t>();
 		case SQLTypeId::BIGINT:
 		case SQLTypeId::TIMESTAMP:
-			CreateUnaryFunction<TR, int64_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, int64_t>();
 		case SQLTypeId::FLOAT:
-			CreateUnaryFunction<TR, float>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, float>();
 		case SQLTypeId::DOUBLE:
 		case SQLTypeId::DECIMAL:
-			CreateUnaryFunction<TR, double>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, double>();
 		case SQLTypeId::VARCHAR:
 		case SQLTypeId::CHAR:
 		case SQLTypeId::BLOB:
-			CreateUnaryFunction<TR, string_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, string_t>();
 		case SQLTypeId::VARBINARY:
-			CreateUnaryFunction<TR, blob_t>(name, args, ret_type, udf_func);
-			break;
+			return std::is_same<T, blob_t>();
 		default:
-			throw InvalidTypeException(GetInternalType(args[0]), "Type does not supported!");
+			throw InvalidTypeException(GetInternalType(sql_type), "Type does not supported!");
 		}
-	}
-
-	template <class TR, class TA>
-	void CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
-		if(args.size() == 1) {
-			auto func_ptr = (TR(*)(TA)) udf_func;
-		    udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
-											UnaryExecutor::Execute<TA, TR>(input.data[0],
-																		   result,
-																		   input.size(),
-																		   func_ptr);
-										};
-			RegisterFunction(name, args, ret_type, udf_function);
-			return;
-		}
-		switch(args[1].id) {
-		case SQLTypeId::BOOLEAN:
-			CreateBinaryFunction<TR, TA, bool>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::TINYINT:
-			CreateBinaryFunction<TR, TA, int8_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::SMALLINT:
-			CreateBinaryFunction<TR, TA, int16_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::INTEGER:
-			CreateBinaryFunction<TR, TA, int>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::BIGINT:
-		case SQLTypeId::TIMESTAMP:
-			CreateBinaryFunction<TR, TA, int64_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::FLOAT:
-			CreateBinaryFunction<TR, TA, float>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::DOUBLE:
-		case SQLTypeId::DECIMAL:
-			CreateBinaryFunction<TR, TA, double>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::VARCHAR:
-		case SQLTypeId::CHAR:
-		case SQLTypeId::BLOB:
-			CreateBinaryFunction<TR, TA, string_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::VARBINARY:
-			CreateBinaryFunction<TR, TA, blob_t>(name, args, ret_type, udf_func);
-			break;
-		default:
-			throw InvalidTypeException(GetInternalType(args[1]), "Type does not supported!");
-		}
-	}
-
-	template <class TR, class TA, class TB>
-	void CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
-		if(args.size() == 2) {
-			auto func_ptr = (TR(*)(TA, TB)) udf_func;
-			udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
-											BinaryExecutor::Execute<TA, TB, TR>(input.data[0],
-																				input.data[1],
-																				result,
-																				input.size(),
-																				func_ptr);
-										};
-			RegisterFunction(name, args, ret_type, udf_function);
-			return;
-		}
-		switch(args[2].id) {
-		case SQLTypeId::BOOLEAN:
-			CreateTernaryFunction<TR, TA, TB, bool>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::TINYINT:
-			CreateTernaryFunction<TR, TA, TB, int8_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::SMALLINT:
-			CreateTernaryFunction<TR, TA, TB, int16_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::INTEGER:
-			CreateTernaryFunction<TR, TA, TB, int>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::BIGINT:
-		case SQLTypeId::TIMESTAMP:
-			CreateTernaryFunction<TR, TA, TB, int64_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::FLOAT:
-			CreateTernaryFunction<TR, TA, TB, float>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::DOUBLE:
-		case SQLTypeId::DECIMAL:
-			CreateTernaryFunction<TR, TA, TB, double>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::VARCHAR:
-		case SQLTypeId::CHAR:
-		case SQLTypeId::BLOB:
-			CreateTernaryFunction<TR, TA, TB, string_t>(name, args, ret_type, udf_func);
-			break;
-		case SQLTypeId::VARBINARY:
-			CreateTernaryFunction<TR, TA, TB, blob_t>(name, args, ret_type, udf_func);
-			break;
-		default:
-			throw InvalidTypeException(GetInternalType(args[2]), "Type does not supported!");
-		}
-	}
-
-	template <class TR, class TA, class TB, class TC>
-	void CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, void *udf_func) {
-		if(args.size() == 3) {
-			auto func_ptr = (TR(*)(TA, TB, TC)) udf_func;
-			udf_function_t udf_function = [=] (DataChunk &input, ExpressionState &state, Vector &result) {
-											TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0],
-																					 input.data[1],
-																					 input.data[2],
-																					 result,
-																					 input.size(),
-																					 func_ptr);
-										};
-			RegisterFunction(name, args, ret_type, udf_function);
-			return;
-		}
-		throw duckdb::Exception(ExceptionType::EXECUTOR, "UDF function only supported until ternary!");
 	}
 
 }; // end UDFWrapper
