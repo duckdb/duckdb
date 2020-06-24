@@ -354,7 +354,7 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
@@ -371,7 +371,8 @@ matrix:
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package)
-        - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 4 --random-seed 0 --timeout-seconds 300 duckdb
+        - cp build/release/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+        - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 # APIs: jdbc/ r / python packages
 
