@@ -68,8 +68,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects)
-	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID),
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects, SQLType varargs = SQLType::INVALID)
+	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(varargs),
 	      has_side_effects(has_side_effects) {
 	}
 	virtual ~SimpleFunction() {
@@ -136,6 +136,7 @@ private:
 
 	// scalar functions
 	void RegisterDateFunctions();
+	void RegisterGenericFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();

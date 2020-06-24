@@ -30,15 +30,15 @@ class ScalarFunction : public SimpleFunction {
 public:
 	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr)
-	    : SimpleFunction(name, arguments, return_type, has_side_effects), function(function), bind(bind),
+	               dependency_function_t dependency = nullptr, SQLType varargs = SQLType::INVALID)
+	    : SimpleFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency) {
 	}
 
 	ScalarFunction(vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr)
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency) {
+	               dependency_function_t dependency = nullptr, SQLType varargs = SQLType::INVALID)
+	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, varargs) {
 	}
 
 	//! The main scalar function to execute
