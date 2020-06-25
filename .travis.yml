@@ -17,14 +17,15 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 10
-      python: 3.7
 
       addons:
         apt:
           sources:
             - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - sourceline: 'ppa:deadsnakes/ppa'
+
           packages:
-            - g++-10
+            - g++-10 python3.7
 
       env:
         - CC=gcc-10
