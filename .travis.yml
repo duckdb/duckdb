@@ -407,7 +407,7 @@ matrix:
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
         - cp build/debug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.6 java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        - ASAN_OPTIONS=detect_leaks=0 LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6" java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
 
