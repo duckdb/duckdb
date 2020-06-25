@@ -354,15 +354,19 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9 openjdk-11-jdk openjdk-11-jre
+            - g++-10 openjdk-11-jdk openjdk-11-jre
 
       env:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
@@ -382,14 +386,15 @@ matrix:
 
       addons:
         apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9 openjdk-11-jdk openjdk-11-jre
+            - g++-10 openjdk-11-jdk openjdk-11-jre
 
       env:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
-        - CC=gcc-9
-        - CXX=g++-9
-
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
