@@ -188,6 +188,8 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
          apt:
+          sources:
+            - ubuntu-toolchain-r-test
           packages:
             - g++-4.9 binutils-2.26
       env:
