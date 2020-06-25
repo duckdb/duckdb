@@ -97,7 +97,7 @@ def write_file(current_file, ignore_excluded = False):
     # add the initial line here
     if linenumbers:
         text = '\n#line 1 "%s"\n' % (current_file,) + text
-    print(current_file)
+    # print(current_file)
     # now read the header and write it
     return cleanup_file(text)
 
