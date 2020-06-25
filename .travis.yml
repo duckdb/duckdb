@@ -207,7 +207,7 @@ matrix:
           sources:
             - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
+            - libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev
 
       env:
         - CC=gcc-10
