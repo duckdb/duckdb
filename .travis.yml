@@ -2,9 +2,6 @@ language: cpp
 script: make unit
 dist: trusty
 
-before_install:
-  - eval "${MATRIX_EVAL}"
-
 env:
   global:
     - CIBW_BUILD='cp37-* cp27-*'
@@ -19,17 +16,19 @@ matrix:
 
     - os: linux
       dist: bionic
-      name: GCC 9
+      name: GCC 10
       python: 3.7
 
       addons:
         apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9 gcc-9
-            
+            - g++-10
+
       env:
-        - CC=gcc-9
-        - CXX=g++-9
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - mkdir -p build/release
@@ -109,16 +108,18 @@ matrix:
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
     - os: linux
       dist: bionic
-      name: GCC 9 Debug
+      name: GCC 10 Debug
 
       addons:
         apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9 gcc-9
+            - g++-10
 
       env:
-        - CC=gcc-9
-        - CXX=g++-9
+        - CC=gcc-10
+        - CXX=g++-10
         - TREAT_WARNINGS_AS_ERRORS=1
 
     - os: osx
@@ -188,23 +189,27 @@ matrix:
           packages:
             - g++-4.9 binutils-2.26
       env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+        - CC=gcc-4.9
+        - CXX=g++-4.9
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
 
     - os: linux
       dist: bionic
-      name: GCC 9 32 Bit
+      name: GCC 10 32 Bit
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
+            - libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
 
-      before_install:
-        - export CC=gcc-9 CXX=g++-9
+      env:
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - python3 scripts/amalgamation.py
