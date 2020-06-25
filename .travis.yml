@@ -401,8 +401,6 @@ matrix:
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/debug
         - (cd build/debug && cmake -DCMAKE_BUILD_TYPE=Debug -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DENABLE_SANITIZER=TRUE ../.. && cmake --build .)
-        - cat /etc/ld.so.preload
-        - rm /etc/ld.so.preload
         - ASAN_OPTIONS=detect_leaks=0 LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libasan.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so.6" java -cp build/debug/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
