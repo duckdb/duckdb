@@ -362,7 +362,8 @@ setMethod(
   }
 )
 
-
+#' @rdname DBI
+#' @export
 read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = TRUE, na.strings = "", nrow.check = 500,
                                                delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {
 

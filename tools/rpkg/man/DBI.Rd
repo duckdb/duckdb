@@ -27,6 +27,7 @@
 \alias{dbBegin,duckdb_connection-method}
 \alias{dbCommit,duckdb_connection-method}
 \alias{dbRollback,duckdb_connection-method}
+\alias{read_csv_duckdb}
 \alias{duckdb_result-class}
 \alias{show,duckdb_result-method}
 \alias{dbClearResult,duckdb_result-method}
@@ -100,6 +101,22 @@ duckdb_unregister(conn, name)
 \S4method{dbCommit}{duckdb_connection}(conn, ...)
 
 \S4method{dbRollback}{duckdb_connection}(conn, ...)
+
+read_csv_duckdb(
+  conn,
+  files,
+  tablename,
+  header = TRUE,
+  na.strings = "",
+  nrow.check = 500,
+  delim = ",",
+  quote = "\\"",
+  col.names = NULL,
+  lower.case.names = FALSE,
+  sep = delim,
+  transaction = TRUE,
+  ...
+)
 
 \S4method{show}{duckdb_result}(object)
 
