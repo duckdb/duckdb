@@ -183,6 +183,7 @@ matrix:
 
 # old compiler
     - os: linux
+      dist: xenial
       name: GCC 4.9
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
