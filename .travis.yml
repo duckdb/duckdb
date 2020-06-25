@@ -369,7 +369,7 @@ matrix:
         - CXX=g++-10
 
       script:
-        - ls /lib64/libasan.so.*
+        - ls /usr/lib/x86_64-linux-gnu/libasan.so*
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
