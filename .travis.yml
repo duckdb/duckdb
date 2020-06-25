@@ -387,6 +387,9 @@ matrix:
 
       env:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
+        - CC=gcc-9
+        - CXX=g++-9
+
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
