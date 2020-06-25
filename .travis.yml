@@ -369,7 +369,6 @@ matrix:
         - CXX=g++-10
 
       script:
-        - ls /usr/lib/x86_64-linux-gnu/libasan.so*
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/release
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE ../.. && cmake --build .)
@@ -377,7 +376,7 @@ matrix:
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -DskipTests)
         - cp build/release/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        - LD_PRELOAD=/lib64/libasan.so.5 java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
     - os: linux
@@ -405,7 +404,7 @@ matrix:
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -DskipTests)
         - cp build/debug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        - java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        - LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.6 java -jar sqlancer/target/SQLancer-*.jar --num-queries 1000 --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
 
 
 
