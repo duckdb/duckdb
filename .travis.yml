@@ -354,7 +354,7 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
@@ -383,7 +383,7 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer (with Address Sanitizer)
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
