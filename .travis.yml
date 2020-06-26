@@ -417,8 +417,6 @@ matrix:
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-
-
     - os: linux
       name: Python 3.7 Package
 
@@ -500,7 +498,6 @@ matrix:
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
           fi
-
 
     - os: osx
       name: Python Package
