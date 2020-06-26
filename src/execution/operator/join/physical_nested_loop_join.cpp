@@ -131,7 +131,7 @@ public:
 	bool has_null;
 	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
 	unique_ptr<bool[]> right_found_match;
-
+	//! The position in the RHS in the final scan of the FULL OUTER JOIN
 	idx_t right_outer_position;
 };
 

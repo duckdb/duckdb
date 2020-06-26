@@ -47,6 +47,32 @@ TEST_CASE("Test FULL OUTER JOIN", "[join]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {Value(), Value()}));
 }
 
+TEST_CASE("Test range FULL OUTER JOIN", "[join]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers2(k INTEGER, l INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers2 VALUES (1, 10)"));
+
+	// range join
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i<integers2.k ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, Value()}));
+
+	// empty RHS
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i<integers2.k ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+}
+
 TEST_CASE("Test inequality FULL OUTER JOIN", "[join]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -58,12 +84,43 @@ TEST_CASE("Test inequality FULL OUTER JOIN", "[join]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers2(k INTEGER, l INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers2 VALUES (1, 10)"));
 
-	// equality join
 	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i<>integers2.k ORDER BY 1, 2, 3, 4");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {1, Value()}));
 	REQUIRE(CHECK_COLUMN(result, 3, {10, Value()}));
+
+	// empty RHS
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i<>integers2.k ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
+}
+
+TEST_CASE("Test complex FULL OUTER JOIN", "[join]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1, 1)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers2(k INTEGER, l INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers2 VALUES (1, 10)"));
+
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i+integers2.k+9<>integers.j+integers2.l ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value(), 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, Value()}));
+
+	// empty RHS
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i+integers2.k+9<>integers.j+integers2.l ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value()}));
 }
 
 TEST_CASE("Test FULL OUTER JOIN with many matches", "[join][.]") {
@@ -97,7 +154,15 @@ TEST_CASE("Test FULL OUTER JOIN with many matches", "[join][.]") {
 			expected_values_l.push_back(Value());
 		}
 	}
+	// equality
 	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k ORDER BY 1, 2, 3, 4");
+	REQUIRE(CHECK_COLUMN(result, 0, expected_values_i));
+	REQUIRE(CHECK_COLUMN(result, 1, expected_values_j));
+	REQUIRE(CHECK_COLUMN(result, 2, expected_values_k));
+	REQUIRE(CHECK_COLUMN(result, 3, expected_values_l));
+
+	// less than
+	result = con.Query("SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.j>integers2.l ORDER BY 1, 2, 3, 4");
 	REQUIRE(CHECK_COLUMN(result, 0, expected_values_i));
 	REQUIRE(CHECK_COLUMN(result, 1, expected_values_j));
 	REQUIRE(CHECK_COLUMN(result, 2, expected_values_k));
