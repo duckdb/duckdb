@@ -78,7 +78,7 @@ setup(
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
-    long_description = '',
+    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python',
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
     ],
