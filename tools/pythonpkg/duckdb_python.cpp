@@ -908,9 +908,7 @@ struct DuckDBPyRelation {
 	}
 
 	string print() {
-		rel->Print();
-		rel->Limit(10)->Execute()->Print();
-		return "";
+		return rel->ToString() + "\n--------------------\n-- Result Preview  --\n---------------------\n" +  rel->Limit(10)->Execute()->ToString() + "\n";
 	}
 
 	py::object getattr(py::str key) {
@@ -983,50 +981,50 @@ PYBIND11_MODULE(duckdb, m) {
 	    .def("df", &DuckDBPyResult::fetchdf);
 
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
-	    .def("filter", &DuckDBPyRelation::filter, "some doc string for filter", py::arg("filter_expr"))
-	    .def("project", &DuckDBPyRelation::project, "some doc string for project", py::arg("project_expr"))
-	    .def("set_alias", &DuckDBPyRelation::alias, "some doc string for alias", py::arg("alias"))
-	    .def("order", &DuckDBPyRelation::order, "some doc string for order", py::arg("order_expr"))
-	    .def("aggregate", &DuckDBPyRelation::aggregate, "some doc string for aggregate", py::arg("aggr_expr"),
+	    .def("filter", &DuckDBPyRelation::filter, "Filters the relation object by the filter in filter_expr", py::arg("filter_expr"))
+	    .def("project", &DuckDBPyRelation::project, "Projects the relation object by the projection in project_expr", py::arg("project_expr"))
+	    .def("set_alias", &DuckDBPyRelation::alias, "Renames the relation object to new alias", py::arg("alias"))
+	    .def("order", &DuckDBPyRelation::order, "Reorders the relation object by order_expr", py::arg("order_expr"))
+	    .def("aggregate", &DuckDBPyRelation::aggregate, "Computes the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")
-	    .def("union", &DuckDBPyRelation::union_, "some doc string for union")
-	    .def("except_", &DuckDBPyRelation::except, "some doc string for except", py::arg("other_rel"))
-	    .def("intersect", &DuckDBPyRelation::intersect, "some doc string for intersect", py::arg("other_rel"))
-	    .def("join", &DuckDBPyRelation::join, "some doc string for join", py::arg("other_rel"),
+	    .def("union", &DuckDBPyRelation::union_, "Create the set union of this relation object with another relation object in other_rel")
+	    .def("except_", &DuckDBPyRelation::except, "Create the set except of this relation object with another relation object in other_rel", py::arg("other_rel"))
+	    .def("intersect", &DuckDBPyRelation::intersect, "Create the set intersection of this relation object with another relation object in other_rel", py::arg("other_rel"))
+	    .def("join", &DuckDBPyRelation::join, "Join the relation object with another relation object in other_rel using the join condition expression in join_condition", py::arg("other_rel"),
 	         py::arg("join_condition"))
-	    .def("distinct", &DuckDBPyRelation::distinct, "some doc string for distinct")
-	    .def("limit", &DuckDBPyRelation::limit, "some doc string for limit", py::arg("n"))
-	    .def("query", &DuckDBPyRelation::query, "some doc string for query", py::arg("virtual_table_name"),
+	    .def("distinct", &DuckDBPyRelation::distinct, "Retrieve distinct rows from this relation object")
+	    .def("limit", &DuckDBPyRelation::limit, "Only retrieve the first n rows from this relation object", py::arg("n"))
+	    .def("query", &DuckDBPyRelation::query, "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object", py::arg("virtual_table_name"),
 	         py::arg("sql_query"))
 	    .def("execute", &DuckDBPyRelation::execute, "some doc string for execute")
-	    .def("write_csv", &DuckDBPyRelation::write_csv, "some doc string for write_csv", py::arg("file_name"))
-	    .def("insert_into", &DuckDBPyRelation::insert_into, "some doc string for insert_into", py::arg("table_name"))
-	    .def("insert", &DuckDBPyRelation::insert, "some doc string for insert", py::arg("values"))
-	    .def("create", &DuckDBPyRelation::create, "some doc string for create", py::arg("table_name"))
-	    .def("to_df", &DuckDBPyRelation::to_df, "some doc string for to_df")
-	    .def("create_view", &DuckDBPyRelation::create_view, "some doc string for create_view", py::arg("view_name"),
+	    .def("write_csv", &DuckDBPyRelation::write_csv, "Write the relation object to a CSV file in file_name", py::arg("file_name"))
+	    .def("insert_into", &DuckDBPyRelation::insert_into, "Inserts the relation object into an existing table named table_name", py::arg("table_name"))
+	    .def("insert", &DuckDBPyRelation::insert, "Inserts the given values into the relation", py::arg("values"))
+	    .def("create", &DuckDBPyRelation::create, "Creates a new table named table_name with the contents of the relation object", py::arg("table_name"))
+	    .def("create_view", &DuckDBPyRelation::create_view, "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
-	    .def("df", &DuckDBPyRelation::to_df, "some doc string for df")
-	    .def("__str__", &DuckDBPyRelation::print, "some doc string for print")
-	    .def("__repr__", &DuckDBPyRelation::print, "some doc string for repr")
+	    .def("to_df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
+	    .def("df", &DuckDBPyRelation::to_df, "Transforms the relation object into a Data.Frame")
+	    .def("__str__", &DuckDBPyRelation::print)
+	    .def("__repr__", &DuckDBPyRelation::print)
 	    .def("__getattr__", &DuckDBPyRelation::getattr);
 
-	m.def("from_df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
-	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "some doc string for from_csv_auto", py::arg("filename"));
-	m.def("from_parquet", &DuckDBPyRelation::from_parquet, "some doc string for from_parquet", py::arg("filename"));
-	m.def("df", &DuckDBPyRelation::from_df, "some doc string for filter", py::arg("df"));
-	m.def("filter", &DuckDBPyRelation::filter_df, "some doc string for filter", py::arg("df"), py::arg("filter_expr"));
-	m.def("project", &DuckDBPyRelation::project_df, "some doc string for project", py::arg("df"),
+	m.def("from_csv_auto", &DuckDBPyRelation::from_csv_auto, "Creates a relation object from the CSV file named filename", py::arg("filename"));
+	m.def("from_parquet", &DuckDBPyRelation::from_parquet, "Creates a relation object from the Parquet file named filename", py::arg("filename"));
+	m.def("df", &DuckDBPyRelation::from_df, "Creates a relation object from the Data.Frame df", py::arg("df"));
+	m.def("from_df", &DuckDBPyRelation::from_df, "Creates a relation object from the Data.Frame df", py::arg("df"));
+	m.def("filter", &DuckDBPyRelation::filter_df, "Filters the Data.Frame df by the filter in filter_expr", py::arg("df"), py::arg("filter_expr"));
+	m.def("project", &DuckDBPyRelation::project_df, "Projects the Data.Frame df by the projection in project_expr", py::arg("df"),
 	      py::arg("project_expr"));
-	m.def("alias", &DuckDBPyRelation::alias_df, "some doc string for alias", py::arg("df"), py::arg("alias"));
-	m.def("order", &DuckDBPyRelation::order_df, "some doc string for order", py::arg("df"), py::arg("order_expr"));
-	m.def("aggregate", &DuckDBPyRelation::aggregate_df, "some doc string for aggregate", py::arg("df"),
+	m.def("alias", &DuckDBPyRelation::alias_df, "Creates a relation from Data.Frame df with the passed alias", py::arg("df"), py::arg("alias"));
+	m.def("order", &DuckDBPyRelation::order_df, "Reorders the Data.Frame df by order_expr", py::arg("df"), py::arg("order_expr"));
+	m.def("aggregate", &DuckDBPyRelation::aggregate_df, "Computes the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
 	      py::arg("aggr_expr"), py::arg("group_expr") = "");
-	m.def("distinct", &DuckDBPyRelation::distinct_df, "some doc string for distinct", py::arg("df"));
-	m.def("limit", &DuckDBPyRelation::limit_df, "some doc string for limit", py::arg("df"), py::arg("n"));
-	m.def("query", &DuckDBPyRelation::query_df, "some doc string for query", py::arg("df"),
+	m.def("distinct", &DuckDBPyRelation::distinct_df, "Computes the distinct rows from Data.Frame df ", py::arg("df"));
+	m.def("limit", &DuckDBPyRelation::limit_df, "Retrieves the first n rows from the Data.Frame df", py::arg("df"), py::arg("n"));
+	m.def("query", &DuckDBPyRelation::query_df, "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of Data.Frame df", py::arg("df"),
 	      py::arg("virtual_table_name"), py::arg("sql_query"));
-	m.def("write_csv", &DuckDBPyRelation::write_csv_df, "some doc string for write_csv", py::arg("df"),
+	m.def("write_csv", &DuckDBPyRelation::write_csv_df, "Write the Data.Frame df to a CSV file in file_name", py::arg("df"),
 	      py::arg("file_name"));
 
 	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
