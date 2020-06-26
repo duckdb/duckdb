@@ -1,10 +1,3 @@
-language: cpp
-script: make unit
-dist: trusty
-
-before_install:
-  - eval "${MATRIX_EVAL}"
-
 env:
   global:
     - CIBW_BUILD='cp37-* cp27-*'
@@ -19,19 +12,20 @@ matrix:
 
     - os: linux
       dist: bionic
-      name: GCC 9
-      python: 3.7
+      name: GCC 10
 
       addons:
         apt:
           sources:
             - sourceline: 'ppa:ubuntu-toolchain-r/test'
             - sourceline: 'ppa:deadsnakes/ppa'
-          packages:
-            - g++-9 python3.7
 
-      before_script:
-        - export CC=gcc-9 CXX=g++-9
+          packages:
+            - g++-10 python3.7
+
+      env:
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - mkdir -p build/release
@@ -110,28 +104,33 @@ matrix:
 
 # checks: debug mode (with sanitizers), coveralls, valgrind, vector sizes
     - os: linux
-      dist: xenial
-      name: GCC 9 Debug
+      dist: bionic
+      name: GCC 10 Debug
 
       addons:
         apt:
           sources:
-            - ubuntu-toolchain-r-test
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9
+            - g++-10
       env:
-        - MATRIX_EVAL="CC=gcc-9 && CXX=g++-9"
+        - CC=gcc-10
+        - CXX=g++-10
         - TREAT_WARNINGS_AS_ERRORS=1
+      script:
+        - make unit
+
 
     - os: osx
       name: Xcode 11.5 Debug
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
       osx_image: xcode11.5
+      script:
+        - make unit
 
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: Code Coverage
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
@@ -157,8 +156,6 @@ matrix:
 
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - valgrind
 
@@ -183,25 +180,9 @@ matrix:
         - python3 scripts/test_vector_sizes.py
 
 
-# old compilers
-
+# old compiler
     - os: linux
-      name: Clang 6
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      dist: xenial
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - clang-6.0
-      env:
-        - MATRIX_EVAL="CC=clang-6.0 && CXX=clang++-6.0"
-        - TREAT_WARNINGS_AS_ERRORS=1
-        - DISABLE_UNITY=1
-
-
-    - os: linux
+      dist: trusty
       name: GCC 4.9
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
@@ -211,25 +192,29 @@ matrix:
           packages:
             - g++-4.9 binutils-2.26
       env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+        - CC=gcc-4.9
+        - CXX=g++-4.9
+      script:
+        make allunit
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
 
     - os: linux
-      dist: xenial
-      name: GCC 9 32 Bit
+      dist: bionic
+      name: GCC 10 32 Bit
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       addons:
         apt:
           sources:
-            - ubuntu-toolchain-r-test
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
           packages:
-            - g++-9 libc6-dev-i386 g++-9-multilib gcc-9-multilib gcc-multilib g++-multilib lib32readline6-dev lib32readline6
+            - libc6-dev-i386 g++-10-multilib gcc-10-multilib gcc-multilib g++-multilib lib32readline6-dev
 
-      before_install:
-        - export CC=gcc-9 CXX=g++-9
+      env:
+        - CC=gcc-10
+        - CXX=g++-10
 
       script:
         - python3 scripts/amalgamation.py
@@ -412,16 +397,17 @@ matrix:
 # APIs: jdbc/ r / python packages
 
     - os: linux
-      dist: xenial
+      dist: bionic
       name: JDBC Compliance
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
+      addons:
+        apt:
+          packages:
+            - openjdk-8-jdk openjdk-8-jre
+
       env:
         - JAVA_HOME='/usr/lib/jvm/java-8-openjdk-amd64'
-
-      install:
-        - sudo apt-get update > /dev/null
-        - sudo apt-get install -y openjdk-8-jdk openjdk-8-jre
 
       script:
         - mkdir -p build/release
@@ -431,11 +417,116 @@ matrix:
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-    
+
+
+    - os: linux
+      name: Python 3 Package
+      dist: bionuc
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp37-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+
+        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+          fi
+
+
+    - os: linux
+      name: Python 2 Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      dist: bionic
+      language: python
+      python: 2.7
+
+      cache: pip
+      env:
+        - CIBW_BUILD='cp27-*'
+      
+      install:
+        - pip install numpy pandas pytest
+
+      script:
+        - cd tools/pythonpkg
+        - python setup.py install
+        - python -m pytest tests
+
+
+    - os: osx
+      name: Python Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      language: generic
+      osx_image: xcode11.5
+
+      install:
+        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+        - python3 /tmp/get-pip.py
+        - python3 -m pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - cd tools/pythonpkg
+        - python3 setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
+
+
+    - os: windows
+      name: Python Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      language: cpp
+      filter_secrets: false
+      # no python 27 because no C++11 support in its windows toolchain
+      env:
+        - CIBW_BUILD='cp37-*'
+
+      install:
+        - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
+        - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
+        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
+        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
+        - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
+        - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
+        - choco install curl -y --force
+        - C:/Python37-x64/python.exe -m pip install --upgrade pip
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" "twine"
+        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4"
+
+      script:
+        - cd tools/pythonpkg
+        - C:/Python37-x64/python.exe setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            C:/Python37-x64/python.exe -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
+
+
     - os: linux
       name: R Package
 
-      dist: xenial
+      dist: bionic
       language: r
       r: devel
 
@@ -510,107 +601,3 @@ matrix:
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
         - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
-
-
-    - os: linux
-      name: Python 3 Package
-      dist: xenial
-      language: python
-      cache: pip
-      env:
-        - CIBW_BUILD='cp37-*'
-      python: 3.7
-
-      install:
-        - pip install cibuildwheel==0.10.2 twine
-
-      script:
-        - cd tools/pythonpkg
-        - python setup.py sdist
-        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - cd ../..
-
-        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
-        - |
-          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-          fi
-
-
-    - os: linux
-      name: Python 2 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      dist: xenial
-      language: python
-      cache: pip
-      env:
-        - CIBW_BUILD='cp27-*'
-      python: 2.7
-
-      install:
-        - pip install numpy pandas pytest
-
-      script:
-        - cd tools/pythonpkg
-        - python setup.py install
-        - python -m pytest tests
-
-
-    - os: osx
-      name: Python Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      language: generic
-      osx_image: xcode11.5
-
-      install:
-        - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-        - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 twine
-
-      script:
-        - cd tools/pythonpkg
-        - python3 setup.py sdist
-        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - cibuildwheel --output-dir wheelhouse duckdb_tarball
-        - cd ../..
-        - |
-          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-          fi
-
-
-    - os: windows
-      name: Python Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      language: cpp
-      filter_secrets: false
-      # no python 27 because no C++11 support in its windows toolchain
-      env:
-        - CIBW_BUILD='cp37-*'
-
-      install:
-        - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
-        - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
-        - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
-        - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
-        - choco install curl -y --force
-        - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" "twine"
-        - C:/Python37-x64/python.exe -m pip install "numpy>=1.16" "pandas>=0.24" "pytest>=4.3" "pybind11>=2.4"
-
-      script:
-        - cd tools/pythonpkg
-        - C:/Python37-x64/python.exe setup.py sdist
-        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        - C:/Python37-x64/python.exe -m cibuildwheel --platform windows --output-dir wheelhouse duckdb_tarball
-        - cd ../..
-        - |
-          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
-            C:/Python37-x64/python.exe -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-          fi
