@@ -18,7 +18,7 @@ FunctionExpression::FunctionExpression(string schema, string function_name,
 
 FunctionExpression::FunctionExpression(string function_name, vector<unique_ptr<ParsedExpression>> &children,
                                        bool distinct, bool is_operator)
-    : FunctionExpression(DEFAULT_SCHEMA, function_name, children, distinct, is_operator) {
+    : FunctionExpression(INVALID_SCHEMA, function_name, children, distinct, is_operator) {
 }
 
 string FunctionExpression::ToString() const {
