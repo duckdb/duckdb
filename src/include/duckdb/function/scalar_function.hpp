@@ -15,36 +15,30 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/function.hpp"
 
-#include <iostream>
-using namespace std;
-
 namespace duckdb {
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
 
 //! The type used for scalar functions
-typedef void (*scalar_function_t)(DataChunk &input, ExpressionState &state, Vector &result);
+typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpression &expr, ClientContext &context);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
-//! The type of UDF functions
-typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> udf_function_t;
-
 class ScalarFunction : public SimpleFunction {
 public:
 	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, udf_function_t udf_function = nullptr)
+	               dependency_function_t dependency = nullptr)
 	    : SimpleFunction(name, arguments, return_type, has_side_effects), function(function), bind(bind),
-	      dependency(dependency), udf_function(udf_function) {
+	      dependency(dependency) {
 	}
 
 	ScalarFunction(vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, udf_function_t udf_function = nullptr)
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, udf_function) {
+	               dependency_function_t dependency = nullptr)
+	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency) {
 	}
 
 	//! The main scalar function to execute
@@ -53,9 +47,6 @@ public:
 	bind_scalar_function_t bind;
 	// The dependency function (if any)
 	dependency_function_t dependency;
-
-	//! An UDF function to execute
-	udf_function_t udf_function;
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
 	                                                              vector<SQLType> &arguments,
@@ -66,10 +57,25 @@ public:
 	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
-		return function == rhs.function && bind == rhs.bind && dependency == rhs.dependency;
+		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency;
 	}
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
+	}
+
+private:
+	bool CompareScalarFunctionT(const scalar_function_t other) const {
+		typedef void(funcTypeT)(DataChunk &, ExpressionState &, Vector &);
+
+		funcTypeT **func_ptr  = (const funcTypeT**) function.template target<funcTypeT*>();
+		funcTypeT **other_ptr = (const funcTypeT**) other.template target<funcTypeT*>();
+
+		//Case the functions were created from lambdas the target will return a nullptr
+		if(func_ptr == nullptr || other_ptr == nullptr) {
+			//scalar_function_t (std::functions) from lambdas cannot be compared
+			return false;
+		}
+	    return ((size_t)*func_ptr == (size_t)*other_ptr);
 	}
 
 public:
