@@ -1,8 +1,8 @@
 env:
   global:
-    - CIBW_BUILD='cp37-* cp27-*'
+    - CIBW_BUILD='cp37-* cp36-* cp27-*'
     - CIBW_TEST_REQUIRES='pytest'
-    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "cmake==3.13.3" && pip install "pybind11>=2.4"'
+    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "pybind11>=2.4"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
@@ -420,12 +420,12 @@ matrix:
 
 
     - os: linux
-      name: Python 3 Package
-      dist: bionuc
+      name: Python Package
+      dist: bionic
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp37-*'
+        - CIBW_BUILD='cp37-* cp36-* cp27-*'
       python: 3.7
 
       install:
@@ -445,6 +445,8 @@ matrix:
           fi
 
 
+<<<<<<< HEAD
+=======
     - os: linux
       name: Python 2 Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
@@ -465,6 +467,7 @@ matrix:
         - python -m pytest tests
 
 
+>>>>>>> origin/master
     - os: osx
       name: Python Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
@@ -502,8 +505,8 @@ matrix:
       install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
         - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
+        # - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
+        # - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
