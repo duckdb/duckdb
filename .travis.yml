@@ -513,12 +513,12 @@ matrix:
 
 
     - os: linux
-      name: Python 3 Package
+      name: Python Package
       dist: xenial
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp37-* cp36-* '
+        - CIBW_BUILD='cp37-* cp36-* cp27-*'
       python: 3.7
 
       install:
@@ -536,26 +536,6 @@ matrix:
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
           fi
-
-
-    - os: linux
-      name: Python 2 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      dist: xenial
-      language: python
-      cache: pip
-      env:
-        - CIBW_BUILD='cp27-*'
-      python: 2.7
-
-      install:
-        - pip install numpy pandas pytest
-
-      script:
-        - cd tools/pythonpkg
-        - python setup.py install
-        - python -m pytest tests
 
 
     - os: osx
