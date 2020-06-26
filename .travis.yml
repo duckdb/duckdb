@@ -518,7 +518,7 @@ matrix:
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp37-*'
+        - CIBW_BUILD='cp37-* cp36-* '
       python: 3.7
 
       install:
@@ -590,7 +590,7 @@ matrix:
       filter_secrets: false
       # no python 27 because no C++11 support in its windows toolchain
       env:
-        - CIBW_BUILD='cp37-*'
+        - CIBW_BUILD='cp37-* cp36-* '
 
       install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
