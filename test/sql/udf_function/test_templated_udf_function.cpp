@@ -12,7 +12,7 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
-	//The types supported by the templated CreateFunction 
+	//The types supported by the templated CreateScalarFunction
 	const vector<SQLType> sql_templated_types = {SQLType::BOOLEAN, SQLType::TINYINT, SQLType::SMALLINT,
 												 SQLType::INTEGER, SQLType::BIGINT, SQLType::FLOAT,
 												 SQLType::DOUBLE, SQLType::VARCHAR};
@@ -34,60 +34,60 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 		switch(sql_type.id) {
 		case SQLTypeId::BOOLEAN:
 		{
-			con.CreateFunction<bool, bool>(func_name + "_1", &BOOL);
-			con.CreateFunction<bool, bool, bool>(func_name + "_2", &BOOL);
-			con.CreateFunction<bool, bool, bool, bool>(func_name + "_3", &BOOL);
+			con.CreateScalarFunction<bool, bool>(func_name + "_1", &udf_bool);
+			con.CreateScalarFunction<bool, bool, bool>(func_name + "_2", &udf_bool);
+			con.CreateScalarFunction<bool, bool, bool, bool>(func_name + "_3", &udf_bool);
 			break;
 		}
 		case SQLTypeId::TINYINT:
 		{
-			con.CreateFunction<int8_t, int8_t>(func_name + "_1", &INT8);
-			con.CreateFunction<int8_t, int8_t, int8_t>(func_name + "_2", &INT8);
-			con.CreateFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &INT8);
+			con.CreateScalarFunction<int8_t, int8_t>(func_name + "_1", &udf_int8);
+			con.CreateScalarFunction<int8_t, int8_t, int8_t>(func_name + "_2", &udf_int8);
+			con.CreateScalarFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &udf_int8);
 			break;
 		}
 		case SQLTypeId::SMALLINT:
 		{
-			con.CreateFunction<int16_t, int16_t>(func_name + "_1", &INT16);
-			con.CreateFunction<int16_t, int16_t, int16_t>(func_name + "_2", &INT16);
-			con.CreateFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &INT16);
+			con.CreateScalarFunction<int16_t, int16_t>(func_name + "_1", &udf_int16);
+			con.CreateScalarFunction<int16_t, int16_t, int16_t>(func_name + "_2", &udf_int16);
+			con.CreateScalarFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &udf_int16);
 			break;
 		}
 		case SQLTypeId::INTEGER:
 		{
-			con.CreateFunction<int32_t, int32_t>(func_name + "_1", &INT);
-			con.CreateFunction<int32_t, int32_t, int32_t>(func_name + "_2", &INT);
-			con.CreateFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3", &INT);
+			con.CreateScalarFunction<int32_t, int32_t>(func_name + "_1", &udf_int);
+			con.CreateScalarFunction<int32_t, int32_t, int32_t>(func_name + "_2", &udf_int);
+			con.CreateScalarFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3", &udf_int);
 			break;
 		}
 		case SQLTypeId::BIGINT:
 		{
-			con.CreateFunction<int64_t, int64_t>(func_name + "_1", &INT64);
-			con.CreateFunction<int64_t, int64_t, int64_t>(func_name + "_2", &INT64);
-			con.CreateFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &INT64);
+			con.CreateScalarFunction<int64_t, int64_t>(func_name + "_1", &udf_int64);
+			con.CreateScalarFunction<int64_t, int64_t, int64_t>(func_name + "_2", &udf_int64);
+			con.CreateScalarFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &udf_int64);
 			break;
 		}
 		case SQLTypeId::FLOAT:
 		//FIXME: there is an implicit cast to DOUBLE before calling the function: float_1(CAST[DOUBLE](a)),
-		//because of that we cannot invoke such a function: float udf(float a);
+		//because of that we cannot invoke such a function: float udf_float(float a);
 //		{
-//			con.CreateFunction<float, float>(func_name + "_1", &FLOAT);
-//			con.CreateFunction<float, float, float>(func_name + "_2", &FLOAT);
-//			con.CreateFunction<float, float, float, float>(func_name + "_3", &FLOAT);
+//			con.CreateScalarFunction<float, float>(func_name + "_1", &FLOAT);
+//			con.CreateScalarFunction<float, float, float>(func_name + "_2", &FLOAT);
+//			con.CreateScalarFunction<float, float, float, float>(func_name + "_3", &FLOAT);
 //			break;
 //		}
 		case SQLTypeId::DOUBLE:
 		{
-			con.CreateFunction<double, double>(func_name + "_1", &DOUBLE);
-			con.CreateFunction<double, double, double>(func_name + "_2", &DOUBLE);
-			con.CreateFunction<double, double, double, double>(func_name + "_3", &DOUBLE);
+			con.CreateScalarFunction<double, double>(func_name + "_1", &udf_double);
+			con.CreateScalarFunction<double, double, double>(func_name + "_2", &udf_double);
+			con.CreateScalarFunction<double, double, double, double>(func_name + "_3", &udf_double);
 			break;
 		}
 		case SQLTypeId::VARCHAR:
 		{
-			con.CreateFunction<string_t, string_t>(func_name + "_1", &VARCHAR);
-			con.CreateFunction<string_t, string_t, string_t>(func_name + "_2", &VARCHAR);
-			con.CreateFunction<string_t, string_t, string_t, string_t>(func_name + "_3", &VARCHAR);
+			con.CreateScalarFunction<string_t, string_t>(func_name + "_1", &udf_varchar);
+			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2", &udf_varchar);
+			con.CreateScalarFunction<string_t, string_t, string_t, string_t>(func_name + "_3", &udf_varchar);
 			break;
 		}
 		default:
