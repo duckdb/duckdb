@@ -420,12 +420,70 @@ matrix:
 
 
     - os: linux
-      name: Python Package
+      name: Python 3.7 Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
       dist: bionic
       language: python
       cache: pip
       env:
-        - CIBW_BUILD='cp37-* cp36-* cp27-*'
+        - CIBW_BUILD='cp37-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+
+        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+          fi
+
+
+    - os: linux
+      name: Python 3.6 Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      dist: bionic
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp36-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+
+        - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+          fi
+
+
+    - os: linux
+      name: Python 2.7 Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      dist: bionic
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp27-*'
       python: 3.7
 
       install:
@@ -505,6 +563,7 @@ matrix:
 
     - os: linux
       name: R Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: r
