@@ -104,19 +104,18 @@ public:
 	void Rollback();
 
 	template<typename TR, typename... Args>
-	void CreateFunction(string name, TR (*udf_func)(Args...)) {
-		udf_wrapper.CreateFunction<TR, Args...>(name, udf_func);
+	void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
+		scalar_function_t function =  UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
+		UDFWrapper::RegisterFunction<TR, Args...>(name, function, *context);
 	}
 
 	template<typename TR, typename... Args>
-	void CreateFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
-		udf_wrapper.CreateFunction<TR, Args...>(name, args, ret_type, udf_func);
+	void CreateScalarFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
+		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
 private:
-	//! UDFWrapper to create temporary udf functions with this connection
-	UDFWrapper udf_wrapper;
-
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
 	template <typename T, typename... Args>
