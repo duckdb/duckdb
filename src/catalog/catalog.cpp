@@ -137,20 +137,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 		schema_name = DEFAULT_SCHEMA;
 	}
 	auto schema = GetSchema(context, schema_name);
-
-	if(type != CatalogType::SCALAR_FUNCTION) {
-		return schema->GetEntry(context, type, name, if_exists);
-	}
-	else {
-		//First look up at the main context schema
-		auto entry = schema->GetEntry(context, type, name, true);
-		//Case the function wans't found, it might be an UDF function, then check up the temporary schema
-		if(!entry) {
-			schema = GetSchema(context, TEMP_SCHEMA);
-			entry = schema->GetEntry(context, type, name, if_exists);
-		}
-		return entry;
-	}
+	return schema->GetEntry(context, type, name, if_exists);
 }
 
 template <>
