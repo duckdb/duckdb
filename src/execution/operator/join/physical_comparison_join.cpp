@@ -1,7 +1,9 @@
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOperatorType type,
                                                vector<JoinCondition> conditions_, JoinType join_type)
@@ -74,4 +76,35 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 			ConstantVector::SetNull(result.data[k], true);
 		}
 	}
+}
+
+void PhysicalComparisonJoin::ConstructFullOuterJoinResult(bool *found_match, ChunkCollection &input, DataChunk &result, idx_t &scan_position) {
+	// fill in NULL values for the LHS
+	SelectionVector rsel(STANDARD_VECTOR_SIZE);
+	while(scan_position < input.count) {
+		auto &rhs_chunk = *input.chunks[scan_position / STANDARD_VECTOR_SIZE];
+		idx_t result_count = 0;
+		// figure out which tuples didn't find a match in the RHS
+		for(idx_t i = 0; i < rhs_chunk.size(); i++) {
+			if (!found_match[scan_position + i]) {
+				rsel.set_index(result_count++, i);
+			}
+		}
+		scan_position += STANDARD_VECTOR_SIZE;
+		if (result_count > 0) {
+			// if there were any tuples that didn't find a match, output them
+			idx_t left_column_count = result.column_count() - input.column_count();
+			for(idx_t i = 0; i < left_column_count; i++) {
+				result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+				ConstantVector::SetNull(result.data[i], true);
+			}
+			for(idx_t col_idx = 0; col_idx < rhs_chunk.column_count(); col_idx++) {
+				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
+			}
+			result.SetCardinality(result_count);
+			return;
+		}
+	}
+}
+
 }
