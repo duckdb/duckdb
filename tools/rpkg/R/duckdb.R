@@ -7,4 +7,3 @@ check_flag <- function(x) {
   }
 }
 
-#' @useDynLib duckdb , .registration = TRUE

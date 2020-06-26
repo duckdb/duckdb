@@ -9,12 +9,14 @@
 \alias{dbDataType,duckdb_driver-method}
 \alias{dbIsValid,duckdb_driver-method}
 \alias{dbGetInfo,duckdb_driver-method}
+\alias{duckdb_shutdown}
+\alias{duckdb_register}
+\alias{duckdb_unregister}
 \alias{duckdb_connection-class}
 \alias{show,duckdb_connection-method}
 \alias{dbIsValid,duckdb_connection-method}
 \alias{dbDisconnect,duckdb_connection-method}
 \alias{dbSendQuery,duckdb_connection,character-method}
-\alias{dbSendStatement,duckdb_connection,character-method}
 \alias{dbDataType,duckdb_connection-method}
 \alias{dbWriteTable,duckdb_connection,character,data.frame-method}
 \alias{dbListTables,duckdb_connection-method}
@@ -25,6 +27,7 @@
 \alias{dbBegin,duckdb_connection-method}
 \alias{dbCommit,duckdb_connection-method}
 \alias{dbRollback,duckdb_connection-method}
+\alias{read_csv_duckdb}
 \alias{duckdb_result-class}
 \alias{show,duckdb_result-method}
 \alias{dbClearResult,duckdb_result-method}
@@ -43,10 +46,10 @@
 
 \S4method{dbConnect}{duckdb_driver}(
   drv,
-  dbdir = ":memory:",
+  dbdir = DBDIR_MEMORY,
   ...,
   debug = getOption("duckdb.debug", FALSE),
-  dbname = NA
+  read_only = FALSE
 )
 
 \S4method{dbDataType}{duckdb_driver}(dbObj, obj, ...)
@@ -55,15 +58,19 @@
 
 \S4method{dbGetInfo}{duckdb_driver}(dbObj, ...)
 
+duckdb_shutdown(drv)
+
+duckdb_register(conn, name, df)
+
+duckdb_unregister(conn, name)
+
 \S4method{show}{duckdb_connection}(object)
 
 \S4method{dbIsValid}{duckdb_connection}(dbObj, ...)
 
-\S4method{dbDisconnect}{duckdb_connection}(conn, ...)
+\S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
 
-\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ...)
-
-\S4method{dbSendStatement}{duckdb_connection,character}(conn, statement, ...)
+\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, ..., immediate = FALSE)
 
 \S4method{dbDataType}{duckdb_connection}(dbObj, obj, ...)
 
@@ -94,6 +101,22 @@
 \S4method{dbCommit}{duckdb_connection}(conn, ...)
 
 \S4method{dbRollback}{duckdb_connection}(conn, ...)
+
+read_csv_duckdb(
+  conn,
+  files,
+  tablename,
+  header = TRUE,
+  na.strings = "",
+  nrow.check = 500,
+  delim = ",",
+  quote = "\\"",
+  col.names = NULL,
+  lower.case.names = FALSE,
+  sep = delim,
+  transaction = TRUE,
+  ...
+)
 
 \S4method{show}{duckdb_result}(object)
 
@@ -134,14 +157,14 @@ or \linkS4class{DBIConnection}}
 \item{obj}{An R object whose SQL type we want to determine.}
 
 \item{conn}{A \linkS4class{DBIConnection} object, as returned by
-\code{\link[=dbConnect]{dbConnect()}}.}
+\code{\link[DBI:dbConnect]{dbConnect()}}.}
+
+\item{name}{A character string specifying the unquoted DBMS table name,
+or the result of a call to \code{\link[DBI:dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
 
 \item{statement}{a character string containing SQL.}
 
-\item{name}{A character string specifying the unquoted DBMS table name,
-or the result of a call to \code{\link[=dbQuoteIdentifier]{dbQuoteIdentifier()}}.}
-
-\item{value}{a \link[DBI]{data.frame} (or coercible to data.frame).}
+\item{value}{a \link{data.frame} (or coercible to data.frame).}
 
 \item{overwrite}{Allow overwriting the destination table. Cannot be
 `TRUE` if `append` is also `TRUE`.}

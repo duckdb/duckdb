@@ -394,7 +394,8 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 		auto start_time = high_resolution_clock::now();
 		for (idx_t i = 0; i < table_filters.size(); i++) {
 			auto tf_idx = state.adaptive_filter->permutation[i];
-			columns[tf_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
+			auto col_idx = state.column_ids[tf_idx];
+			columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
 			                        approved_tuple_count, table_filters[tf_idx]);
 		}
 		for (auto &table_filter : table_filters) {

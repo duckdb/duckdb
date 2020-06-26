@@ -4,10 +4,31 @@
 \name{duckdb-package}
 \alias{duckdb}
 \alias{duckdb-package}
-\title{duckdb: DBI Package for DuckDB}
+\title{duckdb: DBI Package for the DuckDB Database Management System}
 \description{
-TODO
+DuckDB is an embedded analytical data management
+    system with SQL support. This package includes all of DuckDB as well
+    as R DBI & dplyr connectors.
 }
 \details{
 TBD.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://www.duckdb.org}
+  \item \url{https://github.com/cwida/duckdb}
+  \item Report bugs at \url{https://github.com/cwida/duckdb/issues}
+}
+
+}
+\author{
+\strong{Maintainer}: Hannes Mühleisen \email{hannes@cwi.nl} (\href{https://orcid.org/0000-0001-8552-0029}{ORCID})
+
+Authors:
+\itemize{
+  \item Mark Raasveldt \email{mark.raasveldt@cwi.nl} (\href{https://orcid.org/0000-0001-5005-6844}{ORCID})
+  \item DuckDB Contributors
+}
+
 }
