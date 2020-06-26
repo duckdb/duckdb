@@ -1,7 +1,3 @@
-language: cpp
-script: make unit
-dist: trusty
-
 env:
   global:
     - CIBW_BUILD='cp37-* cp27-*'
@@ -183,18 +179,20 @@ matrix:
 
 # old compiler
     - os: linux
-      dist: xenial
+      dist: trusty
       name: GCC 4.9
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
       addons:
          apt:
           sources:
-            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+            - ubuntu-toolchain-r-test
           packages:
             - g++-4.9 binutils-2.26
       env:
         - CC=gcc-4.9
         - CXX=g++-4.9
+      script:
+        make allunit
 
 # weird platforms: 32 bit linux & windows, arm, solaris, openbsd
 
