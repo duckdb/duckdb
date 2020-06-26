@@ -445,29 +445,6 @@ matrix:
           fi
 
 
-<<<<<<< HEAD
-=======
-    - os: linux
-      name: Python 2 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-      dist: bionic
-      language: python
-      python: 2.7
-
-      cache: pip
-      env:
-        - CIBW_BUILD='cp27-*'
-      
-      install:
-        - pip install numpy pandas pytest
-
-      script:
-        - cd tools/pythonpkg
-        - python setup.py install
-        - python -m pytest tests
-
-
->>>>>>> origin/master
     - os: osx
       name: Python Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
