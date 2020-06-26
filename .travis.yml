@@ -355,85 +355,6 @@ matrix:
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-    - os: linux
-      name: R Package
-
-      dist: bionic
-      language: r
-      r: devel
-
-      install:
-        - cd tools/rpkg
-        - R -f dependencies.R
-
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL duckdb_*.tar.gz
-        - (cd tests && R -f testthat.R)
-        - R -f ../../examples/R/dbi.R
-        - R -f ../../examples/R/dplyr.R
-
-        - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
-        - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
-        - python ../upload-s3.py rstats duckdb_*.tar.gz
-        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
-
-
-    - os: osx
-      osx_image: xcode11.5
-      name: R Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      language: r
-      #r: devel
-
-      install:
-        - cd tools/rpkg
-        - R -f dependencies.R
-
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - R CMD INSTALL duckdb_*.tgz
-        - (cd tests && R -f testthat.R)
-
-        - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
-        - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
-        - python3 ../upload-s3.py rstats duckdb_*.tgz
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
-
-
-    - os: windows
-      name: R Package
-      filter_secrets: false
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      language: cpp
-
-      install:
-        - choco install r.project -y --version 3.6.0
-        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
-        - choco install rtools -s rtools.3.5.0.nupkg -f -y
-        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
-        - choco install curl -y --force
-
-      script:
-        - export "PATH=/c/Rtools/bin:$PATH"
-        - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
-        - sh configure
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
-        - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
-
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
-        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
-
 
     - os: linux
       name: Python 3 Package
@@ -537,3 +458,83 @@ matrix:
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             C:/Python37-x64/python.exe -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
           fi
+
+
+    - os: linux
+      name: R Package
+
+      dist: bionic
+      language: r
+      r: devel
+
+      install:
+        - cd tools/rpkg
+        - R -f dependencies.R
+
+      script:
+        - ./configure
+        - R CMD build .
+        - R CMD INSTALL duckdb_*.tar.gz
+        - (cd tests && R -f testthat.R)
+        - R -f ../../examples/R/dbi.R
+        - R -f ../../examples/R/dplyr.R
+
+        - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
+        - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
+        - python ../upload-s3.py rstats duckdb_*.tar.gz
+        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
+
+
+    - os: osx
+      osx_image: xcode11.5
+      name: R Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      language: r
+      #r: devel
+
+      install:
+        - cd tools/rpkg
+        - R -f dependencies.R
+
+      script:
+        - ./configure
+        - R CMD build .
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tgz
+        - (cd tests && R -f testthat.R)
+
+        - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
+        - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
+        - python3 ../upload-s3.py rstats duckdb_*.tgz
+        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
+
+
+    - os: windows
+      name: R Package
+      filter_secrets: false
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      language: cpp
+
+      install:
+        - choco install r.project -y --version 3.6.0
+        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
+        - choco install rtools -s rtools.3.5.0.nupkg -f -y
+        - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
+        - choco install curl -y --force
+
+      script:
+        - export "PATH=/c/Rtools/bin:$PATH"
+        - cd tools/rpkg
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
+        - sh configure
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
+        - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
+
+        - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
+        - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
+        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
