@@ -421,7 +421,6 @@ matrix:
 
     - os: linux
       name: Python 3.7 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: python
