@@ -184,3 +184,7 @@ FatalException::FatalException(string msg, ...) : Exception(ExceptionType::FATAL
 InternalException::InternalException(string msg, ...) : Exception(ExceptionType::INTERNAL, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
+
+InvalidInputException::InvalidInputException(string msg, ...) : Exception(ExceptionType::INVALID_INPUT, msg) {
+	FORMAT_CONSTRUCTOR(msg);
+}
