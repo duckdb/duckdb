@@ -1,6 +1,5 @@
 env:
   global:
-    - CIBW_BUILD='cp37-* cp36-* cp27-*'
     - CIBW_TEST_REQUIRES='pytest'
     - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "pybind11>=2.4"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
@@ -505,6 +504,9 @@ matrix:
 
       language: generic
       osx_image: xcode11.5
+
+      env:
+        - CIBW_BUILD='cp37-* cp27-*'
 
       install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
