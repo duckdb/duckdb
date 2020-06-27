@@ -62,9 +62,11 @@ class LogMessage {
   }
   void Flush() {
     stream() << "\n";
+	/*// R does not allow us to have a reference to stderr even if we are not using it
     std::string s = str_.str();
     size_t n = s.size();
     if (fwrite(s.data(), 1, n, stderr) < n) {}  // shut up gcc
+    */
     flushed_ = true;
   }
   ~LogMessage() {
