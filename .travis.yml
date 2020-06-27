@@ -5,6 +5,10 @@ env:
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
+    - SETUPTOOLS_SCM_DEBUG=please
+
+git:
+  depth: false
 
 matrix:
   include:
