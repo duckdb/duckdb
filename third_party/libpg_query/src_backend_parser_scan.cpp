@@ -8642,8 +8642,8 @@ static void check_escape_warning(core_yyscan_t yyscanner);
  * this would cause warnings.  Providing our own declarations should be
  * harmless even when the bug gets fixed.
  */
-extern int	core_yyget_column(yyscan_t yyscanner);
-extern void core_yyset_column(int column_no, yyscan_t yyscanner);
+int	core_yyget_column(yyscan_t yyscanner);
+void core_yyset_column(int column_no, yyscan_t yyscanner);
 
 #define YY_NO_INPUT 1
 /*
@@ -8929,11 +8929,7 @@ void core_yyset_lval (YYSTYPE * yylval_param ,yyscan_t yyscanner );
  */
 
 #ifndef YY_SKIP_YYWRAP
-#ifdef __cplusplus
-extern "C" int core_yywrap (yyscan_t yyscanner );
-#else
-extern int core_yywrap (yyscan_t yyscanner );
-#endif
+int core_yywrap (yyscan_t yyscanner );
 #endif
 
 #ifndef yytext_ptr
@@ -9021,7 +9017,7 @@ static int input (yyscan_t yyscanner );
 #ifndef YY_DECL
 #define YY_DECL_IS_OURS 1
 
-extern int core_yylex \
+int core_yylex \
                (core_YYSTYPE * yylval_param,YYLTYPE * yylloc_param ,yyscan_t yyscanner);
 
 #define YY_DECL int core_yylex \

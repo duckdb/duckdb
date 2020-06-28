@@ -30,9 +30,9 @@ extern __thread  bool escape_string_warning;
 extern __thread  bool standard_conforming_strings;
 
 /* Primary entry point for the raw parsing functions */
-extern PGList *raw_parser(const char *str);
+PGList *raw_parser(const char *str);
 
 /* Utility functions exported by gram.y (perhaps these should be elsewhere) */
-extern PGList *SystemFuncName(const char *name);
-extern PGTypeName *SystemTypeName(const char *name);
+PGList *SystemFuncName(const char *name);
+PGTypeName *SystemTypeName(const char *name);
 

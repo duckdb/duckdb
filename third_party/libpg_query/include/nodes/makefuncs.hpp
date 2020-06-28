@@ -15,37 +15,37 @@
 
 #include "nodes/parsenodes.hpp"
 
-extern PGAExpr *makeAExpr(PGAExpr_Kind kind, PGList *name,
-		   PGNode *lexpr, PGNode *rexpr, int location);
+PGAExpr *makeAExpr(PGAExpr_Kind kind, PGList *name,
+	   PGNode *lexpr, PGNode *rexpr, int location);
 
-extern PGAExpr *makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
-				 PGNode *lexpr, PGNode *rexpr, int location);
+PGAExpr *makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
+			 PGNode *lexpr, PGNode *rexpr, int location);
 
-extern PGVar *makeVar(PGIndex varno,
+PGVar *makeVar(PGIndex varno,
 		PGAttrNumber varattno,
 		PGOid vartype,
 		int32_t vartypmod,
 		PGOid varcollid,
 		PGIndex varlevelsup);
 
-extern PGVar *makeVarFromTargetEntry(PGIndex varno,
-					   PGTargetEntry *tle);
+PGVar *makeVarFromTargetEntry(PGIndex varno,
+				   PGTargetEntry *tle);
 
-extern PGVar *makeWholeRowVar(PGRangeTblEntry *rte,
-				PGIndex varno,
-				PGIndex varlevelsup,
-				bool allowScalar);
+PGVar *makeWholeRowVar(PGRangeTblEntry *rte,
+			PGIndex varno,
+			PGIndex varlevelsup,
+			bool allowScalar);
 
-extern PGTargetEntry *makeTargetEntry(PGExpr *expr,
+PGTargetEntry *makeTargetEntry(PGExpr *expr,
 				PGAttrNumber resno,
 				char *resname,
 				bool resjunk);
 
-extern PGTargetEntry *flatCopyTargetEntry(PGTargetEntry *src_tle);
+PGTargetEntry *flatCopyTargetEntry(PGTargetEntry *src_tle);
 
-extern PGFromExpr *makeFromExpr(PGList *fromlist, PGNode *quals);
+PGFromExpr *makeFromExpr(PGList *fromlist, PGNode *quals);
 
-extern PGConst *makeConst(PGOid consttype,
+PGConst *makeConst(PGOid consttype,
 		  int32_t consttypmod,
 		  PGOid constcollid,
 		  int constlen,
@@ -53,33 +53,33 @@ extern PGConst *makeConst(PGOid consttype,
 		  bool constisnull,
 		  bool constbyval);
 
-extern PGConst *makeNullConst(PGOid consttype, int32_t consttypmod, PGOid constcollid);
+PGConst *makeNullConst(PGOid consttype, int32_t consttypmod, PGOid constcollid);
 
-extern PGNode *makeBoolConst(bool value, bool isnull);
+PGNode *makeBoolConst(bool value, bool isnull);
 
-extern PGExpr *makeBoolExpr(PGBoolExprType boolop, PGList *args, int location);
+PGExpr *makeBoolExpr(PGBoolExprType boolop, PGList *args, int location);
 
-extern PGAlias *makeAlias(const char *aliasname, PGList *colnames);
+PGAlias *makeAlias(const char *aliasname, PGList *colnames);
 
-extern PGRelabelType *makeRelabelType(PGExpr *arg, PGOid rtype, int32_t rtypmod,
-				PGOid rcollid, PGCoercionForm rformat);
+PGRelabelType *makeRelabelType(PGExpr *arg, PGOid rtype, int32_t rtypmod,
+			PGOid rcollid, PGCoercionForm rformat);
 
-extern PGRangeVar *makeRangeVar(char *schemaname, char *relname, int location);
+PGRangeVar *makeRangeVar(char *schemaname, char *relname, int location);
 
-extern PGTypeName *makeTypeName(char *typnam);
-extern PGTypeName *makeTypeNameFromNameList(PGList *names);
-extern PGTypeName *makeTypeNameFromOid(PGOid typeOid, int32_t typmod);
+PGTypeName *makeTypeName(char *typnam);
+PGTypeName *makeTypeNameFromNameList(PGList *names);
+PGTypeName *makeTypeNameFromOid(PGOid typeOid, int32_t typmod);
 
-extern PGColumnDef *makeColumnDef(const char *colname,
-			  PGOid typeOid, int32_t typmod, PGOid collOid);
+PGColumnDef *makeColumnDef(const char *colname,
+		  PGOid typeOid, int32_t typmod, PGOid collOid);
 
-extern PGFuncExpr *makeFuncExpr(PGOid funcid, PGOid rettype, PGList *args,
-			 PGOid funccollid, PGOid inputcollid, PGCoercionForm fformat);
+PGFuncExpr *makeFuncExpr(PGOid funcid, PGOid rettype, PGList *args,
+		 PGOid funccollid, PGOid inputcollid, PGCoercionForm fformat);
 
-extern PGFuncCall *makeFuncCall(PGList *name, PGList *args, int location);
+PGFuncCall *makeFuncCall(PGList *name, PGList *args, int location);
 
-extern PGDefElem *makeDefElem(const char *name, PGNode *arg, int location);
-extern PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg,
-					PGDefElemAction defaction, int location);
+PGDefElem *makeDefElem(const char *name, PGNode *arg, int location);
+PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg,
+				PGDefElemAction defaction, int location);
 
-extern PGGroupingSet *makeGroupingSet(GroupingSetKind kind, PGList *content, int location);
+PGGroupingSet *makeGroupingSet(GroupingSetKind kind, PGList *content, int location);

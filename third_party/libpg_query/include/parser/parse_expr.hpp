@@ -16,8 +16,8 @@
 
 /* GUC parameters */
 //extern __thread  bool operator_precedence_warning;
-extern bool Transform_null_equals;
+bool Transform_null_equals;
 
-extern PGNode *transformExpr(PGParseState *pstate, PGNode *expr, PGParseExprKind exprKind);
+PGNode *transformExpr(PGParseState *pstate, PGNode *expr, PGParseExprKind exprKind);
 
-extern const char *ParseExprKindName(PGParseExprKind exprKind);
+const char *ParseExprKindName(PGParseExprKind exprKind);

@@ -42,6 +42,6 @@
 
 /* Declarations that provide the initial content of a catalog */
 /* In C, these need to expand into some harmless, repeatable declaration */
-#define DATA(x)   extern int no_such_variable
-#define DESCR(x)  extern int no_such_variable
-#define SHDESCR(x) extern int no_such_variable
+#define DATA(x)  int no_such_variable
+#define DESCR(x) int no_such_variable
+#define SHDESCR(x) int no_such_variable

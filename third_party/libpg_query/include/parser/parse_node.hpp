@@ -256,22 +256,22 @@ typedef struct PGParseCallbackState
 } PGParseCallbackState;
 
 
-extern PGParseState *make_parsestate(PGParseState *parentParseState);
-extern void free_parsestate(PGParseState *pstate);
-extern int	parser_errposition(PGParseState *pstate, int location);
+PGParseState *make_parsestate(PGParseState *parentParseState);
+void free_parsestate(PGParseState *pstate);
+int	parser_errposition(PGParseState *pstate, int location);
 
-extern void setup_parser_errposition_callback(PGParseCallbackState *pcbstate,
-								  PGParseState *pstate, int location);
-extern void cancel_parser_errposition_callback(PGParseCallbackState *pcbstate);
+void setup_parser_errposition_callback(PGParseCallbackState *pcbstate,
+							  PGParseState *pstate, int location);
+void cancel_parser_errposition_callback(PGParseCallbackState *pcbstate);
 
-extern PGVar *make_var(PGParseState *pstate, PGRangeTblEntry *rte, int attrno,
-		 int location);
-extern PGOid	transformArrayType(PGOid *arrayType, int32_t *arrayTypmod);
-extern PGArrayRef *transformArraySubscripts(PGParseState *pstate,
+PGVar *make_var(PGParseState *pstate, PGRangeTblEntry *rte, int attrno,
+	 int location);
+PGOid	transformArrayType(PGOid *arrayType, int32_t *arrayTypmod);
+PGArrayRef *transformArraySubscripts(PGParseState *pstate,
 						 PGNode *arrayBase,
 						 PGOid arrayType,
 						 PGOid elementType,
 						 int32_t arrayTypMod,
 						 PGList *indirection,
 						 PGNode *assignFrom);
-extern PGConst *make_const(PGParseState *pstate, PGValue *value, int location);
+PGConst *make_const(PGParseState *pstate, PGValue *value, int location);
