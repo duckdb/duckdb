@@ -544,7 +544,7 @@ typedef struct PGNode
  *	Fortunately, this macro isn't recursive so we just define
  *	a global variable for this purpose.
  */
-extern __thread PGNode *newNodeMacroHolder;
+__thread PGNode *newNodeMacroHolder;
 
 #define newNode(size, tag) \
 ( \
