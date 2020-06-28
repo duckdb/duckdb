@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <iostream>
 #include <utility>
@@ -51,7 +52,8 @@ void QueryProfiler::EndQuery() {
 		}
 
 		if (save_location.empty()) {
-			cout << query_info << "\n";
+			Printer::Print(query_info);
+			Printer::Print("\n");
 		} else {
 			WriteToFile(save_location.c_str(), query_info);
 		}
