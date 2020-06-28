@@ -314,3 +314,8 @@ dependencies.d
 deps.s
 duckdb.cpp.tmp
 duckdb.hpp.tmp
+# .Rcheck
+tools/duckdb.Rcheck/
+tools/rpkg/tools
+tools/*.tar.gz
+.Rhistory
