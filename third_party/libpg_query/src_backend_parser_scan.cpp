@@ -8578,18 +8578,6 @@ static __thread yyconst struct yy_trans_info *yy_start_state_list[27] =
 
 
 
-/*
- * GUC variables.  This is a DIRECT violation of the warning given at the
- * head of gram.y, ie flex/bison code must not depend on any GUC variables;
- * as such, changing their values can induce very unintuitive behavior.
- * But we shall have to live with it until we can remove these variables.
- */
-__thread int			backslash_quote = PG_BACKSLASH_QUOTE_SAFE_ENCODING;
-
-__thread bool		escape_string_warning = true;
-
-__thread bool		standard_conforming_strings = true;
-
 
 // /*
 //  * Set the type of YYSTYPE.
@@ -11064,9 +11052,9 @@ scanner_init(const char *str,
 	yyext->keywords = keywords;
 	yyext->num_keywords = num_keywords;
 
-	yyext->backslash_quote = backslash_quote;
-	yyext->escape_string_warning = escape_string_warning;
-	yyext->standard_conforming_strings = standard_conforming_strings;
+	yyext->backslash_quote = PG_BACKSLASH_QUOTE_SAFE_ENCODING;
+	yyext->escape_string_warning = true;
+	yyext->standard_conforming_strings = true;
 
 	/*
 	 * Make a scan buffer with special termination needed by flex.
