@@ -19,12 +19,12 @@ matrix:
 
 
       script:
-        - sudo apt-get -yq install postgresql-plpython-9.3 python-pip
-        - sudo pip install numpy
+        - sudo apt-get -yq install postgresql-plpython3-9.3 python3-pip
+        - sudo pip3 install numpy
         - sudo -u postgres psql -c "SELECT 42"
-        - sudo -u postgres psql -c "CREATE EXTENSION plpythonu"
-        - (cd tools/pythonpkg; sudo python2 setup.py install)
-        - sudo -u postgres psql -c "CREATE FUNCTION quack ()\nRETURNS integer\nAS $$\nimport duckdb\ncon = duckdb.connect(':memory:')\nreturn con.execute('SELECT 42').fetchall()[0][0]\n$$ LANGUAGE plpythonu"
+        - sudo -u postgres psql -c "CREATE EXTENSION plpython3u"
+        - (cd tools/pythonpkg; sudo python3 setup.py install)
+        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS $$\nimport duckdb\ncon = duckdb.connect(':memory:')\nreturn con.execute('SELECT 42').fetchall()[0][0]\n$$ LANGUAGE plpython3u" | sudo -u postgres psql
         - sudo -u postgres psql -c "SELECT quack()"
 
 
