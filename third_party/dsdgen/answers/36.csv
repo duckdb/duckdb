@@ -1,0 +1,100 @@
+-0.433458|||2|1
+-0.441220|"Men                                               "||1|1
+-0.441152|"Jewelry                                           "||1|2
+-0.437716|"Books                                             "||1|3
+-0.435533|"Music                                             "||1|4
+-0.434221|"Sports                                            "||1|5
+-0.432264|"Shoes                                             "||1|6
+-0.431818|"Children                                          "||1|7
+-0.430668|"Women                                             "||1|8
+-0.426901|"Electronics                                       "||1|9
+-0.423864|"Home                                              "||1|10
+-0.458518|"Books                                             "|"reference                                         "|0|1
+-0.449838|"Books                                             "|"home repair                                       "|0|2
+-0.449503|"Books                                             "|"romance                                           "|0|3
+-0.449455|"Books                                             "|"sports                                            "|0|4
+-0.447706|"Books                                             "|"entertainments                                    "|0|5
+-0.446739|"Books                                             "|"cooking                                           "|0|6
+-0.442550|"Books                                             "|"mystery                                           "|0|7
+-0.440698|"Books                                             "|"history                                           "|0|8
+-0.438747|"Books                                             "|"science                                           "|0|9
+-0.433700|"Books                                             "|"business                                          "|0|10
+-0.431639|"Books                                             "|"travel                                            "|0|11
+-0.430060|"Books                                             "|"parenting                                         "|0|12
+-0.424403|"Books                                             "|"fiction                                           "|0|13
+-0.419760|"Books                                             "|"self-help                                         "|0|14
+-0.419136|"Books                                             "|"arts                                              "|0|15
+-0.417920|"Books                                             "|"computers                                         "|0|16
+-0.436226|"Children                                          "|"toddlers                                          "|0|1
+-0.434935|"Children                                          "|"newborn                                           "|0|2
+-0.429522|"Children                                          "|"school-uniforms                                   "|0|3
+-0.426629|"Children                                          "|"infants                                           "|0|4
+-0.490227|"Electronics                                       "|"memory                                            "|0|1
+-0.466899|"Electronics                                       "|"monitors                                          "|0|2
+-0.453342|"Electronics                                       "|"dvd/vcr players                                   "|0|3
+-0.451620|"Electronics                                       "|"automotive                                        "|0|4
+-0.431776|"Electronics                                       "|"wireless                                          "|0|5
+-0.425516|"Electronics                                       "|"musical                                           "|0|6
+-0.420882|"Electronics                                       "|"cameras                                           "|0|7
+-0.417553|"Electronics                                       "|"camcorders                                        "|0|8
+-0.417127|"Electronics                                       "|"audio                                             "|0|9
+-0.417080|"Electronics                                       "|"televisions                                       "|0|10
+-0.414535|"Electronics                                       "|"karoke                                            "|0|11
+-0.410053|"Electronics                                       "|"personal                                          "|0|12
+-0.409093|"Electronics                                       "|"scanners                                          "|0|13
+-0.409092|"Electronics                                       "|"stereo                                            "|0|14
+-0.400803|"Electronics                                       "|"disk drives                                       "|0|15
+-0.377297|"Electronics                                       "|"portable                                          "|0|16
+-0.454680|"Home                                              "|"wallpaper                                         "|0|1
+-0.441147|"Home                                              "|"furniture                                         "|0|2
+-0.439609|"Home                                              "|"flatware                                          "|0|3
+-0.439425|"Home                                              "|"rugs                                              "|0|4
+-0.436272|"Home                                              "|"mattresses                                        "|0|5
+-0.425957|"Home                                              "|"paint                                             "|0|6
+-0.423655|"Home                                              "|"tables                                            "|0|7
+-0.423117|"Home                                              "|"bedding                                           "|0|8
+-0.421334|"Home                                              "|"glassware                                         "|0|9
+-0.420725|"Home                                              "|"accent                                            "|0|10
+-0.420160|"Home                                              "|"curtains/drapes                                   "|0|11
+-0.420081|"Home                                              "|"decor                                             "|0|12
+-0.417190|"Home                                              "|"blinds/shades                                     "|0|13
+-0.415304|"Home                                              "|"bathroom                                          "|0|14
+-0.404997|"Home                                              "|"lighting                                          "|0|15
+-0.380034|"Home                                              "|"kids                                              "|0|16
+-0.475527|"Jewelry                                           "|"consignment                                       "|0|1
+-0.472217|"Jewelry                                           "|"birdal                                            "|0|2
+-0.452903|"Jewelry                                           "|"loose stones                                      "|0|3
+-0.450613|"Jewelry                                           "|"custom                                            "|0|4
+-0.449281|"Jewelry                                           "|"semi-precious                                     "|0|5
+-0.446182|"Jewelry                                           "|"rings                                             "|0|6
+-0.445109|"Jewelry                                           "|"jewelry boxes                                     "|0|7
+-0.440862|"Jewelry                                           "|"costume                                           "|0|8
+-0.439158|"Jewelry                                           "|"bracelets                                         "|0|9
+-0.437906|"Jewelry                                           "|"earings                                           "|0|10
+-0.437852|"Jewelry                                           "|"diamonds                                          "|0|11
+-0.437692|"Jewelry                                           "|"estate                                            "|0|12
+-0.432431|"Jewelry                                           "|"gold                                              "|0|13
+-0.432138|"Jewelry                                           "|"pendants                                          "|0|14
+-0.413724|"Jewelry                                           "|"mens watch                                        "|0|15
+-0.405824|"Jewelry                                           "|"womens watch                                      "|0|16
+-0.450122|"Men                                               "|"sports-apparel                                    "|0|1
+-0.445557|"Men                                               "|"pants                                             "|0|2
+-0.442668|"Men                                               "|"shirts                                            "|0|3
+-0.427214|"Men                                               "|"accessories                                       "|0|4
+-0.440114|"Music                                             "|"pop                                               "|0|1
+-0.437665|"Music                                             "|"rock                                              "|0|2
+-0.433084|"Music                                             "|"country                                           "|0|3
+-0.431818|"Music                                             "|"classical                                         "|0|4
+-0.439820|"Shoes                                             "|"womens                                            "|0|1
+-0.434508|"Shoes                                             "|"mens                                              "|0|2
+-0.431070|"Shoes                                             "|"athletic                                          "|0|3
+-0.423114|"Shoes                                             "|"kids                                              "|0|4
+-0.468879|"Sports                                            "|"fitness                                           "|0|1
+-0.458068|"Sports                                            "|"hockey                                            "|0|2
+-0.457296|"Sports                                            "|"outdoor                                           "|0|3
+-0.447661|"Sports                                            "|"basketball                                        "|0|4
+-0.444031|"Sports                                            "|"sailing                                           "|0|5
+-0.435417|"Sports                                            "|"golf                                              "|0|6
+-0.434226|"Sports                                            "|"football                                          "|0|7
+-0.432818|"Sports                                            "|"guns                                              "|0|8
+-0.430606|"Sports                                            "|"archery                                           "|0|9

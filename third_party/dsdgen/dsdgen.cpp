@@ -28,6 +28,10 @@ void dbgen(double flt_scale, DuckDB &db, string schema, string suffix) {
 		// schema only
 		return;
 	}
+	if (flt_scale < 1) {
+		throw NotImplementedException("Scales smaller than 1 not supported!");
+	}
+    SetScale((int) flt_scale);
 
 	InitializeDSDgen();
 
@@ -91,7 +95,10 @@ string get_answer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
 	}
-	return "";
+	if (sf == 1) {
+		return TPCDS_ANSWERS_SF1[query - 1];
+	}
+    throw SyntaxException("Out of range TPC-DS scale factor: only SF1 is supported");
 }
 
 } // namespace tpcds

@@ -14,5 +14,6 @@ ds_key_t GetRowCount(int table_id);
 void ResetCountCount();
 tpcds_table_def GetTDefByNumber(int table_id);
 tpcds_builder_func GetTDefFunctionByNumber(int table_id);
+void SetScale(int scale);
 
 }; // namespace tpcds

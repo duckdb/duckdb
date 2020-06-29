@@ -44,4 +44,8 @@ tpcds_builder_func GetTDefFunctionByNumber(int table_id) {
 	return table_funcs->builder;
 }
 
+void SetScale(int scale) {
+    set_int((char*) "SCALE", (char*) std::to_string(scale).c_str());
+}
+
 } // namespace tpcds

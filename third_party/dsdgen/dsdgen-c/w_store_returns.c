@@ -81,6 +81,7 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	if (!bInit) {
 		strtodec(&dMin, "1.00");
 		strtodec(&dMax, "100000.00");
+		bInit = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, SR_NULLS);

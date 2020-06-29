@@ -252,7 +252,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	// set up the CSV reader
 	CopyInfo info;
 	info.delimiter = "|";
-	info.header = true;
+	info.header = has_header;
 	info.quote = "\"";
 	info.escape = "\"";
 	// set up the intermediate result chunk
@@ -302,6 +302,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 		// same counts, compare tuples in chunks
 		if (!compare_chunk(*collection.chunks[collection_index], parsed_result)) {
 			error_message = show_diff(*collection.chunks[collection_index], parsed_result);
+			return false;
 		}
 
 		collection_index++;
