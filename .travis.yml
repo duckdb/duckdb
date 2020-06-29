@@ -423,11 +423,6 @@ matrix:
     - os: linux
       name: Python 3.7 Package
 
-      addons:
-        apt:
-          packages:
-            - postgresql-plpython3-9.3
-
       dist: bionic
       language: python
       cache: pip
@@ -463,6 +458,11 @@ matrix:
       env:
         - CIBW_BUILD='cp36-*'
       python: 3.7
+
+      addons:
+        apt:
+          packages:
+            - postgresql-plpython3-9.3 python3-pip python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
