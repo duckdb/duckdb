@@ -458,6 +458,7 @@ matrix:
       env:
         - CIBW_BUILD='cp36-*'
       python: 3.7
+      filter_secrets: false
 
       addons:
         apt:
