@@ -15,22 +15,6 @@ matrix:
 
     - os: linux
       dist: bionic
-      name: DuckDB as Postgres UDF
-
-
-      script:
-        - sudo apt-get -yq install postgresql-plpython3-9.3 python3-pip python3-setuptools
-        - sudo pip3 install numpy
-        - (cd tools/pythonpkg; sudo python3 setup.py install)
-        - cd /tmp && sudo su postgres
-        - psql -c "SELECT 42"
-        - psql -c "CREATE EXTENSION plpython3u"
-        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | psql
-        - psql -c "SELECT quack()"
-
-
-    - os: linux
-      dist: bionic
       name: GCC 10
 
       addons:
