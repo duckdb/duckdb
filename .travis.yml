@@ -455,7 +455,7 @@ matrix:
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
 
-        - sudo pip3 install tools/pythonpkg/dist/duckdb-*-cp37-cp37m-manylinux1_x86_64.whl
+        - sudo pip install tools/pythonpkg/dist/duckdb-*-cp37-cp37m-manylinux1_x86_64.whl
         - sudo apt-get -yq install postgresql-plpython3-9.3 python3-pip
         - sudo -u postgres psql -c "SELECT 42"
         - sudo -u postgres psql -c "CREATE EXTENSION plpython3u"
