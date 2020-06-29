@@ -237,6 +237,23 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ClientContext &context, DataChunk
 	} while (chunk.size() == 0);
 }
 
+void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+    SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
+    idx_t remaining_count = 0;
+    for (idx_t i = 0; i < left.size(); i++) {
+        if (!found_match[i]) {
+            remaining_sel.set_index(remaining_count++, i);
+        }
+    }
+    if (remaining_count > 0) {
+        result.Slice(left, remaining_sel, remaining_count);
+        for (idx_t idx = left.column_count(); idx < result.column_count(); idx++) {
+            result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+            ConstantVector::SetNull(result.data[idx], true);
+        }
+    }
+}
+
 void PhysicalNestedLoopJoin::ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
@@ -257,20 +274,9 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ClientContext &context, DataChun
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
 				if (state->left_found_match) {
-					SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-					idx_t remaining_count = 0;
-					for (idx_t i = 0; i < state->child_chunk.size(); i++) {
-						if (!state->left_found_match[i]) {
-							remaining_sel.set_index(remaining_count++, i);
-						}
-					}
-					state->left_found_match.reset();
-					if (remaining_count > 0) {
-						chunk.Slice(state->child_chunk, remaining_sel, remaining_count);
-						for (idx_t idx = state->child_chunk.column_count(); idx < chunk.column_count(); idx++) {
-							chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
-							ConstantVector::SetNull(chunk.data[idx], true);
-						}
+					PhysicalJoin::ConstructLeftJoinResult(state->child_chunk, chunk, state->left_found_match.get());
+                    state->left_found_match.reset();
+					if (chunk.size() > 0) {
 						return;
 					}
 				}
