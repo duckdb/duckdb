@@ -21,11 +21,12 @@ matrix:
       script:
         - sudo apt-get -yq install postgresql-plpython3-9.3 python3-pip python3-setuptools
         - sudo pip3 install numpy
-        - sudo -u postgres psql -c "SELECT 42"
-        - sudo -u postgres psql -c "CREATE EXTENSION plpython3u"
         - (cd tools/pythonpkg; sudo python3 setup.py install)
-        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -u postgres psql
-        - sudo -u postgres psql -c "SELECT quack()"
+        - cd /tmp && sudo su postgres
+        - psql -c "SELECT 42"
+        - psql -c "CREATE EXTENSION plpython3u"
+        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | psql
+        - psql -c "SELECT quack()"
 
 
     - os: linux
@@ -457,10 +458,10 @@ matrix:
 
         - sudo pip install tools/pythonpkg/dist/duckdb-*-cp37-cp37m-manylinux1_x86_64.whl
         - sudo apt-get -yq install postgresql-plpython3-9.3 python3-pip
-        - sudo -u postgres psql -c "SELECT 42"
-        - sudo -u postgres psql -c "CREATE EXTENSION plpython3u"
-        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -u postgres psql
-        - sudo -u postgres psql -c "SELECT quack()"
+        - sudo -Hiu postgres psql -c "SELECT 42"
+        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
+        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
+        - sudo -Hiu postgres psql -c "SELECT quack()"
 
         - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         - |
