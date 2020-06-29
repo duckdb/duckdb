@@ -427,12 +427,12 @@ SQLType MaxSQLType(SQLType left, SQLType right) {
 }
 
 bool ApproxEqual(float ldecimal, float rdecimal) {
-	float epsilon = min(fabs(rdecimal) * 0.01, 0.1);
+	float epsilon = max(fabs(rdecimal) * 0.01, 0.1);
 	return fabs(ldecimal - rdecimal) <= epsilon;
 }
 
 bool ApproxEqual(double ldecimal, double rdecimal) {
-	double epsilon = min(fabs(rdecimal) * 0.01, 0.1);
+	double epsilon = max(fabs(rdecimal) * 0.01, 0.1);
 	return fabs(ldecimal - rdecimal) <= epsilon;
 }
 
