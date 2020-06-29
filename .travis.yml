@@ -17,18 +17,15 @@ matrix:
       dist: bionic
       name: DuckDB as Postgres UDF
 
-      addons:
-        postgresql: "9.6"
-        apt:
-          sources:
-            - sourceline: 'ppa:ubuntu-toolchain-r/test'
-
-          packages:
-            - postgresql-plpython-9.6
 
       script:
-        - (cd tools/pythonpkg; python2 setup.py install)
-        - psql -c "select 42"
+        - sudo service postgresql stop
+        - sudo apt-get -yq install postgresql-plpython-9.6 postgresql-9.6
+        - sudo -u postgres psql -c "SELECT 42"
+        - sudo -u postgres psql -c "CREATE EXTENSION plpythonu"
+        - (cd tools/pythonpkg; sudo python2 setup.py install)
+        - sudo -u postgres psql -c "CREATE FUNCTION quack ()\nRETURNS integer\nAS $$\nimport duckdb\ncon = duckdb.connect(':memory:')\nreturn con.execute('SELECT 42').fetchall()[0][0]\n$$ LANGUAGE plpythonu"
+        - sudo -u postgres psql -c "SELECT quack()"
 
 
     - os: linux
