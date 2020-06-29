@@ -19,8 +19,7 @@ matrix:
 
 
       script:
-        - sudo service postgresql stop
-        - sudo apt-get -yq install postgresql-plpython-9.6 postgresql-9.6
+        - sudo apt-get -yq install postgresql-plpython-9.3
         - sudo -u postgres psql -c "SELECT 42"
         - sudo -u postgres psql -c "CREATE EXTENSION plpythonu"
         - (cd tools/pythonpkg; sudo python2 setup.py install)
