@@ -440,13 +440,13 @@ matrix:
         - pip install --pre duckdb
 
       script:
+        - sudo python3 --version
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
         # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
-        - sudo pip install numpy
         - sudo pip install tools/pythonpkg/wheelhouse/duckdb-*-cp37-cp37m-manylinux1_x86_64.whl
         - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
         - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
