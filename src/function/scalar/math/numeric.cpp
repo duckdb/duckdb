@@ -12,13 +12,13 @@ namespace duckdb {
 template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(SQLType type) {
 	switch (type.id) {
 	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+		return &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
 	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+		return &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
 	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+		return &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
 	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+		return &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunctionFixedReturn");
 	}

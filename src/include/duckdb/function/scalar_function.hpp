@@ -101,19 +101,19 @@ public:
 	template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
+			return &ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
+			return &ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
+			return &ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
+			return &ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
 		case SQLTypeId::FLOAT:
-			return ScalarFunction::UnaryFunction<float, float, OP>;
+			return &ScalarFunction::UnaryFunction<float, float, OP>;
 		case SQLTypeId::DOUBLE:
-			return ScalarFunction::UnaryFunction<double, double, OP>;
+			return &ScalarFunction::UnaryFunction<double, double, OP>;
 		case SQLTypeId::DECIMAL:
-			return ScalarFunction::UnaryFunction<double, double, OP>;
+			return &ScalarFunction::UnaryFunction<double, double, OP>;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
 		}
@@ -122,19 +122,19 @@ public:
 	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+			return &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+			return &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+			return &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+			return &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
 		case SQLTypeId::FLOAT:
-			return ScalarFunction::UnaryFunction<float, TR, OP>;
+			return &ScalarFunction::UnaryFunction<float, TR, OP>;
 		case SQLTypeId::DOUBLE:
-			return ScalarFunction::UnaryFunction<double, TR, OP>;
+			return &ScalarFunction::UnaryFunction<double, TR, OP>;
 		case SQLTypeId::DECIMAL:
-			return ScalarFunction::UnaryFunction<double, TR, OP>;
+			return &ScalarFunction::UnaryFunction<double, TR, OP>;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
 		}
@@ -143,13 +143,13 @@ public:
 	template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(SQLType type) {
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+			return &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+			return &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+			return &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+			return &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
 		}
