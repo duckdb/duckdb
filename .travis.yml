@@ -15,6 +15,24 @@ matrix:
 
     - os: linux
       dist: bionic
+      name: DuckDB as Postgres UDF
+
+      addons:
+        apt:
+          sources:
+            - sourceline: 'ppa:ubuntu-toolchain-r/test'
+
+          packages:
+            - postgresql-plpython
+
+
+      script:
+        - (cd tools/pythonpkg; python2 setup.py install)
+        - psql -c "select 42"
+        
+
+    - os: linux
+      dist: bionic
       name: GCC 10
 
       addons:
