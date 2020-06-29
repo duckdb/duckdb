@@ -436,8 +436,7 @@ matrix:
       python: 3.7
 
       install:
-        - pip install cibuildwheel==0.10.2 twine wheel numpy setuptools
-        - pip install --pre duckdb
+        - pip install cibuildwheel==0.10.2 twine
 
       script:
         - sudo python3 --version
@@ -446,11 +445,6 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
-        # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
-        - sudo pip install tools/pythonpkg/wheelhouse/duckdb-*-cp37-cp37m-manylinux1_x86_64.whl
-        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
-        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
-        - sudo -Hiu postgres psql -c "SELECT quack()"
 
         - python3 scripts/asset-upload.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         - |
@@ -461,7 +455,7 @@ matrix:
 
     - os: linux
       name: Python 3.6 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+   #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: python
@@ -479,6 +473,14 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
+
+         # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
+        - sudo python3 -m pip install numpy wheels
+        - sudo python3 -m pip install tools/pythonpkg/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
+        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
+        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
+        - sudo -Hiu postgres psql -c "SELECT quack()"
+
         - |
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
