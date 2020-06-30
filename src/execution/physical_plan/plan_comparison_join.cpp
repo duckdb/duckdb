@@ -43,8 +43,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.left_projection_map, op.right_projection_map);
 	} else {
 		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now
-		if (op.conditions.size() == 1 && (op.join_type == JoinType::MARK || op.join_type == JoinType::INNER) &&
-		    !has_inequality) {
+		if (op.conditions.size() == 1 && !has_inequality) {
 			// range join: use piecewise merge join
 			plan =
 			    make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions), op.join_type);
