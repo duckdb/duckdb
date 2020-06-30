@@ -450,14 +450,14 @@ matrix:
 
     - os: linux
       name: Python 3.6 Package
-   #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      # if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: python
       cache: pip
       env:
         - CIBW_BUILD='cp36-*'
-      python: 3.7
+      python: 3.7 # this does not apply to the python for root, there we still run 3.6
       filter_secrets: false
 
       addons:
@@ -476,7 +476,8 @@ matrix:
         - cd ../..
 
          # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
-        - sudo python3 -m pip install tools/pythonpkg/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
+        - find tools/pythonpkg -name "duckdb-*-cp36-cp36m-manylinux1_x86_64.whl" 
+        - sudo python3 -m pip install `find tools/pythonpkg -name "duckdb-*-cp36-cp36m-manylinux1_x86_64.whl"`
         - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
         - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
         - sudo -Hiu postgres psql -c "SELECT quack()"
