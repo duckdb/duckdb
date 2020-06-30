@@ -81,3 +81,29 @@ TEST_CASE("Test NULLS FIRST/NULLS LAST in config", "[orderby]") {
     REQUIRE(CHECK_COLUMN(result, 0, {1, Value()}));
 }
 
+
+TEST_CASE("Test NULLS FIRST/NULLS LAST PRAGMA", "[orderby]") {
+    unique_ptr<QueryResult> result;
+    DuckDB db(nullptr);
+    Connection con(db);
+    con.EnableQueryVerification();
+
+    REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+    REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (NULL)"));
+
+    // default is NULLS FIRST
+    result = con.Query("SELECT * FROM integers ORDER BY i");
+    REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1}));
+
+    // changed default now
+	REQUIRE_NO_FAIL(con.Query("PRAGMA default_null_order='NULLS LAST'"));
+
+    result = con.Query("SELECT * FROM integers ORDER BY i");
+    REQUIRE(CHECK_COLUMN(result, 0, {1, Value()}));
+
+    REQUIRE_NO_FAIL(con.Query("PRAGMA default_null_order='NULLS FIRST'"));
+
+    REQUIRE_FAIL(con.Query("PRAGMA default_null_order())"));
+    REQUIRE_FAIL(con.Query("PRAGMA default_null_order=UNKNOWN)"));
+    REQUIRE_FAIL(con.Query("PRAGMA default_null_order=3)"));
+}

@@ -199,3 +199,29 @@ TEST_CASE("Test Top N Optimization", "[order]") {
 	result = con.Query("SELECT b FROM test ORDER BY b OFFSET 10;");
 	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
+
+TEST_CASE("Test ORDER BY PRAGMA", "[order]") {
+	unique_ptr<MaterializedQueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);"));
+
+	// default is ORDER BY ASC
+	result = con.Query("SELECT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
+
+	// we can change the default with a pragma
+    REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='DESCENDING'"));
+
+    result = con.Query("SELECT a FROM test ORDER BY a");
+    REQUIRE(CHECK_COLUMN(result, 0, {13, 12, 11}));
+
+    REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='ASC'"));
+
+    REQUIRE_FAIL(con.Query("PRAGMA default_order())"));
+    REQUIRE_FAIL(con.Query("PRAGMA default_order=UNKNOWN)"));
+    REQUIRE_FAIL(con.Query("PRAGMA default_order=3)"));
+}
