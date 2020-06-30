@@ -1,11 +1,14 @@
 env:
   global:
-    - CIBW_BUILD='cp37-* cp27-*'
     - CIBW_TEST_REQUIRES='pytest'
-    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "cmake==3.13.3" && pip install "pybind11>=2.4"'
+    - CIBW_BEFORE_BUILD='pip install "numpy>=1.16" && pip install "pandas>=0.24" && pip install "pytest>=4.3" && pip install "pybind11>=2.4"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
+    - SETUPTOOLS_SCM_DEBUG=please
+
+git:
+  depth: false
 
 matrix:
   include:
@@ -417,11 +420,10 @@ matrix:
         - (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-
-
     - os: linux
-      name: Python 3 Package
-      dist: bionuc
+      name: Python 3.7 Package
+
+      dist: bionic
       language: python
       cache: pip
       env:
@@ -446,24 +448,55 @@ matrix:
 
 
     - os: linux
-      name: Python 2 Package
+      name: Python 3.6 Package
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
       dist: bionic
       language: python
-      python: 2.7
-
       cache: pip
       env:
-        - CIBW_BUILD='cp27-*'
-      
+        - CIBW_BUILD='cp36-*'
+      python: 3.7
+
       install:
-        - pip install numpy pandas pytest
+        - pip install cibuildwheel==0.10.2 twine
 
       script:
         - cd tools/pythonpkg
-        - python setup.py install
-        - python -m pytest tests
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
 
+
+    - os: linux
+      name: Python 2.7 Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      dist: bionic
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp27-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
 
     - os: osx
       name: Python Package
@@ -471,6 +504,9 @@ matrix:
 
       language: generic
       osx_image: xcode11.5
+
+      env:
+        - CIBW_BUILD='cp37-* cp27-*'
 
       install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
@@ -502,8 +538,8 @@ matrix:
       install:
         - choco install python3 --version 3.7.3 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python37"
         - choco install python3 --version 3.7.3 --sidebyside -y --force --params "/InstallDir:C:\Python37-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
-        - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
+        # - choco install python3 --version 3.6.8 --sidebyside -y --force --params "/InstallDir:C:\Python36-x64"
+        # - choco install python3 --version 3.6.8 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python36"
         - choco install python2 --version 2.7.16 --sidebyside -y --forcex86 --force --params "/InstallDir:C:\Python27"
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
@@ -525,6 +561,7 @@ matrix:
 
     - os: linux
       name: R Package
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: r

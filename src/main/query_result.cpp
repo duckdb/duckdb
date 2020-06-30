@@ -1,4 +1,5 @@
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/printer.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -57,7 +58,7 @@ bool QueryResult::Equals(QueryResult &other) {
 }
 
 void QueryResult::Print() {
-	fprintf(stderr, "%s\n", ToString().c_str());
+	Printer::Print(ToString());
 }
 
 string QueryResult::HeaderToString() {

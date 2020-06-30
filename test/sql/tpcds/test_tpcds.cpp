@@ -20,6 +20,7 @@ TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
 	}
 }
 
+
 TEST_CASE("Test TPC-DS SF1", "[tpcds][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);

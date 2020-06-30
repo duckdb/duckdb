@@ -2,9 +2,11 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                                  unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
@@ -29,12 +31,14 @@ public:
 
 class BlockwiseNLJoinGlobalState : public GlobalOperatorState {
 public:
-	BlockwiseNLJoinGlobalState() {
+	BlockwiseNLJoinGlobalState() : right_outer_position(0) {
 	}
 
 	ChunkCollection right_chunks;
 	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
 	unique_ptr<bool[]> rhs_found_match;
+	//! The position in the RHS in the final scan of the FULL OUTER JOIN
+	idx_t right_outer_position;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalBlockwiseNLJoin::GetGlobalState(ClientContext &context) {
@@ -102,20 +106,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		// fill in the data from the chunk
-		idx_t i;
-		for (i = 0; i < state->child_chunk.column_count(); i++) {
-			chunk.data[i].Reference(state->child_chunk.data[i]);
-		}
-		chunk.SetCardinality(state->child_chunk.size());
-		if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
-			// LEFT OUTER or FULL OUTER join with empty RHS
-			// fill any columns from the RHS with NULLs
-			for (; i < chunk.column_count(); i++) {
-				chunk.data[i].vector_type = VectorType::CONSTANT_VECTOR;
-				ConstantVector::SetNull(chunk.data[i], true);
-			}
-		}
+		PhysicalComparisonJoin::ConstructEmptyJoinResult(join_type, true, state->child_chunk, chunk);
 		return;
 	}
 
@@ -127,7 +118,8 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	idx_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
-			throw NotImplementedException("FIXME: full outer join");
+			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks, chunk, gstate.right_outer_position);
+			return;
 		}
 		if (state->left_position >= state->child_chunk.size()) {
 			// exhausted LHS, have to pull new LHS chunk
@@ -194,8 +186,6 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 			if (state->lhs_found_match) {
 				state->lhs_found_match[state->left_position] = true;
 			}
-			chunk.Slice(match_sel, result_count);
-
 			// set the match flags in the RHS
 			if (gstate.rhs_found_match) {
 				for (idx_t i = 0; i < result_count; i++) {
@@ -203,6 +193,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 					gstate.rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + idx] = true;
 				}
 			}
+			chunk.Slice(match_sel, result_count);
 		} else {
 			// no result: reset the chunk
 			chunk.Reset();
@@ -228,4 +219,6 @@ string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {
 	string extra_info = JoinTypeToString(join_type) + "\n";
 	extra_info += condition->GetName();
 	return extra_info;
+}
+
 }

@@ -421,10 +421,8 @@ struct DuckDBPyResult {
 			}
 
 			// convert the nullmask
-			py::array_t<bool> nullmask;
-			nullmask.resize({mres->collection.count});
-			bool *nullmask_ptr = nullmask.mutable_data();
-
+			auto nullmask = py::array(py::dtype("bool"), mres->collection.count);
+			auto nullmask_ptr = (bool*) nullmask.mutable_data();
 			idx_t out_offset = 0;
 			for (auto &data_chunk : mres->collection.chunks) {
 				auto &src_nm = FlatVector::Nullmask(data_chunk->data[col_idx]);
@@ -505,7 +503,7 @@ struct DuckDBPyConnection {
 			params_set = params;
 		}
 
-		for (auto &single_query_params : params_set) {
+		for (const auto &single_query_params : params_set) {
 			if (prep->n_param != py::len(single_query_params)) {
 				throw runtime_error("Prepared statments needs " + to_string(prep->n_param) + " parameters, " +
 				                    to_string(py::len(single_query_params)) + " given");

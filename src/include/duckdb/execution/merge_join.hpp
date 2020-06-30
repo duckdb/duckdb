@@ -52,10 +52,7 @@ struct ChunkMergeInfo : public MergeInfo {
 	}
 };
 
-struct MergeJoinInner {
-	struct Equality {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
-	};
+struct MergeJoinComplex {
 	struct LessThan {
 		template <class T> static idx_t Operation(ScalarMergeInfo &l, ScalarMergeInfo &r);
 	};
@@ -76,10 +73,7 @@ struct MergeJoinInner {
 	static idx_t Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type);
 };
 
-struct MergeJoinMark {
-	struct Equality {
-		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
-	};
+struct MergeJoinSimple {
 	struct LessThan {
 		template <class T> static idx_t Operation(ScalarMergeInfo &l, ChunkMergeInfo &r);
 	};

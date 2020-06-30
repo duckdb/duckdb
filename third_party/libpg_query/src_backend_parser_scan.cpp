@@ -9072,11 +9072,13 @@ YY_DECL
 		if ( ! yyg->yy_start )
 			yyg->yy_start = 1;	/* first start state */
 
+		/*// R does not allow us to have a reference to stdout even if we are not using it
 		if ( ! yyin )
 			yyin = stdin;
 
 		if ( ! yyout )
 			yyout = stdout;
+		 */
 
 		if ( ! YY_CURRENT_BUFFER ) {
 			core_yyensure_buffer_stack (yyscanner);
