@@ -17,6 +17,7 @@ add_library_unity(duckdb_execution
                   pipeline.cpp
                   physical_operator.cpp
                   physical_plan_generator.cpp
+                  task_scheduler.cpp
                   window_segment_tree.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>
