@@ -9,8 +9,9 @@
 
 #include <cctype>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static idx_t ParseMemoryLimit(string arg);
 
@@ -76,7 +77,8 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(TypeId::VARCHAR).str_value);
 		// bind the collation to verify that it exists
 		ExpressionBinder::PushCollation(context, nullptr, collation_param);
-		context.db.collation = collation_param;
+		auto &config = DBConfig::GetConfig(context);
+		config.collation = collation_param;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
@@ -129,4 +131,6 @@ idx_t ParseMemoryLimit(string arg) {
 		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit.c_str());
 	}
 	return (idx_t)multiplier * limit;
+}
+
 }

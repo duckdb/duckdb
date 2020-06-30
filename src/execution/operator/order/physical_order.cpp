@@ -54,10 +54,12 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 	ExpressionExecutor executor;
 	vector<TypeId> sort_types;
 	vector<OrderType> order_types;
+    vector<OrderByNullType> null_order_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		auto &expr = orders[i].expression;
 		sort_types.push_back(expr->return_type);
 		order_types.push_back(orders[i].type);
+        null_order_types.push_back(orders[i].null_order);
 		executor.AddExpression(*expr);
 	}
 
@@ -74,7 +76,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 
 	// now perform the actual sort
 	sink.sorted_vector = unique_ptr<idx_t[]>(new idx_t[sort_collection.count]);
-	sort_collection.Sort(order_types, sink.sorted_vector.get());
+	sort_collection.Sort(order_types, null_order_types, sink.sorted_vector.get());
 
 	PhysicalSink::Finalize(context, move(state));
 }

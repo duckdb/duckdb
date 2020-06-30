@@ -56,7 +56,7 @@ typedef enum PGSortByNulls
 {
 	PG_SORTBY_NULLS_DEFAULT,
 	PG_SORTBY_NULLS_FIRST,
-	SORTBY_NULLS_LAST
+	PG_SORTBY_NULLS_LAST
 } PGSortByNulls;
 
 /*****************************************************************************

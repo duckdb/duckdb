@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
@@ -83,14 +84,15 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
+            auto &config = DBConfig::GetConfig(context);
 			for (idx_t i = 0; i < order.orders.size(); i++) {
-				BoundOrderByNode node;
-				node.type = order.orders[i].type;
-				node.expression = BindOrderExpression(order_binder, move(order.orders[i].expression));
-				if (!node.expression) {
+				auto order_expression = BindOrderExpression(order_binder, move(order.orders[i].expression));
+				if (!order_expression) {
 					continue;
 				}
-				bound_order->orders.push_back(move(node));
+                auto type = order.orders[i].type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.orders[i].type;
+                auto null_order = order.orders[i].null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.orders[i].null_order;
+				bound_order->orders.push_back(BoundOrderByNode(type, null_order, move(order_expression)));
 			}
 			if (bound_order->orders.size() > 0) {
 				bound_modifier = move(bound_order);
