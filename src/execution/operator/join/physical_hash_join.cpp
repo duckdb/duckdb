@@ -46,7 +46,12 @@ public:
 
 class HashJoinGlobalState : public GlobalOperatorState {
 public:
+	HashJoinGlobalState() {}
+
+	//! The HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
+	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
+	JoinHTScanState ht_scan_state;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &context) {
@@ -164,32 +169,40 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 	}
 	do {
 		ProbeHashTable(context, chunk, state);
-#if STANDARD_VECTOR_SIZE >= 128
 		if (chunk.size() == 0) {
+#if STANDARD_VECTOR_SIZE >= 128
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
 				chunk.Reference(state->cached_chunk);
 				state->cached_chunk.Reset();
-			}
-			return;
-		} else if (chunk.size() < 64) {
-			// small chunk: add it to chunk cache and continue
-			state->cached_chunk.Append(chunk);
-			if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
-				// chunk cache full: return it
-				chunk.Reference(state->cached_chunk);
-				state->cached_chunk.Reset();
-				return;
-			} else {
-				// chunk cache not full: probe again
-				chunk.Reset();
-			}
-		} else {
-			return;
-		}
-#else
-		return;
+			} else
 #endif
+			if (join_type == JoinType::OUTER) {
+				// check if we need to scan any unmatched tuples from the RHS for the full outer join
+				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
+			}
+			return;
+		} else {
+#if STANDARD_VECTOR_SIZE >= 128
+			if (chunk.size() < 64) {
+				// small chunk: add it to chunk cache and continue
+				state->cached_chunk.Append(chunk);
+				if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
+					// chunk cache full: return it
+					chunk.Reference(state->cached_chunk);
+					state->cached_chunk.Reset();
+					return;
+				} else {
+					// chunk cache not full: probe again
+					chunk.Reset();
+				}
+			} else {
+				return;
+			}
+#else
+			return;
+#endif
+		}
 	} while (true);
 }
 

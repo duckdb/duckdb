@@ -120,7 +120,7 @@ public:
 
 class NestedLoopJoinGlobalState : public GlobalOperatorState {
 public:
-	NestedLoopJoinGlobalState() : has_null(false) {
+	NestedLoopJoinGlobalState() : has_null(false), right_outer_position(0) {
 	}
 
 	//! Materialized data of the RHS
@@ -129,6 +129,10 @@ public:
 	ChunkCollection right_chunks;
 	//! Whether or not the RHS of the nested loop join has NULL values
 	bool has_null;
+	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
+	unique_ptr<bool[]> right_found_match;
+	//! The position in the RHS in the final scan of the FULL OUTER JOIN
+	idx_t right_outer_position;
 };
 
 void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
@@ -150,6 +154,16 @@ void PhysicalNestedLoopJoin::Sink(ClientContext &context, GlobalOperatorState &s
 	// append the data and the
 	gstate.right_data.Append(input);
 	gstate.right_chunks.Append(nlj_state.right_condition);
+}
+
+void PhysicalNestedLoopJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	auto &gstate = (NestedLoopJoinGlobalState &)*state;
+	if (join_type == JoinType::OUTER) {
+		// for FULL OUTER JOIN, initialize found_match to false for every tuple
+		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.count]);
+		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.count);
+	}
+	PhysicalSink::Finalize(context, move(state));
 }
 
 unique_ptr<GlobalOperatorState> PhysicalNestedLoopJoin::GetGlobalState(ClientContext &context) {
@@ -223,6 +237,23 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ClientContext &context, DataChunk
 	} while (chunk.size() == 0);
 }
 
+void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+    SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
+    idx_t remaining_count = 0;
+    for (idx_t i = 0; i < left.size(); i++) {
+        if (!found_match[i]) {
+            remaining_sel.set_index(remaining_count++, i);
+        }
+    }
+    if (remaining_count > 0) {
+        result.Slice(left, remaining_sel, remaining_count);
+        for (idx_t idx = left.column_count(); idx < result.column_count(); idx++) {
+            result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+            ConstantVector::SetNull(result.data[idx], true);
+        }
+    }
+}
+
 void PhysicalNestedLoopJoin::ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
@@ -239,30 +270,25 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ClientContext &context, DataChun
 		}
 		if (state->fetch_next_left) {
 			// we exhausted all chunks on the right: move to the next chunk on the left
-			if (join_type == JoinType::LEFT) {
+			if (join_type == JoinType::LEFT || join_type == JoinType::OUTER) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
 				if (state->left_found_match) {
-					SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-					idx_t remaining_count = 0;
-					for (idx_t i = 0; i < state->child_chunk.size(); i++) {
-						if (!state->left_found_match[i]) {
-							remaining_sel.set_index(remaining_count++, i);
-						}
+					PhysicalJoin::ConstructLeftJoinResult(state->child_chunk, chunk, state->left_found_match.get());
+                    state->left_found_match.reset();
+					if (chunk.size() > 0) {
+						return;
 					}
-					state->left_found_match.reset();
-					chunk.Slice(state->child_chunk, remaining_sel, remaining_count);
-					for (idx_t idx = state->child_chunk.column_count(); idx < chunk.column_count(); idx++) {
-						chunk.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
-						ConstantVector::SetNull(chunk.data[idx], true);
-					}
-				} else {
-					state->left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-					memset(state->left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 				}
+				state->left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+				memset(state->left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 			}
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
+				if (join_type == JoinType::OUTER) {
+					// if the LHS is exhausted in a FULL OUTER JOIN, we scan the found_match for any chunks we still need to output
+					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk, gstate.right_outer_position);
+				}
 				return;
 			}
 			// resolve the left join condition for the current chunk
@@ -285,30 +311,28 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ClientContext &context, DataChun
 		right_data.Verify();
 
 		// now perform the join
-		switch (join_type) {
-		case JoinType::LEFT:
-		case JoinType::INNER: {
-			SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
-			idx_t match_count =
-			    NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition, right_chunk,
-			                                 lvector, rvector, conditions);
-			// we have finished resolving the join conditions
-			if (match_count > 0) {
-				// we have matching tuples!
-				// construct the result
-				if (state->left_found_match) {
-					for (idx_t i = 0; i < match_count; i++) {
-						state->left_found_match[lvector.get_index(i)] = true;
-					}
+		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
+		idx_t match_count =
+			NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition, right_chunk,
+											lvector, rvector, conditions);
+		// we have finished resolving the join conditions
+		if (match_count > 0) {
+			// we have matching tuples!
+			// construct the result
+			if (state->left_found_match) {
+				for (idx_t i = 0; i < match_count; i++) {
+					state->left_found_match[lvector.get_index(i)] = true;
 				}
-				chunk.Slice(state->child_chunk, lvector, match_count);
-				chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 			}
-			break;
+			if (gstate.right_found_match) {
+				for(idx_t i = 0; i < match_count; i++) {
+					gstate.right_found_match[state->right_chunk * STANDARD_VECTOR_SIZE + rvector.get_index(i)] = true;
+				}
+			}
+			chunk.Slice(state->child_chunk, lvector, match_count);
+			chunk.Slice(right_data, rvector, match_count, state->child_chunk.column_count());
 		}
-		default:
-			throw NotImplementedException("Unimplemented type for nested loop join!");
-		}
+
 		// check if we exhausted the RHS, if we did we need to move to the next right chunk in the next iteration
 		if (state->right_tuple >= right_chunk.size()) {
 			state->fetch_next_right = true;
@@ -344,6 +368,7 @@ void PhysicalNestedLoopJoin::GetChunkInternal(ClientContext &context, DataChunk 
 		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
+	case JoinType::OUTER:
 		ResolveComplexJoin(context, chunk, state_);
 		break;
 	default:
