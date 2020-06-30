@@ -114,7 +114,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	auto &config = DBConfig::GetConfig(context);
 	for (auto &order : window.orders) {
 		auto type = order.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.type;
-        auto null_order = order.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.null_order;
+		auto null_order =
+		    order.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.null_order;
 		auto expression = GetExpression(order.expression);
 		result->orders.push_back(BoundOrderByNode(type, null_order, move(expression)));
 	}
@@ -133,4 +134,4 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	return BindResult(move(colref), sql_type);
 }
 
-}
+} // namespace duckdb

@@ -734,4 +734,4 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	return make_unique<MaterializedQueryResult>(err_str);
 }
 
-}
+} // namespace duckdb

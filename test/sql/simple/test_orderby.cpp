@@ -214,14 +214,14 @@ TEST_CASE("Test ORDER BY PRAGMA", "[order]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 
 	// we can change the default with a pragma
-    REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='DESCENDING'"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='DESCENDING'"));
 
-    result = con.Query("SELECT a FROM test ORDER BY a");
-    REQUIRE(CHECK_COLUMN(result, 0, {13, 12, 11}));
+	result = con.Query("SELECT a FROM test ORDER BY a");
+	REQUIRE(CHECK_COLUMN(result, 0, {13, 12, 11}));
 
-    REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='ASC'"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA default_order='ASC'"));
 
-    REQUIRE_FAIL(con.Query("PRAGMA default_order())"));
-    REQUIRE_FAIL(con.Query("PRAGMA default_order=UNKNOWN)"));
-    REQUIRE_FAIL(con.Query("PRAGMA default_order=3)"));
+	REQUIRE_FAIL(con.Query("PRAGMA default_order())"));
+	REQUIRE_FAIL(con.Query("PRAGMA default_order=UNKNOWN)"));
+	REQUIRE_FAIL(con.Query("PRAGMA default_order=3)"));
 }

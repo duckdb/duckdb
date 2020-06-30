@@ -125,16 +125,16 @@ unique_ptr<ResultModifier> OrderModifier::Copy() {
 }
 
 void OrderByNode::Serialize(Serializer &serializer) {
-    serializer.Write<OrderType>(type);
-    serializer.Write<OrderByNullType>(null_order);
-    expression->Serialize(serializer);
+	serializer.Write<OrderType>(type);
+	serializer.Write<OrderByNullType>(null_order);
+	expression->Serialize(serializer);
 }
 
 OrderByNode OrderByNode::Deserialize(Deserializer &source) {
-    auto type = source.Read<OrderType>();
-    auto null_order = source.Read<OrderByNullType>();
-    auto expression = ParsedExpression::Deserialize(source);
-    return OrderByNode(type, null_order, move(expression));
+	auto type = source.Read<OrderType>();
+	auto null_order = source.Read<OrderByNullType>();
+	auto expression = ParsedExpression::Deserialize(source);
+	return OrderByNode(type, null_order, move(expression));
 }
 
 void OrderModifier::Serialize(Serializer &serializer) {

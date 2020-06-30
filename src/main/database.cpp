@@ -77,4 +77,4 @@ DBConfig &DBConfig::GetConfig(ClientContext &context) {
 	return context.db.config;
 }
 
-}
+} // namespace duckdb

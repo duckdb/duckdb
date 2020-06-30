@@ -35,6 +35,7 @@ public:
 	unique_ptr<ConnectionManager> connection_manager;
 
 	DBConfig config;
+
 public:
 	template <class T> void LoadExtension() {
 		T extension;

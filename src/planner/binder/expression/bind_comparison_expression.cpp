@@ -101,4 +101,4 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	                  SQLType(SQLTypeId::BOOLEAN));
 }
 
-}
+} // namespace duckdb

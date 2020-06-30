@@ -84,14 +84,17 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order = (OrderModifier &)*mod;
 			auto bound_order = make_unique<BoundOrderModifier>();
-            auto &config = DBConfig::GetConfig(context);
+			auto &config = DBConfig::GetConfig(context);
 			for (idx_t i = 0; i < order.orders.size(); i++) {
 				auto order_expression = BindOrderExpression(order_binder, move(order.orders[i].expression));
 				if (!order_expression) {
 					continue;
 				}
-                auto type = order.orders[i].type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.orders[i].type;
-                auto null_order = order.orders[i].null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.orders[i].null_order;
+				auto type =
+				    order.orders[i].type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.orders[i].type;
+				auto null_order = order.orders[i].null_order == OrderByNullType::ORDER_DEFAULT
+				                      ? config.default_null_order
+				                      : order.orders[i].null_order;
 				bound_order->orders.push_back(BoundOrderByNode(type, null_order, move(order_expression)));
 			}
 			if (bound_order->orders.size() > 0) {
@@ -119,8 +122,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 			if (distinct.target_distincts.size() == 0) {
 				// DISTINCT without a target: push references to the standard select list
 				for (idx_t i = 0; i < sql_types.size(); i++) {
-					distinct.target_distincts.push_back(
-					    make_unique<BoundColumnRefExpression>(GetInternalType(sql_types[i]), ColumnBinding(projection_index, i)));
+					distinct.target_distincts.push_back(make_unique<BoundColumnRefExpression>(
+					    GetInternalType(sql_types[i]), ColumnBinding(projection_index, i)));
 				}
 			} else {
 				// DISTINCT with target list: set types
@@ -135,11 +138,12 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 					bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
 				}
 			}
-			for(idx_t i = 0; i < distinct.target_distincts.size(); i++) {
+			for (idx_t i = 0; i < distinct.target_distincts.size(); i++) {
 				auto &bound_colref = (BoundColumnRefExpression &)*distinct.target_distincts[i];
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id == SQLTypeId::VARCHAR) {
-					distinct.target_distincts[i] = ExpressionBinder::PushCollation(context, move(distinct.target_distincts[i]), sql_type.collation, true);
+					distinct.target_distincts[i] = ExpressionBinder::PushCollation(
+					    context, move(distinct.target_distincts[i]), sql_type.collation, true);
 				}
 			}
 			break;
@@ -157,7 +161,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 				auto sql_type = sql_types[bound_colref.binding.column_index];
 				bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
 				if (sql_type.id == SQLTypeId::VARCHAR) {
-					order.orders[i].expression = ExpressionBinder::PushCollation(context, move(order.orders[i].expression), sql_type.collation);
+					order.orders[i].expression =
+					    ExpressionBinder::PushCollation(context, move(order.orders[i].expression), sql_type.collation);
 				}
 			}
 			break;

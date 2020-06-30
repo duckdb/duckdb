@@ -56,8 +56,9 @@ void StorageManager::Initialize() {
 		LoadDatabase();
 	} else {
 		block_manager = make_unique<InMemoryBlockManager>();
-		buffer_manager = make_unique<BufferManager>(*database.config.file_system, *block_manager, database.config.temporary_directory,
-		                                            database.config.maximum_memory);
+		buffer_manager =
+		    make_unique<BufferManager>(*database.config.file_system, *block_manager,
+		                               database.config.temporary_directory, database.config.maximum_memory);
 	}
 }
 
@@ -103,17 +104,17 @@ void StorageManager::LoadDatabase() {
 			database.file_system->RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager =
-		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.config.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(*database.file_system, *block_manager, database.config.temporary_directory,
-		                                            database.config.maximum_memory);
+		block_manager = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true,
+		                                                    database.config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(
+		    *database.file_system, *block_manager, database.config.temporary_directory, database.config.maximum_memory);
 	} else {
 		if (!database.config.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		auto sf =
-		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.config.use_direct_io);
+		auto sf = make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false,
+		                                              database.config.use_direct_io);
 		buffer_manager = make_unique<BufferManager>(*database.file_system, *sf, database.config.temporary_directory,
 		                                            database.config.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);

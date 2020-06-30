@@ -113,7 +113,8 @@ static int8_t templated_compare_value(Vector &left_vec, Vector &right_vec, idx_t
 }
 
 // return type here is int32 because strcmp() on some platforms returns rather large values
-static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right, OrderByNullType null_order) {
+static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_idx_left, idx_t vector_idx_right,
+                             OrderByNullType null_order) {
 	auto left_null = FlatVector::Nullmask(left_vec)[vector_idx_left];
 	auto right_null = FlatVector::Nullmask(right_vec)[vector_idx_right];
 
@@ -122,7 +123,7 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 	} else if (right_null) {
 		return null_order == OrderByNullType::NULLS_FIRST ? 1 : -1;
 	} else if (left_null) {
-        return null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
+		return null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
 	}
 
 	switch (left_vec.type) {
@@ -147,7 +148,8 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 	return false;
 }
 
-static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t left, idx_t right) {
+static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                         idx_t left, idx_t right) {
 	assert(sort_by);
 
 	idx_t chunk_idx_left = left / STANDARD_VECTOR_SIZE;
@@ -179,7 +181,8 @@ static int compare_tuple(ChunkCollection *sort_by, vector<OrderType> &desc, vect
 	return 0;
 }
 
-static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *result) {
+static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &desc,
+                                  vector<OrderByNullType> &null_order, idx_t *result) {
 	// select pivot
 	int64_t pivot = 0;
 	int64_t low = 0, high = sort_by->count - 1;
@@ -196,8 +199,8 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
 	return low;
 }
 
-static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *result, int64_t left,
-                               int64_t right) {
+static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                               idx_t *result, int64_t left, int64_t right) {
 	if (left >= right) {
 		return;
 	}
@@ -394,8 +397,8 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	}
 	return true;
 }
-static void _heapify(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *heap, idx_t heap_size,
-                     idx_t current_index) {
+static void _heapify(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *heap,
+                     idx_t heap_size, idx_t current_index) {
 	if (current_index >= heap_size) {
 		return;
 	}
@@ -404,13 +407,15 @@ static void _heapify(ChunkCollection *input, vector<OrderType> &desc, vector<Ord
 	idx_t swap_index = current_index;
 
 	if (left_child_index < heap_size) {
-		swap_index =
-		    compare_tuple(input, desc, null_order, heap[swap_index], heap[left_child_index]) <= 0 ? left_child_index : swap_index;
+		swap_index = compare_tuple(input, desc, null_order, heap[swap_index], heap[left_child_index]) <= 0
+		                 ? left_child_index
+		                 : swap_index;
 	}
 
 	if (right_child_index < heap_size) {
-		swap_index =
-		    compare_tuple(input, desc, null_order, heap[swap_index], heap[right_child_index]) <= 0 ? right_child_index : swap_index;
+		swap_index = compare_tuple(input, desc, null_order, heap[swap_index], heap[right_child_index]) <= 0
+		                 ? right_child_index
+		                 : swap_index;
 	}
 
 	if (swap_index != current_index) {
@@ -419,7 +424,8 @@ static void _heapify(ChunkCollection *input, vector<OrderType> &desc, vector<Ord
 	}
 }
 
-static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t *heap, idx_t heap_size) {
+static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                         idx_t *heap, idx_t heap_size) {
 	for (idx_t i = 0; i < heap_size; i++) {
 		heap[i] = i;
 	}
@@ -438,7 +444,8 @@ static void _heap_create(ChunkCollection *input, vector<OrderType> &desc, vector
 	}
 }
 
-void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size) {
+void ChunkCollection::Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[],
+                           idx_t heap_size) {
 	assert(heap);
 	if (count == 0)
 		return;
