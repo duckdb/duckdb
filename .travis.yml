@@ -463,7 +463,7 @@ matrix:
       addons:
         apt:
           packages:
-            - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy
+            - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
