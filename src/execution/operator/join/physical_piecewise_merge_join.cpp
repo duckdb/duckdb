@@ -154,39 +154,41 @@ public:
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
     auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
     auto &gstate = (MergeJoinGlobalState &)*sink_state;
-    children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-    if (state->child_chunk.size() == 0) {
-        return;
-    }
-    state->join_keys.Reset();
-    state->lhs_executor.SetChunk(state->child_chunk);
-    state->join_keys.SetCardinality(state->child_chunk);
-    for (idx_t k = 0; k < conditions.size(); k++) {
-        state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
-        // sort by join key
-        OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
-    }
-    ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
-    ChunkMergeInfo right_info(gstate.right_conditions, gstate.right_orders);
+	do {
+		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+		if (state->child_chunk.size() == 0) {
+			return;
+		}
+		state->join_keys.Reset();
+		state->lhs_executor.SetChunk(state->child_chunk);
+		state->join_keys.SetCardinality(state->child_chunk);
+		for (idx_t k = 0; k < conditions.size(); k++) {
+			state->lhs_executor.ExecuteExpression(k, state->join_keys.data[k]);
+			// sort by join key
+			OrderVector(state->join_keys.data[k], state->join_keys.size(), state->left_orders);
+		}
+		ScalarMergeInfo left_info(state->left_orders, state->join_keys.data[0].type, state->left_position);
+		ChunkMergeInfo right_info(gstate.right_conditions, gstate.right_orders);
 
-    // perform the actual join
-    MergeJoinSimple::Perform(left_info, right_info, conditions[0].comparison);
+		// perform the actual join
+		MergeJoinSimple::Perform(left_info, right_info, conditions[0].comparison);
 
-	// now construct the result based ont he join result
-    switch (join_type) {
-    case JoinType::MARK:
-        PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
-                                              gstate.has_null);
-		break;
-	case JoinType::SEMI:
-        PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, right_info.found_match);
-		break;
-	case JoinType::ANTI:
-        PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, right_info.found_match);
-		break;
-	default:
-		throw NotImplementedException("Unimplemented join type for merge join");
-    }
+		// now construct the result based ont he join result
+		switch (join_type) {
+		case JoinType::MARK:
+			PhysicalJoin::ConstructMarkJoinResult(state->join_keys, state->child_chunk, chunk, right_info.found_match,
+			                                      gstate.has_null);
+			break;
+		case JoinType::SEMI:
+			PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, right_info.found_match);
+			break;
+		case JoinType::ANTI:
+			PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, right_info.found_match);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented join type for merge join");
+		}
+	} while(chunk.size() == 0);
 }
 
 void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
