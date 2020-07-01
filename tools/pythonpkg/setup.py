@@ -36,7 +36,8 @@ if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 
 
 toolchain_args = ['-std=c++11']
-#toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+if 'DUCKDEBUG' in os.environ:
+    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])

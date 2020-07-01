@@ -227,13 +227,7 @@ struct PandasScanFunction : public TableFunction {
 					if (PyUnicode_READY(val) != 0) {
 						throw runtime_error("failure in PyUnicode_READY");
 					}
-					if (PyUnicode_KIND(val) == PyUnicode_1BYTE_KIND) {
-						auto ucs1 = PyUnicode_1BYTE_DATA(val);
-						auto length = PyUnicode_GET_LENGTH(val);
-						tgt_ptr[row] = string_t((const char*) ucs1, length);
-					} else {
-						tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
-					}
+					tgt_ptr[row] = StringVector::AddString(output.data[col_idx], ((py::object*) &val)->cast<string>());
 #else
 					if (!py::isinstance<py::str>(*((py::object*) &val))) {
 						FlatVector::SetNull(output.data[col_idx], row, true);
