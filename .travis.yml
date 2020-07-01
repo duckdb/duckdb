@@ -474,11 +474,12 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
+        - deactivate
 
          # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
         - sudo mkdir /home/postgres && sudo chown postgres /home/postgres
         - cp tools/pythonpkg/wheelhouse/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl /tmp
-        - sudo -u postgres python3 -m pip install `find /tmp -name "duckdb-*-cp36-cp36m-manylinux1_x86_64.whl"`
+        - sudo -u postgres python3 -m pip install --user `find /tmp -name "duckdb-*-cp36-cp36m-manylinux1_x86_64.whl"`
         - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
         - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
         - sudo -Hiu postgres psql -c "SELECT quack()"
