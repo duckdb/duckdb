@@ -412,10 +412,11 @@ TEST_CASE("Prepare all types of statements", "[prepared]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	auto &fs = db.GetFileSystem();
 
 	string csv_path = TestCreatePath("prepared_files");
-	if (db.file_system->DirectoryExists(csv_path)) {
-		db.file_system->RemoveDirectory(csv_path);
+	if (fs.DirectoryExists(csv_path)) {
+		fs.RemoveDirectory(csv_path);
 	}
 
 	// TRANSACTION

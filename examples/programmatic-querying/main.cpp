@@ -180,12 +180,10 @@ int main() {
 	projection->children.push_back(move(group_by));
 
 	// ORDER_BY 1
-	BoundOrderByNode order_by;
-	order_by.type = OrderType::ASCENDING;
-	order_by.expression = make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0);
+	auto order_expr = make_unique_base<Expression, BoundReferenceExpression>(TypeId::INT32, 0);
 
 	vector<BoundOrderByNode> orders;
-	orders.push_back(move(order_by));
+	orders.push_back(BoundOrderByNode(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, move(order_expr)));
 
 	auto order = make_unique<PhysicalOrder>(aggr_types, move(orders));
 	order->children.push_back(move(projection));

@@ -25,8 +25,9 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 ClientContext::ClientContext(DuckDB &database)
     : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this),
@@ -197,7 +198,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
-	if (db.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	if (db.config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type).c_str()));
 	}
@@ -732,3 +733,5 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	err_str += "]";
 	return make_unique<MaterializedQueryResult>(err_str);
 }
+
+} // namespace duckdb

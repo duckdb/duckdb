@@ -9,8 +9,9 @@
 
 #include <cctype>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static idx_t ParseMemoryLimit(string arg);
 
@@ -76,7 +77,36 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(TypeId::VARCHAR).str_value);
 		// bind the collation to verify that it exists
 		ExpressionBinder::PushCollation(context, nullptr, collation_param);
-		context.db.collation = collation_param;
+		auto &config = DBConfig::GetConfig(context);
+		config.collation = collation_param;
+	} else if (keyword == "null_order" || keyword == "default_null_order") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Null order must be an assignment (e.g. PRAGMA default_null_order='NULLS FIRST')");
+		}
+		auto &config = DBConfig::GetConfig(context);
+		string new_null_order = StringUtil::Lower(pragma.parameters[0].ToString());
+		if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
+			config.default_null_order = OrderByNullType::NULLS_FIRST;
+		} else if (new_null_order == "nulls last" || new_null_order == "null last" || new_null_order == "last") {
+			config.default_null_order = OrderByNullType::NULLS_LAST;
+		} else {
+			throw ParserException("Unrecognized null order '%s', expected either NULLS FIRST or NULLS LAST",
+			                      new_null_order.c_str());
+		}
+	} else if (keyword == "order" || keyword == "default_order") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Order must be an assignment (e.g. PRAGMA default_order=DESCENDING)");
+		}
+		auto &config = DBConfig::GetConfig(context);
+		string new_order = StringUtil::Lower(pragma.parameters[0].ToString());
+		if (new_order == "ascending" || new_order == "asc") {
+			config.default_order_type = OrderType::ASCENDING;
+		} else if (new_order == "descending" || new_order == "desc") {
+			config.default_order_type = OrderType::DESCENDING;
+		} else {
+			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING",
+			                      new_order.c_str());
+		}
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
@@ -130,3 +160,5 @@ idx_t ParseMemoryLimit(string arg) {
 	}
 	return (idx_t)multiplier * limit;
 }
+
+} // namespace duckdb

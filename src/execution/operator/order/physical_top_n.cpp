@@ -46,10 +46,12 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 	ExpressionExecutor executor;
 	vector<TypeId> sort_types;
 	vector<OrderType> order_types;
+	vector<OrderByNullType> null_order_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		auto &expr = orders[i].expression;
 		sort_types.push_back(expr->return_type);
 		order_types.push_back(orders[i].type);
+		null_order_types.push_back(orders[i].null_order);
 		executor.AddExpression(*expr);
 	}
 
@@ -71,7 +73,7 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 
 	// create and use the heap
 	auto heap = unique_ptr<idx_t[]>(new idx_t[heap_size]);
-	heap_collection.Heap(order_types, heap.get(), heap_size);
+	heap_collection.Heap(order_types, null_order_types, heap.get(), heap_size);
 	return heap;
 }
 
@@ -140,4 +142,4 @@ unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
 	return make_unique<PhysicalTopNOperatorState>(children[0].get());
 }
 
-}
+} // namespace duckdb

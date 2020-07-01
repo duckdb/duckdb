@@ -98,6 +98,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
                                     ChunkCollection &output, ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
 	vector<OrderType> orders;
+	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
@@ -105,6 +106,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		auto &pexpr = wexpr->partitions[prt_idx];
 		sort_types.push_back(pexpr->return_type);
 		orders.push_back(OrderType::ASCENDING);
+		null_order_types.push_back(OrderByNullType::NULLS_FIRST);
 		executor.AddExpression(*pexpr);
 	}
 
@@ -112,6 +114,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 		auto &oexpr = wexpr->orders[ord_idx].expression;
 		sort_types.push_back(oexpr->return_type);
 		orders.push_back(wexpr->orders[ord_idx].type);
+		null_order_types.push_back(wexpr->orders[ord_idx].null_order);
 		executor.AddExpression(*oexpr);
 	}
 
@@ -131,7 +134,7 @@ static void SortCollectionForWindow(ClientContext &context, BoundWindowExpressio
 	assert(input.count == sort_collection.count);
 
 	auto sorted_vector = unique_ptr<idx_t[]>(new idx_t[input.count]);
-	sort_collection.Sort(orders, sorted_vector.get());
+	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
 	output.Reorder(sorted_vector.get());

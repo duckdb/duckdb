@@ -401,7 +401,7 @@ opt_asc_desc: ASC_P							{ $$ = PG_SORTBY_ASC; }
 		;
 
 opt_nulls_order: NULLS_LA FIRST_P			{ $$ = PG_SORTBY_NULLS_FIRST; }
-			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
+			| NULLS_LA LAST_P				{ $$ = PG_SORTBY_NULLS_LAST; }
 			| /*EMPTY*/						{ $$ = PG_SORTBY_NULLS_DEFAULT; }
 		;
 
