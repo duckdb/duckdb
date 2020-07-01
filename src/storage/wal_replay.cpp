@@ -55,7 +55,7 @@ private:
 };
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
-	BufferedFileReader reader(*database.file_system, path.c_str());
+	BufferedFileReader reader(database.GetFileSystem(), path.c_str());
 
 	if (reader.Finished()) {
 		// WAL is empty

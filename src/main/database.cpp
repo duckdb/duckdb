@@ -52,6 +52,10 @@ DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), conf
 DuckDB::~DuckDB() {
 }
 
+FileSystem &DuckDB::GetFileSystem() {
+	return *config.file_system;
+}
+
 void DuckDB::Configure(DBConfig &new_config) {
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;

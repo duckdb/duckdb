@@ -13,7 +13,7 @@ using namespace std;
 #include <cstdio>
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db.file_system;
+	return *context.db.config.file_system;
 }
 
 static void AssertValidFileFlags(uint8_t flags) {

@@ -28,20 +28,19 @@ public:
 
 	~DuckDB();
 
-	unique_ptr<FileSystem> file_system;
+    DBConfig config;
+
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
 	unique_ptr<ConnectionManager> connection_manager;
-
-	DBConfig config;
-
 public:
 	template <class T> void LoadExtension() {
 		T extension;
 		extension.Load(*this);
 	}
 
+	FileSystem &GetFileSystem();
 private:
 	void Configure(DBConfig &config);
 };
