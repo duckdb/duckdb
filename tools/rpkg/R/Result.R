@@ -1,3 +1,11 @@
+#' @title DuckDB Result Set
+#' @description  TBD
+#'
+#' @param connection FIXME
+#' @param stmt_lst FIXME
+#' @export
+#' @name duckdb_result
+#' @export
 duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent = emptyenv())
   env$rows_fetched <- 0
@@ -22,6 +30,7 @@ duckdb_execute <- function(res) {
     res@env$rows_affected <- as.numeric(res@env$resultset[[1]][1])
   }
 }
+
 
 setClass(
   "duckdb_result",
