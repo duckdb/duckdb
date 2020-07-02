@@ -596,7 +596,8 @@ matrix:
         - R -q -e 'tic::before_install()'
 
       install:
-        - cd tools/rpkg && R -q -e 'tic::install()'
+        - ls -a
+        - R -q -e 'tic::install()'
       before_script:
         - cd tools/rpkg && R -q -e 'tic::before_script()'
       script:
