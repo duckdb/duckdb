@@ -3,9 +3,24 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/execution/task_scheduler.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
+
+class PipelineTask : public Task {
+public:
+	PipelineTask(ClientContext &context, Pipeline *pipeline) :
+	      context(context), pipeline(pipeline) {
+	}
+
+	void Execute() override {
+        pipeline->Execute(context);
+	}
+private:
+    ClientContext &context;
+    Pipeline *pipeline;
+};
 
 ExecutionContext::ExecutionContext(ClientContext &context) : context(context) {
 }
@@ -15,22 +30,25 @@ ExecutionContext::~ExecutionContext() {
 
 void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 	pipelines.clear();
-	while (!scheduled_pipelines.empty()) {
-		scheduled_pipelines.pop();
-	}
 
 	physical_plan = move(plan);
 	physical_state = physical_plan->GetOperatorState();
 
 	context.profiler.Initialize(physical_plan.get());
 
+
 	BuildPipelines(physical_plan.get(), nullptr);
+
 	// schedule pipelines that do not have dependents
+    this->producer = TaskScheduler::GetScheduler(context).CreateProducer();
 	for (auto &pipeline : pipelines) {
 		if (pipeline->dependencies.size() == 0) {
 			Schedule(pipeline.get());
 		}
 	}
+	// now work on the tasks of this pipeline until the query is finished executing
+    auto &scheduler = TaskScheduler::GetScheduler(context);
+    scheduler.ExecuteTasks(*producer);
 }
 
 void ExecutionContext::Reset() {
@@ -121,7 +139,10 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 
 void ExecutionContext::Schedule(Pipeline *pipeline) {
 	assert(pipeline->dependencies.size() == 0);
-	scheduled_pipelines.push(pipeline);
+    auto task = make_unique<PipelineTask>(context, pipeline);
+
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	scheduler.ScheduleTask(*producer, move(task));
 }
 
 vector<TypeId> ExecutionContext::GetTypes() {
@@ -130,16 +151,6 @@ vector<TypeId> ExecutionContext::GetTypes() {
 }
 
 unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
-	if (pipelines.size() > 0) {
-		// execute scheduled pipelines until we are done
-		while (!scheduled_pipelines.empty()) {
-			auto pipeline = scheduled_pipelines.front();
-			scheduled_pipelines.pop();
-
-			pipeline->Execute(context);
-		}
-		assert(pipelines.size() == 0);
-	}
 	assert(physical_plan);
 
 	auto chunk = make_unique<DataChunk>();
@@ -150,6 +161,7 @@ unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
 }
 
 void ExecutionContext::ErasePipeline(Pipeline *pipeline) {
+	lock_guard<mutex> plock(pipeline_lock);
 	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
 	                             [&](std::unique_ptr<Pipeline> &p) { return p.get() == pipeline; }));
 }

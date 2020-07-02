@@ -10,26 +10,36 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/execution/task.hpp"
 
 namespace duckdb {
 
-struct Task {
-    virtual ~Task() { }
+struct ConcurrentQueue;
+struct QueueProducerToken;
+class TaskScheduler;
 
-	//! Execute the task
-	virtual void Execute() = 0;
+struct ProducerToken {
+    ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
+    ~ProducerToken();
+
+    TaskScheduler &scheduler;
+    unique_ptr<QueueProducerToken> token;
 };
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
+	constexpr static int64_t TASK_TIMEOUT_USECS = 10000;
 public:
     TaskScheduler();
 	~TaskScheduler();
 
+	static TaskScheduler &GetScheduler(ClientContext &context);
+
+	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler
-	void ScheduleTask(unique_ptr<Task> task);
-	//! Execute tasks on this thread until all the tasks in the queue have been exhausted
-	void ExecuteTasks();
+	void ScheduleTask(ProducerToken &producer, unique_ptr<Task> task);
+	//! Execute tasks on this thread of a specified producer until all tasks of that producer have been exhausted
+	void ExecuteTasks(ProducerToken &producer);
 
 	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
 	//! The main thread will also be used for execution
@@ -38,7 +48,8 @@ private:
 	//! Run tasks forever until "marker" is set to false
     void ExecuteTasksForever(bool *marker);
 private:
-    vector<shared_ptr<Task>> tasks;
+	//! The task queue
+	unique_ptr<ConcurrentQueue> queue;
     //! The active background threads of the task scheduler
 	vector<unique_ptr<thread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
