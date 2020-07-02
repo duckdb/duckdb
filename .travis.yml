@@ -596,11 +596,11 @@ matrix:
         - R -q -e 'tic::before_install()'
 
       install:
-        - ls -a
         - R -q -e 'tic::install()'
       before_script:
         - R -q -e 'tic::before_script()'
       script:
+        - ./configure
         -  R -q -e 'tic::script()'
       after_success:
         - R -q -e 'tic::after_success()'
