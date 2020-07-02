@@ -1,0 +1,11 @@
+reference:
+- title: Driver
+  contents:
+  - duckdb
+- title: DBI Methods
+  contents:
+  - dbConnect
+  - dbDisconnect
+- title: duckdb Package
+  contents:
+  - duckdb-package
