@@ -1,10 +1,3 @@
-#' @title DuckDB Result Set
-#' @description  TBD
-#'
-#' @param connection FIXME
-#' @param stmt_lst FIXME
-#' @export
-#' @name duckdb_result
 duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent = emptyenv())
   env$rows_fetched <- 0
@@ -20,8 +13,6 @@ duckdb_result <- function(connection, stmt_lst) {
   return(res)
 }
 
-#' @rdname duckdb_result
-#' @export
 duckdb_execute <- function(res) {
   res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref)
   attr(res@env$resultset, "row.names") <-
@@ -32,8 +23,6 @@ duckdb_execute <- function(res) {
   }
 }
 
-#' @rdname duckdb_result
-#' @export
 setClass(
   "duckdb_result",
   contains = "DBIResult",
@@ -223,7 +212,6 @@ setMethod(
 
 #' @rdname duckdb_result
 #' @inheritParams DBI::dbBind
-#' @importFrom testthat skip
 #' @export
 setMethod(
   "dbBind", "duckdb_result",
