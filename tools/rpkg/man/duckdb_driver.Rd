@@ -37,9 +37,9 @@ duckdb_shutdown(drv)
 src_duckdb(path = ":memory:", create = FALSE, read_only = FALSE)
 }
 \arguments{
-\item{dbdir}{FIXME}
+\item{dbdir}{The file in which the DuckDB database should be stored}
 
-\item{read_only}{FIXME}
+\item{read_only}{Whether the database file should be opened in read-only mode}
 
 \item{object}{Any R object}
 
@@ -51,19 +51,19 @@ object (in order to clone an existing connection).}
 typically include \code{user}, \code{password}, \code{host}, \code{port}, \code{dbname}, etc.
 For details see the appropriate \code{DBIDriver}.}
 
-\item{debug}{FIXME}
+\item{debug}{Print additional debug information such as queries}
 
 \item{dbObj}{A object inheriting from \linkS4class{DBIDriver}
 or \linkS4class{DBIConnection}}
 
 \item{obj}{An R object whose SQL type we want to determine.}
 
-\item{path}{FIXME}
+\item{path}{The file in which the DuckDB database should be stored}
 
-\item{create}{FIXME}
+\item{create}{Create a new database if none is present in `path`}
 }
 \description{
-TBD.
+A DuckDB database instance.
 }
 \examples{
 \dontrun{
