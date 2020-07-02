@@ -596,23 +596,17 @@ matrix:
         - R -q -e 'tic::before_install()'
 
       install:
-        - cd tools/rpkg
-        - R -q -e 'tic::install()'
+        - cd tools/rpkg && R -q -e 'tic::install()'
       before_script:
-        - cd tools/rpkg
-        - R -q -e 'tic::before_script()'
+        - cd tools/rpkg && R -q -e 'tic::before_script()'
       script:
-        - cd tools/rpkg
-        - R -q -e 'tic::script()'
+        - cd tools/rpkg && R -q -e 'tic::script()'
       after_success:
-        - cd tools/rpkg
-        - R -q -e 'tic::after_success()'
+        - cd tools/rpkg && R -q -e 'tic::after_success()'
       after_failure:
-        - cd tools/rpkg
-        - R -q -e 'tic::after_failure()'
+        - cd tools/rpkg && R -q -e 'tic::after_failure()'
       after_script:
-        - cd tools/rpkg
-        - R -q -e 'tic::after_script()'
+        - cd tools/rpkg && R -q -e 'tic::after_script()'
 
     - os: osx
       osx_image: xcode11.5
