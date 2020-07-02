@@ -47,8 +47,10 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 		}
 	}
 	// now work on the tasks of this pipeline until the query is finished executing
-    auto &scheduler = TaskScheduler::GetScheduler(context);
-    scheduler.ExecuteTasks(*producer);
+	while(pipelines.size() > 0) {
+		auto &scheduler = TaskScheduler::GetScheduler(context);
+		scheduler.ExecuteTasks(*producer);
+	}
 }
 
 void ExecutionContext::Reset() {

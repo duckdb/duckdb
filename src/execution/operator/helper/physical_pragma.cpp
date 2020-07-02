@@ -6,6 +6,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/execution/task_scheduler.hpp"
 
 #include <cctype>
 
@@ -107,6 +108,12 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING",
 			                      new_order.c_str());
 		}
+	} else if (keyword == "threads" || keyword == "worker_threads") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Order must be an assignment (e.g. PRAGMA threads=4)");
+		}
+		auto nr_threads = pragma.parameters[0].GetValue<int64_t>();
+		TaskScheduler::GetScheduler(context).SetThreads(nr_threads);
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}

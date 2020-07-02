@@ -32,6 +32,7 @@ void Pipeline::AddDependency(Pipeline *pipeline) {
 }
 
 void Pipeline::EraseDependency(Pipeline *pipeline) {
+	lock_guard<mutex> plock(pipeline_lock);
 	assert(dependencies.count(pipeline) == 1);
 
 	dependencies.erase(dependencies.find(pipeline));

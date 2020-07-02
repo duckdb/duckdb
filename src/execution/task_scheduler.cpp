@@ -76,6 +76,10 @@ void TaskScheduler::ExecuteTasksForever(bool *marker) {
 	}
 }
 
+static void ThreadExecuteTasks(TaskScheduler *scheduler, bool *marker) {
+	scheduler->ExecuteTasksForever(marker);
+}
+
 void TaskScheduler::SetThreads(int32_t n) {
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
@@ -86,9 +90,7 @@ void TaskScheduler::SetThreads(int32_t n) {
 		for(idx_t i = 0; i < new_thread_count - threads.size(); i++) {
 			// launch a thread and assign it a cancellation marker
             auto marker = unique_ptr<bool>(new bool(true));
-			auto worker_thread = make_unique<thread>([&]() {
-                ExecuteTasksForever(marker.get());
-			});
+			auto worker_thread = make_unique<thread>(ThreadExecuteTasks, this, marker.get());
 
 	        threads.push_back(move(worker_thread));
             markers.push_back(move(marker));

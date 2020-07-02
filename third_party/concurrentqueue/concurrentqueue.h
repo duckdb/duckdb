@@ -43,22 +43,11 @@
 #endif
 
 #if defined(__APPLE__)
-#include "TargetConditionals.h"
+#include <TargetConditionals.h>
 #endif
 
-#ifdef MCDBGQ_USE_RELACY
-#include "relacy/relacy_std.hpp"
-#include "relacy_shims.h"
-// We only use malloc/free anyway, and the delete macro messes up `= delete` method declarations.
-// We'll override the default trait malloc ourselves without a macro.
-#undef new
-#undef delete
-#undef malloc
-#undef free
-#else
 #include <atomic>		// Requires C++11. Sorry VS2010.
 #include <cassert>
-#endif
 #include <cstddef>              // for max_align_t
 #include <cstdint>
 #include <cstdlib>
@@ -248,10 +237,6 @@ namespace moodycamel { namespace details {
 	static inline bool (unlikely)(bool x) { return x; }
 #endif
 } }
-
-#ifdef MOODYCAMEL_QUEUE_INTERNAL_DEBUG
-#include "internal/concurrentqueue_internal_debug.h"
-#endif
 
 namespace moodycamel {
 namespace details {

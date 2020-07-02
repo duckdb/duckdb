@@ -40,13 +40,12 @@ public:
 	void ScheduleTask(ProducerToken &producer, unique_ptr<Task> task);
 	//! Execute tasks on this thread of a specified producer until all tasks of that producer have been exhausted
 	void ExecuteTasks(ProducerToken &producer);
+	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
+	void ExecuteTasksForever(bool *marker);
 
 	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
 	//! The main thread will also be used for execution
 	void SetThreads(int32_t n);
-private:
-	//! Run tasks forever until "marker" is set to false
-    void ExecuteTasksForever(bool *marker);
 private:
 	//! The task queue
 	unique_ptr<ConcurrentQueue> queue;

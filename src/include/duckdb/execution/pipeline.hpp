@@ -42,6 +42,8 @@ public:
 
 	string ToString() const;
 	void Print() const;
+private:
+	std::mutex pipeline_lock;
 };
 
 } // namespace duckdb
