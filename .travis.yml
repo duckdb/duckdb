@@ -1,7 +1,7 @@
 env:
   global:
     - CIBW_TEST_REQUIRES='pytest'
-    - CIBW_BEFORE_BUILD='pip install "pandas>=0.24" "pytest>=4.3"'
+    - CIBW_BEFORE_BUILD='pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
     - CIBW_TEST_COMMAND='python -m pytest {project}/tests'
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
@@ -434,6 +434,7 @@ matrix:
         - pip install cibuildwheel==0.10.2 twine
 
       script:
+        - sudo python3 --version
         - cd tools/pythonpkg
         - python setup.py sdist
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
@@ -456,7 +457,13 @@ matrix:
       cache: pip
       env:
         - CIBW_BUILD='cp36-*'
-      python: 3.7
+      python: 3.7 # this does not apply to the python for root, there we still run 3.6
+      filter_secrets: false
+
+      addons:
+        apt:
+          packages:
+            - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
@@ -467,6 +474,14 @@ matrix:
         - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         - cibuildwheel --output-dir wheelhouse duckdb_tarball
         - cd ../..
+
+         # this tests whether we can run DuckDB as a UDF within PostgreSQL, mainly to check for symbol clashes in libpg_query
+        - sudo mkdir /home/postgres && sudo chown postgres /home/postgres
+        - sudo python3 -m pip install --prefix=/tmp tools/pythonpkg/wheelhouse/duckdb-*-cp36-cp36m-manylinux1_x86_64.whl
+        - sudo -Hiu postgres psql -c "CREATE EXTENSION plpython3u"
+        - echo -e "CREATE FUNCTION quack ()\nRETURNS integer\nAS \$\$\nimport sys\nsys.path.insert(0,'/tmp/lib/python3.6/site-packages/')\nimport duckdb\ncon = duckdb.connect(':memory:')\ncon.execute('CREATE TABLE a(i integer)')\ncon.execute('INSERT INTO a VALUES (42)')\nreturn con.execute('SELECT * FROM a').fetchall()[0][0]\n\$\$ LANGUAGE plpython3u" | sudo -Hiu postgres psql
+        - sudo -Hiu postgres psql -c "SELECT quack()"
+
         - |
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
