@@ -255,6 +255,15 @@ static int64_t impala_timestamp_to_nanoseconds(const Int96 &impala_timestamp) {
 	return days_since_epoch * kNanosecondsInADay + nanoseconds;
 }
 
+static timestamp_t impala_timestamp_to_timestamp_t(const Int96 &raw_ts) {
+	auto impala_ns = impala_timestamp_to_nanoseconds(raw_ts);
+	auto ms = impala_ns / 1000000; // nanoseconds
+	auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
+	date_t date = Date::EpochToDate(ms / 1000);
+	dtime_t time = (dtime_t)(ms % ms_per_day);
+	return Timestamp::FromDatetime(date, time);
+}
+
 struct ParquetScanColumnData {
 	idx_t chunk_offset;
 
@@ -357,7 +366,6 @@ private:
 		// skip the first column its the root and otherwise useless
 		for (uint64_t col_idx = 1; col_idx < file_meta_data.schema.size(); col_idx++) {
 			auto &s_ele = file_meta_data.schema[col_idx];
-
 			if (!s_ele.__isset.type || s_ele.num_children > 0) {
 				throw runtime_error("Only flat tables are supported (no nesting)");
 			}
@@ -523,13 +531,8 @@ private:
 				col_data.payload.available(dict_byte_size);
 				// immediately convert timestamps to duckdb format, potentially fewer conversions
 				for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
-					auto impala_ns = impala_timestamp_to_nanoseconds(((Int96 *)col_data.payload.ptr)[dict_index]);
-
-					auto ms = impala_ns / 1000000; // nanoseconds
-					auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
-					date_t date = Date::EpochToDate(ms / 1000);
-					dtime_t time = (dtime_t)(ms % ms_per_day);
-					((timestamp_t *)col_data.dict.ptr)[dict_index] = Timestamp::FromDatetime(date, time);
+					((timestamp_t *)col_data.dict.ptr)[dict_index] =
+					    impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
 				}
 
 				break;
@@ -841,6 +844,18 @@ private:
 					case SQLTypeId::DOUBLE:
 						_fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
+					case SQLTypeId::TIMESTAMP: {
+						for (idx_t i = 0; i < current_batch_size; i++) {
+							if (col_data.defined_buf.ptr[i]) {
+								((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
+								    impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
+							} else {
+								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
+							}
+						}
+
+						break;
+					}
 					case SQLTypeId::VARCHAR: {
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
