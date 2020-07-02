@@ -16849,7 +16849,7 @@ yyreduce:
 
   case 474:
 #line 404 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.nullorder) = SORTBY_NULLS_LAST; ;}
+    { (yyval.nullorder) = PG_SORTBY_NULLS_LAST; ;}
     break;
 
   case 475:

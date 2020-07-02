@@ -21,6 +21,13 @@ namespace duckdb {
 class BufferManager;
 class BufferHandle;
 
+struct JoinHTScanState {
+	JoinHTScanState() : position(0), block_position(0) {}
+
+	idx_t position;
+	idx_t block_position;
+};
+
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
    The JoinHashTable concatenates incoming chunks inside a linked list of
@@ -115,6 +122,8 @@ public:
 	void Finalize();
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
+	//! Scan the HT to construct the final full outer join result after
+	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 
 	idx_t size() {
 		return count;
@@ -142,6 +151,8 @@ public:
 	idx_t entry_size;
 	//! The total tuple size
 	idx_t tuple_size;
+	//! Next pointer offset in tuple
+	idx_t pointer_offset;
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized

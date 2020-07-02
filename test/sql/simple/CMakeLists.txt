@@ -18,6 +18,7 @@ add_library_unity(test_sql_simple
                   test_having.cpp
                   test_inserts.cpp
                   test_join.cpp
+                  test_nulls_first.cpp
                   test_least_greatest.cpp
                   test_like.cpp
                   test_limit.cpp

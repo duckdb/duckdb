@@ -25,12 +25,12 @@ public:
 };
 
 struct BoundOrderByNode {
-	BoundOrderByNode() {
-	}
-	BoundOrderByNode(OrderType type, unique_ptr<Expression> expression) : type(type), expression(move(expression)) {
+	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression)
+	    : type(type), null_order(null_order), expression(move(expression)) {
 	}
 
 	OrderType type;
+	OrderByNullType null_order;
 	unique_ptr<Expression> expression;
 };
 

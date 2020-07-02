@@ -4,20 +4,22 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include "duckdb/function/scalar/string_functions.hpp"
 
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, unique_ptr<Expression> source,
                                                        string collation, bool equality_only) {
 	// replace default collation with system collation
 	if (collation.empty()) {
-		collation = context.db.collation;
+		collation = DBConfig::GetConfig(context).collation;
 	}
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
@@ -89,10 +91,14 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), right.sql_type, input_type);
 	if (input_type.id == SQLTypeId::VARCHAR) {
 		// handle collation
-		left.expr = PushCollation(context, move(left.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr = PushCollation(context, move(right.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		left.expr =
+		    PushCollation(context, move(left.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr =
+		    PushCollation(context, move(right.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)),
 	                  SQLType(SQLTypeId::BOOLEAN));
 }
+
+} // namespace duckdb
