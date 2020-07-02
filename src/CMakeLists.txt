@@ -22,6 +22,9 @@ if(AMALGAMATION_BUILD)
   add_library(duckdb_static STATIC
               "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
 
+  target_link_libraries(duckdb Threads::Threads)
+  target_link_libraries(duckdb_static Threads::Threads)
+
   install(FILES "${CMAKE_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
           DESTINATION "${INSTALL_INCLUDE_DIR}")
 
