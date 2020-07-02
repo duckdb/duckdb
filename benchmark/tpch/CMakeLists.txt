@@ -2,7 +2,7 @@ include_directories(../../third_party/dbgen/include)
 include_directories(../../third_party/sqlite/include)
 include_directories(../../extension/parquet/include)
 
-set(BENCHMARK_SOURCE_FILES lineitem_aggregate.cpp sf1.cpp read_lineitem.cpp
+set(BENCHMARK_SOURCE_FILES lineitem_aggregate.cpp sf1.cpp sf1-parallel.cpp read_lineitem.cpp
                            startup.cpp)
 
 if(${BUILD_PARQUET_EXTENSION})
