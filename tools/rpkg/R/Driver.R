@@ -1,20 +1,15 @@
-#' @include duckdb.R
-NULL
-
-#' DBI methods
-#'
-#' Implementations of pure virtual functions defined in the `DBI` package.
-#' @name DBI
-NULL
-
 DBDIR_MEMORY <- ":memory:"
 
-#' DuckDB driver
+#' @title DuckDB Driver
 #'
-#' TBD.
+#' @description TBD.
 #'
-#' @export
+#' @param dbdir FIXME
+#' @param read_only FIXME
+#'
+#' @name duckdb_driver
 #' @import methods DBI
+#' @export
 #' @examples
 #' \dontrun{
 #' #' library(DBI)
@@ -31,7 +26,13 @@ duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
   )
 }
 
-#' @rdname DBI
+check_flag <- function(x) {
+  if (is.null(x) || length(x) != 1 || is.na(x) || !is.logical(x)) {
+    stop("flags need to be scalar logicals")
+  }
+}
+
+#' @rdname duckdb_driver
 #' @export
 setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical"))
 
@@ -47,7 +48,7 @@ drv_to_string <- function(drv) {
   sprintf("<duckdb_driver %s dbdir='%s' read_only=%s>", extptr_str(drv@database_ref), drv@dbdir, drv@read_only)
 }
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -58,8 +59,9 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @inheritParams DBI::dbConnect
+#' @param debug FIXME
 #' @export
 setMethod(
   "dbConnect", "duckdb_driver",
@@ -81,7 +83,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @inheritParams DBI::dbDataType
 #' @export
 setMethod(
@@ -114,7 +116,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -135,7 +137,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -146,7 +148,7 @@ setMethod(
 )
 
 
-#' @rdname DBI
+#' @rdname duckdb_driver
 #' @export
 duckdb_shutdown <- function(drv) {
   if (!is(drv, "duckdb_driver")) {
@@ -167,6 +169,9 @@ is_installed <- function(pkg) {
 
 #' @importFrom DBI dbConnect
 #' @importFrom dbplyr src_dbi
+#' @param path FIXME
+#' @param create FIXME
+#' @rdname duckdb_driver
 #' @export
 src_duckdb <- function(path = ":memory:", create = FALSE, read_only = FALSE) {
   if (!is_installed("dbplyr")) {
