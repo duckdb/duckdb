@@ -1,13 +1,3 @@
-#' @title DuckDB Connection
-#'
-#' @description
-#' TBD
-#'
-#' @param duckdb_driver FIXME
-#' @param debug FIXME
-#'
-#' @name duckdb_connection
-#' @export
 duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
@@ -17,8 +7,11 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
+#' Register a R data.frame as a virtual table (view) in DuckDB without copying the data
 #' @rdname duckdb_connection
-#' @param df FIXME
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param name The name for the virtual table that is registered
+#' @param df A `data.frame` with the data for the virtual table
 #' @export
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
@@ -26,7 +19,10 @@ duckdb_register <- function(conn, name, df) {
   invisible(TRUE)
 }
 
+#' Unregister a virtual table referring to a data.frame
 #' @rdname duckdb_connection
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param name The name for the virtual table previously registered using `duckdb_register()`.
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
@@ -34,7 +30,7 @@ duckdb_unregister <- function(conn, name) {
   invisible(TRUE)
 }
 
-
+#' DuckDB connection class
 #' @rdname duckdb_connection
 #' @export
 setClass(
@@ -73,7 +69,7 @@ setMethod(
 )
 
 #' @rdname duckdb_connection
-#' @param shutdown FIXME
+#' @param shutdown Shut down the DuckDB database instance that this connection refers to.
 #' @export
 setMethod(
   "dbDisconnect", "duckdb_connection",
@@ -92,11 +88,10 @@ setMethod(
 
 #' @rdname duckdb_connection
 #' @inheritParams DBI::dbSendQuery
-#' @param immediate FIXME
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
-  function(conn, statement, ..., immediate = FALSE) {
+  function(conn, statement, ...) {
     if (conn@debug) {
       cat("Q ", statement, "\n")
     }
@@ -134,11 +129,11 @@ duckdb_random_string <- function(x) {
 
 #' @rdname duckdb_connection
 #' @inheritParams DBI::dbWriteTable
-#' @param row.names FIXME
-#' @param overwrite FIXME
-#' @param append FIXME
-#' @param field.types FIXME
-#' @param temporary FIXME
+#' @param row.names Whether the row.names of the data.frame should be preserved
+#' @param overwrite If a table with the given name already exists, should it be overwritten?
+#' @param append If a table with the given name already exists, just try to append the passed data to it
+#' @param field.types Override the auto-generated SQL types
+#' @param temporary Should the created table be temporary?
 #' @export
 setMethod(
   "dbWriteTable", c("duckdb_connection", "character", "data.frame"),
@@ -368,18 +363,19 @@ setMethod(
   }
 )
 
+#' Directly reads a CSV file into DuckDB, tries to detect and create the correct schema for it.
 #' @rdname duckdb_connection
-#' @param files FIXME
-#' @param tablename FIXME
-#' @param header FIXME
-#' @param na.strings FIXME
-#' @param nrow.check FIXME
-#' @param delim FIXME
-#' @param quote FIXME
-#' @param col.names FIXME
-#' @param lower.case.names FIXME
-#' @param sep FIXME
-#' @param transaction FIXME
+#' @param files One or more CSV file names, should all have the same structure though
+#' @param tablename The database table the files should be read into
+#' @param header Whether or not the CSV files have a separate header in the first line
+#' @param na.strings Which strings in the CSV files should be considered to be NULL
+#' @param nrow.check How many rows should be read from the CSV file to figure out data types
+#' @param delim Which field separator should be used
+#' @param quote Which quote character is used for columns in the CSV file
+#' @param col.names Override the detected or generated column names
+#' @param lower.case.names Transform column names to lower case
+#' @param sep Alias for delim for compatibility
+#' @param transaction Should a transaction be used for the entire operation
 #' @export
 read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = TRUE, na.strings = "", nrow.check = 500,
                                                delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {

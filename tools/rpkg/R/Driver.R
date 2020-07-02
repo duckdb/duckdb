@@ -2,10 +2,10 @@ DBDIR_MEMORY <- ":memory:"
 
 #' @title DuckDB Driver
 #'
-#' @description TBD.
+#' @description A DuckDB database instance. 
 #'
-#' @param dbdir FIXME
-#' @param read_only FIXME
+#' @param dbdir The file in which the DuckDB database should be stored
+#' @param read_only Whether the database file should be opened in read-only mode
 #'
 #' @name duckdb_driver
 #' @import methods DBI
@@ -61,7 +61,7 @@ setMethod(
 
 #' @rdname duckdb_driver
 #' @inheritParams DBI::dbConnect
-#' @param debug FIXME
+#' @param debug Print additional debug information such as queries
 #' @export
 setMethod(
   "dbConnect", "duckdb_driver",
@@ -169,8 +169,8 @@ is_installed <- function(pkg) {
 
 #' @importFrom DBI dbConnect
 #' @importFrom dbplyr src_dbi
-#' @param path FIXME
-#' @param create FIXME
+#' @param path The file in which the DuckDB database should be stored
+#' @param create Create a new database if none is present in `path`
 #' @rdname duckdb_driver
 #' @export
 src_duckdb <- function(path = ":memory:", create = FALSE, read_only = FALSE) {
