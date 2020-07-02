@@ -34,11 +34,10 @@ Suggests:
     nycflights13
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.0.9000
+RoxygenNote: 7.1.1
 SystemRequirements: C++11
 Collate: 
-    'duckdb.R'
     'Driver.R'
     'Connection.R'
     'Result.R'
-    'duckdb-package.R'
+    'duckdb.R'

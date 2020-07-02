@@ -1,8 +1,13 @@
-#' @include Driver.R
-
-NULL
-
-
+#' @title DuckDB Connection
+#'
+#' @description
+#' TBD
+#'
+#' @param duckdb_driver FIXME
+#' @param debug FIXME
+#'
+#' @name duckdb_connection
+#' @export
 duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
@@ -12,7 +17,8 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
-#' @rdname DBI
+#' @rdname duckdb_connection
+#' @param df FIXME
 #' @export
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
@@ -20,7 +26,7 @@ duckdb_register <- function(conn, name, df) {
   invisible(TRUE)
 }
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
@@ -29,7 +35,7 @@ duckdb_unregister <- function(conn, name) {
 }
 
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @export
 setClass(
   "duckdb_connection",
@@ -37,7 +43,7 @@ setClass(
   slots = list(dbdir = "character", conn_ref = "externalptr", driver = "duckdb_driver", debug = "logical")
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -47,7 +53,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -66,8 +72,8 @@ setMethod(
   }
 )
 
-#' @rdname DBI
-#' @inheritParams DBI::dbDisconnect
+#' @rdname duckdb_connection
+#' @param shutdown FIXME
 #' @export
 setMethod(
   "dbDisconnect", "duckdb_connection",
@@ -84,8 +90,9 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbSendQuery
+#' @param immediate FIXME
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
@@ -111,8 +118,7 @@ setMethod(
   }
 )
 
-
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbDataType
 #' @export
 setMethod(
@@ -126,12 +132,13 @@ duckdb_random_string <- function(x) {
   paste(sample(letters, 10, replace = TRUE), collapse = "")
 }
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbWriteTable
-#' @param overwrite Allow overwriting the destination table. Cannot be
-#'   `TRUE` if `append` is also `TRUE`.
-#' @param append Allow appending to the destination table. Cannot be
-#'   `TRUE` if `overwrite` is also `TRUE`.
+#' @param row.names FIXME
+#' @param overwrite FIXME
+#' @param append FIXME
+#' @param field.types FIXME
+#' @param temporary FIXME
 #' @export
 setMethod(
   "dbWriteTable", c("duckdb_connection", "character", "data.frame"),
@@ -149,7 +156,6 @@ setMethod(
     check_flag(temporary)
 
     # TODO: start a transaction if one is not already running
-
 
     if (overwrite && append) {
       stop("Setting both overwrite and append makes no sense")
@@ -235,7 +241,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbListTables
 #' @export
 setMethod(
@@ -250,7 +256,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbExistsTable
 #' @export
 setMethod(
@@ -282,7 +288,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbListFields
 #' @export
 setMethod(
@@ -299,7 +305,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbRemoveTable
 #' @export
 setMethod(
@@ -313,7 +319,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -329,7 +335,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbBegin
 #' @export
 setMethod(
@@ -340,7 +346,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbCommit
 #' @export
 setMethod(
@@ -351,7 +357,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbRollback
 #' @export
 setMethod(
@@ -362,7 +368,18 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
+#' @param files FIXME
+#' @param tablename FIXME
+#' @param header FIXME
+#' @param na.strings FIXME
+#' @param nrow.check FIXME
+#' @param delim FIXME
+#' @param quote FIXME
+#' @param col.names FIXME
+#' @param lower.case.names FIXME
+#' @param sep FIXME
+#' @param transaction FIXME
 #' @export
 read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = TRUE, na.strings = "", nrow.check = 500,
                                                delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {

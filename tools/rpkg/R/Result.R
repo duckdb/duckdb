@@ -1,6 +1,10 @@
-#' @include Connection.R
-NULL
-
+#' @title DuckDB Result Set
+#' @description  TBD
+#'
+#' @param connection FIXME
+#' @param stmt_lst FIXME
+#' @export
+#' @name duckdb_result
 duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent = emptyenv())
   env$rows_fetched <- 0
@@ -16,6 +20,8 @@ duckdb_result <- function(connection, stmt_lst) {
   return(res)
 }
 
+#' @rdname duckdb_result
+#' @export
 duckdb_execute <- function(res) {
   res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref)
   attr(res@env$resultset, "row.names") <-
@@ -26,7 +32,7 @@ duckdb_execute <- function(res) {
   }
 }
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @export
 setClass(
   "duckdb_result",
@@ -38,7 +44,7 @@ setClass(
   )
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -48,7 +54,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbClearResult
 #' @export
 setMethod(
@@ -73,7 +79,7 @@ fix_rownames <- function(df) {
 }
 
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbFetch
 #' @importFrom utils head
 #' @export
@@ -128,7 +134,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbHasCompleted
 #' @export
 setMethod(
@@ -144,7 +150,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -155,7 +161,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -165,7 +171,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetStatement
 #' @export
 setMethod(
@@ -178,7 +184,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbColumnInfo
 #' @export
 setMethod(
@@ -189,7 +195,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetRowCount
 #' @export
 setMethod(
@@ -202,7 +208,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetRowsAffected
 #' @export
 setMethod(
@@ -215,7 +221,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbBind
 #' @importFrom testthat skip
 #' @export
