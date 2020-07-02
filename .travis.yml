@@ -580,9 +580,11 @@ matrix:
 
       dist: bionic
       language: r
+      cache: packages
       r: devel
 
       before_install:
+        - cd tools/rpkg
         - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
         - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
         - echo -e "options(Ncpus = 8, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
@@ -594,16 +596,22 @@ matrix:
         - R -q -e 'tic::before_install()'
 
       install:
+        - cd tools/rpkg
         - R -q -e 'tic::install()'
       before_script:
+        - cd tools/rpkg
         - R -q -e 'tic::before_script()'
       script:
+        - cd tools/rpkg
         - R -q -e 'tic::script()'
       after_success:
+        - cd tools/rpkg
         - R -q -e 'tic::after_success()'
       after_failure:
+        - cd tools/rpkg
         - R -q -e 'tic::after_failure()'
       after_script:
+        - cd tools/rpkg
         - R -q -e 'tic::after_script()'
 
     - os: osx
