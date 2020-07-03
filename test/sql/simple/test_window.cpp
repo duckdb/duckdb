@@ -65,9 +65,9 @@ TEST_CASE("Most basic window function", "[window]") {
 
 	// first_value
 	result = con.Query("SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary "
-	                   "ORDER BY depname, fv");
+	                   "ORDER BY 2 DESC, 1 ASC");
 	REQUIRE(result->types.size() == 2);
-	REQUIRE(CHECK_COLUMN(result, 0, {11, 8, 7, 9, 10, 5, 2, 4, 3, 1}));
+	REQUIRE(CHECK_COLUMN(result, 0, {7, 8, 9, 10, 11, 2, 5, 1, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {7, 7, 7, 7, 7, 2, 2, 1, 1, 1}));
 
 	// rank_dense
