@@ -8,3 +8,4 @@ fi
 # R issues a warning for .hpp files, use .h to silence it
 (cd ../.. && python scripts/amalgamation.py --source=tools/rpkg/src/duckdb.cpp --header=tools/rpkg/src/duckdb.h)
 (cd ../.. && python extension/parquet/parquet_amalgamation.py --source=tools/rpkg/src/parquet-extension.cpp --header=tools/rpkg/src/parquet-extension.h)
+sed -i 's/duckdb[.]hpp/duckdb.h/g' src/parquet-extension.h
