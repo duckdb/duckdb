@@ -1,11 +1,9 @@
-#' @title DuckDB Result Set
-#' @description  TBD
+#' DuckDB Result Set
 #'
-#' @param connection FIXME
-#' @param stmt_lst FIXME
-#' @export
+#' Methods for accessing result sets for queries on DuckDB connections.
 #' @name duckdb_result
-#' @export
+NULL
+
 duckdb_result <- function(connection, stmt_lst) {
   env <- new.env(parent = emptyenv())
   env$rows_fetched <- 0
@@ -32,6 +30,8 @@ duckdb_execute <- function(res) {
 }
 
 
+#' @rdname duckdb_result
+#' @export
 setClass(
   "duckdb_result",
   contains = "DBIResult",
