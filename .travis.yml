@@ -576,7 +576,7 @@ matrix:
 
     - os: linux
       name: R Package
-      if: (type = push) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: r
@@ -615,24 +615,32 @@ matrix:
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
-      #r: devel
+
+      before_install:
+        - cd tools/rpkg
+        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
+        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
+        - echo -e "options(Ncpus = 8, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\nCXX14=ccache g++\nCXX17=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
+        - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
+        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
+        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
+        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
+        - R -q -e 'tic::before_install()'
 
       install:
-        - cd tools/rpkg
-        - R -f dependencies.R
-
+        - R -q -e 'tic::install()'
+      before_script:
+        - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - R CMD INSTALL duckdb_*.tgz
-        - (cd tests && R -f testthat.R)
-
-        - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
-        - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
-        - python3 ../upload-s3.py rstats duckdb_*.tgz
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
-
+        -  R -q -e 'tic::script()'
+      after_success:
+        - R -q -e 'tic::after_success()'
+      after_failure:
+        - R -q -e 'tic::after_failure()'
+      after_script:
+        - R -q -e 'tic::after_script()'
 
     - os: windows
       name: R Package
@@ -641,24 +649,30 @@ matrix:
 
       language: cpp
 
-      install:
-        - choco install r.project -y --version 3.6.0
-        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
-        - choco install rtools -s rtools.3.5.0.nupkg -f -y
+      before_install:
+        - choco install r.project -y --version 4.0.2
+        - choco install rtools -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
-
-      script:
         - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
-        - sh configure
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
-        - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
+        - echo -e "options(Ncpus = 8, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
+        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
+        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
+        - R -q -e 'tic::before_install()'
 
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
-        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
+      install:
+        - R -q -e 'tic::install()'
+      before_script:
+        - R -q -e 'tic::before_script()'
+      script:
+        - ./configure
+        -  R -q -e 'tic::script()'
+      after_success:
+        - R -q -e 'tic::after_success()'
+      after_failure:
+        - R -q -e 'tic::after_failure()'
+      after_script:
+        - R -q -e 'tic::after_script()'
+
