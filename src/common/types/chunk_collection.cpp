@@ -8,9 +8,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <queue>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 void ChunkCollection::Verify() {
 #ifdef DEBUG
@@ -199,11 +201,40 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
 	return low;
 }
 
-static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
-                               idx_t *result, int64_t left, int64_t right) {
-	if (left >= right) {
-		return;
+struct QuicksortInfo {
+	QuicksortInfo(int64_t left_, int64_t right_) : left(left_), right(right_) {}
+
+	int64_t left;
+	int64_t right;
+};
+
+struct QuicksortStack {
+	queue<QuicksortInfo> info_queue;
+
+	QuicksortInfo Pop() {
+		auto element = info_queue.front();
+		info_queue.pop();
+		return element;
 	}
+
+	bool IsEmpty() {
+		return info_queue.empty();
+	}
+
+	void Enqueue(int64_t left, int64_t right) {
+		if (left >= right) {
+			return;
+		}
+		info_queue.emplace(left, right);
+	}
+};
+
+static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc, vector<OrderByNullType> &null_order,
+                               idx_t *result, QuicksortInfo info, QuicksortStack &stack) {
+	auto left = info.left;
+	auto right = info.right;
+
+	assert(left < right);
 
 	int64_t middle = left + (right - left) / 2;
 	int64_t pivot = result[middle];
@@ -212,8 +243,17 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	int64_t j = right;
 
 	std::swap(result[middle], result[left]);
+	bool all_equal = true;
 	while (i <= j) {
-		while (i <= j && compare_tuple(sort_by, desc, null_order, result[i], pivot) <= 0) {
+		if (result )
+		while (i <= j) {
+			int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
+			if (cmp < 0) {
+				all_equal = false;
+			} else if (cmp > 0) {
+				all_equal = false;
+				break;
+			}
 			i++;
 		}
 
@@ -228,18 +268,30 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	std::swap(result[i - 1], result[left]);
 	int64_t part = i - 1;
 
-	_quicksort_inplace(sort_by, desc, null_order, result, left, part - 1);
-	_quicksort_inplace(sort_by, desc, null_order, result, part + 1, right);
+	if (all_equal) {
+		return;
+	}
+
+	stack.Enqueue(left, part - 1);
+	stack.Enqueue(part + 1, right);
 }
 
 void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]) {
 	assert(result);
-	if (count == 0)
+	if (count == 0) {
 		return;
-	// quicksort
+	}
+	// start off with an initial quicksort
 	int64_t part = _quicksort_initial(this, desc, null_order, result);
-	_quicksort_inplace(this, desc, null_order, result, 0, part);
-	_quicksort_inplace(this, desc, null_order, result, part + 1, count - 1);
+
+	// now continuously perform
+	QuicksortStack stack;
+	stack.Enqueue(0, part);
+	stack.Enqueue(part + 1, count - 1);
+	while(!stack.IsEmpty()) {
+		auto element = stack.Pop();
+		_quicksort_inplace(this, desc, null_order, result, element, stack);
+	}
 }
 
 // FIXME make this more efficient by not using the Value API
@@ -512,4 +564,6 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 	}
 	target.Verify();
 	return start_offset + remaining_data;
+}
+
 }
