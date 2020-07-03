@@ -7,24 +7,33 @@ using namespace std;
 namespace duckdb {
 
 template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType type) {
+	scalar_function_t function;
 	switch (type.id) {
 	case SQLTypeId::TINYINT:
-		return &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+		break;
 	case SQLTypeId::SMALLINT:
-		return &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+		function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+		break;
 	case SQLTypeId::INTEGER:
-		return &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+		function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+		break;
 	case SQLTypeId::BIGINT:
-		return &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+		break;
 	case SQLTypeId::FLOAT:
-		return &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
+		break;
 	case SQLTypeId::DOUBLE:
-		return &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		break;
 	case SQLTypeId::DECIMAL:
-		return &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarBinaryFunction");
 	}
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
