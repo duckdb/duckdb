@@ -42,17 +42,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<bool, bool>(func_name + "_1",
 										   {SQLType::BOOLEAN},
 										   SQLType::BOOLEAN,
-										   &udf_bool);
+										   &udf_bool_1);
 
 			con.CreateScalarFunction<bool, bool, bool>(func_name + "_2",
 												 {SQLType::BOOLEAN, SQLType::BOOLEAN},
 												 SQLType::BOOLEAN,
-												 &udf_bool);
+												 &udf_bool_2);
 
 			con.CreateScalarFunction<bool, bool, bool, bool>(func_name + "_3",
 													   {SQLType::BOOLEAN, SQLType::BOOLEAN, SQLType::BOOLEAN},
 													   SQLType::BOOLEAN,
-													   &udf_bool);
+													   &udf_bool_3);
 			break;
 		}
 		case SQLTypeId::TINYINT:
@@ -60,17 +60,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<int8_t, int8_t>(func_name + "_1",
 											   {SQLType::TINYINT},
 											   SQLType::TINYINT,
-											   &udf_int8);
+											   &udf_int8_1);
 
 			con.CreateScalarFunction<int8_t, int8_t, int8_t>(func_name + "_2",
 													   {SQLType::TINYINT, SQLType::TINYINT},
 												  	   SQLType::TINYINT,
-													   &udf_int8);
+													   &udf_int8_2);
 
 			con.CreateScalarFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3",
 															   {SQLType::TINYINT, SQLType::TINYINT, SQLType::TINYINT},
 					  	  	  	  	  	  	  	  	  	  	   SQLType::TINYINT,
-															   &udf_int8);
+															   &udf_int8_3);
 			break;
 		}
 		case SQLTypeId::SMALLINT:
@@ -78,17 +78,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<int16_t, int16_t>(func_name + "_1",
 												 {SQLType::SMALLINT},
 												 SQLType::SMALLINT,
-												 &udf_int16);
+												 &udf_int16_1);
 
 			con.CreateScalarFunction<int16_t, int16_t, int16_t>(func_name + "_2",
 														  {SQLType::SMALLINT, SQLType::SMALLINT},
 														  SQLType::SMALLINT,
-														  &udf_int16);
+														  &udf_int16_2);
 
 			con.CreateScalarFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3",
 																   {SQLType::SMALLINT, SQLType::SMALLINT, SQLType::SMALLINT},
 																   SQLType::SMALLINT,
-																   &udf_int16);
+																   &udf_int16_3);
 			break;
 		}
 		case SQLTypeId::DATE:
@@ -96,17 +96,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<date_t, date_t>(func_name + "_1",
 												 {SQLType::DATE},
 												 SQLType::DATE,
-												 &udf_date);
+												 &udf_date_1);
 
 			con.CreateScalarFunction<date_t, date_t, date_t>(func_name + "_2",
 													  {SQLType::DATE, SQLType::DATE},
 													  SQLType::DATE,
-													  &udf_date);
+													  &udf_date_2);
 
 			con.CreateScalarFunction<date_t, date_t, date_t, date_t>(func_name + "_3",
 																   {SQLType::DATE, SQLType::DATE, SQLType::DATE},
 																   SQLType::DATE,
-																   &udf_date);
+																   &udf_date_3);
 			break;
 		}
 		case SQLTypeId::TIME:
@@ -114,17 +114,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<dtime_t, dtime_t>(func_name + "_1",
 												 {SQLType::TIME},
 												 SQLType::TIME,
-												 &udf_time);
+												 &udf_time_1);
 
 			con.CreateScalarFunction<dtime_t, dtime_t, dtime_t>(func_name + "_2",
 														  {SQLType::TIME, SQLType::TIME},
 														  SQLType::TIME,
-														  &udf_time);
+														  &udf_time_2);
 
 			con.CreateScalarFunction<dtime_t, dtime_t, dtime_t, dtime_t>(func_name + "_3",
 																   {SQLType::TIME, SQLType::TIME, SQLType::TIME},
 																   SQLType::TIME,
-																   &udf_time);
+																   &udf_time_3);
 			break;
 		}
 		case SQLTypeId::INTEGER:
@@ -132,17 +132,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<int32_t, int32_t>(func_name + "_1",
 												{SQLType::INTEGER},
 												SQLType::INTEGER,
-												&udf_int);
+												&udf_int_1);
 
 			con.CreateScalarFunction<int32_t, int32_t, int32_t>(func_name + "_2",
 														  {SQLType::INTEGER, SQLType::INTEGER},
 														  SQLType::INTEGER,
-														  &udf_int);
+														  &udf_int_2);
 
 			con.CreateScalarFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3",
 																   {SQLType::INTEGER, SQLType::INTEGER, SQLType::INTEGER},
 																   SQLType::INTEGER,
-																   &udf_int);
+																   &udf_int_3);
 			break;
 		}
 		case SQLTypeId::BIGINT:
@@ -150,17 +150,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<int64_t, int64_t>(func_name + "_1",
 												 {SQLType::BIGINT},
 												 SQLType::BIGINT,
-												 &udf_int64);
+												 &udf_int64_1);
 
 			con.CreateScalarFunction<int64_t, int64_t, int64_t>(func_name + "_2",
 														  {SQLType::BIGINT, SQLType::BIGINT},
 														  SQLType::BIGINT,
-														  &udf_int64);
+														  &udf_int64_2);
 
 			con.CreateScalarFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3",
 																   {SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT},
 																   SQLType::BIGINT,
-																   &udf_int64);
+																   &udf_int64_3);
 			break;
 		}
 		case SQLTypeId::TIMESTAMP:
@@ -168,17 +168,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<timestamp_t, timestamp_t>(func_name + "_1",
 												 {SQLType::TIMESTAMP},
 												 SQLType::TIMESTAMP,
-												 &udf_timestamp);
+												 &udf_timestamp_1);
 
 			con.CreateScalarFunction<timestamp_t, timestamp_t, timestamp_t>(func_name + "_2",
 														  {SQLType::TIMESTAMP, SQLType::TIMESTAMP},
 														  SQLType::TIMESTAMP,
-														  &udf_timestamp);
+														  &udf_timestamp_2);
 
 			con.CreateScalarFunction<timestamp_t, timestamp_t, timestamp_t, timestamp_t>(func_name + "_3",
 																   {SQLType::TIMESTAMP, SQLType::TIMESTAMP, SQLType::TIMESTAMP},
 																   SQLType::TIMESTAMP,
-																   &udf_timestamp);
+																   &udf_timestamp_3);
 			break;
 		}
 		case SQLTypeId::FLOAT:
@@ -195,17 +195,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<double, double>(func_name + "_1",
 											   {SQLType::DOUBLE},
 											   SQLType::DOUBLE,
-											   &udf_double);
+											   &udf_double_1);
 
 			con.CreateScalarFunction<double, double, double>(func_name + "_2",
 													   {SQLType::DOUBLE, SQLType::DOUBLE},
 													   SQLType::DOUBLE,
-													   &udf_double);
+													   &udf_double_2);
 
 			con.CreateScalarFunction<double, double, double, double>(func_name + "_3",
 															   {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
 															   SQLType::DOUBLE,
-															   &udf_double);
+															   &udf_double_3);
 			break;
 		}
 		case SQLTypeId::DECIMAL:
@@ -213,17 +213,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<double, double>(func_name + "_1",
 											   {SQLType::DOUBLE},
 											   SQLType::DOUBLE,
-											   &udf_decimal);
+											   &udf_decimal_1);
 
 			con.CreateScalarFunction<double, double, double>(func_name + "_2",
 													   {SQLType::DOUBLE, SQLType::DOUBLE},
 													   SQLType::DOUBLE,
-													   &udf_decimal);
+													   &udf_decimal_2);
 
 			con.CreateScalarFunction<double, double, double, double>(func_name + "_3",
 															   {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
 															   SQLType::DOUBLE,
-															   &udf_decimal);
+															   &udf_decimal_3);
 			break;
 		}
 
@@ -232,17 +232,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<string_t, string_t>(func_name + "_1",
 												   {SQLType::VARCHAR},
 												   SQLType::VARCHAR,
-												   &udf_varchar);
+												   &udf_varchar_1);
 
 			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2",
 															 {SQLType::VARCHAR, SQLType::VARCHAR},
 															 SQLType::VARCHAR,
-															 &udf_varchar);
+															 &udf_varchar_2);
 
 			con.CreateScalarFunction<string_t, string_t, string_t, string_t>(func_name + "_3",
 																	   {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
 																	   SQLType::VARCHAR,
-																	   &udf_varchar);
+																	   &udf_varchar_3);
 			break;
 		}
 		case SQLTypeId::BLOB:
@@ -250,17 +250,17 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 			con.CreateScalarFunction<string_t, string_t>(func_name + "_1",
 												   {SQLType::BLOB},
 												   SQLType::BLOB,
-												   &udf_varchar);
+												   &udf_varchar_1);
 
 			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2",
 															 {SQLType::BLOB, SQLType::BLOB},
 															 SQLType::BLOB,
-															 &udf_varchar);
+															 &udf_varchar_2);
 
 			con.CreateScalarFunction<string_t, string_t, string_t, string_t>(func_name + "_3",
 																	   {SQLType::BLOB, SQLType::BLOB, SQLType::BLOB},
 																	   SQLType::BLOB,
-																	   &udf_varchar);
+																	   &udf_varchar_3);
 			break;
 		}
 //		case SQLTypeId::VARBINARY:
