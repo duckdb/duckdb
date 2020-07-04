@@ -652,7 +652,8 @@ matrix:
       before_install:
         - choco install r.project -y --version 4.0.2
         - choco install rtools -y
-        - export "PATH=$PATH:/c/Program Files/R/R-4.0.2/bin:/c/rtools40/usr/bin"
+        - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
+        - export MAKE=mingw32-make
         - cd tools/rpkg
         - echo -e "options(Ncpus = 1, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
         - R -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
