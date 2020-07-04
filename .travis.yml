@@ -650,7 +650,7 @@ matrix:
       language: cpp
 
       before_install:
-        - choco install r.project -y --version 4.0.2
+        - choco install r.project -y --version 4.0.2 --params "/AddToPath"
         - choco install rtools -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
