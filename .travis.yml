@@ -674,3 +674,23 @@ matrix:
       after_script:
         - R -q -e 'tic::after_script()'
 
+    - os: windows
+      name: R Package (without tic)
+      filter_secrets: false
+      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+
+      language: cpp
+
+      before_install:
+        - choco install r.project -y --version 4.0.2
+        - choco install rtools -y
+        - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
+        - cd tools/rpkg
+
+      install:
+        - R -f dependencies.R
+
+      script:
+        - ./configure
+        - R CMD BUILD .
+        - R CMD check -o /tmp --as-cran duckdb_*.tar.gz
