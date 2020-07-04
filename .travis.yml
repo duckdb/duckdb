@@ -683,8 +683,8 @@ matrix:
 
       before_install:
         - choco install r.project -y --version 4.0.2
-        - choco install rtools -y
-        - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
+        - choco install rtools -y --version 3.5.0.4
+        - export "PATH=/c/Program Files/R/R-4.0.2/bin:/c/rtools/bin:$PATH"
         - cd tools/rpkg
 
       install:
