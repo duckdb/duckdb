@@ -692,5 +692,5 @@ matrix:
 
       script:
         - ./configure
-        - R CMD BUILD .
+        - R CMD build .
         - R CMD check -o /tmp --as-cran duckdb_*.tar.gz
