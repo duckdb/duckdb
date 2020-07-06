@@ -105,6 +105,9 @@ public:
 	void RegisterAppender(Appender *appender);
 	void RemoveAppender(Appender *appender);
 
+	//! Overloading and Instantiating a private function to turn it public without a template type
+	void RunFunctionInTransaction(std::function<void()> &fun);
+
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.

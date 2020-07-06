@@ -618,6 +618,10 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	return "";
 }
 
+void ClientContext::RunFunctionInTransaction(std::function<void()> &fun) {
+	RunFunctionInTransaction(std::move(fun));
+}
+
 template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {
