@@ -34,37 +34,37 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 		switch(sql_type.id) {
 		case SQLTypeId::BOOLEAN:
 		{
-			con.CreateScalarFunction<bool, bool>(func_name + "_1", &udf_bool_1);
-			con.CreateScalarFunction<bool, bool, bool>(func_name + "_2", &udf_bool_2);
-			con.CreateScalarFunction<bool, bool, bool, bool>(func_name + "_3", &udf_bool_3);
+			con.CreateScalarFunction<bool, bool>(func_name + "_1", &udf_bool);
+			con.CreateScalarFunction<bool, bool, bool>(func_name + "_2", &udf_bool);
+			con.CreateScalarFunction<bool, bool, bool, bool>(func_name + "_3", &udf_bool);
 			break;
 		}
 		case SQLTypeId::TINYINT:
 		{
-			con.CreateScalarFunction<int8_t, int8_t>(func_name + "_1", &udf_int8_1);
-			con.CreateScalarFunction<int8_t, int8_t, int8_t>(func_name + "_2", &udf_int8_2);
-			con.CreateScalarFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &udf_int8_3);
+			con.CreateScalarFunction<int8_t, int8_t>(func_name + "_1", &udf_int8);
+			con.CreateScalarFunction<int8_t, int8_t, int8_t>(func_name + "_2", &udf_int8);
+			con.CreateScalarFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &udf_int8);
 			break;
 		}
 		case SQLTypeId::SMALLINT:
 		{
-			con.CreateScalarFunction<int16_t, int16_t>(func_name + "_1", &udf_int16_1);
-			con.CreateScalarFunction<int16_t, int16_t, int16_t>(func_name + "_2", &udf_int16_2);
-			con.CreateScalarFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &udf_int16_3);
+			con.CreateScalarFunction<int16_t, int16_t>(func_name + "_1", &udf_int16);
+			con.CreateScalarFunction<int16_t, int16_t, int16_t>(func_name + "_2", &udf_int16);
+			con.CreateScalarFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &udf_int16);
 			break;
 		}
 		case SQLTypeId::INTEGER:
 		{
-			con.CreateScalarFunction<int32_t, int32_t>(func_name + "_1", &udf_int_1);
-			con.CreateScalarFunction<int32_t, int32_t, int32_t>(func_name + "_2", &udf_int_2);
-			con.CreateScalarFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3", &udf_int_3);
+			con.CreateScalarFunction<int32_t, int32_t>(func_name + "_1", &udf_int);
+			con.CreateScalarFunction<int32_t, int32_t, int32_t>(func_name + "_2", &udf_int);
+			con.CreateScalarFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3", &udf_int);
 			break;
 		}
 		case SQLTypeId::BIGINT:
 		{
-			con.CreateScalarFunction<int64_t, int64_t>(func_name + "_1", &udf_int64_1);
-			con.CreateScalarFunction<int64_t, int64_t, int64_t>(func_name + "_2", &udf_int64_2);
-			con.CreateScalarFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &udf_int64_3);
+			con.CreateScalarFunction<int64_t, int64_t>(func_name + "_1", &udf_int64);
+			con.CreateScalarFunction<int64_t, int64_t, int64_t>(func_name + "_2", &udf_int64);
+			con.CreateScalarFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &udf_int64);
 			break;
 		}
 		case SQLTypeId::FLOAT:
@@ -78,16 +78,16 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 //		}
 		case SQLTypeId::DOUBLE:
 		{
-			con.CreateScalarFunction<double, double>(func_name + "_1", &udf_double_1);
-			con.CreateScalarFunction<double, double, double>(func_name + "_2", &udf_double_2);
-			con.CreateScalarFunction<double, double, double, double>(func_name + "_3", &udf_double_3);
+			con.CreateScalarFunction<double, double>(func_name + "_1", &udf_double);
+			con.CreateScalarFunction<double, double, double>(func_name + "_2", &udf_double);
+			con.CreateScalarFunction<double, double, double, double>(func_name + "_3", &udf_double);
 			break;
 		}
 		case SQLTypeId::VARCHAR:
 		{
-			con.CreateScalarFunction<string_t, string_t>(func_name + "_1", &udf_varchar_1);
-			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2", &udf_varchar_2);
-			con.CreateScalarFunction<string_t, string_t, string_t, string_t>(func_name + "_3", &udf_varchar_3);
+			con.CreateScalarFunction<string_t, string_t>(func_name + "_1", &udf_varchar);
+			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2", &udf_varchar);
+			con.CreateScalarFunction<string_t, string_t, string_t, string_t>(func_name + "_3", &udf_varchar);
 			break;
 		}
 		default:
