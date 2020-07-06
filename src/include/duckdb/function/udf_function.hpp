@@ -78,7 +78,10 @@ public:
 
 		ScalarFunction scalar_function = ScalarFunction(name, args, ret_type, udf_function);
 		CreateScalarFunctionInfo info(scalar_function);
-		InsertFunctionIntoCatalog(&info, context);
+		std::function<void()> create_fun = [&]() {
+			context.temporary_objects.get()->CreateFunction(context, &info);
+		};
+		context.RunFunctionInTransaction(create_fun);
 	}
 
 private:
@@ -135,33 +138,6 @@ private:
 																				 udf_func);
 									};
 		return udf_function;
-	}
-
-	static void InsertFunctionIntoCatalog(CreateFunctionInfo *info, ClientContext &context) {
-		lock_guard<mutex> client_guard(context.context_lock);
-		if (context.is_invalidated) {
-			throw Exception("Failed: database has been closed!");
-		}
-		if (context.transaction.HasActiveTransaction() && context.transaction.ActiveTransaction().is_invalidated) {
-			throw Exception("Failed: transaction has been invalidated!");
-		}
-		// check if we are on AutoCommit. In this case we should start a transaction
-		if (context.transaction.IsAutoCommit()) {
-			context.transaction.BeginTransaction();
-		}
-		try {
-			context.temporary_objects.get()->CreateFunction(context, info);
-		} catch (Exception &ex) {
-			if (context.transaction.IsAutoCommit()) {
-				context.transaction.Rollback();
-			} else {
-				context.transaction.Invalidate();
-			}
-			throw ex;
-		}
-		if (context.transaction.IsAutoCommit()) {
-			context.transaction.Commit();
-		}
 	}
 
 	template<typename T> static SQLType GetArgumentType() {
