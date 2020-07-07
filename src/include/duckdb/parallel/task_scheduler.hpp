@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/thread.hpp"
-#include "task.hpp"
+#include "duckdb/parallel/task.hpp"
 
 namespace duckdb {
 
