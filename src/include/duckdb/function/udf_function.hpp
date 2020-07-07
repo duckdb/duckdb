@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/function/udf_function2.hpp
+// duckdb/function/udf_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,17 +10,13 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include <string>
 #include <vector>
-#include <type_traits>
 
 using namespace std;
 
 namespace duckdb {
+class ClientContext;
 
 struct UDFWrapper {
 public:
@@ -74,15 +70,7 @@ public:
 	}
 
 	static void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type,
-								 scalar_function_t udf_function, ClientContext &context) {
-
-		ScalarFunction scalar_function = ScalarFunction(name, args, ret_type, udf_function);
-		CreateScalarFunctionInfo info(scalar_function);
-		std::function<void()> create_fun = [&]() {
-			context.temporary_objects.get()->CreateFunction(context, &info);
-		};
-		context.RunFunctionInTransaction(create_fun);
-	}
+								 scalar_function_t udf_function, ClientContext &context);
 
 private:
 	//-------------------------------- Templated functions --------------------------------//
