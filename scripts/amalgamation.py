@@ -155,11 +155,11 @@ def generate_amalgamation(source_file, header_file):
 
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)
-    os.remove(temp_header)
-    os.remove(temp_source)
-
-    os.remove(temp_header)
-    os.remove(temp_source)
+    try:
+        os.remove(temp_header)
+        os.remove(temp_source)
+    except:
+        pass
 
 
 
