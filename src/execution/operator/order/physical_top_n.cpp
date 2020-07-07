@@ -26,7 +26,7 @@ public:
 	ChunkCollection big_data;
 };
 
-unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<TopNLocalState>();
 }
 
@@ -34,7 +34,7 @@ unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &cont
 	return make_unique<TopNGlobalState>();
 }
 
-void PhysicalTopN::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.big_data.Append(input);
@@ -80,7 +80,7 @@ unique_ptr<idx_t[]> PhysicalTopN::ComputeTopN(ChunkCollection &big_data, idx_t &
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
+void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_) {
 	auto &gstate = (TopNGlobalState &)state;
 	auto &lstate = (TopNLocalState &)lstate_;
 
@@ -106,7 +106,7 @@ void PhysicalTopN::Combine(ClientContext &context, GlobalOperatorState &state, L
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalTopN::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap = ComputeTopN(gstate.big_data, gstate.heap_size);
@@ -125,7 +125,7 @@ public:
 	idx_t position;
 };
 
-void PhysicalTopN::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &state = (PhysicalTopNOperatorState &)*state_;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 

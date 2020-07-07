@@ -5,8 +5,9 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //! The operator state of the window
 class PhysicalUnnestOperatorState : public PhysicalOperatorState {
@@ -30,7 +31,7 @@ PhysicalUnnest::PhysicalUnnest(LogicalOperator &op, vector<unique_ptr<Expression
 	assert(this->select_list.size() > 0);
 }
 
-void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnnestOperatorState *>(state_);
 	while (true) { // repeat until we actually have produced some rows
 		if (state->child_chunk.size() == 0 || state->parent_position >= state->child_chunk.size()) {
@@ -127,4 +128,6 @@ void PhysicalUnnest::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState() {
 	return make_unique<PhysicalUnnestOperatorState>(children[0].get());
+}
+
 }

@@ -19,7 +19,7 @@ public:
 	PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	//! The projection list of the SELECT statement (that contains aggregates)
 	vector<unique_ptr<Expression>> select_list;

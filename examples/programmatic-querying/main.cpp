@@ -1,13 +1,13 @@
 #include "duckdb.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/execution/operator/list.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/operator/list.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/expression/list.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/expression/list.hpp"
 
 /**
 This file contains an example on how a query tree can be programmatically constructed. This is essentially hand-rolling

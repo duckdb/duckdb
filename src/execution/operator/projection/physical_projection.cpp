@@ -2,8 +2,9 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalProjectionState : public PhysicalOperatorState {
 public:
@@ -15,7 +16,7 @@ public:
 	ExpressionExecutor executor;
 };
 
-void PhysicalProjection::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalProjectionState *>(state_);
 
 	// get the next chunk from the child
@@ -37,4 +38,6 @@ string PhysicalProjection::ExtraRenderInformation() const {
 		extra_info += expr->GetName() + "\n";
 	}
 	return extra_info;
+}
+
 }

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/pipeline.hpp
+// duckdb/parallel/pipeline.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,14 +11,14 @@
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
-class ExecutionContext;
+class Executor;
 
 //! The Pipeline class represents an execution pipeline
 class Pipeline {
 public:
-	Pipeline(ExecutionContext &execution_context);
+	Pipeline(Executor &execution_context);
 
-	ExecutionContext &execution_context;
+	Executor &executor;
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state

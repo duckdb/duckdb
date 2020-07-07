@@ -25,11 +25,11 @@ public:
 	vector<BoundOrderByNode> orders;
 
 public:
-	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
-	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

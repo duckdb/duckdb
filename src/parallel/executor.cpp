@@ -1,10 +1,15 @@
-#include "duckdb/execution/execution_context.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/executor.hpp"
+
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
-#include "duckdb/execution/task_scheduler.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+
+using namespace std;
 
 namespace duckdb {
 
@@ -15,20 +20,21 @@ public:
 	}
 
 	void Execute() override {
-        pipeline->Execute(context);
+		pipeline->Execute(context);
+		pipeline->Finish();
 	}
 private:
     ClientContext &context;
     Pipeline *pipeline;
 };
 
-ExecutionContext::ExecutionContext(ClientContext &context) : context(context) {
+Executor::Executor(ClientContext &context) : context(context) {
 }
 
-ExecutionContext::~ExecutionContext() {
+Executor::~Executor() {
 }
 
-void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
+void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	pipelines.clear();
 
 	physical_plan = move(plan);
@@ -36,14 +42,16 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	context.profiler.Initialize(physical_plan.get());
 
-
 	BuildPipelines(physical_plan.get(), nullptr);
 
 	// schedule pipelines that do not have dependents
     this->producer = TaskScheduler::GetScheduler(context).CreateProducer();
-	for (auto &pipeline : pipelines) {
-		if (pipeline->dependencies.size() == 0) {
-			Schedule(pipeline.get());
+	{
+		lock_guard<mutex> plock(pipeline_lock);
+		for (auto &pipeline : pipelines) {
+			if (pipeline->dependencies.size() == 0) {
+				Schedule(pipeline.get());
+			}
 		}
 	}
 	// now work on the tasks of this pipeline until the query is finished executing
@@ -51,14 +59,18 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 		auto &scheduler = TaskScheduler::GetScheduler(context);
 		scheduler.ExecuteTasks(*producer);
 	}
+	if (exceptions.size() > 0) {
+		// an exception has occurred executing one of the pipelines
+		throw Exception(exceptions[0]);
+	}
 }
 
-void ExecutionContext::Reset() {
+void Executor::Reset() {
 	physical_plan = nullptr;
 	physical_state = nullptr;
 }
 
-void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
+void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_unique<Pipeline>(*this);
@@ -139,7 +151,7 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	}
 };
 
-void ExecutionContext::Schedule(Pipeline *pipeline) {
+void Executor::Schedule(Pipeline *pipeline) {
 	assert(pipeline->dependencies.size() == 0);
     auto task = make_unique<PipelineTask>(context, pipeline);
 
@@ -147,22 +159,38 @@ void ExecutionContext::Schedule(Pipeline *pipeline) {
 	scheduler.ScheduleTask(*producer, move(task));
 }
 
-vector<TypeId> ExecutionContext::GetTypes() {
+vector<TypeId> Executor::GetTypes() {
 	assert(physical_plan);
 	return physical_plan->GetTypes();
 }
 
-unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
+void Executor::PushError(std::string exception) {
+	lock_guard<mutex> plock(pipeline_lock);
+	// interrupt execution of any other pipelines that belong to this executor
+	context.interrupted = true;
+	// push the exception onto the stack
+	exceptions.push_back(exception);
+}
+
+void Executor::Flush(ThreadContext &tcontext) {
+	lock_guard<mutex> plock(pipeline_lock);
+	context.profiler.Flush(tcontext.profiler);
+}
+
+unique_ptr<DataChunk> Executor::FetchChunk() {
 	assert(physical_plan);
+
+	ThreadContext thread(context);
+	ExecutionContext econtext(context, thread);
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks
 	physical_plan->InitializeChunk(*chunk);
-	physical_plan->GetChunk(context, *chunk, physical_state.get());
+	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	return chunk;
 }
 
-void ExecutionContext::ErasePipeline(Pipeline *pipeline) {
+void Executor::ErasePipeline(Pipeline *pipeline) {
 	lock_guard<mutex> plock(pipeline_lock);
 	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
 	                             [&](std::unique_ptr<Pipeline> &p) { return p.get() == pipeline; }));

@@ -39,7 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
 		// equality join: use hash join
-		plan = make_unique<PhysicalHashJoin>(context, op, move(left), move(right), move(op.conditions), op.join_type,
+		plan = make_unique<PhysicalHashJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 		                                     op.left_projection_map, op.right_projection_map);
 	} else {
 		assert(!has_null_equal_conditions); // don't support this for anything but hash joins for now

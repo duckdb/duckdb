@@ -19,10 +19,10 @@ namespace duckdb {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
-	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
 	                 vector<idx_t> left_projection_map, vector<idx_t> right_projection_map);
-	PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                 unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
 	vector<idx_t> right_projection_map;
@@ -36,15 +36,15 @@ public:
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
-	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
-	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 private:
-	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
 };
 
 } // namespace duckdb

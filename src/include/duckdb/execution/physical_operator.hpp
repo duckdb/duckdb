@@ -15,9 +15,9 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
-class ClientContext;
 class ExpressionExecutor;
 class PhysicalOperator;
 
@@ -79,9 +79,9 @@ public:
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
 
-	void GetChunk(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+	void GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
@@ -119,20 +119,20 @@ public:
 public:
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalOperatorState.
-	virtual void Sink(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
+	virtual void Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
 	                  DataChunk &input) = 0;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalOperatorState.
-	virtual void Combine(ClientContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	virtual void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
 	}
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	virtual void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
+	virtual void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> gstate) {
 		this->sink_state = move(gstate);
 	}
 
-	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) {
+	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) {
 		return make_unique<LocalSinkState>();
 	}
 	virtual unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) {

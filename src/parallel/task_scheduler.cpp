@@ -1,8 +1,9 @@
-#include "duckdb/execution/task_scheduler.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+
+#include "concurrentqueue.h"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "concurrentqueue.h"
 #include "lightweightsemaphore.h"
 
 namespace duckdb {

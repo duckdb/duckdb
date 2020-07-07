@@ -30,7 +30,7 @@ using namespace std;
 namespace duckdb {
 
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this),
+    : db(database), transaction(*database.transaction_manager), interrupted(false), executor(*this),
       catalog(*database.catalog), temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
@@ -105,7 +105,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 string ClientContext::FinalizeQuery(bool success) {
 	profiler.EndQuery();
 
-	execution_context.Reset();
+	executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
@@ -147,7 +147,7 @@ void ClientContext::CleanupInternal() {
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
-	return execution_context.FetchChunk();
+	return executor.FetchChunk();
 }
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
@@ -209,9 +209,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	bool create_stream_result = statement.statement_type == StatementType::SELECT_STATEMENT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.Initialize(move(statement.plan));
+	executor.Initialize(move(statement.plan));
 
-	auto types = execution_context.GetTypes();
+	auto types = executor.GetTypes();
 	assert(types.size() == statement.sql_types.size());
 
 	if (create_stream_result) {
@@ -545,7 +545,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	try {
 		auto result = RunStatementInternal(query, move(statement), false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
 	}
@@ -565,7 +565,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	try {
 		auto result = RunStatementInternal(query, move(copied_stmt), false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
 		copied_result->success = false;
 	}
@@ -573,7 +573,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	try {
 		auto result = RunStatementInternal(query, move(deserialized_stmt), false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
 		deserialized_result->success = false;
 	}
@@ -582,7 +582,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	try {
 		auto result = RunStatementInternal(query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
 	}

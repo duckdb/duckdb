@@ -4,8 +4,9 @@
 #include <algorithm>
 #include <fstream>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class BufferedWriter {
 	constexpr static idx_t BUFFER_SIZE = 4096 * 4;
@@ -135,7 +136,7 @@ static void WriteQuotedString(BufferedWriter &writer, string_t str_value, string
 	}
 }
 
-void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &info = *this->info;
 	idx_t total = 0;
 
@@ -206,4 +207,6 @@ void PhysicalCopyToFile::GetChunkInternal(ClientContext &context, DataChunk &chu
 	chunk.SetValue(0, 0, Value::BIGINT(total));
 
 	state->finished = true;
+}
+
 }

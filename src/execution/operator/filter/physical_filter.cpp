@@ -2,8 +2,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalFilterState : public PhysicalOperatorState {
 public:
@@ -28,7 +29,7 @@ PhysicalFilter::PhysicalFilter(vector<TypeId> types, vector<unique_ptr<Expressio
 	}
 }
 
-void PhysicalFilter::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_);
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t initial_count;
@@ -57,4 +58,6 @@ unique_ptr<PhysicalOperatorState> PhysicalFilter::GetOperatorState() {
 
 string PhysicalFilter::ExtraRenderInformation() const {
 	return expression->GetName();
+}
+
 }

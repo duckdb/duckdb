@@ -1,12 +1,12 @@
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/execution/task_scheduler.hpp"
 
 using namespace std;
 

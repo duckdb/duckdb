@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/task_scheduler.hpp
+// duckdb/parallel/task_scheduler.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/thread.hpp"
-#include "duckdb/execution/task.hpp"
+#include "task.hpp"
 
 namespace duckdb {
 

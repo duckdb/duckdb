@@ -68,11 +68,11 @@ unique_ptr<GlobalOperatorState> PhysicalPiecewiseMergeJoin::GetGlobalState(Clien
 	return make_unique<MergeJoinGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<MergeJoinLocalState>(conditions);
 }
 
-void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                       DataChunk &input) {
 	auto &gstate = (MergeJoinGlobalState &)state;
 	auto &mj_state = (MergeJoinLocalState &)lstate;
@@ -96,7 +96,7 @@ void PhysicalPiecewiseMergeJoin::Sink(ClientContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalPiecewiseMergeJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (MergeJoinGlobalState &)*state;
 	if (gstate.right_conditions.chunks.size() > 0) {
 		// now order all the chunks
@@ -151,7 +151,7 @@ public:
 	unique_ptr<bool[]> left_found_match;
 };
 
-void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
     auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
     auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
@@ -191,7 +191,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ClientContext &context, DataC
 	} while(chunk.size() == 0);
 }
 
-void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
     auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
     auto &gstate = (MergeJoinGlobalState &)*sink_state;
     do {
@@ -276,7 +276,7 @@ void PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ClientContext &context, Data
 
 }
 
-void PhysicalPiecewiseMergeJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+void PhysicalPiecewiseMergeJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                                   PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalPiecewiseMergeJoinState *>(state_);
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;

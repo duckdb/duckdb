@@ -38,6 +38,7 @@ else()
   add_subdirectory(common)
   add_subdirectory(execution)
   add_subdirectory(main)
+  add_subdirectory(parallel)
   add_subdirectory(storage)
   add_subdirectory(transaction)
 

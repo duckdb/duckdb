@@ -100,11 +100,11 @@ unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientCo
 	return make_unique<SimpleAggregateGlobalState>(aggregates);
 }
 
-unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<SimpleAggregateLocalState>(aggregates);
 }
 
-void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                    DataChunk &input) {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
@@ -136,7 +136,7 @@ void PhysicalSimpleAggregate::Sink(ClientContext &context, GlobalOperatorState &
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
 	auto &gstate = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
 
@@ -163,7 +163,7 @@ void PhysicalSimpleAggregate::Combine(ClientContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	if (state->finished) {
 		return;

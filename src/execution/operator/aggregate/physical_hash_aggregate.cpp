@@ -99,11 +99,11 @@ unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientCont
 	return make_unique<HashAggregateGlobalState>(group_types, payload_types, bindings);
 }
 
-unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<HashAggregateLocalState>(groups, bindings, group_types, payload_types);
 }
 
-void PhysicalHashAggregate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                  DataChunk &input) {
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &sink = (HashAggregateLocalState &)lstate;
@@ -159,7 +159,7 @@ public:
 	idx_t ht_scan_position;
 };
 
-void PhysicalHashAggregate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)*state_;
 

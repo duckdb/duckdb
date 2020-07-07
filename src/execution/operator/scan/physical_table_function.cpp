@@ -5,20 +5,23 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
 
-void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+namespace duckdb {
+
+void PhysicalTableFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	// run main code
-	function->function.function(context, parameters, chunk, bind_data.get());
+	function->function.function(context.client, parameters, chunk, bind_data.get());
 	if (chunk.size() == 0) {
 		// finished, call clean up
 		if (function->function.final) {
-			function->function.final(context, bind_data.get());
+			function->function.final(context.client, bind_data.get());
 		}
 	}
 }
 
 string PhysicalTableFunction::ExtraRenderInformation() const {
 	return function->name;
+}
+
 }
