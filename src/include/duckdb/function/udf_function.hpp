@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include <string>
 #include <vector>
@@ -16,7 +15,6 @@
 using namespace std;
 
 namespace duckdb {
-class ClientContext;
 
 struct UDFWrapper {
 public:
