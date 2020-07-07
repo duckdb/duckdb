@@ -29,9 +29,7 @@ typedef struct PGScanKeyword
 	int16_t		category;		/* see codes above */
 } PGScanKeyword;
 
-extern const PGScanKeyword ScanKeywords[];
-extern const int NumScanKeywords;
 
-extern const PGScanKeyword *ScanKeywordLookup(const char *text,
+const PGScanKeyword *ScanKeywordLookup(const char *text,
 				  const PGScanKeyword *keywords,
 				  int num_keywords);

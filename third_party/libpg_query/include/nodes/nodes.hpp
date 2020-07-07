@@ -544,7 +544,7 @@ typedef struct PGNode
  *	Fortunately, this macro isn't recursive so we just define
  *	a global variable for this purpose.
  */
-extern __thread PGNode *newNodeMacroHolder;
+__thread PGNode *newNodeMacroHolder;
 
 #define newNode(size, tag) \
 ( \
@@ -592,30 +592,30 @@ castNodeImpl(PGNodeTag type, void *ptr)
 struct PGBitmapset;				/* not to include bitmapset.h here */
 struct PGStringInfoData;			/* not to include stringinfo.h here */
 
-extern void outNode(struct PGStringInfoData *str, const void *obj);
-extern void outToken(struct PGStringInfoData *str, const char *s);
-extern void outBitmapset(struct PGStringInfoData *str,
-			 const struct PGBitmapset *bms);
-extern void outDatum(struct PGStringInfoData *str, uintptr_t value,
-		 int typlen, bool typbyval);
-extern char *nodeToString(const void *obj);
-extern char *bmsToString(const struct PGBitmapset *bms);
+void outNode(struct PGStringInfoData *str, const void *obj);
+void outToken(struct PGStringInfoData *str, const char *s);
+void outBitmapset(struct PGStringInfoData *str,
+		 const struct PGBitmapset *bms);
+void outDatum(struct PGStringInfoData *str, uintptr_t value,
+	 int typlen, bool typbyval);
+char *nodeToString(const void *obj);
+char *bmsToString(const struct PGBitmapset *bms);
 
 /*
  * nodes/{readfuncs.c,read.c}
  */
-extern void *stringToNode(char *str);
-extern struct PGBitmapset *readBitmapset(void);
-extern uintptr_t readDatum(bool typbyval);
-extern bool *readBoolCols(int numCols);
-extern int *readIntCols(int numCols);
-extern PGOid *readOidCols(int numCols);
-extern int16_t *readAttrNumberCols(int numCols);
+void *stringToNode(char *str);
+struct PGBitmapset *readBitmapset(void);
+uintptr_t readDatum(bool typbyval);
+bool *readBoolCols(int numCols);
+int *readIntCols(int numCols);
+PGOid *readOidCols(int numCols);
+int16_t *readAttrNumberCols(int numCols);
 
 /*
  * nodes/copyfuncs.c
  */
-extern void *copyObjectImpl(const void *obj);
+void *copyObjectImpl(const void *obj);
 
 /* cast result back to argument type, if supported by compiler */
 //#ifdef HAVE_TYPEOF

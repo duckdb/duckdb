@@ -119,12 +119,12 @@ typedef void *core_yyscan_t;
 
 
 /* Entry points in parser/scan.l */
-extern core_yyscan_t scanner_init(const char *str,
+core_yyscan_t scanner_init(const char *str,
 			 core_yy_extra_type *yyext,
 			 const PGScanKeyword *keywords,
 			 int num_keywords);
-extern void scanner_finish(core_yyscan_t yyscanner);
-extern int core_yylex(core_YYSTYPE *lvalp, YYLTYPE *llocp,
+void scanner_finish(core_yyscan_t yyscanner);
+int core_yylex(core_YYSTYPE *lvalp, YYLTYPE *llocp,
 		   core_yyscan_t yyscanner);
-extern int	scanner_errposition(int location, core_yyscan_t yyscanner);
-extern void scanner_yyerror(const char *message, core_yyscan_t yyscanner);
+int	scanner_errposition(int location, core_yyscan_t yyscanner);
+void scanner_yyerror(const char *message, core_yyscan_t yyscanner);

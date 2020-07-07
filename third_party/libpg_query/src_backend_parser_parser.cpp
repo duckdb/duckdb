@@ -31,7 +31,7 @@
 
 #include "parser/gramparse.hpp"
 #include "parser/parser.hpp"
-
+#include "parser/kwlist.hpp"
 
 /*
  * raw_parser
