@@ -68,6 +68,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 void Executor::Reset() {
 	physical_plan = nullptr;
 	physical_state = nullptr;
+	exceptions.clear();
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
