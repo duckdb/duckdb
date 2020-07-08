@@ -36,7 +36,7 @@ static bool HasNullValues(DataChunk &chunk) {
 }
 
 template <bool MATCH>
-void PhysicalJoin::ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	assert(left.column_count() == result.column_count());
 	// create the selection vector from the matches that were found
 	idx_t result_count = 0;
@@ -55,6 +55,15 @@ void PhysicalJoin::ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &res
 	} else {
 		result.SetCardinality(0);
 	}
+}
+
+
+void PhysicalJoin::ConstructSemiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+	ConstructSemiOrAntiJoinResult<true>(left, result, found_match);
+}
+
+void PhysicalJoin::ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
+	ConstructSemiOrAntiJoinResult<false>(left, result, found_match);
 }
 
 void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
@@ -225,11 +234,11 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 			break;
 		case JoinType::SEMI:
 			// construct the semi join result from the found matches
-			PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, found_match);
+			PhysicalJoin::ConstructSemiJoinResult(state->child_chunk, chunk, found_match);
 			break;
 		case JoinType::ANTI:
 			// construct the anti join result from the found matches
-			PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, found_match);
+			PhysicalJoin::ConstructAntiJoinResult(state->child_chunk, chunk, found_match);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented type for simple nested loop join!");

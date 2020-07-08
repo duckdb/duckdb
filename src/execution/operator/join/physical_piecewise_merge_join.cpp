@@ -180,10 +180,10 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 			                                      gstate.has_null);
 			break;
 		case JoinType::SEMI:
-			PhysicalJoin::ConstructSemiOrAntiJoinResult<true>(state->child_chunk, chunk, right_info.found_match);
+			PhysicalJoin::ConstructSemiJoinResult(state->child_chunk, chunk, right_info.found_match);
 			break;
 		case JoinType::ANTI:
-			PhysicalJoin::ConstructSemiOrAntiJoinResult<false>(state->child_chunk, chunk, right_info.found_match);
+			PhysicalJoin::ConstructAntiJoinResult(state->child_chunk, chunk, right_info.found_match);
 			break;
 		default:
 			throw NotImplementedException("Unimplemented join type for merge join");

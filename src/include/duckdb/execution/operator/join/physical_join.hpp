@@ -21,8 +21,8 @@ public:
 	JoinType join_type;
 
 public:
-	template <bool MATCH>
-	static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
+	static void ConstructSemiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
+	static void ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
 	                                    bool has_null);
     static void ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
