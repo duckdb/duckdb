@@ -652,6 +652,7 @@ matrix:
       before_install:
         - choco install r.project -y --version 4.0.2
         - choco install rtools -y --version 4.0.0 --ignore-checksums
+        - choco install make -y
         - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
         - export MAKE=mingw32-make
         - cd tools/rpkg
