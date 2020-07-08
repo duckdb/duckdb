@@ -2,6 +2,10 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+
+using namespace std;
 
 namespace duckdb {
 
