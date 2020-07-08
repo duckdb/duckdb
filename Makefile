@@ -58,7 +58,6 @@ release:
 
 reldebug:
 	mkdir -p build/reldebug && \
-	python scripts/amalgamation.py && \
 	cd build/reldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
