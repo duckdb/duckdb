@@ -16,6 +16,7 @@ namespace duckdb {
 
 struct ConcurrentQueue;
 struct QueueProducerToken;
+class ClientContext;
 class TaskScheduler;
 
 struct ProducerToken {
