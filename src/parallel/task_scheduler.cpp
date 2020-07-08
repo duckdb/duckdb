@@ -70,11 +70,10 @@ void TaskScheduler::ExecuteTasksForever(bool *marker) {
 	// loop until the marker is set to false
 	while(*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
-        if (queue->semaphore.wait(TASK_TIMEOUT_USECS)) {
-            if (queue->q.try_dequeue(task)) {
-                task->Execute();
-				task.reset();
-            }
+        queue->semaphore.wait(TASK_TIMEOUT_USECS);
+        if (queue->q.try_dequeue(task)) {
+            task->Execute();
+			task.reset();
         }
 	}
 }
