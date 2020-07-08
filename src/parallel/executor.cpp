@@ -47,11 +47,15 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	// schedule pipelines that do not have dependents
     this->producer = TaskScheduler::GetScheduler(context).CreateProducer();
 	{
-		lock_guard<mutex> plock(pipeline_lock);
+		vector<Pipeline *> to_schedule;
 		for (auto &pipeline : pipelines) {
 			if (pipeline->dependencies.size() == 0) {
-				Schedule(pipeline.get());
+				to_schedule.push_back(pipeline.get());
 			}
+		}
+		lock_guard<mutex> plock(pipeline_lock);
+		for (auto &pipeline : to_schedule) {
+			Schedule(pipeline.get());
 		}
 	}
 	// now work on the tasks of this pipeline until the query is finished executing

@@ -28,7 +28,7 @@ struct ProducerToken {
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
-	constexpr static int64_t TASK_TIMEOUT_USECS = 10000;
+	constexpr static int64_t TASK_TIMEOUT_USECS = 100000;
 public:
     TaskScheduler();
 	~TaskScheduler();
