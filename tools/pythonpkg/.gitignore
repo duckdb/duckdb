@@ -6,3 +6,5 @@ build
 /duckdb_tarball/
 duckdb.cpp
 duckdb.hpp
+parquet-extension.cpp
+parquet-extension.hpp

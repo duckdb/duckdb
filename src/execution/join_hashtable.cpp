@@ -41,20 +41,19 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	// at least one equality is necessary
 	assert(equality_types.size() > 0);
 
-	if (type == JoinType::ANTI || type == JoinType::SEMI || type == JoinType::MARK) {
-		// for ANTI, SEMI and MARK join, we only need to store the keys
-		build_size = 0;
-		build_types.clear();
-	} else {
-		// otherwise we need to store the entire build side for reconstruction
-		// purposes
-		for (idx_t i = 0; i < build_types.size(); i++) {
-			build_size += GetTypeIdSize(build_types[i]);
-		}
+	for (idx_t i = 0; i < build_types.size(); i++) {
+		build_size += GetTypeIdSize(build_types[i]);
 	}
 	tuple_size = condition_size + build_size;
+	pointer_offset = tuple_size;
 	// entry size is the tuple size and the size of the hash/next pointer
 	entry_size = tuple_size + std::max(sizeof(hash_t), sizeof(uintptr_t));
+	if (join_type == JoinType::OUTER) {
+		// outer joins need an extra bool to keep track of whether or not a tuple has found a matching entry
+		// we place the bool before the NEXT pointer
+		entry_size += sizeof(bool);
+		pointer_offset += sizeof(bool);
+	}
 	// compute the per-block capacity of this HT
 	block_capacity = std::max((idx_t)STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
 }
@@ -141,6 +140,14 @@ static void templated_serialize_vdata(VectorData &vdata, const SelectionVector &
 			*target = source[source_idx];
 			key_locations[i] += sizeof(T);
 		}
+	}
+}
+
+static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
+	for (idx_t i = 0; i < count; i++) {
+		auto target = (bool *)key_locations[i];
+		*target = false;
+		key_locations[i] += sizeof(bool);
 	}
 }
 
@@ -329,6 +336,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			SerializeVector(payload.data[i], payload.size(), *current_sel, added_count, key_locations);
 		}
 	}
+	if (join_type == JoinType::OUTER) {
+		// for OUTER joins initialize the "found" boolean to false
+		initialize_outer_join(added_count, key_locations);
+	}
 	SerializeVector(hash_values, payload.size(), *current_sel, added_count, key_locations);
 }
 
@@ -347,7 +358,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		auto index = indices[i];
 		// set prev in current key to the value (NOTE: this will be nullptr if
 		// there is none)
-		auto prev_pointer = (data_ptr_t *)(key_locations[i] + tuple_size);
+		auto prev_pointer = (data_ptr_t *)(key_locations[i] + pointer_offset);
 		*prev_pointer = pointers[index];
 
 		// set pointer to current tuple
@@ -382,7 +393,7 @@ void JoinHashTable::Finalize() {
 			// fetch the next vector of entries from the blocks
 			idx_t next = std::min((idx_t)STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < next; i++) {
-				hash_data[i] = *((hash_t *)(dataptr + tuple_size));
+				hash_data[i] = *((hash_t *)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
@@ -459,6 +470,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::ANTI:
 		NextAntiJoin(keys, left, result);
 		break;
+	case JoinType::OUTER:
 	case JoinType::LEFT:
 		NextLeftJoin(keys, left, result);
 		break;
@@ -621,7 +633,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	auto ptrs = FlatVector::GetData<data_ptr_t>(this->pointers);
 	for (idx_t i = 0; i < sel_count; i++) {
 		auto idx = sel.get_index(i);
-		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
+		auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.pointer_offset);
 		ptrs[idx] = *chain_pointer;
 		if (ptrs[idx]) {
 			this->sel_vector.set_index(new_count++, idx);
@@ -651,10 +663,8 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	}
 }
 
-void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
-                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
 	switch (result.type) {
 	case TypeId::BOOL:
 	case TypeId::INT8:
@@ -682,6 +692,13 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_v
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
 	offset += GetTypeIdSize(result.type);
+
+}
+
+void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
+                                 const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+	auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+	GatherResultVector(result, result_vector, ptrs, sel_vector, count, offset);
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
@@ -699,6 +716,16 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 
 	idx_t result_count = ScanInnerJoin(keys, result_vector);
 	if (result_count > 0) {
+		if (ht.join_type == JoinType::OUTER) {
+			// outer join: mark join matches as FOUND in the HT
+			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
+			for(idx_t i = 0; i < result_count; i++) {
+				auto idx = result_vector.get_index(i);
+				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
+				auto target = (bool *) chain_pointer;
+				*target = true;
+			}
+		}
 		// matches were found
 		// construct the result
 		// on the LHS, we create a slice using the result vector
@@ -967,6 +994,47 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
+}
+
+void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
+	// scan the HT starting from the current position and check which rows from the build side did not find a match
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	idx_t found_entries = 0;
+	for(; state.block_position < blocks.size(); state.block_position++) {
+		auto &block = blocks[state.block_position];
+		auto &handle = pinned_handles[state.block_position];
+		auto baseptr = handle->node->buffer;
+		for(; state.position < block.count; state.position++) {
+			auto tuple_base = baseptr + state.position * entry_size;
+			auto found_match = (bool *) (tuple_base + tuple_size);
+			if (!*found_match) {
+				key_locations[found_entries++] = tuple_base;
+				if (found_entries == STANDARD_VECTOR_SIZE) {
+					state.position++;
+					break;
+				}
+			}
+		}
+		if (found_entries == STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	result.SetCardinality(found_entries);
+	if (found_entries > 0) {
+		idx_t left_column_count = result.column_count() - build_types.size();
+		// set the left side as a constant NULL
+		for (idx_t i = 0; i < left_column_count; i++) {
+			result.data[i].vector_type = VectorType::CONSTANT_VECTOR;
+			ConstantVector::SetNull(result.data[i], true);
+		}
+		// gather the values from the RHS
+		idx_t offset = condition_size;
+		for (idx_t i = 0; i < build_types.size(); i++) {
+			auto &vector = result.data[left_column_count + i];
+			assert(vector.type == build_types[i]);
+			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *) key_locations, FlatVector::IncrementalSelectionVector, found_entries, offset);
+		}
+	}
 }
 
 } // namespace duckdb

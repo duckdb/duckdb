@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct CreateTableFunctionInfo : public CreateInfo {
-	CreateTableFunctionInfo(TableFunction function) : CreateInfo(CatalogType::TABLE_FUNCTION), function(function) {
+	CreateTableFunctionInfo(TableFunction function, bool supports_projection = false)
+	    : CreateInfo(CatalogType::TABLE_FUNCTION), function(function), supports_projection(supports_projection) {
 		this->name = function.name;
 	}
 
@@ -22,6 +23,8 @@ struct CreateTableFunctionInfo : public CreateInfo {
 	string name;
 	//! The table function
 	TableFunction function;
+
+	bool supports_projection;
 };
 
 } // namespace duckdb

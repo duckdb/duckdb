@@ -3,12 +3,14 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType child_type) {
 	switch (window_type) {
@@ -109,11 +111,13 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
 	}
+	auto &config = DBConfig::GetConfig(context);
 	for (auto &order : window.orders) {
-		BoundOrderByNode bound_order;
-		bound_order.expression = GetExpression(order.expression);
-		bound_order.type = order.type;
-		result->orders.push_back(move(bound_order));
+		auto type = order.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.type;
+		auto null_order =
+		    order.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.null_order;
+		auto expression = GetExpression(order.expression);
+		result->orders.push_back(BoundOrderByNode(type, null_order, move(expression)));
 	}
 	result->start_expr = GetExpression(window.start_expr);
 	result->end_expr = GetExpression(window.end_expr);
@@ -129,3 +133,5 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	node.windows.push_back(move(result));
 	return BindResult(move(colref), sql_type);
 }
+
+} // namespace duckdb

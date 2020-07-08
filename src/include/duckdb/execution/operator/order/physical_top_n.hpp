@@ -16,22 +16,28 @@ namespace duckdb {
 
 //! Represents a physical ordering of the data. Note that this will not change
 //! the data but only add a selection vector.
-class PhysicalTopN : public PhysicalOperator {
+class PhysicalTopN : public PhysicalSink {
 public:
 	PhysicalTopN(LogicalOperator &op, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit), offset(offset),
-	      heap_size(0) {
+	    : PhysicalSink(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;
 	idx_t limit;
 	idx_t offset;
-	idx_t heap_size;
 
 public:
+	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Combine(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void CalculateHeapSize(idx_t rows);
+
+private:
+	unique_ptr<idx_t[]> ComputeTopN(ChunkCollection &big_data, idx_t &heap_size);
 };
 
 } // namespace duckdb

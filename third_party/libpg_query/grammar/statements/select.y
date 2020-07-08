@@ -401,7 +401,7 @@ opt_asc_desc: ASC_P							{ $$ = PG_SORTBY_ASC; }
 		;
 
 opt_nulls_order: NULLS_LA FIRST_P			{ $$ = PG_SORTBY_NULLS_FIRST; }
-			| NULLS_LA LAST_P				{ $$ = SORTBY_NULLS_LAST; }
+			| NULLS_LA LAST_P				{ $$ = PG_SORTBY_NULLS_LAST; }
 			| /*EMPTY*/						{ $$ = PG_SORTBY_NULLS_DEFAULT; }
 		;
 
@@ -2380,22 +2380,6 @@ func_expr_common_subexpr:
 					c->args = $3;
 					c->location = @1;
 					$$ = (PGNode *)c;
-				}
-			| GREATEST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = PG_IS_GREATEST;
-					v->location = @1;
-					$$ = (PGNode *)v;
-				}
-			| LEAST '(' expr_list ')'
-				{
-					PGMinMaxExpr *v = makeNode(PGMinMaxExpr);
-					v->args = $3;
-					v->op = IS_LEAST;
-					v->location = @1;
-					$$ = (PGNode *)v;
 				}
 		;
 

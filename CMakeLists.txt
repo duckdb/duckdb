@@ -252,14 +252,32 @@ function(disable_target_warnings NAME)
   endif()
 endfunction()
 
+
+option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
+if(${BUILD_ICU_EXTENSION})
+	add_definitions( -DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION} )
+endif()
+
+option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
+if(${BUILD_PARQUET_EXTENSION})
+	add_definitions( -DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION} )
+endif()
+
+
 add_subdirectory(extension)
 add_subdirectory(src)
-add_subdirectory(third_party)
-add_subdirectory(test)
-add_subdirectory(tools)
-if(NOT WIN32 AND NOT SUN)
+
+option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
+if(${BUILD_UNITTESTS})
+  add_subdirectory(test)
+  if(NOT WIN32 AND NOT SUN)
   add_subdirectory(benchmark)
+  endif()
 endif()
+
+add_subdirectory(third_party)
+add_subdirectory(tools)
+
 
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")

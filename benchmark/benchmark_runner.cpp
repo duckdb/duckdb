@@ -27,7 +27,7 @@ Benchmark::Benchmark(bool register_benchmark, string name, string group) : name(
 }
 
 void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
-	auto &fs = *db.file_system;
+	auto &fs = db.GetFileSystem();
 	// check if the database directory exists; if not create it
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
@@ -64,7 +64,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 }
 
 bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
-	auto &fs = *db.file_system;
+	auto &fs = db.GetFileSystem();
 	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
 		return false;
 	}

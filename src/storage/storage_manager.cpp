@@ -56,13 +56,15 @@ void StorageManager::Initialize() {
 		LoadDatabase();
 	} else {
 		block_manager = make_unique<InMemoryBlockManager>();
-		buffer_manager = make_unique<BufferManager>(*database.file_system, *block_manager, database.temporary_directory,
-		                                            database.maximum_memory);
+		buffer_manager =
+		    make_unique<BufferManager>(database.GetFileSystem(), *block_manager,
+		                               database.config.temporary_directory, database.config.maximum_memory);
 	}
 }
 
 void StorageManager::Checkpoint(string wal_path) {
-	if (!database.file_system->FileExists(wal_path)) {
+    auto &fs = database.GetFileSystem();
+	if (!fs.FileExists(wal_path)) {
 		// no WAL to checkpoint
 		return;
 	}
@@ -72,8 +74,8 @@ void StorageManager::Checkpoint(string wal_path) {
 	}
 	// check the size of the WAL
 	{
-		BufferedFileReader reader(*database.file_system, wal_path.c_str());
-		if (reader.FileSize() <= database.checkpoint_wal_size) {
+		BufferedFileReader reader(fs, wal_path.c_str());
+		if (reader.FileSize() <= database.config.checkpoint_wal_size) {
 			// WAL is too small
 			return;
 		}
@@ -90,32 +92,33 @@ void StorageManager::Checkpoint(string wal_path) {
 
 void StorageManager::LoadDatabase() {
 	string wal_path = path + ".wal";
+	auto &fs = database.GetFileSystem();
 	// first check if the database exists
-	if (!database.file_system->FileExists(path)) {
+	if (!fs.FileExists(path)) {
 		if (read_only) {
 			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
 			                       path.c_str());
 		}
 		// check if the WAL exists
-		if (database.file_system->FileExists(wal_path)) {
+		if (fs.FileExists(wal_path)) {
 			// WAL file exists but database file does not
 			// remove the WAL
-			database.file_system->RemoveFile(wal_path);
+			fs.RemoveFile(wal_path);
 		}
 		// initialize the block manager while creating a new db file
-		block_manager =
-		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, true, database.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(*database.file_system, *block_manager, database.temporary_directory,
-		                                            database.maximum_memory);
+		block_manager = make_unique<SingleFileBlockManager>(fs, path, read_only, true,
+		                                                    database.config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(
+		    fs, *block_manager, database.config.temporary_directory, database.config.maximum_memory);
 	} else {
-		if (!database.checkpoint_only) {
+		if (!database.config.checkpoint_only) {
 			Checkpoint(wal_path);
 		}
 		// initialize the block manager while loading the current db file
-		auto sf =
-		    make_unique<SingleFileBlockManager>(*database.file_system, path, read_only, false, database.use_direct_io);
-		buffer_manager = make_unique<BufferManager>(*database.file_system, *sf, database.temporary_directory,
-		                                            database.maximum_memory);
+		auto sf = make_unique<SingleFileBlockManager>(fs, path, read_only, false,
+		                                              database.config.use_direct_io);
+		buffer_manager = make_unique<BufferManager>(fs, *sf, database.config.temporary_directory,
+		                                            database.config.maximum_memory);
 		sf->LoadFreeList(*buffer_manager);
 		block_manager = move(sf);
 
@@ -123,20 +126,20 @@ void StorageManager::LoadDatabase() {
 		CheckpointManager checkpointer(*this);
 		checkpointer.LoadFromStorage();
 		// check if the WAL file exists
-		if (database.file_system->FileExists(wal_path)) {
+		if (fs.FileExists(wal_path)) {
 			// replay the WAL
 			WriteAheadLog::Replay(database, wal_path);
-			if (database.checkpoint_only) {
+			if (database.config.checkpoint_only) {
 				assert(!read_only);
 				// checkpoint the database
 				checkpointer.CreateCheckpoint();
 				// remove the WAL
-				database.file_system->RemoveFile(wal_path);
+				fs.RemoveFile(wal_path);
 			}
 		}
 	}
 	// initialize the WAL file
-	if (!database.checkpoint_only && !read_only) {
+	if (!database.config.checkpoint_only && !read_only) {
 		wal.Initialize(wal_path);
 	}
 }

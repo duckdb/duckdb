@@ -37,6 +37,8 @@ struct TableFunctionData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override {
 		throw NotImplementedException("Copy not required for table-producing function");
 	}
+	// used to pass on projections to table functions that support them. NB, can contain COLUMN_IDENTIFIER_ROW_ID
+	vector<idx_t> column_ids;
 };
 
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
@@ -66,8 +68,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects)
-	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(SQLTypeId::INVALID),
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects, SQLType varargs = SQLType::INVALID)
+	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(varargs),
 	      has_side_effects(has_side_effects) {
 	}
 	virtual ~SimpleFunction() {
@@ -111,7 +113,8 @@ public:
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
 
-	void AddCollation(string name, ScalarFunction function, bool combinable = false, bool not_required_for_equality = false);
+	void AddCollation(string name, ScalarFunction function, bool combinable = false,
+	                  bool not_required_for_equality = false);
 
 private:
 	ClientContext &context;
@@ -133,6 +136,7 @@ private:
 
 	// scalar functions
 	void RegisterDateFunctions();
+	void RegisterGenericFunctions();
 	void RegisterMathFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();

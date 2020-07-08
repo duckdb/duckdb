@@ -25,12 +25,13 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 
-using namespace duckdb;
 using namespace std;
 
+namespace duckdb {
+
 ClientContext::ClientContext(DuckDB &database)
-    : db(database), transaction(*database.transaction_manager), interrupted(false), catalog(*database.catalog),
-      temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
+    : db(database), transaction(*database.transaction_manager), interrupted(false), execution_context(*this),
+      catalog(*database.catalog), temporary_objects(make_unique<SchemaCatalogEntry>(db.catalog.get(), TEMP_SCHEMA)),
       prepared_statements(make_unique<CatalogSet>(*db.catalog)), open_result(nullptr) {
 	random_device rd;
 	random_engine.seed(rd());
@@ -146,12 +147,7 @@ void ClientContext::CleanupInternal() {
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal() {
-	assert(execution_context.physical_plan);
-	auto chunk = make_unique<DataChunk>();
-	// run the plan to get the next chunks
-	execution_context.physical_plan->InitializeChunk(*chunk);
-	execution_context.physical_plan->GetChunk(*this, *chunk, execution_context.physical_state.get());
-	return chunk;
+	return execution_context.FetchChunk();
 }
 
 unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const string &query,
@@ -202,7 +198,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	if (ActiveTransaction().is_invalidated && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
-	if (db.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	if (db.config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type).c_str()));
 	}
@@ -213,10 +209,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	bool create_stream_result = statement.statement_type == StatementType::SELECT_STATEMENT && allow_stream_result;
 
 	// store the physical plan in the context for calls to Fetch()
-	execution_context.physical_plan = move(statement.plan);
-	execution_context.physical_state = execution_context.physical_plan->GetOperatorState();
+	execution_context.Initialize(move(statement.plan));
 
-	auto types = execution_context.physical_plan->GetTypes();
+	auto types = execution_context.GetTypes();
 	assert(types.size() == statement.sql_types.size());
 
 	if (create_stream_result) {
@@ -572,6 +567,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		copied_result->error = ex.what();
+		copied_result->success = false;
 	}
 	// now execute the deserialized statement
 	try {
@@ -579,6 +575,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		deserialized_result->error = ex.what();
+		deserialized_result->success = false;
 	}
 	// now execute the unoptimized statement
 	enable_optimizer = false;
@@ -587,6 +584,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (Exception &ex) {
 		unoptimized_result->error = ex.what();
+		unoptimized_result->success = false;
 	}
 
 	enable_optimizer = true;
@@ -741,3 +739,5 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	err_str += "]";
 	return make_unique<MaterializedQueryResult>(err_str);
 }
+
+} // namespace duckdb

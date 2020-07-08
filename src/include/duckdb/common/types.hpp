@@ -242,6 +242,7 @@ public:
 	static const SQLType LIST;
 	static const SQLType ANY;
 	static const SQLType BLOB;
+	static const SQLType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
 	static const vector<SQLType> NUMERIC;

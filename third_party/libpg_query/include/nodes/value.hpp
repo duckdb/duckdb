@@ -52,7 +52,7 @@ typedef struct PGValue
 #define floatVal(v)		atof(((PGValue *)(v))->val.str)
 #define strVal(v)		(((PGValue *)(v))->val.str)
 
-extern PGValue *makeInteger(long i);
-extern PGValue *makeFloat(char *numericStr);
-extern PGValue *makeString(const char *str);
-extern PGValue *makeBitString(char *str);
+PGValue *makeInteger(long i);
+PGValue *makeFloat(char *numericStr);
+PGValue *makeString(const char *str);
+PGValue *makeBitString(char *str);

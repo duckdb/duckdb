@@ -125,7 +125,7 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 	}
 }
 
-TEST_CASE("Tests found by Rigger", "[rigger]") {
+TEST_CASE("SQLancer", "[rigger]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -742,5 +742,28 @@ TEST_CASE("Tests found by Rigger", "[rigger]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 		result = con.Query("SELECT RIGHT(t0.c0, -1) FROM t0;");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+	}
+	SECTION("637") {
+		// SELECT with RIGHT JOIN causes an assertion failure "Assertion `!finalized' failed"
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 VARCHAR);"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES('');"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO t1 VALUES(0);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE VIEW v0 AS SELECT 0 FROM t0, t1 WHERE t0.c0 = t1.c0;"));
+		result = con.Query("SELECT * FROM v0;");
+		REQUIRE(CHECK_COLUMN(result, 0, {}));
+		REQUIRE(CHECK_COLUMN(result, 1, {}));
+
+		result = con.Query("SELECT * FROM v0 RIGHT JOIN t1 ON 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
+		REQUIRE(CHECK_COLUMN(result, 1, {"0"}));
+	}
+	SECTION("709") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 DATETIME DEFAULT(0.45428781614730807), c1 DATE, PRIMARY KEY(c1));"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(c0 DOUBLE NOT NULL, c1 BOOLEAN);"));
+		REQUIRE_NO_FAIL(con.Query("insert into t0 (c0, c1) values (NULL, '2019-11-26');"));
+		REQUIRE_NO_FAIL(con.Query("insert into t1 values (42, true);"));
+
+		REQUIRE_NO_FAIL(con.Query("SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (NOT (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0)))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::TINYINT))))AND((false BETWEEN '[' AND t1.c0)))) IS NULL);"));
 	}
 }

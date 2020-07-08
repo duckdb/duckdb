@@ -27,6 +27,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterNestedAggregates();
 
 	RegisterDateFunctions();
+	RegisterGenericFunctions();
 	RegisterMathFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
@@ -210,6 +211,7 @@ void SimpleFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &chi
 		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), types[i], target_type);
+			types[i] = target_type;
 		}
 	}
 }
@@ -237,10 +239,8 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 
 	// now create the function
 	auto result =
-	    make_unique<BoundFunctionExpression>(GetInternalType(bound_function.return_type), bound_function, is_operator);
+	    make_unique<BoundFunctionExpression>(GetInternalType(bound_function.return_type), bound_function, move(arguments), bound_function.return_type, is_operator);
 	result->children = move(children);
-	result->arguments = arguments;
-	result->sql_return_type = bound_function.return_type;
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);
 	}

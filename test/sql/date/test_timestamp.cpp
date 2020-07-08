@@ -283,3 +283,20 @@ TEST_CASE("Test more timestamp functions", "[timestamp]") {
 	auto ts2 = Timestamp::FromString(ds->GetValue(3, 0).str_value);
 	REQUIRE(ts2 > 0);
 }
+
+TEST_CASE("Test epoch_ms function", "[timestamp]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	result = con.Query(
+	    "SELECT epoch_ms(0) as epoch1, epoch_ms(1574802684123) as epoch2, epoch_ms(-291044928000) as epoch3, "
+	    "epoch_ms(-291081600000) as epoch4,  epoch_ms(-291081600001) as epoch5, epoch_ms(-290995201000) as epoch6");
+
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(Timestamp::FromString("1970-01-01 00:00:00.000"))}));
+	REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(Timestamp::FromString("2019-11-26 21:11:24.123"))}));
+	REQUIRE(CHECK_COLUMN(result, 2, {Value::BIGINT(Timestamp::FromString("1960-10-11 10:11:12.000"))}));
+	REQUIRE(CHECK_COLUMN(result, 3, {Value::BIGINT(Timestamp::FromString("1960-10-11 00:00:00"))}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value::BIGINT(Timestamp::FromString("1960-10-10 23:59:59.999"))}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value::BIGINT(Timestamp::FromString("1960-10-11 23:59:59"))}));
+}

@@ -24,8 +24,18 @@ public:
 	                       vector<JoinCondition> cond, JoinType join_type);
 
 public:
+	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
+	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+
 	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+private:
+	// resolve joins that output max N elements (SEMI, ANTI, MARK)
+	void ResolveSimpleJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
+	void ResolveComplexJoin(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state);
 };
 
 } // namespace duckdb

@@ -2,9 +2,11 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalDelimJoinState : public PhysicalOperatorState {
 public:
@@ -16,7 +18,7 @@ public:
 
 PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans)
-    : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, op.types), join(move(original_join)) {
+    : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, op.types), join(move(original_join)) {
 	assert(delim_scans.size() > 0);
 	assert(join->children.size() == 2);
 	// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create here
@@ -34,25 +36,39 @@ PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	join->children[0] = move(cached_chunk_scan);
 }
 
+unique_ptr<GlobalOperatorState> PhysicalDelimJoin::GetGlobalState(ClientContext &context) {
+	return distinct->GetGlobalState(context);
+}
+
+unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ClientContext &context) {
+	return distinct->GetLocalSinkState(context);
+}
+
+void PhysicalDelimJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                             DataChunk &input) {
+	lhs_data.Append(input);
+	distinct->Sink(context, state, lstate, input);
+}
+
+void PhysicalDelimJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+	// finalize the distinct HT
+	distinct->Finalize(context, move(state));
+	// materialize the distinct collection
+	DataChunk delim_chunk;
+	distinct->InitializeChunk(delim_chunk);
+	auto distinct_state = distinct->GetOperatorState();
+	while (true) {
+		distinct->GetChunk(context, delim_chunk, distinct_state.get());
+		if (delim_chunk.size() == 0) {
+			break;
+		}
+		delim_data.Append(delim_chunk);
+	}
+}
+
 void PhysicalDelimJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_);
-	assert(distinct);
 	if (!state->join_state) {
-		// first run: fully materialize the LHS
-		ChunkCollection &big_data = lhs_data;
-		do {
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			big_data.Append(state->child_chunk);
-		} while (state->child_chunk.size() != 0);
-		// now create the duplicate eliminated chunk by pulling from the DISTINCT aggregate
-		DataChunk delim_chunk;
-		distinct->InitializeChunk(delim_chunk);
-		auto distinct_state = distinct->GetOperatorState();
-		do {
-			delim_chunk.Reset();
-			distinct->GetChunkInternal(context, delim_chunk, distinct_state.get());
-			delim_data.Append(delim_chunk);
-		} while (delim_chunk.size() != 0);
 		// create the state of the underlying join
 		state->join_state = join->GetOperatorState();
 	}
@@ -67,3 +83,5 @@ unique_ptr<PhysicalOperatorState> PhysicalDelimJoin::GetOperatorState() {
 string PhysicalDelimJoin::ExtraRenderInformation() const {
 	return join->ExtraRenderInformation();
 }
+
+} // namespace duckdb

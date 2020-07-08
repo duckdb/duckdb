@@ -13,11 +13,17 @@ add_subdirectory(imdb)
 add_subdirectory(expression_reordering)
 
 add_executable(benchmark_runner benchmark_runner.cpp ${BENCHMARK_OBJECT_FILES})
-target_link_libraries(benchmark_runner
-                      duckdb
-                      dbgen
-                      dsdgen
-                      imdb
-                      test_helpers
-                      tpce
-                      sqlite_transfer)
+
+target_link_libraries(
+  benchmark_runner
+  duckdb
+  dbgen
+  dsdgen
+  imdb
+  test_helpers
+  tpce
+  sqlite_transfer)
+
+if(${BUILD_PARQUET_EXTENSION})
+  target_link_libraries(benchmark_runner parquet_extension)
+endif()

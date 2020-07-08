@@ -59,10 +59,10 @@ typedef struct base_yy_extra_type
 
 
 /* from parser.c */
-extern int base_yylex(YYSTYPE *lvalp, YYLTYPE *llocp,
+int base_yylex(YYSTYPE *lvalp, YYLTYPE *llocp,
 		   core_yyscan_t yyscanner);
 
 /* from gram.y */
-extern void parser_init(base_yy_extra_type *yyext);
-extern int	base_yyparse(core_yyscan_t yyscanner);
+void parser_init(base_yy_extra_type *yyext);
+int	base_yyparse(core_yyscan_t yyscanner);
 

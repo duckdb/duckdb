@@ -1,29 +1,44 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.1.7
-Authors@R: c(person(given = "DuckDB Contributors", role = "aut"),
-    person("Hannes", "M\u00fchleisen", role = c("aut", "cre"), email = "hannes@cwi.nl", comment = c(ORCID = "0000-0001-8552-0029")))
-Description: DuckDB is an embedded analytical data management system with SQL support. This package includes all of DuckDB as well as R DBI & dplyr connectors.
-Depends: 
-    R (>= 3.5.0),
-    DBI
+Version: 0.2.0
+Authors@R: 
+    c(person(given = "Hannes",
+             family = "Mühleisen",
+             role = c("aut", "cre"),
+             email = "hannes@cwi.nl",
+             comment = c(ORCID = "0000-0001-8552-0029")),
+      person(given = "Mark",
+             family = "Raasveldt",
+             role = "aut",
+             email = "mark.raasveldt@cwi.nl",
+             comment = c(ORCID = "0000-0001-5005-6844")),
+      person(given = "DuckDB Contributors",
+             role = "aut"))
+Description: DuckDB is an embedded analytical data management
+    system with SQL support. This package includes all of DuckDB as well
+    as R DBI & dplyr connectors.
 License: MPL
-LazyData: true
-Encoding: UTF-8
+URL: https://www.duckdb.org, https://github.com/cwida/duckdb
+BugReports: https://github.com/cwida/duckdb/issues
+Depends: 
+    DBI,
+    R (>= 3.5.0)
 Imports:
     dbplyr,
     methods,
     testthat,
     utils
 Suggests: 
-    DBItest, 
-    callr
-URL: https://www.duckdb.org, https://github.com/cwida/duckdb
-BugReports: https://github.com/cwida/duckdb/issues
+    callr,
+    DBItest,
+    nycflights13
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.1.0.9000
+SystemRequirements: C++11
 Collate: 
     'duckdb.R'
     'Driver.R'
     'Connection.R'
     'Result.R'
-RoxygenNote: 6.1.1
-SystemRequirements: C++11
+    'duckdb-package.R'

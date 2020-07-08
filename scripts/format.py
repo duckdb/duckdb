@@ -12,7 +12,7 @@ cpp_format_command = 'clang-format -i -sort-includes=${SORT_INCLUDES} -style=fil
 sql_format_command = 'pg_format "${FILE}" -o "${FILE}.out" && mv "${FILE}.out" "${FILE}"'
 cmake_format_command = 'cmake-format -i "${FILE}"'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', '.sql', '.txt']
-formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples']
+formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h']
 confirm = True
@@ -188,6 +188,8 @@ if format_all:
     format_directory('test')
     format_directory('tools')
     format_directory('examples')
+    format_directory('extension')
+
 else:
     for full_path in changed_files:
         splits = full_path.split(os.path.sep)

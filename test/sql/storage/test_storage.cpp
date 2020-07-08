@@ -41,13 +41,7 @@ TEST_CASE("Test empty table", "[storage]") {
 		result = con.Query("SELECT COUNT(*) FROM test");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	}
-	{
-		DuckDB db(storage_database, config.get());
-		Connection con(db);
-		result = con.Query("SELECT COUNT(*) FROM test");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	}
-	{
+	for (idx_t i = 0; i < 2; i++) {
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		result = con.Query("SELECT COUNT(*) FROM test");
@@ -106,6 +100,12 @@ TEST_CASE("Test storing NULLs and strings", "[storage]") {
 		result = con.Query("SELECT a, b FROM test ORDER BY a");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 12, 13}));
 		REQUIRE(CHECK_COLUMN(result, 1, {"hello", Value(), "abcdefgh"}));
+	}
+	{
+		DuckDB db(storage_database, config.get());
+		Connection con(db);
+		REQUIRE_FAIL(con.Query("CREATE TABLE test (a INTEGER, b STRING);"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE IF NOT EXISTS test (a INTEGER, b STRING);"));
 	}
 	DeleteDatabase(storage_database);
 }

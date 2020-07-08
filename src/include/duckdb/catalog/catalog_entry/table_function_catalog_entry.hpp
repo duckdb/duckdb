@@ -26,5 +26,6 @@ public:
 
 	//! The table function
 	TableFunction function;
+	bool supports_projection;
 };
 } // namespace duckdb

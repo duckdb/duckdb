@@ -116,6 +116,10 @@ test('''
 SELECT NULL;
 ''', out="wilbur")
 
+test("select 'yo' where 'abc' like 'a%c';", out='yo')
+
+test("select regexp_matches('abc','abc')", out='true')
+
 test('.help', 'Show this message')
 
 test('.load %s' % tf(), err="Error")

@@ -18,3 +18,7 @@ void PhysicalTableFunction::GetChunkInternal(ClientContext &context, DataChunk &
 		}
 	}
 }
+
+string PhysicalTableFunction::ExtraRenderInformation() const {
+	return function->name;
+}

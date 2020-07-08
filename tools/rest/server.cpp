@@ -108,7 +108,7 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::DOUBLE:
-			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
+			assign_json_loop<double, double>(*v, col_idx, chunk->size(), j);
 			break;
 		case TypeId::VARCHAR: {
 			auto data_ptr = FlatVector::GetData<string_t>(*v);

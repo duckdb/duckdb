@@ -13,6 +13,8 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -53,7 +55,7 @@ private:
 };
 
 void WriteAheadLog::Replay(DuckDB &database, string &path) {
-	BufferedFileReader reader(*database.file_system, path.c_str());
+	BufferedFileReader reader(database.GetFileSystem(), path.c_str());
 
 	if (reader.Finished()) {
 		// WAL is empty
@@ -92,7 +94,7 @@ void WriteAheadLog::Replay(DuckDB &database, string &path) {
 		}
 	} catch (std::exception &ex) {
 		// FIXME: this report a proper warning in the connection
-		fprintf(stderr, "Exception in WAL playback: %s\n", ex.what());
+		Printer::Print(StringUtil::Format("Exception in WAL playback: %s\n", ex.what()));
 		// exception thrown in WAL replay: rollback
 		context.transaction.Rollback();
 	}

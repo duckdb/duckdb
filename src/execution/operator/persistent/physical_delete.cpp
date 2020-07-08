@@ -3,24 +3,47 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
+#include <atomic>
+
 using namespace std;
 
-void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	int64_t deleted_count = 0;
-	while (true) {
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			break;
-		}
-		// delete data in the base table
-		// the row ids are given to us as the last column of the child chunk
-		table.Delete(tableref, context, state->child_chunk.data[row_id_index], state->child_chunk.size());
-		deleted_count += state->child_chunk.size();
+namespace duckdb {
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class DeleteGlobalState : public GlobalOperatorState {
+public:
+	DeleteGlobalState() : deleted_count(0) {
 	}
 
+	std::atomic<idx_t> deleted_count;
+};
+
+void PhysicalDelete::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                          DataChunk &input) {
+	auto &gstate = (DeleteGlobalState &)state;
+
+	// delete data in the base table
+	// the row ids are given to us as the last column of the child chunk
+	table.Delete(tableref, context, input.data[row_id_index], input.size());
+	gstate.deleted_count += input.size();
+}
+
+unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &context) {
+	return make_unique<DeleteGlobalState>();
+}
+
+//===--------------------------------------------------------------------===//
+// GetChunkInternal
+//===--------------------------------------------------------------------===//
+void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+	auto &gstate = (DeleteGlobalState &)*sink_state;
+
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(deleted_count));
+	chunk.SetValue(0, 0, Value::BIGINT(gstate.deleted_count));
 
 	state->finished = true;
 }
+
+} // namespace duckdb

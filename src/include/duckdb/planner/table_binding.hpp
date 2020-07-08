@@ -22,6 +22,7 @@ class SubqueryRef;
 class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
+class BoundTableFunction;
 
 enum class BindingType : uint8_t { TABLE = 0, SUBQUERY = 1, TABLE_FUNCTION = 2, GENERIC = 3 };
 
@@ -64,7 +65,7 @@ struct GenericBinding : public Binding {
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names
-	unordered_map<string, uint64_t> name_map;
+	unordered_map<string, column_t> name_map;
 
 public:
 	bool HasMatchingBinding(const string &column_name) override;

@@ -25,11 +25,19 @@ if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     sys.path.append('scripts')
     import amalgamation
     amalgamation.generate_amalgamation(target_source, target_header)
+
+    sys.path.append('extension/parquet')
+    import parquet_amalgamation
+    ext_target_header = os.path.join(prev_wd, 'parquet-extension.hpp')
+    ext_target_source = os.path.join(prev_wd, 'parquet-extension.cpp')
+    parquet_amalgamation.generate_amalgamation(ext_target_source, ext_target_header)
+
     os.chdir(prev_wd)
 
 
 toolchain_args = ['-std=c++11']
-#toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+if 'DUCKDEBUG' in os.environ:
+    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -51,7 +59,7 @@ class get_numpy_include(object):
 
 libduckdb = Extension('duckdb',
     include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
-    sources=['duckdb_python.cpp', 'duckdb.cpp'],
+    sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
     extra_compile_args=toolchain_args,
     extra_link_args=toolchain_args,
     language='c++')
@@ -62,20 +70,23 @@ if {'pytest', 'test', 'ptr'}.intersection(sys.argv):
 else:
     setup_requires = []
 
+setuptools_scm_conf = {"root": "../..", "relative_to": __file__}
+if os.getenv('SETUPTOOLS_SCM_NO_LOCAL', 'no') != 'no':
+    setuptools_scm_conf['local_scheme'] = 'no-local-version'
+
 setup(
     name = "duckdb",
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
-    long_description = '',
-    install_requires=[ # these versions are still available for Python 2, newer ones aren't
-         'numpy>=1.14',
-         'pandas>=0.23',
+    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python',
+    install_requires=[ # these version is still available for Python 2, newer ones aren't
+         'numpy>=1.14'
     ],
     packages=['duckdb_query_graph'],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.4'],
-    use_scm_version = {"root": "../..", "relative_to": __file__},
+    use_scm_version = setuptools_scm_conf,
     tests_require=['pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',

@@ -37,4 +37,8 @@ struct CurrentTimestampFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EpochFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
