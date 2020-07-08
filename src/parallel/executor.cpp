@@ -55,7 +55,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 		}
 		lock_guard<mutex> plock(pipeline_lock);
 		for (auto &pipeline : to_schedule) {
-			Schedule(pipeline.get());
+			Schedule(pipeline);
 		}
 	}
 	// now work on the tasks of this pipeline until the query is finished executing
