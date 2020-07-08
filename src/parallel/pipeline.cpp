@@ -24,12 +24,14 @@ void Pipeline::Execute(ClientContext &client) {
 		child->InitializeChunk(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
+			thread.profiler.StartOperator(sink);
 			if (intermediate.size() == 0) {
 				sink->Combine(context, *sink_state, *lstate);
 				sink->Finalize(context, move(sink_state));
 				break;
 			}
 			sink->Sink(context, *sink_state, *lstate, intermediate);
+			thread.profiler.EndOperator(nullptr);
 		}
 	} catch(std::exception &ex) {
 		executor.PushError(ex.what());

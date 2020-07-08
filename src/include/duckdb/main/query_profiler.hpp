@@ -37,7 +37,7 @@ public:
 	OperatorProfiler(bool enabled);
 
 	void StartOperator(PhysicalOperator *phys_op);
-	void EndOperator(DataChunk &chunk);
+	void EndOperator(DataChunk *chunk);
 private:
 	void AddTiming(PhysicalOperator *op, double time, idx_t elements);
 

@@ -51,6 +51,8 @@ void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	if (queue->q.enqueue(token.token->queue_token, move(task))) {
 		queue->semaphore.signal();
+	} else {
+		throw InternalException("Could not schedule task!");
 	}
 }
 

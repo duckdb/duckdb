@@ -132,7 +132,7 @@ void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
 	op.Start();
 }
 
-void OperatorProfiler::EndOperator(DataChunk &chunk) {
+void OperatorProfiler::EndOperator(DataChunk *chunk) {
 	if (!enabled) {
 		return;
 	}
@@ -140,7 +140,7 @@ void OperatorProfiler::EndOperator(DataChunk &chunk) {
 	// finish timing for the current element
 	op.End();
 
-	AddTiming(execution_stack.top(), op.Elapsed(), chunk.size());
+	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
 
 	assert(!execution_stack.empty());
 	execution_stack.pop();

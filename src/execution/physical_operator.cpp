@@ -46,7 +46,7 @@ void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, Phy
 
 	context.thread.profiler.StartOperator(this);
 	GetChunkInternal(context, chunk, state);
-	context.thread.profiler.EndOperator(chunk);
+	context.thread.profiler.EndOperator(&chunk);
 
 	chunk.Verify();
 }
