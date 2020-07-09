@@ -4,15 +4,27 @@
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-Pipeline::Pipeline(Executor &executor_) : executor(executor_) {
+Pipeline::Pipeline(Executor &executor_, idx_t maximum_threads_) :
+      executor(executor_), finished(false), current_threads(0), maximum_threads(maximum_threads_) {
 }
 
-void Pipeline::Execute(ClientContext &client) {
+bool Pipeline::TryWork() {
+	lock_guard<mutex> plock(pipeline_lock);
+	if (current_threads >= maximum_threads || finished || dependencies.size() > 0) {
+		return false;
+	}
+	current_threads++;
+	return true;
+}
+
+void Pipeline::Execute() {
+	auto &client = executor.context;
 	if (client.interrupted) {
 		return;
 	}
@@ -57,17 +69,17 @@ void Pipeline::EraseDependency(Pipeline *pipeline) {
 	dependencies.erase(dependencies.find(pipeline));
 	if (dependencies.size() == 0) {
 		// no more dependents: schedule this pipeline
-		executor.Schedule(this);
+		executor.SchedulePipeline(shared_from_this());
 	}
 }
 
 void Pipeline::Finish() {
+	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent : parents) {
 		// parent: remove this entry from the dependents
 		parent->EraseDependency(this);
 	}
-	// erase pipeline from the execution context
 	executor.ErasePipeline(this);
 }
 

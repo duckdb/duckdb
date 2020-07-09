@@ -1,36 +1,24 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 
-#include "concurrentqueue.h"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+
+#include "concurrentqueue.h"
 #include "lightweightsemaphore.h"
+
+using namespace std;
 
 namespace duckdb {
 
-typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
-struct ConcurrentQueue {
-    concurrent_queue_t q;
-    lightweight_semaphore_t semaphore;
+struct Semaphore {
+    lightweight_semaphore_t s;
 };
 
-struct QueueProducerToken {
-    QueueProducerToken(concurrent_queue_t &q) : queue_token(q) {}
 
-    moodycamel::ProducerToken queue_token;
-};
-
-ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token)  : scheduler(scheduler), token(move(token)) {
-
-}
-
-ProducerToken::~ProducerToken() {
-
-}
-
-TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler() : semaphore(make_unique<Semaphore>()) {
 
 }
 
@@ -42,44 +30,52 @@ TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
 	return *context.db.scheduler;
 }
 
-unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
-    auto token = make_unique<QueueProducerToken>(queue->q);
-    return make_unique<ProducerToken>(*this, move(token));
+void TaskScheduler::Schedule(Executor *executor) {
+	lock_guard<mutex> slock(scheduler_lock);
+	tasks.push_back(make_shared<ExecutorTask>(*executor));
+	//! signal all threads to start working on this query
+	semaphore->s.signal(threads.size());
 }
 
-void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
-	// Enqueue a task for the given producer token and signal any sleeping threads
-	if (queue->q.enqueue(token.token->queue_token, move(task))) {
-		queue->semaphore.signal();
-	} else {
-		throw InternalException("Could not schedule task!");
+void TaskScheduler::Finish(Executor *executor) {
+	lock_guard<mutex> slock(scheduler_lock);
+	idx_t i;
+	for(i = 0; i < tasks.size(); i++) {
+		if (&tasks[i]->executor == executor) {
+			break;
+		}
 	}
+	assert(i < tasks.size());
+	tasks[i]->executor.finished = true;
+	tasks.erase(tasks.begin() + i);
 }
 
-void TaskScheduler::ExecuteTasks(ProducerToken &token) {
-	unique_ptr<Task> task;
-    // loop over the queue executing tasks for the given producer until the tasks of that producer are exhausted
-	while(queue->q.try_dequeue_from_producer(token.token->queue_token, task)) {
-		task->Execute();
-		task.reset();
-	}
-}
-
-void TaskScheduler::ExecuteTasksForever(bool *marker) {
+void TaskScheduler::ExecuteForever(bool *marker) {
     unique_ptr<Task> task;
 	// loop until the marker is set to false
 	while(*marker) {
-		// wait for a signal with a timeout; the timeout allows us to periodically check
-        queue->semaphore.wait(TASK_TIMEOUT_USECS);
-        if (queue->q.try_dequeue(task)) {
-            task->Execute();
-			task.reset();
-        }
+		// wait for a signal with a timeout
+		// the timeout allows us to periodically check
+        semaphore->s.wait(TASK_TIMEOUT_USECS);
+		// try to find a task to execute
+		for(idx_t i = 0; i < tasks.size(); i++) {
+			shared_ptr<ExecutorTask> task;
+			{
+				lock_guard<mutex> slock(scheduler_lock);
+				if (i >= tasks.size()) {
+					break;
+				}
+				task = tasks[i];
+			}
+			if (!task->finished) {
+				task->executor.Work();
+			}
+		}
 	}
 }
 
 static void ThreadExecuteTasks(TaskScheduler *scheduler, bool *marker) {
-	scheduler->ExecuteTasksForever(marker);
+	scheduler->ExecuteForever(marker);
 }
 
 void TaskScheduler::SetThreads(int32_t n) {

@@ -14,9 +14,9 @@ namespace duckdb {
 class Executor;
 
 //! The Pipeline class represents an execution pipeline
-class Pipeline {
+class Pipeline : public std::enable_shared_from_this<Pipeline> {
 public:
-	Pipeline(Executor &execution_context);
+	Pipeline(Executor &execution_context, idx_t maximum_threads = 1);
 
 	Executor &executor;
 	//! The child from which to pull chunks
@@ -31,9 +31,19 @@ public:
 	//! executing)
 	unordered_set<Pipeline *> dependencies;
 
+	//! Whether or not the pipeline is finished executing
+	bool finished;
+	//! The current threads working on the pipeline
+	idx_t current_threads;
+	//! The maximum amount of threads that can work on the pipeline
+	idx_t maximum_threads;
+
 public:
+	//! Try to start working on this pipeline. Returns false if the pipeline is already fully occupied.
+	bool TryWork();
+
 	//! Execute the pipeline sequentially on a single thread
-	void Execute(ClientContext &context);
+	void Execute();
 
 	void AddDependency(Pipeline *pipeline);
 	void EraseDependency(Pipeline *pipeline);

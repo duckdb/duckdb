@@ -9,7 +9,10 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+
+#include <queue>
 
 namespace duckdb {
 class ClientContext;
@@ -28,11 +31,18 @@ public:
 	Executor(ClientContext &context);
 	~Executor();
 
+	ClientContext &context;
+	bool finished;
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
+
+	void Work();
 	void Reset();
+
+	void SchedulePipeline(shared_ptr<Pipeline> pipeline);
+	void ErasePipeline(Pipeline *pipeline);
 
 	vector<TypeId> GetTypes();
 
@@ -44,21 +54,16 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 private:
-	void Schedule(Pipeline *pipeline);
-
-	void ErasePipeline(Pipeline *pipeline);
-
-private:
-	ClientContext &context;
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
-	std::mutex pipeline_lock;
+
+	mutex executor_lock;
 	//! The pipelines of the current query
-	vector<unique_ptr<Pipeline>> pipelines;
-	//! The producer token of this query, any tasks created by this query are associated with this producer token
-    unique_ptr<ProducerToken> producer;
+	vector<shared_ptr<Pipeline>> pipelines;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
+
+	std::queue<shared_ptr<Pipeline>> scheduled_pipelines;
 
 
     unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;

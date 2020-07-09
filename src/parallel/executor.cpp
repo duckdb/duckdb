@@ -9,26 +9,13 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
 namespace duckdb {
 
-class PipelineTask : public Task {
-public:
-	PipelineTask(ClientContext &context, Pipeline *pipeline) :
-	      context(context), pipeline(pipeline) {
-	}
-
-	void Execute() override {
-		pipeline->Execute(context);
-		pipeline->Finish();
-	}
-private:
-    ClientContext &context;
-    Pipeline *pipeline;
-};
-
-Executor::Executor(ClientContext &context) : context(context) {
+Executor::Executor(ClientContext &context) : context(context), finished(false) {
 }
 
 Executor::~Executor() {
@@ -45,27 +32,57 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	BuildPipelines(physical_plan.get(), nullptr);
 
 	// schedule pipelines that do not have dependents
-    this->producer = TaskScheduler::GetScheduler(context).CreateProducer();
-	{
-		vector<Pipeline *> to_schedule;
-		for (auto &pipeline : pipelines) {
-			if (pipeline->dependencies.size() == 0) {
-				to_schedule.push_back(pipeline.get());
-			}
-		}
-		lock_guard<mutex> plock(pipeline_lock);
-		for (auto &pipeline : to_schedule) {
-			Schedule(pipeline);
+	for(auto &pipeline : pipelines) {
+		if (pipeline->dependencies.size() == 0) {
+			scheduled_pipelines.push(pipeline);
 		}
 	}
+
+	finished = false;
+
+	// schedule the executor so worker threads can help work on this query
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	scheduler.Schedule(this);
+
 	// now work on the tasks of this pipeline until the query is finished executing
 	while(pipelines.size() > 0) {
-		auto &scheduler = TaskScheduler::GetScheduler(context);
-		scheduler.ExecuteTasks(*producer);
+		Work();
 	}
+
+	// finished execution: unschedule the executor again
+	scheduler.Finish(this);
+
 	if (exceptions.size() > 0) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
+	}
+}
+
+void Executor::Work() {
+	if (finished) {
+		return;
+	}
+
+	while(scheduled_pipelines.size() > 0) {
+		// find a pipeline to work on
+		shared_ptr<Pipeline> pipeline;
+		{
+			lock_guard<mutex> elock(executor_lock);
+			while (scheduled_pipelines.size() > 0) {
+				pipeline = scheduled_pipelines.front();
+				if (!pipeline->TryWork()) {
+					// cannot work on this pipeline!
+					scheduled_pipelines.pop();
+					pipeline.reset();
+				} else {
+					break;
+				}
+			}
+		}
+		if (pipeline) {
+			pipeline->Execute();
+			pipeline->Finish();
+		}
 	}
 }
 
@@ -78,7 +95,7 @@ void Executor::Reset() {
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_unique<Pipeline>(*this);
+		auto pipeline = make_shared<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
@@ -156,21 +173,13 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	}
 };
 
-void Executor::Schedule(Pipeline *pipeline) {
-	assert(pipeline->dependencies.size() == 0);
-    auto task = make_unique<PipelineTask>(context, pipeline);
-
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	scheduler.ScheduleTask(*producer, move(task));
-}
-
 vector<TypeId> Executor::GetTypes() {
 	assert(physical_plan);
 	return physical_plan->GetTypes();
 }
 
 void Executor::PushError(std::string exception) {
-	lock_guard<mutex> plock(pipeline_lock);
+	lock_guard<mutex> elock(executor_lock);
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
@@ -178,8 +187,20 @@ void Executor::PushError(std::string exception) {
 }
 
 void Executor::Flush(ThreadContext &tcontext) {
-	lock_guard<mutex> plock(pipeline_lock);
+	lock_guard<mutex> elock(executor_lock);
 	context.profiler.Flush(tcontext.profiler);
+}
+
+void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
+	lock_guard<mutex> elock(executor_lock);
+	scheduled_pipelines.push(move(pipeline));
+}
+
+void Executor::ErasePipeline(Pipeline *pipeline) {
+	lock_guard<mutex> elock(executor_lock);
+	pipelines.erase(std::find_if(pipelines.begin(), pipelines.begin(), [&](shared_ptr<Pipeline> &arg) {
+		return arg.get() == pipeline;
+	}));
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
@@ -193,12 +214,6 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	physical_plan->InitializeChunk(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	return chunk;
-}
-
-void Executor::ErasePipeline(Pipeline *pipeline) {
-	lock_guard<mutex> plock(pipeline_lock);
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
-	                             [&](std::unique_ptr<Pipeline> &p) { return p.get() == pipeline; }));
 }
 
 } // namespace duckdb
