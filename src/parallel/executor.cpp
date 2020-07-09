@@ -33,7 +33,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	// schedule pipelines that do not have dependents
 	for(auto &pipeline : pipelines) {
-		if (pipeline->dependencies.size() == 0) {
+		if (!pipeline->HasDependencies()) {
 			scheduled_pipelines.push(pipeline);
 		}
 	}
@@ -192,13 +192,14 @@ void Executor::Flush(ThreadContext &tcontext) {
 }
 
 void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
+	assert(!pipeline->HasDependencies());
 	lock_guard<mutex> elock(executor_lock);
 	scheduled_pipelines.push(move(pipeline));
 }
 
 void Executor::ErasePipeline(Pipeline *pipeline) {
 	lock_guard<mutex> elock(executor_lock);
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.begin(), [&](shared_ptr<Pipeline> &arg) {
+	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(), [&](shared_ptr<Pipeline> &arg) {
 		return arg.get() == pipeline;
 	}));
 }

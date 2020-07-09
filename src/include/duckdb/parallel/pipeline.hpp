@@ -15,10 +15,31 @@ class Executor;
 
 //! The Pipeline class represents an execution pipeline
 class Pipeline : public std::enable_shared_from_this<Pipeline> {
+	friend class Executor;
 public:
 	Pipeline(Executor &execution_context, idx_t maximum_threads = 1);
 
 	Executor &executor;
+public:
+	//! Try to start working on this pipeline. Returns false if the pipeline is already fully occupied.
+	bool TryWork();
+
+	//! Execute the pipeline sequentially on a single thread
+	void Execute();
+
+	void AddDependency(Pipeline *pipeline);
+	void EraseDependency(Pipeline *pipeline);
+	bool HasDependencies() {
+		return dependencies.size() != 0;
+	}
+
+	//! Finish executing this pipeline
+	void Finish();
+
+	string ToString() const;
+	void Print() const;
+private:
+	std::mutex pipeline_lock;
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state
@@ -38,22 +59,6 @@ public:
 	//! The maximum amount of threads that can work on the pipeline
 	idx_t maximum_threads;
 
-public:
-	//! Try to start working on this pipeline. Returns false if the pipeline is already fully occupied.
-	bool TryWork();
-
-	//! Execute the pipeline sequentially on a single thread
-	void Execute();
-
-	void AddDependency(Pipeline *pipeline);
-	void EraseDependency(Pipeline *pipeline);
-	//! Finish executing this pipeline
-	void Finish();
-
-	string ToString() const;
-	void Print() const;
-private:
-	std::mutex pipeline_lock;
 };
 
 } // namespace duckdb

@@ -24,6 +24,8 @@ bool Pipeline::TryWork() {
 }
 
 void Pipeline::Execute() {
+	assert(dependencies.size() == 0);
+
 	auto &client = executor.context;
 	if (client.interrupted) {
 		return;
@@ -32,7 +34,6 @@ void Pipeline::Execute() {
 	ThreadContext thread(client);
 	ExecutionContext context(client, thread);
 	try {
-		assert(dependencies.size() == 0);
 		auto state = child->GetOperatorState();
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
@@ -74,6 +75,8 @@ void Pipeline::EraseDependency(Pipeline *pipeline) {
 }
 
 void Pipeline::Finish() {
+	assert(dependencies.size() == 0);
+	assert(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent : parents) {
