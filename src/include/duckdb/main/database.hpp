@@ -34,8 +34,8 @@ public:
 	unique_ptr<StorageManager> storage;
 	unique_ptr<Catalog> catalog;
 	unique_ptr<TransactionManager> transaction_manager;
-	unique_ptr<ConnectionManager> connection_manager;
 	unique_ptr<TaskScheduler> scheduler;
+	unique_ptr<ConnectionManager> connection_manager;
 public:
 	template <class T> void LoadExtension() {
 		T extension;
