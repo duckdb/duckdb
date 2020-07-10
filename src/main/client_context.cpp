@@ -616,6 +616,12 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	return "";
 }
 
+void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
+	RunFunctionInTransaction([&]() {
+		temporary_objects.get()->CreateFunction(*this, info);
+	});
+}
+
 template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {
 	lock_guard<mutex> client_guard(context_lock);
 	if (is_invalidated) {

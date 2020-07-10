@@ -100,7 +100,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(PGFuncCall *root) {
 		function_name = reinterpret_cast<PGValue *>(name->head->next->data.ptr_value)->val.str;
 	} else {
 		// unqualified name
-		schema = DEFAULT_SCHEMA;
+//		schema = DEFAULT_SCHEMA;
+		schema = INVALID_SCHEMA;
 		function_name = reinterpret_cast<PGValue *>(name->head->data.ptr_value)->val.str;
 	}
 

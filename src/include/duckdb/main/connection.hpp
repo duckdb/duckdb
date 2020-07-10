@@ -16,6 +16,7 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/function/udf_function.hpp"
 
 namespace duckdb {
 
@@ -101,6 +102,18 @@ public:
 	void BeginTransaction();
 	void Commit();
 	void Rollback();
+
+	template<typename TR, typename... Args>
+	void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
+		scalar_function_t function =  UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
+		UDFWrapper::RegisterFunction<TR, Args...>(name, function, *context);
+	}
+
+	template<typename TR, typename... Args>
+	void CreateScalarFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
+		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
+	}
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

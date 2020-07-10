@@ -43,6 +43,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	expr.function.function(arguments, *state, result);
+
 	if (result.type != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.type,
 		                            "expected function to return the former "

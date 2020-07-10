@@ -66,7 +66,8 @@ enum class ExceptionType {
 	INTERRUPT = 29,       // interrupt
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
-	    31 // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
+	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
+	INVALID_INPUT = 32    // Input or arguments error
 };
 
 class Exception : public std::exception {
@@ -194,6 +195,11 @@ public:
 class InternalException : public Exception {
 public:
 	InternalException(string msg, ...);
+};
+
+class InvalidInputException : public Exception {
+public:
+	InvalidInputException(string msg, ...);
 };
 
 } // namespace duckdb
