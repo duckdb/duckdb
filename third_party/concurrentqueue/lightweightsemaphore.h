@@ -1,5 +1,5 @@
 // Provides an efficient implementation of a semaphore (LightweightSemaphore).
-// This is an extension of Jeff Preshing's sempahore implementation (licensed 
+// This is an extension of Jeff Preshing's sempahore implementation (licensed
 // under the terms of its separate zlib license) that has been adapted and
 // extended by Cameron Desrochers.
 
@@ -59,7 +59,7 @@ class Semaphore
 {
 private:
 	void* m_hSema;
-	
+
 	Semaphore(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
 	Semaphore& operator=(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
 
@@ -82,12 +82,12 @@ public:
 		const unsigned long infinite = 0xffffffff;
 		return WaitForSingleObject(m_hSema, infinite) == 0;
 	}
-	
+
 	bool try_wait()
 	{
 		return WaitForSingleObject(m_hSema, 0) == 0;
 	}
-	
+
 	bool timed_wait(std::uint64_t usecs)
 	{
 		return WaitForSingleObject(m_hSema, (unsigned long)(usecs / 1000)) == 0;
@@ -129,12 +129,12 @@ public:
 	{
 		return semaphore_wait(m_sema) == KERN_SUCCESS;
 	}
-	
+
 	bool try_wait()
 	{
 		return timed_wait(0);
 	}
-	
+
 	bool timed_wait(std::uint64_t timeout_usecs)
 	{
 		mach_timespec_t ts;
@@ -160,6 +160,8 @@ public:
 	}
 };
 #elif defined(__unix__)
+#include <chrono>
+
 //---------------------------------------------------------
 // Semaphore (POSIX, Linux)
 //---------------------------------------------------------
@@ -207,11 +209,22 @@ public:
 	bool timed_wait(std::uint64_t usecs)
 	{
 		struct timespec ts;
-		const int usecs_in_1_sec = 1000000;
-		const int nsecs_in_1_sec = 1000000000;
-		clock_gettime(CLOCK_REALTIME, &ts);
+		// sem_timedwait needs an absolute time
+		// hence we need to first obtain the current time
+		// and then add the maximum time we want to wait
+		// we want to avoid clock_gettime because of linking issues
+		// chrono -> timespec conversion from here: https://embeddedartistry.com/blog/2019/01/31/converting-between-timespec-stdchrono/
+		auto current_time = std::chrono::system_clock::now();
+		auto secs =  std::chrono::time_point_cast<seconds>(current_time);
+		auto ns = std::chrono::time_point_cast<nanoseconds>(current_time) - std::chrono::time_point_cast<nanoseconds>(secs);
+
+		ts.tv_sec = secs.time_since_epoch().count();
+		ts.tv_nsec = ns.count();
+
+		// now add the time we want to wait
 		ts.tv_sec += usecs / usecs_in_1_sec;
 		ts.tv_nsec += (usecs % usecs_in_1_sec) * 1000;
+
 		// sem_timedwait bombs if you have more than 1e9 in tv_nsec
 		// so we have to clean things up before passing it in
 		if (ts.tv_nsec >= nsecs_in_1_sec) {
@@ -385,7 +398,7 @@ public:
 			result = waitManyWithPartialSpinning(max, timeout_usecs);
 		return result;
 	}
-	
+
 	ssize_t waitMany(ssize_t max)
 	{
 		ssize_t result = waitMany(max, -1);
@@ -403,7 +416,7 @@ public:
 			m_sema.signal((int)toRelease);
 		}
 	}
-	
+
 	ssize_t availableApprox() const
 	{
 		ssize_t count = m_count.load(std::memory_order_relaxed);
