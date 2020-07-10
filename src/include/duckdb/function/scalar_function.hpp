@@ -20,7 +20,7 @@ class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
 
 //! The type used for scalar functions
-typedef void (*scalar_function_t)(DataChunk &input, ExpressionState &state, Vector &result);
+typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpression &expr, ClientContext &context);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
@@ -57,10 +57,25 @@ public:
 	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
-		return function == rhs.function && bind == rhs.bind && dependency == rhs.dependency;
+		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency;
 	}
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
+	}
+
+private:
+	bool CompareScalarFunctionT(const scalar_function_t other) const {
+		typedef void(funcTypeT)(DataChunk &, ExpressionState &, Vector &);
+
+		funcTypeT **func_ptr  = (funcTypeT**) function.template target<funcTypeT*>();
+		funcTypeT **other_ptr = (funcTypeT**) other.template target<funcTypeT*>();
+
+		//Case the functions were created from lambdas the target will return a nullptr
+		if(func_ptr == nullptr || other_ptr == nullptr) {
+			//scalar_function_t (std::functions) from lambdas cannot be compared
+			return false;
+		}
+	    return ((size_t)*func_ptr == (size_t)*other_ptr);
 	}
 
 public:
@@ -84,60 +99,84 @@ public:
 
 public:
 	template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
+		scalar_function_t function;
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
+			function = &ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
+			break;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
+			function = &ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
+			break;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
+			function = &ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
+			break;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
+			function = &ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
+			break;
 		case SQLTypeId::FLOAT:
-			return ScalarFunction::UnaryFunction<float, float, OP>;
+			function = &ScalarFunction::UnaryFunction<float, float, OP>;
+			break;
 		case SQLTypeId::DOUBLE:
-			return ScalarFunction::UnaryFunction<double, double, OP>;
+			function = &ScalarFunction::UnaryFunction<double, double, OP>;
+			break;
 		case SQLTypeId::DECIMAL:
-			return ScalarFunction::UnaryFunction<double, double, OP>;
+			function = &ScalarFunction::UnaryFunction<double, double, OP>;
+			break;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
 		}
+		return function;
 	}
 
 	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
+		scalar_function_t function;
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+			break;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+			break;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+			break;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+			break;
 		case SQLTypeId::FLOAT:
-			return ScalarFunction::UnaryFunction<float, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<float, TR, OP>;
+			break;
 		case SQLTypeId::DOUBLE:
-			return ScalarFunction::UnaryFunction<double, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
+			break;
 		case SQLTypeId::DECIMAL:
-			return ScalarFunction::UnaryFunction<double, TR, OP>;
+			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
+			break;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
 		}
+		return function;
 	}
 
 	template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(SQLType type) {
+		scalar_function_t function;
 		switch (type.id) {
 		case SQLTypeId::TINYINT:
-			return ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+			function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
+			break;
 		case SQLTypeId::SMALLINT:
-			return ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+			function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
+			break;
 		case SQLTypeId::INTEGER:
-			return ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+			function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
+			break;
 		case SQLTypeId::BIGINT:
-			return ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+			break;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
 		}
+		return function;
 	}
 };
 

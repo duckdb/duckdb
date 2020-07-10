@@ -31,6 +31,7 @@ add_subdirectory(transactions)
 add_subdirectory(views)
 add_subdirectory(storage)
 add_subdirectory(update)
+add_subdirectory(udf_function)
 
 if(NOT WIN32 AND NOT SUN)
   add_subdirectory(tpch)

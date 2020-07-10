@@ -105,6 +105,9 @@ public:
 	void RegisterAppender(Appender *appender);
 	void RemoveAppender(Appender *appender);
 
+	//! Register function in the temporary schema
+	void RegisterFunction(CreateFunctionInfo *info);
+
 private:
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.

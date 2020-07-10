@@ -10,18 +10,24 @@ using namespace std;
 namespace duckdb {
 
 template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(SQLType type) {
+	scalar_function_t function;
 	switch (type.id) {
 	case SQLTypeId::TINYINT:
-		return ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+		function = &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
+		break;
 	case SQLTypeId::SMALLINT:
-		return ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+		function = &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
+		break;
 	case SQLTypeId::INTEGER:
-		return ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+		function = &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
+		break;
 	case SQLTypeId::BIGINT:
-		return ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+		function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunctionFixedReturn");
 	}
+	return function;
 }
 
 struct UnaryDoubleWrapper {
