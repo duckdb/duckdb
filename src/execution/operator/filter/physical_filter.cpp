@@ -60,4 +60,4 @@ string PhysicalFilter::ExtraRenderInformation() const {
 	return expression->GetName();
 }
 
-}
+} // namespace duckdb

@@ -20,4 +20,4 @@ void PhysicalPrepare::GetChunkInternal(ExecutionContext &context, DataChunk &chu
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

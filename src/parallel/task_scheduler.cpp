@@ -14,16 +14,14 @@ namespace duckdb {
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct Semaphore {
-    lightweight_semaphore_t s;
+	lightweight_semaphore_t s;
 };
 
-
 TaskScheduler::TaskScheduler() : semaphore(make_unique<Semaphore>()) {
-
 }
 
 TaskScheduler::~TaskScheduler() {
-    SetThreads(1);
+	SetThreads(1);
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
@@ -40,7 +38,7 @@ void TaskScheduler::Schedule(Executor *executor) {
 void TaskScheduler::Finish(Executor *executor) {
 	lock_guard<mutex> slock(scheduler_lock);
 	idx_t i;
-	for(i = 0; i < tasks.size(); i++) {
+	for (i = 0; i < tasks.size(); i++) {
 		if (&tasks[i]->executor == executor) {
 			break;
 		}
@@ -51,14 +49,14 @@ void TaskScheduler::Finish(Executor *executor) {
 }
 
 void TaskScheduler::ExecuteForever(bool *marker) {
-    unique_ptr<Task> task;
+	unique_ptr<Task> task;
 	// loop until the marker is set to false
-	while(*marker) {
+	while (*marker) {
 		// wait for a signal with a timeout
 		// the timeout allows us to periodically check
-        semaphore->s.wait(TASK_TIMEOUT_USECS);
+		semaphore->s.wait(TASK_TIMEOUT_USECS);
 		// try to find a task to execute
-		for(idx_t i = 0; i < tasks.size(); i++) {
+		for (idx_t i = 0; i < tasks.size(); i++) {
 			shared_ptr<ExecutorTask> task;
 			{
 				lock_guard<mutex> slock(scheduler_lock);
@@ -85,27 +83,27 @@ void TaskScheduler::SetThreads(int32_t n) {
 	idx_t new_thread_count = n - 1;
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
-		for(idx_t i = 0; i < new_thread_count - threads.size(); i++) {
+		for (idx_t i = 0; i < new_thread_count - threads.size(); i++) {
 			// launch a thread and assign it a cancellation marker
-            auto marker = unique_ptr<bool>(new bool(true));
+			auto marker = unique_ptr<bool>(new bool(true));
 			auto worker_thread = make_unique<thread>(ThreadExecuteTasks, this, marker.get());
 
-	        threads.push_back(move(worker_thread));
-            markers.push_back(move(marker));
+			threads.push_back(move(worker_thread));
+			markers.push_back(move(marker));
 		}
 	} else if (threads.size() > new_thread_count) {
 		// we are reducing the number of threads: cancel any threads exceeding new_thread_count
-		for(idx_t i = new_thread_count; i < threads.size(); i++) {
+		for (idx_t i = new_thread_count; i < threads.size(); i++) {
 			*markers[i] = false;
 		}
 		// now join the threads to ensure they are fully stopped before erasing them
-        for(idx_t i = new_thread_count; i < threads.size(); i++) {
-            threads[i]->join();
-        }
+		for (idx_t i = new_thread_count; i < threads.size(); i++) {
+			threads[i]->join();
+		}
 		// erase the threads/markers
 		threads.resize(new_thread_count);
 		markers.resize(new_thread_count);
 	}
 }
 
-}
+} // namespace duckdb

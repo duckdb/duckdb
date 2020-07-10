@@ -55,4 +55,4 @@ void PhysicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-}
+} // namespace duckdb

@@ -42,7 +42,7 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*storage);
 	transaction_manager = make_unique<TransactionManager>(*storage);
-    scheduler = make_unique<TaskScheduler>();
+	scheduler = make_unique<TaskScheduler>();
 	connection_manager = make_unique<ConnectionManager>();
 	// initialize the database
 	storage->Initialize();

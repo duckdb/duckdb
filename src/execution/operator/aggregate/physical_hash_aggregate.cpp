@@ -159,7 +159,8 @@ public:
 	idx_t ht_scan_position;
 };
 
-void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                             PhysicalOperatorState *state_) {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)*state_;
 

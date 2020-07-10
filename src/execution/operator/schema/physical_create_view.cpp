@@ -10,4 +10,4 @@ void PhysicalCreateView::GetChunkInternal(ExecutionContext &context, DataChunk &
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

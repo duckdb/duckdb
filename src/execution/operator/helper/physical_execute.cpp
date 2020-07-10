@@ -13,4 +13,4 @@ unique_ptr<PhysicalOperatorState> PhysicalExecute::GetOperatorState() {
 	return plan->GetOperatorState();
 }
 
-}
+} // namespace duckdb

@@ -7,10 +7,20 @@ if(NOT MSVC)
     )
 endif()
 
-# clang-tidy config from presto-cpp
-# set(CMAKE_CXX_CLANG_TIDY clang-tidy --checks=*,-abseil-*,-android-*,-cert-err58-cpp,-clang-analyzer-osx-*,-cppcoreguidelines-avoid-c-arrays,-cppcoreguidelines-avoid-magic-numbers,-cppcoreguidelines-pro-bounds-array-to-pointer-decay,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-pro-type-reinterpret-cast,-cppcoreguidelines-pro-type-vararg,-fuchsia-*,-google-*,-hicpp-avoid-c-arrays,-hicpp-deprecated-headers,-hicpp-no-array-decay,-hicpp-use-equals-default,-hicpp-vararg,-llvmlibc-*,-llvm-header-guard,-llvm-include-order,-mpi-*,-misc-non-private-member-variables-in-classes,-misc-no-recursion,-misc-unused-parameters,-modernize-avoid-c-arrays,-modernize-deprecated-headers,-modernize-use-nodiscard,-modernize-use-trailing-return-type,-objc-*,-openmp-*,-readability-avoid-const-params-in-decls,-readability-convert-member-functions-to-static,-readability-magic-numbers,-zircon-*)
-
-
+# clang-tidy config from presto-cpp set(CMAKE_CXX_CLANG_TIDY clang-tidy
+# --checks=*,-abseil-*,-android-*,-cert-err58-cpp,-clang-analyzer-
+# osx-*,-cppcoreguidelines-avoid-c-arrays,-cppcoreguidelines-avoid-magic-
+# numbers,-cppcoreguidelines-pro-bounds-array-to-pointer-
+# decay,-cppcoreguidelines-pro-bounds-pointer-arithmetic,-cppcoreguidelines-pro-
+# type-reinterpret-cast,-cppcoreguidelines-pro-type-
+# vararg,-fuchsia-*,-google-*,-hicpp-avoid-c-arrays,-hicpp-deprecated-
+# headers,-hicpp-no-array-decay,-hicpp-use-equals-default,-hicpp-
+# vararg,-llvmlibc-*,-llvm-header-guard,-llvm-include-order,-mpi-*,-misc-non-
+# private-member-variables-in-classes,-misc-no-recursion,-misc-unused-
+# parameters,-modernize-avoid-c-arrays,-modernize-deprecated-headers,-modernize-
+# use-nodiscard,-modernize-use-trailing-return-
+# type,-objc-*,-openmp-*,-readability-avoid-const-params-in-decls,-readability-
+# convert-member-functions-to-static,-readability-magic-numbers,-zircon-*)
 
 if(AMALGAMATION_BUILD)
 

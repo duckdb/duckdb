@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/execution_context.hpp
+// duckdb/execution/executor.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -33,10 +33,10 @@ public:
 
 	ClientContext &context;
 	bool finished;
+
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
-
 
 	void Work();
 	void Reset();
@@ -53,6 +53,7 @@ public:
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
+
 private:
 	unique_ptr<PhysicalOperator> physical_plan;
 	unique_ptr<PhysicalOperatorState> physical_state;
@@ -65,7 +66,6 @@ private:
 
 	std::queue<shared_ptr<Pipeline>> scheduled_pipelines;
 
-
-    unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
+	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
 };
 } // namespace duckdb

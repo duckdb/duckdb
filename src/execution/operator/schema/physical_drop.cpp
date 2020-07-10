@@ -19,4 +19,4 @@ void PhysicalDrop::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

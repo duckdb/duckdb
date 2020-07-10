@@ -31,7 +31,8 @@ PhysicalRecursiveCTE::PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, 
 }
 
 // first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
-void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                            PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
 	if (!state->recursing) {
@@ -117,4 +118,4 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	return (move(state));
 }
 
-}
+} // namespace duckdb

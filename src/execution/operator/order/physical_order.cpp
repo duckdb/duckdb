@@ -35,7 +35,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	return make_unique<OrderByGlobalOperatorState>();
 }
 
-void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                         DataChunk &input) {
 	// concatenate all the data of the child chunks
 	auto &gstate = (OrderByGlobalOperatorState &)state;
 	lock_guard<mutex> glock(gstate.lock);

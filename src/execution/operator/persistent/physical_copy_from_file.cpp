@@ -41,4 +41,4 @@ PhysicalCopyFromFileOperatorState::PhysicalCopyFromFileOperatorState() : Physica
 PhysicalCopyFromFileOperatorState::~PhysicalCopyFromFileOperatorState() {
 }
 
-}
+} // namespace duckdb

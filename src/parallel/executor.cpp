@@ -32,7 +32,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	BuildPipelines(physical_plan.get(), nullptr);
 
 	// schedule pipelines that do not have dependents
-	for(auto &pipeline : pipelines) {
+	for (auto &pipeline : pipelines) {
 		if (!pipeline->HasDependencies()) {
 			scheduled_pipelines.push(pipeline);
 		}
@@ -45,7 +45,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	scheduler.Schedule(this);
 
 	// now work on the tasks of this pipeline until the query is finished executing
-	while(pipelines.size() > 0) {
+	while (pipelines.size() > 0) {
 		Work();
 	}
 
@@ -63,7 +63,7 @@ void Executor::Work() {
 		return;
 	}
 
-	while(scheduled_pipelines.size() > 0) {
+	while (scheduled_pipelines.size() > 0) {
 		// find a pipeline to work on
 		shared_ptr<Pipeline> pipeline;
 		{
@@ -199,9 +199,8 @@ void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
 
 void Executor::ErasePipeline(Pipeline *pipeline) {
 	lock_guard<mutex> elock(executor_lock);
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(), [&](shared_ptr<Pipeline> &arg) {
-		return arg.get() == pipeline;
-	}));
+	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
+	                             [&](shared_ptr<Pipeline> &arg) { return arg.get() == pipeline; }));
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {

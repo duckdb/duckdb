@@ -58,7 +58,6 @@ TEST_CASE("Test Parallel TPC-H SF0.1", "[tpch][.]") {
 	}
 }
 
-
 TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;

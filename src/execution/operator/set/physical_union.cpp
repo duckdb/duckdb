@@ -43,4 +43,4 @@ unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState() {
 	return (move(state));
 }
 
-}
+} // namespace duckdb

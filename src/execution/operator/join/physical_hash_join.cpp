@@ -46,7 +46,8 @@ public:
 
 class HashJoinGlobalState : public GlobalOperatorState {
 public:
-	HashJoinGlobalState() {}
+	HashJoinGlobalState() {
+	}
 
 	//! The HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
@@ -177,7 +178,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Reset();
 			} else
 #endif
-			if (join_type == JoinType::OUTER) {
+			    if (join_type == JoinType::OUTER) {
 				// check if we need to scan any unmatched tuples from the RHS for the full outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}

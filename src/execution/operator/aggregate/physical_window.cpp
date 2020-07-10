@@ -90,13 +90,13 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 	}
 }
 
-static void MaterializeExpression(Expression *expr, ChunkCollection &input,
-                                  ChunkCollection &output, bool scalar = false) {
+static void MaterializeExpression(Expression *expr, ChunkCollection &input, ChunkCollection &output,
+                                  bool scalar = false) {
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, ChunkCollection &sort_collection) {
+static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
@@ -276,8 +276,8 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	}
 }
 
-static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, idx_t output_idx) {
+static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    idx_t output_idx) {
 
 	ChunkCollection sort_collection;
 	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
@@ -311,14 +311,12 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
 	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection,
-		                      wexpr->start_expr->IsScalar());
+		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr &&
 	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection,
-		                      wexpr->end_expr->IsScalar());
+		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
 	// build a segment tree for frame-adhering aggregates
@@ -527,4 +525,4 @@ unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(children[0].get());
 }
 
-}
+} // namespace duckdb

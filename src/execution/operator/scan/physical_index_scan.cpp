@@ -63,4 +63,4 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexScan::GetOperatorState() {
 	return make_unique<PhysicalIndexScanOperatorState>();
 }
 
-}
+} // namespace duckdb

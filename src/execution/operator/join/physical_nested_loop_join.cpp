@@ -57,7 +57,6 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 	}
 }
 
-
 void PhysicalJoin::ConstructSemiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
 	ConstructSemiOrAntiJoinResult<true>(left, result, found_match);
 }
@@ -212,7 +211,8 @@ public:
 	unique_ptr<bool[]> left_found_match;
 };
 
-void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 	do {
@@ -226,11 +226,11 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 
 		bool found_match[STANDARD_VECTOR_SIZE] = {false};
 		NestedLoopJoinMark::Perform(state->left_condition, gstate.right_chunks, found_match, conditions);
-		switch(join_type) {
+		switch (join_type) {
 		case JoinType::MARK:
 			// now construct the mark join result from the found matches
-			PhysicalJoin::ConstructMarkJoinResult(state->left_condition, state->child_chunk, chunk,
-													found_match, gstate.has_null);
+			PhysicalJoin::ConstructMarkJoinResult(state->left_condition, state->child_chunk, chunk, found_match,
+			                                      gstate.has_null);
 			break;
 		case JoinType::SEMI:
 			// construct the semi join result from the found matches
@@ -247,23 +247,24 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 }
 
 void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]) {
-    SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
-    idx_t remaining_count = 0;
-    for (idx_t i = 0; i < left.size(); i++) {
-        if (!found_match[i]) {
-            remaining_sel.set_index(remaining_count++, i);
-        }
-    }
-    if (remaining_count > 0) {
-        result.Slice(left, remaining_sel, remaining_count);
-        for (idx_t idx = left.column_count(); idx < result.column_count(); idx++) {
-            result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
-            ConstantVector::SetNull(result.data[idx], true);
-        }
-    }
+	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
+	idx_t remaining_count = 0;
+	for (idx_t i = 0; i < left.size(); i++) {
+		if (!found_match[i]) {
+			remaining_sel.set_index(remaining_count++, i);
+		}
+	}
+	if (remaining_count > 0) {
+		result.Slice(left, remaining_sel, remaining_count);
+		for (idx_t idx = left.column_count(); idx < result.column_count(); idx++) {
+			result.data[idx].vector_type = VectorType::CONSTANT_VECTOR;
+			ConstantVector::SetNull(result.data[idx], true);
+		}
+	}
 }
 
-void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk,
+                                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
@@ -284,7 +285,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 				// have a match found
 				if (state->left_found_match) {
 					PhysicalJoin::ConstructLeftJoinResult(state->child_chunk, chunk, state->left_found_match.get());
-                    state->left_found_match.reset();
+					state->left_found_match.reset();
 					if (chunk.size() > 0) {
 						return;
 					}
@@ -295,8 +296,10 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
 			if (state->child_chunk.size() == 0) {
 				if (join_type == JoinType::OUTER) {
-					// if the LHS is exhausted in a FULL OUTER JOIN, we scan the found_match for any chunks we still need to output
-					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk, gstate.right_outer_position);
+					// if the LHS is exhausted in a FULL OUTER JOIN, we scan the found_match for any chunks we still
+					// need to output
+					ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk,
+					                             gstate.right_outer_position);
 				}
 				return;
 			}
@@ -321,9 +324,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 
 		// now perform the join
 		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
-		idx_t match_count =
-			NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition, right_chunk,
-											lvector, rvector, conditions);
+		idx_t match_count = NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition,
+		                                                 right_chunk, lvector, rvector, conditions);
 		// we have finished resolving the join conditions
 		if (match_count > 0) {
 			// we have matching tuples!
@@ -334,7 +336,7 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 				}
 			}
 			if (gstate.right_found_match) {
-				for(idx_t i = 0; i < match_count; i++) {
+				for (idx_t i = 0; i < match_count; i++) {
 					gstate.right_found_match[state->right_chunk * STANDARD_VECTOR_SIZE + rvector.get_index(i)] = true;
 				}
 			}
@@ -349,7 +351,8 @@ void PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 	} while (chunk.size() == 0);
 }
 
-void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalNestedLoopJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                              PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalNestedLoopJoinState *>(state_);
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 

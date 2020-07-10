@@ -118,7 +118,8 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 	idx_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
-			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks, chunk, gstate.right_outer_position);
+			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks,
+			                                                     chunk, gstate.right_outer_position);
 			return;
 		}
 		if (state->left_position >= state->child_chunk.size()) {
@@ -221,4 +222,4 @@ string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {
 	return extra_info;
 }
 
-}
+} // namespace duckdb

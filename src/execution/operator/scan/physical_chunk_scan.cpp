@@ -32,4 +32,4 @@ unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState() {
 	return make_unique<PhysicalChunkScanState>();
 }
 
-}
+} // namespace duckdb

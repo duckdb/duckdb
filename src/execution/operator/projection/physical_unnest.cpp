@@ -130,4 +130,4 @@ unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState() {
 	return make_unique<PhysicalUnnestOperatorState>(children[0].get());
 }
 
-}
+} // namespace duckdb

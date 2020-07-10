@@ -10,4 +10,4 @@ void PhysicalDummyScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	chunk.SetCardinality(1);
 }
 
-}
+} // namespace duckdb

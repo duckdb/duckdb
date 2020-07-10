@@ -9,7 +9,8 @@ using namespace std;
 
 namespace duckdb {
 
-void PhysicalTableFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalTableFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                             PhysicalOperatorState *state) {
 	// run main code
 	function->function.function(context.client, parameters, chunk, bind_data.get());
 	if (chunk.size() == 0) {
@@ -24,4 +25,4 @@ string PhysicalTableFunction::ExtraRenderInformation() const {
 	return function->name;
 }
 
-}
+} // namespace duckdb

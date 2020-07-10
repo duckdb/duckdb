@@ -65,4 +65,4 @@ unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState() {
 	return make_unique<PhysicalLimitOperatorState>(children[0].get(), 0);
 }
 
-}
+} // namespace duckdb

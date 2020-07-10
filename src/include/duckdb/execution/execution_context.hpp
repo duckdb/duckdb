@@ -16,8 +16,8 @@ class ThreadContext;
 
 class ExecutionContext {
 public:
-	ExecutionContext(ClientContext &client_, ThreadContext &thread_) :
-	      client(client_), thread(thread_) {}
+	ExecutionContext(ClientContext &client_, ThreadContext &thread_) : client(client_), thread(thread_) {
+	}
 
 	//! The client-global context; caution needs to be taken when used in parallel situations
 	ClientContext &client;

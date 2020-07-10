@@ -34,7 +34,8 @@ unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &cont
 	return make_unique<TopNGlobalState>();
 }
 
-void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                        DataChunk &input) {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.big_data.Append(input);

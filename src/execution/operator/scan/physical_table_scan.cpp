@@ -70,4 +70,4 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
 	}
 }
 
-}
+} // namespace duckdb

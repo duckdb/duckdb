@@ -8,10 +8,10 @@ using namespace std;
 
 #define SF 1
 
-#define TPCH_QUERY_BODY_PARALLEL(QNR)                                                                                           \
+#define TPCH_QUERY_BODY_PARALLEL(QNR)                                                                                  \
 	virtual void Load(DuckDBBenchmarkState *state) {                                                                   \
-	    Connection con(state->db);                                                                                    \
-	    con.Query("PRAGMA threads=4");                                                                                 \
+		Connection con(state->db);                                                                                     \
+		con.Query("PRAGMA threads=4");                                                                                 \
 		string cached_name = "tpch_sf" + to_string(SF);                                                                \
 		if (!BenchmarkRunner::TryLoadDatabase(state->db, cached_name)) {                                               \
 			tpch::dbgen(SF, state->db);                                                                                \

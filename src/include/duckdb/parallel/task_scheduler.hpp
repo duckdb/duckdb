@@ -23,7 +23,8 @@ class Executor;
 struct Semaphore;
 
 struct ExecutorTask {
-	ExecutorTask(Executor &executor_) : executor(executor_), finished(false) {}
+	ExecutorTask(Executor &executor_) : executor(executor_), finished(false) {
+	}
 
 	Executor &executor;
 	bool finished;
@@ -33,8 +34,9 @@ struct ExecutorTask {
 class TaskScheduler {
 	// timeout for semaphore wait, default 50ms
 	constexpr static int64_t TASK_TIMEOUT_USECS = 50000;
+
 public:
-    TaskScheduler();
+	TaskScheduler();
 	~TaskScheduler();
 
 	static TaskScheduler &GetScheduler(ClientContext &context);
@@ -49,6 +51,7 @@ public:
 	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
 	//! The main thread will also be used for execution
 	void SetThreads(int32_t n);
+
 private:
 	//! The lock used in the scheduler
 	mutex scheduler_lock;
@@ -56,7 +59,7 @@ private:
 	vector<shared_ptr<ExecutorTask>> tasks;
 	//! Semaphore
 	unique_ptr<Semaphore> semaphore;
-    //! The active background threads of the task scheduler
+	//! The active background threads of the task scheduler
 	vector<unique_ptr<thread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped
 	vector<unique_ptr<bool>> markers;

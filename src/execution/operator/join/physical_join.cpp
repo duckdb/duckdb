@@ -8,4 +8,4 @@ PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinT
     : PhysicalSink(type, op.types), join_type(join_type) {
 }
 
-}
+} // namespace duckdb

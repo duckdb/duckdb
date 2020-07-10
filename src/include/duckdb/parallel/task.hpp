@@ -6,7 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-
 namespace duckdb {
 
 class Task {
@@ -18,4 +17,4 @@ public:
 	virtual void Execute() = 0;
 };
 
-}
+} // namespace duckdb

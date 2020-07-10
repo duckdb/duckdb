@@ -163,7 +163,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                               PhysicalOperatorState *state) {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	if (state->finished) {
 		return;

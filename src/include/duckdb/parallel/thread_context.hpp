@@ -22,4 +22,4 @@ public:
 	OperatorProfiler profiler;
 };
 
-}
+} // namespace duckdb

@@ -24,7 +24,8 @@ PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<Physi
 	children.push_back(move(right));
 }
 
-void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                            PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_);
 	// first we fully materialize the right child, if we haven't done that yet
 	if (state->right_data.column_count() == 0) {

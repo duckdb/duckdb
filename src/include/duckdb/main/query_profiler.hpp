@@ -33,11 +33,13 @@ struct OperatorTimingInformation {
 //! The OperatorProfiler measures timings of individual operators
 class OperatorProfiler {
 	friend class QueryProfiler;
+
 public:
 	OperatorProfiler(bool enabled);
 
 	void StartOperator(PhysicalOperator *phys_op);
 	void EndOperator(DataChunk *chunk);
+
 private:
 	void AddTiming(PhysicalOperator *op, double time, idx_t elements);
 

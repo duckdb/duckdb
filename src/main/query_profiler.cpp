@@ -164,7 +164,7 @@ void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elemen
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	for(auto &node : profiler.timings) {
+	for (auto &node : profiler.timings) {
 		auto entry = tree_map.find(node.first);
 		assert(entry != tree_map.end());
 
@@ -441,4 +441,4 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	return result;
 }
 
-}
+} // namespace duckdb

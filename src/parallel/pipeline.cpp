@@ -10,8 +10,8 @@ using namespace std;
 
 namespace duckdb {
 
-Pipeline::Pipeline(Executor &executor_, idx_t maximum_threads_) :
-      executor(executor_), finished(false), current_threads(0), maximum_threads(maximum_threads_) {
+Pipeline::Pipeline(Executor &executor_, idx_t maximum_threads_)
+    : executor(executor_), finished(false), current_threads(0), maximum_threads(maximum_threads_) {
 }
 
 bool Pipeline::TryWork() {
@@ -50,9 +50,9 @@ void Pipeline::Execute() {
 			sink->Sink(context, *sink_state, *lstate, intermediate);
 			thread.profiler.EndOperator(nullptr);
 		}
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
-	} catch(...) {
+	} catch (...) {
 		executor.PushError("Unknown exception!");
 	}
 	executor.Flush(thread);

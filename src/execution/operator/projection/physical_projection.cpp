@@ -40,4 +40,4 @@ string PhysicalProjection::ExtraRenderInformation() const {
 	return extra_info;
 }
 
-}
+} // namespace duckdb

@@ -17,7 +17,8 @@ public:
 	unique_ptr<ExpressionExecutor> executor;
 };
 
-void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                              PhysicalOperatorState *state_) {
 	auto state = (PhysicalExpressionScanState *)state_;
 	if (state->expression_index >= expressions.size()) {
 		// finished executing all expression lists
@@ -43,4 +44,4 @@ unique_ptr<PhysicalOperatorState> PhysicalExpressionScan::GetOperatorState() {
 	return make_unique<PhysicalExpressionScanState>(children[0].get());
 }
 
-}
+} // namespace duckdb

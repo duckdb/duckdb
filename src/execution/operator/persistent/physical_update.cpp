@@ -104,4 +104,4 @@ void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	state->finished = true;
 }
 
-}
+} // namespace duckdb

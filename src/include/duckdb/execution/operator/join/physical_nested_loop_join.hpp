@@ -31,6 +31,7 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);

@@ -11,4 +11,4 @@ void PhysicalCreateSequence::GetChunkInternal(ExecutionContext &context, DataChu
 	state->finished = true;
 }
 
-}
+} // namespace duckdb
