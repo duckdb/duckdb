@@ -45,11 +45,11 @@ unique_ptr<GlobalOperatorState> PhysicalBlockwiseNLJoin::GetGlobalState(ClientCo
 	return make_unique<BlockwiseNLJoinGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<BlockwiseNLJoinLocalState>();
 }
 
-void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                                    DataChunk &input) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
 	gstate.right_chunks.Append(input);
@@ -58,7 +58,7 @@ void PhysicalBlockwiseNLJoin::Sink(ClientContext &context, GlobalOperatorState &
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalBlockwiseNLJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.count]);
@@ -89,7 +89,7 @@ public:
 	ExpressionExecutor executor;
 };
 
-void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk,
+void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                                PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_);
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
@@ -118,7 +118,8 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ClientContext &context, DataChunk
 	idx_t result_count = 0;
 	do {
 		if (state->fill_in_rhs) {
-			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks, chunk, gstate.right_outer_position);
+			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks,
+			                                                     chunk, gstate.right_outer_position);
 			return;
 		}
 		if (state->left_position >= state->child_chunk.size()) {
@@ -221,4 +222,4 @@ string PhysicalBlockwiseNLJoin::ExtraRenderInformation() const {
 	return extra_info;
 }
 
-}
+} // namespace duckdb

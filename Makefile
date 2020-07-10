@@ -56,6 +56,12 @@ release:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
 	cmake --build .
 
+reldebug:
+	mkdir -p build/reldebug && \
+	cd build/reldebug && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build .
+
 amaldebug:
 	mkdir -p build/amaldebug && \
 	python scripts/amalgamation.py && \

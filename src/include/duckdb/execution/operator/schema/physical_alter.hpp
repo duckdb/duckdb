@@ -23,7 +23,7 @@ public:
 	unique_ptr<AlterInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 
 } // namespace duckdb

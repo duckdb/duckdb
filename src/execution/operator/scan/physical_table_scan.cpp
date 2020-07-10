@@ -6,8 +6,9 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalTableScanOperatorState : public PhysicalOperatorState {
 public:
@@ -40,12 +41,12 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 		expression = move(filter[0]);
 	}
 }
-void PhysicalTableScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	if (column_ids.empty()) {
 		return;
 	}
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::GetTransaction(context.client);
 	if (!state->initialized) {
 		table.InitializeScan(transaction, state->scan_offset, column_ids, &table_filters);
 		state->initialized = true;
@@ -68,3 +69,5 @@ unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
 		return make_unique<PhysicalTableScanOperatorState>();
 	}
 }
+
+} // namespace duckdb

@@ -9,13 +9,13 @@ using namespace std;
 
 namespace duckdb {
 
-void PhysicalCreateIndex::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	if (column_ids.size() == 0) {
 		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
 	}
 
 	auto &schema = *table.schema;
-	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context, info.get());
+	auto index_entry = (IndexCatalogEntry *)schema.CreateIndex(context.client, info.get());
 	if (!index_entry) {
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return;

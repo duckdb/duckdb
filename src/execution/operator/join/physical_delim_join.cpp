@@ -40,17 +40,17 @@ unique_ptr<GlobalOperatorState> PhysicalDelimJoin::GetGlobalState(ClientContext 
 	return distinct->GetGlobalState(context);
 }
 
-unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) {
 	return distinct->GetLocalSinkState(context);
 }
 
-void PhysicalDelimJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                              DataChunk &input) {
 	lhs_data.Append(input);
 	distinct->Sink(context, state, lstate, input);
 }
 
-void PhysicalDelimJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalDelimJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize the distinct HT
 	distinct->Finalize(context, move(state));
 	// materialize the distinct collection
@@ -66,7 +66,7 @@ void PhysicalDelimJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperat
 	}
 }
 
-void PhysicalDelimJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalDelimJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalDelimJoinState *>(state_);
 	if (!state->join_state) {
 		// create the state of the underlying join

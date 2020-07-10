@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
@@ -12,7 +13,7 @@ public:
 	idx_t current_offset;
 };
 
-void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_);
 
 	idx_t max_element = limit + offset;
@@ -63,3 +64,5 @@ void PhysicalLimit::GetChunkInternal(ClientContext &context, DataChunk &chunk, P
 unique_ptr<PhysicalOperatorState> PhysicalLimit::GetOperatorState() {
 	return make_unique<PhysicalLimitOperatorState>(children[0].get(), 0);
 }
+
+} // namespace duckdb

@@ -17,7 +17,7 @@ TEST_CASE("Test basic parquet reading", "[parquet]") {
 	con.EnableQueryVerification();
 
 	SECTION("Exception on missing file") {
-		REQUIRE_THROWS(con.Query("SELECT * FROM parquet_scan('does_not_exist')"));
+		REQUIRE_FAIL(con.Query("SELECT * FROM parquet_scan('does_not_exist')"));
 	}
 
 	SECTION("alltypes_plain.parquet") {

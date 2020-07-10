@@ -26,6 +26,6 @@ public:
 	unique_ptr<BoundCreateTableInfo> info;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 };
 } // namespace duckdb

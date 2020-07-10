@@ -1,23 +1,28 @@
-#include "duckdb/execution/execution_context.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/executor.hpp"
+
+#include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+
+#include <algorithm>
+
+using namespace std;
 
 namespace duckdb {
 
-ExecutionContext::ExecutionContext(ClientContext &context) : context(context) {
+Executor::Executor(ClientContext &context) : context(context), finished(false) {
 }
 
-ExecutionContext::~ExecutionContext() {
+Executor::~Executor() {
 }
 
-void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
+void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	pipelines.clear();
-	while (!scheduled_pipelines.empty()) {
-		scheduled_pipelines.pop();
-	}
 
 	physical_plan = move(plan);
 	physical_state = physical_plan->GetOperatorState();
@@ -25,23 +30,72 @@ void ExecutionContext::Initialize(unique_ptr<PhysicalOperator> plan) {
 	context.profiler.Initialize(physical_plan.get());
 
 	BuildPipelines(physical_plan.get(), nullptr);
+
 	// schedule pipelines that do not have dependents
 	for (auto &pipeline : pipelines) {
-		if (pipeline->dependencies.size() == 0) {
-			Schedule(pipeline.get());
+		if (!pipeline->HasDependencies()) {
+			scheduled_pipelines.push(pipeline);
+		}
+	}
+
+	finished = false;
+
+	// schedule the executor so worker threads can help work on this query
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	scheduler.Schedule(this);
+
+	// now work on the tasks of this pipeline until the query is finished executing
+	while (pipelines.size() > 0) {
+		Work();
+	}
+
+	// finished execution: unschedule the executor again
+	scheduler.Finish(this);
+
+	if (exceptions.size() > 0) {
+		// an exception has occurred executing one of the pipelines
+		throw Exception(exceptions[0]);
+	}
+}
+
+void Executor::Work() {
+	if (finished) {
+		return;
+	}
+
+	while (scheduled_pipelines.size() > 0) {
+		// find a pipeline to work on
+		shared_ptr<Pipeline> pipeline;
+		{
+			lock_guard<mutex> elock(executor_lock);
+			while (scheduled_pipelines.size() > 0) {
+				pipeline = scheduled_pipelines.front();
+				if (!pipeline->TryWork()) {
+					// cannot work on this pipeline!
+					scheduled_pipelines.pop();
+					pipeline.reset();
+				} else {
+					break;
+				}
+			}
+		}
+		if (pipeline) {
+			pipeline->Execute();
+			pipeline->Finish();
 		}
 	}
 }
 
-void ExecutionContext::Reset() {
+void Executor::Reset() {
 	physical_plan = nullptr;
 	physical_state = nullptr;
+	exceptions.clear();
 }
 
-void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
+void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_unique<Pipeline>(*this);
+		auto pipeline = make_shared<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
@@ -119,39 +173,47 @@ void ExecutionContext::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	}
 };
 
-void ExecutionContext::Schedule(Pipeline *pipeline) {
-	assert(pipeline->dependencies.size() == 0);
-	scheduled_pipelines.push(pipeline);
-}
-
-vector<TypeId> ExecutionContext::GetTypes() {
+vector<TypeId> Executor::GetTypes() {
 	assert(physical_plan);
 	return physical_plan->GetTypes();
 }
 
-unique_ptr<DataChunk> ExecutionContext::FetchChunk() {
-	if (pipelines.size() > 0) {
-		// execute scheduled pipelines until we are done
-		while (!scheduled_pipelines.empty()) {
-			auto pipeline = scheduled_pipelines.front();
-			scheduled_pipelines.pop();
+void Executor::PushError(std::string exception) {
+	lock_guard<mutex> elock(executor_lock);
+	// interrupt execution of any other pipelines that belong to this executor
+	context.interrupted = true;
+	// push the exception onto the stack
+	exceptions.push_back(exception);
+}
 
-			pipeline->Execute(context);
-		}
-		assert(pipelines.size() == 0);
-	}
+void Executor::Flush(ThreadContext &tcontext) {
+	lock_guard<mutex> elock(executor_lock);
+	context.profiler.Flush(tcontext.profiler);
+}
+
+void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
+	assert(!pipeline->HasDependencies());
+	lock_guard<mutex> elock(executor_lock);
+	scheduled_pipelines.push(move(pipeline));
+}
+
+void Executor::ErasePipeline(Pipeline *pipeline) {
+	lock_guard<mutex> elock(executor_lock);
+	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
+	                             [&](shared_ptr<Pipeline> &arg) { return arg.get() == pipeline; }));
+}
+
+unique_ptr<DataChunk> Executor::FetchChunk() {
 	assert(physical_plan);
+
+	ThreadContext thread(context);
+	ExecutionContext econtext(context, thread);
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks
 	physical_plan->InitializeChunk(*chunk);
-	physical_plan->GetChunk(context, *chunk, physical_state.get());
+	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	return chunk;
-}
-
-void ExecutionContext::ErasePipeline(Pipeline *pipeline) {
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
-	                             [&](std::unique_ptr<Pipeline> &p) { return p.get() == pipeline; }));
 }
 
 } // namespace duckdb

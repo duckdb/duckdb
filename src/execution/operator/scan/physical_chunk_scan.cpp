@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalChunkScanState : public PhysicalOperatorState {
 public:
@@ -12,7 +13,7 @@ public:
 	idx_t chunk_index;
 };
 
-void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = (PhysicalChunkScanState *)state_;
 	assert(collection);
 	if (collection->count == 0) {
@@ -30,3 +31,5 @@ void PhysicalChunkScan::GetChunkInternal(ClientContext &context, DataChunk &chun
 unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState() {
 	return make_unique<PhysicalChunkScanState>();
 }
+
+} // namespace duckdb
