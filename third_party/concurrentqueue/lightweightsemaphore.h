@@ -209,14 +209,17 @@ public:
 	bool timed_wait(std::uint64_t usecs)
 	{
 		struct timespec ts;
+		const int usecs_in_1_sec = 1000000;
+		const int nsecs_in_1_sec = 1000000000;
+
 		// sem_timedwait needs an absolute time
 		// hence we need to first obtain the current time
 		// and then add the maximum time we want to wait
 		// we want to avoid clock_gettime because of linking issues
 		// chrono -> timespec conversion from here: https://embeddedartistry.com/blog/2019/01/31/converting-between-timespec-stdchrono/
 		auto current_time = std::chrono::system_clock::now();
-		auto secs =  std::chrono::time_point_cast<seconds>(current_time);
-		auto ns = std::chrono::time_point_cast<nanoseconds>(current_time) - std::chrono::time_point_cast<nanoseconds>(secs);
+		auto secs =  std::chrono::time_point_cast<std::chrono::seconds>(current_time);
+		auto ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(current_time) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
 
 		ts.tv_sec = secs.time_since_epoch().count();
 		ts.tv_nsec = ns.count();
