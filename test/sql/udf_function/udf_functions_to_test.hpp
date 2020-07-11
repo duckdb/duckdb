@@ -52,4 +52,123 @@ inline string_t udf_varchar(string_t a) {return a;}
 inline string_t udf_varchar(string_t a, string_t b) {return b;}
 inline string_t udf_varchar(string_t a, string_t b, string_t c) {return c;}
 
+// Vectorized UDF Functions -------------------------------------------------------------------
+
+template<typename TYPE>
+static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 1);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[0]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
+template<typename TYPE>
+static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 2);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == input.data[1].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[1]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
+template<typename TYPE>
+static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 3);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == input.data[1].type);
+	assert((GetTypeId<TYPE>()) == input.data[2].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[2]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
 }; //end namespace
