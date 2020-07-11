@@ -115,6 +115,11 @@ public:
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
+	template<typename TR, typename... Args>
+	void CreateVectorizedFunction(string name, scalar_function_t udf_func) {
+		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context);
+	}
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
