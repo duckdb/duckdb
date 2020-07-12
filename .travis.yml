@@ -669,7 +669,10 @@ matrix:
         - R -q -e 'tic::before_script()'
       script:
         - ./configure
-        -  R -q -e 'tic::script()'
+        - R CMD build .
+        - R CMD INSTALL --no-multiarch duckdb_*.tar.gz
+        - R CMD check --as-cran --no-manual --no-vignettes --no-build-vignettes duckdb_*.tar.gz
+        #-  R -q -e 'tic::script()'
       after_success:
         - R -q -e 'tic::after_success()'
       after_failure:
