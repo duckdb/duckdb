@@ -54,6 +54,9 @@ inline string_t udf_varchar(string_t a, string_t b, string_t c) {return c;}
 
 // Vectorized UDF Functions -------------------------------------------------------------------
 
+/*
+ * This vectorized function is a unary one that copies input values to the result vector
+ */
 template<typename TYPE>
 static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	assert(input.column_count() == 1);
@@ -92,6 +95,9 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 	}
 }
 
+/*
+ * This vectorized function is a binary one that copies values from the second input vector to the result vector
+ */
 template<typename TYPE>
 static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	assert(input.column_count() == 2);
@@ -131,6 +137,9 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 	}
 }
 
+/*
+ * This vectorized function is a binary one that copies values from the third input vector to the result vector
+ */
 template<typename TYPE>
 static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
 	assert(input.column_count() == 3);
