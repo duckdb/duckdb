@@ -654,9 +654,9 @@ matrix:
         - choco install rtools -y --version 4.0.0 --ignore-checksums
         - choco install make -y
         - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
-        - export MAKE=mingw32-make
+        - export MAKE=mingw64-make
         - cd tools/rpkg
-        - echo -e "options(Ncpus = 1, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
         - R -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
         - R -q -e 'remotes::install_github(\\\"ropensci/tic\\\", upgrade = \\\"always\\\"); print(tic::dsl_load()); tic::prepare_all_stages()'
         - R -q -e 'tic::before_install()'
