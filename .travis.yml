@@ -642,36 +642,36 @@ matrix:
       after_script:
         - R -q -e 'tic::after_script()'
 
-    - os: windows
-      name: R Package
-      filter_secrets: false
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
-
-      language: cpp
-
-      before_install:
-        - choco install r.project -y --version 4.0.2
-        - choco install rtools -y
-        - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
-        - cd tools/rpkg
-        - echo -e "options(Ncpus = 4, pkgType = 'binary', repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
-        - R -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
-        - R -q -e 'remotes::install_github(\\\"ropensci/tic\\\", upgrade = \\\"always\\\"); print(tic::dsl_load()); tic::prepare_all_stages()'
-        - R -q -e 'tic::before_install()'
-
-      install:
-        - R -q -e 'tic::install()'
-      before_script:
-        - R -q -e 'tic::before_script()'
-      script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --no-multiarch duckdb_*.tar.gz
-        - R CMD check --as-cran --no-manual --no-vignettes --no-build-vignettes duckdb_*.tar.gz
-        #-  R -q -e 'tic::script()'
-      after_success:
-        - R -q -e 'tic::after_success()'
-      after_failure:
-        - R -q -e 'tic::after_failure()'
-      after_script:
-        - R -q -e 'tic::after_script()'
+    # - os: windows
+    #   name: R Package
+    #   filter_secrets: false
+    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #
+    #   language: cpp
+    #
+    #   before_install:
+    #     - choco install r.project -y --version 4.0.2
+    #     - choco install rtools -y
+    #     - export "PATH=/c/Program Files/R/R-4.0.2/bin:$PATH"
+    #     - cd tools/rpkg
+    #     - echo -e "options(Ncpus = 4, pkgType = 'binary', repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+    #     - R -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
+    #     - R -q -e 'remotes::install_github(\\\"ropensci/tic\\\", upgrade = \\\"always\\\"); print(tic::dsl_load()); tic::prepare_all_stages()'
+    #     - R -q -e 'tic::before_install()'
+    #
+    #   install:
+    #     - R -q -e 'tic::install()'
+    #   before_script:
+    #     - R -q -e 'tic::before_script()'
+    #   script:
+    #     - ./configure
+    #     - R CMD build .
+    #     - R CMD INSTALL --no-multiarch duckdb_*.tar.gz
+    #     - R CMD check --as-cran --no-manual --no-vignettes --no-build-vignettes duckdb_*.tar.gz
+    #     #-  R -q -e 'tic::script()'
+    #   after_success:
+    #     - R -q -e 'tic::after_success()'
+    #   after_failure:
+    #     - R -q -e 'tic::after_failure()'
+    #   after_script:
+    #     - R -q -e 'tic::after_script()'
