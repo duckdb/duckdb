@@ -11,27 +11,13 @@ using namespace std;
 
 namespace duckdb {
 
-typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
+typedef moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
     concurrent_queue_t q;
     lightweight_semaphore_t semaphore;
 };
-
-struct QueueProducerToken {
-    QueueProducerToken(concurrent_queue_t &q) : queue_token(q) {}
-
-    moodycamel::ProducerToken queue_token;
-};
-
-ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token)  : scheduler(scheduler), token(move(token)) {
-
-}
-
-ProducerToken::~ProducerToken() {
-
-}
 
 TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
 
@@ -45,13 +31,7 @@ TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
 	return *context.db.scheduler;
 }
 
-
-unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
-    auto token = make_unique<QueueProducerToken>(queue->q);
-    return make_unique<ProducerToken>(*this, move(token));
-}
-
-void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
+void TaskScheduler::ScheduleTask(shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	if (queue->q.enqueue(move(task))) {
 		queue->semaphore.signal();
@@ -60,20 +40,8 @@ void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 	}
 }
 
-void TaskScheduler::ExecuteTasks(ProducerToken &token) {
-	unique_ptr<Task> task;
-    // loop over the queue executing tasks for the given producer until the tasks of that producer are exhausted
-	queue->q.try_dequeue(task);
-	while(task) {
-		task->Execute();
-		task.reset();
-
-		queue->q.try_dequeue(task);
-	}
-}
-
 void TaskScheduler::ExecuteForever(bool *marker) {
-    unique_ptr<Task> task;
+    shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while(*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check

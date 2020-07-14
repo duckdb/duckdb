@@ -20,8 +20,7 @@ class DataChunk;
 class PhysicalOperator;
 class PhysicalOperatorState;
 class ThreadContext;
-
-struct ProducerToken;
+class Task;
 
 class Executor {
 	friend class Pipeline;
@@ -38,7 +37,9 @@ public:
 
 	void Reset();
 
-	void SchedulePipeline(shared_ptr<Pipeline> pipeline);
+	void ScheduleTasks(vector<shared_ptr<Task>> tasks);
+	void ExecuteTasks();
+
 	void ErasePipeline(Pipeline *pipeline);
 
 	vector<TypeId> GetTypes();
@@ -58,8 +59,8 @@ private:
 	mutex executor_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! The producer token of this query, any tasks created by this query are associated with this producer token
-    unique_ptr<ProducerToken> producer;
+	//! The task queue for this query, used for the main thread
+	std::queue<shared_ptr<Task>> task_queue;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
 

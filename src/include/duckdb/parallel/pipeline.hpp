@@ -10,6 +10,8 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 
+#include <atomic>
+
 namespace duckdb {
 class Executor;
 
@@ -18,14 +20,11 @@ class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class Executor;
 
 public:
-	Pipeline(Executor &execution_context, idx_t maximum_threads = 1);
+	Pipeline(Executor &execution_context);
 
 	Executor &executor;
 
 public:
-	//! Try to start working on this pipeline. Returns false if the pipeline is already fully occupied.
-	bool TryWork();
-
 	//! Execute the pipeline sequentially on a single thread
 	void Execute();
 
@@ -34,6 +33,8 @@ public:
 	bool HasDependencies() {
 		return dependencies.size() != 0;
 	}
+
+	void Schedule();
 
 	//! Finish executing this pipeline
 	void Finish();
@@ -58,9 +59,9 @@ private:
 	//! Whether or not the pipeline is finished executing
 	bool finished;
 	//! The current threads working on the pipeline
-	idx_t current_threads;
+	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
-	idx_t maximum_threads;
+	idx_t total_tasks;
 };
 
 } // namespace duckdb

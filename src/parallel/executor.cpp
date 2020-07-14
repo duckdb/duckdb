@@ -15,20 +15,6 @@ using namespace std;
 
 namespace duckdb {
 
-class PipelineTask : public Task {
-public:
-	PipelineTask(shared_ptr<Pipeline> pipeline_) :
-	      pipeline(move(pipeline_)) {
-	}
-
-	void Execute() override {
-		pipeline->Execute();
-		pipeline->Finish();
-	}
-private:
-    shared_ptr<Pipeline> pipeline;
-};
-
 Executor::Executor(ClientContext &context) : context(context) {
 }
 
@@ -46,22 +32,20 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	BuildPipelines(physical_plan.get(), nullptr);
 
 	// schedule pipelines that do not have dependents
-	vector<shared_ptr<Pipeline>> scheduled_pipelines;
+	vector<Pipeline*> scheduled_pipelines;
 	for (auto &pipeline : pipelines) {
 		if (!pipeline->HasDependencies()) {
-			scheduled_pipelines.push_back(pipeline);
+			scheduled_pipelines.push_back(pipeline.get());
 		}
 	}
 
 	// schedule the pipeline tasks in the task scheduler
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-    this->producer = scheduler.CreateProducer();
 	for(auto &pipeline : scheduled_pipelines) {
-		SchedulePipeline(move(pipeline));
+		pipeline->Schedule();
 	}
 
 	while(pipelines.size() > 0) {
-		scheduler.ExecuteTasks(*producer);
+		ExecuteTasks();
 	}
 
 	assert(pipelines.size() == 0);
@@ -176,12 +160,27 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
-void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
-	assert(!pipeline->HasDependencies());
-	auto task = make_unique<PipelineTask>(move(pipeline));
-
+void Executor::ScheduleTasks(vector<shared_ptr<Task>> tasks) {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	scheduler.ScheduleTask(*producer, move(task));
+
+	lock_guard<mutex> elock(executor_lock);
+	for(auto &task : tasks) {
+		scheduler.ScheduleTask(task);
+		task_queue.push(move(task));
+	}
+}
+
+void Executor::ExecuteTasks() {
+	while (task_queue.size() > 0) {
+		shared_ptr<Task> task;
+		{
+			lock_guard<mutex> elock(executor_lock);
+			task = move(task_queue.front());
+			task_queue.pop();
+		}
+
+		task->Execute();
+	}
 }
 
 void Executor::ErasePipeline(Pipeline *pipeline) {

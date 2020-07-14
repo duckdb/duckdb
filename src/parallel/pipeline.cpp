@@ -10,17 +10,27 @@ using namespace std;
 
 namespace duckdb {
 
-Pipeline::Pipeline(Executor &executor_, idx_t maximum_threads_)
-    : executor(executor_), finished(false), current_threads(0), maximum_threads(maximum_threads_) {
-}
-
-bool Pipeline::TryWork() {
-	lock_guard<mutex> plock(pipeline_lock);
-	if (current_threads >= maximum_threads || finished || dependencies.size() > 0) {
-		return false;
+class PipelineTask : public Task {
+public:
+	PipelineTask(shared_ptr<Pipeline> pipeline_) :
+	      in_progress(0), pipeline(move(pipeline_)) {
 	}
-	current_threads++;
-	return true;
+
+	void Execute() override {
+		if (in_progress++ > 0) {
+			// already being worked on by another thread
+			return;
+		}
+
+		pipeline->Execute();
+	}
+private:
+	atomic<idx_t> in_progress;
+    shared_ptr<Pipeline> pipeline;
+};
+
+Pipeline::Pipeline(Executor &executor_)
+    : executor(executor_), finished(false), finished_tasks(0), total_tasks(1) {
 }
 
 void Pipeline::Execute() {
@@ -56,6 +66,20 @@ void Pipeline::Execute() {
 		executor.PushError("Unknown exception!");
 	}
 	executor.Flush(thread);
+
+	idx_t current_finished = ++finished_tasks;
+	if (current_finished == total_tasks) {
+		Finish();
+	}
+}
+
+void Pipeline::Schedule() {
+	assert(!HasDependencies());
+
+	vector<shared_ptr<Task>> tasks;
+	tasks.push_back(make_shared<PipelineTask>(shared_from_this()));
+
+	executor.ScheduleTasks(move(tasks));
 }
 
 void Pipeline::AddDependency(Pipeline *pipeline) {
@@ -70,7 +94,7 @@ void Pipeline::EraseDependency(Pipeline *pipeline) {
 	dependencies.erase(dependencies.find(pipeline));
 	if (dependencies.size() == 0) {
 		// no more dependents: schedule this pipeline
-		executor.SchedulePipeline(shared_from_this());
+		Schedule();
 	}
 }
 
