@@ -15,7 +15,21 @@ using namespace std;
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), finished(false) {
+class PipelineTask : public Task {
+public:
+	PipelineTask(shared_ptr<Pipeline> pipeline_) :
+	      pipeline(move(pipeline_)) {
+	}
+
+	void Execute() override {
+		pipeline->Execute();
+		pipeline->Finish();
+	}
+private:
+    shared_ptr<Pipeline> pipeline;
+};
+
+Executor::Executor(ClientContext &context) : context(context) {
 }
 
 Executor::~Executor() {
@@ -32,57 +46,28 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	BuildPipelines(physical_plan.get(), nullptr);
 
 	// schedule pipelines that do not have dependents
+	vector<shared_ptr<Pipeline>> scheduled_pipelines;
 	for (auto &pipeline : pipelines) {
 		if (!pipeline->HasDependencies()) {
-			scheduled_pipelines.push(pipeline);
+			scheduled_pipelines.push_back(pipeline);
 		}
 	}
 
-	finished = false;
-
-	// schedule the executor so worker threads can help work on this query
+	// schedule the pipeline tasks in the task scheduler
 	auto &scheduler = TaskScheduler::GetScheduler(context);
-	scheduler.Schedule(this);
-
-	// now work on the tasks of this pipeline until the query is finished executing
-	while (pipelines.size() > 0) {
-		Work();
+    this->producer = scheduler.CreateProducer();
+	for(auto &pipeline : scheduled_pipelines) {
+		SchedulePipeline(move(pipeline));
 	}
 
-	// finished execution: unschedule the executor again
-	scheduler.Finish(this);
+	while(pipelines.size() > 0) {
+		scheduler.ExecuteTasks(*producer);
+	}
 
+	assert(pipelines.size() == 0);
 	if (exceptions.size() > 0) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
-	}
-}
-
-void Executor::Work() {
-	if (finished) {
-		return;
-	}
-
-	while (scheduled_pipelines.size() > 0) {
-		// find a pipeline to work on
-		shared_ptr<Pipeline> pipeline;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			while (scheduled_pipelines.size() > 0) {
-				pipeline = scheduled_pipelines.front();
-				if (!pipeline->TryWork()) {
-					// cannot work on this pipeline!
-					scheduled_pipelines.pop();
-					pipeline.reset();
-				} else {
-					break;
-				}
-			}
-		}
-		if (pipeline) {
-			pipeline->Execute();
-			pipeline->Finish();
-		}
 	}
 }
 
@@ -193,8 +178,10 @@ void Executor::Flush(ThreadContext &tcontext) {
 
 void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
 	assert(!pipeline->HasDependencies());
-	lock_guard<mutex> elock(executor_lock);
-	scheduled_pipelines.push(move(pipeline));
+	auto task = make_unique<PipelineTask>(move(pipeline));
+
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	scheduler.ScheduleTask(*producer, move(task));
 }
 
 void Executor::ErasePipeline(Pipeline *pipeline) {

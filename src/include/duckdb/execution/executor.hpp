@@ -32,13 +32,10 @@ public:
 	~Executor();
 
 	ClientContext &context;
-	bool finished;
-
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
-	void Work();
 	void Reset();
 
 	void SchedulePipeline(shared_ptr<Pipeline> pipeline);
@@ -61,10 +58,10 @@ private:
 	mutex executor_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
+	//! The producer token of this query, any tasks created by this query are associated with this producer token
+    unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
-
-	std::queue<shared_ptr<Pipeline>> scheduled_pipelines;
 
 	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
 };

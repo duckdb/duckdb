@@ -36,6 +36,28 @@ TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
 	}
 }
 
+TEST_CASE("Test Parallel TPC-H SF0.01", "[tpch]") {
+	unique_ptr<QueryResult> result;
+	double sf = 0.01;
+
+	// generate the TPC-H data for SF 0.01
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	con.DisableProfiling();
+
+	// initialize background threads
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
+
+	tpch::dbgen(sf, db);
+
+	// test all the basic queries
+	for (idx_t i = 1; i <= 22; i++) {
+		result = con.Query(tpch::get_query(i));
+		COMPARE_CSV(result, tpch::get_answer(sf, i), true);
+	}
+}
+
 TEST_CASE("Test Parallel TPC-H SF0.1", "[tpch][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;
