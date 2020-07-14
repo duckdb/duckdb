@@ -63,9 +63,12 @@ void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 void TaskScheduler::ExecuteTasks(ProducerToken &token) {
 	unique_ptr<Task> task;
     // loop over the queue executing tasks for the given producer until the tasks of that producer are exhausted
-	while(queue->q.try_dequeue_from_producer(token.token->queue_token, task)) {
+	queue->q.try_dequeue_from_producer(token.token->queue_token, task);
+	while(task) {
 		task->Execute();
 		task.reset();
+
+		queue->q.try_dequeue_from_producer(token.token->queue_token, task);
 	}
 }
 
@@ -75,7 +78,8 @@ void TaskScheduler::ExecuteForever(bool *marker) {
 	while(*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
         queue->semaphore.wait(TASK_TIMEOUT_USECS);
-        if (queue->q.try_dequeue(task)) {
+		queue->q.try_dequeue(task);
+        if (task) {
             task->Execute();
 			task.reset();
         }
