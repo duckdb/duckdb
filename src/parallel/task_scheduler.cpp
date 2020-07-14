@@ -11,13 +11,27 @@ using namespace std;
 
 namespace duckdb {
 
-typedef moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
+typedef moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
 typedef moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
     concurrent_queue_t q;
     lightweight_semaphore_t semaphore;
 };
+
+struct QueueProducerToken {
+    QueueProducerToken(concurrent_queue_t &q) : queue_token(q) {}
+
+    moodycamel::ProducerToken queue_token;
+};
+
+ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token)  : scheduler(scheduler), token(move(token)) {
+
+}
+
+ProducerToken::~ProducerToken() {
+
+}
 
 TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
 
@@ -31,23 +45,35 @@ TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
 	return *context.db.scheduler;
 }
 
-void TaskScheduler::ScheduleTask(shared_ptr<Task> task) {
+
+unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
+    auto token = make_unique<QueueProducerToken>(queue->q);
+    return make_unique<ProducerToken>(*this, move(token));
+}
+
+void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	if (queue->q.enqueue(move(task))) {
+	if (queue->q.enqueue(token.token->queue_token, move(task))) {
 		queue->semaphore.signal();
 	} else {
 		throw InternalException("Could not schedule task!");
 	}
 }
 
+bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	return queue->q.try_dequeue_from_producer(token.token->queue_token, task);
+}
+
 void TaskScheduler::ExecuteForever(bool *marker) {
-    shared_ptr<Task> task;
+    unique_ptr<Task> task;
 	// loop until the marker is set to false
 	while(*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
         queue->semaphore.wait(TASK_TIMEOUT_USECS);
-		queue->q.try_dequeue(task);
-        if (task) {
+        if (queue->q.try_dequeue(task)) {
             task->Execute();
 			task.reset();
         }

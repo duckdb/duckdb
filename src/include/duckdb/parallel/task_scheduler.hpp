@@ -18,8 +18,19 @@
 namespace duckdb {
 
 struct ConcurrentQueue;
+struct QueueProducerToken;
 class ClientContext;
 class TaskScheduler;
+
+struct ProducerToken {
+    ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
+    ~ProducerToken();
+
+    TaskScheduler &scheduler;
+    unique_ptr<QueueProducerToken> token;
+	std::mutex producer_lock;
+};
+
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {
@@ -32,8 +43,11 @@ public:
 
 	static TaskScheduler &GetScheduler(ClientContext &context);
 
+	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler
-	void ScheduleTask(shared_ptr<Task> task);
+	void ScheduleTask(ProducerToken &producer, unique_ptr<Task> task);
+	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
+	bool GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(bool *marker);
 

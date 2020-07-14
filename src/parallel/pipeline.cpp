@@ -12,8 +12,8 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	PipelineTask(shared_ptr<Pipeline> pipeline_) :
-	      in_progress(0), pipeline(move(pipeline_)) {
+	PipelineTask(Pipeline *pipeline_) :
+	      in_progress(0), pipeline(pipeline_) {
 	}
 
 	void Execute() override {
@@ -27,7 +27,7 @@ public:
 	}
 private:
 	atomic<idx_t> in_progress;
-    shared_ptr<Pipeline> pipeline;
+    Pipeline *pipeline;
 };
 
 Pipeline::Pipeline(Executor &executor_)
@@ -79,10 +79,10 @@ void Pipeline::FinishTask() {
 void Pipeline::Schedule() {
 	assert(!HasDependencies());
 
-	vector<shared_ptr<Task>> tasks;
-	tasks.push_back(make_shared<PipelineTask>(shared_from_this()));
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	auto task = make_unique<PipelineTask>(this);
 
-	executor.ScheduleTasks(move(tasks));
+	scheduler.ScheduleTask(*executor.producer, move(task));
 }
 
 void Pipeline::AddDependency(Pipeline *pipeline) {
@@ -110,7 +110,7 @@ void Pipeline::Finish() {
 		// parent: remove this entry from the dependents
 		parent->EraseDependency(this);
 	}
-	executor.ErasePipeline(this);
+	executor.completed_pipelines++;
 }
 
 string Pipeline::ToString() const {

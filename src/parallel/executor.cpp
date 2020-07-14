@@ -31,6 +31,10 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	BuildPipelines(physical_plan.get(), nullptr);
 
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	this->producer = scheduler.CreateProducer();
+	this->total_pipelines = pipelines.size();
+
 	// schedule pipelines that do not have dependents
 	vector<Pipeline*> scheduled_pipelines;
 	for (auto &pipeline : pipelines) {
@@ -44,11 +48,16 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 		pipeline->Schedule();
 	}
 
-	while(pipelines.size() > 0) {
-		ExecuteTasks();
+	// now execute tasks from this producer until all pipelines are completed
+	while(completed_pipelines < total_pipelines) {
+		unique_ptr<Task> task;
+		while (scheduler.GetTaskFromProducer(*producer, task)) {
+			task->Execute();
+			task.reset();
+		}
 	}
 
-	assert(pipelines.size() == 0);
+	pipelines.clear();
 	if (exceptions.size() > 0) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
@@ -59,17 +68,16 @@ void Executor::Reset() {
 	delim_join_dependencies.clear();
 	physical_plan = nullptr;
 	physical_state = nullptr;
+	completed_pipelines = 0;
+	total_pipelines = 0;
 	exceptions.clear();
 	pipelines.clear();
-	while (!task_queue.empty()) {
-		task_queue.pop();
-	}
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_shared<Pipeline>(*this);
+		auto pipeline = make_unique<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
@@ -163,35 +171,6 @@ void Executor::PushError(std::string exception) {
 void Executor::Flush(ThreadContext &tcontext) {
 	lock_guard<mutex> elock(executor_lock);
 	context.profiler.Flush(tcontext.profiler);
-}
-
-void Executor::ScheduleTasks(vector<shared_ptr<Task>> tasks) {
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-
-	lock_guard<mutex> elock(executor_lock);
-	for(auto &task : tasks) {
-		scheduler.ScheduleTask(task);
-		task_queue.push(move(task));
-	}
-}
-
-void Executor::ExecuteTasks() {
-	while (task_queue.size() > 0) {
-		shared_ptr<Task> task;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			task = move(task_queue.front());
-			task_queue.pop();
-		}
-
-		task->Execute();
-	}
-}
-
-void Executor::ErasePipeline(Pipeline *pipeline) {
-	lock_guard<mutex> elock(executor_lock);
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
-	                             [&](shared_ptr<Pipeline> &arg) { return arg.get() == pipeline; }));
 }
 
 unique_ptr<DataChunk> Executor::FetchChunk() {

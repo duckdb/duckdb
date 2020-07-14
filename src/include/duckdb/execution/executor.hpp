@@ -22,6 +22,8 @@ class PhysicalOperatorState;
 class ThreadContext;
 class Task;
 
+struct ProducerToken;
+
 class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
@@ -36,11 +38,6 @@ public:
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
 	void Reset();
-
-	void ScheduleTasks(vector<shared_ptr<Task>> tasks);
-	void ExecuteTasks();
-
-	void ErasePipeline(Pipeline *pipeline);
 
 	vector<TypeId> GetTypes();
 
@@ -58,11 +55,16 @@ private:
 
 	mutex executor_lock;
 	//! The pipelines of the current query
-	vector<shared_ptr<Pipeline>> pipelines;
-	//! The task queue for this query, used for the main thread
-	std::queue<shared_ptr<Task>> task_queue;
+	vector<unique_ptr<Pipeline>> pipelines;
+	//! The producer of this query
+	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
+
+	//! The amount of completed pipelines of the query
+	std::atomic<idx_t> completed_pipelines;
+	//! The total amount of pipelines in the query
+	idx_t total_pipelines;
 
 	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
 };

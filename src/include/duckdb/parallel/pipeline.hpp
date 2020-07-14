@@ -16,7 +16,7 @@ namespace duckdb {
 class Executor;
 
 //! The Pipeline class represents an execution pipeline
-class Pipeline : public std::enable_shared_from_this<Pipeline> {
+class Pipeline {
 	friend class Executor;
 
 public:
