@@ -53,7 +53,7 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
-	if (queue->q.enqueue(token.token->queue_token, move(task))) {
+	if (queue->q.enqueue(move(task))) {
 		queue->semaphore.signal();
 	} else {
 		throw InternalException("Could not schedule task!");
@@ -63,12 +63,12 @@ void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
 void TaskScheduler::ExecuteTasks(ProducerToken &token) {
 	unique_ptr<Task> task;
     // loop over the queue executing tasks for the given producer until the tasks of that producer are exhausted
-	queue->q.try_dequeue_from_producer(token.token->queue_token, task);
+	queue->q.try_dequeue(task);
 	while(task) {
 		task->Execute();
 		task.reset();
 
-		queue->q.try_dequeue_from_producer(token.token->queue_token, task);
+		queue->q.try_dequeue(task);
 	}
 }
 
