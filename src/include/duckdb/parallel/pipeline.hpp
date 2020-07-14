@@ -36,6 +36,8 @@ public:
 
 	void Schedule();
 
+	//! Finish a single task of this pipeline
+	void FinishTask();
 	//! Finish executing this pipeline
 	void Finish();
 

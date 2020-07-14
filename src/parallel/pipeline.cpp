@@ -23,6 +23,7 @@ public:
 		}
 
 		pipeline->Execute();
+		pipeline->FinishTask();
 	}
 private:
 	atomic<idx_t> in_progress;
@@ -66,7 +67,9 @@ void Pipeline::Execute() {
 		executor.PushError("Unknown exception!");
 	}
 	executor.Flush(thread);
+}
 
+void Pipeline::FinishTask() {
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		Finish();

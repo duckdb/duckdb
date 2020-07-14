@@ -22,7 +22,7 @@ Executor::~Executor() {
 }
 
 void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
-	pipelines.clear();
+	Reset();
 
 	physical_plan = move(plan);
 	physical_state = physical_plan->GetOperatorState();
@@ -56,9 +56,14 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 }
 
 void Executor::Reset() {
+	delim_join_dependencies.clear();
 	physical_plan = nullptr;
 	physical_state = nullptr;
 	exceptions.clear();
+	pipelines.clear();
+	while (!task_queue.empty()) {
+		task_queue.pop();
+	}
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
