@@ -1,4 +1,4 @@
-add_library_unity(duckdb_operator_persistent
+add_library(duckdb_operator_persistent
                   OBJECT
                   buffered_csv_reader.cpp
                   physical_copy_from_file.cpp

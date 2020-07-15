@@ -1,4 +1,4 @@
-add_library_unity(duckdb_optimizer_join_order
+add_library(duckdb_optimizer_join_order
                   OBJECT
                   query_graph.cpp
                   relation.cpp)

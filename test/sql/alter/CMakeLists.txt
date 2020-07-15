@@ -1,4 +1,4 @@
-add_library_unity(test_sql_alter
+add_library(test_sql_alter
                   OBJECT
                   test_alter.cpp
                   test_rename_table.cpp)

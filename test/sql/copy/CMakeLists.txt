@@ -1,4 +1,4 @@
-add_library_unity(test_sql_copy OBJECT test_copy.cpp test_csv_auto.cpp)
+add_library(test_sql_copy OBJECT test_copy.cpp test_csv_auto.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_copy>
     PARENT_SCOPE)

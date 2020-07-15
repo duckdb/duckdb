@@ -503,16 +503,16 @@ struct StringToIntegerCast {
 			// "Three Optimization Tips for C++". See speed-test for a comparison.
 			auto index = static_cast<unsigned>((value % 100) * 2);
 			value /= 100;
-			*--ptr = fmt::internal::data::digits[index + 1];
-			*--ptr = fmt::internal::data::digits[index];
+			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
+			*--ptr = duckdb_fmt::internal::data::digits[index];
 		}
 		if (value < 10) {
 			*--ptr = static_cast<char>('0' + value);
 			return ptr;
 		}
 		auto index = static_cast<unsigned>(value * 2);
-		*--ptr = fmt::internal::data::digits[index + 1];
-		*--ptr = fmt::internal::data::digits[index];
+		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
+		*--ptr = duckdb_fmt::internal::data::digits[index];
 		return ptr;
 	}
 
@@ -618,12 +618,12 @@ template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
 }
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
-	std::string s = fmt::format("{}", input);
+	std::string s = duckdb_fmt::format("{}", input);
 	return StringVector::AddString(vector, s);
 }
 
 template <> string_t StringCast::Operation(double input, Vector &vector) {
-	std::string s = fmt::format("{}", input);
+	std::string s = duckdb_fmt::format("{}", input);
 	return StringVector::AddString(vector, s);
 }
 
@@ -670,8 +670,8 @@ struct DateToStringCast {
 				ptr[2] = '0' + date[i];
 			} else {
 				auto index = static_cast<unsigned>(date[i] * 2);
-				ptr[1] = fmt::internal::data::digits[index];
-				ptr[2] = fmt::internal::data::digits[index + 1];
+				ptr[1] = duckdb_fmt::internal::data::digits[index];
+				ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
 			}
 			ptr += 3;
 		}
@@ -735,8 +735,8 @@ struct TimeToStringCast {
 				ptr[1] = '0' + time[i];
 			} else {
 				auto index = static_cast<unsigned>(time[i] * 2);
-				ptr[0] = fmt::internal::data::digits[index];
-				ptr[1] = fmt::internal::data::digits[index + 1];
+				ptr[0] = duckdb_fmt::internal::data::digits[index];
+				ptr[1] = duckdb_fmt::internal::data::digits[index + 1];
 			}
 			ptr[2] = ':';
 			ptr += 3;

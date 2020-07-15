@@ -1,4 +1,4 @@
-add_library_unity(duckdb_transformer_helpers
+add_library(duckdb_transformer_helpers
                   OBJECT
                   transform_alias.cpp
                   transform_cte.cpp

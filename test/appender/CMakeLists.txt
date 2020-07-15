@@ -1,4 +1,4 @@
-add_library_unity(test_appender
+add_library(test_appender
                   OBJECT
                   test_appender_abort.cpp
                   test_appender.cpp

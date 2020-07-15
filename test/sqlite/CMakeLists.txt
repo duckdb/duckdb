@@ -1,4 +1,4 @@
-add_library_unity(test_sqlite
+add_library(test_sqlite
                   OBJECT
                   md5.cpp
                   test_sqllogictest.cpp)

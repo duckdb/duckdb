@@ -1,4 +1,4 @@
-add_library_unity(duckdb_transformer_statement
+add_library(duckdb_transformer_statement
                   OBJECT
                   transform_alter_table.cpp
                   transform_copy.cpp

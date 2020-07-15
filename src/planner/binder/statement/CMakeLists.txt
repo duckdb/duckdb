@@ -1,4 +1,4 @@
-add_library_unity(duckdb_bind_statement
+add_library(duckdb_bind_statement
                   OBJECT
                   bind_copy.cpp
                   bind_create.cpp
