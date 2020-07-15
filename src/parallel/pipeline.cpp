@@ -13,29 +13,23 @@ namespace duckdb {
 class PipelineTask : public Task {
 public:
 	PipelineTask(Pipeline *pipeline_) :
-	      in_progress(0), pipeline(pipeline_) {
+	      pipeline(pipeline_) {
 	}
 
 	void Execute() override {
-		if (in_progress++ > 0) {
-			// already being worked on by another thread
-			return;
-		}
-
 		pipeline->Execute();
 		pipeline->FinishTask();
 	}
 private:
-	atomic<idx_t> in_progress;
     Pipeline *pipeline;
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished(false), finished_tasks(0), total_tasks(1) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(1) {
 }
 
 void Pipeline::Execute() {
-	assert(dependencies.size() == 0);
+	assert(finished_dependencies == dependencies.size());
 
 	auto &client = executor.context;
 	if (client.interrupted) {
@@ -77,7 +71,7 @@ void Pipeline::FinishTask() {
 }
 
 void Pipeline::Schedule() {
-	assert(!HasDependencies());
+	assert(finished_dependencies == dependencies.size());
 
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 	auto task = make_unique<PipelineTask>(this);
@@ -90,25 +84,21 @@ void Pipeline::AddDependency(Pipeline *pipeline) {
 	pipeline->parents.insert(this);
 }
 
-void Pipeline::EraseDependency(Pipeline *pipeline) {
-	lock_guard<mutex> plock(pipeline_lock);
-	assert(dependencies.count(pipeline) == 1);
-
-	dependencies.erase(dependencies.find(pipeline));
-	if (dependencies.size() == 0) {
-		// no more dependents: schedule this pipeline
+void Pipeline::CompleteDependency() {
+	idx_t current_finished = ++finished_dependencies;
+	if (current_finished == dependencies.size()) {
+		// all dependencies have been completed: schedule the pipeline
 		Schedule();
 	}
 }
 
 void Pipeline::Finish() {
-	assert(dependencies.size() == 0);
 	assert(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent : parents) {
-		// parent: remove this entry from the dependents
-		parent->EraseDependency(this);
+		// mark a dependency as completed for each of the parents
+		parent->CompleteDependency();
 	}
 	executor.completed_pipelines++;
 }

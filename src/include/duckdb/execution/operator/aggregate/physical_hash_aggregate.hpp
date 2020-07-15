@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {

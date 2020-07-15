@@ -36,16 +36,10 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	this->total_pipelines = pipelines.size();
 
 	// schedule pipelines that do not have dependents
-	vector<Pipeline*> scheduled_pipelines;
 	for (auto &pipeline : pipelines) {
 		if (!pipeline->HasDependencies()) {
-			scheduled_pipelines.push_back(pipeline.get());
+			pipeline->Schedule();
 		}
-	}
-
-	// schedule the pipeline tasks in the task scheduler
-	for(auto &pipeline : scheduled_pipelines) {
-		pipeline->Schedule();
 	}
 
 	// now execute tasks from this producer until all pipelines are completed

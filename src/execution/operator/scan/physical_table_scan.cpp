@@ -20,7 +20,7 @@ public:
 	//! Whether or not the scan has been initialized
 	bool initialized;
 	//! The current position in the scan
-	TableScanState scan_offset;
+	TableScanState scan_state;
 	//! Execute filters inside the table
 	ExpressionExecutor executor;
 };
@@ -41,6 +41,7 @@ PhysicalTableScan::PhysicalTableScan(LogicalOperator &op, TableCatalogEntry &tab
 		expression = move(filter[0]);
 	}
 }
+
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalTableScanOperatorState *>(state_);
 	if (column_ids.empty()) {
@@ -48,10 +49,10 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 	}
 	auto &transaction = Transaction::GetTransaction(context.client);
 	if (!state->initialized) {
-		table.InitializeScan(transaction, state->scan_offset, column_ids, &table_filters);
+		table.InitializeScan(transaction, state->scan_state, column_ids, &table_filters);
 		state->initialized = true;
 	}
-	table.Scan(transaction, chunk, state->scan_offset, table_filters);
+	table.Scan(transaction, chunk, state->scan_state, table_filters);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {

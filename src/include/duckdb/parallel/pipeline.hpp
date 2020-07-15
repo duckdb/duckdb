@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 
 #include <atomic>
 
@@ -29,7 +29,7 @@ public:
 	void Execute();
 
 	void AddDependency(Pipeline *pipeline);
-	void EraseDependency(Pipeline *pipeline);
+	void CompleteDependency();
 	bool HasDependencies() {
 		return dependencies.size() != 0;
 	}
@@ -45,7 +45,6 @@ public:
 	void Print() const;
 
 private:
-	std::mutex pipeline_lock;
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state
@@ -54,9 +53,11 @@ private:
 	PhysicalSink *sink;
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	unordered_set<Pipeline *> parents;
-	//! The dependencies of this pipeline (the pipeline can only be started after the dependencies have finished
-	//! executing)
+	//! The dependencies of this pipeline
 	unordered_set<Pipeline *> dependencies;
+	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
+	//! executing)
+	std::atomic<idx_t> finished_dependencies;
 
 	//! Whether or not the pipeline is finished executing
 	bool finished;
