@@ -8,6 +8,11 @@ DBItest::test_all(c(
   "send_query_stale_warning", # wontfix
   "send_statement_stale_warning", # wontfix
 
+  "send_query_immediate", # ???
+  "get_query_immediate", # ???
+  "send_statement_immediate", # ???
+  "execute_immediate", # ???
+
   "get_query_n_bad", # broken test
   "get_query_good_after_bad_n", # broken test
   "has_completed_statement", # broken test

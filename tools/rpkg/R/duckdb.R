@@ -1,9 +1,11 @@
-#' @details TBD.
-"_PACKAGE"
-
-check_flag <- function(x) {
-  if (is.null(x) || length(x) != 1 || is.na(x) || !is.logical(x)) {
-    stop("flags need to be scalar logicals")
-  }
-}
-
+#' DuckDB client package for R
+#'
+#' @description R client package for DuckDB: an embeddable SQL OLAP Database Management System.
+#'
+#' More information at at https://duckdb.org/.
+## usethis namespace: start
+#' @useDynLib duckdb, .registration = TRUE
+## usethis namespace: end
+#' @docType package
+#' @name duckdb-package
+NULL
