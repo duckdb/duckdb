@@ -1,5 +1,10 @@
 #!/bin/sh
 
+set -e
+set -x
+
+cd `dirname $0`
+
 if [ ! -f "../../scripts/amalgamation.py" ]; then
 	echo "Could find neither the amalgamation build script"
 	exit 1
