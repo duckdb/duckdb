@@ -638,7 +638,7 @@ matrix:
         - choco install curl -y --force
 
       script:
-        - export "PATH=/c/Rtools/bin:$PATH"
+        - export "PATH=/c/Rtools40/usr/bin:$PATH"
         - cd tools/rpkg
         - C:/Program\ Files/R/R-4.0.2/bin/R.exe -f dependencies.R
         - sh configure
