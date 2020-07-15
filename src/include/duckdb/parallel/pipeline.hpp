@@ -14,6 +14,7 @@
 
 namespace duckdb {
 class Executor;
+class TaskContext;
 
 //! The Pipeline class represents an execution pipeline
 class Pipeline {
@@ -25,8 +26,8 @@ public:
 	Executor &executor;
 
 public:
-	//! Execute the pipeline sequentially on a single thread
-	void Execute();
+	//! Execute a task within the pipeline on a single thread
+	void Execute(TaskContext &task);
 
 	void AddDependency(Pipeline *pipeline);
 	void CompleteDependency();
@@ -65,6 +66,9 @@ private:
 	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
 	idx_t total_tasks;
+private:
+	void ScheduleSequentialTask();
+	bool ScheduleOperator(PhysicalOperator *op);
 };
 
 } // namespace duckdb

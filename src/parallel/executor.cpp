@@ -6,6 +6,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
@@ -171,7 +172,8 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	assert(physical_plan);
 
 	ThreadContext thread(context);
-	ExecutionContext econtext(context, thread);
+	TaskContext task;
+	ExecutionContext econtext(context, thread, task);
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks

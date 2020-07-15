@@ -20,6 +20,7 @@
 namespace duckdb {
 class ExpressionExecutor;
 class PhysicalOperator;
+class OperatorTaskInfo;
 
 //! The current state/context of the operator. The PhysicalOperatorState is
 //! updated using the GetChunk function, and allows the caller to repeatedly
@@ -95,6 +96,9 @@ public:
 	virtual bool IsSink() const {
 		return false;
 	}
+
+	//! Provides an interface for parallel scans of this operator. For every OperatorTaskInfo returned, one task is created. The OperatorTaskInfo can be accessed as part of the TaskContext during execution.
+	virtual void ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback);
 };
 
 } // namespace duckdb
