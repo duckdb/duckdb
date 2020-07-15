@@ -1,4 +1,4 @@
-add_library_unity(duckdb_aggr_nested
+add_library(duckdb_aggr_nested
                   OBJECT
                  list.cpp)
 set(ALL_OBJECT_FILES

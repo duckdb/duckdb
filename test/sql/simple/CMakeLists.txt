@@ -1,4 +1,4 @@
-add_library_unity(test_sql_simple
+add_library(test_sql_simple
                   OBJECT
                   test_arithmetic.cpp
                   test_alias.cpp

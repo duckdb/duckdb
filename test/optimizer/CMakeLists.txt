@@ -1,4 +1,4 @@
-add_library_unity(test_optimizer
+add_library(test_optimizer
                   OBJECT
                   test_arithmetic_simplification.cpp
                   test_case_simplification.cpp

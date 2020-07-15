@@ -1,4 +1,4 @@
-add_library_unity(duckdb_storage_buffer
+add_library(duckdb_storage_buffer
                   OBJECT
                   buffer_handle.cpp
                   buffer_list.cpp

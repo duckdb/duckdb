@@ -1,4 +1,4 @@
-add_library_unity(test_sql_update
+add_library(test_sql_update
                   OBJECT
                   test_big_update.cpp
                   test_null_update.cpp

@@ -1,4 +1,4 @@
-add_library_unity(duckdb_expression
+add_library(duckdb_expression
                   OBJECT
                   case_expression.cpp
                   cast_expression.cpp

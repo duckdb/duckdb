@@ -1,4 +1,4 @@
-add_library_unity(duckdb_parallel
+add_library(duckdb_parallel
                   OBJECT
                   executor.cpp
                   pipeline.cpp

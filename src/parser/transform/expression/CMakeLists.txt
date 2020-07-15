@@ -1,4 +1,4 @@
-add_library_unity(duckdb_transformer_expression
+add_library(duckdb_transformer_expression
                   OBJECT
                   transform_bool_expr.cpp
                   transform_case.cpp

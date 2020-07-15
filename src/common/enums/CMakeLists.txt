@@ -1,4 +1,4 @@
-add_library_unity(duckdb_common_enums
+add_library(duckdb_common_enums
                   OBJECT
                   catalog_type.cpp
                   expression_type.cpp

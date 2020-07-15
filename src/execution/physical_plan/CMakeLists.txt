@@ -1,4 +1,4 @@
-add_library_unity(duckdb_physical_plan
+add_library(duckdb_physical_plan
                   OBJECT
                   plan_aggregate.cpp
                   plan_any_join.cpp

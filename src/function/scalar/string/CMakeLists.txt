@@ -1,4 +1,4 @@
-add_library_unity(
+add_library(
   duckdb_func_string
   OBJECT
   reverse.cpp

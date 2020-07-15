@@ -1,4 +1,4 @@
-add_library_unity(duckdb_constraints
+add_library(duckdb_constraints
                   OBJECT
                   check_constraint.cpp
                   not_null_constraint.cpp

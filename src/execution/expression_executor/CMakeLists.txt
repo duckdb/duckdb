@@ -1,4 +1,4 @@
-add_library_unity(duckdb_expression_executor
+add_library(duckdb_expression_executor
                   OBJECT
                   execute_between.cpp
                   execute_case.cpp

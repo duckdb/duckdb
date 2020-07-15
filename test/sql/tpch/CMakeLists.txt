@@ -1,4 +1,4 @@
-add_library_unity(test_sql_tpch
+add_library(test_sql_tpch
                   OBJECT
                   test_tpch.cpp
                   test_tpch_with_relations.cpp)

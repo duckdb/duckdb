@@ -1,4 +1,4 @@
-add_library_unity(duckdb_transformer_tableref
+add_library(duckdb_transformer_tableref
                   OBJECT
                   transform_base_tableref.cpp
                   transform_join.cpp

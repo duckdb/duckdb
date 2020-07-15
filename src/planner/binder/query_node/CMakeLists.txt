@@ -1,4 +1,4 @@
-add_library_unity(duckdb_bind_query_node
+add_library(duckdb_bind_query_node
                   OBJECT
                   bind_select_node.cpp
                   bind_setop_node.cpp
