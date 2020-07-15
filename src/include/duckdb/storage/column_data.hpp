@@ -40,6 +40,8 @@ public:
 public:
 	//! Initialize a scan of the column
 	void InitializeScan(ColumnScanState &state);
+	//! Initialize a scan starting at the specified offset
+	void InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx);
 	//! Scan the next vector from the column
 	void Scan(Transaction &transaction, ColumnScanState &state, Vector &result);
 	//! Scan the next vector from the column and apply a selection vector to filter the data

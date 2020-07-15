@@ -54,7 +54,6 @@ void Pipeline::Execute(TaskContext &task) {
 			thread.profiler.StartOperator(sink);
 			if (intermediate.size() == 0) {
 				sink->Combine(context, *sink_state, *lstate);
-				sink->Finalize(context, move(sink_state));
 				break;
 			}
 			sink->Sink(context, *sink_state, *lstate, intermediate);
@@ -71,6 +70,7 @@ void Pipeline::Execute(TaskContext &task) {
 void Pipeline::FinishTask() {
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
+		sink->Finalize(executor.context, move(sink_state));
 		Finish();
 	}
 }

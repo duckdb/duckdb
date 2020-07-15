@@ -51,9 +51,12 @@ public:
 
 void PhysicalTableScan::ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
 	// generate parallel scans
-	auto task = make_unique<TableScanTaskInfo>();
-	table.InitializeScan(Transaction::GetTransaction(context), task->state, column_ids, &table_filters);
-	callback(move(task));
+	auto &transaction = Transaction::GetTransaction(context);
+	table.InitializeParallelScan(transaction, column_ids, &table_filters, [&](TableScanState state) {
+		auto task = make_unique<TableScanTaskInfo>();
+		task->state = move(state);
+		callback(move(task));
+	});
 }
 
 void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {

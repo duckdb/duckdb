@@ -24,6 +24,15 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 }
 
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
+	// FIXME: this is obviously not very efficient
+	InitializeScan(state);
+	for(idx_t i = 0; i < vector_idx; i++) {
+		state.Next();
+	}
+	assert(state.current);
+}
+
 void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);

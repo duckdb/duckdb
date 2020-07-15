@@ -3,6 +3,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/task_context.hpp"
 
 using namespace std;
 
@@ -50,13 +52,16 @@ void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalOperatorState &sta
 	distinct->Sink(context, state, lstate, input);
 }
 
-void PhysicalDelimJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalDelimJoin::Finalize(ClientContext &client, unique_ptr<GlobalOperatorState> state) {
 	// finalize the distinct HT
-	distinct->Finalize(context, move(state));
+	distinct->Finalize(client, move(state));
 	// materialize the distinct collection
 	DataChunk delim_chunk;
 	distinct->InitializeChunk(delim_chunk);
 	auto distinct_state = distinct->GetOperatorState();
+	ThreadContext thread(client);
+	TaskContext task;
+	ExecutionContext context(client, thread, task);
 	while (true) {
 		distinct->GetChunk(context, delim_chunk, distinct_state.get());
 		if (delim_chunk.size() == 0) {

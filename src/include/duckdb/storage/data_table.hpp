@@ -86,6 +86,9 @@ public:
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+
+	void InitializeParallelScan(Transaction &transaction, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback);
+
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
@@ -149,6 +152,9 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
+
+	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
+                               unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, const vector<column_t> &column_ids, idx_t &current_row,
