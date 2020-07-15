@@ -75,7 +75,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		}
 		state->initialized = true;
 	}
-	table.Scan(transaction, chunk, state->scan_state, table_filters);
+	table.Scan(transaction, chunk, state->scan_state, column_ids, table_filters);
 }
 
 string PhysicalTableScan::ExtraRenderInformation() const {

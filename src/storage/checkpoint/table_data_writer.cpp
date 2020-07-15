@@ -70,7 +70,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 		chunk.Reset();
 		// now scan the table to construct the blocks
 		unordered_map<idx_t, vector<TableFilter>> mock;
-		table.storage->Scan(transaction, chunk, state, mock);
+		table.storage->Scan(transaction, chunk, state, column_ids, mock);
 		if (chunk.size() == 0) {
 			break;
 		}
