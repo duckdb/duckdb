@@ -8,7 +8,7 @@ cd `dirname $0`
 export "PATH=/c/Rtools40/usr/bin:$PATH"
 R=C:/Program\ Files/R/R-4.0.2/bin/R.exe
 
-${R} -f dependencies.R
+"${R}" -f dependencies.R
 ${R} CMD build .
 ${R} CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
 ${R} CMD INSTALL duckdb_*.zip
