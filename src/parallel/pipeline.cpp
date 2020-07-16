@@ -30,7 +30,7 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_)
-    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(1) {
+    : executor(executor_), finished_dependencies(0), finished(false), finished_tasks(0), total_tasks(0) {
 }
 
 void Pipeline::Execute(TaskContext &task) {
@@ -68,6 +68,7 @@ void Pipeline::Execute(TaskContext &task) {
 }
 
 void Pipeline::FinishTask() {
+	assert(finished_tasks < total_tasks);
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
 		sink->Finalize(executor.context, move(sink_state));
@@ -79,6 +80,7 @@ void Pipeline::ScheduleSequentialTask() {
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 	auto task = make_unique<PipelineTask>(this);
 
+	this->total_tasks = 1;
 	scheduler.ScheduleTask(*executor.producer, move(task));
 }
 
@@ -92,15 +94,26 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::SEQ_SCAN: {
 		// we reached a scan: split it up into parts and schedule the parts
 		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-		idx_t task_count = 0;
+
+		// first we gather all of the tasks of this pipeline
+		// we gather the tasks first because we want to set total_tasks to the actual task amount
+		// otherwise we can encounter race conditions in which a pipeline could finish twice
+		vector<unique_ptr<OperatorTaskInfo>> tasks;
 		op->ParallelScanInfo(executor.context, [&](unique_ptr<OperatorTaskInfo> info) {
-			task_count++;
+			tasks.push_back(move(info));
+		});
+		this->total_tasks = tasks.size();
+		if (this->total_tasks == 0) {
+			// could not generate parallel tasks, or parallel tasks were determined as not worthwhile
+			// move on to sequential execution
+			return false;
+		}
+		// after we have gathered all the tasks we actually schedule them for execution
+		for(auto &info : tasks) {
 			auto task = make_unique<PipelineTask>(this);
 			task->task.task_info[op] = move(info);
 			scheduler.ScheduleTask(*executor.producer, move(task));
-		});
-		assert(task_count > 0);
-		this->total_tasks = task_count;
+		}
 		return true;
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
@@ -114,6 +127,8 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 }
 
 void Pipeline::Schedule() {
+	assert(finished_tasks == 0);
+	assert(total_tasks == 0);
 	assert(finished_dependencies == dependencies.size());
 	// check if we can parallelize this task based on the sink
 	switch(sink->type) {
