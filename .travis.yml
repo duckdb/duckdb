@@ -6,6 +6,7 @@ env:
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
     - SETUPTOOLS_SCM_DEBUG=please
+    - MAKEFLAGS="-j 2"
 
 git:
   depth: false
