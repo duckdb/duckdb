@@ -177,6 +177,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
 	case TypeId::VARCHAR: {
+		StringHeap local_heap;
 		auto source = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
@@ -188,10 +189,12 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 			} else if (source[source_idx].IsInlined()) {
 				*target = source[source_idx];
 			} else {
-				*target = string_heap.AddString(source[source_idx]);
+				*target = local_heap.AddString(source[source_idx]);
 			}
 			key_locations[i] += sizeof(string_t);
 		}
+		lock_guard<mutex> append_lock(ht_lock);
+		string_heap.MergeHeap(local_heap);
 		break;
 	}
 	default:
@@ -212,11 +215,11 @@ idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
 	idx_t offset = count - remaining;
+	block.count += append_count;
 	for (idx_t i = 0; i < append_count; i++) {
 		key_locations[offset + i] = dataptr;
 		dataptr += entry_size;
 	}
-	block.count += append_count;
 	return append_count;
 }
 
@@ -262,6 +265,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
+		lock_guard<mutex> mj_lock(info.mj_lock);
 		// Correlated MARK join
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
@@ -295,30 +299,33 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// first allocate space of where to serialize the keys and payload columns
 	idx_t remaining = added_count;
 	// first append to the last block (if any)
-	if (blocks.size() != 0) {
-		auto &last_block = blocks.back();
-		if (last_block.count < last_block.capacity) {
-			// last block has space: pin the buffer of this block
-			auto handle = buffer_manager.Pin(last_block.block_id);
-			// now append to the block
-			idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
+	{
+		lock_guard<mutex> append_lock(ht_lock);
+		if (blocks.size() != 0) {
+			auto &last_block = blocks.back();
+			if (last_block.count < last_block.capacity) {
+				// last block has space: pin the buffer of this block
+				auto handle = buffer_manager.Pin(last_block.block_id);
+				// now append to the block
+				idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
+				remaining -= append_count;
+				handles.push_back(move(handle));
+			}
+		}
+		while (remaining > 0) {
+			// now for the remaining data, allocate new buffers to store the data and append there
+			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+
+			HTDataBlock new_block;
+			new_block.count = 0;
+			new_block.capacity = block_capacity;
+			new_block.block_id = handle->block_id;
+
+			idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
+			blocks.push_back(new_block);
 		}
-	}
-	while (remaining > 0) {
-		// now for the remaining data, allocate new buffers to store the data and append there
-		auto handle = buffer_manager.Allocate(block_capacity * entry_size);
-
-		HTDataBlock new_block;
-		new_block.count = 0;
-		new_block.capacity = block_capacity;
-		new_block.block_id = handle->block_id;
-
-		idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
-		remaining -= append_count;
-		handles.push_back(move(handle));
-		blocks.push_back(new_block);
 	}
 
 	// hash the keys and obtain an entry in the list

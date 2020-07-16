@@ -98,6 +98,8 @@ public:
 	};
 
 private:
+	std::mutex ht_lock;
+
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct HTDataBlock {
 		idx_t count;
@@ -165,6 +167,7 @@ public:
 	idx_t block_capacity;
 
 	struct {
+		std::mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
 		vector<TypeId> correlated_types;

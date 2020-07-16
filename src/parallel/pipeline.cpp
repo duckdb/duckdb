@@ -153,6 +153,14 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::HASH_JOIN: {
+		// schedule build side of the join
+		if (ScheduleOperator(sink->children[1].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
 	default:
 		break;
 	}
