@@ -12,6 +12,6 @@ R=C:/Program\ Files/R/R-4.0.2/bin/R.exe
 "${R}" CMD build .
 "${R}" CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
 "${R}" CMD INSTALL duckdb_*.zip
-(cd tests; "${R}" -q -f testthat.R)
+"${R}" CMD check --no-multiarch --no-manual --as-cran duckdb_*.tar.gz
 
 "${R}" -q -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
