@@ -588,6 +588,8 @@ matrix:
       script:
         - ./configure
         - R CMD build .
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tgz
         - R CMD check --no-multiarch --as-cran duckdb_*.tar.gz
 
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
@@ -611,6 +613,8 @@ matrix:
       script:
         - ./configure
         - R CMD build .
+        - R CMD INSTALL --build duckdb_*.tar.gz
+        - R CMD INSTALL duckdb_*.tgz
         - R CMD check --no-multiarch --as-cran duckdb_*.tar.gz
 
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
@@ -639,7 +643,7 @@ matrix:
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
         - sh configure
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD check --no-multiarch --as-cran duckdb_*.tar.gz
+        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD check --no-multiarch --no-manual --as-cran duckdb_*.tar.gz
 
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
