@@ -8,30 +8,46 @@ sys.path.insert(0, 'benchmark')
 
 import duckdb_query_graph
 
-if len(sys.argv) <= 1:
-	print("Usage: python generate_querygraph.py [input.json] [output.html] [open={1,0}]")
+arguments = sys.argv
+if len(arguments) <= 1:
+	print("Usage: python generate_querygraph.py [input.json] [output.html] [open={1,0}] [--tree=0]")
 	exit(1)
 
+tree_index = None
+for i in range(0, len(arguments)):
+	if arguments[i].startswith('--tree'):
+		tree_index = int(arguments[i].split('--tree=')[1])
+		del arguments[i]
 
-input = sys.argv[1]
-if len(sys.argv) <= 2:
+input = arguments[1]
+if len(arguments) <= 2:
 	if ".json" in input:
 		output = input.replace(".json", ".html")
 	else:
 		output = input + ".html"
 else:
-	output = sys.argv[2]
+	output = arguments[2]
 
 open_output = True
-if len(sys.argv) >= 4:
-	open_arg = sys.argv[3].lower()
+if len(arguments) >= 4:
+	open_arg = arguments[3].lower()
 	if open_arg == "1" or open_arg == "true":
 		open_output = True
-	elif sys.argv[3] == "0" or open_arg == "false":
+	elif arguments[3] == "0" or open_arg == "false":
 		open_output = False
 	else:
 		print("Incorrect input for open_output, expected TRUE or FALSE")
 		exit(1)
+
+if tree_index != None:
+	with open(input, 'r') as f:
+		text = f.read()
+	new_text = '{ "result"' + text.split('{ "result"')[tree_index + 1]
+	input += '.tmp'
+	with open(input, 'w+') as f:
+		f.write(new_text)
+
+
 
 
 duckdb_query_graph.generate(input, output)
