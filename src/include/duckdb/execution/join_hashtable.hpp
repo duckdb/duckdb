@@ -107,8 +107,14 @@ private:
 		block_id_t block_id;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
-	                    idx_t remaining);
+	struct BlockAppendEntry {
+		BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) { }
+
+		data_ptr_t baseptr;
+		idx_t count;
+	};
+
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries, idx_t remaining);
 
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 

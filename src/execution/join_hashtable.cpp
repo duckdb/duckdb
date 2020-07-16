@@ -210,16 +210,11 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	SerializeVectorData(vdata, v.type, sel, count, key_locations);
 }
 
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
-                                   idx_t remaining) {
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries, idx_t remaining) {
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
-	idx_t offset = count - remaining;
+	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
 	block.count += append_count;
-	for (idx_t i = 0; i < append_count; i++) {
-		key_locations[offset + i] = dataptr;
-		dataptr += entry_size;
-	}
 	return append_count;
 }
 
@@ -295,11 +290,12 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
+	vector<BlockAppendEntry> append_entries;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
 	idx_t remaining = added_count;
-	// first append to the last block (if any)
 	{
+		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(ht_lock);
 		if (blocks.size() != 0) {
 			auto &last_block = blocks.back();
@@ -307,7 +303,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block_id);
 				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
+				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
 				remaining -= append_count;
 				handles.push_back(move(handle));
 			}
@@ -321,10 +317,19 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 			new_block.capacity = block_capacity;
 			new_block.block_id = handle->block_id;
 
-			idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
+			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
 			blocks.push_back(new_block);
+		}
+	}
+	// now set up the key_locations based on the append entries
+	idx_t append_idx = 0;
+	for(auto &append_entry : append_entries) {
+		idx_t next = append_idx + append_entry.count;
+		for(; append_idx < next; append_idx++) {
+			key_locations[append_idx] = append_entry.baseptr;
+			append_entry.baseptr += entry_size;
 		}
 	}
 
