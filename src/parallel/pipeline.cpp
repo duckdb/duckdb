@@ -9,6 +9,7 @@
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
 using namespace std;
 
@@ -139,6 +140,13 @@ void Pipeline::Schedule() {
 			// not all aggregates are parallelizable: switch to sequential mode
 			break;
 		}
+		if (ScheduleOperator(sink->children[0].get())) {
+			// all parallel tasks have been scheduled: return
+			return;
+		}
+		break;
+	}
+	case PhysicalOperatorType::HASH_GROUP_BY: {
 		if (ScheduleOperator(sink->children[0].get())) {
 			// all parallel tasks have been scheduled: return
 			return;
