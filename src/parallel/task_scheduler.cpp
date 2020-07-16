@@ -91,7 +91,8 @@ void TaskScheduler::SetThreads(int32_t n) {
 	idx_t new_thread_count = n - 1;
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
-		for (idx_t i = 0; i < new_thread_count - threads.size(); i++) {
+		idx_t create_new_threads = new_thread_count - threads.size();
+		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<bool>(new bool(true));
 			auto worker_thread = make_unique<thread>(ThreadExecuteTasks, this, marker.get());
