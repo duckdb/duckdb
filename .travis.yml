@@ -590,7 +590,7 @@ matrix:
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
-        - R CMD check --no-multiarch --as-cran duckdb_*.tar.gz
+        - R CMD check --as-cran duckdb_*.tar.gz
 
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
@@ -614,8 +614,7 @@ matrix:
         - ./configure
         - R CMD build .
         - R CMD INSTALL --build duckdb_*.tar.gz
-        - R CMD INSTALL duckdb_*.tgz
-        - R CMD check --no-multiarch --as-cran duckdb_*.tar.gz
+        - R CMD check --as-cran duckdb_*.tar.gz
 
         - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
@@ -647,5 +646,4 @@ matrix:
 
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
         - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
