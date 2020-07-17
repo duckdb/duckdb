@@ -591,6 +591,8 @@ matrix:
         - R CMD INSTALL --build duckdb_*.tar.gz
         - R CMD INSTALL duckdb_*.tgz
         - R CMD check --as-cran duckdb_*.tar.gz
+        - R -f ../../examples/R/dbi.R
+        - R -f ../../examples/R/dplyr.R
 
         - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
