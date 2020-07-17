@@ -360,7 +360,7 @@ matrix:
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DAMALGAMATION_BUILD=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DAMALGAMATION_BUILD=1 ../.. && travis_wait 30 cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
