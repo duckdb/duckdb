@@ -11,4 +11,3 @@ configure
 ^docs$
 \.o$
 \.a$
-CMakeFiles
