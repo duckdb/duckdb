@@ -15,7 +15,7 @@ TEST_CASE("Vectorized UDF functions", "[udf_function]") {
 	//The types supported by the templated CreateVectorizedFunction
 	const vector<SQLType> sql_templated_types = {SQLType::BOOLEAN, SQLType::TINYINT, SQLType::SMALLINT,
 												 SQLType::INTEGER, SQLType::BIGINT, SQLType::FLOAT,
-												 SQLType::DOUBLE}; //, SQLType::VARCHAR
+												 SQLType::DOUBLE, SQLType::VARCHAR};
 
 	//Creating the tables
 	for(SQLType sql_type: sql_templated_types) {
@@ -175,5 +175,70 @@ TEST_CASE("Vectorized UDF functions", "[udf_function]") {
 			result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 			REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr), Value(nullptr), Value(nullptr)}));
 		}
+	}
+
+	SECTION("Cheking Vectorized UDF functions with several input columns") {
+		// UDF with 4 input ints, return the last one
+		con.CreateVectorizedFunction<int, int, int, int, int>("udf_four_ints", &udf_several_constant_input<int, 4>);
+		result = con.Query("SELECT udf_four_ints(1, 2, 3, 4)");
+		REQUIRE(CHECK_COLUMN(result, 0, {4}));
+
+		// UDF with 5 input ints, return the last one
+		con.CreateVectorizedFunction<int, int, int, int, int, int>("udf_five_ints", &udf_several_constant_input<int, 5>);
+		result = con.Query("SELECT udf_five_ints(1, 2, 3, 4, 5)");
+		REQUIRE(CHECK_COLUMN(result, 0, {5}));
+
+		// UDF with 10 input ints, return the last one
+		con.CreateVectorizedFunction<int, int, int, int, int, int, int, int, int, int, int>("udf_ten_ints", &udf_several_constant_input<int, 10>);
+		result = con.Query("SELECT udf_ten_ints(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)");
+		REQUIRE(CHECK_COLUMN(result, 0, {10}));
+	}
+
+	SECTION("Cheking Vectorized UDF functions with varargs and constant values") {
+		// Test udf_max with integer
+		con.CreateVectorizedFunction<int, int>("udf_const_max_int", &udf_max_constant<int>, SQLType::INTEGER);
+		result = con.Query("SELECT udf_const_max_int(1, 2, 3, 4, 999, 5, 6, 7)");
+		REQUIRE(CHECK_COLUMN(result, 0, {999}));
+
+		result = con.Query("SELECT udf_const_max_int(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)");
+		REQUIRE(CHECK_COLUMN(result, 0, {10}));
+
+		// Test udf_max with double
+		con.CreateVectorizedFunction<double, double>("udf_const_max_double", &udf_max_constant<double>, SQLType::DOUBLE);
+		result = con.Query("SELECT udf_const_max_double(1.0, 2.0, 3.0, 4.0, 999.0, 5.0, 6.0, 7.0)");
+		REQUIRE(CHECK_COLUMN(result, 0, {999.0}));
+
+		result = con.Query("SELECT udf_const_max_double(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0)");
+		REQUIRE(CHECK_COLUMN(result, 0, {10.0}));
+	}
+
+	SECTION("Cheking Vectorized UDF functions with varargs and input columns") {
+		// Test udf_max with integer
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (a INTEGER, b INTEGER, c INTEGER, d INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), (1000, 2000, 3000, 4000)"));
+
+		con.CreateVectorizedFunction<int, int>("udf_flat_max_int", &udf_max_flat<int>, SQLType::INTEGER);
+		result = con.Query("SELECT udf_flat_max_int(a, b, c, d) FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
+
+		result = con.Query("SELECT udf_flat_max_int(d, c, b, a) FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
+
+		result = con.Query("SELECT udf_flat_max_int(c, b) FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {3, 30, 300, 3000}));
+
+		// Test udf_max with double
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE doubles (a DOUBLE, b DOUBLE, c DOUBLE, d DOUBLE)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO doubles VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), (1000, 2000, 3000, 4000)"));
+
+		con.CreateVectorizedFunction<double, double>("udf_flat_max_double", &udf_max_flat<double>, SQLType::DOUBLE);
+		result = con.Query("SELECT udf_flat_max_double(a, b, c, d) FROM doubles");
+		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
+
+		result = con.Query("SELECT udf_flat_max_double(d, c, b, a) FROM doubles");
+		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
+
+		result = con.Query("SELECT udf_flat_max_double(c, b) FROM doubles");
+		REQUIRE(CHECK_COLUMN(result, 0, {3, 30, 300, 3000}));
 	}
 }

@@ -180,4 +180,66 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 	}
 }
 
+/*
+ * Vectorized function with the number of input as a template parameter
+ */
+template<typename TYPE, int NUM_INPUT>
+static void udf_several_constant_input(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == NUM_INPUT);
+	for(idx_t i = 0; i < NUM_INPUT; ++i) {
+		assert((GetTypeId<TYPE>()) == input.data[i].type);
+	}
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	auto result_data = ConstantVector::GetData<TYPE>(result);
+	auto ldata = ConstantVector::GetData<TYPE>(input.data[NUM_INPUT - 1 ]);
+
+	for (idx_t i = 0; i < input.size(); i++) {
+		result_data[i] = ldata[i];
+	}
+}
+
+/*
+ * Vectorized MAX function with varargs and constant inputs
+ */
+template<typename TYPE>
+static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &result) {
+	TYPE max = 0;
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
+		assert((GetTypeId<TYPE>()) == input.type);
+		if (ConstantVector::IsNull(input)) {
+			// constant null, skip
+			continue;
+		}
+		auto input_data = ConstantVector::GetData<TYPE>(input);
+		if(max < input_data[0]) {
+			max = input_data[0];
+		}
+	}
+	auto result_data = ConstantVector::GetData<TYPE>(result);
+	result_data[0] = max;
+}
+
+/*
+ * Vectorized MAX function with varargs and input columns
+ */
+template<typename TYPE>
+static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<TYPE>(result);
+	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
+		assert((GetTypeId<TYPE>()) == input.type);
+		auto input_data = FlatVector::GetData<TYPE>(input);
+		for(idx_t i=0; i < args.size(); ++i) {
+			if(result_data[i] < input_data[i]) {
+				result_data[i] = input_data[i];
+			}
+		}
+	}
+}
+
 }; //end namespace
