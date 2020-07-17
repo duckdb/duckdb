@@ -1,2 +1,10 @@
-PKG_CXXFLAGS = -I. -DDUCKDB_DISABLE_PRINT
-OBJECTS=duckdbr.o parquet-extension.o duckdb.o
+PKG_CXXFLAGS = -I. -Iduckdb/include -DDUCKDB_DISABLE_PRINT
+PKG_LIBS = -Lduckdb/lib -lduckdb_static -lfmt -lhyperloglog -lminiz -lpg_query -lre2 -lutf8proc
+OBJECTS=duckdbr.o parquet-extension.o
+
+all: $(SHLIB)
+
+$(SHLIB): duckdb/src/libduckdb_static.a
+
+duckdb/src/libduckdb_static.a:
+	cd duckdb && make install

@@ -9,3 +9,5 @@ configure
 ^tic\.R$
 ^_pkgdown\.yml$
 ^docs$
+\.o$
+CMakeFiles

@@ -1,4 +1,9 @@
-#include "duckdb.h"
+#include "duckdb.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "parquet-extension.h"
 
 #include <Rdefines.h>
