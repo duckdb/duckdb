@@ -16,6 +16,7 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 10
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       addons:
         apt:
@@ -55,6 +56,7 @@ matrix:
     - os: osx
       name: Xcode 11.5
       osx_image: xcode11.5
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       script:
         - mkdir -p build/release
@@ -75,6 +77,7 @@ matrix:
     - os: windows
       name: VS 2017
       filter_secrets: false
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       language: c
 
@@ -108,6 +111,7 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 10 Debug
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       addons:
         apt:
@@ -125,7 +129,7 @@ matrix:
 
     - os: osx
       name: Xcode 11.5 Debug
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
       osx_image: xcode11.5
       script:
         - make unit
@@ -134,7 +138,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Code Coverage
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -154,7 +158,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Valgrind
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -170,7 +174,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Vector Sizes
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       python: 3.7
 
@@ -186,7 +190,7 @@ matrix:
     - os: linux
       dist: trusty
       name: GCC 4.9
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
       addons:
          apt:
           sources:
@@ -205,7 +209,7 @@ matrix:
     - os: linux
       dist: bionic
       name: GCC 10 32 Bit
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -234,7 +238,7 @@ matrix:
 
     - os: windows
       name: VS 2017 32 Bit
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       filter_secrets: false
 
@@ -265,7 +269,7 @@ matrix:
     - os: linux
       dist: xenial
       name: GCC 5 (ARM64)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       arch: arm64
 
@@ -278,7 +282,7 @@ matrix:
     - os: linux
       dist: bionic
       name: Solaris VM
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
       sudo: true
 
       install:
@@ -309,7 +313,7 @@ matrix:
     # - os: linux
     #   dist: bionic
     #   name: OpenBSD VM
-    #   if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+    #   if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
     #   sudo: true
 
     #   install:
@@ -341,7 +345,7 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -370,7 +374,7 @@ matrix:
     - os: linux
       dist: bionic
       name: SQLancer (with Address Sanitizer)
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -401,7 +405,7 @@ matrix:
     - os: linux
       dist: bionic
       name: JDBC Compliance
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       addons:
         apt:
@@ -421,6 +425,7 @@ matrix:
 
     - os: linux
       name: Python 3.7 Package
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       dist: bionic
       language: python
@@ -449,7 +454,7 @@ matrix:
 
     - os: linux
       name: Python 3.6 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       dist: bionic
       language: python
@@ -489,7 +494,7 @@ matrix:
 
     - os: linux
       name: Python 2.7 Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       dist: bionic
       language: python
@@ -514,7 +519,7 @@ matrix:
 
     - os: osx
       name: Python Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       language: generic
       osx_image: xcode11.5
@@ -541,7 +546,7 @@ matrix:
 
     - os: windows
       name: Python Package
-      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       language: cpp
       filter_secrets: false
