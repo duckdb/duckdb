@@ -10,4 +10,5 @@ configure
 ^_pkgdown\.yml$
 ^docs$
 \.o$
+\.a$
 CMakeFiles
