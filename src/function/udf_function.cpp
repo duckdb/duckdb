@@ -6,9 +6,11 @@
 namespace duckdb {
 
 void UDFWrapper::RegisterFunction(string name, vector<SQLType> args, SQLType ret_type,
-							 	 	 	 scalar_function_t udf_function, ClientContext &context) {
+								  scalar_function_t udf_function, ClientContext &context,
+								  SQLType varargs) {
 
 	ScalarFunction scalar_function = ScalarFunction(name, args, ret_type, udf_function);
+	scalar_function.varargs = varargs;
 	CreateScalarFunctionInfo info(scalar_function);
 	context.RegisterFunction(&info);
 }

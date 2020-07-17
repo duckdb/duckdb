@@ -116,8 +116,8 @@ public:
 	}
 
 	template<typename TR, typename... Args>
-	void CreateVectorizedFunction(string name, scalar_function_t udf_func) {
-		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context);
+	void CreateVectorizedFunction(string name, scalar_function_t udf_func, SQLType varargs = SQLType::INVALID) {
+		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, varargs);
 	}
 
 private:
