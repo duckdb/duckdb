@@ -1,4 +1,4 @@
-PKG_CXXFLAGS = -I. -Iduckdb/include -DDUCKDB_DISABLE_PRINT
+PKG_CXXFLAGS = -I. -Iduckdb/src-include -DDUCKDB_DISABLE_PRINT
 PKG_LIBS = -Lduckdb/lib -lduckdb_static -lfmt -lhyperloglog -lminiz -lpg_query -lre2 -lutf8proc
 OBJECTS=duckdbr.o parquet-extension.o
 
