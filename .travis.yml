@@ -575,7 +575,7 @@ matrix:
 
     - os: linux
       name: R Package
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       dist: bionic
       language: r
@@ -601,7 +601,7 @@ matrix:
     - os: osx
       osx_image: xcode11.5
       name: R Package
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
       #r: devel
@@ -625,7 +625,7 @@ matrix:
     - os: windows
       name: R Package
       filter_secrets: false
-      #if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
+      if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: cpp
 
