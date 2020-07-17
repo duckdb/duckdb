@@ -4,7 +4,7 @@ OBJECTS=duckdbr.o parquet-extension.o
 
 all: $(SHLIB)
 
-$(SHLIB): duckdb/src/libduckdb_static.a
+$(SHLIB): duckdb/lib/libduckdb_static.a
 
-duckdb/src/libduckdb_static.a:
+duckdb/lib/libduckdb_static.a:
 	cd duckdb && make install
