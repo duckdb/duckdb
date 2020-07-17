@@ -3,8 +3,9 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalIndexScanOperatorState : public PhysicalOperatorState {
 public:
@@ -15,13 +16,13 @@ public:
 	TableIndexScanState scan_state;
 };
 
-void PhysicalIndexScan::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalIndexScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalIndexScanOperatorState *>(state_);
 	if (column_ids.size() == 0) {
 		return;
 	}
 
-	auto &transaction = Transaction::GetTransaction(context);
+	auto &transaction = Transaction::GetTransaction(context.client);
 	if (!state->initialized) {
 		// initialize the scan state of the index
 		if (low_index && high_index) {
@@ -61,3 +62,5 @@ string PhysicalIndexScan::ExtraRenderInformation() const {
 unique_ptr<PhysicalOperatorState> PhysicalIndexScan::GetOperatorState() {
 	return make_unique<PhysicalIndexScanOperatorState>();
 }
+
+} // namespace duckdb

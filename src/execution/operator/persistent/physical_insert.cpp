@@ -33,7 +33,7 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalInsert::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                           DataChunk &chunk) {
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
@@ -65,7 +65,7 @@ void PhysicalInsert::Sink(ClientContext &context, GlobalOperatorState &state, Lo
 	}
 
 	lock_guard<mutex> glock(gstate.lock);
-	table->storage->Append(*table, context, istate.insert_chunk);
+	table->storage->Append(*table, context.client, istate.insert_chunk);
 	gstate.insert_count += chunk.size();
 }
 
@@ -73,14 +73,14 @@ unique_ptr<GlobalOperatorState> PhysicalInsert::GetGlobalState(ClientContext &co
 	return make_unique<InsertGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<InsertLocalState>(table->GetTypes(), bound_defaults);
 }
 
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalInsert::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalInsert::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &gstate = (InsertGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);

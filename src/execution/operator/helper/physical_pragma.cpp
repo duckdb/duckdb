@@ -1,11 +1,12 @@
 #include "duckdb/execution/operator/helper/physical_pragma.hpp"
 
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include <cctype>
 
@@ -15,7 +16,8 @@ namespace duckdb {
 
 static idx_t ParseMemoryLimit(string arg);
 
-void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+	auto &client = context.client;
 	auto &pragma = *info;
 	auto &keyword = pragma.name;
 	if (keyword == "enable_profile" || keyword == "enable_profiling") {
@@ -25,33 +27,33 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			// this is either enable_profiling = json, or enable_profiling = query_tree
 			string assignment = pragma.parameters[0].ToString();
 			if (assignment == "json") {
-				context.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
+				client.profiler.automatic_print_format = ProfilerPrintFormat::JSON;
 			} else if (assignment == "query_tree") {
-				context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+				client.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 			} else {
 				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
 				                      assignment.c_str());
 			}
 		} else if (pragma.pragma_type == PragmaType::NOTHING) {
-			context.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+			client.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 		} else {
 			throw ParserException("Cannot call PRAGMA enable_profiling");
 		}
-		context.profiler.Enable();
+		client.profiler.Enable();
 	} else if (keyword == "disable_profile" || keyword == "disable_profiling") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
 			throw ParserException("disable_profiling cannot take parameters!");
 		}
 		// enable profiling
-		context.profiler.Disable();
-		context.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
+		client.profiler.Disable();
+		client.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type != TypeId::VARCHAR) {
 			throw ParserException(
 			    "Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
 		}
-		context.profiler.save_location = pragma.parameters[0].str_value;
+		client.profiler.save_location = pragma.parameters[0].str_value;
 	} else if (keyword == "memory_limit") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Memory limit must be an assignment (e.g. PRAGMA memory_limit='1GB')");
@@ -59,12 +61,12 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (pragma.parameters[0].type == TypeId::VARCHAR) {
 			idx_t new_limit = ParseMemoryLimit(pragma.parameters[0].str_value);
 			// set the new limit in the buffer manager
-			context.db.storage->buffer_manager->SetLimit(new_limit);
+			client.db.storage->buffer_manager->SetLimit(new_limit);
 		} else {
 			int64_t value = pragma.parameters[0].GetValue<int64_t>();
 			if (value < 0) {
 				// limit < 0, set limit to infinite
-				context.db.storage->buffer_manager->SetLimit();
+				client.db.storage->buffer_manager->SetLimit();
 			} else {
 				throw ParserException(
 				    "Memory limit must be an assignment with a memory unit (e.g. PRAGMA memory_limit='1GB')");
@@ -76,14 +78,14 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		}
 		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(TypeId::VARCHAR).str_value);
 		// bind the collation to verify that it exists
-		ExpressionBinder::PushCollation(context, nullptr, collation_param);
-		auto &config = DBConfig::GetConfig(context);
+		ExpressionBinder::PushCollation(client, nullptr, collation_param);
+		auto &config = DBConfig::GetConfig(client);
 		config.collation = collation_param;
 	} else if (keyword == "null_order" || keyword == "default_null_order") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Null order must be an assignment (e.g. PRAGMA default_null_order='NULLS FIRST')");
 		}
-		auto &config = DBConfig::GetConfig(context);
+		auto &config = DBConfig::GetConfig(client);
 		string new_null_order = StringUtil::Lower(pragma.parameters[0].ToString());
 		if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
 			config.default_null_order = OrderByNullType::NULLS_FIRST;
@@ -97,7 +99,7 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Order must be an assignment (e.g. PRAGMA default_order=DESCENDING)");
 		}
-		auto &config = DBConfig::GetConfig(context);
+		auto &config = DBConfig::GetConfig(client);
 		string new_order = StringUtil::Lower(pragma.parameters[0].ToString());
 		if (new_order == "ascending" || new_order == "asc") {
 			config.default_order_type = OrderType::ASCENDING;
@@ -107,6 +109,12 @@ void PhysicalPragma::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING",
 			                      new_order.c_str());
 		}
+	} else if (keyword == "threads" || keyword == "worker_threads") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Order must be an assignment (e.g. PRAGMA threads=4)");
+		}
+		auto nr_threads = pragma.parameters[0].GetValue<int64_t>();
+		TaskScheduler::GetScheduler(client).SetThreads(nr_threads);
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}

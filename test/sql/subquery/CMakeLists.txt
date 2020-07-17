@@ -1,4 +1,4 @@
-add_library_unity(test_subquery
+add_library(test_subquery
                   OBJECT
                   test_any_all.cpp
                   test_correlated_subquery.cpp

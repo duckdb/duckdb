@@ -5,3 +5,7 @@ git
 configure
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^build-win$
+^tic\.R$
+^_pkgdown\.yml$
+^docs$

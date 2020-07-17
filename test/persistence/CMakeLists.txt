@@ -1,4 +1,4 @@
-add_library_unity(test_persistence
+add_library(test_persistence
                   OBJECT
                   test_persistence.cpp
                   test_locking.cpp

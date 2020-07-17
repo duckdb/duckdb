@@ -13,10 +13,11 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/relation.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -33,8 +35,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/execution/pipeline.hpp"
-#include "duckdb/parser/tableref/list.hpp"
 
 using namespace duckdb;
 using namespace std;

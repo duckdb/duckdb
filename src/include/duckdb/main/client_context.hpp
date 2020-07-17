@@ -8,15 +8,16 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/execution/executor.hpp"
+#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/stream_query_result.hpp"
-#include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-#include "duckdb/common/unordered_set.hpp"
+
 #include <random>
 
 namespace duckdb {
@@ -45,7 +46,8 @@ public:
 	//! Lock on using the ClientContext in parallel
 	std::mutex context_lock;
 
-	ExecutionContext execution_context;
+	//! The query executor
+	Executor executor;
 
 	Catalog &catalog;
 	unique_ptr<SchemaCatalogEntry> temporary_objects;

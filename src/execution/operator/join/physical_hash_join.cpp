@@ -10,7 +10,7 @@ using namespace std;
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    vector<idx_t> left_projection_map, vector<idx_t> right_projection_map)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type),
@@ -29,9 +29,9 @@ PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, 
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(ClientContext &context, LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type)
-    : PhysicalHashJoin(context, op, move(left), move(right), move(cond), join_type, {}, {}) {
+    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -46,7 +46,8 @@ public:
 
 class HashJoinGlobalState : public GlobalOperatorState {
 public:
-	HashJoinGlobalState() {}
+	HashJoinGlobalState() {
+	}
 
 	//! The HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
@@ -91,7 +92,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 	return move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) {
 	auto state = make_unique<HashJoinLocalState>();
 	if (right_projection_map.size() > 0) {
 		state->build_chunk.Initialize(build_types);
@@ -103,7 +104,7 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ClientContext &co
 	return move(state);
 }
 
-void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
+void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_,
                             DataChunk &input) {
 	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_;
@@ -127,7 +128,7 @@ void PhysicalHashJoin::Sink(ClientContext &context, GlobalOperatorState &state, 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalHashJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &sink = (HashJoinGlobalState &)*state;
 	sink.hash_table->Finalize();
 
@@ -159,7 +160,7 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	return move(state);
 }
 
-void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	if (sink.hash_table->size() == 0 &&
@@ -177,7 +178,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 				state->cached_chunk.Reset();
 			} else
 #endif
-			if (join_type == JoinType::OUTER) {
+			    if (join_type == JoinType::OUTER) {
 				// check if we need to scan any unmatched tuples from the RHS for the full outer join
 				sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 			}
@@ -206,7 +207,7 @@ void PhysicalHashJoin::GetChunkInternal(ClientContext &context, DataChunk &chunk
 	} while (true);
 }
 
-void PhysicalHashJoin::ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 

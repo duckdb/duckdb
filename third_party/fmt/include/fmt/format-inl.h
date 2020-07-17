@@ -36,8 +36,8 @@
 
 // Dummy implementations of strerror_r and strerror_s called if corresponding
 // system functions are not available.
-inline fmt::internal::null<> strerror_r(int, char*, ...) { return {}; }
-inline fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
+inline duckdb_fmt::internal::null<> strerror_r(int, char*, ...) { return {}; }
+inline duckdb_fmt::internal::null<> strerror_s(char*, std::size_t, ...) { return {}; }
 
 FMT_BEGIN_NAMESPACE
 namespace internal {

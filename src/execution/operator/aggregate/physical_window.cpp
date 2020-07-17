@@ -9,8 +9,9 @@
 
 #include <cmath>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //! The operator state of the window
 class PhysicalWindowOperatorState : public PhysicalOperatorState {
@@ -61,7 +62,7 @@ static idx_t BinarySearchRightmost(ChunkCollection &input, vector<Value> row, id
 	return l - 1;
 }
 
-static void MaterializeExpressions(ClientContext &context, Expression **exprs, idx_t expr_count, ChunkCollection &input,
+static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
                                    ChunkCollection &output, bool scalar = false) {
 	if (expr_count == 0) {
 		return;
@@ -89,13 +90,13 @@ static void MaterializeExpressions(ClientContext &context, Expression **exprs, i
 	}
 }
 
-static void MaterializeExpression(ClientContext &context, Expression *expr, ChunkCollection &input,
-                                  ChunkCollection &output, bool scalar = false) {
-	MaterializeExpressions(context, &expr, 1, input, output, scalar);
+static void MaterializeExpression(Expression *expr, ChunkCollection &input, ChunkCollection &output,
+                                  bool scalar = false) {
+	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForWindow(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, ChunkCollection &sort_collection) {
+static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    ChunkCollection &sort_collection) {
 	vector<TypeId> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
@@ -275,13 +276,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, ChunkCollection
 	}
 }
 
-static void ComputeWindowExpression(ClientContext &context, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                    ChunkCollection &output, idx_t output_idx) {
+static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    idx_t output_idx) {
 
 	ChunkCollection sort_collection;
 	bool needs_sorting = wexpr->partitions.size() + wexpr->orders.size() > 0;
 	if (needs_sorting) {
-		SortCollectionForWindow(context, wexpr, input, output, sort_collection);
+		SortCollectionForWindow(wexpr, input, output, sort_collection);
 	}
 
 	// evaluate inner expressions of window functions, could be more complex
@@ -291,17 +292,17 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 		exprs.push_back(child.get());
 	}
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
-	MaterializeExpressions(context, exprs.data(), exprs.size(), input, payload_collection);
+	MaterializeExpressions(exprs.data(), exprs.size(), input, payload_collection);
 
 	ChunkCollection leadlag_offset_collection;
 	ChunkCollection leadlag_default_collection;
 	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
 		if (wexpr->offset_expr) {
-			MaterializeExpression(context, wexpr->offset_expr.get(), input, leadlag_offset_collection,
+			MaterializeExpression(wexpr->offset_expr.get(), input, leadlag_offset_collection,
 			                      wexpr->offset_expr->IsScalar());
 		}
 		if (wexpr->default_expr) {
-			MaterializeExpression(context, wexpr->default_expr.get(), input, leadlag_default_collection,
+			MaterializeExpression(wexpr->default_expr.get(), input, leadlag_default_collection,
 			                      wexpr->default_expr->IsScalar());
 		}
 	}
@@ -310,14 +311,12 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr &&
 	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->start_expr.get(), input, boundary_start_collection,
-		                      wexpr->start_expr->IsScalar());
+		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
 	ChunkCollection boundary_end_collection;
 	if (wexpr->end_expr &&
 	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
-		MaterializeExpression(context, wexpr->end_expr.get(), input, boundary_end_collection,
-		                      wexpr->end_expr->IsScalar());
+		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
 	// build a segment tree for frame-adhering aggregates
@@ -457,7 +456,7 @@ static void ComputeWindowExpression(ClientContext &context, BoundWindowExpressio
 	}
 }
 
-void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalWindowOperatorState *>(state_);
 	ChunkCollection &big_data = state->tuples;
 	ChunkCollection &window_results = state->window_results;
@@ -498,7 +497,7 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 			assert(select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 			// sort by partition and order clause in window def
 			auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[expr_idx].get());
-			ComputeWindowExpression(context, wexpr, big_data, window_results, window_output_idx++);
+			ComputeWindowExpression(wexpr, big_data, window_results, window_output_idx++);
 		}
 	}
 
@@ -525,3 +524,5 @@ void PhysicalWindow::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(children[0].get());
 }
+
+} // namespace duckdb

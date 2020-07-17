@@ -34,7 +34,7 @@ matrix:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1  -DJDBC_DRIVER=1 ../.. && cmake --build .)
-       
+
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb
         - build/release/extension/icu/test/icu_test
@@ -43,7 +43,6 @@ matrix:
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
         - (cd examples/embedded-c++; make)
-        - (cd examples/programmatic-querying; make)
         - (cd examples/jdbc; make; make maven)
 
         - zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
@@ -61,7 +60,7 @@ matrix:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
         - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
-        
+
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
@@ -244,7 +243,7 @@ matrix:
       before_script:
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
-        - choco install jdk8 --version 8.0.211 --x86 -y --force 
+        - choco install jdk8 --version 8.0.211 --x86 -y --force
         - choco install zip -y --force
 
       script:
@@ -633,23 +632,15 @@ matrix:
       language: cpp
 
       install:
-        - choco install r.project -y --version 3.6.0
-        - wget "https://github.com/hannesmuehleisen/choco-rtools/raw/master/rtools.3.5.0.nupkg"
-        - choco install rtools -s rtools.3.5.0.nupkg -f -y
+        - choco install r.project -y --version 4.0.2
+        - choco install rtools -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
 
       script:
-        - export "PATH=/c/Rtools/bin:$PATH"
         - cd tools/rpkg
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -f dependencies.R
         - sh configure
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD build .
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe CMD INSTALL duckdb_*.zip
-        - (cd tests; C:/Program\ Files/R/R-3.6.0/bin/R.exe -f testthat.R)
-
+        - sh build-win
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
-        - C:/Program\ Files/R/R-3.6.0/bin/R.exe -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
         - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip

@@ -12,8 +12,9 @@
 #include <iostream>
 #include <utility>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 constexpr idx_t TREE_RENDER_WIDTH = 20;
 constexpr idx_t REMAINING_RENDER_WIDTH = TREE_RENDER_WIDTH - 2;
@@ -26,13 +27,11 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	this->running = true;
 	this->query = query;
 	tree_map.clear();
-	execution_stack = stack<PhysicalOperator *>();
 	root = nullptr;
 	phase_timings.clear();
 	phase_stack.clear();
 
 	main_query.Start();
-	op.Start();
 }
 
 void QueryProfiler::EndQuery() {
@@ -111,36 +110,37 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	this->root = CreateTree(root_op);
 }
 
-void QueryProfiler::StartOperator(PhysicalOperator *phys_op) {
-	if (!enabled || !running) {
+OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
+	execution_stack = stack<PhysicalOperator *>();
+}
+
+void OperatorProfiler::StartOperator(PhysicalOperator *phys_op) {
+	if (!enabled) {
 		return;
 	}
 
-	assert(root);
 	if (!execution_stack.empty()) {
 		// add timing for the previous element
 		op.End();
-		assert(tree_map.count(execution_stack.top()) > 0);
-		auto &info = tree_map[execution_stack.top()]->info;
-		info.time += op.Elapsed();
+
+		AddTiming(execution_stack.top(), op.Elapsed(), 0);
 	}
-	assert(tree_map.count(phys_op) != 0);
+
 	execution_stack.push(phys_op);
 
 	// start timing for current element
 	op.Start();
 }
 
-void QueryProfiler::EndOperator(DataChunk &chunk) {
-	if (!enabled || !running) {
+void OperatorProfiler::EndOperator(DataChunk *chunk) {
+	if (!enabled) {
 		return;
 	}
 
 	// finish timing for the current element
 	op.End();
-	auto &info = tree_map[execution_stack.top()]->info;
-	info.time += op.Elapsed();
-	info.elements += chunk.size();
+
+	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
 
 	assert(!execution_stack.empty());
 	execution_stack.pop();
@@ -148,6 +148,28 @@ void QueryProfiler::EndOperator(DataChunk &chunk) {
 	// start timing again for the previous element, if any
 	if (!execution_stack.empty()) {
 		op.Start();
+	}
+}
+
+void OperatorProfiler::AddTiming(PhysicalOperator *op, double time, idx_t elements) {
+	auto entry = timings.find(op);
+	if (entry == timings.end()) {
+		// add new entry
+		timings[op] = OperatorTimingInformation(time, elements);
+	} else {
+		// add to existing entry
+		entry->second.time += time;
+		entry->second.elements += elements;
+	}
+}
+
+void QueryProfiler::Flush(OperatorProfiler &profiler) {
+	for (auto &node : profiler.timings) {
+		auto entry = tree_map.find(node.first);
+		assert(entry != tree_map.end());
+
+		entry->second->info.time += node.second.time;
+		entry->second->info.elements += node.second.elements;
 	}
 }
 
@@ -418,3 +440,5 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	}
 	return result;
 }
+
+} // namespace duckdb

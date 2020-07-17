@@ -756,4 +756,9 @@ TEST_CASE("Test csv type detection", "[copy]") {
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
 }
 
+// this avoids a compiler warning ('nfc_normalization' defined but not used [-Wunused-const-variable=])
+void __dummy() {
+    (void) nfc_normalization;
+}
+
 #endif

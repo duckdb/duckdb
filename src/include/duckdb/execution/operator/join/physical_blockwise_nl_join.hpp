@@ -26,11 +26,11 @@ public:
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ClientContext &context) override;
-	void Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
-	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) override;
 
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ExtraRenderInformation() const override;

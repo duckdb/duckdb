@@ -1,4 +1,4 @@
-add_library_unity(test_sql_udf_function
+add_library(test_sql_udf_function
                   OBJECT
                   test_templated_udf_function.cpp
                   test_argumented_udf_function.cpp

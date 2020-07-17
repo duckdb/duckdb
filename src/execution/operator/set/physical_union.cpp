@@ -1,9 +1,8 @@
 #include "duckdb/execution/operator/set/physical_union.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 class PhysicalUnionOperatorState : public PhysicalOperatorState {
 public:
@@ -21,7 +20,7 @@ PhysicalUnion::PhysicalUnion(LogicalOperator &op, unique_ptr<PhysicalOperator> t
 }
 
 // first exhaust top, then exhaust bottom. state to remember which.
-void PhysicalUnion::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalUnion::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalUnionOperatorState *>(state_);
 	if (!state->top_done) {
 		children[0]->GetChunk(context, chunk, state->top_state.get());
@@ -43,3 +42,5 @@ unique_ptr<PhysicalOperatorState> PhysicalUnion::GetOperatorState() {
 	state->bottom_state = children[1]->GetOperatorState();
 	return (move(state));
 }
+
+} // namespace duckdb

@@ -20,13 +20,13 @@ public:
 	std::atomic<idx_t> deleted_count;
 };
 
-void PhysicalDelete::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                           DataChunk &input) {
 	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
 	// the row ids are given to us as the last column of the child chunk
-	table.Delete(tableref, context, input.data[row_id_index], input.size());
+	table.Delete(tableref, context.client, input.data[row_id_index], input.size());
 	gstate.deleted_count += input.size();
 }
 
@@ -37,7 +37,7 @@ unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &co
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalDelete::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &gstate = (DeleteGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);

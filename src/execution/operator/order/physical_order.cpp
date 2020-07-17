@@ -35,7 +35,8 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	return make_unique<OrderByGlobalOperatorState>();
 }
 
-void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) {
+void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+                         DataChunk &input) {
 	// concatenate all the data of the child chunks
 	auto &gstate = (OrderByGlobalOperatorState &)state;
 	lock_guard<mutex> glock(gstate.lock);
@@ -45,7 +46,7 @@ void PhysicalOrder::Sink(ClientContext &context, GlobalOperatorState &state, Loc
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalOrder::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
 	// finalize: perform the actual sorting
 	auto &sink = (OrderByGlobalOperatorState &)*state;
 	ChunkCollection &big_data = sink.sorted_data;
@@ -84,7 +85,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalOrder::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
+void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalOrderOperatorState *>(state_);
 	auto &sink = (OrderByGlobalOperatorState &)*this->sink_state;
 	ChunkCollection &big_data = sink.sorted_data;

@@ -1,4 +1,7 @@
-#' @include Connection.R
+#' DuckDB Result Set
+#'
+#' Methods for accessing result sets for queries on DuckDB connections.
+#' @name duckdb_result
 NULL
 
 duckdb_result <- function(connection, stmt_lst) {
@@ -26,7 +29,8 @@ duckdb_execute <- function(res) {
   }
 }
 
-#' @rdname DBI
+
+#' @rdname duckdb_result
 #' @export
 setClass(
   "duckdb_result",
@@ -38,7 +42,7 @@ setClass(
   )
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -48,7 +52,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbClearResult
 #' @export
 setMethod(
@@ -73,7 +77,7 @@ fix_rownames <- function(df) {
 }
 
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbFetch
 #' @importFrom utils head
 #' @export
@@ -128,7 +132,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbHasCompleted
 #' @export
 setMethod(
@@ -144,7 +148,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -155,7 +159,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -165,7 +169,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetStatement
 #' @export
 setMethod(
@@ -178,7 +182,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbColumnInfo
 #' @export
 setMethod(
@@ -189,7 +193,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetRowCount
 #' @export
 setMethod(
@@ -202,7 +206,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbGetRowsAffected
 #' @export
 setMethod(
@@ -215,9 +219,8 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_result
 #' @inheritParams DBI::dbBind
-#' @importFrom testthat skip
 #' @export
 setMethod(
   "dbBind", "duckdb_result",

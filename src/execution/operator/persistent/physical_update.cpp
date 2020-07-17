@@ -6,8 +6,9 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Sink
@@ -41,7 +42,7 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalUpdate::Sink(ClientContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
                           DataChunk &chunk) {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
@@ -71,14 +72,14 @@ void PhysicalUpdate::Sink(ClientContext &context, GlobalOperatorState &state, Lo
 	lock_guard<mutex> glock(gstate.lock);
 	if (is_index_update) {
 		// index update, perform a delete and an append instead
-		table.Delete(tableref, context, row_ids, update_chunk.size());
+		table.Delete(tableref, context.client, row_ids, update_chunk.size());
 		mock_chunk.SetCardinality(update_chunk);
 		for (idx_t i = 0; i < columns.size(); i++) {
 			mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
 		}
-		table.Append(tableref, context, mock_chunk);
+		table.Append(tableref, context.client, mock_chunk);
 	} else {
-		table.Update(tableref, context, row_ids, columns, update_chunk);
+		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
 	gstate.updated_count += chunk.size();
 }
@@ -87,14 +88,14 @@ unique_ptr<GlobalOperatorState> PhysicalUpdate::GetGlobalState(ClientContext &co
 	return make_unique<UpdateGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ClientContext &context) {
+unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) {
 	return make_unique<UpdateLocalState>(expressions, table.types, bound_defaults);
 }
 
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
 	auto &gstate = (UpdateGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
@@ -102,3 +103,5 @@ void PhysicalUpdate::GetChunkInternal(ClientContext &context, DataChunk &chunk, 
 
 	state->finished = true;
 }
+
+} // namespace duckdb

@@ -23,7 +23,7 @@ public:
 	idx_t offset;
 
 public:
-	void GetChunkInternal(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };

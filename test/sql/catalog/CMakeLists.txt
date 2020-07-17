@@ -1,4 +1,4 @@
-add_library_unity(test_sql_catalog
+add_library(test_sql_catalog
                   OBJECT
                   test_catalog_errors.cpp
                   test_create_from_select.cpp

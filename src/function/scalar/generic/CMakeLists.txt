@@ -1,4 +1,4 @@
-add_library_unity(duckdb_func_generic
+add_library(duckdb_func_generic
                   OBJECT
                   least.cpp)
 set(ALL_OBJECT_FILES

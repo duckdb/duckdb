@@ -1,9 +1,10 @@
 #include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
@@ -41,6 +42,7 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) {
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*storage);
 	transaction_manager = make_unique<TransactionManager>(*storage);
+	scheduler = make_unique<TaskScheduler>();
 	connection_manager = make_unique<ConnectionManager>();
 	// initialize the database
 	storage->Initialize();

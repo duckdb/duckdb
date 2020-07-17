@@ -1,6 +1,6 @@
 add_subdirectory(catalog_entry)
 
-add_library_unity(duckdb_catalog
+add_library(duckdb_catalog
                   OBJECT
                   catalog_entry.cpp
                   catalog.cpp

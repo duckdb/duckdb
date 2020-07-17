@@ -1,4 +1,4 @@
-add_library_unity(duckdb_merge_join
+add_library(duckdb_merge_join
                   OBJECT
                   merge_join.cpp
         merge_join_complex.cpp
