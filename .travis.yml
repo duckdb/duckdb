@@ -588,8 +588,7 @@ matrix:
       script:
         - ./configure
         - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - R CMD INSTALL duckdb_*.tgz
+        - R CMD INSTALL duckdb_*.tar.gz
         - R CMD check --as-cran duckdb_*.tar.gz
         - R -f ../../examples/R/dbi.R
         - R -f ../../examples/R/dplyr.R
