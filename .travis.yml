@@ -581,6 +581,8 @@ matrix:
       language: r
       r: devel
 
+      install: true
+
       script:
         - cd tools/rpkg
         - sh configure
@@ -590,7 +592,6 @@ matrix:
         - python ../upload-s3.py rstats duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
 
-
     - os: osx
       osx_image: xcode11.5
       name: R Package
@@ -598,6 +599,8 @@ matrix:
 
       language: r
       #r: devel
+
+      install: true
 
       script:
         - cd tools/rpkg
