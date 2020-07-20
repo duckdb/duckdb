@@ -147,6 +147,11 @@ void Pipeline::Schedule() {
 		break;
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
+		auto &hash_aggr = (PhysicalHashAggregate &) *sink;
+		if (!hash_aggr.all_combinable) {
+			// not all aggregates are parallelizable: switch to sequential mode
+			break;
+		}
 		if (ScheduleOperator(sink->children[0].get())) {
 			// all parallel tasks have been scheduled: return
 			return;

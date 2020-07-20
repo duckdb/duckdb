@@ -116,7 +116,7 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
-		// resolve the child expression of the aggregate (if any)
+		// resolve the child expressions of the aggregate (if any)
 		if (aggregate.children.size() > 0) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 				sink.child_executor.ExecuteExpression(payload_expr_idx, payload_chunk.data[payload_idx + payload_cnt]);

@@ -30,6 +30,8 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 	//! Whether or not the aggregate is an implicit (i.e. ungrouped) aggregate
 	bool is_implicit_aggr;
+	//! Whether or not all aggregates are combinable
+	bool all_combinable;
 
 	//! The group types
 	vector<TypeId> group_types;
