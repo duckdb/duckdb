@@ -584,7 +584,7 @@ TEST_CASE("Test complex correlated subqueries", "[subquery]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 3}));
 	// left outer join on correlated subquery
 	REQUIRE_FAIL(con.Query("SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT 2*SUM(i)*s1.i FROM "
-	                   "integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;"));
+	                       "integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;"));
 
 	// left outer join in correlated expression
 	REQUIRE_FAIL(con.Query("SELECT i, (SELECT SUM(s1.i) FROM integers s1 LEFT OUTER JOIN integers s2 ON s1.i=s2.i OR "
@@ -1002,14 +1002,17 @@ TEST_CASE("Test nested correlated subqueries with multiple columns", "[subquery]
 	con.EnableQueryVerification();
 	con.EnableProfiling();
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e VARCHAR, f DATE, g TIMESTAMP)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO tbl VALUES (1, 2, 3, 4, '5', DATE '1992-01-01', TIMESTAMP '1992-01-01 00:00:00')"));
+	REQUIRE_NO_FAIL(
+	    con.Query("CREATE TABLE tbl(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e VARCHAR, f DATE, g TIMESTAMP)"));
+	REQUIRE_NO_FAIL(
+	    con.Query("INSERT INTO tbl VALUES (1, 2, 3, 4, '5', DATE '1992-01-01', TIMESTAMP '1992-01-01 00:00:00')"));
 
 	result = con.Query("SELECT EXISTS(SELECT t1.b+t1.c) FROM tbl t1");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	result = con.Query("SELECT t1.c+(SELECT t1.b FROM tbl t2 WHERE EXISTS(SELECT t1.b+t2.a)) FROM tbl t1");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-	result = con.Query("SELECT 1 FROM tbl t1 JOIN tbl t2 ON (t1.d=t2.d) WHERE EXISTS(SELECT t1.c FROM tbl t3 WHERE t1.d+t3.c<100 AND EXISTS(SELECT t2.f < DATE '2000-01-01'))");
+	result = con.Query("SELECT 1 FROM tbl t1 JOIN tbl t2 ON (t1.d=t2.d) WHERE EXISTS(SELECT t1.c FROM tbl t3 WHERE "
+	                   "t1.d+t3.c<100 AND EXISTS(SELECT t2.f < DATE '2000-01-01'))");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	result = con.Query("SELECT EXISTS(SELECT 1 WHERE (t1.c>100 OR 1) AND t1.d<100) FROM tbl t1");

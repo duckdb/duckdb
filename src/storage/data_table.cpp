@@ -213,7 +213,7 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 }
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset) {
+                                         unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset) {
 	// initialize a column scan state for each column
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -235,13 +235,15 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	}
 }
 
-void DataTable::InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback) {
+void DataTable::InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
+                                       unordered_map<idx_t, vector<TableFilter>> *table_filters,
+                                       std::function<void(TableScanState)> callback) {
 	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
 	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 
 	idx_t current_offset = 0;
 	// create parallel scans for the persistent rows
-	for(idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
+	for (idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
 		idx_t current = i;
 		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, persistent_manager->max_row);
 
@@ -263,7 +265,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, const vector<colu
 		PARALLEL_SCAN_VECTOR_COUNT = 1;
 		PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
 	}
-	for(idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
+	for (idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
 		idx_t current = i;
 		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
 
@@ -290,8 +292,8 @@ void DataTable::InitializeParallelScan(ClientContext &context, const vector<colu
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
                      unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	// scan the persistent segments
-	while (ScanBaseTable(transaction, result, state, column_ids, state.current_persistent_row, state.max_persistent_row, 0,
-	                     *persistent_manager, table_filters)) {
+	while (ScanBaseTable(transaction, result, state, column_ids, state.current_persistent_row, state.max_persistent_row,
+	                     0, *persistent_manager, table_filters)) {
 		if (result.size() > 0) {
 			return;
 		}
@@ -423,9 +425,9 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 	return true;
 }
 
-bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, const vector<column_t> &column_ids, idx_t &current_row,
-                              idx_t max_row, idx_t base_row, VersionManager &manager,
-                              unordered_map<idx_t, vector<TableFilter>> &table_filters) {
+bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
+                              const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
+                              VersionManager &manager, unordered_map<idx_t, vector<TableFilter>> &table_filters) {
 	if (current_row >= max_row) {
 		// exceeded the amount of rows to scan
 		return false;
@@ -473,7 +475,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			auto tf_idx = state.adaptive_filter->permutation[i];
 			auto col_idx = column_ids[tf_idx];
 			columns[col_idx]->Select(transaction, state.column_scans[tf_idx], result.data[tf_idx], sel,
-			                        approved_tuple_count, table_filters[tf_idx]);
+			                         approved_tuple_count, table_filters[tf_idx]);
 		}
 		for (auto &table_filter : table_filters) {
 			result.data[table_filter.first].Slice(sel, approved_tuple_count);
@@ -976,8 +978,8 @@ void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column
 	}
 }
 
-bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result, idx_t &current_row, idx_t max_row,
-                                idx_t base_row) {
+bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+                                idx_t &current_row, idx_t max_row, idx_t base_row) {
 	if (current_row >= max_row) {
 		return false;
 	}

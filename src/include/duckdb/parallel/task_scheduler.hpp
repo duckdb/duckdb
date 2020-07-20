@@ -23,14 +23,13 @@ class ClientContext;
 class TaskScheduler;
 
 struct ProducerToken {
-    ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
-    ~ProducerToken();
+	ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerToken> token);
+	~ProducerToken();
 
-    TaskScheduler &scheduler;
-    unique_ptr<QueueProducerToken> token;
+	TaskScheduler &scheduler;
+	unique_ptr<QueueProducerToken> token;
 	std::mutex producer_lock;
 };
-
 
 //! The TaskScheduler is responsible for managing tasks and threads
 class TaskScheduler {

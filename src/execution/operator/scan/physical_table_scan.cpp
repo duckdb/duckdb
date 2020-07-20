@@ -49,7 +49,8 @@ public:
 	TableScanState state;
 };
 
-void PhysicalTableScan::ParallelScanInfo(ClientContext &context, std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
+void PhysicalTableScan::ParallelScanInfo(ClientContext &context,
+                                         std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
 	// generate parallel scans
 	table.InitializeParallelScan(context, column_ids, &table_filters, [&](TableScanState state) {
 		auto task = make_unique<TableScanTaskInfo>();
@@ -69,7 +70,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		auto task_info = task.task_info.find(this);
 		if (task_info != task.task_info.end()) {
 			// task specific limitations: scan the part indicated by the task
-			auto &info = (TableScanTaskInfo &) *task_info->second;
+			auto &info = (TableScanTaskInfo &)*task_info->second;
 			state->scan_state = move(info.state);
 		} else {
 			// no task specific limitations for the scan: scan the entire table

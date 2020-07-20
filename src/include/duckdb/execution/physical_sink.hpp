@@ -61,4 +61,4 @@ public:
 	void Schedule(ClientContext &context);
 };
 
-}
+} // namespace duckdb

@@ -44,7 +44,7 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 	}
 
 	// now execute tasks from this producer until all pipelines are completed
-	while(completed_pipelines < total_pipelines) {
+	while (completed_pipelines < total_pipelines) {
 		unique_ptr<Task> task;
 		while (scheduler.GetTaskFromProducer(*producer, task)) {
 			task->Execute();

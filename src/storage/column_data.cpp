@@ -27,7 +27,7 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
 	// FIXME: this is obviously not very efficient
 	InitializeScan(state);
-	for(idx_t i = 0; i < vector_idx; i++) {
+	for (idx_t i = 0; i < vector_idx; i++) {
 		state.Next();
 	}
 	assert(state.current);

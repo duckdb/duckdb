@@ -87,7 +87,9 @@ public:
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 
-	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback);
+	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
+	                            unordered_map<idx_t, vector<TableFilter>> *table_filters,
+	                            std::function<void(TableScanState)> callback);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -152,16 +154,15 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
-
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
-                               unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
+	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
-	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, const vector<column_t> &column_ids, idx_t &current_row,
-	                   idx_t max_row, idx_t base_row, VersionManager &manager,
-	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
-	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result, idx_t &current_row, idx_t max_row,
-	                     idx_t base_row);
+	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
+	                   VersionManager &manager, unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+	                     idx_t &current_row, idx_t max_row, idx_t base_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.

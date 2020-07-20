@@ -97,8 +97,8 @@ unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
 	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
 	                             AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update,
-	                             nullptr, list_finalize,
-	                             nullptr, list_bind, AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
+	                             nullptr, list_finalize, nullptr, list_bind,
+	                             AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);
 	set.AddFunction(agg);
 }
 

@@ -16,16 +16,18 @@ class PhysicalOperator;
 
 class OperatorTaskInfo {
 public:
-	virtual ~OperatorTaskInfo() {}
+	virtual ~OperatorTaskInfo() {
+	}
 };
 
 //! TaskContext holds task specific information relating to the excution
 class TaskContext {
 public:
-	TaskContext() {}
+	TaskContext() {
+	}
 
 	//! Per-operator task info
-	unordered_map<PhysicalOperator*, unique_ptr<OperatorTaskInfo>> task_info;
+	unordered_map<PhysicalOperator *, unique_ptr<OperatorTaskInfo>> task_info;
 };
 
 } // namespace duckdb

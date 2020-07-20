@@ -33,6 +33,7 @@ public:
 	~Executor();
 
 	ClientContext &context;
+
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);

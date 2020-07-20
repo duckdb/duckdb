@@ -540,11 +540,16 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	unique_ptr<MaterializedQueryResult> original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-				copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-				deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-				unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-				parallel_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+	unique_ptr<MaterializedQueryResult> original_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    copied_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    deserialized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    unoptimized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    parallel_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
 
 	// execute the original statement
 	try {
@@ -621,8 +626,8 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	results.push_back(move(deserialized_result));
 	results.push_back(move(unoptimized_result));
 	results.push_back(move(parallel_result));
-	vector<string> names = { "Copied Result", "Deserialized Result", "Unoptimized Result", "Parallel Result" };
-	for(idx_t i = 0; i < results.size(); i++) {
+	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result", "Parallel Result"};
+	for (idx_t i = 0; i < results.size(); i++) {
 		if (!original_result->collection.Equals(results[i]->collection)) {
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();
@@ -635,9 +640,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
-	RunFunctionInTransaction([&]() {
-		temporary_objects.get()->CreateFunction(*this, info);
-	});
+	RunFunctionInTransaction([&]() { temporary_objects.get()->CreateFunction(*this, info); });
 }
 
 template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {

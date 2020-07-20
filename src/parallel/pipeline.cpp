@@ -17,12 +17,12 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	PipelineTask(Pipeline *pipeline_) :
-	      pipeline(pipeline_) {
+	PipelineTask(Pipeline *pipeline_) : pipeline(pipeline_) {
 	}
 
 	TaskContext task;
 	Pipeline *pipeline;
+
 public:
 	void Execute() override {
 		pipeline->Execute(task);
@@ -86,7 +86,7 @@ void Pipeline::ScheduleSequentialTask() {
 }
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
-	switch(op->type) {
+	switch (op->type) {
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::HASH_JOIN:
@@ -100,9 +100,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		// we gather the tasks first because we want to set total_tasks to the actual task amount
 		// otherwise we can encounter race conditions in which a pipeline could finish twice
 		vector<unique_ptr<OperatorTaskInfo>> tasks;
-		op->ParallelScanInfo(executor.context, [&](unique_ptr<OperatorTaskInfo> info) {
-			tasks.push_back(move(info));
-		});
+		op->ParallelScanInfo(executor.context, [&](unique_ptr<OperatorTaskInfo> info) { tasks.push_back(move(info)); });
 		this->total_tasks = tasks.size();
 		if (this->total_tasks == 0) {
 			// could not generate parallel tasks, or parallel tasks were determined as not worthwhile
@@ -110,7 +108,7 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 			return false;
 		}
 		// after we have gathered all the tasks we actually schedule them for execution
-		for(auto &info : tasks) {
+		for (auto &info : tasks) {
 			auto task = make_unique<PipelineTask>(this);
 			task->task.task_info[op] = move(info);
 			scheduler.ScheduleTask(*executor.producer, move(task));
@@ -132,9 +130,9 @@ void Pipeline::Schedule() {
 	assert(total_tasks == 0);
 	assert(finished_dependencies == dependencies.size());
 	// check if we can parallelize this task based on the sink
-	switch(sink->type) {
+	switch (sink->type) {
 	case PhysicalOperatorType::SIMPLE_AGGREGATE: {
-		auto &simple_aggregate = (PhysicalSimpleAggregate &) *sink;
+		auto &simple_aggregate = (PhysicalSimpleAggregate &)*sink;
 		// simple aggregate: check if we can parallelize it
 		if (!simple_aggregate.all_combinable) {
 			// not all aggregates are parallelizable: switch to sequential mode
@@ -147,7 +145,7 @@ void Pipeline::Schedule() {
 		break;
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
-		auto &hash_aggr = (PhysicalHashAggregate &) *sink;
+		auto &hash_aggr = (PhysicalHashAggregate &)*sink;
 		if (!hash_aggr.all_combinable) {
 			// not all aggregates are parallelizable: switch to sequential mode
 			break;

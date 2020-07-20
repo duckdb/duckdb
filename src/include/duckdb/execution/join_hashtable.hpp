@@ -22,7 +22,8 @@ class BufferManager;
 class BufferHandle;
 
 struct JoinHTScanState {
-	JoinHTScanState() : position(0), block_position(0) {}
+	JoinHTScanState() : position(0), block_position(0) {
+	}
 
 	idx_t position;
 	idx_t block_position;
@@ -108,13 +109,15 @@ private:
 	};
 
 	struct BlockAppendEntry {
-		BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) { }
+		BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) {
+		}
 
 		data_ptr_t baseptr;
 		idx_t count;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries, idx_t remaining);
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
+	                    idx_t remaining);
 
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 

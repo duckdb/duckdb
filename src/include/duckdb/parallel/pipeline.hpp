@@ -66,6 +66,7 @@ private:
 	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
 	idx_t total_tasks;
+
 private:
 	void ScheduleSequentialTask();
 	bool ScheduleOperator(PhysicalOperator *op);

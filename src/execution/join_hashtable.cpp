@@ -210,7 +210,8 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	SerializeVectorData(vdata, v.type, sel, count, key_locations);
 }
 
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries, idx_t remaining) {
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
+                                   idx_t remaining) {
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
 	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
@@ -325,9 +326,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 	// now set up the key_locations based on the append entries
 	idx_t append_idx = 0;
-	for(auto &append_entry : append_entries) {
+	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
-		for(; append_idx < next; append_idx++) {
+		for (; append_idx < next; append_idx++) {
 			key_locations[append_idx] = append_entry.baseptr;
 			append_entry.baseptr += entry_size;
 		}
@@ -675,7 +676,8 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	}
 }
 
-static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+                               const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	switch (result.type) {
 	case TypeId::BOOL:
@@ -704,7 +706,6 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
 	offset += GetTypeIdSize(result.type);
-
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
@@ -731,10 +732,10 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		if (ht.join_type == JoinType::OUTER) {
 			// outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
-			for(idx_t i = 0; i < result_count; i++) {
+			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
 				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
-				auto target = (bool *) chain_pointer;
+				auto target = (bool *)chain_pointer;
 				*target = true;
 			}
 		}
@@ -1012,13 +1013,13 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for(; state.block_position < blocks.size(); state.block_position++) {
+	for (; state.block_position < blocks.size(); state.block_position++) {
 		auto &block = blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;
-		for(; state.position < block.count; state.position++) {
+		for (; state.position < block.count; state.position++) {
 			auto tuple_base = baseptr + state.position * entry_size;
-			auto found_match = (bool *) (tuple_base + tuple_size);
+			auto found_match = (bool *)(tuple_base + tuple_size);
 			if (!*found_match) {
 				key_locations[found_entries++] = tuple_base;
 				if (found_entries == STANDARD_VECTOR_SIZE) {
@@ -1044,7 +1045,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			assert(vector.type == build_types[i]);
-			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *) key_locations, FlatVector::IncrementalSelectionVector, found_entries, offset);
+			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
+			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
 		}
 	}
 }
