@@ -1,4 +1,4 @@
-add_library_unity(duckdb_transaction
+add_library(duckdb_transaction
                   OBJECT
                   undo_buffer.cpp
                   transaction_context.cpp

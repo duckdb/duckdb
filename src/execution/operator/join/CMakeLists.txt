@@ -1,4 +1,4 @@
-add_library_unity(duckdb_operator_join
+add_library(duckdb_operator_join
                   OBJECT
                   physical_blockwise_nl_join.cpp
                   physical_comparison_join.cpp

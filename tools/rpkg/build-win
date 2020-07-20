@@ -1,0 +1,17 @@
+#!/bin/sh
+
+set -e
+set -x
+
+cd `dirname $0`
+
+export "PATH=/c/Rtools40/usr/bin:$PATH"
+R=C:/Program\ Files/R/R-4.0.2/bin/R.exe
+
+"${R}" -q -f dependencies.R
+"${R}" CMD build .
+"${R}" CMD INSTALL --build --no-multiarch duckdb_*.tar.gz
+"${R}" CMD INSTALL duckdb_*.zip
+"${R}" CMD check --no-multiarch --no-manual --as-cran duckdb_*.tar.gz
+
+"${R}" -q -e "tools::write_PACKAGES(dir = '.', type = 'win.binary')"

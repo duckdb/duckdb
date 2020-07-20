@@ -1,4 +1,4 @@
-add_library_unity(duckdb_func_math
+add_library(duckdb_func_math
                   OBJECT
                   numeric.cpp
                   random.cpp

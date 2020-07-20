@@ -1,4 +1,4 @@
-add_library_unity(duckdb_common_serializer
+add_library(duckdb_common_serializer
                   OBJECT
                   buffered_deserializer.cpp
                   buffered_file_reader.cpp

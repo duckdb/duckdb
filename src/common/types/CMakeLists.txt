@@ -1,4 +1,4 @@
-add_library_unity(duckdb_common_types
+add_library(duckdb_common_types
                   OBJECT
                   chunk_collection.cpp
                   data_chunk.cpp

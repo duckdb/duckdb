@@ -1,8 +1,3 @@
-#' @include Driver.R
-
-NULL
-
-
 duckdb_connection <- function(duckdb_driver, debug) {
   new(
     "duckdb_connection",
@@ -12,7 +7,11 @@ duckdb_connection <- function(duckdb_driver, debug) {
   )
 }
 
-#' @rdname DBI
+#' Register a R data.frame as a virtual table (view) in DuckDB without copying the data
+#' @rdname duckdb_connection
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param name The name for the virtual table that is registered
+#' @param df A `data.frame` with the data for the virtual table
 #' @export
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
@@ -20,7 +19,10 @@ duckdb_register <- function(conn, name, df) {
   invisible(TRUE)
 }
 
-#' @rdname DBI
+#' Unregister a virtual table referring to a data.frame
+#' @rdname duckdb_connection
+#' @param conn A DuckDB connection, created by `dbConnect()`.
+#' @param name The name for the virtual table previously registered using `duckdb_register()`.
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
@@ -28,8 +30,8 @@ duckdb_unregister <- function(conn, name) {
   invisible(TRUE)
 }
 
-
-#' @rdname DBI
+#' DuckDB connection class
+#' @rdname duckdb_connection
 #' @export
 setClass(
   "duckdb_connection",
@@ -37,7 +39,7 @@ setClass(
   slots = list(dbdir = "character", conn_ref = "externalptr", driver = "duckdb_driver", debug = "logical")
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams methods::show
 #' @export
 setMethod(
@@ -47,7 +49,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbIsValid
 #' @export
 setMethod(
@@ -66,8 +68,8 @@ setMethod(
   }
 )
 
-#' @rdname DBI
-#' @inheritParams DBI::dbDisconnect
+#' @rdname duckdb_connection
+#' @param shutdown Shut down the DuckDB database instance that this connection refers to.
 #' @export
 setMethod(
   "dbDisconnect", "duckdb_connection",
@@ -84,12 +86,12 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbSendQuery
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
-  function(conn, statement, ..., immediate = FALSE) {
+  function(conn, statement, ...) {
     if (conn@debug) {
       cat("Q ", statement, "\n")
     }
@@ -111,8 +113,7 @@ setMethod(
   }
 )
 
-
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbDataType
 #' @export
 setMethod(
@@ -126,12 +127,13 @@ duckdb_random_string <- function(x) {
   paste(sample(letters, 10, replace = TRUE), collapse = "")
 }
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbWriteTable
-#' @param overwrite Allow overwriting the destination table. Cannot be
-#'   `TRUE` if `append` is also `TRUE`.
-#' @param append Allow appending to the destination table. Cannot be
-#'   `TRUE` if `overwrite` is also `TRUE`.
+#' @param row.names Whether the row.names of the data.frame should be preserved
+#' @param overwrite If a table with the given name already exists, should it be overwritten?
+#' @param append If a table with the given name already exists, just try to append the passed data to it
+#' @param field.types Override the auto-generated SQL types
+#' @param temporary Should the created table be temporary?
 #' @export
 setMethod(
   "dbWriteTable", c("duckdb_connection", "character", "data.frame"),
@@ -149,7 +151,6 @@ setMethod(
     check_flag(temporary)
 
     # TODO: start a transaction if one is not already running
-
 
     if (overwrite && append) {
       stop("Setting both overwrite and append makes no sense")
@@ -235,7 +236,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbListTables
 #' @export
 setMethod(
@@ -250,7 +251,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbExistsTable
 #' @export
 setMethod(
@@ -282,7 +283,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbListFields
 #' @export
 setMethod(
@@ -299,7 +300,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbRemoveTable
 #' @export
 setMethod(
@@ -313,7 +314,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbGetInfo
 #' @export
 setMethod(
@@ -329,7 +330,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbBegin
 #' @export
 setMethod(
@@ -340,7 +341,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbCommit
 #' @export
 setMethod(
@@ -351,7 +352,7 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' @rdname duckdb_connection
 #' @inheritParams DBI::dbRollback
 #' @export
 setMethod(
@@ -362,7 +363,19 @@ setMethod(
   }
 )
 
-#' @rdname DBI
+#' Directly reads a CSV file into DuckDB, tries to detect and create the correct schema for it.
+#' @rdname duckdb_connection
+#' @param files One or more CSV file names, should all have the same structure though
+#' @param tablename The database table the files should be read into
+#' @param header Whether or not the CSV files have a separate header in the first line
+#' @param na.strings Which strings in the CSV files should be considered to be NULL
+#' @param nrow.check How many rows should be read from the CSV file to figure out data types
+#' @param delim Which field separator should be used
+#' @param quote Which quote character is used for columns in the CSV file
+#' @param col.names Override the detected or generated column names
+#' @param lower.case.names Transform column names to lower case
+#' @param sep Alias for delim for compatibility
+#' @param transaction Should a transaction be used for the entire operation
 #' @export
 read_csv_duckdb <- duckdb.read.csv <- function(conn, files, tablename, header = TRUE, na.strings = "", nrow.check = 500,
                                                delim = ",", quote = "\"", col.names = NULL, lower.case.names = FALSE, sep = delim, transaction = TRUE, ...) {

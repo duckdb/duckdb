@@ -1,4 +1,4 @@
-add_library_unity(duckdb_storage_table
+add_library(duckdb_storage_table
                   OBJECT
                   chunk_info.cpp
                   column_segment.cpp

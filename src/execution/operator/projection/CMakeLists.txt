@@ -1,4 +1,4 @@
-add_library_unity(duckdb_operator_projection
+add_library(duckdb_operator_projection
                   OBJECT
                   physical_projection.cpp
                   physical_unnest.cpp

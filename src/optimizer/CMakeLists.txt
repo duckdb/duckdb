@@ -3,7 +3,7 @@ add_subdirectory(join_order)
 add_subdirectory(pushdown)
 add_subdirectory(rule)
 
-add_library_unity(duckdb_optimizer
+add_library(duckdb_optimizer
                   OBJECT
                   cse_optimizer.cpp
                   column_lifetime_analyzer.cpp

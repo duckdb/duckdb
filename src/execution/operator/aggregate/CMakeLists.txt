@@ -1,4 +1,4 @@
-add_library_unity(duckdb_operator_aggregate
+add_library(duckdb_operator_aggregate
                   OBJECT
                   physical_hash_aggregate.cpp
                   physical_simple_aggregate.cpp

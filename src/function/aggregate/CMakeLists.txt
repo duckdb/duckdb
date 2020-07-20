@@ -2,7 +2,7 @@ add_subdirectory(algebraic)
 add_subdirectory(distributive)
 add_subdirectory(nested)
 
-add_library_unity(duckdb_func_aggr
+add_library(duckdb_func_aggr
                   OBJECT
                   algebraic_functions.cpp
                   distributive_functions.cpp

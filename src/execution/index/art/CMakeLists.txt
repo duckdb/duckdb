@@ -1,4 +1,4 @@
-add_library_unity(duckdb_art_index_execution
+add_library(duckdb_art_index_execution
                   OBJECT
                   art_key.cpp
                   leaf.cpp

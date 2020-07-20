@@ -5,7 +5,7 @@ add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)
 
-add_library_unity(duckdb_common
+add_library(duckdb_common
                   OBJECT
                   constants.cpp
                   checksum.cpp

@@ -1,4 +1,4 @@
-add_library_unity(test_monetdb
+add_library(test_monetdb
                   OBJECT
                   test_leftjoin_bug.cpp
                   test_many_views.cpp

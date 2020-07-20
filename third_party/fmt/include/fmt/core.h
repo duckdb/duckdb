@@ -161,7 +161,7 @@
       }
 #  endif
 #  define FMT_BEGIN_NAMESPACE \
-    namespace fmt {           \
+    namespace duckdb_fmt {           \
     FMT_INLINE_NAMESPACE v6 {
 #endif
 
@@ -421,7 +421,7 @@ constexpr basic_string_view<typename S::char_type> to_string_view(const S& s) {
 
 namespace internal {
 void to_string_view(...);
-using fmt::v6::to_string_view;
+using duckdb_fmt::v6::to_string_view;
 
 // Specifies whether S is a string type convertible to fmt::basic_string_view.
 // It should be a constexpr function but MSVC 2017 fails to compile it in

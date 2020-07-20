@@ -1,4 +1,4 @@
-add_library_unity(test_sql_setops
+add_library(test_sql_setops
                   OBJECT
                   test_joins_under_setops.cpp
                   test_union.cpp)

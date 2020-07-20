@@ -1,5 +1,5 @@
-#include "duckdb.hpp"
-#include "parquet-extension.hpp"
+#include "duckdb.h"
+#include "parquet-extension.h"
 
 #include <Rdefines.h>
 #include <algorithm>

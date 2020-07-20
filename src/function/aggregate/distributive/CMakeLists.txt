@@ -1,4 +1,4 @@
-add_library_unity(duckdb_aggr_distr
+add_library(duckdb_aggr_distr
                   OBJECT
                   bitagg.cpp
                   count.cpp

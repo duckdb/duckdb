@@ -3,7 +3,7 @@ library("DBI")
 
 test_convert <- function(con, type, val) {
   val_comp <- val
-  if (class(val) == "factor") {
+  if (is.factor(val)) {
     val_comp <- as.character(val)
   }
   q <- dbSendQuery(con, sprintf("SELECT CAST(? AS %s) a", type))
