@@ -44,10 +44,14 @@ TEST_CASE("Test Parallel TPC-H SF0.01", "[tpch]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	con.DisableProfiling();
+	// con.Query("PRAGMA enable_profiling");
 
 	// initialize background threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
+	if (STANDARD_VECTOR_SIZE >= 512) {
+		// this just takes too long on vsize = 2, because lineitem gets split into 300K tasks
+		con.ForceParallelism();
+	}
 
 	tpch::dbgen(sf, db);
 

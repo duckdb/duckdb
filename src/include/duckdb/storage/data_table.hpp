@@ -87,7 +87,7 @@ public:
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
 
-	void InitializeParallelScan(Transaction &transaction, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback);
+	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many

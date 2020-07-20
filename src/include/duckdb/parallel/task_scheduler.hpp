@@ -54,6 +54,8 @@ public:
 	//! Sets the amount of active threads executing tasks for the system; n-1 background threads will be launched.
 	//! The main thread will also be used for execution
 	void SetThreads(int32_t n);
+	//! Returns the number of threads
+	int32_t NumberOfThreads();
 
 private:
 	//! The task queue

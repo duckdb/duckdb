@@ -125,7 +125,7 @@ TEST_CASE("Test correlated aggregate subqueries", "[subquery]") {
 	result = con.Query("SELECT (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {6}));
 	// aggregate ONLY inside subquery, with column reference outside of subquery
-	result = con.Query("SELECT FIRST(i), (SELECT SUM(i1.i)) FROM integers i1;");
+	result = con.Query("SELECT MIN(i), (SELECT SUM(i1.i)) FROM integers i1;");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 	REQUIRE(CHECK_COLUMN(result, 1, {6}));
 	// this will fail, because "i" is not an aggregate but the SUM(i1.i) turns this query into an aggregate

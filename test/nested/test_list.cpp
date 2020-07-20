@@ -143,7 +143,7 @@ TEST_CASE("Test filter and projection of nested lists", "[nested]") {
 	                      Value::LIST({Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3)})}));
 	REQUIRE(CHECK_COLUMN(result, 1, {4, 5, 6, 7}));
 
-	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data");
+	result = con.Query("SELECT UNNEST(LIST(e)) ue, LIST(g) from list_data ORDER BY 1 NULLS LAST");
 	REQUIRE(CHECK_COLUMN(result, 0,
 	                     {Value::INTEGER(1), Value::INTEGER(2), Value::INTEGER(3), Value::INTEGER(4), Value::INTEGER(5),
 	                      Value::INTEGER(6), Value()}));

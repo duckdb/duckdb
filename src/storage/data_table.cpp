@@ -10,6 +10,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -234,9 +235,10 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 	}
 }
 
-void DataTable::InitializeParallelScan(Transaction &transaction, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback) {
-	const idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
-	const idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
+void DataTable::InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids, unordered_map<idx_t, vector<TableFilter>> *table_filters, std::function<void(TableScanState)> callback) {
+	idx_t PARALLEL_SCAN_VECTOR_COUNT = 100;
+	idx_t PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
+
 	idx_t current_offset = 0;
 	// create parallel scans for the persistent rows
 	for(idx_t i = 0; i < persistent_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
@@ -256,6 +258,11 @@ void DataTable::InitializeParallelScan(Transaction &transaction, const vector<co
 		current_offset = (persistent_manager->max_row / STANDARD_VECTOR_SIZE) + 1;
 	}
 	// now create parallel scans for the transient rows
+	if (context.force_parallelism) {
+		// force parallelism: create one task per vector
+		PARALLEL_SCAN_VECTOR_COUNT = 1;
+		PARALLEL_SCAN_TUPLE_COUNT = STANDARD_VECTOR_SIZE * PARALLEL_SCAN_VECTOR_COUNT;
+	}
 	for(idx_t i = 0; i < transient_manager->max_row; i += PARALLEL_SCAN_TUPLE_COUNT) {
 		idx_t current = i;
 		idx_t next = std::min(i + PARALLEL_SCAN_TUPLE_COUNT, transient_manager->max_row);
@@ -272,6 +279,7 @@ void DataTable::InitializeParallelScan(Transaction &transaction, const vector<co
 
 	// create a task for scanning the local data
 	// FIXME: this should also be potentially parallelized
+	auto &transaction = Transaction::GetTransaction(context);
 	TableScanState state;
 	state.current_persistent_row = state.max_persistent_row = 0;
 	state.current_transient_row = state.max_transient_row = 0;

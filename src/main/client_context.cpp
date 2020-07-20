@@ -24,6 +24,7 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 using namespace std;
 
@@ -483,11 +484,13 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// Hash() of expressions
 	// Equality() of statements and expressions
 	// Correctness of plans both with and without optimizers
+	// Correctness of plans both with and without parallelism
 
 	// copy the statement
 	auto select_stmt = (SelectStatement *)statement.get();
 	auto copied_stmt = select_stmt->Copy();
 	auto unoptimized_stmt = select_stmt->Copy();
+	auto parallel_stmt = select_stmt->Copy();
 
 	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
@@ -537,10 +540,12 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	auto original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+	unique_ptr<MaterializedQueryResult> original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+				copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+				deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+				unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+				parallel_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+
 	// execute the original statement
 	try {
 		auto result = RunStatementInternal(query, move(statement), false);
@@ -586,31 +591,44 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
 	}
-
 	enable_optimizer = true;
+	// now execute the parallel statement
+	// set the degree of parallelism to 4, if the current database is single-threaded
+	force_parallelism = true;
+	auto &scheduler = TaskScheduler::GetScheduler(*this);
+	idx_t current_threads = scheduler.NumberOfThreads();
+	if (current_threads < 4) {
+		scheduler.SetThreads(4);
+	}
+	try {
+		auto result = RunStatementInternal(query, move(parallel_stmt), false);
+		parallel_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+	} catch (std::exception &ex) {
+		parallel_result->error = ex.what();
+		parallel_result->success = false;
+	}
+	force_parallelism = false;
+	scheduler.SetThreads(current_threads);
+
 	if (profiling_is_enabled) {
 		profiler.Enable();
 	}
 
 	// now compare the results
-	// the results of all four runs should be identical
-	if (!original_result->collection.Equals(copied_result->collection)) {
-		string result = "Copied result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Copied Result\n" + copied_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(deserialized_result->collection)) {
-		string result = "Deserialized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Deserialized Result\n" + deserialized_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(unoptimized_result->collection)) {
-		string result = "Unoptimized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Unoptimized Result\n" + unoptimized_result->ToString();
-		return result;
+	// the results of all runs should be identical
+	vector<unique_ptr<MaterializedQueryResult>> results;
+	results.push_back(move(copied_result));
+	results.push_back(move(deserialized_result));
+	results.push_back(move(unoptimized_result));
+	results.push_back(move(parallel_result));
+	vector<string> names = { "Copied Result", "Deserialized Result", "Unoptimized Result", "Parallel Result" };
+	for(idx_t i = 0; i < results.size(); i++) {
+		if (!original_result->collection.Equals(results[i]->collection)) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 	}
 
 	return "";

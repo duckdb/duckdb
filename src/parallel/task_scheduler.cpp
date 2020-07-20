@@ -84,6 +84,10 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, bool *marker) {
 	scheduler->ExecuteForever(marker);
 }
 
+int32_t TaskScheduler::NumberOfThreads() {
+	return threads.size() + 1;
+}
+
 void TaskScheduler::SetThreads(int32_t n) {
 	if (n < 1) {
 		throw SyntaxException("Must have at least 1 thread!");
