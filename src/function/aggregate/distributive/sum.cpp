@@ -74,6 +74,11 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	sum.AddFunction(
 	    AggregateFunction::UnaryAggregate<sum_state_t, double, double, SumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
 
+	// for now disable combine on all FP sums (FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf)
+	sum.functions[0].combine = nullptr;
+	sum.functions[1].combine = nullptr;
+	sum.functions[2].combine = nullptr;
+
 	set.AddFunction(sum);
 }
 
