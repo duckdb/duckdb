@@ -19395,7 +19395,7 @@ yyreduce:
 					/* various trim expressions are defined in SQL
 					 * - thomas 1997-07-19
 					 */
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("trim"), (yyvsp[(4) - (5)].list), (yylsp[(1) - (5)]));
 				;}
     break;
 
@@ -19416,7 +19416,7 @@ yyreduce:
   case 799:
 #line 2370 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("btrim"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("trim"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
