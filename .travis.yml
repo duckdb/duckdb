@@ -385,6 +385,7 @@ matrix:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
         - CC=gcc-10
         - CXX=g++-10
+        - MAKEFLAGS=
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
