@@ -141,16 +141,4 @@ struct UnicodeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RegexpMatchesBindData : public FunctionData {
-	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
-	                      bool range_success);
-	~RegexpMatchesBindData();
-
-	std::unique_ptr<re2::RE2> constant_pattern;
-	string range_min, range_max;
-	bool range_success;
-
-	unique_ptr<FunctionData> Copy() override;
-};
-
 } // namespace duckdb
