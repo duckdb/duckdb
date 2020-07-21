@@ -114,6 +114,12 @@ template <> double StrictCast::Operation(string_t input);
 template <> string StrictCast::Operation(string_t input);
 
 //===--------------------------------------------------------------------===//
+// Interval -> String Casts
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(string_t input, interval_t &result, bool strict);
+template <> interval_t StrictCast::Operation(string_t input);
+template <> interval_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
 // Numeric -> String Casts
 //===--------------------------------------------------------------------===//
 // these functions are convenience functions that cast a value to a std::string, they are very slow
@@ -142,6 +148,7 @@ template <> duckdb::string_t StringCast::Operation(int64_t input, Vector &result
 template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(interval_t input, Vector &result);
 
 struct CastFromDate {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {

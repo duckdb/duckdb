@@ -125,6 +125,8 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 		return GetFirstAggregateTemplated<date_t>(type);
 	case SQLTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<timestamp_t>(type);
+	case SQLTypeId::INTERVAL:
+		return GetFirstAggregateTemplated<interval_t>(type);
 	case SQLTypeId::VARCHAR:
     case SQLTypeId::BLOB:
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,

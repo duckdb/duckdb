@@ -48,6 +48,8 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.float_, right.value_.float_);
 	case TypeId::DOUBLE:
 		return OP::Operation(left.value_.double_, right.value_.double_);
+	case TypeId::INTERVAL:
+		return OP::Operation(left.value_.interval, right.value_.interval);
 	case TypeId::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
 	case TypeId::STRUCT: {

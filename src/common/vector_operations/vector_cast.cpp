@@ -86,7 +86,7 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 }
 
 template <class OP>
-static void string_cast_numric_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
+static void string_cast_numeric_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
                                       idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
@@ -118,6 +118,10 @@ static void string_cast_numric_switch(Vector &source, Vector &result, SQLType so
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
 		UnaryExecutor::Execute<string_t, double, OP, true>(source, result, count);
+		break;
+	case SQLTypeId::INTERVAL:
+		assert(result.type == TypeId::INTERVAL);
+		UnaryExecutor::Execute<string_t, interval_t, OP, true>(source, result, count);
 		break;
 	default:
 		null_cast(source, result, source_type, target_type, count);
@@ -155,9 +159,9 @@ static void string_cast_switch(Vector &source, Vector &result, SQLType source_ty
 		break;
 	default:
 		if (strict) {
-			string_cast_numric_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
+			string_cast_numeric_switch<duckdb::StrictCast>(source, result, source_type, target_type, count);
 		} else {
-			string_cast_numric_switch<duckdb::Cast>(source, result, source_type, target_type, count);
+			string_cast_numeric_switch<duckdb::Cast>(source, result, source_type, target_type, count);
 		}
 		break;
 	}
@@ -208,6 +212,19 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 	case SQLTypeId::TIME:
 		// timestamp to time
 		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::CastTimestampToTime, true>(source, result, count);
+		break;
+	default:
+		null_cast(source, result, source_type, target_type, count);
+		break;
+	}
+}
+
+static void interval_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+	// now switch on the result type
+	switch (target_type.id) {
+	case SQLTypeId::VARCHAR:
+		// time to varchar
+		string_cast<interval_t, duckdb::StringCast>(source, result, count);
 		break;
 	default:
 		null_cast(source, result, source_type, target_type, count);
@@ -274,6 +291,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::TIMESTAMP:
 		assert(source.type == TypeId::INT64);
 		timestamp_cast_switch(source, result, source_type, target_type, count);
+		break;
+	case SQLTypeId::INTERVAL:
+		assert(source.type == TypeId::INTERVAL);
+		interval_cast_switch(source, result, source_type, target_type, count);
 		break;
 	case SQLTypeId::VARCHAR:
 		assert(source.type == TypeId::VARCHAR);

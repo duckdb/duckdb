@@ -5,6 +5,7 @@ add_library(duckdb_common_types
                   date.cpp
                   hash.cpp
                   hyperloglog.cpp
+                  interval.cpp
                   null_value.cpp
                   selection_vector.cpp
                   string_heap.cpp

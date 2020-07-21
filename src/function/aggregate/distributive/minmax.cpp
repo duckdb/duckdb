@@ -38,8 +38,11 @@ template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
 	case SQLTypeId::TIMESTAMP:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type,
 		                                                                                                     type);
+	case SQLTypeId::INTERVAL:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type,
+		                                                                                                     type);
 	default:
-		throw NotImplementedException("Unimplemented type for unary aggregate");
+		throw NotImplementedException("Unimplemented type for min/max aggregate");
 	}
 }
 
@@ -101,7 +104,7 @@ struct MinOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value > source.value) {
+		} else if (GreaterThan::Operation(target->value, source.value)) {
 			target->value = source.value;
 		}
 	}
@@ -122,7 +125,7 @@ struct MaxOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value < source.value) {
+		} else if (LessThan::Operation(target->value, source.value)) {
 			target->value = source.value;
 		}
 	}

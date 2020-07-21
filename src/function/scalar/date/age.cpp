@@ -15,7 +15,7 @@ static const char *age_scalar_function(timestamp_t input1, timestamp_t input2, s
 	auto years = timestamp.year;
 	auto months = timestamp.month;
 	auto days = timestamp.day;
-	auto time = interval.time;
+	auto time = interval.msecs;
 
 	output = "";
 	if (years == 0 && months == 0 && days == 0) {

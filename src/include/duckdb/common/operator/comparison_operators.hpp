@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types.hpp"
 
 #include <cstring>
 
@@ -99,5 +100,27 @@ template <> inline bool LessThan::Operation(string_t left, string_t right) {
 template <> inline bool LessThanEquals::Operation(string_t left, string_t right) {
 	return strcmp(left.GetData(), right.GetData()) <= 0;
 }
-
+//===--------------------------------------------------------------------===//
+// Specialized Interval Comparison Operators
+//===--------------------------------------------------------------------===//
+template <> inline bool Equals::Operation(interval_t left, interval_t right) {
+	return left.months == right.months && left.days == right.days && left.msecs == right.msecs;
+}
+template <> inline bool NotEquals::Operation(interval_t left, interval_t right) {
+	return !Equals::Operation(left, right);
+}
+template <> inline bool GreaterThan::Operation(interval_t left, interval_t right) {
+	// FIXME
+	return false;
+}
+template <> inline bool GreaterThanEquals::Operation(interval_t left, interval_t right) {
+	// FIXME
+	return false;
+}
+template <> inline bool LessThan::Operation(interval_t left, interval_t right) {
+	return !GreaterThanEquals::Operation(right, left);
+}
+template <> inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
+	return !GreaterThan::Operation(right, left);
+}
 } // namespace duckdb

@@ -18,7 +18,7 @@ constexpr const int32_t START_YEAR = 1900;
 
 constexpr const int32_t SECS_PER_MINUTE = 60;
 constexpr const int32_t MINS_PER_HOUR = 60;
-constexpr const int64_t MSECS_PER_HOUR = 360000;
+constexpr const int64_t MSECS_PER_HOUR = 3600000;
 constexpr const int64_t MSECS_PER_MINUTE = 60000;
 constexpr const int64_t MSECS_PER_SEC = 1000;
 
@@ -94,7 +94,7 @@ timestamp_t Timestamp::GetCurrentTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
-Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+interval_t Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	// First extract the dates
 	auto date1 = GetDate(timestamp_1);
 	auto date2 = GetDate(timestamp_2);
@@ -179,16 +179,16 @@ Interval Timestamp::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp
 		sec_diff = -sec_diff;
 		msec_diff = -msec_diff;
 	}
-	Interval interval;
+	interval_t interval;
 	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
 	interval.days = day_diff;
-	interval.time =
+	interval.msecs =
 	    ((((((hour_diff * MINS_PER_HOUR) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
 
 	return interval;
 }
 
-timestamp_struct Timestamp::IntervalToTimestamp(Interval &interval) {
+timestamp_struct Timestamp::IntervalToTimestamp(interval_t &interval) {
 	timestamp_struct timestamp;
 
 	if (interval.months != 0) {
@@ -200,7 +200,7 @@ timestamp_struct Timestamp::IntervalToTimestamp(Interval &interval) {
 		timestamp.month = 0;
 	}
 	timestamp.day = interval.days;
-	auto time = interval.time;
+	auto time = interval.msecs;
 
 	timestamp.hour = time / MSECS_PER_HOUR;
 	time -= timestamp.hour * MSECS_PER_HOUR;
@@ -211,12 +211,12 @@ timestamp_struct Timestamp::IntervalToTimestamp(Interval &interval) {
 	return timestamp;
 }
 
-Interval TimestampToInterval(timestamp_struct *timestamp) {
-	Interval interval;
+interval_t TimestampToInterval(timestamp_struct *timestamp) {
+	interval_t interval;
 
 	interval.months = timestamp->year * MONTHS_PER_YEAR + timestamp->month;
 	interval.days = timestamp->day;
-	interval.time =
+	interval.msecs =
 	    ((((((timestamp->hour * MINS_PER_HOUR) + timestamp->min) * SECS_PER_MINUTE) + timestamp->sec) * MSECS_PER_SEC) +
 	     timestamp->msec);
 

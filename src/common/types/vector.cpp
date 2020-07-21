@@ -175,6 +175,9 @@ void Vector::SetValue(idx_t index, Value val) {
 	case TypeId::POINTER:
 		((uintptr_t *)data)[index] = newVal.value_.pointer;
 		break;
+	case TypeId::INTERVAL:
+		((interval_t *)data)[index] = newVal.value_.interval;
+		break;
 	case TypeId::VARCHAR: {
 		((string_t *)data)[index] = StringVector::AddBlob(*this, newVal.str_value);
 		break;
@@ -280,6 +283,8 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::FLOAT(((float *)data)[index]);
 	case TypeId::DOUBLE:
 		return Value::DOUBLE(((double *)data)[index]);
+	case TypeId::INTERVAL:
+		return Value::INTERVAL(((interval_t *)data)[index]);
 	case TypeId::VARCHAR: {
 		auto str = ((string_t *)data)[index];
 		// avoiding implicit cast and double conversion

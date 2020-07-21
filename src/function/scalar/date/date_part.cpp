@@ -11,27 +11,27 @@ namespace duckdb {
 
 DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	specifier = StringUtil::Lower(specifier);
-	if (specifier == "year") {
+	if (specifier == "year" || specifier == "y" || specifier == "years") {
 		return DatePartSpecifier::YEAR;
-	} else if (specifier == "month") {
+	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
 		return DatePartSpecifier::MONTH;
-	} else if (specifier == "day") {
+	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
 		return DatePartSpecifier::DAY;
-	} else if (specifier == "decade") {
+	} else if (specifier == "decade" || specifier == "decades") {
 		return DatePartSpecifier::DECADE;
-	} else if (specifier == "century") {
+	} else if (specifier == "century" || specifier == "centuries") {
 		return DatePartSpecifier::CENTURY;
-	} else if (specifier == "millennium") {
+	} else if (specifier == "millennium" || specifier == "millenia") {
 		return DatePartSpecifier::MILLENNIUM;
-	} else if (specifier == "microseconds") {
+	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
-	} else if (specifier == "milliseconds") {
+	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms") {
 		return DatePartSpecifier::MILLISECONDS;
-	} else if (specifier == "second") {
+	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
-	} else if (specifier == "minute") {
+	} else if (specifier == "minute" || specifier == "minutes" || specifier == "m") {
 		return DatePartSpecifier::MINUTE;
-	} else if (specifier == "hour") {
+	} else if (specifier == "hour" || specifier == "hours" || specifier == "h") {
 		return DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
@@ -42,7 +42,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
 		return DatePartSpecifier::ISODOW;
-	} else if (specifier == "week") {
+	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
 		// week number
 		return DatePartSpecifier::WEEK;
 	} else if (specifier == "doy") {

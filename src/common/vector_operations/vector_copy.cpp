@@ -101,6 +101,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case TypeId::DOUBLE:
 		TemplatedCopy<double>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
+	case TypeId::INTERVAL:
+		TemplatedCopy<interval_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
 	case TypeId::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(source);
 		auto tdata = FlatVector::GetData<string_t>(target);

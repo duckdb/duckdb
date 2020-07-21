@@ -23,6 +23,17 @@ struct blob_t {
 	idx_t size;
 };
 
+struct interval_t {
+	int32_t months;
+	int32_t days;
+	int64_t msecs;
+};
+
+struct hugeint_t {
+	uint64_t lower;
+	uint64_t upper;
+};
+
 struct string_t;
 
 template <class T> using child_list_t = std::vector<std::pair<std::string, T>>;
@@ -190,6 +201,7 @@ enum class SQLTypeId : uint8_t {
 	VARCHAR = 22,
 	VARBINARY = 23,
 	BLOB = 24,
+	INTERVAL = 25,
 
 	STRUCT = 100,
 	LIST = 101
@@ -242,6 +254,7 @@ public:
 	static const SQLType LIST;
 	static const SQLType ANY;
 	static const SQLType BLOB;
+	static const SQLType INTERVAL;
 	static const SQLType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -285,6 +298,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {
 		return TypeId::VARCHAR;
+	} else if (std::is_same<T, interval_t>()) {
+		return TypeId::INTERVAL;
 	} else {
 		return TypeId::INVALID;
 	}

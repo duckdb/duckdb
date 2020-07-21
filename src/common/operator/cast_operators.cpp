@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -160,15 +161,17 @@ template <> float Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
 	}
 	return result;
 }
 
+
+
 template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
-		throw ConversionException("Could not convert string '%s' to numeric", input.GetData());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
 	}
 	return result;
 }
@@ -627,6 +630,12 @@ template <> string_t StringCast::Operation(double input, Vector &vector) {
 	return StringVector::AddString(vector, s);
 }
 
+template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
+	std::string s = Interval::ToString(input);
+	return StringVector::AddString(vector, s);
+}
+
+
 //===--------------------------------------------------------------------===//
 // Cast From Date
 //===--------------------------------------------------------------------===//
@@ -915,6 +924,21 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 		result = StringVector::AddBlob(vector, input);
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Interval
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(string_t input, interval_t &result, bool strict) {
+	return Interval::FromCString(input.GetData(), input.GetSize(), result);
+}
+
+template <> interval_t StrictCast::Operation(string_t input) {
+	return try_strict_cast_string<interval_t>(input);
+}
+
+template <> interval_t Cast::Operation(string_t input) {
+	return try_cast_string<interval_t>(input);
 }
 
 } // namespace duckdb
