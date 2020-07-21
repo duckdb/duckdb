@@ -4,7 +4,6 @@
 #include "duckdb.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-//#include "dbgen.hpp"
 
 using namespace duckdb;
 
@@ -271,6 +270,16 @@ TEST_CASE("Parquet file with random NULLs", "[parquet]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {99000}));
 }
 
+TEST_CASE("Parquet file with gzip compression", "[parquet]") {
+	DuckDB db(nullptr);
+	db.LoadExtension<ParquetExtension>();
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	auto result =
+	    con.Query("select count(*) from parquet_scan('extension/parquet/test/lineitem-top10000.gzip.parquet')");
+	REQUIRE(CHECK_COLUMN(result, 0, {10000}));
+}
 //
 // TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 //	DuckDB db(nullptr);
