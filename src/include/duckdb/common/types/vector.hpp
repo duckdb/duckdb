@@ -14,13 +14,16 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+
 //! Type used for nullmasks
 typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
+
 
 struct VectorData {
 	const SelectionVector *sel;

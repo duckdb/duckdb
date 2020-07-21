@@ -1,7 +1,9 @@
 # use bison to generate the parser files
 # the following version of bison is used:
 # bison (GNU Bison) 2.3
-import os, subprocess, re
+import os
+import subprocess
+import re
 
 bison_location     = "bison"
 base_dir           = 'third_party/libpg_query/grammar'

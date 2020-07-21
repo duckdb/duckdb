@@ -1,5 +1,5 @@
 #include "duckdb/common/constants.hpp"
-
+#include "duckdb/common/vector_size.hpp"
 #include <limits>
 
 using namespace duckdb;
