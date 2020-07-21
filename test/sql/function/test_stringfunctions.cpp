@@ -410,23 +410,36 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 
 	// test ltrim on scalars
 	result = con.Query(
-	    "select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL)");
+	    "select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL), LTRIM('     ')");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"Leading"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"Trailing   "}));
 	REQUIRE(CHECK_COLUMN(result, 4, {"Both "}));
 	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {""}));
 
 	// test rtrim on scalars
 	result = con.Query(
-	    "select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL)");
+	    "select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL), RTRIM('    ')");
 	REQUIRE(CHECK_COLUMN(result, 0, {""}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {" Leading"}));
 	REQUIRE(CHECK_COLUMN(result, 3, {"Trailing"}));
 	REQUIRE(CHECK_COLUMN(result, 4, {" Both"}));
 	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {""}));
+
+	// test trim on scalars
+	result = con.Query(
+	    "select TRIM(''), TRIM('Neither'), TRIM(' Leading'), TRIM('Trailing   '), TRIM(' Both '), TRIM(NULL), TRIM('     ')");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"Neither"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"Leading"}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Trailing"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {"Both"}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {""}));
 
 	// test on tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(a STRING, b STRING)"));
@@ -452,15 +465,54 @@ TEST_CASE("LTRIM/RTRIM test", "[function]") {
 	result = con.Query("select RTRIM(a) FROM strings WHERE b IS NOT NULL");
 	REQUIRE(CHECK_COLUMN(result, 0, {"", " Both"}));
 
-	// test incorrect usage of ltrim
-	REQUIRE_FAIL(con.Query("select LTRIM()"));
-	REQUIRE_FAIL(con.Query("select LTRIM(1, 2)"));
-	REQUIRE_FAIL(con.Query("select LTRIM('hello', 'world')"));
+	// test ltrim/rtrim/trim with custom trim filter
+	result = con.Query(
+	    "select LTRIM('', 'ho'), LTRIM('hello', 'ho'), LTRIM('papapapa', 'pa'), LTRIM('blaHblabla', 'bla'), LTRIM('blabla', NULL), LTRIM(NULL, 'blabla'), LTRIM('blabla', '')");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ello"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"Hblabla"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {"blabla"}));
 
-	// test incorrect usage of rtrim
+	result = con.Query(
+	    "select RTRIM('', 'ho'), RTRIM('hello', 'ho'), RTRIM('papapapa', 'pa'), RTRIM('blaHblabla', 'bla'), RTRIM('blabla', NULL), RTRIM(NULL, 'blabla'), RTRIM('blabla', '')");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hell"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"blaH"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {"blabla"}));
+
+	result = con.Query(
+	    "select TRIM('', 'ho'), TRIM('hello', 'ho'), TRIM('papapapa', 'pa'), TRIM('blaHblabla', 'bla'), TRIM('blabla', NULL), TRIM(NULL, 'blabla'), TRIM('blabla', '')");
+	REQUIRE(CHECK_COLUMN(result, 0, {""}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"ell"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {""}));
+	REQUIRE(CHECK_COLUMN(result, 3, {"H"}));
+	REQUIRE(CHECK_COLUMN(result, 4, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 5, {Value()}));
+	REQUIRE(CHECK_COLUMN(result, 6, {"blabla"}));
+
+	// test on tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE trim_test(a VARCHAR, b VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO trim_test VALUES ('hello', 'ho'), "
+	                          "('test', 't'), ('mühleisen','mün'), (NULL, ' '), ('', NULL), ('', ''), (NULL, NULL)"));
+
+	result = con.Query("SELECT LTRIM(a, b), RTRIM(a, b), TRIM(a, b) FROM trim_test");
+	REQUIRE(CHECK_COLUMN(result, 0, {"ello", "est", "hleisen", Value(), Value(), "", Value()}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"hell", "tes", "mühleise", Value(), Value(), "", Value()}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"ell", "es", "hleise", Value(), Value(), "", Value()}));
+
+	// test incorrect usage of ltrim/rtrim/trim
+	REQUIRE_FAIL(con.Query("select LTRIM()"));
+	REQUIRE_FAIL(con.Query("select LTRIM('hello', 'world', 'aaa')"));
 	REQUIRE_FAIL(con.Query("select RTRIM()"));
-	REQUIRE_FAIL(con.Query("select RTRIM(1, 2)"));
-	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world')"));
+	REQUIRE_FAIL(con.Query("select RTRIM('hello', 'world', 'aaa')"));
+	REQUIRE_FAIL(con.Query("select TRIM()"));
+	REQUIRE_FAIL(con.Query("select TRIM('hello', 'world', 'aaa')"));
 }
 
 TEST_CASE("LEFT test", "[function]") {
