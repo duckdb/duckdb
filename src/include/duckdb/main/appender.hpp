@@ -48,6 +48,8 @@ public:
 		throw Exception("Undefined type for Appender::Append!");
 	}
 
+	void Append(const char *value, uint32_t length);
+
 	// prepared statements
 	template <typename... Args> void AppendRow(Args... args) {
 		BeginRow();

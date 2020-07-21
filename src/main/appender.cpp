@@ -126,6 +126,10 @@ template <> void Appender::Append(const char *value) {
 	AppendValueInternal<string_t>(string_t(value));
 }
 
+void Appender::Append(const char *value, uint32_t length) {
+	AppendValueInternal<string_t>(string_t(value, length));
+}
+
 template <> void Appender::Append(float value) {
 	if (!Value::FloatIsValid(value)) {
 		InvalidateException("Float value is out of range!");
