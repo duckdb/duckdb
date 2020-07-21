@@ -7,7 +7,6 @@
 #include <sstream>
 #include <stdarg.h>
 #include <string.h>
-#include <string>
 
 using namespace duckdb;
 using namespace std;

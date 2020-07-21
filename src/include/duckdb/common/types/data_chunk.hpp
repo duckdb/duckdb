@@ -11,8 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 
-#include <vector>
-
 namespace duckdb {
 
 //!  A Data Chunk represents a set of vectors.

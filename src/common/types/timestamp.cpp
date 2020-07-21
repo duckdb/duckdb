@@ -4,12 +4,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 
-#include <iomanip>
-#include <iostream>
-#include <sstream>
+#include <chrono>  // chrono::system_clock
+#include <string>  // string
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 constexpr const int32_t MONTHS_PER_YEAR = 12;
 constexpr const int32_t HOURS_PER_DAY = 24; //! assume no daylight savings time changes
@@ -247,4 +247,6 @@ int64_t Timestamp::GetMinutes(timestamp_t timestamp) {
 
 int64_t Timestamp::GetHours(timestamp_t timestamp) {
 	return Timestamp::GetTime(timestamp) / 3600000;
+}
+
 }

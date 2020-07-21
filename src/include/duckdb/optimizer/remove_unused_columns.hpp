@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class BoundColumnRefExpression;

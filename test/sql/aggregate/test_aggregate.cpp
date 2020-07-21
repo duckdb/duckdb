@@ -2,6 +2,8 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
 
+#include <sstream>
+
 using namespace duckdb;
 using namespace std;
 

@@ -1,12 +1,11 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include <sstream>
 
 using namespace duckdb;
 using namespace std;
 
 #define COLUMN_COUNT 10000
-
-#include <fstream>
 
 TEST_CASE("Test many columns", "[create][.]") {
 	unique_ptr<QueryResult> result;

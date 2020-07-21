@@ -11,8 +11,8 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
-
-#include <mutex>
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
@@ -30,7 +30,7 @@ public:
 	//! The nodes in the tree, can be binary searched
 	vector<SegmentNode> nodes;
 	//! Lock to access or modify the nodes
-	std::mutex node_lock;
+	mutex node_lock;
 
 public:
 	//! Gets a pointer to the first segment. Useful for scans.

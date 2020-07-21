@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 class VectorBuffer;

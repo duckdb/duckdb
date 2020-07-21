@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/base_expression.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class ParsedExpression;

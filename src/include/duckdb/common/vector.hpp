@@ -1,12 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/common.hpp
+// duckdb/common/vector.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
-#include "duckdb/common/helper.hpp"
+#include <vector>
+
+namespace duckdb {
+using std::vector;
+}

@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/function/scalar_function.hpp"
-#include <string>
-#include <vector>
 
 using namespace std;
 

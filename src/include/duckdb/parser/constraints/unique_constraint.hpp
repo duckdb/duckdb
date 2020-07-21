@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

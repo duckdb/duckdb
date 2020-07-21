@@ -8,22 +8,18 @@
 
 #pragma once
 
-#include <cstdlib>
 #include <memory>
-#include <string>
-#include <vector>
-#include <cmath>
+#include <cstdint>
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
 //! inline std directives that we use frequently
 using std::move;
 using std::shared_ptr;
-using std::string;
 using std::unique_ptr;
 using data_ptr = unique_ptr<char[]>;
 using std::make_shared;
-using std::vector;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA "main"

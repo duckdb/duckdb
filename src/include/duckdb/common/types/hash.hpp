@@ -10,9 +10,9 @@
 
 #include "duckdb/common/common.hpp"
 
-#include <memory.h>
-
 namespace duckdb {
+
+struct string_t;
 
 // efficient hash function that maximizes the avalanche effect and minimizes
 // bias
