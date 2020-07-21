@@ -79,7 +79,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	// look into the children to see if we can replace them
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> child) -> unique_ptr<Expression> {
 		PerformCSEReplacement(&child, expression_count);
-		return move(child);
+		return child;
 	});
 }
 

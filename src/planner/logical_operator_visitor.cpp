@@ -54,7 +54,7 @@ void LogicalOperatorVisitor::VisitOperatorExpressions(LogicalOperator &op) {
 	case LogicalOperatorType::COMPARISON_JOIN: {
 		if (op.type == LogicalOperatorType::DELIM_JOIN) {
 			auto &delim_join = (LogicalDelimJoin &)op;
-			for(auto &expr : delim_join.duplicate_eliminated_columns) {
+			for (auto &expr : delim_join.duplicate_eliminated_columns) {
 				VisitExpression(&expr);
 			}
 		}
@@ -154,7 +154,7 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> expr) -> unique_ptr<Expression> {
 		VisitExpression(&expr);
-		return move(expr);
+		return expr;
 	});
 }
 
