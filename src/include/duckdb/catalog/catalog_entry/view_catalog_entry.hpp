@@ -10,6 +10,8 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

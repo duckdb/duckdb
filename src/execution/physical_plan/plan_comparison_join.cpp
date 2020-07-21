@@ -18,7 +18,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	if (op.conditions.size() == 0) {
 		// no conditions: insert a cross product
-		return make_unique<PhysicalCrossProduct>(op, move(left), move(right));
+		return make_unique<PhysicalCrossProduct>(op.types, move(left), move(right));
 	}
 
 	bool has_equality = false;

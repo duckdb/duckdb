@@ -15,7 +15,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 	}
 #endif
 
-	auto projection = make_unique<PhysicalProjection>(op, move(op.expressions));
+	auto projection = make_unique<PhysicalProjection>(op.types, move(op.expressions));
 	projection->children.push_back(move(plan));
 	return move(projection);
 }

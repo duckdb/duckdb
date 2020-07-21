@@ -12,7 +12,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op
 	auto plan = CreatePlan(*op.children[0]);
 
 	dependencies.insert(op.table);
-	auto update = make_unique<PhysicalUpdate>(op, *op.table, *op.table->storage, op.columns, move(op.expressions),
+	auto update = make_unique<PhysicalUpdate>(op.types, *op.table, *op.table->storage, op.columns, move(op.expressions),
 	                                          move(op.bound_defaults));
 	update->is_index_update = op.is_index_update;
 	update->children.push_back(move(plan));

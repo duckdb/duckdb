@@ -10,6 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/vector.hpp"
+
 #include <limits>
 
 namespace duckdb {

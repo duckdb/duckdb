@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 

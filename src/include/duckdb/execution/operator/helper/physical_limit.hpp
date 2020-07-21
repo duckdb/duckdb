@@ -15,8 +15,8 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
 public:
-	PhysicalLimit(LogicalOperator &op, idx_t limit, idx_t offset)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, op.types), limit(limit), offset(offset) {
+	PhysicalLimit(vector<TypeId> types, idx_t limit, idx_t offset)
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types)), limit(limit), offset(offset) {
 	}
 
 	idx_t limit;

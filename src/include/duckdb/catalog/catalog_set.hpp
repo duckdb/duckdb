@@ -12,10 +12,10 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/mutex.hpp"
 
 #include <functional>
 #include <memory>
-#include <mutex>
 
 namespace duckdb {
 struct AlterInfo;
@@ -72,7 +72,7 @@ private:
 
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data
-	std::mutex catalog_lock;
+	mutex catalog_lock;
 	//! The set of entries present in the CatalogSet.
 	unordered_map<string, unique_ptr<CatalogEntry>> data;
 };

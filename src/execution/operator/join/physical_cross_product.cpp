@@ -17,9 +17,9 @@ public:
 	ChunkCollection right_data;
 };
 
-PhysicalCrossProduct::PhysicalCrossProduct(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalCrossProduct::PhysicalCrossProduct(vector<TypeId> types, unique_ptr<PhysicalOperator> left,
                                            unique_ptr<PhysicalOperator> right)
-    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, op.types) {
+    : PhysicalOperator(PhysicalOperatorType::CROSS_PRODUCT, move(types)) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }

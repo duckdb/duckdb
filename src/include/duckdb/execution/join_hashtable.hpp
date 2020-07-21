@@ -15,8 +15,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
-#include <mutex>
-
 namespace duckdb {
 class BufferManager;
 class BufferHandle;

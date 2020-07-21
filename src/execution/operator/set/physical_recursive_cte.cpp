@@ -23,9 +23,9 @@ public:
 	bool intermediate_empty = true;
 };
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(LogicalOperator &op, bool union_all, unique_ptr<PhysicalOperator> top,
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<TypeId> types, bool union_all, unique_ptr<PhysicalOperator> top,
                                            unique_ptr<PhysicalOperator> bottom)
-    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, op.types), union_all(union_all) {
+    : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, move(types)), union_all(union_all) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));
 }
