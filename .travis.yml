@@ -584,23 +584,16 @@ matrix:
       language: r
       r: devel
 
-      install:
-        - cd tools/rpkg
-        - R -f dependencies.R
+      install: true
 
       script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL duckdb_*.tar.gz
-        - (cd tests && R -f testthat.R)
-        - R -f ../../examples/R/dbi.R
-        - R -f ../../examples/R/dplyr.R
+        - cd tools/rpkg
+        - sh configure
+        - sh build-linux
 
-        - R -e "tools::write_PACKAGES(dir = '.', type = 'source')"
         - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
         - python ../upload-s3.py rstats duckdb_*.tar.gz
         - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
-
 
     - os: osx
       osx_image: xcode11.5
@@ -610,18 +603,13 @@ matrix:
       language: r
       #r: devel
 
-      install:
-        - cd tools/rpkg
-        - R -f dependencies.R
+      install: true
 
       script:
-        - ./configure
-        - R CMD build .
-        - R CMD INSTALL --build duckdb_*.tar.gz
-        - R CMD INSTALL duckdb_*.tgz
-        - (cd tests && R -f testthat.R)
+        - cd tools/rpkg
+        - sh configure
+        - sh build-mac
 
-        - R -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"
         - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
         - python3 ../upload-s3.py rstats duckdb_*.tgz
         - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
@@ -644,6 +632,7 @@ matrix:
         - cd tools/rpkg
         - sh configure
         - sh build-win
+
         - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
         - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
         - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
