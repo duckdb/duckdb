@@ -151,7 +151,7 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog
 		// commit WITH write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
 	} else {
-		// comit WITHOUT write ahead log
+		// commit WITHOUT write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<false>(type, data); });
 	}
 }

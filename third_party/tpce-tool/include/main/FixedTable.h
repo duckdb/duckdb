@@ -57,7 +57,7 @@ public:
 
 	/*
 	 *   Generates all fields for the next record.
-	 *   Template Method Pattern used to accomodate
+	 *   Template Method Pattern used to accommodate
 	 *   subtle variations in underlying data files
 	 *   (i.e. DataFile vs. WeightedDataFile).
 	 */

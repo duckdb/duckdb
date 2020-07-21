@@ -59,7 +59,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		cross_product->AddChild(move(plan));
 		root = move(cross_product);
 
-		// we replace the original subquery with a ColumnRefExpression refering to the result of the projection (either
+		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
 		return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::BOOL, ColumnBinding(projection_index, 0));
 	}
@@ -97,7 +97,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		cross_product->AddChild(move(plan));
 		root = move(cross_product);
 
-		// we replace the original subquery with a BoundColumnRefExpression refering to the first result of the
+		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
 		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(aggr_index, 0));
 	}
@@ -125,7 +125,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		join->conditions.push_back(move(cond));
 		root = move(join);
 
-		// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
+		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
 		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
 	}
 	}
