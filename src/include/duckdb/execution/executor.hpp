@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 #include <queue>
 

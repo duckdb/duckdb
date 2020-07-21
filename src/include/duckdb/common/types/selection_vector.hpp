@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/vector_size.hpp"
 
@@ -87,7 +86,5 @@ private:
 	sel_t *sel_vector;
 	buffer_ptr<SelectionData> selection_data;
 };
-
-typedef unordered_map<sel_t *, buffer_ptr<VectorBuffer>> sel_cache_t;
 
 } // namespace duckdb

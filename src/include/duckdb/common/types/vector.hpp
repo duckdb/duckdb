@@ -35,6 +35,8 @@ class VectorStructBuffer;
 class VectorListBuffer;
 class ChunkCollection;
 
+struct SelCache;
+
 //!  Vector of values of a specified TypeId.
 class Vector {
 	friend struct ConstantVector;
@@ -86,7 +88,7 @@ public:
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
-	void Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache);
+	void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
