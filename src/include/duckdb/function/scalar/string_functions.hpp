@@ -75,10 +75,6 @@ struct LpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LtrimFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LeftFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -123,12 +119,12 @@ struct RpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RtrimFun {
+struct SuffixFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SuffixFun {
-	static ScalarFunction GetFunction();
+struct TrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

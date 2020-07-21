@@ -2356,7 +2356,7 @@ func_expr_common_subexpr:
 					/* various trim expressions are defined in SQL
 					 * - thomas 1997-07-19
 					 */
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("btrim"), $4, @1);
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("trim"), $4, @1);
 				}
 			| TRIM '(' LEADING trim_list ')'
 				{
@@ -2368,7 +2368,7 @@ func_expr_common_subexpr:
 				}
 			| TRIM '(' trim_list ')'
 				{
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("btrim"), $3, @1);
+					$$ = (PGNode *) makeFuncCall(SystemFuncName("trim"), $3, @1);
 				}
 			| NULLIF '(' a_expr ',' a_expr ')'
 				{

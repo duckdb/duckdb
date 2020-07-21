@@ -15,7 +15,6 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<LikeFun>();
 	Register<LikeEscapeFun>();
 	Register<LpadFun>();
-	Register<LtrimFun>();
 	Register<LeftFun>();
 	Register<RightFun>();
 	Register<PrintfFun>();
@@ -26,8 +25,8 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<RepeatFun>();
 	Register<ReplaceFun>();
 	Register<RpadFun>();
-	Register<RtrimFun>();
 	Register<SuffixFun>();
+	Register<TrimFun>();
 	Register<UnicodeFun>();
 }
 
