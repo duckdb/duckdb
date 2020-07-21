@@ -422,7 +422,7 @@ private:
 	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
 			if (col_data.defined_buf.ptr[i]) {
-				auto offset = col_data.offset_buf.read<int32_t>();
+				auto offset = col_data.offset_buf.read<uint32_t>();
 				if (offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
 					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
@@ -718,7 +718,7 @@ private:
 			data.current_group++;
 			data.group_offset = 0;
 
-			if (data.current_group == data.file_meta_data.row_groups.size()) {
+			if ((uint64_t)data.current_group == data.file_meta_data.row_groups.size()) {
 				data.finished = true;
 				return;
 			}
@@ -821,7 +821,7 @@ private:
 						auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
-								auto offset = col_data.offset_buf.read<int32_t>();
+								auto offset = col_data.offset_buf.read<uint32_t>();
 								if (offset >= col_data.string_collection->count) {
 									throw runtime_error("string dictionary offset out of bounds");
 								}
@@ -848,7 +848,7 @@ private:
 						// bit packed this
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
 						int byte_pos = 0;
-						for (int32_t i = 0; i < current_batch_size; i++) {
+						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (!col_data.defined_buf.ptr[i]) {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 								continue;
