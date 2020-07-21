@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include <limits>
 
 using namespace duckdb;
 using namespace std;

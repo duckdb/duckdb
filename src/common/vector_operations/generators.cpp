@@ -5,6 +5,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include <limits>
 
 using namespace duckdb;
 using namespace std;
