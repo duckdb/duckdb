@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <algorithm>
+
 using namespace std;
 
 namespace duckdb {

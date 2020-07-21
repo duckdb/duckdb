@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 
 #include <cstring>
+#include <limits>
 
 namespace duckdb {
 

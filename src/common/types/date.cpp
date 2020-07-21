@@ -2,12 +2,12 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/assert.hpp"
 
 #include <cstring>
 #include <cctype>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
+#include <algorithm>
+#include <limits>
 
 using namespace duckdb;
 using namespace std;
