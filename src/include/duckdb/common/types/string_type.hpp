@@ -33,7 +33,6 @@ public:
 			// zero initialize the prefix first
 			// this makes sure that strings with length smaller than 4 still have an equal prefix
 			memset(prefix, 0, PREFIX_LENGTH);
-			value_.data = nullptr;
 			if (length == 0) {
 				return;
 			}
