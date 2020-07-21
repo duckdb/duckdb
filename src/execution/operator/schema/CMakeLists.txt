@@ -1,4 +1,4 @@
-add_library(duckdb_operator_schema
+add_library_unity(duckdb_operator_schema
                   OBJECT
                   physical_alter.cpp
                   physical_create_index.cpp

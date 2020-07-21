@@ -5,7 +5,7 @@ add_subdirectory(operator)
 add_subdirectory(physical_plan)
 add_subdirectory(index/art)
 
-add_library(duckdb_execution
+add_library_unity(duckdb_execution
                   OBJECT
                   adaptive_filter.cpp
                   aggregate_hashtable.cpp

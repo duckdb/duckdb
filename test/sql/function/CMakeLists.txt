@@ -1,4 +1,4 @@
-add_library(test_sql_function
+add_library_unity(test_sql_function
                   OBJECT
                   test_math.cpp
                   test_concat.cpp

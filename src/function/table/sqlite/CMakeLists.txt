@@ -1,4 +1,4 @@
-add_library(duckdb_func_sqlite
+add_library_unity(duckdb_func_sqlite
                   OBJECT
                   pragma_collations.cpp
                   pragma_table_info.cpp

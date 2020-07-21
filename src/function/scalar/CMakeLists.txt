@@ -6,7 +6,7 @@ add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(nested)
 
-add_library(duckdb_func_scalar
+add_library_unity(duckdb_func_scalar
                   OBJECT
                   date_functions.cpp
                   generic_functions.cpp

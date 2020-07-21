@@ -1,4 +1,4 @@
-add_library(duckdb_nested_loop_join
+add_library_unity(duckdb_nested_loop_join
                   OBJECT
                   nested_loop_join_inner.cpp
                   nested_loop_join_mark.cpp)

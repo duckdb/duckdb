@@ -18,7 +18,6 @@ namespace duckdb {
 
 class Pipeline;
 class Executor;
-class ClientContext;
 
 struct Semaphore;
 

@@ -1,4 +1,4 @@
-add_library(duckdb_vector_operations
+add_library_unity(duckdb_vector_operations
                   OBJECT
                   boolean_operators.cpp
                   vector_cast.cpp

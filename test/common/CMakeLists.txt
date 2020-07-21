@@ -1,4 +1,4 @@
-add_library(test_common
+add_library_unity(test_common
                   OBJECT
                   test_cast.cpp
                   test_checksum.cpp

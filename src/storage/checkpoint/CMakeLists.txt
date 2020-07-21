@@ -1,4 +1,4 @@
-add_library(duckdb_storage_checkpoint
+add_library_unity(duckdb_storage_checkpoint
                   OBJECT
                   table_data_writer.cpp
                   table_data_reader.cpp)

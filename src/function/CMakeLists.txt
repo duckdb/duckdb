@@ -2,7 +2,7 @@ add_subdirectory(aggregate)
 add_subdirectory(scalar)
 add_subdirectory(table)
 
-add_library(duckdb_function
+add_library_unity(duckdb_function
                   OBJECT
                   cast_rules.cpp
                   function.cpp

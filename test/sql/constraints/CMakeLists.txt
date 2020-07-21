@@ -1,4 +1,4 @@
-add_library(test_sql_constraints
+add_library_unity(test_sql_constraints
                   OBJECT
                   test_check.cpp
                   test_notnull.cpp

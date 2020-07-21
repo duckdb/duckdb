@@ -1,4 +1,4 @@
-add_library(test_sql_order
+add_library_unity(test_sql_order
         OBJECT
         test_order_same_value.cpp)
 set(ALL_OBJECT_FILES

@@ -1,4 +1,4 @@
-add_library(duckdb_func_ops
+add_library_unity(duckdb_func_ops
                   OBJECT
                   arithmetic.cpp
                   bitwise.cpp)

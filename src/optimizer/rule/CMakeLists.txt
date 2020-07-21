@@ -1,4 +1,4 @@
-add_library(duckdb_optimizer_rules
+add_library_unity(duckdb_optimizer_rules
                   OBJECT
                   arithmetic_simplification.cpp
                   case_simplification.cpp

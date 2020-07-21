@@ -1,5 +1,5 @@
 add_subdirectory(sqlite)
-add_library(duckdb_func_table
+add_library_unity(duckdb_func_table
                   OBJECT
                   read_csv.cpp
                   sqlite_functions.cpp)

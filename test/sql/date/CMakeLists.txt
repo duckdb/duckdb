@@ -1,4 +1,4 @@
-add_library(
+add_library_unity(
   test_sql_date
   OBJECT
   test_date.cpp
