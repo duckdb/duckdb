@@ -75,10 +75,6 @@ struct LpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LtrimFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LeftFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -123,12 +119,12 @@ struct RpadFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RtrimFun {
+struct SuffixFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct SuffixFun {
-	static ScalarFunction GetFunction();
+struct TrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -139,18 +135,6 @@ struct ContainsFun {
 
 struct UnicodeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RegexpMatchesBindData : public FunctionData {
-	RegexpMatchesBindData(std::unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
-	                      bool range_success);
-	~RegexpMatchesBindData();
-
-	std::unique_ptr<re2::RE2> constant_pattern;
-	string range_min, range_max;
-	bool range_success;
-
-	unique_ptr<FunctionData> Copy() override;
 };
 
 } // namespace duckdb
