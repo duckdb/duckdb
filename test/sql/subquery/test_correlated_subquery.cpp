@@ -638,6 +638,13 @@ TEST_CASE("Test window functions in correlated subqueries", "[subquery]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
+#if STANDARD_VECTOR_SIZE < 512
+	// window functions not supported for small vector sizes
+	REQUIRE_FAIL(con.Query(
+	    "SELECT i, (SELECT SUM(i) OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;"));
+	return;
+#endif
+
 	// window functions in correlated subquery
 	result = con.Query(
 	    "SELECT i, (SELECT row_number() OVER (ORDER BY i) FROM integers WHERE i1.i=i) FROM integers i1 ORDER BY i;");

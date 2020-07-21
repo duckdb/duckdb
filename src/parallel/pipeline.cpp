@@ -63,7 +63,7 @@ void Pipeline::Execute(TaskContext &task) {
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
 	} catch (...) {
-		executor.PushError("Unknown exception!");
+		executor.PushError("Unknown exception in pipeline!");
 	}
 	executor.Flush(thread);
 }
@@ -72,7 +72,13 @@ void Pipeline::FinishTask() {
 	assert(finished_tasks < total_tasks);
 	idx_t current_finished = ++finished_tasks;
 	if (current_finished == total_tasks) {
-		sink->Finalize(executor.context, move(sink_state));
+		try {
+			sink->Finalize(executor.context, move(sink_state));
+		} catch(std::exception &ex) {
+			executor.PushError(ex.what());
+		} catch (...) {
+			executor.PushError("Unknown exception in Finalize!");
+		}
 		Finish();
 	}
 }

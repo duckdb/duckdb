@@ -4,6 +4,7 @@
 using namespace duckdb;
 using namespace std;
 
+#if STANDARD_VECTOR_SIZE >= 512
 TEST_CASE("Most scalar window functions", "[window]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -605,3 +606,13 @@ TEST_CASE("Test binding of named window functions in CTEs", "[window]") {
 	REQUIRE_FAIL(con.Query("select i, lag(i) over named_window from (values (1), (2), (3)) as t (i) window "
 	                       "named_window as (order by i), named_window as (order by j);"));
 }
+#else
+TEST_CASE("Most scalar window functions", "[window]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	REQUIRE_FAIL(con.Query("SELECT avg(42) OVER ()"));
+}
+#endif

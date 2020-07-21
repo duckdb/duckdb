@@ -10,6 +10,10 @@ using namespace std;
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
     : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
       input_ref(input) {
+#if STANDARD_VECTOR_SIZE < 512
+		throw NotImplementedException("Window functions are not supported for vector sizes < 512");
+#endif
+
 	statep.SetCount(STANDARD_VECTOR_SIZE);
 	Value ptr_val = Value::POINTER((idx_t)state.data());
 	statep.Reference(ptr_val);

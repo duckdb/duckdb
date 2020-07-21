@@ -76,6 +76,9 @@ TEST_CASE("Test queries found by Rigger that cause problems in other systems", "
 		REQUIRE(CHECK_COLUMN(result, 0, {"val"}));
 	}
 	SECTION("#57 Null pointer dereference caused by window functions in result-set of EXISTS(SELECT ...)") {
+#if STANDARD_VECTOR_SIZE < 512
+		return;
+#endif
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0(c0 INTEGER);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO t0(c0) VALUES (0);"));
 		result = con.Query("SELECT * FROM t0 WHERE EXISTS (SELECT MIN(c0) OVER (), CUME_DIST() OVER () FROM t0);");
