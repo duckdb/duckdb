@@ -6,6 +6,7 @@ env:
     - SETUPTOOLS_SCM_NO_LOCAL=yes
     - TWINE_USERNAME=hfmuehleisen
     - SETUPTOOLS_SCM_DEBUG=please
+    - MAKEFLAGS="-j 2"
 
 git:
   depth: false
@@ -152,7 +153,7 @@ matrix:
         - mkdir -p build/coverage
         - (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
         - build/coverage/test/unittest
-        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp'
+        - coveralls -b build/coverage -E '.*CMakeCXXCompilerId.cpp' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
 
 
     - os: linux
@@ -279,35 +280,35 @@ matrix:
         - build/debug/test/unittest -s "[tpch]"
 
 
-    - os: linux
-      dist: bionic
-      name: Solaris VM
-      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
-      sudo: true
+    # - os: linux
+    #   dist: bionic
+    #   name: Solaris VM
+    #   if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+    #   sudo: true
 
-      install:
-        - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
-        - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
-        - sudo apt-get update > /dev/null
-        - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
-        - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova"
-        - VBoxManage import Solaris10_1-13-2.ova
-        - rm Solaris10_1-13-2.ova
-        - VBoxManage modifyvm "Solaris10_1-13" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
-        - VBoxManage startvm "Solaris10_1-13" --type headless
-        - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEArPN99L/D9jXUwtFjoAzhnzA5a7t/YJiSrcTm+hKSxPp/nklfu1Km\ntDbMBOrXsAqLRcMz5JZoF8G1jebXOO3u2LRB+INFsxqDV76TZjUC1y4SAX17h5UvstT3sn\naPPt+TzwX3PmF8ooN+L8hDIZpvty6m+7b09QRFx4l7+j30MgO+kjwNHUyocn7qokoyH2p4\nfzvtoWePNyL191O9GNg6LmjneG25nN/NBoFYc/Zu+XfDY3gMECNurGHVV3W4ZNpoqjpZWU\nFx4eG0tShBZ+pvuFPy669+H8b5laNEjPGYclInW8unW6T9nuaoQjc/metBwaODgkOsAR0u\nddRxR8nIUwAAA9C2NMXdtjTF3QAAAAdzc2gtcnNhAAABAQCs8330v8P2NdTC0WOgDOGfMD\nlru39gmJKtxOb6EpLE+n+eSV+7Uqa0NswE6tewCotFwzPklmgXwbWN5tc47e7YtEH4g0Wz\nGoNXvpNmNQLXLhIBfXuHlS+y1Peydo8+35PPBfc+YXyig34vyEMhmm+3Lqb7tvT1BEXHiX\nv6PfQyA76SPA0dTKhyfuqiSjIfanh/O+2hZ483IvX3U70Y2DouaOd4bbmc380GgVhz9m75\nd8NjeAwQI26sYdVXdbhk2miqOllZQXHh4bS1KEFn6m+4U/Lrr34fxvmVo0SM8ZhyUidby6\ndbpP2e5qhCNz+Z60HBo4OCQ6wBHS511HFHychTAAAAAwEAAQAAAQEAl3IwnZ0+z96bjG0m\nvAQLngXwgjIRfFieOKPvTpPtCagBEG5X8gSSDcTeKoAqlvDkvBYO3uAGDqeFf9jgJe3T9N\ncD3cW1xvw0fyVWlW1eK2cgRUXIYhV1SzfKHvBKx1eoauRieLGNHhHe8aB/iHFf2hx0BH9V\nSSiQogX2Fk8iAphr9qLuR+M0eMtsZmq9nNpk0iXiohw7b3xNb1QrewoeiXiSI4xANdbkmx\n7R2Jnm132toa+ofPZWbpRptYyzv5TWRhEob4GQSknEvS7NEep3cxnv71d1wQvCfhkMKLXH\nKrIck4X46fLa+65OV8Bq37x91kRagOl4VFBZBT61Y9+DoQAAAIEAltUA8Zx5ETlUOXdGCQ\n+ftbCLZlmlPGGabFdg/EKM+M96Q3sj7L2lIP0Htt5w/HmM3Hz9uLk/d/m20zPq8xkltwCo\nF4R80K5HA38Q26fPRpJzDhch+k7AYuQwjziPSH1uzP3BdQo74KVuyvaTk+9VoeeFslF13P\njflhvUmCyquNkAAACBANtkmGdXwaMHrFKAibQreQuQD9CBRFRDRYNWOP4nPOp7YyCY4xbf\n02kHfFUmf7UqvY36v+jTC4RJ1mJH9KVlqJOB/JLhb6Wrv3xuddcxbwaMwb6dGgsZM+iB7G\nqBlcHlrxnWi6bXXK9WpQWaLNYdE4MKgRvKTSq20glezRWDijznAAAAgQDJzyCedgs5ibpb\nhvtNy5TGXPyX2lI9qoMDV2LSJZhp5TPL/mZqITUrehs0siM9IQ4DqhL4DgKBkYOLI/W6mW\nCXkQVFkGGLovzFUMM/wpK1Ua20k+0XakblI11yK3fjd0XJ0K5FyQ1YzG9XXZ8EuZo/2p2A\n8Y/K54JYuMflOJVftQAAABZoYW5uZXNAZGFrYXIuZGEuY3dpLm5sAQID\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_solaris
-        - chmod 400 id_rsa_solaris
-        - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_solaris"
-        - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
-        - sleep 60
-        - while ! $SCMD ls ; do sleep 30 ; done
-        - $SCMD 'bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"'
+    #   install:
+    #     - wget -q https://www.virtualbox.org/download/oracle_vbox_2016.asc -O- | sudo apt-key add -
+    #     - echo -e "\ndeb [arch=amd64] https://download.virtualbox.org/virtualbox/debian bionic contrib\n" | sudo tee -a /etc/apt/sources.list
+    #     - sudo apt-get update > /dev/null
+    #     - sudo apt-get install -y linux-headers-$(uname -r) virtualbox-5.2 rsync
+    #     - wget -q "https://homepages.cwi.nl/~hannes/86Cv27lf5353lJR/Solaris10_1-13-2.ova"
+    #     - VBoxManage import Solaris10_1-13-2.ova
+    #     - rm Solaris10_1-13-2.ova
+    #     - VBoxManage modifyvm "Solaris10_1-13" --usb off --usbehci off --usbxhci off --cpus 2 --hwvirtex on --memory 6114
+    #     - VBoxManage startvm "Solaris10_1-13" --type headless
+    #     - echo -e "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn\nNhAAAAAwEAAQAAAQEArPN99L/D9jXUwtFjoAzhnzA5a7t/YJiSrcTm+hKSxPp/nklfu1Km\ntDbMBOrXsAqLRcMz5JZoF8G1jebXOO3u2LRB+INFsxqDV76TZjUC1y4SAX17h5UvstT3sn\naPPt+TzwX3PmF8ooN+L8hDIZpvty6m+7b09QRFx4l7+j30MgO+kjwNHUyocn7qokoyH2p4\nfzvtoWePNyL191O9GNg6LmjneG25nN/NBoFYc/Zu+XfDY3gMECNurGHVV3W4ZNpoqjpZWU\nFx4eG0tShBZ+pvuFPy669+H8b5laNEjPGYclInW8unW6T9nuaoQjc/metBwaODgkOsAR0u\nddRxR8nIUwAAA9C2NMXdtjTF3QAAAAdzc2gtcnNhAAABAQCs8330v8P2NdTC0WOgDOGfMD\nlru39gmJKtxOb6EpLE+n+eSV+7Uqa0NswE6tewCotFwzPklmgXwbWN5tc47e7YtEH4g0Wz\nGoNXvpNmNQLXLhIBfXuHlS+y1Peydo8+35PPBfc+YXyig34vyEMhmm+3Lqb7tvT1BEXHiX\nv6PfQyA76SPA0dTKhyfuqiSjIfanh/O+2hZ483IvX3U70Y2DouaOd4bbmc380GgVhz9m75\nd8NjeAwQI26sYdVXdbhk2miqOllZQXHh4bS1KEFn6m+4U/Lrr34fxvmVo0SM8ZhyUidby6\ndbpP2e5qhCNz+Z60HBo4OCQ6wBHS511HFHychTAAAAAwEAAQAAAQEAl3IwnZ0+z96bjG0m\nvAQLngXwgjIRfFieOKPvTpPtCagBEG5X8gSSDcTeKoAqlvDkvBYO3uAGDqeFf9jgJe3T9N\ncD3cW1xvw0fyVWlW1eK2cgRUXIYhV1SzfKHvBKx1eoauRieLGNHhHe8aB/iHFf2hx0BH9V\nSSiQogX2Fk8iAphr9qLuR+M0eMtsZmq9nNpk0iXiohw7b3xNb1QrewoeiXiSI4xANdbkmx\n7R2Jnm132toa+ofPZWbpRptYyzv5TWRhEob4GQSknEvS7NEep3cxnv71d1wQvCfhkMKLXH\nKrIck4X46fLa+65OV8Bq37x91kRagOl4VFBZBT61Y9+DoQAAAIEAltUA8Zx5ETlUOXdGCQ\n+ftbCLZlmlPGGabFdg/EKM+M96Q3sj7L2lIP0Htt5w/HmM3Hz9uLk/d/m20zPq8xkltwCo\nF4R80K5HA38Q26fPRpJzDhch+k7AYuQwjziPSH1uzP3BdQo74KVuyvaTk+9VoeeFslF13P\njflhvUmCyquNkAAACBANtkmGdXwaMHrFKAibQreQuQD9CBRFRDRYNWOP4nPOp7YyCY4xbf\n02kHfFUmf7UqvY36v+jTC4RJ1mJH9KVlqJOB/JLhb6Wrv3xuddcxbwaMwb6dGgsZM+iB7G\nqBlcHlrxnWi6bXXK9WpQWaLNYdE4MKgRvKTSq20glezRWDijznAAAAgQDJzyCedgs5ibpb\nhvtNy5TGXPyX2lI9qoMDV2LSJZhp5TPL/mZqITUrehs0siM9IQ4DqhL4DgKBkYOLI/W6mW\nCXkQVFkGGLovzFUMM/wpK1Ua20k+0XakblI11yK3fjd0XJ0K5FyQ1YzG9XXZ8EuZo/2p2A\n8Y/K54JYuMflOJVftQAAABZoYW5uZXNAZGFrYXIuZGEuY3dpLm5sAQID\n-----END OPENSSH PRIVATE KEY-----\n" > id_rsa_solaris
+    #     - chmod 400 id_rsa_solaris
+    #     - export SSHFLAGS="-o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i id_rsa_solaris"
+    #     - export SCMD="ssh $SSHFLAGS -p 2222 root@localhost"
+    #     - sleep 60
+    #     - while ! $SCMD ls ; do sleep 30 ; done
+    #     - $SCMD 'bash -c "echo 'nameserver 8.8.8.8' > /etc/resolv.conf"'
 
-      script:
-        - python scripts/amalgamation.py > /dev/null
-        - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest --exclude=third_party/imdb .  root@localhost:/duckdb
-        - travis_wait 50 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
-        - $SCMD /duckdb/build/test/unittest "~[copy]~[file_system]~[.]"
+    #   script:
+    #     - python scripts/amalgamation.py > /dev/null
+    #     - rsync -a -e "ssh $SSHFLAGS -p 2222" --exclude=.git --exclude=build --exclude=third_party/sqllogictest --exclude=third_party/imdb .  root@localhost:/duckdb
+    #     - travis_wait 50 $SCMD 'rm -rf /duckdb/build && mkdir -p /duckdb/build && cd /duckdb/build && export PATH=/opt/csw/bin/:$PATH CXX=g++ CC=gcc  && cmake -DCMAKE_AR=/opt/csw/bin/gar -DCMAKE_BUILD_TYPE=Debug -DAMALGAMATION_BUILD=1 .. && gmake -j2'
+    #     - $SCMD /duckdb/build/test/unittest "~[copy]~[file_system]~[.]"
 
 
     # - os: linux
@@ -358,12 +359,13 @@ matrix:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
         - CC=gcc-10
         - CXX=g++-10
+        - MAKEFLAGS=
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DAMALGAMATION_BUILD=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DAMALGAMATION_BUILD=1 ../.. && travis_wait 30 cmake --build .)
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - git clone https://github.com/sqlancer/sqlancer.git
         - (cd sqlancer && mvn package -q -DskipTests)
@@ -387,6 +389,7 @@ matrix:
         - JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
         - CC=gcc-10
         - CXX=g++-10
+        - MAKEFLAGS=
 
       script:
         - export PATH=$JAVA_HOME/bin:$PATH

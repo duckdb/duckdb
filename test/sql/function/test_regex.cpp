@@ -96,3 +96,80 @@ TEST_CASE("regex replace test", "[regex]") {
 	result = con.Query("SELECT regexp_replace('foobarbaz', 'b..', 'X')");
 	REQUIRE(CHECK_COLUMN(result, 0, {"fooXbaz"}));
 }
+
+TEST_CASE("regex replace with options", "[regex]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// global replace
+	result = con.Query("SELECT regexp_replace('ana ana', 'ana', 'banana', 'g')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"banana banana"}));
+	result = con.Query("SELECT regexp_replace('ANA ana', 'ana', 'banana', 'gi')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"banana banana"}));
+	// case sensitivity
+	result = con.Query("SELECT regexp_replace('ana', 'ana', 'banana', 'c')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"banana"}));
+	result = con.Query("SELECT regexp_replace('ANA', 'ana', 'banana', 'i')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"banana"}));
+	// dot matches newline
+	result = con.Query("SELECT regexp_replace('hello\nworld', '.*', 'x', 'sg')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"x"}));
+	result = con.Query("SELECT regexp_replace('hello\nworld', '.*', 'x', 'ng')");
+	REQUIRE(CHECK_COLUMN(result, 0, {"x\nx"}));
+
+	// this also works with tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(v VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('HELLO');"));
+
+	result = con.Query("SELECT regexp_replace(v, 'h.*', 'world', 'i') FROM test ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {"world", "world"}));
+	result = con.Query("SELECT regexp_replace(v, 'h.*', 'world', 'c') FROM test ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {"HELLO", "world"}));
+	// we cannot use non-constant options (currently)
+	REQUIRE_FAIL(con.Query("SELECT regexp_replace(v, 'h.*', 'world', v) FROM test ORDER BY v"));
+
+	// throw on invalid options
+	REQUIRE_FAIL(con.Query("SELECT regexp_replace('asdf', '.*SD.*', 'a', 'q')"));
+}
+
+TEST_CASE("regex match with options", "[regex]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// case sensitivity
+	result = con.Query("SELECT regexp_matches('asdf', '.*SD.*', 'i')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT regexp_matches('asdf', '.*SD.*', 'c')");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	// dot matches newline
+	result = con.Query("SELECT regexp_matches('hello\nworld', '.*', 's')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT regexp_full_match('hello\nworld', '.*', 'n')");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	// whitespace is ignored
+	result = con.Query("SELECT regexp_matches('asdf', '.*SD.*', ' i 	')");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	// NULL in options is ignored
+	result = con.Query("SELECT regexp_matches('asdf', '.*SD.*', NULL)");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+
+	// this also works with tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test(v VARCHAR);"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('hello'), ('HELLO');"));
+
+	result = con.Query("SELECT regexp_matches(v, 'h.*', 'i') FROM test ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {true, true}));
+	result = con.Query("SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v");
+	REQUIRE(CHECK_COLUMN(result, 0, {false, true}));
+	// we cannot use non-constant options (currently)
+	REQUIRE_FAIL(con.Query("SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v"));
+
+	// throw on invalid options
+	REQUIRE_FAIL(con.Query("SELECT regexp_matches('asdf', '.*SD.*', 'q')"));
+	// can only use "g" with regexp replace
+	REQUIRE_FAIL(con.Query("SELECT regexp_matches('asdf', '.*SD.*', 'g')"));
+}
