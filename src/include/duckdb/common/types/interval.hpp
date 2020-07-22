@@ -22,10 +22,12 @@ public:
 	static constexpr const int32_t MONTHS_PER_YEAR = 12;
 	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
 	static constexpr const int32_t DAYS_PER_WEEK = 7;
-	static constexpr const int64_t MSECS_PER_DAY = 86400000;
-	static constexpr const int64_t MSECS_PER_HOUR = 3600000;
-	static constexpr const int64_t MSECS_PER_MINUTE = 60000;
+	static constexpr const int64_t DAYS_PER_MONTH = 30; // only used for comparison purposes, in which case a month counts as 30 days
 	static constexpr const int64_t MSECS_PER_SEC = 1000;
+	static constexpr const int64_t MSECS_PER_MINUTE = MSECS_PER_SEC * 60;
+	static constexpr const int64_t MSECS_PER_HOUR = MSECS_PER_MINUTE * 60;
+	static constexpr const int64_t MSECS_PER_DAY = MSECS_PER_HOUR * 24;
+	static constexpr const int64_t MSECS_PER_MONTH = MSECS_PER_DAY * DAYS_PER_MONTH;
 	static constexpr const int32_t SECS_PER_MINUTE = 60;
 	static constexpr const int32_t MINS_PER_HOUR = 60;
 	static constexpr const int32_t HOURS_PER_DAY = 24;
@@ -40,5 +42,9 @@ public:
 
 	//! Returns the difference between two timestamps
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
+
+	//! Comparison operators
+	static bool GreaterThan(interval_t left, interval_t right);
+	static bool GreaterThanEquals(interval_t left, interval_t right);
 };
 } // namespace duckdb

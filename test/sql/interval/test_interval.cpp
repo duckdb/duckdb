@@ -208,3 +208,61 @@ TEST_CASE("Test interval addition/subtraction", "[interval]") {
 	result = con.Query("SELECT TIMESTAMP '1992-01-01 10:00:00' - INTERVAL '1' DAY");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1991, 12, 31, 10, 0, 0, 0)}));
 }
+
+TEST_CASE("Test storage for interval type", "[interval]") {
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_interval_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE interval (t INTERVAL);"));
+		REQUIRE_NO_FAIL(con.Query(
+		    "INSERT INTO interval VALUES (INTERVAL '1' DAY), (NULL), (INTERVAL '3 months 2 days 5 seconds')"));
+	}
+	// reload the database from disk
+	for (idx_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT t FROM interval ORDER BY t;");
+		REQUIRE(CHECK_COLUMN(result, 0,
+		                     {Value(), Value::INTERVAL(0, 1, 0), Value::INTERVAL(3, 2, 5000)}));
+	}
+	DeleteDatabase(storage_database);
+}
+
+TEST_CASE("Test interval comparisons", "[interval]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// 30 days = 1 month for ordering purposes
+	result = con.Query("SELECT INTERVAL '30' DAY > INTERVAL '1' MONTH");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.Query("SELECT INTERVAL '30' DAY >= INTERVAL '1' MONTH");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT INTERVAL '31' DAY > INTERVAL '1' MONTH");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT INTERVAL '2' DAY TO HOUR > INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT INTERVAL '1' DAY TO HOUR >= INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	result = con.Query("SELECT INTERVAL '1' HOUR < INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+	result = con.Query("SELECT INTERVAL '30' HOUR <= INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+
+	result = con.Query("SELECT INTERVAL '1' HOUR = INTERVAL '1' HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+
+	// for equality purposes 30 days is different from one month
+	result = con.Query("SELECT INTERVAL '30' DAY = INTERVAL '1' MONTH");
+	REQUIRE(CHECK_COLUMN(result, 0, {false}));
+	result = con.Query("SELECT INTERVAL '1' YEAR = INTERVAL '12' MONTH");
+	REQUIRE(CHECK_COLUMN(result, 0, {true}));
+}

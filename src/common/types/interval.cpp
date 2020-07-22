@@ -375,5 +375,46 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	return interval;
 }
 
+static void normalize_interval_entries(interval_t input, int64_t &months, int64_t &days, int64_t &msecs) {
+	int64_t extra_months_d = input.days / Interval::DAYS_PER_MONTH;
+	int64_t extra_months_ms = input.msecs / Interval::MSECS_PER_MONTH;
+	input.days -= extra_months_d * Interval::DAYS_PER_MONTH;
+	input.msecs -= extra_months_ms * Interval::MSECS_PER_MONTH;
+
+	int64_t extra_days_ms = input.msecs / Interval::MSECS_PER_DAY;
+	input.msecs -= extra_days_ms * Interval::MSECS_PER_DAY;
+
+	months = input.months + extra_months_d + extra_months_ms;
+	days = input.days + extra_days_ms;
+	msecs = input.msecs;
+}
+
+template<bool GREATER_EQUAL>
+static bool interval_gt_gte(interval_t left, interval_t right) {
+	int64_t lmonths, ldays, lmsecs;
+	int64_t rmonths, rdays, rmsecs;
+	normalize_interval_entries(left, lmonths, ldays, lmsecs);
+	normalize_interval_entries(right, rmonths, rdays, rmsecs);
+
+	if (lmonths > rmonths) {
+		return true;
+	} else if (lmonths < rmonths) {
+		return false;
+	}
+	if (ldays > rdays) {
+		return true;
+	} else if (ldays < rdays) {
+		return false;
+	}
+	return GREATER_EQUAL ? lmsecs >= rmsecs : lmsecs > rmsecs;
+}
+
+bool Interval::GreaterThan(interval_t left, interval_t right) {
+	return interval_gt_gte<false>(left, right);
+}
+
+bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
+	return interval_gt_gte<true>(left, right);
+}
 
 }

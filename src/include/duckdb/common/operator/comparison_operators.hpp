@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 #include <cstring>
 
@@ -110,17 +111,15 @@ template <> inline bool NotEquals::Operation(interval_t left, interval_t right) 
 	return !Equals::Operation(left, right);
 }
 template <> inline bool GreaterThan::Operation(interval_t left, interval_t right) {
-	// FIXME
-	return false;
+	return Interval::GreaterThan(left, right);
 }
 template <> inline bool GreaterThanEquals::Operation(interval_t left, interval_t right) {
-	// FIXME
-	return false;
+	return Interval::GreaterThanEquals(left, right);
 }
 template <> inline bool LessThan::Operation(interval_t left, interval_t right) {
-	return !GreaterThanEquals::Operation(right, left);
+	return GreaterThan::Operation(right, left);
 }
 template <> inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
-	return !GreaterThan::Operation(right, left);
+	return GreaterThanEquals::Operation(right, left);
 }
 } // namespace duckdb

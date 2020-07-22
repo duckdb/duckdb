@@ -447,6 +447,9 @@ void Vector::Normalify(idx_t count) {
 		case TypeId::POINTER:
 			flatten_constant_vector_loop<uintptr_t>(data, old_data, count);
 			break;
+		case TypeId::INTERVAL:
+			flatten_constant_vector_loop<interval_t>(data, old_data, count);
+			break;
 		case TypeId::VARCHAR:
 			flatten_constant_vector_loop<string_t>(data, old_data, count);
 			break;

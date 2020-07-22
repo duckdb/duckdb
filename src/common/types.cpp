@@ -154,7 +154,7 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 bool TypeIsConstantSize(TypeId type) {
 	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
 	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
-	       type == TypeId::POINTER;
+	       type == TypeId::POINTER || type == TypeId::INTERVAL;
 }
 bool TypeIsIntegral(TypeId type) {
 	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER;
