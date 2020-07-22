@@ -423,7 +423,7 @@ private:
 		for (idx_t i = 0; i < count; i++) {
 			if (col_data.defined_buf.ptr[i]) {
 				auto offset = col_data.offset_buf.read<int32_t>();
-				if (offset > col_data.dict_size) {
+				if ((idx_t) offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
 					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
 					                    ". Corrupt file?");
@@ -686,7 +686,7 @@ private:
 			data.current_group++;
 			data.group_offset = 0;
 
-			if (data.current_group == data.file_meta_data.row_groups.size()) {
+			if ((idx_t) data.current_group == data.file_meta_data.row_groups.size()) {
 				data.finished = true;
 				return;
 			}
@@ -790,7 +790,7 @@ private:
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
 								auto offset = col_data.offset_buf.read<int32_t>();
-								if (offset >= col_data.string_collection->count) {
+								if ((idx_t) offset >= col_data.string_collection->count) {
 									throw runtime_error("string dictionary offset out of bounds");
 								}
 								auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
@@ -816,7 +816,7 @@ private:
 						// bit packed this
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
 						int byte_pos = 0;
-						for (int32_t i = 0; i < current_batch_size; i++) {
+						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (!col_data.defined_buf.ptr[i]) {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 								continue;
