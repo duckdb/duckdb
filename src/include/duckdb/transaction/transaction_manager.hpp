@@ -10,10 +10,10 @@
 
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <atomic>
-#include <memory>
-#include <mutex>
 
 namespace duckdb {
 
@@ -67,7 +67,7 @@ private:
 	//! Catalog sets
 	vector<StoredCatalogSet> old_catalog_sets;
 	//! The lock used for transaction operations
-	std::mutex transaction_lock;
+	mutex transaction_lock;
 	//! The storage manager
 	StorageManager &storage;
 };

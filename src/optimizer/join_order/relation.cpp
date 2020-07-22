@@ -2,10 +2,10 @@
 #include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
-#include <string>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
@@ -142,4 +142,6 @@ JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinR
 		}
 	}
 	return GetJoinRelation(move(relations), count);
+}
+
 }

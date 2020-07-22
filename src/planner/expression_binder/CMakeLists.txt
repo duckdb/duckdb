@@ -1,4 +1,4 @@
-add_library(duckdb_expression_binders
+add_library_unity(duckdb_expression_binders
                   OBJECT
                   aggregate_binder.cpp
                   alter_binder.cpp

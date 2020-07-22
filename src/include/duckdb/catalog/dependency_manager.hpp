@@ -11,8 +11,6 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include <mutex>
-
 namespace duckdb {
 class Catalog;
 class Transaction;

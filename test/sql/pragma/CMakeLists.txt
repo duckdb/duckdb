@@ -1,4 +1,4 @@
-add_library(test_sql_pragma
+add_library_unity(test_sql_pragma
                   OBJECT
                   test_pragma.cpp
                   test_show_tables.cpp

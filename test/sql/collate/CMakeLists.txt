@@ -1,4 +1,4 @@
-add_library(test_sql_collate
+add_library_unity(test_sql_collate
                   OBJECT
                   test_collate.cpp
                   test_strip_accents.cpp)

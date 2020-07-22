@@ -9,3 +9,4 @@ configure
 ^tic\.R$
 ^_pkgdown\.yml$
 ^docs$
+build-*

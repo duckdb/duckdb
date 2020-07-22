@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #include "parquet-extension.hpp"
 
@@ -718,7 +719,7 @@ private:
 			data.current_group++;
 			data.group_offset = 0;
 
-			if ((uint64_t)data.current_group == data.file_meta_data.row_groups.size()) {
+			if ((idx_t) data.current_group == data.file_meta_data.row_groups.size()) {
 				data.finished = true;
 				return;
 			}
@@ -823,7 +824,7 @@ private:
 							if (col_data.defined_buf.ptr[i]) {
 								auto offset = col_data.offset_buf.read<uint32_t>();
 								if (offset >= col_data.string_collection->count) {
-									throw runtime_error("string dictionary offset out of bounds");
+        							throw runtime_error("string dictionary offset out of bounds");
 								}
 								auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
 								auto &vec = chunk->data[0];

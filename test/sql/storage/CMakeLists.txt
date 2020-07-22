@@ -1,5 +1,5 @@
 if(NOT WIN32 AND NOT SUN)
-  add_library(test_sql_storage
+  add_library_unity(test_sql_storage
                     OBJECT
                     test_buffer_manager.cpp
                     test_constraints.cpp
@@ -19,7 +19,7 @@ if(NOT WIN32 AND NOT SUN)
                     test_storage_scan.cpp
                     test_database_size.cpp)
 else()
-  add_library(test_sql_storage
+  add_library_unity(test_sql_storage
                     OBJECT
                     test_buffer_manager.cpp
                     test_constraints.cpp

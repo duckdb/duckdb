@@ -11,15 +11,13 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/thread.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
-
-#include <queue>
 
 namespace duckdb {
 
 class Pipeline;
 class Executor;
-class ClientContext;
 
 struct Semaphore;
 

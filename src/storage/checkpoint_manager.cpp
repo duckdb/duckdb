@@ -52,7 +52,7 @@ void CheckpointManager::CreateCheckpoint() {
 
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
-	database.catalog->schemas.Scan(*transaction,
+	database.catalog->schemas->Scan(*transaction,
 	                               [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas

@@ -2,8 +2,9 @@
 #include "utf8proc_wrapper.h"
 #include "utf8proc.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 // This function efficiently checks if a string is valid UTF8.
 // It was originally written by Sjoerd Mullender.
@@ -84,21 +85,23 @@ size_t Utf8Proc::PreviousGraphemeCluster(const char *s, size_t len, size_t cpos)
 	}
 }
 
+}
+
 size_t utf8proc_next_grapheme_cluster(const char *s, size_t len, size_t pos) {
-	return Utf8Proc::NextGraphemeCluster(s, len, pos);
+	return duckdb::Utf8Proc::NextGraphemeCluster(s, len, pos);
 }
 
 size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos) {
-	return Utf8Proc::PreviousGraphemeCluster(s, len, pos);
+	return duckdb::Utf8Proc::PreviousGraphemeCluster(s, len, pos);
 }
 
 size_t utf8proc_render_width(const char *s, size_t len, size_t pos) {
 	int sz;
-	auto codepoint = utf8proc_codepoint(s + pos, sz);
-	auto properties = utf8proc_get_property(codepoint);
+	auto codepoint = duckdb::utf8proc_codepoint(s + pos, sz);
+	auto properties = duckdb::utf8proc_get_property(codepoint);
 	return properties->charwidth;
 }
 
 int utf8proc_is_valid(const char *s, size_t len) {
-	return Utf8Proc::IsValid(s, len) ? 1 : 0;
+	return duckdb::Utf8Proc::IsValid(s, len) ? 1 : 0;
 }

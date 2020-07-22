@@ -1,5 +1,6 @@
 #include "duckdb/main/relation/subquery_relation.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 

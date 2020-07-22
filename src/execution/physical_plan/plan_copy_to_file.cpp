@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto plan = CreatePlan(*op.children[0]);
 	// COPY from select statement to file
-	auto copy = make_unique<PhysicalCopyToFile>(op, move(op.info));
+	auto copy = make_unique<PhysicalCopyToFile>(op.types, move(op.info));
 	copy->names = op.names;
 	copy->sql_types = op.sql_types;
 

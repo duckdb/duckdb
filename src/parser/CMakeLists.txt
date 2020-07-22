@@ -9,7 +9,7 @@ add_subdirectory(statement)
 add_subdirectory(tableref)
 add_subdirectory(transform)
 
-add_library(duckdb_parser
+add_library_unity(duckdb_parser
                   OBJECT
                   base_expression.cpp
                   column_definition.cpp

@@ -34,7 +34,7 @@ static void pragma_collate_info(ClientContext &context, vector<Value> &input, Da
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = Transaction::GetTransaction(context);
-		Catalog::GetCatalog(context).schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->collations.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});

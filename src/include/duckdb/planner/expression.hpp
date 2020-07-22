@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/base_expression.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 //!  The Expression class represents a bound Expression with a return type
