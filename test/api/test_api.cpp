@@ -60,7 +60,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
-	bool correct;
+	bool correct = true;
 	auto background_thread = thread(long_running_query, conn.get(), &correct);
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));

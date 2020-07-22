@@ -55,6 +55,7 @@
 
 // DuckDB change:
 #define UTF8PROC_STATIC
+namespace duckdb {
 
 /** @name API version
  *
@@ -751,5 +752,5 @@ UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC_Casefold(const utf8proc_uint8
 //#ifdef __cplusplus
 //}
 //#endif
-
+}
 #endif
