@@ -217,6 +217,10 @@ template <> timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
 }
 
+template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right) {
+	return Interval::GetDifference(left, right);
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
@@ -228,6 +232,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	// we can subtract timestamps from each other
+	functions.AddFunction(ScalarFunction({SQLType::TIMESTAMP, SQLType::TIMESTAMP}, SQLType::INTERVAL,
+	                                     ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>));
 	// we can subtract intervals from each other
 	functions.AddFunction(ScalarFunction({SQLType::INTERVAL, SQLType::INTERVAL}, SQLType::INTERVAL,
 										ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>));

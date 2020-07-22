@@ -50,8 +50,8 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	REQUIRE_FAIL(con.Query("SELECT t*t FROM timestamp"));
 	REQUIRE_FAIL(con.Query("SELECT t/t FROM timestamp"));
 	REQUIRE_FAIL(con.Query("SELECT t%t FROM timestamp"));
-	// FIXME: we can subtract timestamps!
-	// REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
+	// we can subtract timestamps!
+	REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
 
 	// test YEAR function
 	result = con.Query("SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01');");
@@ -215,6 +215,19 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 						}));
 
 	result = con.Query("SELECT AGE(t1, t2) FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {
+		Value::INTERVAL(43 * Interval::MONTHS_PER_YEAR + 9, 27, 0),
+		Value::INTERVAL(0, 8, 0),
+		Value::INTERVAL(3, 24, 0),
+		Value::INTERVAL(0, 0, 0),
+		Value(),
+		Value(),
+		Value()}));
+
+	// age is equivalent to subtraction
+	result = con.Query("SELECT t1 - t2 FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
 	    {
