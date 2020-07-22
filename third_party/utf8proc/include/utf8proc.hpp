@@ -114,21 +114,22 @@ typedef bool utf8proc_bool;
 #endif
 #include <limits.h>
 
-#ifdef UTF8PROC_STATIC
-#  define UTF8PROC_DLLEXPORT
-#else
-#  ifdef _WIN32
-#    ifdef UTF8PROC_EXPORTS
-#      define UTF8PROC_DLLEXPORT __declspec(dllexport)
-#    else
-#      define UTF8PROC_DLLEXPORT __declspec(dllimport)
-#    endif
-#  elif __GNUC__ >= 4
-#    define UTF8PROC_DLLEXPORT __attribute__ ((visibility("default")))
-#  else
-#    define UTF8PROC_DLLEXPORT
-#  endif
-#endif
+#define UTF8PROC_DLLEXPORT
+// #ifdef UTF8PROC_STATIC
+// #  define UTF8PROC_DLLEXPORT
+// #else
+// #  ifdef _WIN32
+// #    ifdef UTF8PROC_EXPORTS
+// #      define UTF8PROC_DLLEXPORT __declspec(dllexport)
+// #    else
+// #      define UTF8PROC_DLLEXPORT __declspec(dllimport)
+// #    endif
+// #  elif __GNUC__ >= 4
+// #    define UTF8PROC_DLLEXPORT __attribute__ ((visibility("default")))
+// #  else
+// #    define UTF8PROC_DLLEXPORT
+// #  endif
+// #endif
 
 namespace duckdb {
 
@@ -405,7 +406,7 @@ typedef utf8proc_int32_t (*utf8proc_custom_func)(utf8proc_int32_t codepoint, voi
  * Array containing the byte lengths of a UTF-8 encoded codepoint based
  * on the first byte.
  */
-UTF8PROC_DLLEXPORT extern const utf8proc_int8_t utf8proc_utf8class[256];
+// UTF8PROC_DLLEXPORT extern const utf8proc_int8_t utf8proc_utf8class[256];
 
 /**
  * Returns the utf8proc API version as a string MAJOR.MINOR.PATCH
