@@ -78,7 +78,7 @@ def generate_amalgamation(source_file, header_file):
 
     rewrite_prefix('third_party/snappy', ['snappy-stubs-public.h', 'snappy.h'])
 
-    rewrite_prefix('third_party/miniz', ['miniz.hpp', 'miniz.cpp'])
+    rewrite_prefix('third_party/miniz', ['miniz.hpp']) # miniz.cpp is already in duckdb.cpp
 
     rewrite('third_party/utf8proc/include/utf8proc_wrapper.hpp', temp_source)
 
