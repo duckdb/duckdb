@@ -22,6 +22,7 @@ public:
 	static constexpr const int32_t MONTHS_PER_YEAR = 12;
 	static constexpr const int32_t MONTHS_PER_QUARTER = 3;
 	static constexpr const int32_t DAYS_PER_WEEK = 7;
+	static constexpr const int64_t MSECS_PER_DAY = 86400000;
 	static constexpr const int64_t MSECS_PER_HOUR = 3600000;
 	static constexpr const int64_t MSECS_PER_MINUTE = 60000;
 	static constexpr const int64_t MSECS_PER_SEC = 1000;
@@ -29,12 +30,6 @@ public:
 	static constexpr const int32_t MINS_PER_HOUR = 60;
 	static constexpr const int32_t HOURS_PER_DAY = 24;
 
-	// Used to check amount of days per month in common year and leap year
-	static constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
-										{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
-	static constexpr bool isleap(int16_t year) {
-		return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
-	}
 public:
 	//! Convert a string to an interval object
 	static bool FromString(string str, interval_t &result);

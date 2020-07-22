@@ -79,9 +79,19 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	// but not multiply
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';"));
 
-	// we can add them to dates...
-	// we can add them to times...
-	// we can add them to timestamps...
+	// we can, however, multiply/divide intervals by integers
+	result = con.Query("SELECT INTERVAL '1 year 2 days 2 seconds' * 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(24, 4, 4 * 1000)}));
+	// multiplication can be done both ways
+	result = con.Query("SELECT 2 * INTERVAL '1 year 2 days 2 seconds';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(24, 4, 4 * 1000)}));
+	result = con.Query("SELECT INTERVAL '1 year 2 days 2 seconds' / 2;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(6, 1, 1 * 1000)}));
+	// division cannot!
+	REQUIRE_FAIL(con.Query("SELECT 2 / INTERVAL '1 year 2 days 2 seconds';"));
+	// division by zero
+	result = con.Query("SELECT INTERVAL '1 year 2 days 2 seconds' / 0;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value()}));
 
 	// invalid intervals
 	// empty interval
@@ -119,3 +129,82 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100 months' DAY;"));
 }
 
+
+TEST_CASE("Test interval addition/subtraction", "[interval]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// we can add/subtract intervals to/from dates
+	result = con.Query("SELECT DATE '1992-03-01' + INTERVAL '1' YEAR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 3, 1)}));
+	// check a bunch of different months to test proper month looping behavior
+	for(int i = 0; i <= 12; i++) {
+		result = con.Query("SELECT DATE '1992-03-01' + INTERVAL '" + to_string(i) + "' MONTH");
+		if (i + 3 <= 12) {
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 3 + i, 1)}));
+		} else {
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, i - (12 - 3), 1)}));
+		}
+		result = con.Query("SELECT DATE '1992-03-01' - INTERVAL '" + to_string(i) + "' MONTH");
+		if (3 - i >= 1) {
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 3 - i, 1)}));
+		} else {
+			REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1991, 12 - (i - 3), 1)}));
+		}
+	}
+	result = con.Query("SELECT DATE '1992-03-01' + INTERVAL '10' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 3, 11)}));
+	result = con.Query("SELECT DATE '1992-03-01' - INTERVAL '10' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1992, 2, 20)}));
+	result = con.Query("SELECT DATE '1993-03-01' - INTERVAL '10' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 2, 19)}));
+	// small times have no impact on date
+	result = con.Query("SELECT DATE '1993-03-01' - INTERVAL '1' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 3, 1)}));
+	// small seconds have no impact on DATE
+	result = con.Query("SELECT DATE '1993-03-01' + INTERVAL '1' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 3, 1)}));
+	result = con.Query("SELECT DATE '1993-03-01' - INTERVAL '1' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 3, 1)}));
+	// but a large amount of seconds does have an impact
+	result = con.Query("SELECT DATE '1993-03-01' + INTERVAL '1000000' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 3, 12)}));
+	result = con.Query("SELECT DATE '1993-03-01' - INTERVAL '1000000' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(1993, 2, 18)}));
+	// we cannot subtract dates from intervals
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '1000000' SECOND - DATE '1993-03-01'"));
+
+	// we can add/subtract them to/from times
+	result = con.Query("SELECT TIME '10:00:00' + INTERVAL '5' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(10, 0, 5, 0)}));
+	result = con.Query("SELECT INTERVAL '5' SECOND + TIME '10:00:00'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(10, 0, 5, 0)}));
+	result = con.Query("SELECT TIME '10:00:00' - INTERVAL '5' SECOND");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(9, 59, 55, 0)}));
+	// adding large amounts does nothing
+	result = con.Query("SELECT TIME '10:00:00' + INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(10, 0, 0, 0)}));
+	result = con.Query("SELECT TIME '10:00:00' + INTERVAL '1' DAY TO HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(10, 0, 0, 0)}));
+	result = con.Query("SELECT TIME '10:00:00' - INTERVAL '1' DAY TO HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(10, 0, 0, 0)}));
+	// test wrapping behavior
+	result = con.Query("SELECT TIME '23:00:00' + INTERVAL '1' HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(0, 0, 0, 0)}));
+	result = con.Query("SELECT TIME '00:00:00' - INTERVAL '1' HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(23, 0, 0, 0)}));
+	result = con.Query("SELECT TIME '00:00:00' + INTERVAL '-1' HOUR");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIME(23, 0, 0, 0)}));
+
+	// we can add/subtract them to/from timestamps
+	result = con.Query("SELECT TIMESTAMP '1992-01-01 10:00:00' + INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1992, 1, 2, 10, 0, 0, 0)}));
+	result = con.Query("SELECT INTERVAL '1' DAY + TIMESTAMP '1992-01-01 10:00:00'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1992, 1, 2, 10, 0, 0, 0)}));
+	result = con.Query("SELECT TIMESTAMP '1992-01-01 10:00:05' + INTERVAL '17 years 3 months 1 day 2 hours 1 minute 57 seconds'");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(2009, 4, 2, 12, 2, 2, 0)}));
+	result = con.Query("SELECT TIMESTAMP '1992-01-01 10:00:00' - INTERVAL '1' DAY");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1991, 12, 31, 10, 0, 0, 0)}));
+}

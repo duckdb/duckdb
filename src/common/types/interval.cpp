@@ -274,6 +274,13 @@ string Interval::ToString(interval_t date) {
 	return result;
 }
 
+// Used to check amount of days per month in common year and leap year
+constexpr int days_per_month[2][13] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0},
+									{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 0}};
+constexpr bool isleap(int16_t year) {
+	return (((year) % 4) == 0 && (((year) % 100) != 0 || ((year) % 400) == 0));
+}
+
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	// First extract the dates
 	auto date1 = Timestamp::GetDate(timestamp_1);
