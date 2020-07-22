@@ -15,6 +15,8 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class ExpressionExecutor;
 class PhysicalOperator;
