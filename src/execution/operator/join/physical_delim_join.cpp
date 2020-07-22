@@ -16,9 +16,9 @@ public:
 	unique_ptr<PhysicalOperatorState> join_state;
 };
 
-PhysicalDelimJoin::PhysicalDelimJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> original_join,
+PhysicalDelimJoin::PhysicalDelimJoin(vector<TypeId> types, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans)
-    : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, op.types), join(move(original_join)) {
+    : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types)), join(move(original_join)) {
 	assert(delim_scans.size() > 0);
 	assert(join->children.size() == 2);
 	// for any duplicate eliminated scans in the RHS, point them to the duplicate eliminated chunk that we create here

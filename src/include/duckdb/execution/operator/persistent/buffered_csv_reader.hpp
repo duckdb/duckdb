@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include <sstream>
 
 #define SAMPLE_CHUNK_SIZE 100
 #if STANDARD_VECTOR_SIZE < SAMPLE_CHUNK_SIZE

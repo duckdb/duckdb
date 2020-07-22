@@ -1,4 +1,4 @@
-add_library(duckdb_func_nested
+add_library_unity(duckdb_func_nested
                   OBJECT
                   list_value.cpp
                   struct_extract.cpp

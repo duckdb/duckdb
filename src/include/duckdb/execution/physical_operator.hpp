@@ -12,9 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {

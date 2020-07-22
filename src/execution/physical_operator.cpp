@@ -1,5 +1,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/client_context.hpp"

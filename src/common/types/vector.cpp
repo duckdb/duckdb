@@ -9,6 +9,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/sel_cache.hpp"
 
 using namespace std;
 
@@ -101,19 +102,19 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	vector_type = VectorType::DICTIONARY_VECTOR;
 }
 
-void Vector::Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache) {
+void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	if (vector_type == VectorType::DICTIONARY_VECTOR) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto target_data = current_sel.data();
-		auto entry = cache.find(target_data);
-		if (entry != cache.end()) {
+		auto entry = cache.cache.find(target_data);
+		if (entry != cache.cache.end()) {
 			// cached entry exists: use that
 			this->buffer = entry->second;
 		} else {
 			Slice(sel, count);
-			cache[target_data] = this->buffer;
+			cache.cache[target_data] = this->buffer;
 		}
 	} else {
 		Slice(sel, count);

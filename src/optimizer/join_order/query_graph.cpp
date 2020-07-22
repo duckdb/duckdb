@@ -2,6 +2,7 @@
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/assert.hpp"
 
 using namespace duckdb;
 using namespace std;

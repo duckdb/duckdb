@@ -16,8 +16,8 @@ namespace duckdb {
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
-	PhysicalCopyToFile(LogicalOperator &op, unique_ptr<CopyInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, op.types), info(move(info)) {
+	PhysicalCopyToFile(vector<TypeId> types, unique_ptr<CopyInfo> info)
+	    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types)), info(move(info)) {
 	}
 
 	//! Settings for the COPY statement

@@ -8,7 +8,6 @@ if(NOT AMALGAMATION_BUILD)
   add_subdirectory(re2)
   add_subdirectory(miniz)
   add_subdirectory(utf8proc)
-
 endif()
 
 if(NOT WIN32 AND NOT SUN AND ${BUILD_UNITTESTS})

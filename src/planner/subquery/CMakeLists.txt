@@ -1,4 +1,4 @@
-add_library(duckdb_planner_subquery
+add_library_unity(duckdb_planner_subquery
                   OBJECT
                   flatten_dependent_join.cpp
                   has_correlated_expressions.cpp

@@ -10,12 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 
-#include <chrono>  // chrono::system_clock
-#include <ctime>   // localtime
-#include <iomanip> // put_time
-#include <sstream> // stringstream
-#include <string>  // string
-
 namespace duckdb {
 
 struct timestamp_struct {

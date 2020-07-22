@@ -10,8 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-
-#include <type_traits>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

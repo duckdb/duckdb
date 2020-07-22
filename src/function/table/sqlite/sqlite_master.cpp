@@ -7,6 +7,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 using namespace std;
 
@@ -71,7 +72,7 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 	if (!data.initialized) {
 		// scan all the schemas
 		auto &transaction = Transaction::GetTransaction(context);
-		Catalog::GetCatalog(context).schemas.Scan(transaction, [&](CatalogEntry *entry) {
+		Catalog::GetCatalog(context).schemas->Scan(transaction, [&](CatalogEntry *entry) {
 			auto schema = (SchemaCatalogEntry *)entry;
 			schema->tables.Scan(transaction, [&](CatalogEntry *entry) { data.entries.push_back(entry); });
 		});
