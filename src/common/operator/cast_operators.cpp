@@ -177,9 +177,9 @@ template <class T> static T try_strict_cast_string(string_t input) {
 }
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
-static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
+static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
-	while (buf[pos]) {
+	while(pos < len) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
@@ -190,7 +190,7 @@ static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
-				while (buf[pos]) {
+				while(pos < len) {
 					if (!std::isdigit((unsigned char)buf[pos++])) {
 						return false;
 					}
@@ -199,7 +199,7 @@ static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
 			}
 			if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
-				while (buf[++pos]) {
+				while(++pos < len) {
 					if (!std::isspace((unsigned char)buf[pos])) {
 						return false;
 					}
@@ -212,11 +212,11 @@ static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
 					int64_t exponent = 0;
 					int negative = buf[pos] == '-';
 					if (negative) {
-						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, exponent, strict)) {
+						if (!IntegerCastLoop<int64_t, true, false>(buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					} else {
-						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, exponent, strict)) {
+						if (!IntegerCastLoop<int64_t, false, false>(buf + pos, len - pos, exponent, strict)) {
 							return false;
 						}
 					}
@@ -246,21 +246,22 @@ static bool IntegerCastLoop(const char *buf, T &result, bool strict) {
 	return pos > (NEGATIVE ? 1 : 0);
 }
 
-template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, T &result, bool strict) {
-	if (!*buf) {
-		return false;
-	}
+template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while (std::isspace((unsigned char)*buf)) {
+	while(len > 0 && std::isspace(*buf)) {
 		buf++;
+		len--;
+	}
+	if (len == 0) {
+		return false;
 	}
 	int negative = *buf == '-';
 
 	result = 0;
 	if (!negative) {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, result, strict);
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, len, result, strict);
 	} else {
-		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, result, strict);
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, len, result, strict);
 	}
 }
 
@@ -289,16 +290,16 @@ template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	return true;
 }
 template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
-	return TryIntegerCast<int8_t>(input.GetData(), result, strict);
+	return TryIntegerCast<int8_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict) {
-	return TryIntegerCast<int16_t>(input.GetData(), result, strict);
+	return TryIntegerCast<int16_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict) {
-	return TryIntegerCast<int32_t>(input.GetData(), result, strict);
+	return TryIntegerCast<int32_t>(input.GetData(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict) {
-	return TryIntegerCast<int64_t>(input.GetData(), result, strict);
+	return TryIntegerCast<int64_t>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx_t decimal, idx_t decimal_factor) {
@@ -311,11 +312,11 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx
 	}
 }
 
-template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T &result, bool strict) {
+template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
-	while (buf[pos]) {
+	while (pos < len) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
@@ -329,7 +330,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				continue;
 			} else if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
-				while (buf[++pos]) {
+				while (++pos < len) {
 					if (!std::isspace((unsigned char)buf[pos])) {
 						return false;
 					}
@@ -341,7 +342,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, T 
 				// parse an integer, this time not allowing another exponent
 				pos++;
 				int64_t exponent;
-				if (!TryIntegerCast<int64_t, false>(buf + pos, exponent, strict)) {
+				if (!TryIntegerCast<int64_t, false>(buf + pos, len - pos, exponent, strict)) {
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
@@ -377,23 +378,24 @@ template <> bool CheckDoubleValidity(double value) {
 	return Value::DoubleIsValid(value);
 }
 
-template <class T> static bool TryDoubleCast(const char *buf, T &result, bool strict) {
-	if (!*buf) {
-		return false;
-	}
+template <class T> static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while (std::isspace((unsigned char)*buf)) {
+	while(len > 0 && std::isspace(*buf)) {
 		buf++;
+		len--;
+	}
+	if (len == 0) {
+		return false;
 	}
 	int negative = *buf == '-';
 
 	result = 0;
 	if (!negative) {
-		if (!DoubleCastLoop<T, false>(buf, result, strict)) {
+		if (!DoubleCastLoop<T, false>(buf, len, result, strict)) {
 			return false;
 		}
 	} else {
-		if (!DoubleCastLoop<T, true>(buf, result, strict)) {
+		if (!DoubleCastLoop<T, true>(buf, len, result, strict)) {
 			return false;
 		}
 	}
@@ -404,10 +406,10 @@ template <class T> static bool TryDoubleCast(const char *buf, T &result, bool st
 }
 
 template <> bool TryCast::Operation(string_t input, float &result, bool strict) {
-	return TryDoubleCast<float>(input.GetData(), result, strict);
+	return TryDoubleCast<float>(input.GetData(), input.GetSize(), result, strict);
 }
 template <> bool TryCast::Operation(string_t input, double &result, bool strict) {
-	return TryDoubleCast<double>(input.GetData(), result, strict);
+	return TryDoubleCast<double>(input.GetData(), input.GetSize(), result, strict);
 }
 
 template <> bool Cast::Operation(string_t input) {

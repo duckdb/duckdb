@@ -14,6 +14,24 @@ bool Interval::FromString(string str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
 }
 
+template<class T>
+void interval_try_addition(T &target, int64_t input, int64_t multiplier) {
+	if (target >= 0) {
+		if (input > (std::numeric_limits<T>::max() / multiplier) - target) {
+			throw OutOfRangeException("interval value is out of range");
+		}
+	} else {
+		if (input < ((std::numeric_limits<T>::min() / multiplier) - target)) {
+			throw OutOfRangeException("interval value is out of range");
+		}
+	}
+	if (std::is_same<T, int64_t>()) {
+		target += input * multiplier;
+	} else {
+		target += Cast::Operation<int64_t, T>(input * multiplier);
+	}
+}
+
 bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
 	idx_t pos = 0;
 	idx_t start_pos;
@@ -108,43 +126,43 @@ parse_identifier:
 	// add the specifier to the interval
 	switch(specifier) {
 	case DatePartSpecifier::MILLENNIUM:
-		result.months += number * MONTHS_PER_MILLENIUM;
+		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_MILLENIUM);
 		break;
 	case DatePartSpecifier::CENTURY:
-		result.months += number * MONTHS_PER_CENTURY;
+		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_CENTURY);
 		break;
 	case DatePartSpecifier::DECADE:
-		result.months += number * MONTHS_PER_DECADE;
+		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_DECADE);
 		break;
 	case DatePartSpecifier::YEAR:
-		result.months += number * MONTHS_PER_YEAR;
+		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_YEAR);
 		break;
 	case DatePartSpecifier::QUARTER:
-		result.months += number * MONTHS_PER_QUARTER;
+		interval_try_addition<int32_t>(result.months, number, MONTHS_PER_QUARTER);
 		break;
 	case DatePartSpecifier::MONTH:
-		result.months += number;
+		interval_try_addition<int32_t>(result.months, number, 1);
 		break;
 	case DatePartSpecifier::DAY:
-		result.days += number;
-		break;
-	case DatePartSpecifier::MICROSECONDS:
-		result.msecs += number / 1000;
-		break;
-	case DatePartSpecifier::MILLISECONDS:
-		result.msecs += number;
-		break;
-	case DatePartSpecifier::SECOND:
-		result.msecs += number * MSECS_PER_SEC;
-		break;
-	case DatePartSpecifier::MINUTE:
-		result.msecs += number * MSECS_PER_MINUTE;
-		break;
-	case DatePartSpecifier::HOUR:
-		result.msecs += number * MSECS_PER_HOUR;
+		interval_try_addition<int32_t>(result.days, number, 1);
 		break;
 	case DatePartSpecifier::WEEK:
-		result.days += number * DAYS_PER_WEEK;
+		interval_try_addition<int32_t>(result.days, number, DAYS_PER_WEEK);
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+		interval_try_addition<int64_t>(result.msecs, number / 1000, 1);
+		break;
+	case DatePartSpecifier::MILLISECONDS:
+		interval_try_addition<int64_t>(result.msecs, number, 1);
+		break;
+	case DatePartSpecifier::SECOND:
+		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_SEC);
+		break;
+	case DatePartSpecifier::MINUTE:
+		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_MINUTE);
+		break;
+	case DatePartSpecifier::HOUR:
+		interval_try_addition<int64_t>(result.msecs, number, MSECS_PER_HOUR);
 		break;
 	default:
 		return false;

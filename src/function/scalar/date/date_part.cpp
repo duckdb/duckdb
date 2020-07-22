@@ -25,7 +25,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 		return DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
-	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms") {
+	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" || specifier == "msecs") {
 		return DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
