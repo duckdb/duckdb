@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 class Executor;

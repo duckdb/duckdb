@@ -1,4 +1,4 @@
-add_library(
+add_library_unity(
   duckdb_func_date
   OBJECT
   age.cpp

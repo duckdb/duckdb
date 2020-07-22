@@ -8,6 +8,7 @@ imdb: third_party/imdb/data
 GENERATOR=
 FORCE_COLOR=
 WARNINGS_AS_ERRORS=
+DISABLE_UNITY_FLAG=
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
@@ -15,9 +16,10 @@ endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
 endif
-
-EXTENSIONS="-DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_ICU_EXTENSION=TRUE"
-
+ifeq (${DISABLE_UNITY}, 1)
+	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
+endif
+EXTENSIONS=-DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_ICU_EXTENSION=TRUE
 
 clean:
 	rm -rf build
@@ -25,13 +27,13 @@ clean:
 debug:
 	mkdir -p build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 unittest: debug
@@ -52,34 +54,34 @@ release:
 	mkdir -p build/release && \
 	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 ../.. && \
 	cmake --build .
 
 reldebug:
 	mkdir -p build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 amaldebug:
 	mkdir -p build/amaldebug && \
 	python scripts/amalgamation.py && \
 	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DAMALGAMATION_BUILD=1 ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 jdbc:
 	mkdir -p build/release && \
 	python scripts/amalgamation.py && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 ../.. && \
 	cmake --build .
 
 
 jdbcdebug:
 	mkdir -p build/jdbcdebug && \
 	cd build/jdbcdebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) -DJDBC_DRIVER=1 -DENABLE_SANITIZER=FALSE ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${EXTENSIONS} -DJDBC_DRIVER=1 -DENABLE_SANITIZER=FALSE -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
 test_compile: # test compilation of individual cpp files

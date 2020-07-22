@@ -13,6 +13,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 class BufferManager;

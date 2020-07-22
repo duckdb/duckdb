@@ -14,13 +14,16 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
+
 //! Type used for nullmasks
 typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
+
 
 struct VectorData {
 	const SelectionVector *sel;
@@ -31,6 +34,8 @@ struct VectorData {
 class VectorStructBuffer;
 class VectorListBuffer;
 class ChunkCollection;
+
+struct SelCache;
 
 //!  Vector of values of a specified TypeId.
 class Vector {
@@ -83,7 +88,7 @@ public:
 	//! Turns the vector into a dictionary vector with the specified dictionary
 	void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
-	void Slice(const SelectionVector &sel, idx_t count, sel_cache_t &cache);
+	void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.

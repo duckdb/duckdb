@@ -12,8 +12,6 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 
-#include <vector>
-
 namespace duckdb {
 
 class CopyStatement : public SQLStatement {

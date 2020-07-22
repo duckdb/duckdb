@@ -1,4 +1,4 @@
-add_library(duckdb_operator_helper
+add_library_unity(duckdb_operator_helper
                   OBJECT
                   physical_execute.cpp
                   physical_limit.cpp

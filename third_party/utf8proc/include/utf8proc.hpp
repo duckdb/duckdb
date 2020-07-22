@@ -111,6 +111,28 @@ typedef bool utf8proc_bool;
 #  include <stddef.h>
 #  include <stdbool.h>
 #  include <inttypes.h>
+#endif
+#include <limits.h>
+
+#define UTF8PROC_DLLEXPORT
+// #ifdef UTF8PROC_STATIC
+// #  define UTF8PROC_DLLEXPORT
+// #else
+// #  ifdef _WIN32
+// #    ifdef UTF8PROC_EXPORTS
+// #      define UTF8PROC_DLLEXPORT __declspec(dllexport)
+// #    else
+// #      define UTF8PROC_DLLEXPORT __declspec(dllimport)
+// #    endif
+// #  elif __GNUC__ >= 4
+// #    define UTF8PROC_DLLEXPORT __attribute__ ((visibility("default")))
+// #  else
+// #    define UTF8PROC_DLLEXPORT
+// #  endif
+// #endif
+
+namespace duckdb {
+
 typedef int8_t utf8proc_int8_t;
 typedef uint8_t utf8proc_uint8_t;
 typedef int16_t utf8proc_int16_t;
@@ -120,24 +142,6 @@ typedef uint32_t utf8proc_uint32_t;
 typedef size_t utf8proc_size_t;
 typedef ptrdiff_t utf8proc_ssize_t;
 typedef bool utf8proc_bool;
-#endif
-#include <limits.h>
-
-#ifdef UTF8PROC_STATIC
-#  define UTF8PROC_DLLEXPORT
-#else
-#  ifdef _WIN32
-#    ifdef UTF8PROC_EXPORTS
-#      define UTF8PROC_DLLEXPORT __declspec(dllexport)
-#    else
-#      define UTF8PROC_DLLEXPORT __declspec(dllimport)
-#    endif
-#  elif __GNUC__ >= 4
-#    define UTF8PROC_DLLEXPORT __attribute__ ((visibility("default")))
-#  else
-#    define UTF8PROC_DLLEXPORT
-#  endif
-#endif
 
 //#ifdef __cplusplus
 //extern "C" {
@@ -402,7 +406,7 @@ typedef utf8proc_int32_t (*utf8proc_custom_func)(utf8proc_int32_t codepoint, voi
  * Array containing the byte lengths of a UTF-8 encoded codepoint based
  * on the first byte.
  */
-UTF8PROC_DLLEXPORT extern const utf8proc_int8_t utf8proc_utf8class[256];
+// UTF8PROC_DLLEXPORT extern const utf8proc_int8_t utf8proc_utf8class[256];
 
 /**
  * Returns the utf8proc API version as a string MAJOR.MINOR.PATCH
@@ -751,5 +755,5 @@ UTF8PROC_DLLEXPORT utf8proc_uint8_t *utf8proc_NFKC_Casefold(const utf8proc_uint8
 //#ifdef __cplusplus
 //}
 //#endif
-
+}
 #endif

@@ -5,6 +5,8 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

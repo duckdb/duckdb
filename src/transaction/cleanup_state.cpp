@@ -27,7 +27,7 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
 			if (!catalog_entry->parent->child->deleted) {
 				// delete the entry from the dependency manager, if it is not deleted yet
-				catalog_entry->catalog->dependency_manager.EraseObject(catalog_entry->parent->child.get());
+				catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry->parent->child.get());
 			}
 			catalog_entry->parent->child = move(catalog_entry->child);
 		}

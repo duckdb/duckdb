@@ -24,9 +24,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalUnnest::PhysicalUnnest(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+PhysicalUnnest::PhysicalUnnest(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 
 	assert(this->select_list.size() > 0);
 }
