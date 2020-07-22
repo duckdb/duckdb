@@ -43,6 +43,33 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	// result = con.Query("SELECT INTERVAL 'P00-02-00T01:00:01';");
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(2, 0, 60 * 60 * 1000 + 60 * 1000)}));
 
+	result = con.Query("SELECT INTERVAL '90' DAY;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 90, 0)}));
+	result = con.Query("SELECT INTERVAL '90' YEAR;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(12 * 90, 0, 0)}));
+	result = con.Query("SELECT INTERVAL '1' YEAR TO MONTH;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(12, 0, 0)}));
+	result = con.Query("SELECT INTERVAL '90' MONTH;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(90, 0, 0)}));
+	result = con.Query("SELECT INTERVAL '90' SECOND;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 1000)}));
+	result = con.Query("SELECT INTERVAL '90' MINUTE;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '90' MINUTE TO SECOND;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '90' HOUR;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 60 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '90' HOUR TO MINUTE;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 60 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '90' HOUR TO SECOND;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 90 * 60 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '1' DAY TO HOUR;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 24 * 60 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '1' DAY TO MINUTE;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 24 * 60 * 60 * 1000)}));
+	result = con.Query("SELECT INTERVAL '1' DAY TO SECOND;");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 24 * 60 * 60 * 1000)}));
+
 	// we can add together intervals
 	result = con.Query("SELECT INTERVAL '2 month' + INTERVAL '1 month 3 days';");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(3, 3, 0)}));
@@ -63,6 +90,8 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	// no number
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL 'years';"));
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '-years';"));
+	// gibberish
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';"));
 
 	// overflow in year
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000year';"));
@@ -85,5 +114,8 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	REQUIRE_NO_FAIL(con.Query("SELECT INTERVAL '9223372036854775807msecs';"));
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '9223372036854775810msecs';"));
 	REQUIRE_FAIL(con.Query("SELECT INTERVAL '-9223372036854775810msecs';"));
+	// need a number here
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL 'aa' DAY;"));
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100 months' DAY;"));
 }
 
