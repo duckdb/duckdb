@@ -55,7 +55,6 @@
 
 // DuckDB change:
 #define UTF8PROC_STATIC
-namespace duckdb {
 
 /** @name API version
  *
@@ -112,15 +111,6 @@ typedef bool utf8proc_bool;
 #  include <stddef.h>
 #  include <stdbool.h>
 #  include <inttypes.h>
-typedef int8_t utf8proc_int8_t;
-typedef uint8_t utf8proc_uint8_t;
-typedef int16_t utf8proc_int16_t;
-typedef uint16_t utf8proc_uint16_t;
-typedef int32_t utf8proc_int32_t;
-typedef uint32_t utf8proc_uint32_t;
-typedef size_t utf8proc_size_t;
-typedef ptrdiff_t utf8proc_ssize_t;
-typedef bool utf8proc_bool;
 #endif
 #include <limits.h>
 
@@ -139,6 +129,18 @@ typedef bool utf8proc_bool;
 #    define UTF8PROC_DLLEXPORT
 #  endif
 #endif
+
+namespace duckdb {
+
+typedef int8_t utf8proc_int8_t;
+typedef uint8_t utf8proc_uint8_t;
+typedef int16_t utf8proc_int16_t;
+typedef uint16_t utf8proc_uint16_t;
+typedef int32_t utf8proc_int32_t;
+typedef uint32_t utf8proc_uint32_t;
+typedef size_t utf8proc_size_t;
+typedef ptrdiff_t utf8proc_ssize_t;
+typedef bool utf8proc_bool;
 
 //#ifdef __cplusplus
 //extern "C" {
