@@ -53,8 +53,10 @@ struct ModuloOperator {
 
 template <> float AddOperator::Operation(float left, float right);
 template <> double AddOperator::Operation(double left, double right);
+template <> interval_t AddOperator::Operation(interval_t left, interval_t right);
 template <> float SubtractOperator::Operation(float left, float right);
 template <> double SubtractOperator::Operation(double left, double right);
+template <> interval_t SubtractOperator::Operation(interval_t left, interval_t right);
 template <> float MultiplyOperator::Operation(float left, float right);
 template <> double MultiplyOperator::Operation(double left, double right);
 template <> float DivideOperator::Operation(float left, float right);

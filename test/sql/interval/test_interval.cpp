@@ -44,13 +44,13 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(2, 0, 60 * 60 * 1000 + 60 * 1000)}));
 
 	// we can add together intervals
-	// result = con.Query("SELECT INTERVAL '2 month' + INTERVAL '1 month 3 days';");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(3, 3, 0)}));
-	// // or subtract them
-	// result = con.Query("SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';");
-	// REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(1, -3, 0)}));
+	result = con.Query("SELECT INTERVAL '2 month' + INTERVAL '1 month 3 days';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(3, 3, 0)}));
+	// or subtract them
+	result = con.Query("SELECT INTERVAL '2 month' - INTERVAL '1 month 3 days';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(1, -3, 0)}));
 	// but not multiply
-	// REQUIRE_FAIL(con.Query("SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';"));
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '2 month' * INTERVAL '1 month 3 days';"));
 
 	// we can add them to dates...
 	// we can add them to times...
@@ -66,11 +66,11 @@ TEST_CASE("Test basic interval usage", "[interval]") {
 	// FIXME: overflows
 	// what if year + year overflows?
 	// overflow in year
-	// REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000year';"));
-	// // overflow in months
-	// REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000months';"));
-	// // overflow in days
-	// REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000days';"));
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000year';"));
+	// overflow in months
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000months';"));
+	// overflow in days
+	REQUIRE_FAIL(con.Query("SELECT INTERVAL '100000000000000000days';"));
 
 
 }

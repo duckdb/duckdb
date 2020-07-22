@@ -45,10 +45,6 @@ public:
 	static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
 	//! Returns current timestamp
 	static timestamp_t GetCurrentTimestamp();
-	//! Gets the timestamp which correspondes to the difference between the given ones
-	static interval_t GetDifference(timestamp_t timestamp_a, timestamp_t timestamp_b);
-
-	static timestamp_struct IntervalToTimestamp(interval_t &interval);
 
 	// Unix epoch: milliseconds since 1970
 	static int64_t GetEpoch(timestamp_t timestamp);

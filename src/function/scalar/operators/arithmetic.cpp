@@ -55,6 +55,14 @@ template <> double AddOperator::Operation(double left, double right) {
 	return result;
 }
 
+template <> interval_t AddOperator::Operation(interval_t left, interval_t right) {
+	interval_t result;
+	result.months = left.months + right.months;
+	result.days = left.days + right.days;
+	result.msecs = left.msecs + right.msecs;
+	return result;
+}
+
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
@@ -66,6 +74,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::INTEGER, SQLType::DATE}, SQLType::DATE,
 	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::INTERVAL, SQLType::INTERVAL}, SQLType::INTERVAL,
+	                                     ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
@@ -92,6 +102,14 @@ template <> double SubtractOperator::Operation(double left, double right) {
 	return result;
 }
 
+template <> interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
+	interval_t result;
+	result.months = left.months - right.months;
+	result.days = left.days - right.days;
+	result.msecs = left.msecs - right.msecs;
+	return result;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
@@ -102,6 +120,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
+	functions.AddFunction(ScalarFunction({SQLType::INTERVAL, SQLType::INTERVAL}, SQLType::INTERVAL,
+										ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>));
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(

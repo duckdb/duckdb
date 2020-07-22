@@ -2,21 +2,13 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/time.hpp"
 
 using namespace std;
 
 namespace duckdb {
-
-constexpr const int32_t MONTHS_PER_MILLENIUM = 12000;
-constexpr const int32_t MONTHS_PER_CENTURY = 1200;
-constexpr const int32_t MONTHS_PER_DECADE = 120;
-constexpr const int32_t MONTHS_PER_YEAR = 12;
-constexpr const int32_t MONTHS_PER_QUARTER = 3;
-constexpr const int32_t DAYS_PER_WEEK = 7;
-constexpr const int64_t MSECS_PER_HOUR = 3600000;
-constexpr const int64_t MSECS_PER_MINUTE = 60000;
-constexpr const int64_t MSECS_PER_SEC = 1000;
 
 bool Interval::FromString(string str, interval_t &result) {
 	return Interval::FromCString(str.c_str(), str.size(), result);
@@ -258,8 +250,104 @@ string Interval::ToString(interval_t date) {
 			}
 			result += to_string(msecs);
 		}
+	} else if (result.empty()) {
+		return "00:00:00";
 	}
 	return result;
+}
+
+interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+	// First extract the dates
+	auto date1 = Timestamp::GetDate(timestamp_1);
+	auto date2 = Timestamp::GetDate(timestamp_2);
+	// and from date extract the years, months and days
+	int32_t year1, month1, day1;
+	int32_t year2, month2, day2;
+	Date::Convert(date1, year1, month1, day1);
+	Date::Convert(date2, year2, month2, day2);
+	// finally perform the differences
+	auto year_diff = year1 - year2;
+	auto month_diff = month1 - month2;
+	auto day_diff = day1 - day2;
+
+	// Now we extract the time
+	auto time1 = Timestamp::GetTime(timestamp_1);
+	auto time2 = Timestamp::GetTime(timestamp_2);
+
+	// In case time is not specified we do not show it in the output
+	if (time1 == 0) {
+		time2 = time1;
+	}
+
+	// and from time extract hours, minutes, seconds and miliseconds
+	int32_t hour1, min1, sec1, msec1;
+	int32_t hour2, min2, sec2, msec2;
+	Time::Convert(time1, hour1, min1, sec1, msec1);
+	Time::Convert(time2, hour2, min2, sec2, msec2);
+	// finally perform the differences
+	auto hour_diff = hour1 - hour2;
+	auto min_diff = min1 - min2;
+	auto sec_diff = sec1 - sec2;
+	auto msec_diff = msec1 - msec2;
+
+	// flip sign if necessary
+	if (timestamp_1 < timestamp_2) {
+		year_diff = -year_diff;
+		month_diff = -month_diff;
+		day_diff = -day_diff;
+		hour_diff = -hour_diff;
+		min_diff = -min_diff;
+		sec_diff = -sec_diff;
+		msec_diff = -msec_diff;
+	}
+	// now propagate any negative field into the next higher field
+	while (msec_diff < 0) {
+		msec_diff += MSECS_PER_SEC;
+		sec_diff--;
+	}
+	while (sec_diff < 0) {
+		sec_diff += SECS_PER_MINUTE;
+		min_diff--;
+	}
+	while (min_diff < 0) {
+		min_diff += MINS_PER_HOUR;
+		hour_diff--;
+	}
+	while (hour_diff < 0) {
+		hour_diff += HOURS_PER_DAY;
+		day_diff--;
+	}
+	while (day_diff < 0) {
+		if (timestamp_1 < timestamp_2) {
+			day_diff += days_per_month[isleap(year1)][month1 - 1];
+			month_diff--;
+		} else {
+			day_diff += days_per_month[isleap(year2)][month2 - 1];
+			month_diff--;
+		}
+	}
+	while (month_diff < 0) {
+		month_diff += MONTHS_PER_YEAR;
+		year_diff--;
+	}
+
+	// recover sign if necessary
+	if (timestamp_1 < timestamp_2 && (month_diff != 0 || day_diff != 0)) {
+		year_diff = -year_diff;
+		month_diff = -month_diff;
+		day_diff = -day_diff;
+		hour_diff = -hour_diff;
+		min_diff = -min_diff;
+		sec_diff = -sec_diff;
+		msec_diff = -msec_diff;
+	}
+	interval_t interval;
+	interval.months = year_diff * MONTHS_PER_YEAR + month_diff;
+	interval.days = day_diff;
+	interval.msecs =
+	    ((((((hour_diff * MINS_PER_HOUR) + min_diff) * SECS_PER_MINUTE) + sec_diff) * MSECS_PER_SEC) + msec_diff);
+
+	return interval;
 }
 
 
