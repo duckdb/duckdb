@@ -21,7 +21,6 @@
 
 #include <atomic>
 #include <mutex>
-#include <vector>
 
 namespace duckdb {
 class ClientContext;

@@ -1,4 +1,4 @@
-add_library(test_sql_capi
+add_library_unity(test_sql_capi
                   OBJECT
                   test_capi.cpp
                   test_starting_database.cpp)

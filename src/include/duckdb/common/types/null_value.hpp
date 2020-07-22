@@ -10,8 +10,10 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types.hpp"
 
 #include <cstring>
+#include <limits>
 
 namespace duckdb {
 

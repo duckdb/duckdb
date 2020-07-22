@@ -1,4 +1,4 @@
-add_library(duckdb_planner_operator
+add_library_unity(duckdb_planner_operator
                   OBJECT
                   logical_aggregate.cpp
                   logical_empty_result.cpp

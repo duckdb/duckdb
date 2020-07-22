@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/common.hpp"
 
 #include <stdarg.h>
 #include <stdexcept>
 
 namespace duckdb {
+enum class TypeId : uint8_t;
 
 inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
                                      const char *fname, int linenr) {
@@ -115,31 +117,9 @@ public:
 	BinderException(string msg, ...);
 };
 
-class CastException : public Exception {
-public:
-	CastException(const TypeId origType, const TypeId newType);
-};
-
-class ValueOutOfRangeException : public Exception {
-public:
-	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const idx_t length);
-};
-
 class ConversionException : public Exception {
 public:
 	ConversionException(string msg, ...);
-};
-
-class InvalidTypeException : public Exception {
-public:
-	InvalidTypeException(TypeId type, string msg);
-};
-
-class TypeMismatchException : public Exception {
-public:
-	TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg);
 };
 
 class TransactionException : public Exception {
@@ -200,6 +180,28 @@ public:
 class InvalidInputException : public Exception {
 public:
 	InvalidInputException(string msg, ...);
+};
+
+class CastException : public Exception {
+public:
+	CastException(const TypeId origType, const TypeId newType);
+};
+
+class InvalidTypeException : public Exception {
+public:
+	InvalidTypeException(TypeId type, string msg);
+};
+
+class TypeMismatchException : public Exception {
+public:
+	TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg);
+};
+
+class ValueOutOfRangeException : public Exception {
+public:
+	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
+	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
+	ValueOutOfRangeException(const TypeId varType, const idx_t length);
 };
 
 } // namespace duckdb

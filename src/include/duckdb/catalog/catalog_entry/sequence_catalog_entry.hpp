@@ -10,11 +10,11 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-
-#include <atomic>
-#include <mutex>
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
 
 struct SequenceValue {
 	SequenceValue() : usage_count(0), counter(-1) {
@@ -33,7 +33,7 @@ public:
 	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
 
 	//! Lock for getting a value on the sequence
-	std::mutex lock;
+	mutex lock;
 	//! The amount of times the sequence has been used
 	uint64_t usage_count;
 	//! The sequence counter

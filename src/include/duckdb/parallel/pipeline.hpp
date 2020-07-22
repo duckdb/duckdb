@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 #include <atomic>
 

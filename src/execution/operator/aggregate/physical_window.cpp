@@ -25,9 +25,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {

@@ -10,9 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-
-#include <iosfwd>
-#include <memory.h>
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 

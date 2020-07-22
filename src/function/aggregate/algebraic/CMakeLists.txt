@@ -1,4 +1,4 @@
-add_library(duckdb_aggr_algebraic
+add_library_unity(duckdb_aggr_algebraic
                   OBJECT
                   avg.cpp
                   covar.cpp

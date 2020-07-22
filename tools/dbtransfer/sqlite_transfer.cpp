@@ -2,6 +2,8 @@
 
 #include "duckdb/common/types/date.hpp"
 
+#include <sstream>
+
 using namespace duckdb;
 using namespace std;
 
