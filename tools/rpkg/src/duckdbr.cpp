@@ -3,6 +3,7 @@
 
 #include <Rdefines.h>
 #include <algorithm>
+#include <sstream>
 
 // motherfucker
 #undef error
