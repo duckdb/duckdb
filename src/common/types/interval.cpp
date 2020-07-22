@@ -65,22 +65,22 @@ standard_interval:
 		} else if (c >= '0' && c <= '9') {
 			// start parsing a positive number
 			negative = false;
-			goto parse_number;
+			goto interval_parse_number;
 		} else if (c == '-') {
 			// negative number
 			negative = true;
 			pos++;
-			goto parse_number;
+			goto interval_parse_number;
 		} else if (c == 'a' or c == 'A') {
 			// parse the word "ago" as the final specifier
-			goto parse_ago;
+			goto interval_parse_ago;
 		} else {
 			// unrecognized character, expected a number or end of string
 			return false;
 		}
 	}
 	goto end_of_string;
-parse_number:
+interval_parse_number:
 	start_pos = pos;
 	for(; pos < len; pos++) {
 		char c = str[pos];
@@ -97,11 +97,11 @@ parse_number:
 			if (negative) {
 				number = -number;
 			}
-			goto parse_identifier;
+			goto interval_parse_identifier;
 		}
 	}
 	goto end_of_string;
-parse_identifier:
+interval_parse_identifier:
 	for(; pos < len; pos++) {
 		char c = str[pos];
 		if (c == ' ' || c == '\t' || c == '\n') {
@@ -169,7 +169,7 @@ parse_identifier:
 	}
 	found_any = true;
 	goto standard_interval;
-parse_ago:
+interval_parse_ago:
 	// parse the "ago" string at the end of the
 	if (len - pos < 3) {
 		return false;
