@@ -24,6 +24,15 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.initialized = false;
 }
 
+void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
+	// FIXME: this is obviously not very efficient
+	InitializeScan(state);
+	for (idx_t i = 0; i < vector_idx; i++) {
+		state.Next();
+	}
+	assert(state.current);
+}
+
 void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
 	if (!state.initialized) {
 		state.current->InitializeScan(state);
@@ -85,11 +94,8 @@ void ColumnScanState::Next() {
 
 void TableScanState::NextVector() {
 	//! nothing to scan for this vector, skip the entire vector
-	for (idx_t j = 0; j < column_ids.size(); j++) {
-		auto column = column_ids[j];
-		if (column != COLUMN_IDENTIFIER_ROW_ID) {
-			column_scans[j].Next();
-		}
+	for (idx_t j = 0; j < column_count; j++) {
+		column_scans[j].Next();
 	}
 }
 

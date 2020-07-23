@@ -62,7 +62,7 @@ TEST_CASE("Test multiple versions of the same data", "[transactions]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {8}));
 }
 
-TEST_CASE("Test multiple versions of the same data with a data set that exceeds a single block", "[transactions]") {
+TEST_CASE("Test multiple versions of the same data with a data set that exceeds a single block", "[transactions][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db), con2(db);

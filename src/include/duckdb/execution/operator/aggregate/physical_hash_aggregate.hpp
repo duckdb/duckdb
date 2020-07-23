@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
@@ -30,6 +30,8 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 	//! Whether or not the aggregate is an implicit (i.e. ungrouped) aggregate
 	bool is_implicit_aggr;
+	//! Whether or not all aggregates are combinable
+	bool all_combinable;
 
 	//! The group types
 	vector<TypeId> group_types;

@@ -53,6 +53,8 @@ public:
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();
 	void DisableQueryVerification();
+	//! Force parallel execution, even for smaller tables. Should only be used in testing.
+	void ForceParallelism();
 
 	//! Issues a query to the database and returns a QueryResult. This result can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The result can be stepped through with calls to Fetch(). Note that there can only be
@@ -103,13 +105,12 @@ public:
 	void Commit();
 	void Rollback();
 
-	template<typename TR, typename... Args>
-	void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
-		scalar_function_t function =  UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
+	template <typename TR, typename... Args> void CreateScalarFunction(string name, TR (*udf_func)(Args...)) {
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, udf_func);
 		UDFWrapper::RegisterFunction<TR, Args...>(name, function, *context);
 	}
 
-	template<typename TR, typename... Args>
+	template <typename TR, typename... Args>
 	void CreateScalarFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
 		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);

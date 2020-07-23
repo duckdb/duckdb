@@ -10,6 +10,10 @@ using namespace std;
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
     : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
       input_ref(input) {
+#if STANDARD_VECTOR_SIZE < 512
+		throw NotImplementedException("Window functions are not supported for vector sizes < 512");
+#endif
+
 	statep.SetCount(STANDARD_VECTOR_SIZE);
 	Value ptr_val = Value::POINTER((idx_t)state.data());
 	statep.Reference(ptr_val);
@@ -46,15 +50,28 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 
 	idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	Vector s;
-	s.Slice(statep, start_in_vector);
+	s.Slice(statep, 0);
 	if (l_idx == 0) {
 		const auto input_count = input_ref->column_count();
-		auto &chunk = input_ref->GetChunk(begin);
-		for (idx_t i = 0; i < input_count; ++i) {
-			auto &v = inputs.data[i];
-			auto &vec = chunk.data[i];
-			v.Slice(vec, start_in_vector);
-			v.Verify(inputs.size());
+		if (start_in_vector + inputs.size() < STANDARD_VECTOR_SIZE) {
+			auto &chunk = input_ref->GetChunk(begin);
+			for (idx_t i = 0; i < input_count; ++i) {
+				auto &v = inputs.data[i];
+				auto &vec = chunk.data[i];
+				v.Slice(vec, start_in_vector);
+				v.Verify(inputs.size());
+			}
+		} else {
+			// we cannot just slice the individual vector!
+			auto &chunk_a = input_ref->GetChunk(begin);
+			auto &chunk_b = input_ref->GetChunk(end);
+			idx_t chunk_a_count = chunk_a.size() - start_in_vector;
+			idx_t chunk_b_count = inputs.size() - chunk_a_count;
+			for (idx_t i = 0; i < input_count; ++i) {
+				auto &v = inputs.data[i];
+				VectorOperations::Copy(chunk_a.data[i], v, chunk_a.size(), start_in_vector, 0);
+				VectorOperations::Copy(chunk_b.data[i], v, chunk_b_count, 0, chunk_a_count);
+			}
 		}
 		aggregate.update(&inputs.data[0], input_count, s, inputs.size());
 	} else {
