@@ -228,8 +228,14 @@ static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &re
  */
 template<typename TYPE>
 static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(TypeIsNumeric(GetTypeId<TYPE>()));
+
 	result.vector_type = VectorType::FLAT_VECTOR;
 	auto result_data = FlatVector::GetData<TYPE>(result);
+
+	//Initialize the result vector with the minimum value from TYPE.
+	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
+
 	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
 		assert((GetTypeId<TYPE>()) == input.type);
