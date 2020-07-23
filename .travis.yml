@@ -467,6 +467,9 @@ matrix:
       python: 3.7 # this does not apply to the python for root, there we still run 3.6
       filter_secrets: false
 
+      services:
+        - postgresql
+
       addons:
         apt:
           packages:
