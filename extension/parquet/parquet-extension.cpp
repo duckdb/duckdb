@@ -301,6 +301,8 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	bool finished;
 };
 
+
+
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
@@ -707,7 +709,8 @@ private:
 
 		auto current_group = data.file_meta_data.row_groups[data.current_group];
 		output.SetCardinality(std::min((int64_t)STANDARD_VECTOR_SIZE, current_group.num_rows - data.group_offset));
-		assert(output.size() > 0);
+
+		if (output.size() == 0) {return;}
 
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
 			auto file_col_idx = data.column_ids[out_col_idx];

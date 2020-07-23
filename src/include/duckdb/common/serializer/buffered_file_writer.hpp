@@ -24,6 +24,7 @@ public:
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;
 	idx_t offset;
+	idx_t total_written;
 	unique_ptr<FileHandle> handle;
 
 public:
@@ -34,6 +35,8 @@ public:
 	int64_t GetFileSize();
 	//! Truncate the size to a previous size (given that size <= GetFileSize())
 	void Truncate(int64_t size);
+
+	idx_t GetTotalWritten();
 
 private:
 	//! Flush the buffer to the file
