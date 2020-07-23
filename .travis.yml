@@ -427,6 +427,35 @@ matrix:
 
 
     - os: linux
+      name: Python 3.8 Package
+      #if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
+
+      dist: bionic
+      language: python
+      cache: pip
+      env:
+        - CIBW_BUILD='cp38-*'
+      python: 3.7
+
+      install:
+        - pip install cibuildwheel==0.10.2 twine
+
+      script:
+        - sudo python3 --version
+        - cd tools/pythonpkg
+        - python setup.py sdist
+        - mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        - cibuildwheel --output-dir wheelhouse duckdb_tarball
+        - cd ../..
+
+        - |
+          if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
+            python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+          fi
+
+
+
+    - os: linux
       name: Python 3.7 Package
       if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
