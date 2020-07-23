@@ -280,6 +280,7 @@ using namespace duckdb;
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 #include "duckdb/common/serializer.hpp"
+#include "snappy.h"
 
 using namespace parquet::format;
 using namespace apache::thrift::protocol;
@@ -408,7 +409,7 @@ public:
             BufferedSerializer temp_writer;
 
             PageHeader hdr;
-			hdr.compressed_page_size = 0;
+            hdr.compressed_page_size = 0;
 			hdr.uncompressed_page_size = 0;
 			hdr.type = PageType::DATA_PAGE;
             hdr.__isset.data_page_header = true;
@@ -468,21 +469,24 @@ public:
 			default: throw NotImplementedException("type");
 			}
 
-            hdr.compressed_page_size = temp_writer.blob.size;
-            hdr.uncompressed_page_size = hdr.compressed_page_size;
+           // hdr.compressed_page_size = temp_writer.blob.size;
+            hdr.uncompressed_page_size = temp_writer.blob.size;
 
-//			hdr.printTo(std::cout);
-//            std::cout << '\n';
+
+            size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
+            auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			snappy::RawCompress((const char*)temp_writer.blob.data.get(), temp_writer.blob.size, (char*) compressed_buf.get(), &compressed_size);
+
+            hdr.compressed_page_size = compressed_size;
 
             hdr.write(protocol.get());
-			writer->WriteData((const_data_ptr_t) temp_writer.blob.data.get(), temp_writer.blob.size);
+            writer->WriteData(compressed_buf.get(), compressed_size);
 
             auto& column_chunk = row_group.columns[i];
 			column_chunk.__isset.meta_data = true;
             column_chunk.meta_data.data_page_offset = start_offset;
             column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
-            column_chunk.meta_data.total_uncompressed_size =  column_chunk.meta_data.total_compressed_size;
-            column_chunk.meta_data.codec = CompressionCodec::UNCOMPRESSED;
+            column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
 			column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i+1].name);
 			column_chunk.meta_data.num_values = input.size();
             column_chunk.meta_data.type = file_meta_data.schema[i+1].type;
@@ -532,7 +536,7 @@ TEST_CASE("Parquet writing dummy", "[parquet]") {
 	writer.Finalize();
 
     auto result = con.Query("SELECT * FROM "
-	                        "parquet_scan('/tmp/fuu') LIMIT 2000");
+	                        "parquet_scan('/tmp/fuu') LIMIT 10");
 	result->Print();
 }
 
