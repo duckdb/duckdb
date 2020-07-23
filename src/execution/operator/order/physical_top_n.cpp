@@ -107,7 +107,7 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalTopN::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (TopNGlobalState &)*state;
 	// global finalize: compute the final top N
 	gstate.heap = ComputeTopN(gstate.big_data, gstate.heap_size);

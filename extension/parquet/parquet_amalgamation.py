@@ -37,7 +37,7 @@ def generate_amalgamation(source_file, header_file):
         os.chdir(wd)
         return [f.replace('\\', '/') for f in files]
 
-    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h")
+    headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
 
     def rewrite(file_in, file_out):
         print(file_in)
@@ -77,6 +77,8 @@ def generate_amalgamation(source_file, header_file):
         'parquet_types.cpp', 'parquet_constants.cpp'])
 
     rewrite_prefix('third_party/snappy', ['snappy-stubs-public.h', 'snappy.h'])
+
+    rewrite_prefix('third_party/miniz', ['miniz.hpp']) # miniz.cpp is already in duckdb.cpp
 
     rewrite('third_party/utf8proc/include/utf8proc_wrapper.hpp', temp_source)
 

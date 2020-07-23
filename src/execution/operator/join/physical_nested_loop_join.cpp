@@ -164,7 +164,7 @@ void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalOperatorState
 	gstate.right_chunks.Append(nlj_state.right_condition);
 }
 
-void PhysicalNestedLoopJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalNestedLoopJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (NestedLoopJoinGlobalState &)*state;
 	if (join_type == JoinType::OUTER) {
 		// for FULL OUTER JOIN, initialize found_match to false for every tuple
