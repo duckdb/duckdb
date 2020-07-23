@@ -299,11 +299,6 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto time1 = Timestamp::GetTime(timestamp_1);
 	auto time2 = Timestamp::GetTime(timestamp_2);
 
-	// In case time is not specified we do not show it in the output
-	if (time1 == 0) {
-		time2 = time1;
-	}
-
 	// and from time extract hours, minutes, seconds and miliseconds
 	int32_t hour1, min1, sec1, msec1;
 	int32_t hour2, min2, sec2, msec2;

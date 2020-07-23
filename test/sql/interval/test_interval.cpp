@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "dbgen.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -207,6 +208,8 @@ TEST_CASE("Test interval addition/subtraction", "[interval]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(2009, 4, 2, 12, 2, 2, 0)}));
 	result = con.Query("SELECT TIMESTAMP '1992-01-01 10:00:00' - INTERVAL '1' DAY");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::TIMESTAMP(1991, 12, 31, 10, 0, 0, 0)}));
+	result = con.Query("select timestamp '1993-01-01 00:00:00' - timestamp '1991-01-01 01:00:30';");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(23, 30, 22 * Interval::MSECS_PER_HOUR + 59 * Interval::MSECS_PER_MINUTE + 30 * Interval::MSECS_PER_SEC)}));
 }
 
 TEST_CASE("Test storage for interval type", "[interval]") {
