@@ -105,7 +105,7 @@ template <> inline bool LessThanEquals::Operation(string_t left, string_t right)
 // Specialized Interval Comparison Operators
 //===--------------------------------------------------------------------===//
 template <> inline bool Equals::Operation(interval_t left, interval_t right) {
-	return left.months == right.months && left.days == right.days && left.msecs == right.msecs;
+	return Interval::Equals(left, right);
 }
 template <> inline bool NotEquals::Operation(interval_t left, interval_t right) {
 	return !Equals::Operation(left, right);

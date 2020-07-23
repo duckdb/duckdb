@@ -389,8 +389,11 @@ static void normalize_interval_entries(interval_t input, int64_t &months, int64_
 	msecs = input.msecs;
 }
 
-template<bool GREATER_EQUAL>
-static bool interval_gt_gte(interval_t left, interval_t right) {
+bool Interval::Equals(interval_t left, interval_t right) {
+	return left.months == right.months && left.days == right.days && left.msecs == right.msecs;
+}
+
+bool Interval::GreaterThan(interval_t left, interval_t right) {
 	int64_t lmonths, ldays, lmsecs;
 	int64_t rmonths, rdays, rmsecs;
 	normalize_interval_entries(left, lmonths, ldays, lmsecs);
@@ -406,15 +409,11 @@ static bool interval_gt_gte(interval_t left, interval_t right) {
 	} else if (ldays < rdays) {
 		return false;
 	}
-	return GREATER_EQUAL ? lmsecs >= rmsecs : lmsecs > rmsecs;
-}
-
-bool Interval::GreaterThan(interval_t left, interval_t right) {
-	return interval_gt_gte<false>(left, right);
+	return lmsecs > rmsecs;
 }
 
 bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
-	return interval_gt_gte<true>(left, right);
+	return GreaterThan(left, right) || Equals(left, right);
 }
 
 }

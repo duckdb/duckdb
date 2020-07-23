@@ -44,6 +44,7 @@ public:
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
 
 	//! Comparison operators
+	static bool Equals(interval_t left, interval_t right);
 	static bool GreaterThan(interval_t left, interval_t right);
 	static bool GreaterThanEquals(interval_t left, interval_t right);
 };

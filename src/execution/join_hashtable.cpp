@@ -176,6 +176,9 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 	case TypeId::HASH:
 		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
+	case TypeId::INTERVAL:
+		templated_serialize_vdata<interval_t>(vdata, sel, count, key_locations);
+		break;
 	case TypeId::VARCHAR: {
 		auto source = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
@@ -538,6 +541,9 @@ static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const
 	case TypeId::DOUBLE:
 		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
+	case TypeId::INTERVAL:
+		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                 no_match_sel, no_match_count);
 	case TypeId::VARCHAR:
 		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                   no_match_sel, no_match_count);
@@ -684,6 +690,9 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 		break;
 	case TypeId::DOUBLE:
 		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::INTERVAL:
+		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	case TypeId::VARCHAR:
 		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);

@@ -376,6 +376,9 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 		case TypeId::DOUBLE:
 			templated_scatter<double>(gdata, addresses, sel, count, type_size);
 			break;
+		case TypeId::INTERVAL:
+			templated_scatter<interval_t>(gdata, addresses, sel, count, type_size);
+			break;
 		case TypeId::VARCHAR: {
 			auto data = (string_t *)gdata.data;
 			auto pointers = FlatVector::GetData<uintptr_t>(addresses);
@@ -474,6 +477,9 @@ static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_da
 			break;
 		case TypeId::DOUBLE:
 			templated_compare_groups<double>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
+			break;
+		case TypeId::INTERVAL:
+			templated_compare_groups<interval_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
 			break;
 		case TypeId::VARCHAR:
 			templated_compare_groups<string_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
