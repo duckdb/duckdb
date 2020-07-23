@@ -13,7 +13,6 @@ add_library(
   ../../third_party/thrift/transport/TTransportException.cpp
   ../../third_party/thrift/transport/TBufferTransports.cpp
   ../../third_party/snappy/snappy.cc
-  ../../third_party/miniz/miniz.cpp
   ../../third_party/snappy/snappy-sinksource.cc
   parquet-extension.cpp)
 
