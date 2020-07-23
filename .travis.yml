@@ -467,10 +467,13 @@ matrix:
       python: 3.7 # this does not apply to the python for root, there we still run 3.6
       filter_secrets: false
 
+      services:
+        - postgresql
+
       addons:
         apt:
           packages:
-            - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy python3-wheel
+            - postgresql-plpython3-10 python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
