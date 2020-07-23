@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_set.hpp"
+
 #include <cmath>
 
 using namespace duckdb;

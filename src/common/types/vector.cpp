@@ -3,6 +3,7 @@
 #include "duckdb/common/types/vector.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"

@@ -71,7 +71,7 @@ standard_interval:
 			negative = true;
 			pos++;
 			goto interval_parse_number;
-		} else if (c == 'a' or c == 'A') {
+		} else if (c == 'a' || c == 'A') {
 			// parse the word "ago" as the final specifier
 			goto interval_parse_ago;
 		} else {

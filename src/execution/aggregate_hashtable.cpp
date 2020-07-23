@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 #include <cmath>
 #include <map>
