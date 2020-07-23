@@ -438,7 +438,7 @@ matrix:
       python: 3.7
 
       install:
-        - pip install cibuildwheel==0.10.2 twine
+        - pip install cibuildwheel==1.5.5 twine
 
       script:
         - sudo python3 --version
@@ -467,7 +467,7 @@ matrix:
       python: 3.7
 
       install:
-        - pip install cibuildwheel==0.10.2 twine
+        - pip install cibuildwheel==1.5.5 twine
 
       script:
         - sudo python3 --version
@@ -502,7 +502,7 @@ matrix:
             - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
-        - pip install cibuildwheel==0.10.2 twine
+        - pip install cibuildwheel==1.5.5 twine
 
       script:
         - cd tools/pythonpkg
@@ -536,7 +536,7 @@ matrix:
       python: 3.7
 
       install:
-        - pip install cibuildwheel==0.10.2 twine
+        - pip install cibuildwheel==1.5.5 twine
 
       script:
         - cd tools/pythonpkg
@@ -562,7 +562,7 @@ matrix:
       install:
         - curl https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
         - python3 /tmp/get-pip.py
-        - python3 -m pip install cibuildwheel==0.10.2 twine
+        - python3 -m pip install cibuildwheel==1.5.5 twine
 
       script:
         - cd tools/pythonpkg
@@ -595,7 +595,7 @@ matrix:
         - choco install python2 --version 2.7.16 --sidebyside -y --force --params "/InstallDir:C:\Python27-x64"
         - choco install curl -y --force
         - C:/Python37-x64/python.exe -m pip install --upgrade pip
-        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==0.10.2" "twine"
+        - C:/Python37-x64/python.exe -m pip install "cibuildwheel==1.5.5" "twine"
         - C:/Python37-x64/python.exe -m pip install "pandas>=0.24" "pytest>=4.3"
 
       script:
