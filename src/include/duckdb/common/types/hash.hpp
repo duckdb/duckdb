@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -41,6 +42,7 @@ template <> hash_t Hash(double val);
 template <> hash_t Hash(const char *val);
 template <> hash_t Hash(char *val);
 template <> hash_t Hash(string_t val);
+template <> hash_t Hash(interval_t val);
 hash_t Hash(const char *val, size_t size);
 hash_t Hash(char *val, size_t size);
 hash_t Hash(uint8_t *val, size_t size);

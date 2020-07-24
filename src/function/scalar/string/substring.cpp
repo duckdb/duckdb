@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
@@ -29,7 +30,7 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 
 	// check if there is any non-ascii
 	bool ascii_only = true;
-	int ascii_end = std::min(offset + length + 1, (int)input_size);
+	int ascii_end = min(offset + length + 1, (int)input_size);
 	for (int i = 0; i < ascii_end; i++) {
 		if (input_data[i] & 0x80) {
 			ascii_only = false;

@@ -38,6 +38,14 @@ template <> inline char *NullValue() {
 	return (char *)NullValue<const char *>();
 }
 
+template <> inline interval_t NullValue() {
+	interval_t null_value;
+	null_value.days = NullValue<int32_t>();
+	null_value.months = NullValue<int32_t>();
+	null_value.msecs = NullValue<int64_t>();
+	return null_value;
+}
+
 template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }
@@ -48,6 +56,10 @@ template <> inline bool IsNullValue(const char *value) {
 
 template <> inline bool IsNullValue(string_t value) {
 	return value.GetData()[0] == str_nil[0];
+}
+
+template <> inline bool IsNullValue(interval_t value) {
+	return value.days == NullValue<int32_t>() && value.months == NullValue<int32_t>() && value.msecs == NullValue<int64_t>();
 }
 
 template <> inline bool IsNullValue(char *value) {

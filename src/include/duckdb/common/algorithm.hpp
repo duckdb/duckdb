@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/string.hpp
+// duckdb/common/algorithm.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include <string>
-#include <sstream>
+#include <algorithm>
 
 namespace duckdb {
-using std::string;
+using std::min;
+using std::max;
 }

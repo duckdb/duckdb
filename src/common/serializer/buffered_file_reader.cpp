@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;

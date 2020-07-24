@@ -50,6 +50,9 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	case TypeId::DOUBLE:
 		CopyToStorageLoop<double>(vdata, count, target);
 		break;
+	case TypeId::INTERVAL:
+		CopyToStorageLoop<interval_t>(vdata, count, target);
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for CopyToStorage");
 	}
@@ -95,6 +98,9 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		break;
 	case TypeId::DOUBLE:
 		ReadFromStorageLoop<double>(source, count, result);
+		break;
+	case TypeId::INTERVAL:
+		ReadFromStorageLoop<interval_t>(source, count, result);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for CopyToStorage");

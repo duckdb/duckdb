@@ -404,7 +404,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 					break;
 				}
 				default:
-					throw NotImplementedException("Unimplemented type for uncompressed segment");
+					throw NotImplementedException("Unimplemented type for zonemaps");
 				}
 			}
 			if (!readSegment) {

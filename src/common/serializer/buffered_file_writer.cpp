@@ -1,6 +1,6 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/exception.hpp"
-
+#include "duckdb/common/algorithm.hpp"
 #include <cstring>
 
 using namespace duckdb;
@@ -23,7 +23,7 @@ void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size)
 	// first copy anything we can from the buffer
 	const_data_ptr_t end_ptr = buffer + write_size;
 	while (buffer < end_ptr) {
-		idx_t to_write = std::min((idx_t)(end_ptr - buffer), FILE_BUFFER_SIZE - offset);
+		idx_t to_write = min((idx_t)(end_ptr - buffer), FILE_BUFFER_SIZE - offset);
 		assert(to_write > 0);
 		memcpy(data.get() + offset, buffer, to_write);
 		offset += to_write;
