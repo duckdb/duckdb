@@ -115,6 +115,16 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		}
 		auto nr_threads = pragma.parameters[0].GetValue<int64_t>();
 		TaskScheduler::GetScheduler(client).SetThreads(nr_threads);
+	} else if (keyword == "enable_verification") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Enable verification must be a statement (PRAGMA enable_verification)");
+		}
+		context.client.query_verification_enabled = true;
+	} else if (keyword == "disable_verification") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Disable verification must be a statement (PRAGMA disable_verification)");
+		}
+		context.client.query_verification_enabled = false;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
