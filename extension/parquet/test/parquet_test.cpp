@@ -358,6 +358,7 @@ public:
 		   schema_element.name = names[i];
         }
 		this->sql_types = sql_types;
+		this->buffer = make_unique<ChunkCollection>();
 	}
 
 	void VarintEncode(uint32_t val, Serializer& ser) {
@@ -385,26 +386,38 @@ public:
     }
 
     template <class SRC, class TGT>
-    static void _write_plain(Vector& col, idx_t length, nullmask_t& defined, Serializer& ser) {
+    static void _write_plain(Vector& col, idx_t length, nullmask_t& nullmask, Serializer& ser) {
         auto *ptr = FlatVector::GetData<SRC>(col);
         for (idx_t r = 0; r < length; r++) {
-            if (defined[r]) {
+            if (!nullmask[r]) {
                 ser.Write<TGT>((TGT) ptr[r]);
             }
         }
     }
 
-	void Sink(ClientContext &context, DataChunk &input)  {
+
+    void Sink(ClientContext &context, DataChunk &input)  {
+        buffer->Append(input);
+        if (buffer->count > 100000) {
+            Flush(context);
+        }
+    }
+
+    void Flush(ClientContext &context) {
+
+	    if (buffer->count == 0) {
+		    return;
+	    }
+
 		file_meta_data.row_groups.push_back(RowGroup());
         auto& row_group = file_meta_data.row_groups.back();
 
         row_group.num_rows = 0;
         row_group.file_offset = writer->GetTotalWritten();
 		row_group.__isset.file_offset = true;
-		row_group.columns.resize(input.column_count());
+		row_group.columns.resize(buffer->column_count());
 
-        for (idx_t i = 0; i < input.column_count(); i++) {
-            auto& input_column = input.data[i];
+        for (idx_t i = 0; i < buffer->column_count(); i++) {
 
             BufferedSerializer temp_writer;
 
@@ -414,7 +427,7 @@ public:
 			hdr.type = PageType::DATA_PAGE;
             hdr.__isset.data_page_header = true;
 
-            hdr.data_page_header.num_values = input.size();
+            hdr.data_page_header.num_values = buffer->count;
 			hdr.data_page_header.encoding = Encoding::PLAIN;
 			hdr.data_page_header.definition_level_encoding = Encoding::RLE;
             hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
@@ -422,51 +435,62 @@ public:
             auto start_offset = writer->GetTotalWritten();
 
             // varint-encoded, shift count left 1 and set low bit to 1 to indicate literal
-            auto define_byte_count = (input.size() + 7)/8;
+            auto define_byte_count = (buffer->count + 7)/8;
 			uint32_t define_header = (define_byte_count << 1) | 1;
             uint32_t define_size = GetVarintSize(define_header) + define_byte_count;
             // write length of define block
 
             temp_writer.Write<uint32_t>(define_size);
             VarintEncode(define_header, temp_writer);
-			auto defined = FlatVector::Nullmask(input_column);
-            defined.flip();
-            // bitpack null-ness
-            temp_writer.WriteData((const_data_ptr_t) &defined, define_byte_count);
 
-			// write actual payload data
-			switch (sql_types[i].id) {
-				// TODO bitpack booleans
-            case SQLTypeId::TINYINT:
-                _write_plain<int8_t, int32_t>(input_column, input.size(), defined, temp_writer);
-                break;
-            case SQLTypeId::SMALLINT:
-                _write_plain<int16_t, int32_t>(input_column, input.size(), defined, temp_writer);
-                break;
-            case SQLTypeId::INTEGER:
-                _write_plain<int32_t, int32_t>(input_column, input.size(), defined, temp_writer);
-			    break;
-            case SQLTypeId::BIGINT:
-                _write_plain<int64_t, int64_t>(input_column, input.size(), defined, temp_writer);
-                break;
-            case SQLTypeId::FLOAT:
-                _write_plain<float, float>(input_column, input.size(), defined, temp_writer);
-                break;
-            case SQLTypeId::DOUBLE:
-                _write_plain<double, double>(input_column, input.size(), defined, temp_writer);
-                break;
-            case SQLTypeId::VARCHAR: {
-                auto *ptr = FlatVector::GetData<string_t>(input_column);
-                for (idx_t r = 0; r < input.size(); r++) {
-                    if (defined[r]) {
-                        temp_writer.Write<uint32_t>(ptr[r].GetSize());
-                        temp_writer.WriteData((const_data_ptr_t) ptr[r].GetData(), ptr[r].GetSize());
-                    }
-                }
-				break;
+			for (auto& chunk : buffer->chunks) {
+				auto defined = FlatVector::Nullmask(chunk->data[i]);
+				defined.flip();
+				// bitpack null-ness
+                auto chunk_define_byte_count = (chunk->size() + 7)/8;
+                temp_writer.WriteData((const_data_ptr_t)&defined, chunk_define_byte_count);
 			}
-				// TODO date timestamp blob etc.
-			default: throw NotImplementedException("type");
+
+            for (auto& chunk : buffer->chunks) {
+				auto& input = *chunk;
+                auto& input_column = input.data[i];
+                auto& nullmask = FlatVector::Nullmask(input_column);
+
+                // write actual payload data
+				switch (sql_types[i].id) {
+					// TODO bitpack booleans
+				case SQLTypeId::TINYINT:
+					_write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::SMALLINT:
+					_write_plain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::INTEGER:
+					_write_plain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::BIGINT:
+					_write_plain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::FLOAT:
+					_write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::DOUBLE:
+					_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::VARCHAR: {
+					auto *ptr = FlatVector::GetData<string_t>(input_column);
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) {
+							temp_writer.Write<uint32_t>(ptr[r].GetSize());
+							temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+						}
+					}
+					break;
+				}
+					// TODO date timestamp blob etc.
+				default:
+					throw NotImplementedException("type");
+				}
 			}
 
            // hdr.compressed_page_size = temp_writer.blob.size;
@@ -487,21 +511,25 @@ public:
             column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
             column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
 			column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i+1].name);
-			column_chunk.meta_data.num_values = input.size();
+			column_chunk.meta_data.num_values = buffer->count;
             column_chunk.meta_data.type = file_meta_data.schema[i+1].type;
         }
-        row_group.num_rows += input.size();
-        file_meta_data.num_rows += input.size();
+        row_group.num_rows += buffer->count;
+        file_meta_data.num_rows += buffer->count;
+
+        this->buffer = make_unique<ChunkCollection>();
+
 
         // ?? row_group.total_byte_size / row_group.total_compressed_size
 
     }
-	void Finalize() {
+	void Finalize(ClientContext& context) {
+	    Flush(context);
 		auto start_offset = writer->GetTotalWritten();
 		file_meta_data.write(protocol.get());
 
-//		file_meta_data.printTo(std::cout);
-//        std::cout << '\n';
+		file_meta_data.printTo(std::cout);
+        std::cout << '\n';
 
 		writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
@@ -516,6 +544,7 @@ private:
     shared_ptr<TProtocol> protocol;
     FileMetaData file_meta_data;
 	vector<SQLType> sql_types;
+	unique_ptr<ChunkCollection> buffer;
 };
 
 TEST_CASE("Parquet writing dummy", "[parquet]") {
@@ -525,14 +554,14 @@ TEST_CASE("Parquet writing dummy", "[parquet]") {
     //con.EnableQueryVerification();
 
 	//auto res = con.Query("VALUES (42::tinyint, 42::smallint, 42::integer, 42::bigint, 42::float,42::double, 42::varchar)");
-    auto res = con.Query("SELECT * FROM parquet_scan('/Users/hannes/source/duckdb/extension/parquet/test/lineitem-sf1.snappy.parquet') limit 2000");
+    auto res = con.Query("SELECT * FROM parquet_scan('/Users/hannes/source/duckdb/extension/parquet/test/lineitem-sf1.snappy.parquet')");
 
     ParquetWriter writer;
     writer.Initialize(*con.context, "/tmp/fuu", res->sql_types, res->names);
     for (auto& chunk : res->collection.chunks) {
 		writer.Sink(*con.context, *chunk);
 	}
-	writer.Finalize();
+	writer.Finalize(*con.context);
 
     auto result = con.Query("SELECT * FROM "
 	                        "parquet_scan('/tmp/fuu') LIMIT 10");
