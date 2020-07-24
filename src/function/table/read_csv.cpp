@@ -29,8 +29,9 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	auto result = make_unique<ReadCSVData>();
 
 	result->info.file_path = inputs[0].str_value;
-	result->info.header = false;
-	result->info.delimiter = inputs[1].str_value;
+	// FIXME
+//	result->info.header = false;
+//	result->info.delimiter = inputs[1].str_value;
 
 	result->csv_reader = make_unique<BufferedCSVReader>(context, result->info, return_types);
 	return move(result);
@@ -40,7 +41,8 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
                                                    vector<SQLType> &return_types, vector<string> &names) {
 	auto result = make_unique<ReadCSVData>();
 	result->info.file_path = inputs[0].str_value;
-	result->info.auto_detect = true;
+	// FIXME
+	//result->info.auto_detect = true;
 
 	result->csv_reader = make_unique<BufferedCSVReader>(context, result->info);
 

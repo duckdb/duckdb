@@ -251,10 +251,11 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 
 	// set up the CSV reader
 	CopyInfo info;
-	info.delimiter = "|";
-	info.header = true;
-	info.quote = "\"";
-	info.escape = "\"";
+	// FIXME
+//	info.delimiter = "|";
+//	info.header = true;
+//	info.quote = "\"";
+//	info.escape = "\"";
 	// set up the intermediate result chunk
 	vector<TypeId> internal_types;
 	for (auto &type : sql_types) {

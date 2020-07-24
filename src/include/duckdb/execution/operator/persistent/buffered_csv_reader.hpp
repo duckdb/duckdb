@@ -44,6 +44,35 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
+struct BufferedCSVReaderOptions  {
+    //! Whether or not to automatically detect dialect and datatypes
+    bool auto_detect;
+    //! Delimiter to separate columns within each line
+    string delimiter;
+    //! Quote used for columns that contain reserved characters, e.g., delimiter
+    string quote;
+    //! Escape character to escape quote character
+    string escape;
+    //! Whether or not the file has a header line
+    bool header;
+    //! How many leading rows to skip
+    idx_t skip_rows;
+    //! Expected number of columns
+    idx_t num_cols;
+    //! Specifies the string that represents a null value
+    string null_str;
+    //! Determines whether all columns must be quoted
+    bool quote_all;
+    //! Forces quoting to be used for all non-NULL values in each specified column
+    vector<string> force_quote_list;
+    //! True, if column with that index must be quoted
+    vector<bool> force_quote;
+    //! Null values will be read as zero-length strings in each specified column
+    vector<string> force_not_null_list;
+    //! True, if column with that index must skip null check
+    vector<bool> force_not_null;
+};
+
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2 };
@@ -132,6 +161,8 @@ private:
 	bool ReadBuffer(idx_t &start);
 
 	unique_ptr<std::istream> OpenCSV(ClientContext &context, CopyInfo &info);
+
+    BufferedCSVReaderOptions options;
 };
 
 } // namespace duckdb
