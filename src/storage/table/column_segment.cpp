@@ -29,6 +29,7 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t stats_
     : type(type), type_size(type_size) {
 	Reset();
 	switch (type) {
+	case TypeId::BOOL:
 	case TypeId::INT8: {
 		set_min_max<int8_t>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;
@@ -53,13 +54,16 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t stats_
 		set_min_max<double>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;
 	}
+	case TypeId::INTERVAL: {
+		set_min_max<interval_t>(stats_min, stats_max, minimum.get(), maximum.get());
+		break;
+	}
 	case TypeId::VARCHAR: {
 		set_min_max<char[8]>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;
 	}
-
 	default:
-		break;
+		throw NotImplementedException("Unimplemented type for SEGMENT statistics");
 	}
 }
 
@@ -69,7 +73,7 @@ template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
 }
 
 void SegmentStatistics::Reset() {
-	idx_t min_max_size = type_size > 8 ? 8 : type_size;
+	idx_t min_max_size = type == TypeId::VARCHAR ? 8 : type_size;
 	minimum = unique_ptr<data_t[]>(new data_t[min_max_size]);
 	maximum = unique_ptr<data_t[]>(new data_t[min_max_size]);
 	has_null = false;
@@ -77,6 +81,7 @@ void SegmentStatistics::Reset() {
 	has_overflow_strings = false;
 	char padding = '\0';
 	switch (type) {
+	case TypeId::BOOL:
 	case TypeId::INT8:
 		initialize_max_min<int8_t>(minimum.get(), maximum.get());
 		break;
@@ -104,7 +109,19 @@ void SegmentStatistics::Reset() {
 		maximum.get()[1] = marker;
 		break;
 	}
-	default:
+	case TypeId::INTERVAL: {
+		auto min = (interval_t *) minimum.get();
+		auto max = (interval_t *) maximum.get();
+		min->months = numeric_limits<int32_t>::max();
+		min->days   = numeric_limits<int32_t>::max();
+		min->msecs  = numeric_limits<int64_t>::max();
+
+		max->months = numeric_limits<int32_t>::min();
+		max->days   = numeric_limits<int32_t>::min();
+		max->msecs  = numeric_limits<int64_t>::min();
 		break;
+	}
+	default:
+		throw NotImplementedException("Unimplemented type for SEGMENT statistics");
 	}
 }

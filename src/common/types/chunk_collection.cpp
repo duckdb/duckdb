@@ -144,6 +144,8 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::VARCHAR:
 		return templated_compare_value<string_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::INTERVAL:
+		return templated_compare_value<interval_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -380,6 +382,9 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 			break;
 		case TypeId::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::INTERVAL:
+			templated_set_values<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 
 		case TypeId::LIST:

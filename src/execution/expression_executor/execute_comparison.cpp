@@ -68,6 +68,8 @@ static idx_t templated_select_operation(Vector &left, Vector &right, const Selec
 		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
 	case TypeId::DOUBLE:
 		return BinaryExecutor::Select<double, double, OP>(left, right, sel, count, true_sel, false_sel);
+	case TypeId::INTERVAL:
+		return BinaryExecutor::Select<interval_t, interval_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case TypeId::VARCHAR:
 		return BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel, count, true_sel, false_sel);
 	default:

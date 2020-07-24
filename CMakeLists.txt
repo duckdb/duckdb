@@ -59,6 +59,8 @@ if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
 endif()
 
+option(DISABLE_UNITY "Disable unity builds." FALSE)
+
 option(FORCE_COLORED_OUTPUT
        "Always produce ANSI-colored output (GNU/Clang only)." FALSE)
 if(${FORCE_COLORED_OUTPUT})

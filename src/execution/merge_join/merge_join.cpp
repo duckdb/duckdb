@@ -21,6 +21,8 @@ template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, 
 		return MJ::template Operation<float>(l, r);
 	case TypeId::DOUBLE:
 		return MJ::template Operation<double>(l, r);
+	case TypeId::INTERVAL:
+		return MJ::template Operation<interval_t>(l, r);
 	case TypeId::VARCHAR:
 		return MJ::template Operation<string_t>(l, r);
 	default:

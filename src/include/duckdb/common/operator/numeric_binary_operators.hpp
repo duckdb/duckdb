@@ -53,12 +53,28 @@ struct ModuloOperator {
 
 template <> float AddOperator::Operation(float left, float right);
 template <> double AddOperator::Operation(double left, double right);
+template <> interval_t AddOperator::Operation(interval_t left, interval_t right);
+template <> date_t AddOperator::Operation(date_t left, interval_t right);
+template <> date_t AddOperator::Operation(interval_t left, date_t right);
+template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t right);
+template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right);
+
 template <> float SubtractOperator::Operation(float left, float right);
 template <> double SubtractOperator::Operation(double left, double right);
+template <> interval_t SubtractOperator::Operation(interval_t left, interval_t right);
+template <> date_t SubtractOperator::Operation(date_t left, interval_t right);
+template <> timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right);
+template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t right);
+
 template <> float MultiplyOperator::Operation(float left, float right);
 template <> double MultiplyOperator::Operation(double left, double right);
+template <> interval_t MultiplyOperator::Operation(interval_t left, int64_t right);
+template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t right);
+
 template <> float DivideOperator::Operation(float left, float right);
 template <> double DivideOperator::Operation(double left, double right);
+template <> interval_t DivideOperator::Operation(interval_t left, int64_t right);
+
 template <> float ModuloOperator::Operation(float left, float right);
 template <> double ModuloOperator::Operation(double left, double right);
 

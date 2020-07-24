@@ -544,14 +544,14 @@ typedef struct PGNode
  *	Fortunately, this macro isn't recursive so we just define
  *	a global variable for this purpose.
  */
-__thread PGNode *newNodeMacroHolder;
+extern __thread PGNode *duckdb_newNodeMacroHolder;
 
 #define newNode(size, tag) \
 ( \
 	AssertMacro((size) >= sizeof(PGNode)),		/* need the tag, at least */ \
-	newNodeMacroHolder = (PGNode *) palloc0fast(size), \
-	newNodeMacroHolder->type = (tag), \
-	newNodeMacroHolder \
+	duckdb_newNodeMacroHolder = (PGNode *) palloc0fast(size), \
+	duckdb_newNodeMacroHolder->type = (tag), \
+	duckdb_newNodeMacroHolder \
 )
 #endif							/* __GNUC__ */
 

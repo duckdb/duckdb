@@ -1,6 +1,7 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 #include <cmath>
 
