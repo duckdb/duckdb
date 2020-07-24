@@ -52,4 +52,200 @@ inline string_t udf_varchar(string_t a) {return a;}
 inline string_t udf_varchar(string_t a, string_t b) {return b;}
 inline string_t udf_varchar(string_t a, string_t b, string_t c) {return c;}
 
+// Vectorized UDF Functions -------------------------------------------------------------------
+
+/*
+ * This vectorized function is an unary one that copies input values to the result vector
+ */
+template<typename TYPE>
+static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 1);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[0]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[0]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
+/*
+ * This vectorized function is a binary one that copies values from the second input vector to the result vector
+ */
+template<typename TYPE>
+static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 2);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == input.data[1].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[1]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[1]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
+/*
+ * This vectorized function is a ternary one that copies values from the third input vector to the result vector
+ */
+template<typename TYPE>
+static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == 3);
+	assert((GetTypeId<TYPE>()) == input.data[0].type);
+	assert((GetTypeId<TYPE>()) == input.data[1].type);
+	assert((GetTypeId<TYPE>()) == input.data[2].type);
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	switch(GetTypeId<TYPE>()) {
+		case TypeId::VARCHAR: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<string_t>(result);
+			auto ldata = FlatVector::GetData<string_t>(input.data[2]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				auto input_length = ldata[i].GetSize();
+				string_t target = StringVector::EmptyString(result, input_length);
+				auto target_data = target.GetData();
+				memcpy(target_data, ldata[i].GetData(), input_length);
+				target.Finalize();
+				result_data[i] = target;
+			}
+			break;
+		}
+		default: {
+			result.vector_type = VectorType::FLAT_VECTOR;
+			auto result_data = FlatVector::GetData<TYPE>(result);
+			auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
+
+			FlatVector::SetNullmask(result, FlatVector::Nullmask(input.data[2]));
+
+			for (idx_t i = 0; i < input.size(); i++) {
+				result_data[i] = ldata[i];
+			}
+		}
+	}
+}
+
+/*
+ * Vectorized function with the number of input as a template parameter
+ */
+template<typename TYPE, int NUM_INPUT>
+static void udf_several_constant_input(DataChunk &input, ExpressionState &state, Vector &result) {
+	assert(input.column_count() == NUM_INPUT);
+	for(idx_t i = 0; i < NUM_INPUT; ++i) {
+		assert((GetTypeId<TYPE>()) == input.data[i].type);
+	}
+	assert((GetTypeId<TYPE>()) == result.type);
+
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	auto result_data = ConstantVector::GetData<TYPE>(result);
+	auto ldata = ConstantVector::GetData<TYPE>(input.data[NUM_INPUT - 1 ]);
+
+	for (idx_t i = 0; i < input.size(); i++) {
+		result_data[i] = ldata[i];
+	}
+}
+
+/*
+ * Vectorized MAX function with varargs and constant inputs
+ */
+template<typename TYPE>
+static void udf_max_constant(DataChunk &args, ExpressionState &state, Vector &result) {
+	TYPE max = 0;
+	result.vector_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
+		assert((GetTypeId<TYPE>()) == input.type);
+		if (ConstantVector::IsNull(input)) {
+			// constant null, skip
+			continue;
+		}
+		auto input_data = ConstantVector::GetData<TYPE>(input);
+		if(max < input_data[0]) {
+			max = input_data[0];
+		}
+	}
+	auto result_data = ConstantVector::GetData<TYPE>(result);
+	result_data[0] = max;
+}
+
+/*
+ * Vectorized MAX function with varargs and input columns
+ */
+template<typename TYPE>
+static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result) {
+	assert(TypeIsNumeric(GetTypeId<TYPE>()));
+
+	result.vector_type = VectorType::FLAT_VECTOR;
+	auto result_data = FlatVector::GetData<TYPE>(result);
+
+	//Initialize the result vector with the minimum value from TYPE.
+	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
+
+	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
+		auto &input = args.data[col_idx];
+		assert((GetTypeId<TYPE>()) == input.type);
+		auto input_data = FlatVector::GetData<TYPE>(input);
+		for(idx_t i=0; i < args.size(); ++i) {
+			if(result_data[i] < input_data[i]) {
+				result_data[i] = input_data[i];
+			}
+		}
+	}
+}
+
 }; //end namespace
