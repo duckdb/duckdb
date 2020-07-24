@@ -15,6 +15,10 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
+
 #include "utf8proc_wrapper.hpp"
 
 #include "thrift/protocol/TCompactProtocol.h"
@@ -925,15 +929,321 @@ private:
 	}
 };
 
+
+class MyTransport : public TTransport {
+public:
+    MyTransport(Serializer &serializer) : serializer(serializer) {
+    }
+
+    bool isOpen() const override {
+        return true;
+    }
+
+    void open() override {
+    }
+
+    void close() override {
+    }
+
+    void write_virt(const uint8_t *buf, uint32_t len) override {
+        serializer.WriteData((const_data_ptr_t)buf, len);
+    }
+
+private:
+    Serializer &serializer;
+};
+
+static Type::type duckdb_type_to_parquet_type(SQLType duckdb_type) {
+    switch (duckdb_type.id) {
+    case SQLTypeId::BOOLEAN:
+        return Type::BOOLEAN;
+    case SQLTypeId::TINYINT:
+    case SQLTypeId::SMALLINT:
+    case SQLTypeId::INTEGER:
+        return Type::INT32;
+    case SQLTypeId::BIGINT:
+        return Type::INT64;
+    case SQLTypeId::FLOAT:
+        return Type::FLOAT;
+    case SQLTypeId::DOUBLE:
+        return Type::DOUBLE;
+    case SQLTypeId::VARCHAR:
+    case SQLTypeId::BLOB:
+        return Type::BYTE_ARRAY;
+    case SQLTypeId::DATE:
+    case SQLTypeId::TIMESTAMP:
+        return Type::INT96;
+    default:
+        throw NotImplementedException("type");
+    }
+}
+
+static void VarintEncode(uint32_t val, Serializer &ser) {
+    do {
+        uint8_t byte = val & 127;
+        val >>= 7;
+        if (val != 0) {
+            byte |= 128;
+        }
+        ser.Write<uint8_t>(byte);
+    } while (val != 0);
+}
+
+static uint8_t GetVarintSize(uint32_t val) {
+    uint8_t res = 0;
+    do {
+        uint8_t byte = val & 127;
+        val >>= 7;
+        if (val != 0) {
+            byte |= 128;
+        }
+        res++;
+    } while (val != 0);
+    return res;
+}
+
+template <class SRC, class TGT>
+static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serializer &ser) {
+    auto *ptr = FlatVector::GetData<SRC>(col);
+    for (idx_t r = 0; r < length; r++) {
+        if (!nullmask[r]) {
+            ser.Write<TGT>((TGT)ptr[r]);
+        }
+    }
+}
+
+struct ParquetWriteBindData : public FunctionData {
+    vector<SQLType> sql_types;
+    string file_name;
+    vector<string> column_names;
+    // TODO compression flag to test the param passing stuff
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+    unique_ptr<BufferedFileWriter> writer;
+    shared_ptr<TProtocol> protocol;
+    FileMetaData file_meta_data;
+    unique_ptr<ChunkCollection> buffer;
+    vector<SQLType> sql_types;
+
+    void Finalize() {
+        Flush();
+        auto start_offset = writer->GetTotalWritten();
+        file_meta_data.write(protocol.get());
+
+//        file_meta_data.printTo(std::cout);
+//        std::cout << '\n';
+
+        writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
+
+        writer->WriteData((const_data_ptr_t) "PAR1", 4);
+        writer->Sync();
+        writer.reset();
+    }
+
+    void Flush() {
+
+        if (buffer->count == 0) {
+            return;
+        }
+
+        file_meta_data.row_groups.push_back(RowGroup());
+        auto &row_group = file_meta_data.row_groups.back();
+
+        row_group.num_rows = 0;
+        row_group.file_offset = writer->GetTotalWritten();
+        row_group.__isset.file_offset = true;
+        row_group.columns.resize(buffer->column_count());
+
+        for (idx_t i = 0; i < buffer->column_count(); i++) {
+
+            BufferedSerializer temp_writer;
+
+            PageHeader hdr;
+            hdr.compressed_page_size = 0;
+            hdr.uncompressed_page_size = 0;
+            hdr.type = PageType::DATA_PAGE;
+            hdr.__isset.data_page_header = true;
+
+            hdr.data_page_header.num_values = buffer->count;
+            hdr.data_page_header.encoding = Encoding::PLAIN;
+            hdr.data_page_header.definition_level_encoding = Encoding::RLE;
+            hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
+
+            auto start_offset = writer->GetTotalWritten();
+
+            // varint-encoded, shift count left 1 and set low bit to 1 to indicate literal
+            auto define_byte_count = (buffer->count + 7) / 8;
+            uint32_t define_header = (define_byte_count << 1) | 1;
+            uint32_t define_size = GetVarintSize(define_header) + define_byte_count;
+            // write length of define block
+
+            temp_writer.Write<uint32_t>(define_size);
+            VarintEncode(define_header, temp_writer);
+
+            for (auto &chunk : buffer->chunks) {
+                auto defined = FlatVector::Nullmask(chunk->data[i]);
+                defined.flip();
+                // bitpack null-ness
+                auto chunk_define_byte_count = (chunk->size() + 7) / 8;
+                temp_writer.WriteData((const_data_ptr_t)&defined, chunk_define_byte_count);
+            }
+
+            for (auto &chunk : buffer->chunks) {
+                auto &input = *chunk;
+                auto &input_column = input.data[i];
+                auto &nullmask = FlatVector::Nullmask(input_column);
+
+                // write actual payload data
+                switch (sql_types[i].id) {
+                    // TODO bitpack booleans
+                case SQLTypeId::TINYINT:
+                    _write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::SMALLINT:
+                    _write_plain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::INTEGER:
+                    _write_plain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::BIGINT:
+                    _write_plain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::FLOAT:
+                    _write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::DOUBLE:
+                    _write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
+                    break;
+                case SQLTypeId::VARCHAR: {
+                    auto *ptr = FlatVector::GetData<string_t>(input_column);
+                    for (idx_t r = 0; r < input.size(); r++) {
+                        if (!nullmask[r]) {
+                            temp_writer.Write<uint32_t>(ptr[r].GetSize());
+                            temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+                        }
+                    }
+                    break;
+                }
+                    // TODO date timestamp blob etc.
+                default:
+                    throw NotImplementedException("type");
+                }
+            }
+
+            // hdr.compressed_page_size = temp_writer.blob.size;
+            hdr.uncompressed_page_size = temp_writer.blob.size;
+
+            size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
+            auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+            snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
+                                (char *)compressed_buf.get(), &compressed_size);
+
+            hdr.compressed_page_size = compressed_size;
+
+            hdr.write(protocol.get());
+            writer->WriteData(compressed_buf.get(), compressed_size);
+
+            auto &column_chunk = row_group.columns[i];
+            column_chunk.__isset.meta_data = true;
+            column_chunk.meta_data.data_page_offset = start_offset;
+            column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
+            column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
+            column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i + 1].name);
+            column_chunk.meta_data.num_values = buffer->count;
+            column_chunk.meta_data.type = file_meta_data.schema[i + 1].type;
+        }
+        row_group.num_rows += buffer->count;
+        file_meta_data.num_rows += buffer->count;
+
+        this->buffer = make_unique<ChunkCollection>();
+
+        // ?? row_group.total_byte_size / row_group.total_compressed_size
+    }
+};
+
+unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
+                                            vector<SQLType> &sql_types) {
+    auto bind_data = make_unique<ParquetWriteBindData>();
+    bind_data->sql_types = sql_types;
+    bind_data->column_names = names;
+    bind_data->file_name = info.file_path;
+    return move(bind_data);
+}
+
+unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &context, FunctionData &bind_data) {
+    auto global_state = make_unique<ParquetWriteGlobalState>();
+    auto &parquet_bind = (ParquetWriteBindData &)bind_data;
+
+    global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str());
+    global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
+    TCompactProtocolFactoryT<MyTransport> tproto_factory;
+    global_state->protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*global_state->writer));
+    global_state->file_meta_data.num_rows = 0;
+    global_state->file_meta_data.schema.resize(parquet_bind.sql_types.size() + 1);
+
+    global_state->file_meta_data.schema[0].num_children = parquet_bind.sql_types.size();
+    global_state->file_meta_data.schema[0].__isset.num_children = true;
+    global_state->file_meta_data.version = 1;
+
+    for (idx_t i = 0; i < parquet_bind.sql_types.size(); i++) {
+        auto &schema_element = global_state->file_meta_data.schema[i + 1];
+
+        schema_element.type = duckdb_type_to_parquet_type(parquet_bind.sql_types[i]); // TODO switcheroo
+        schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+        schema_element.num_children = 0;
+        schema_element.__isset.num_children = true;
+        schema_element.__isset.type = true;
+        schema_element.__isset.repetition_type = true;
+        schema_element.name = parquet_bind.column_names[i];
+    }
+    global_state->buffer = make_unique<ChunkCollection>();
+    global_state->sql_types = parquet_bind.sql_types;
+    return move(global_state);
+}
+void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                        LocalFunctionData &lstate, DataChunk &input) {
+    auto &global_state = (ParquetWriteGlobalState &)gstate;
+
+    global_state.buffer->Append(input);
+    if (global_state.buffer->count > 100000) {
+        global_state.Flush();
+    }
+}
+
+void parquet_write_finalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+    auto &global_state = (ParquetWriteGlobalState &)gstate;
+    global_state.Finalize();
+}
+
+unique_ptr<LocalFunctionData> parquet_write_initialize_local(ClientContext &context, FunctionData &bind_data) {
+    return make_unique<LocalFunctionData>();
+}
+
+void parquet_write_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                           LocalFunctionData &lstate) {
+}
+
 void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun, true);
+	CreateTableFunctionInfo cinfo(scan_fun, true);
+    cinfo.name = "read_parquet"; // ok we will have this alias
 
-	Connection conn(db);
+    CopyFunction function("parquet");
+    function.copy_to_bind = parquet_write_bind;
+    function.copy_to_initialize_global = parquet_write_initialize_global;
+    function.copy_to_initialize_local = parquet_write_initialize_local;
+    function.copy_to_sink = parquet_write_sink;
+    function.copy_to_combine = parquet_write_combine;
+    function.copy_to_finalize = parquet_write_finalize;
+    CreateCopyFunctionInfo info(function);
+
+    Connection conn(db);
 	conn.context->transaction.BeginTransaction();
-	conn.context->catalog.CreateTableFunction(*conn.context, &info);
-	info.name = "read_parquet"; // ok we will have this alias
-	conn.context->catalog.CreateTableFunction(*conn.context, &info);
+    db.catalog->CreateCopyFunction(*conn.context, &info);
+    db.catalog->CreateTableFunction(*conn.context, &cinfo);
+    cinfo.name = "parquet_scan"; // ok we will have this alias
+    db.catalog->CreateTableFunction(*conn.context, &cinfo);
 
 	conn.context->transaction.Commit();
 }
