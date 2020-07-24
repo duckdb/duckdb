@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
@@ -29,7 +29,7 @@ public:
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 

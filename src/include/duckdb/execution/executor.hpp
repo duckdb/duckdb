@@ -21,6 +21,7 @@ class DataChunk;
 class PhysicalOperator;
 class PhysicalOperatorState;
 class ThreadContext;
+class Task;
 
 struct ProducerToken;
 
@@ -33,17 +34,12 @@ public:
 	~Executor();
 
 	ClientContext &context;
-	bool finished;
 
 public:
 	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
 
-	void Work();
 	void Reset();
-
-	void SchedulePipeline(shared_ptr<Pipeline> pipeline);
-	void ErasePipeline(Pipeline *pipeline);
 
 	vector<TypeId> GetTypes();
 
@@ -61,11 +57,16 @@ private:
 
 	mutex executor_lock;
 	//! The pipelines of the current query
-	vector<shared_ptr<Pipeline>> pipelines;
+	vector<unique_ptr<Pipeline>> pipelines;
+	//! The producer of this query
+	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
 
-	std::queue<shared_ptr<Pipeline>> scheduled_pipelines;
+	//! The amount of completed pipelines of the query
+	std::atomic<idx_t> completed_pipelines;
+	//! The total amount of pipelines in the query
+	idx_t total_pipelines;
 
 	unordered_map<ChunkCollection *, Pipeline *> delim_join_dependencies;
 };

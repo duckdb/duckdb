@@ -20,7 +20,8 @@ class BufferManager;
 class BufferHandle;
 
 struct JoinHTScanState {
-	JoinHTScanState() : position(0), block_position(0) {}
+	JoinHTScanState() : position(0), block_position(0) {
+	}
 
 	idx_t position;
 	idx_t block_position;
@@ -96,6 +97,8 @@ public:
 	};
 
 private:
+	std::mutex ht_lock;
+
 	//! Nodes store the actual data of the tuples inside the HT as a linked list
 	struct HTDataBlock {
 		idx_t count;
@@ -103,7 +106,15 @@ private:
 		block_id_t block_id;
 	};
 
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+	struct BlockAppendEntry {
+		BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) {
+		}
+
+		data_ptr_t baseptr;
+		idx_t count;
+	};
+
+	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining);
 
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
@@ -163,6 +174,7 @@ public:
 	idx_t block_capacity;
 
 	struct {
+		std::mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
 		vector<TypeId> correlated_types;

@@ -472,7 +472,6 @@ public:
            // hdr.compressed_page_size = temp_writer.blob.size;
             hdr.uncompressed_page_size = temp_writer.blob.size;
 
-
             size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
             auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			snappy::RawCompress((const char*)temp_writer.blob.data.get(), temp_writer.blob.size, (char*) compressed_buf.get(), &compressed_size);
@@ -540,6 +539,16 @@ TEST_CASE("Parquet writing dummy", "[parquet]") {
 	result->Print();
 }
 
+//TEST_CASE("Parquet file with gzip compression", "[parquet]") {
+//	DuckDB db(nullptr);
+//	db.LoadExtension<ParquetExtension>();
+//	Connection con(db);
+//	con.EnableQueryVerification();
+//
+//	auto result =
+//	    con.Query("select count(*) from parquet_scan('extension/parquet/test/lineitem-top10000.gzip.parquet')");
+//	REQUIRE(CHECK_COLUMN(result, 0, {10000}));
+//}
 //
 // TEST_CASE("Test TPCH SF1 from parquet file", "[parquet][.]") {
 //	DuckDB db(nullptr);

@@ -34,7 +34,7 @@
 #define _WIN32_WINNT 0x601
 #endif
 
-#include <winsock2.h>
+//#include <winsock2.h>
 #include <windows.h>
 
 #undef OPTIONAL // WTF?!

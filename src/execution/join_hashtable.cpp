@@ -177,6 +177,7 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
 	case TypeId::VARCHAR: {
+		StringHeap local_heap;
 		auto source = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
@@ -188,10 +189,12 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 			} else if (source[source_idx].IsInlined()) {
 				*target = source[source_idx];
 			} else {
-				*target = string_heap.AddString(source[source_idx]);
+				*target = local_heap.AddString(source[source_idx]);
 			}
 			key_locations[i] += sizeof(string_t);
 		}
+		lock_guard<mutex> append_lock(ht_lock);
+		string_heap.MergeHeap(local_heap);
 		break;
 	}
 	default:
@@ -207,15 +210,11 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	SerializeVectorData(vdata, v.type, sel, count, key_locations);
 }
 
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, idx_t count, data_ptr_t key_locations[],
+idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
                                    idx_t remaining) {
 	idx_t append_count = std::min(remaining, block.capacity - block.count);
 	auto dataptr = handle.node->buffer + block.count * entry_size;
-	idx_t offset = count - remaining;
-	for (idx_t i = 0; i < append_count; i++) {
-		key_locations[offset + i] = dataptr;
-		dataptr += entry_size;
-	}
+	append_entries.push_back(BlockAppendEntry(dataptr, append_count));
 	block.count += append_count;
 	return append_count;
 }
@@ -262,6 +261,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// special case: correlated mark join
 	if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.size() > 0) {
 		auto &info = correlated_mark_join_info;
+		lock_guard<mutex> mj_lock(info.mj_lock);
 		// Correlated MARK join
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
@@ -291,34 +291,47 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	count += added_count;
 
 	vector<unique_ptr<BufferHandle>> handles;
+	vector<BlockAppendEntry> append_entries;
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// first allocate space of where to serialize the keys and payload columns
 	idx_t remaining = added_count;
-	// first append to the last block (if any)
-	if (blocks.size() != 0) {
-		auto &last_block = blocks.back();
-		if (last_block.count < last_block.capacity) {
-			// last block has space: pin the buffer of this block
-			auto handle = buffer_manager.Pin(last_block.block_id);
-			// now append to the block
-			idx_t append_count = AppendToBlock(last_block, *handle, added_count, key_locations, remaining);
+	{
+		// first append to the last block (if any)
+		lock_guard<mutex> append_lock(ht_lock);
+		if (blocks.size() != 0) {
+			auto &last_block = blocks.back();
+			if (last_block.count < last_block.capacity) {
+				// last block has space: pin the buffer of this block
+				auto handle = buffer_manager.Pin(last_block.block_id);
+				// now append to the block
+				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
+				remaining -= append_count;
+				handles.push_back(move(handle));
+			}
+		}
+		while (remaining > 0) {
+			// now for the remaining data, allocate new buffers to store the data and append there
+			auto handle = buffer_manager.Allocate(block_capacity * entry_size);
+
+			HTDataBlock new_block;
+			new_block.count = 0;
+			new_block.capacity = block_capacity;
+			new_block.block_id = handle->block_id;
+
+			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
 			remaining -= append_count;
 			handles.push_back(move(handle));
+			blocks.push_back(new_block);
 		}
 	}
-	while (remaining > 0) {
-		// now for the remaining data, allocate new buffers to store the data and append there
-		auto handle = buffer_manager.Allocate(block_capacity * entry_size);
-
-		HTDataBlock new_block;
-		new_block.count = 0;
-		new_block.capacity = block_capacity;
-		new_block.block_id = handle->block_id;
-
-		idx_t append_count = AppendToBlock(new_block, *handle, added_count, key_locations, remaining);
-		remaining -= append_count;
-		handles.push_back(move(handle));
-		blocks.push_back(new_block);
+	// now set up the key_locations based on the append entries
+	idx_t append_idx = 0;
+	for (auto &append_entry : append_entries) {
+		idx_t next = append_idx + append_entry.count;
+		for (; append_idx < next; append_idx++) {
+			key_locations[append_idx] = append_entry.baseptr;
+			append_entry.baseptr += entry_size;
+		}
 	}
 
 	// hash the keys and obtain an entry in the list
@@ -663,7 +676,8 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 	}
 }
 
-static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs, const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
+static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
+                               const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	switch (result.type) {
 	case TypeId::BOOL:
@@ -692,7 +706,6 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
 	offset += GetTypeIdSize(result.type);
-
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
@@ -719,10 +732,10 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 		if (ht.join_type == JoinType::OUTER) {
 			// outer join: mark join matches as FOUND in the HT
 			auto ptrs = FlatVector::GetData<uintptr_t>(pointers);
-			for(idx_t i = 0; i < result_count; i++) {
+			for (idx_t i = 0; i < result_count; i++) {
 				auto idx = result_vector.get_index(i);
 				auto chain_pointer = (data_ptr_t *)(ptrs[idx] + ht.tuple_size);
-				auto target = (bool *) chain_pointer;
+				auto target = (bool *)chain_pointer;
 				*target = true;
 			}
 		}
@@ -1000,13 +1013,13 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	idx_t found_entries = 0;
-	for(; state.block_position < blocks.size(); state.block_position++) {
+	for (; state.block_position < blocks.size(); state.block_position++) {
 		auto &block = blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle->node->buffer;
-		for(; state.position < block.count; state.position++) {
+		for (; state.position < block.count; state.position++) {
 			auto tuple_base = baseptr + state.position * entry_size;
-			auto found_match = (bool *) (tuple_base + tuple_size);
+			auto found_match = (bool *)(tuple_base + tuple_size);
 			if (!*found_match) {
 				key_locations[found_entries++] = tuple_base;
 				if (found_entries == STANDARD_VECTOR_SIZE) {
@@ -1032,7 +1045,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (idx_t i = 0; i < build_types.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
 			assert(vector.type == build_types[i]);
-			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *) key_locations, FlatVector::IncrementalSelectionVector, found_entries, offset);
+			GatherResultVector(vector, FlatVector::IncrementalSelectionVector, (uintptr_t *)key_locations,
+			                   FlatVector::IncrementalSelectionVector, found_entries, offset);
 		}
 	}
 }

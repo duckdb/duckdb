@@ -72,10 +72,11 @@ public:
 	idx_t current_persistent_row, max_persistent_row;
 	idx_t current_transient_row, max_transient_row;
 	unique_ptr<ColumnScanState[]> column_scans;
+	idx_t column_count;
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	idx_t offset;
-	vector<column_t> column_ids;
 	LocalScanState local_state;
+
+	//! Move to the next vector
 	void NextVector();
 };
 

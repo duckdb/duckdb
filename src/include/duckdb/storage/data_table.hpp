@@ -81,15 +81,20 @@ public:
 	StorageManager &storage;
 
 public:
-	void InitializeScan(TableScanState &state, vector<column_t> column_ids,
+	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filter = nullptr);
-	void InitializeScan(Transaction &transaction, TableScanState &state, vector<column_t> column_ids,
+	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
 	                    unordered_map<idx_t, vector<TableFilter>> *table_filters = nullptr);
+
+	void InitializeParallelScan(ClientContext &context, const vector<column_t> &column_ids,
+	                            unordered_map<idx_t, vector<TableFilter>> *table_filters,
+	                            std::function<void(TableScanState)> callback);
+
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
 	//! elements were returned.
 	//! Returns true if all pushed down filters were executed during data fetching
-	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state,
+	void Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids,
 	          unordered_map<idx_t, vector<TableFilter>> &table_filters);
 
 	//! Initialize an index scan with a single predicate and a comparison type (= <= < > >=)
@@ -148,21 +153,23 @@ private:
 	void InitializeIndexScan(Transaction &transaction, TableIndexScanState &state, Index &index,
 	                         vector<column_t> column_ids);
 
+	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
+	                              unordered_map<idx_t, vector<TableFilter>> *table_filters, idx_t offset);
 	bool CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
 	                  idx_t &current_row);
-	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state, idx_t &current_row,
-	                   idx_t max_row, idx_t base_row, VersionManager &manager,
-	                   unordered_map<idx_t, vector<TableFilter>> &table_filters);
-	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, idx_t &current_row, idx_t max_row,
-	                     idx_t base_row);
+	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state,
+	                   const vector<column_t> &column_ids, idx_t &current_row, idx_t max_row, idx_t base_row,
+	                   VersionManager &manager, unordered_map<idx_t, vector<TableFilter>> &table_filters);
+	bool ScanCreateIndex(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
+	                     idx_t &current_row, idx_t max_row, idx_t base_row);
 
 	//! Figure out which of the row ids to use for the given transaction by looking at inserted/deleted data. Returns
 	//! the amount of rows to use and places the row_ids in the result_rows array.
 	idx_t FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
-	void InitializeCreateIndexScan(CreateIndexScanState &state, vector<column_t> column_ids);
-	void CreateIndexScan(CreateIndexScanState &structure, DataChunk &result);
+	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
+	void CreateIndexScan(CreateIndexScanState &structure, const vector<column_t> &column_ids, DataChunk &result);
 
 private:
 	//! Lock for appending entries to the table

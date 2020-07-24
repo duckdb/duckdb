@@ -21,6 +21,7 @@
 #include "thrift/transport/TBufferTransports.h"
 #include "parquet_types.h"
 #include "snappy.h"
+#include "miniz.hpp"
 #endif
 
 using namespace duckdb;
@@ -424,8 +425,8 @@ private:
 	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
 			if (col_data.defined_buf.ptr[i]) {
-				auto offset = col_data.offset_buf.read<int32_t>();
-				if ((idx_t) offset > col_data.dict_size) {
+				auto offset = col_data.offset_buf.read<uint32_t>();
+				if (offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
 					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
 					                    ". Corrupt file?");
@@ -447,6 +448,10 @@ private:
 			}
 		}
 	}
+
+	static const uint8_t GZIP_HEADER_MINSIZE = 10;
+	static const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
+	static const unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 	static bool _prepare_page_buffers(ParquetScanFunctionData &data, idx_t col_idx) {
 		auto &col_data = data.column_data[col_idx];
@@ -478,11 +483,7 @@ private:
 			break;
 
 		case CompressionCodec::SNAPPY: {
-			size_t decompressed_size;
-
-			snappy::GetUncompressedLength(col_data.buf.ptr, page_hdr.compressed_page_size, &decompressed_size);
-			col_data.decompressed_buf.resize(decompressed_size);
-
+			col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 			auto res =
 			    snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
 			if (!res) {
@@ -491,8 +492,40 @@ private:
 			col_data.payload.ptr = col_data.decompressed_buf.ptr;
 			break;
 		}
+		case CompressionCodec::GZIP: {
+			mz_stream stream;
+			memset(&stream, 0, sizeof(mz_stream));
+
+			auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
+			if (mz_ret != MZ_OK) {
+				throw Exception("Failed to initialize miniz");
+			}
+
+			col_data.buf.available(GZIP_HEADER_MINSIZE);
+			auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
+
+			if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
+			    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+				throw Exception("Input is invalid/unsupported GZIP stream");
+			}
+
+			col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
+
+			stream.next_in = (const unsigned char *)col_data.buf.ptr + GZIP_HEADER_MINSIZE;
+			stream.avail_in = page_hdr.compressed_page_size - GZIP_HEADER_MINSIZE;
+			stream.next_out = (unsigned char *)col_data.decompressed_buf.ptr;
+			stream.avail_out = page_hdr.uncompressed_page_size;
+
+			mz_ret = mz_inflate(&stream, MZ_FINISH);
+			if (mz_ret != MZ_OK && mz_ret != MZ_STREAM_END) {
+				throw runtime_error("Decompression failure: " + string(mz_error(mz_ret)));
+			}
+
+			col_data.payload.ptr = col_data.decompressed_buf.ptr;
+			break;
+		}
 		default:
-			throw runtime_error("Unsupported compression codec. Try uncompressed or snappy");
+			throw runtime_error("Unsupported compression codec. Try uncompressed, gzip or snappy");
 		}
 		col_data.buf.inc(page_hdr.compressed_page_size);
 
@@ -792,9 +825,9 @@ private:
 						auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
-								auto offset = col_data.offset_buf.read<int32_t>();
-								if ((idx_t) offset >= col_data.string_collection->count) {
-									throw runtime_error("string dictionary offset out of bounds");
+								auto offset = col_data.offset_buf.read<uint32_t>();
+								if (offset >= col_data.string_collection->count) {
+        							throw runtime_error("string dictionary offset out of bounds");
 								}
 								auto &chunk = col_data.string_collection->chunks[offset / STANDARD_VECTOR_SIZE];
 								auto &vec = chunk->data[0];
