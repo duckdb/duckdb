@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_copy_from_file.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 
 #include <algorithm>
 
@@ -20,15 +21,17 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// bind the select statement
 	auto select_node = Bind(*stmt.select_statement);
 
-	auto &names = select_node.names;
-
 	// TODO catalog lookup for copy_to function
+	auto &catalog = Catalog::GetCatalog(context);
+	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, stmt.info->schema, stmt.info->format);
+
+	unique_ptr<FunctionData> function_data =
+	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
 
 	// now create the copy information
-	auto copy = make_unique<LogicalCopyToFile>(move(stmt.info));
+	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->AddChild(move(select_node.plan));
-	copy->names = select_node.names;
-	copy->sql_types = select_node.types;
+
 	result.plan = move(copy);
 
 	return result;
@@ -53,9 +56,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 
-	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
-	// set all columns to false
-
+	// auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema,
+	// stmt.info->table); set all columns to false
 
 	// now create the copy statement and set it as a child of the insert statement
 	auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), bound_insert.expected_types);

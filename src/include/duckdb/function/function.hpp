@@ -30,7 +30,9 @@ struct FunctionData {
 	virtual ~FunctionData() {
 	}
 
-	virtual unique_ptr<FunctionData> Copy() = 0;
+	virtual unique_ptr<FunctionData> Copy() {
+		return make_unique<FunctionData>();
+	};
 };
 
 struct TableFunctionData : public FunctionData {
@@ -68,7 +70,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects, SQLType varargs = SQLType::INVALID)
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects,
+	               SQLType varargs = SQLType::INVALID)
 	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(varargs),
 	      has_side_effects(has_side_effects) {
 	}
