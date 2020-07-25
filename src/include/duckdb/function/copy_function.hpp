@@ -36,7 +36,7 @@ typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_da
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<SQLType> &expected_types);
 typedef unique_ptr<GlobalFunctionData> (*copy_from_initialize_t)(ClientContext &context, FunctionData &bind_data);
-typedef void (*copy_from_get_chunk)(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data, DataChunk &chunk);
+typedef void (*copy_from_get_chunk_t)(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data, DataChunk &chunk);
 
 class CopyFunction : public Function {
 public:
@@ -54,7 +54,7 @@ public:
 
 	copy_from_bind_t copy_from_bind;
 	copy_from_initialize_t copy_from_initialize;
-	copy_from_get_chunk copy_from_get_chunk;
+	copy_from_get_chunk_t copy_from_get_chunk;
 
 };
 

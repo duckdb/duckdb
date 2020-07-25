@@ -373,7 +373,7 @@ struct LocalReadCSVData : public LocalFunctionData {
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, string file_path) : fs(fs) {
-		handle = fs.OpenFile(file_path, FileFlags::WRITE | FileFlags::CREATE, FileLockType::WRITE_LOCK);
+		handle = fs.OpenFile(file_path, FileFlags::WRITE | FileFlags::CREATE_NEW, FileLockType::WRITE_LOCK);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {

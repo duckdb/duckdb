@@ -50,8 +50,10 @@ public:
 	static constexpr uint8_t DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
 	static constexpr uint8_t CREATE = 1 << 3;
+	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
+	static constexpr uint8_t CREATE_NEW = 1 << 4;
 	//! Open file in append mode
-	static constexpr uint8_t APPEND = 1 << 4;
+	static constexpr uint8_t APPEND = 1 << 5;
 };
 
 class FileSystem {
