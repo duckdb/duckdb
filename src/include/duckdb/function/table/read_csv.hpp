@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+struct CSVCopyFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ReadCSVTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -118,7 +118,7 @@ private:
 	//! Transform a Postgres column reference into an Expression
 	unique_ptr<ParsedExpression> TransformColumnRef(PGColumnRef *root);
 	//! Transform a Postgres constant value into an Expression
-	unique_ptr<ParsedExpression> TransformValue(PGValue val);
+	unique_ptr<ConstantExpression> TransformValue(PGValue val);
 	//! Transform a Postgres operator into an Expression
 	unique_ptr<ParsedExpression> TransformAExpr(PGAExpr *root);
 	//! Transform a Postgres abstract expression into an Expression

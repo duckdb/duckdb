@@ -39,6 +39,10 @@ public:
 	BinaryData GetData() {
 		return std::move(blob);
 	}
+
+	void Reset() {
+		blob.size = 0;
+	}
 };
 
 } // namespace duckdb

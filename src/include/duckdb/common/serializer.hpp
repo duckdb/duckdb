@@ -24,6 +24,10 @@ public:
 
 	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
 
+	void WriteData(const string &str) {
+		WriteData((const_data_ptr_t) str.c_str(), str.size());
+	}
+
 	template <class T> void Write(T element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}

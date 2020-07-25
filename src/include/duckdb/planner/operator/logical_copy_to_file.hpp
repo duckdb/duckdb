@@ -10,18 +10,17 @@
 
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 
 class LogicalCopyToFile : public LogicalOperator {
 public:
-	LogicalCopyToFile(unique_ptr<CopyInfo> info)
-	    : LogicalOperator(LogicalOperatorType::COPY_TO_FILE), info(move(info)) {
+	LogicalCopyToFile(CopyFunction function, unique_ptr<FunctionData> bind_data)
+	    : LogicalOperator(LogicalOperatorType::COPY_TO_FILE), function(function), bind_data(move(bind_data)) {
 	}
-
-	unique_ptr<CopyInfo> info;
-	vector<string> names;
-	vector<SQLType> sql_types;
+	CopyFunction function;
+	unique_ptr<FunctionData> bind_data;
 
 protected:
 	void ResolveTypes() override {

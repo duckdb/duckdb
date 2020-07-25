@@ -9,6 +9,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -79,6 +80,11 @@ void BuiltinFunctions::AddFunction(ScalarFunctionSet set) {
 void BuiltinFunctions::AddFunction(TableFunction function) {
 	CreateTableFunctionInfo info(function);
 	catalog.CreateTableFunction(context, &info);
+}
+
+void BuiltinFunctions::AddFunction(CopyFunction function) {
+	CreateCopyFunctionInfo info(function);
+	catalog.CreateCopyFunction(context, &info);
 }
 
 string Function::CallToString(string name, vector<SQLType> arguments) {
