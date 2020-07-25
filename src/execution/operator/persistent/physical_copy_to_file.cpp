@@ -10,8 +10,10 @@ namespace duckdb {
 
 class CopyToFunctionGlobalState : public GlobalOperatorState {
 public:
-	CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state) : global_state(move(global_state)) {
+	CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state) : rows_copied(0), global_state(move(global_state)) {
 	}
+
+	idx_t rows_copied;
 	unique_ptr<GlobalFunctionData> global_state;
 };
 
@@ -23,25 +25,37 @@ public:
 };
 
 void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
-	//	chunk.SetCardinality(1);
-	//	chunk.SetValue(0, 0, Value::BIGINT(total));
+	auto &g = (CopyToFunctionGlobalState &)*sink_state;
+
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
 
 	state->finished = true;
 }
 
 void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
                               DataChunk &input) {
-	function.copy_to_sink(context.client, *bind_data, *((CopyToFunctionGlobalState &)gstate).global_state,
-	                      *((CopyToFunctionLocalState &)lstate).local_state, input);
+	auto &g = (CopyToFunctionGlobalState &)gstate;
+	auto &l = (CopyToFunctionLocalState &)lstate;
+
+	g.rows_copied += input.size();
+	function.copy_to_sink(context.client, *bind_data, *g.global_state, *l.local_state, input);
 }
 
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
-	function.copy_to_combine(context.client, *bind_data, *((CopyToFunctionGlobalState &)gstate).global_state,
-	                         *((CopyToFunctionLocalState &)lstate).local_state);
+	auto &g = (CopyToFunctionGlobalState &)gstate;
+	auto &l = (CopyToFunctionLocalState &)lstate;
+
+	if (function.copy_to_combine) {
+		function.copy_to_combine(context.client, *bind_data, *g.global_state, *l.local_state);
+	}
 }
 void PhysicalCopyToFile::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
-	auto global_state = (CopyToFunctionGlobalState *)gstate.get();
-	function.copy_to_finalize(context, *bind_data, *global_state->global_state);
+	auto g = (CopyToFunctionGlobalState *)gstate.get();
+	if (function.copy_to_finalize) {
+		function.copy_to_finalize(context, *bind_data, *g->global_state);
+	}
+	PhysicalSink::Finalize(context, move(gstate));
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) {

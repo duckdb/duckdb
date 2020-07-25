@@ -22,6 +22,7 @@ class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
+class CopyFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunction;
@@ -115,6 +116,7 @@ public:
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
+	void AddFunction(CopyFunction function);
 
 	void AddCollation(string name, ScalarFunction function, bool combinable = false,
 	                  bool not_required_for_equality = false);

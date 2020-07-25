@@ -65,6 +65,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {
+	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
 }
 

@@ -23,7 +23,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	info.file_path = stmt->filename;
 	info.is_from = stmt->is_from;
 
-	info.format = "parquet";
+	info.format = "csv";
 
 	// get select_list
 	if (stmt->attlist) {
@@ -32,7 +32,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 			if (target->name) {
 				info.select_list.push_back(string(target->name));
 			}
-			// FIXME
 		}
 	}
 
@@ -66,6 +65,9 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 		// iterate over each option
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<PGDefElem *>(cell->data.ptr_value);
+			if (info.options.find(def_elem->defname) != info.options.end()) {
+				throw ParserException("Unexpected duplicate option \"%s\"", def_elem->defname);
+			}
 			if (!def_elem->arg) {
 				info.options[def_elem->defname] = vector<Value>();
 				continue;

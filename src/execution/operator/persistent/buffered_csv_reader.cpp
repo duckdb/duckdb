@@ -19,7 +19,6 @@
 using namespace duckdb;
 using namespace std;
 
-
 static char is_newline(char c) {
 	return c == '\n' || c == '\r';
 }
