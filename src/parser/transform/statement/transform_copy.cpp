@@ -58,13 +58,23 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 		result->select_statement = TransformSelectNode((PGSelectStmt *)stmt->query);
 	}
 
-	// handle options, when no option were given, try auto detect
+	// handle the different options of the COPY statement
 	if (stmt->options) {
 		PGListCell *cell = nullptr;
 
 		// iterate over each option
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<PGDefElem *>(cell->data.ptr_value);
+			if (StringUtil::Lower(def_elem->defname) == "format") {
+				// format specifier: interpret this option
+				auto *format_val = (PGValue *)(def_elem->arg);
+				if (!format_val || format_val->type != T_PGString) {
+					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'csv_auto'");
+				}
+				info.format = format_val->val.str;
+				continue;
+			}
+			// otherwise
 			if (info.options.find(def_elem->defname) != info.options.end()) {
 				throw ParserException("Unexpected duplicate option \"%s\"", def_elem->defname);
 			}

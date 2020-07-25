@@ -21,13 +21,15 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// bind the select statement
 	auto select_node = Bind(*stmt.select_statement);
 
-	// TODO catalog lookup for copy_to function
+	// lookup the format in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
 	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, stmt.info->schema, stmt.info->format);
+	if (!copy_function->function.copy_to_bind) {
+		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format.c_str());
+	}
 
-	unique_ptr<FunctionData> function_data =
+	auto function_data =
 	    copy_function->function.copy_to_bind(context, *stmt.info, select_node.names, select_node.types);
-
 	// now create the copy information
 	auto copy = make_unique<LogicalCopyToFile>(copy_function->function, move(function_data));
 	copy->AddChild(move(select_node.plan));
@@ -56,11 +58,31 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	auto &bound_insert = (LogicalInsert &)*insert_statement.plan;
 
-	// auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema,
-	// stmt.info->table); set all columns to false
+	// lookup the format in the catalog
+	auto &catalog = Catalog::GetCatalog(context);
+	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, stmt.info->schema, stmt.info->format);
+	if (!copy_function->function.copy_from_bind) {
+		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format.c_str());
+	}
+	// lookup the table to copy into
+	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
+	vector<string> expected_names;
+	expected_names.reserve(bound_insert.expected_types.size());
+	if (bound_insert.column_index_map.size() > 0) {
+		for(idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
+			expected_names.push_back(table->columns[bound_insert.column_index_map[i]].name);
+		}
+	} else {
+		for(idx_t i = 0; i < table->columns.size(); i++) {
+			expected_names.push_back(table->columns[i].name);
+		}
+	}
+
+	auto function_data =
+	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
 
 	// now create the copy statement and set it as a child of the insert statement
-	auto copy = make_unique<LogicalCopyFromFile>(0, move(stmt.info), bound_insert.expected_types);
+	auto copy = make_unique<LogicalCopyFromFile>(0, copy_function->function, move(function_data), bound_insert.expected_types);
 	insert_statement.plan->children.push_back(move(copy));
 	result.plan = move(insert_statement.plan);
 	return result;
