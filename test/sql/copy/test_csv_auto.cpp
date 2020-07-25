@@ -27,7 +27,7 @@ TEST_CASE("Test copy into auto from lineitem csv", "[copy]") {
 	    "NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, "
 	    "l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) "
 	    "NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);"));
-	result = con.Query("COPY lineitem FROM '" + lineitem_csv + "' (FORMAT CSV_AUTO);");
+	REQUIRE_NO_FAIL(con.Query("COPY lineitem FROM '" + lineitem_csv + "' (FORMAT CSV_AUTO);"));
 
 	result = con.Query("SELECT COUNT(*) FROM lineitem;");
 	REQUIRE(CHECK_COLUMN(result, 0, {10}));

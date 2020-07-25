@@ -75,6 +75,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
+			open_flags |= O_TRUNC;
 		}
 		if (flags & FileFlags::APPEND) {
 			open_flags |= O_APPEND;

@@ -156,7 +156,7 @@ TEST_CASE("Test copy statement", "[copy]") {
 	unterminated_quotes_file << "\"hello\n\n world\n";
 	unterminated_quotes_file.close();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE unterminated (a VARCHAR);"));
-	REQUIRE_FAIL(con.Query("COPY unterminated FROM '" + fs.JoinPath(csv_path, "unterminated.csv") + "';"));
+	REQUIRE_FAIL(con.Query("COPY unterminated FROM '" + fs.JoinPath(csv_path, "unterminated.csv") + " (QUOTE '\"')';"));
 
 	// 1024 rows (vector size)
 	ofstream csv_vector_size(fs.JoinPath(csv_path, "vsize.csv"));
@@ -676,11 +676,11 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	// create a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));"));
 
-	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' (HEADER FALSE);");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// test FORCE_QUOTE *
-	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_star.csv") + "' (FORCE_QUOTE *);");
+	result = con.Query("COPY test TO '" + fs.JoinPath(csv_path, "test_star.csv") + "' (HEADER FALSE, FORCE_QUOTE *);");
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	vector<string> lines;
@@ -786,7 +786,7 @@ TEST_CASE("Test force_quote and force_not_null", "[copy]") {
 	                       "' (FORCE_NOT_NULL (col_c, col_d));"));
 
 	// FORCE_NOT_NULL fails on integer columns
-	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (FORCE_NOT_NULL (col_a));"));
+	REQUIRE_FAIL(con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test_2.csv") + "' (HEADER FALSE, FORCE_NOT_NULL (col_a));"));
 }
 
 TEST_CASE("Test copy statement with unicode delimiter/quote/escape", "[copy]") {
@@ -1155,7 +1155,7 @@ TEST_CASE("Test copy statement with many empty lines", "[copy]") {
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
-	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' (HEADER FALSE);");
 	REQUIRE(CHECK_COLUMN(result, 0, {20000}));
 
 	result = con.Query("SELECT SUM(a) FROM test;");
@@ -1221,7 +1221,7 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);"));
-	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "';");
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test.csv") + "' (HEADER FALSE);");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
 
 	result = con.Query("SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;");
@@ -1255,7 +1255,7 @@ TEST_CASE("Test Windows Newlines with a long file", "[copy]") {
 
 	// load CSV file into a table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a INTEGER);"));
-	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test2.csv") + "';");
+	result = con.Query("COPY test FROM '" + fs.JoinPath(csv_path, "test2.csv") + "' (HEADER FALSE);");
 	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(line_count)}));
 
 	result = con.Query("SELECT SUM(a) FROM test;");
