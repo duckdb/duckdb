@@ -440,6 +440,9 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	case TypeId::DOUBLE:
 		templated_quicksort<double>(vdata, not_null, not_null_count, order.order);
 		break;
+	case TypeId::INTERVAL:
+		templated_quicksort<interval_t>(vdata, not_null, not_null_count, order.order);
+		break;
 	case TypeId::VARCHAR:
 		templated_quicksort<string_t>(vdata, not_null, not_null_count, order.order);
 		break;

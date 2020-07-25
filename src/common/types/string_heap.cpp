@@ -1,6 +1,7 @@
 #include "duckdb/common/types/string_heap.hpp"
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "utf8proc_wrapper.hpp"
 

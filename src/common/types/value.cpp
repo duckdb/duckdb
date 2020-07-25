@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -265,6 +266,19 @@ Value Value::BLOB(string data, bool must_cast) {
 	return result;
 }
 
+Value Value::INTERVAL(int32_t months, int32_t days, int64_t msecs) {
+	Value result(TypeId::INTERVAL);
+	result.is_null = false;
+	result.value_.interval.months = months;
+	result.value_.interval.days = days;
+	result.value_.interval.msecs = msecs;
+	return result;
+}
+
+Value Value::INTERVAL(interval_t interval) {
+	return Value::INTERVAL(interval.months, interval.days, interval.msecs);
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -421,6 +435,8 @@ string Value::ToString(SQLType sql_type) const {
 		return Time::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
+	case SQLTypeId::INTERVAL:
+		return Interval::ToString(value_.interval);
 	case SQLTypeId::VARCHAR:
 		return str_value;
 	case SQLTypeId::BLOB: {

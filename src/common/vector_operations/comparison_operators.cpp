@@ -46,6 +46,9 @@ public:
 		case TypeId::DOUBLE:
 			TemplatedExecute<double, OP>(left, right, result, count);
 			break;
+		case TypeId::INTERVAL:
+			TemplatedExecute<interval_t, OP>(left, right, result, count);
+			break;
 		case TypeId::VARCHAR:
 			TemplatedExecute<string_t, OP, true>(left, right, result, count);
 			break;
