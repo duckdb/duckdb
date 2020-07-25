@@ -19,10 +19,12 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and Append flags
+	// cannot combine Read and CREATE/Append flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
-	// cannot combine Read and CREATE flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	assert(!(flags & FileFlags::CREATE && flags & FileFlags::CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -75,7 +77,8 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
-			open_flags |= O_TRUNC;
+		} else if (flags & FileFlags::CREATE_NEW) {
+			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags & FileFlags::APPEND) {
 			open_flags |= O_APPEND;
@@ -358,6 +361,8 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		share_mode = 0;
 		if (flags & FileFlags::CREATE) {
 			creation_disposition = OPEN_ALWAYS;
+		} else if (flags & FileFlags::CREATE_NEW) {
+			creation_disposition = CREATE_ALWAYS;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;

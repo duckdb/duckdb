@@ -23,7 +23,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, stmt.info->schema, stmt.info->format);
+	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_to_bind) {
 		throw NotImplementedException("COPY TO is not supported for FORMAT \"%s\"", stmt.info->format.c_str());
 	}
@@ -60,7 +60,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetCatalog(context);
-	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, stmt.info->schema, stmt.info->format);
+	auto copy_function = catalog.GetEntry<CopyFunctionCatalogEntry>(context, DEFAULT_SCHEMA, stmt.info->format);
 	if (!copy_function->function.copy_from_bind) {
 		throw NotImplementedException("COPY FROM is not supported for FORMAT \"%s\"", stmt.info->format.c_str());
 	}
