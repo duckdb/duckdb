@@ -2,6 +2,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 
 using namespace duckdb;
@@ -49,8 +50,8 @@ TEST_CASE("Test TIMESTAMP type", "[timestamp]") {
 	REQUIRE_FAIL(con.Query("SELECT t*t FROM timestamp"));
 	REQUIRE_FAIL(con.Query("SELECT t/t FROM timestamp"));
 	REQUIRE_FAIL(con.Query("SELECT t%t FROM timestamp"));
-	// FIXME: we can subtract timestamps!
-	// REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
+	// we can subtract timestamps!
+	REQUIRE_NO_FAIL(con.Query("SELECT t-t FROM timestamp"));
 
 	// test YEAR function
 	result = con.Query("SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01');");
@@ -158,45 +159,28 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	result = con.Query("SELECT AGE(TIMESTAMP '1957-06-13');");
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
-	auto interval = Timestamp::GetDifference(Timestamp::FromString("1957-06-13"), current_timestamp);
-	auto timestamp = Timestamp::IntervalToTimestamp(interval);
-	auto years = timestamp.year;
-	auto months = timestamp.month;
-	auto days = timestamp.day;
+	auto interval = Interval::GetDifference(Timestamp::FromString("1957-06-13"), current_timestamp);
 
-	std::string output{""};
-	if (years == 0 && months == 0 && days == 0) {
-		output += "00:00:00";
-	} else {
-		if (years != 0) {
-			output = std::to_string(years);
-			output += " years ";
-		}
-		if (months != 0) {
-			output += std::to_string(months);
-			output += " mons ";
-		}
-		if (days != 0) {
-			output += std::to_string(days);
-			output += " days";
-		}
-	}
-	REQUIRE(CHECK_COLUMN(result, 0, {output.c_str()}));
+	result = con.Query("SELECT AGE(TIMESTAMP '1957-06-13');");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(interval)}));
 
 	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', TIMESTAMP '1957-06-13');");
-	REQUIRE(CHECK_COLUMN(result, 0, {"43 years 9 mons 27 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(43*12 + 9, 27, 0)}));
 
 	result = con.Query("SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-04-17');");
-	REQUIRE(CHECK_COLUMN(result, 0, {"8 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 8, 0)}));
 
 	result = con.Query("SELECT age(TIMESTAMP '2014-04-25', TIMESTAMP '2014-01-01');");
-	REQUIRE(CHECK_COLUMN(result, 0, {"3 mons 24 days"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(3, 24, 0)}));
 
 	result = con.Query("SELECT age(TIMESTAMP '2019-06-11', TIMESTAMP '2019-06-11');");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 0, 0)}));
+
+	result = con.Query("SELECT age(TIMESTAMP '2019-06-11', TIMESTAMP '2019-06-11')::VARCHAR;");
 	REQUIRE(CHECK_COLUMN(result, 0, {"00:00:00"}));
 
 	result = con.Query(" SELECT age(timestamp '2019-06-11 12:00:00', timestamp '2019-07-11 11:00:00');");
-	REQUIRE(CHECK_COLUMN(result, 0, {"-29 days -23:00:00"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, -29, -23 * Interval::MSECS_PER_HOUR)}));
 
 	// create and insert into table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE timestamp(t1 TIMESTAMP, t2 TIMESTAMP)"));
@@ -210,31 +194,57 @@ TEST_CASE("Test timestamp functions", "[timestamp]") {
 
 	result = con.Query("SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {{"43 years 9 mons 27 days"},
-	                      {"56 years 10 mons 12 days"},
-	                      {"56 years 10 mons 12 days"},
-	                      {"61 years 11 mons 28 days"},
-	                      {Value()},
-	                      {"61 years 11 mons 28 days"},
-	                      {Value()}}));
+	                     {Value::INTERVAL(43 * Interval::MONTHS_PER_YEAR + 9, 27, 0),
+						 Value::INTERVAL(56 * Interval::MONTHS_PER_YEAR + 10, 12, 0),
+						 Value::INTERVAL(56 * Interval::MONTHS_PER_YEAR + 10, 12, 0),
+						 Value::INTERVAL(61 * Interval::MONTHS_PER_YEAR + 11, 28, 0),
+	                      Value(),
+						 Value::INTERVAL(61 * Interval::MONTHS_PER_YEAR + 11, 28, 0),
+	                      Value()}));
 
 	result = con.Query("SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(result, 0,
-	                     {{"43 years 9 mons 27 days"},
-	                      {"-13 years -7 days"},
-	                      {"-12 years -8 mons -21 days"},
-	                      {"-18 years -2 mons -1 days"},
-	                      {"-18 years -2 mons -1 days"},
-	                      {Value()},
-	                      {Value()}}));
+						{
+						Value::INTERVAL(43 * Interval::MONTHS_PER_YEAR + 9, 27, 0),
+						Value::INTERVAL(-13 * Interval::MONTHS_PER_YEAR, -7, 0),
+						Value::INTERVAL(-(12 * Interval::MONTHS_PER_YEAR + 8), -21, 0),
+						Value::INTERVAL(-(18 * Interval::MONTHS_PER_YEAR + 2), -1, 0),
+						Value::INTERVAL(-(18 * Interval::MONTHS_PER_YEAR + 2), -1, 0),
+						Value(),
+						Value()
+						}));
 
 	result = con.Query("SELECT AGE(t1, t2) FROM timestamp;");
 	REQUIRE(CHECK_COLUMN(
 	    result, 0,
-	    {{"43 years 9 mons 27 days"}, {"8 days"}, {"3 mons 24 days"}, {"00:00:00"}, {Value()}, {Value()}, {Value()}}));
+	    {
+		Value::INTERVAL(43 * Interval::MONTHS_PER_YEAR + 9, 27, 0),
+		Value::INTERVAL(0, 8, 0),
+		Value::INTERVAL(3, 24, 0),
+		Value::INTERVAL(0, 0, 0),
+		Value(),
+		Value(),
+		Value()}));
+
+	// age is equivalent to subtraction
+	result = con.Query("SELECT t1 - t2 FROM timestamp;");
+	REQUIRE(CHECK_COLUMN(
+	    result, 0,
+	    {
+		Value::INTERVAL(43 * Interval::MONTHS_PER_YEAR + 9, 27, 0),
+		Value::INTERVAL(0, 8, 0),
+		Value::INTERVAL(3, 24, 0),
+		Value::INTERVAL(0, 0, 0),
+		Value(),
+		Value(),
+		Value()}));
 
 	result = con.Query("SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12';");
-	REQUIRE(CHECK_COLUMN(result, 0, {{"8 days"}, {"3 mons 24 days"}, {"00:00:00"}, {Value()}}));
+	REQUIRE(CHECK_COLUMN(result, 0, {
+		Value::INTERVAL(0, 8, 0),
+		Value::INTERVAL(3, 24, 0),
+		Value::INTERVAL(0, 0, 0),
+		Value() }));
 
 	// Test NULLS
 	result = con.Query("SELECT AGE(NULL, NULL);");

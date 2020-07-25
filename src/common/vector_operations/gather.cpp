@@ -55,6 +55,9 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 	case TypeId::POINTER:
 		templated_gather_loop<uintptr_t>(source, dest, count);
 		break;
+	case TypeId::INTERVAL:
+		templated_gather_loop<interval_t>(source, dest, count);
+		break;
 	case TypeId::VARCHAR:
 		templated_gather_loop<string_t>(source, dest, count);
 		break;
