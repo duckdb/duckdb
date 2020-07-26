@@ -22,6 +22,9 @@ Connection::Connection(DuckDB &database) : db(database), context(make_unique<Cli
 }
 
 Connection::~Connection() {
+	if (record_writer) {
+		record_writer->Sync();
+	}
 	if (!context->is_invalidated) {
 		context->Cleanup();
 		db.connection_manager->RemoveConnection(this);
@@ -51,7 +54,53 @@ void Connection::DisableProfiling() {
 	context->DisableProfiling();
 }
 
+static string ParseGroupFromPath(string file) {
+	string extension = "";
+	if (file.find("slow") != std::string::npos) {
+		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		extension = "[.]";
+	}
+	// move backwards to the last slash
+	int group_begin = -1, group_end = -1;
+	for(idx_t i = file.size(); i > 0; i--) {
+		if (file[i - 1] == '/' || file[i - 1] == '\\') {
+			if (group_end == -1) {
+				group_end = i - 1;
+			} else {
+				group_begin = i;
+				return "[" + file.substr(group_begin, group_end - group_begin) + "]";
+			}
+		}
+	}
+	if (group_end == -1) {
+		return "[" + file + "]";
+	}
+	return "[" + file.substr(0, group_end) + "]";
+}
+
+void Connection::Record(string file, string description, vector<string> extensions) {
+	string target = StringUtil::Replace(file, ".cpp", ".test");
+	record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
+	string path = "-- name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";
+	record_writer->WriteData((const_data_ptr_t) path.c_str(), path.size());
+	if (!description.empty()) {
+		description = "-- description: " + description + "\n";
+		record_writer->WriteData((const_data_ptr_t) description.c_str(), description.size());
+	}
+	string group_name = "-- group: " + ParseGroupFromPath(file) + "\n";
+	record_writer->WriteData((const_data_ptr_t) group_name.c_str(), group_name.size());
+	for(auto extension : extensions) {
+		string ext = "-- extension: " + extension + "\n";
+		record_writer->WriteData((const_data_ptr_t) ext.c_str(), ext.size());
+	}
+	record_writer->WriteData((const_data_ptr_t) "\n", 1);
+}
+
 void Connection::EnableQueryVerification() {
+	if (record_writer) {
+		string query = "statement ok\nPRAGMA enable_verification\n\n";
+		record_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+	}
 	context->query_verification_enabled = true;
 }
 
@@ -60,6 +109,10 @@ void Connection::DisableQueryVerification() {
 }
 
 void Connection::ForceParallelism() {
+	if (record_writer) {
+		string query = "statement ok\nPRAGMA force_parallelism\n\n";
+		record_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+	}
 	context->force_parallelism = true;
 }
 
@@ -69,6 +122,64 @@ unique_ptr<QueryResult> Connection::SendQuery(string query) {
 
 unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 	auto result = context->Query(query, false);
+	if (record_writer) {
+		string q;
+		if (result->success) {
+			if (result->statement_type == StatementType::SELECT_STATEMENT) {
+				// record the answer
+				auto &materialized = (MaterializedQueryResult &) *result;
+				q = "query ";
+				for(idx_t i = 0; i < materialized.sql_types.size(); i++) {
+					switch(materialized.sql_types[i].id) {
+					case SQLTypeId::TINYINT:
+					case SQLTypeId::SMALLINT:
+					case SQLTypeId::INTEGER:
+					case SQLTypeId::BIGINT:
+						q += "I";
+						break;
+					case SQLTypeId::DECIMAL:
+					case SQLTypeId::FLOAT:
+					case SQLTypeId::DOUBLE:
+						q += "R";
+						break;
+					default:
+						q += "T";
+						break;
+					}
+					q += "\n";
+				}
+				q += query + "\n";
+				q += "----\n";
+				for(idx_t r = 0; r < materialized.collection.count; r++) {
+					for(idx_t c = 0; c < materialized.sql_types.size(); c++) {
+						auto val = materialized.collection.GetValue(c, r);
+						if (c != 0) {
+							q += "\n";
+						}
+						if (val.is_null) {
+							q += "NULL";
+						} else {
+							switch (materialized.sql_types[c].id) {
+							case SQLTypeId::BOOLEAN:
+								q += val.value_.boolean ? "1" : "0";
+								break;
+							default:
+								q += val.ToString();
+								break;
+							}
+						}
+					}
+					q += "\n";
+				}
+				q += "\n";
+			} else {
+				q = "statement ok\n"+ query + "\n\n";
+			}
+		} else {
+			q = "statement error\n"+ query + "\n\n";
+		}
+		record_writer->WriteData((const_data_ptr_t) q.c_str(), q.size());
+	}
 	assert(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 }

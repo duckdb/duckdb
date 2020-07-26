@@ -8,6 +8,7 @@ TEST_CASE("Test boolean casts", "[cast]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Record(__FILE__, "Test boolean casts");
 	con.EnableQueryVerification();
 
 	// boolean -> string casts

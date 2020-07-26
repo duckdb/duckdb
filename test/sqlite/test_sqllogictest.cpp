@@ -34,6 +34,7 @@
 #define stricmp strcasecmp
 #endif
 #include "slt_duckdb.hpp"
+#include "duckdb/common/types.hpp"
 
 #include <algorithm>
 #include <dirent.h>
@@ -503,7 +504,7 @@ static void execute_file(string script) {
 
 			/* Verify that the type string consists of one or more
 			 *characters
-			 ** from the set "TIR". */
+			 ** from the set 'TIR':*/
 			for (k = 0; (c = sScript.azToken[1][k]) != 0; k++) {
 				if (c != 'T' && c != 'I' && c != 'R') {
 					fprintf(stderr,
@@ -642,6 +643,9 @@ static void execute_file(string script) {
 			 */
 			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
 			break;
+		} else if (strcmp(sScript.azToken[0], "--") == 0) {
+			// skip comments
+			continue;
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
@@ -685,6 +689,30 @@ static void testRunner() {
 	auto name = Catch::getResultCapture().getCurrentTestName();
 	fprintf(stderr, "%s\n", name.c_str());
 	execute_file(name);
+}
+
+static string ParseGroupFromPath(string file) {
+	string extension = "";
+	if (file.find("slow") != std::string::npos) {
+		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		extension = "[.]";
+	}
+	// move backwards to the last slash
+	int group_begin = -1, group_end = -1;
+	for(idx_t i = file.size(); i > 0; i--) {
+		if (file[i - 1] == '/' || file[i - 1] == '\\') {
+			if (group_end == -1) {
+				group_end = i - 1;
+			} else {
+				group_begin = i;
+				return "[" + file.substr(group_begin, group_end - group_begin) + "]";
+			}
+		}
+	}
+	if (group_end == -1) {
+		return "[" + file + "]";
+	}
+	return "[" + file.substr(0, group_end) + "]";
 }
 
 TEST_CASE("SQLite select1", "[sqlitelogic]") {
@@ -756,6 +784,12 @@ struct AutoRegTests {
 					}
 				}
 				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+			}
+		});
+		listFiles("test/", [excludes](const string &path) {
+			if (endsWith(path, ".test")) {
+				// parse the name / group from the test
+				REGISTER_TEST_CASE(testRunner, path, ParseGroupFromPath(path));
 			}
 		});
 	}
