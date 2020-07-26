@@ -1,6 +1,3 @@
-library("testthat")
-library("DBI")
-
 test_convert <- function(con, type, val) {
   val_comp <- val
   if (is.factor(val)) {
