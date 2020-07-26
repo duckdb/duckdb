@@ -5,9 +5,11 @@ set -x
 
 cd $(dirname $0)
 
-R -q -f dependencies.R
 R CMD build .
-R CMD INSTALL duckdb_*.tar.gz
-R CMD check --as-cran duckdb_*.tar.gz
+R -q -e 'tic::script()'
 
 R -q -e "tools::write_PACKAGES(dir = '.', type = 'source')"
+
+python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
+python ../upload-s3.py rstats duckdb_*.tar.gz
+python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
