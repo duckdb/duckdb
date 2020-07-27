@@ -1,0 +1,32 @@
+# name: test/sql/function/generic/test_if.test
+# description: IF test
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT IF(true, 1, 10), IF(false, 1, 10), IF(NULL, 1, 10)
+----
+1	10	10
+
+query III
+SELECT IF(true, 20, 2000), IF(false, 20, 2000), IF(NULL, 20, 2000)
+----
+20	2000	2000
+
+query RRR
+SELECT IF(true, 20.5, 2000), IF(false, 20, 2000.5), IF(NULL, 20, 2000.5)
+----
+20.500000	2000.500000	2000.500000
+
+query TTT
+SELECT IF(true, '2020-05-05'::date, '1996-11-05 10:11:56'::timestamp), IF(false, '2020-05-05'::date, '1996-11-05 10:11:56'::timestamp), IF(NULL, '2020-05-05'::date, '1996-11-05 10:11:56'::timestamp)
+----
+2020-05-05 00:00:00	1996-11-05 10:11:56	1996-11-05 10:11:56
+
+query TTT
+SELECT IF(true, 'true', 'false'), IF(false, 'true', 'false'), IF(NULL, 'true', 'false')
+----
+true	false	false
+

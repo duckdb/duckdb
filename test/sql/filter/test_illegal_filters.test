@@ -1,0 +1,17 @@
+# name: test/sql/filter/test_illegal_filters.test
+# description: Test aggregation in WHERE
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (2, 12)
+
+# aggregates in WHERE are not allowed
+statement error
+SELECT * FROM integers WHERE SUM(a)>10
+

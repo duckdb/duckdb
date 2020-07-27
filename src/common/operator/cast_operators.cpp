@@ -267,20 +267,19 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
-	// TODO: add support for '0' and '1' as boolean
 	if (strict) {
-		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0) {
+		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0  || strcmp(input_data, "1") == 0) {
 			result = true;
 		} else if (strcmp(input_data, "false") == 0 || strcmp(input_data, "False") == 0 ||
-		           strcmp(input_data, "FALSE") == 0) {
+		           strcmp(input_data, "FALSE") == 0 || strcmp(input_data, "0") == 0) {
 			result = false;
 		} else {
 			return false;
 		}
 	} else {
-		if (input_data[0] == 't' || input_data[0] == 'T') {
+		if (input_data[0] == 't' || input_data[0] == 'T' || input_data[0] == '1') {
 			result = true;
-		} else if (input_data[0] == 'f' || input_data[0] == 'F') {
+		} else if (input_data[0] == 'f' || input_data[0] == 'F' || input_data[0] == '0') {
 			result = false;
 		} else {
 			return false;

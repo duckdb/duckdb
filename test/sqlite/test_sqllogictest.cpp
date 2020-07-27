@@ -37,6 +37,7 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 #include <dirent.h>
@@ -331,14 +332,6 @@ static char *sqllogictest_convert_value(Value value, SQLType sql_type) {
 		case SQLTypeId::BOOLEAN:
 			snprintf(buffer, BUFSIZ, "%s", value.value_.boolean ? "1" : "0");
 			break;
-		case SQLTypeId::FLOAT:
-			// cast to INT seems to be the trick here
-			snprintf(buffer, BUFSIZ, "%d", (int) value.value_.float_);
-			break;
-		case SQLTypeId::DOUBLE:
-			// cast to INT seems to be the trick here
-			snprintf(buffer, BUFSIZ, "%d", (int) value.value_.double_);
-			break;
 		default: {
 			string str = value.ToString(sql_type);
 			snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
@@ -498,6 +491,44 @@ static bool result_is_hash(string result) {
 		pos++;
 	}
 	return pos == result.size();
+}
+
+bool compare_values(MaterializedQueryResult &result, Value &lvalue, string rvalue_str, const char *zScriptFile, int query_line, const char *zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
+	Value rvalue;
+	bool error = false;
+	auto sql_type = result.sql_types[current_column];
+	try {
+		if (rvalue_str == "NULL") {
+			rvalue = Value(GetInternalType(sql_type));
+			rvalue.is_null = true;
+		} else {
+			rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);		
+		}
+	} catch(std::exception &ex) {
+		print_error_header("Test error!", zScriptFile, query_line);
+		print_line_sep();
+		print_sql(zScript);
+		print_line_sep();
+		std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << rvalue_str << " to type " << SQLTypeToString(sql_type) << termcolor::reset << std::endl;
+		std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
+		print_line_sep();
+		return false;
+	}
+	if (!error) {
+		error = !Value::ValuesAreEqual(lvalue, rvalue);
+	}
+	if (error) {
+		print_error_header("Wrong result in query!", zScriptFile, query_line);
+		print_line_sep();
+		print_sql(zScript);
+		print_line_sep();
+		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column " << current_column << std::endl << termcolor::reset;
+		std::cerr << lvalue.ToString(result.sql_types[current_column]) << " <> " <<  rvalue.ToString(result.sql_types[current_column]) << std::endl;
+		print_line_sep();
+		print_result_error(result, values, expected_column_count, row_wise);
+		return false;
+	}
+	return true;
 }
 
 static void execute_file(string script) {
@@ -884,43 +915,39 @@ static void execute_file(string script) {
 					IFAIL();
 				}
 
-				int current_row = 0, current_column = 0;
-				for (i = 0; i < nResult && i < values.size(); i++) {
-					bool error;
-					if (sScript.azToken[1][current_column] == 'R' && values[i] != "NULL") {
-						// double value: perform precision dependent comparison
-						auto lvalue = result->GetValue(current_column, current_row);
-						auto rvalue = Value(values[i]);
-						rvalue.CastAs(TypeId::DOUBLE);
-						error = Value::ValuesAreEqual(lvalue, rvalue);
-					} else {
-						// default: text comparison
-						error = strcmp(values[i].c_str(), azResult[i]) != 0;
-					}
-					if (error) {
-						print_error_header("Wrong result in query!", zScriptFile, query_line);
-						print_line_sep();
-						print_sql(zScript);
-						print_line_sep();
-						std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row;
-						if (row_wise) {
-							std::cerr << std::endl << termcolor::reset;
-						} else {
-							std::cerr << ", column " << current_column << std::endl << termcolor::reset;
+				if (row_wise) {
+					int current_row = 0;
+					for (i = 0; i < nResult && i < values.size(); i++) {
+						// split based on tab character
+						auto splits = StringUtil::Split(values[i], "\t");
+						if (splits.size() != expected_column_count) {
+							print_line_sep();
+							print_error_header("Error in test! Column count mismatch after splitting on tab!", zScriptFile, query_line);
+							std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
+							std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
+							print_line_sep();
+							print_sql(zScript);
+							print_line_sep();
+							IFAIL();
 						}
-						std::cerr << values[i] << " <> " <<  azResult[i] << std::endl;
-						print_line_sep();
-						print_result_error(*result, values, expected_column_count, row_wise);
-						IFAIL();
-					}
-					current_column++;
-					if (current_column == expected_column_count) {
+						for(idx_t c = 0; c < splits.size(); c++) {
+							Value lvalue = result->GetValue(c, current_row);
+							REQUIRE(compare_values(*result, lvalue, splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise));
+						}
 						current_row++;
-						current_column = 0;
 					}
-					// we check this already but this inflates the test
-					// case count as desired
-					REQUIRE(!error);
+				} else {
+					int current_row = 0, current_column = 0;
+					for (i = 0; i < nResult && i < values.size(); i++) {
+						Value lvalue = result->GetValue(current_column, current_row);
+						REQUIRE(compare_values(*result, lvalue, values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise));
+
+						current_column++;
+						if (current_column == expected_column_count) {
+							current_row++;
+							current_column = 0;
+						}
+					}
 				}
 			} else {
 				if (strcmp(sScript.zLine, zHash) != 0) {

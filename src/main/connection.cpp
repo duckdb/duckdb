@@ -126,7 +126,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 		auto &materialized = (MaterializedQueryResult &) *result;
 		string q;
 		if (result->success) {
-			if (result->statement_type == StatementType::SELECT_STATEMENT && materialized.collection.count > 0) {
+			if (result->statement_type == StatementType::SELECT_STATEMENT) {
 				// record the answer
 				q = "query ";
 				for(idx_t i = 0; i < materialized.sql_types.size(); i++) {

@@ -53,6 +53,20 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	REQUIRE_FAIL(con.Query("EXECUTE " + prepare_name + "(12)"));
 }
 
+TEST_CASE("Test type resolution of function with parameter expressions", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+	con.EnableQueryVerification();
+
+	// can deduce type of prepared parameter here
+	auto prepared = con.Prepare("select 1 + $1");
+	REQUIRE(prepared->error.empty());
+
+	result = prepared->Execute(1);
+	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+}
+
 TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

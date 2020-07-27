@@ -4,64 +4,6 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test deletions", "[delete]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42);"));
-
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-
-	// delete everything
-	result = con.Query("DELETE FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-
-	// nothing left
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {0}));
-
-	//////////////
-	// ROLLBACK //
-	//////////////
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (42);"));
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-	// delete everything
-	result = con.Query("DELETE FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {0}));
-	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-
-	// after rollback, the data is back
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {1}));
-}
-
-TEST_CASE("Test scan with large deletions", "[delete][.]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a(i INTEGER);"));
-	for (idx_t i = 0; i < 10000; i++) {
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (" + to_string(i) + ")"));
-	}
-	REQUIRE_NO_FAIL(con.Query("COMMIT;"));
-
-	// delete a segment of the table
-	REQUIRE_NO_FAIL(con.Query("DELETE FROM a WHERE i >= 2000 AND i < 5000;"));
-
-	result = con.Query("SELECT COUNT(*) FROM a;");
-	REQUIRE(CHECK_COLUMN(result, 0, {7000}));
-}
-
 TEST_CASE("Test scan with many segmented deletions", "[delete][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
