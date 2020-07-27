@@ -14,6 +14,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
@@ -112,7 +113,7 @@ public:
 	/// Create a decoder object. buffer/buffer_len is the decoded data.
 	/// bit_width is the width of each value (before encoding).
 	RleBpDecoder(const uint8_t *buffer, uint32_t buffer_len, uint32_t bit_width)
-		: buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(0), literal_count_(0) {
+	    : buffer(buffer), bit_width_(bit_width), current_value_(0), repeat_count_(0), literal_count_(0) {
 
 		if (bit_width >= 64) {
 			throw runtime_error("Decode bit width too large");
@@ -244,9 +245,9 @@ private:
 };
 
 const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
-	0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
-	2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
-	4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+    0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
+    2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
+    4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
 
 const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 
@@ -268,6 +269,19 @@ static timestamp_t impala_timestamp_to_timestamp_t(const Int96 &raw_ts) {
 	date_t date = Date::EpochToDate(ms / 1000);
 	dtime_t time = (dtime_t)(ms % ms_per_day);
 	return Timestamp::FromDatetime(date, time);
+}
+
+static Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
+	int32_t hour, min, sec, msec;
+	Time::Convert(Timestamp::GetTime(ts), hour, min, sec, msec);
+	uint64_t ms_since_midnight = hour * 60 * 60 * 1000 + min * 60 * 1000 + sec * 1000 + msec;
+	auto days_since_epoch = Date::Epoch(Timestamp::GetDate(ts)) / (24 * 60 * 60);
+	// first two uint32 in Int96 are nanoseconds since midnights
+	// last uint32 is number of days since year 4713 BC ("Julian date")
+	Int96 impala_ts;
+	*((uint64_t *)impala_ts.value) = ms_since_midnight * 1000000;
+	impala_ts.value[2] = days_since_epoch + kJulianToUnixEpochDays;
+	return impala_ts;
 }
 
 struct ParquetScanColumnData {
@@ -306,16 +320,14 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	bool finished;
 };
 
-
-
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-		: TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr){};
+	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr){};
 
 private:
 	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> inputs,
-													  vector<SQLType> &return_types, vector<string> &names) {
+	                                                  vector<SQLType> &return_types, vector<string> &names) {
 
 		auto file_name = inputs[0].GetValue<string>();
 		auto res = make_unique<ParquetScanFunctionData>();
@@ -432,8 +444,8 @@ private:
 				auto offset = col_data.offset_buf.read<uint32_t>();
 				if (offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
-										to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
-										". Corrupt file?");
+					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
+					                    ". Corrupt file?");
 				}
 				((T *)FlatVector::GetData(target))[i + target_offset] = ((const T *)col_data.dict.ptr)[offset];
 			} else {
@@ -473,7 +485,7 @@ private:
 		}
 		PageHeader page_hdr;
 		thrift_unpack((const uint8_t *)col_data.buf.ptr + col_data.chunk_offset, (uint32_t *)&page_header_len,
-					  &page_hdr);
+		              &page_hdr);
 
 		// the payload starts behind the header, obvsl.
 		col_data.buf.inc(page_header_len);
@@ -489,7 +501,7 @@ private:
 		case CompressionCodec::SNAPPY: {
 			col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 			auto res =
-				snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
+			    snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
 			if (!res) {
 				throw runtime_error("Decompression failure");
 			}
@@ -509,7 +521,7 @@ private:
 			auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
 
 			if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
-				gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+			    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
 				throw Exception("Input is invalid/unsupported GZIP stream");
 			}
 
@@ -572,7 +584,7 @@ private:
 				// immediately convert timestamps to duckdb format, potentially fewer conversions
 				for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
 					((timestamp_t *)col_data.dict.ptr)[dict_index] =
-						impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
+					    impala_timestamp_to_timestamp_t(((Int96 *)col_data.payload.ptr)[dict_index]);
 				}
 
 				break;
@@ -601,13 +613,13 @@ private:
 					switch (utf_type) {
 					case UnicodeType::ASCII:
 						FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-							StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
+						    StringVector::AddString(append_chunk->data[0], col_data.payload.ptr, str_len);
 						break;
 					case UnicodeType::UNICODE:
 						// this regrettably copies to normalize
 						FlatVector::GetData<string_t>(append_chunk->data[0])[append_chunk->size()] =
-							StringVector::AddString(append_chunk->data[0],
-													Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
+						    StringVector::AddString(append_chunk->data[0],
+						                            Utf8Proc::Normalize(string(col_data.payload.ptr, str_len)));
 
 						break;
 					case UnicodeType::INVALID:
@@ -649,7 +661,7 @@ private:
 				uint32_t def_length = col_data.payload.read<uint32_t>();
 				col_data.payload.available(def_length);
 				col_data.defined_decoder =
-					make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, def_length, 1);
 				col_data.payload.inc(def_length);
 			} break;
 			default:
@@ -661,7 +673,7 @@ private:
 			case Encoding::PLAIN_DICTIONARY: {
 				auto enc_length = col_data.payload.read<uint8_t>();
 				col_data.dict_decoder =
-					make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
+				    make_unique<RleBpDecoder>((const uint8_t *)col_data.payload.ptr, col_data.payload.len, enc_length);
 				break;
 			}
 			case Encoding::PLAIN:
@@ -711,7 +723,7 @@ private:
 	}
 
 	static void parquet_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
-									  FunctionData *dataptr) {
+	                                  FunctionData *dataptr) {
 		auto &data = *((ParquetScanFunctionData *)dataptr);
 
 		if (data.finished) {
@@ -720,12 +732,12 @@ private:
 
 		// see if we have to switch to the next row group in the parquet file
 		if (data.current_group < 0 ||
-			data.group_offset >= data.file_meta_data.row_groups[data.current_group].num_rows) {
+		    data.group_offset >= data.file_meta_data.row_groups[data.current_group].num_rows) {
 
 			data.current_group++;
 			data.group_offset = 0;
 
-			if ((idx_t) data.current_group == data.file_meta_data.row_groups.size()) {
+			if ((idx_t)data.current_group == data.file_meta_data.row_groups.size()) {
 				data.finished = true;
 				return;
 			}
@@ -747,7 +759,9 @@ private:
 		auto current_group = data.file_meta_data.row_groups[data.current_group];
 		output.SetCardinality(std::min((int64_t)STANDARD_VECTOR_SIZE, current_group.num_rows - data.group_offset));
 
-		if (output.size() == 0) {return;}
+		if (output.size() == 0) {
+			return;
+		}
 
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
 			auto file_col_idx = data.column_ids[out_col_idx];
@@ -773,7 +787,7 @@ private:
 				}
 
 				auto current_batch_size =
-					std::min(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
+				    std::min(col_data.page_value_count - col_data.page_offset, output.size() - output_offset);
 
 				assert(current_batch_size > 0);
 
@@ -814,7 +828,7 @@ private:
 						break;
 					case SQLTypeId::TIMESTAMP:
 						_fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx],
-													 output_offset);
+						                             output_offset);
 						break;
 					case SQLTypeId::VARCHAR: {
 						if (!col_data.string_collection) {
@@ -837,7 +851,7 @@ private:
 								auto &vec = chunk->data[0];
 
 								out_data_ptr[i + output_offset] =
-									FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
+								    FlatVector::GetData<string_t>(vec)[offset % STANDARD_VECTOR_SIZE];
 							} else {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 							}
@@ -873,11 +887,11 @@ private:
 					}
 					case SQLTypeId::INTEGER:
 						_fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx],
-												  output_offset);
+						                          output_offset);
 						break;
 					case SQLTypeId::BIGINT:
 						_fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx],
-												  output_offset);
+						                          output_offset);
 						break;
 					case SQLTypeId::FLOAT:
 						_fill_from_plain<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
@@ -889,7 +903,7 @@ private:
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
 								((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
-									impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
+								    impala_timestamp_to_timestamp_t(col_data.payload.read<Int96>());
 							} else {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 							}
@@ -903,7 +917,7 @@ private:
 								uint32_t str_len = col_data.payload.read<uint32_t>();
 								col_data.payload.available(str_len);
 								FlatVector::GetData<string_t>(output.data[out_col_idx])[i + output_offset] =
-									StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
+								    StringVector::AddString(output.data[out_col_idx], col_data.payload.ptr, str_len);
 								col_data.payload.inc(str_len);
 							} else {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
@@ -928,7 +942,6 @@ private:
 		data.group_offset += output.size();
 	}
 };
-
 
 class MyTransport : public TTransport {
 public:
@@ -974,7 +987,7 @@ static Type::type duckdb_type_to_parquet_type(SQLType duckdb_type) {
 	case SQLTypeId::TIMESTAMP:
 		return Type::INT96;
 	default:
-		throw NotImplementedException("type");
+		throw NotImplementedException(SQLTypeToString(duckdb_type));
 	}
 }
 
@@ -1087,7 +1100,29 @@ public:
 
 				// write actual payload data
 				switch (sql_types[i].id) {
-					// TODO bitpack booleans
+				case SQLTypeId::BOOLEAN: {
+					auto *ptr = FlatVector::GetData<bool>(input_column);
+					uint8_t byte = 0;
+					uint8_t byte_pos = 0;
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) { // only encode if non-null
+							byte |= (ptr[r] & 1) << byte_pos;
+							byte_pos++;
+
+							temp_writer.Write<uint8_t>(byte);
+							if (byte_pos == 8) {
+								temp_writer.Write<uint8_t>(byte);
+								byte = 0;
+								byte_pos = 0;
+							}
+						}
+					}
+					// flush last byte if req
+					if (byte_pos > 0) {
+						temp_writer.Write<uint8_t>(byte);
+					}
+					break;
+				}
 				case SQLTypeId::TINYINT:
 					_write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 					break;
@@ -1106,6 +1141,15 @@ public:
 				case SQLTypeId::DOUBLE:
 					_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
 					break;
+				case SQLTypeId::TIMESTAMP: {
+					auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) {
+							temp_writer.Write<Int96>(timestamp_t_to_impala_timestamp(ptr[r]));
+						}
+					}
+					break;
+				}
 				case SQLTypeId::VARCHAR: {
 					auto *ptr = FlatVector::GetData<string_t>(input_column);
 					for (idx_t r = 0; r < input.size(); r++) {
@@ -1116,9 +1160,9 @@ public:
 					}
 					break;
 				}
-					// TODO date timestamp blob etc.
+					// TODO date blob etc.
 				default:
-					throw NotImplementedException("type");
+					throw NotImplementedException(SQLTypeToString((sql_types[i])));
 				}
 			}
 
@@ -1129,7 +1173,7 @@ public:
 			size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
 			auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-								(char *)compressed_buf.get(), &compressed_size);
+			                    (char *)compressed_buf.get(), &compressed_size);
 
 			hdr.compressed_page_size = compressed_size;
 
@@ -1184,7 +1228,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 };
 
 unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
-											vector<SQLType> &sql_types) {
+                                            vector<SQLType> &sql_types) {
 	auto bind_data = make_unique<ParquetWriteBindData>();
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
@@ -1197,7 +1241,8 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	// initialize the file writer
-	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(), FileFlags::WRITE | FileFlags::CREATE_NEW);
+	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
+	                                                       FileFlags::WRITE | FileFlags::CREATE_NEW);
 	// parquet files start with the string "PAR1"
 	global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
@@ -1225,9 +1270,9 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 }
 
 void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-						LocalFunctionData &lstate, DataChunk &input) {
+                        LocalFunctionData &lstate, DataChunk &input) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &) lstate;
+	auto &local_state = (ParquetWriteLocalState &)lstate;
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer->Append(input);
@@ -1239,9 +1284,10 @@ void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalF
 	}
 }
 
-void parquet_write_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate, LocalFunctionData &lstate) {
+void parquet_write_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                           LocalFunctionData &lstate) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
-	auto &local_state = (ParquetWriteLocalState &) lstate;
+	auto &local_state = (ParquetWriteLocalState &)lstate;
 	// flush any data left in the local state to the file
 	global_state.Flush(*local_state.buffer);
 }
