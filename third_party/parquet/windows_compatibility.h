@@ -41,5 +41,6 @@
 #undef Realloc
 #undef min
 #undef max
+#undef CREATE_NEW
 
 #endif  // _WIN32
