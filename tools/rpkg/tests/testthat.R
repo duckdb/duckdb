@@ -13,7 +13,9 @@ dbplyr_tests <- function() {
 
   # pull dbplyr sources to harvest test cases
   zipfile <- tempfile()
-  url <- "https://github.com/tidyverse/dbplyr/archive/v1.4.2.zip"
+  all_pkgs <- available.packages()
+  version_latest <- all_pkgs[all_pkgs[, "Package"] == "dbplyr", "Version"]
+  url <- sprintf("https://github.com/tidyverse/dbplyr/archive/v%s.zip", version_latest)
   download.file(url, zipfile)
   dbplyr_src <- tempdir()
   unzip(zipfile, exdir = dbplyr_src)
