@@ -389,7 +389,7 @@ static void print_header(string header) {
 
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
-	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER", "CREATE TABLE", "INSERT INTO", "ORDER BY", "VALUES"};
+	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER", "CREATE TABLE", "INSERT INTO", "ORDER BY", "VALUES", "ALTER TABLE", "INTEGER", "VARCHAR"};
 	// this is super inefficient, but I don't care for now
 	while(true) {
 		size_t next_keyword_pos = string::npos;
@@ -621,14 +621,13 @@ static void execute_file(string script) {
 				printf("%s;\n", zScript);
 
 			unique_ptr<QueryResult> result;
-			if (strncasecmp(zScript, "CREATE INDEX", 12) == 0) {
-				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", zScript);
-				rc = 0;
-			} else {
+			// if (strncasecmp(zScript, "CREATE INDEX", 12) == 0) {
+			// 	fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", zScript);
+			// 	rc = 0;
+			// } else {
 				result = con.Query(zScript);
 				rc = result->success ? 0 : 1;
-
-			}
+			// }
 			nCmd++;
 
 			/* Check to see if we are expecting success or failure */

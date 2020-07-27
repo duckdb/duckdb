@@ -1,0 +1,29 @@
+# name: test/sql/alter/test_rename_col_dependencies.test
+# description: Test ALTER TABLE RENAME COLUMN and dependencies
+# group: [alter]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+# add a prepared statement that depends on test
+statement ok
+PREPARE v AS SELECT * FROM test
+
+# we don't allow altering of tables when there are dependencies
+statement error
+ALTER TABLE test RENAME COLUMN i TO k
+
+# remove the prepared statement again
+statement ok
+DEALLOCATE v
+
+# now we can alter the table
+statement ok
+ALTER TABLE test RENAME COLUMN i TO k
+
+statement ok
+SELECT j, k FROM test
+
+statement ok
+DROP TABLE IF EXISTS test
+
