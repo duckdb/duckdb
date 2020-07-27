@@ -1,0 +1,17 @@
+# name: test/sql/table_function/test_range_function.test
+# description: Test range functions
+# group: [table_function]
+
+query I
+SELECT * FROM range(0, 10, 1)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

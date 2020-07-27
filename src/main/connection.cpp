@@ -81,16 +81,16 @@ static string ParseGroupFromPath(string file) {
 void Connection::Record(string file, string description, vector<string> extensions) {
 	string target = StringUtil::Replace(file, ".cpp", ".test");
 	record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
-	string path = "-- name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";
+	string path = "# name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";
 	record_writer->WriteData((const_data_ptr_t) path.c_str(), path.size());
 	if (!description.empty()) {
-		description = "-- description: " + description + "\n";
+		description = "# description: " + description + "\n";
 		record_writer->WriteData((const_data_ptr_t) description.c_str(), description.size());
 	}
-	string group_name = "-- group: " + ParseGroupFromPath(file) + "\n";
+	string group_name = "# group: " + ParseGroupFromPath(file) + "\n";
 	record_writer->WriteData((const_data_ptr_t) group_name.c_str(), group_name.size());
 	for(auto extension : extensions) {
-		string ext = "-- extension: " + extension + "\n";
+		string ext = "# extension: " + extension + "\n";
 		record_writer->WriteData((const_data_ptr_t) ext.c_str(), ext.size());
 	}
 	record_writer->WriteData((const_data_ptr_t) "\n", 1);
@@ -123,11 +123,11 @@ unique_ptr<QueryResult> Connection::SendQuery(string query) {
 unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 	auto result = context->Query(query, false);
 	if (record_writer) {
+		auto &materialized = (MaterializedQueryResult &) *result;
 		string q;
 		if (result->success) {
-			if (result->statement_type == StatementType::SELECT_STATEMENT) {
+			if (result->statement_type == StatementType::SELECT_STATEMENT && materialized.collection.count > 0) {
 				// record the answer
-				auto &materialized = (MaterializedQueryResult &) *result;
 				q = "query ";
 				for(idx_t i = 0; i < materialized.sql_types.size(); i++) {
 					switch(materialized.sql_types[i].id) {
@@ -146,8 +146,8 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 						q += "T";
 						break;
 					}
-					q += "\n";
 				}
+				q += "\n";
 				q += query + "\n";
 				q += "----\n";
 				for(idx_t r = 0; r < materialized.collection.count; r++) {
