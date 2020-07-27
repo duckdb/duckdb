@@ -347,12 +347,11 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 					// cast to INT seems to be the trick here
 					snprintf(buffer, BUFSIZ, "%d", (int) value.value_.double_);
 					break;
-				case SQLTypeId::VARCHAR:
-					snprintf(buffer, BUFSIZ, "%s", value.str_value.c_str());
+				default: {
+					string str = value.ToString();
+					snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
 					break;
-				default:
-					snprintf(buffer, BUFSIZ, "%s", value.ToString().c_str());
-					break;
+				}
 				}
 			}
 			(*pazResult)[r * column_count + c] = buffer;
@@ -390,7 +389,7 @@ static void print_header(string header) {
 
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
-	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER"};
+	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER", "CREATE TABLE", "INSERT INTO", "ORDER BY", "VALUES"};
 	// this is super inefficient, but I don't care for now
 	while(true) {
 		size_t next_keyword_pos = string::npos;
@@ -433,6 +432,31 @@ static void print_result_error(MaterializedQueryResult &result, vector<string> &
 	result.Print();
 }
 
+static bool result_is_hash(string result) {
+	idx_t pos = 0;
+	// first parse the rows
+	while(result[pos] >= '0' && result[pos] <= '9') {
+		pos++;
+	}
+	if (pos == 0) {
+		return false;
+	}
+	string constant_str = " values hashing to ";
+	string example_hash = "acd848208cc35c7324ece9fcdd507823";
+	if (pos + constant_str.size() + example_hash.size() != result.size()) {
+		return false;
+	}
+	if (result.substr(pos, constant_str.size()) != constant_str) {
+		return false;
+	}
+	pos += constant_str.size();
+	// now parse the hash
+	while((result[pos] >= '0' && result[pos] <= '9') || (result[pos] >= 'a' && result[pos] <= 'z')) {
+		pos++;
+	}
+	return pos == result.size();
+}
+
 static void execute_file(string script) {
 	int haltOnError = 0;                        /* Stop on first error if true */
 	int enableTrace = 0;                        /* Trace SQL statements if true */
@@ -453,6 +477,7 @@ static void execute_file(string script) {
 	char zHash[100];                            /* Storage space for hash results */
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
+	int output_hash_mode = 0;
 
 	DuckDB db;
 	Connection con(db);
@@ -620,14 +645,9 @@ static void execute_file(string script) {
 
 			/* Report an error if the results do not match expectation */
 			if (rc) {
+				print_error_header(bExpectError ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", zScriptFile, sScript.nLine);
 				print_line_sep();
-				if (!bExpectError) {
-					fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", zScriptFile, sScript.nLine);
-				} else {
-					fprintf(stderr, "Query unexpectedly succeeded (%s:%d)\n", zScriptFile, sScript.nLine);
-				}
-				print_line_sep();
-				fprintf(stderr, "%s\n", zScript);
+				print_sql(zScript);
 				print_line_sep();
 				if (result) {
 					result->Print();
@@ -712,9 +732,21 @@ static void execute_file(string script) {
 				IFAIL();
 			}
 
+			/* In verify mode, first skip over the ---- line if we are
+			 *still
+			 ** pointing at it. */
+			if (strcmp(sScript.zLine, "----") == 0) {
+				nextLine(&sScript);
+			}
+
+			int compare_hash = sScript.azToken[3][0] || (hashThreshold > 0 && nResult > hashThreshold);
+			// check if the current line (the first line of the result) is a hash value
+			if (result_is_hash(sScript.zLine)) {
+				compare_hash = true;
+			}
 			/* Hash the results if we are over the hash threshold or if we
 			** there is a hash label */
-			if (sScript.azToken[3][0] || (hashThreshold > 0 && nResult > hashThreshold)) {
+			if (output_hash_mode || compare_hash) {
 				md5_add(""); /* make sure md5 is reset, even if no results */
 				for (i = 0; i < nResult; i++) {
 					md5_add(azResult[i]);
@@ -729,21 +761,24 @@ static void execute_file(string script) {
 					        zScriptFile, sScript.startLine, sScript.azToken[3]);
 					IFAIL();
 				}
+				if (output_hash_mode) {
+					print_line_sep();
+					print_sql(zScript);
+					print_line_sep();
+					fprintf(stderr, "%s\n", zHash);
+					print_line_sep();
+					duckdbFreeResults(azResult, nResult);
+					continue;
+				}
 			}
 			int query_line = sScript.nLine;
-
-			/* In verify mode, first skip over the ---- line if we are
-			 *still
-			 ** pointing at it. */
-			if (strcmp(sScript.zLine, "----") == 0)
-				nextLine(&sScript);
 
 			/* Compare subsequent lines of the script against the
 			 *results
 			 ** from the query.  Report an error if any differences are
 			 *found.
 			 */
-			if (hashThreshold == 0 || nResult <= hashThreshold) {
+			if (!compare_hash) {
 				// read the expected result: keep reading until we encounter a blank line
 				vector<string> values;
 				while(sScript.zLine[0]) {
@@ -782,7 +817,17 @@ static void execute_file(string script) {
 
 				int current_row = 0, current_column = 0;
 				for (i = 0; i < nResult && i < values.size(); i++) {
-					bool error = strcmp(values[i].c_str(), azResult[i]) != 0;
+					bool error;
+					if (sScript.azToken[1][current_column] == 'R' && values[i] != "NULL") {
+						// double value: perform precision dependent comparison
+						auto lvalue = result->GetValue(current_column, current_row);
+						auto rvalue = Value(values[i]);
+						rvalue.CastAs(TypeId::DOUBLE);
+						error = Value::ValuesAreEqual(lvalue, rvalue);
+					} else {
+						// default: text comparison
+						error = strcmp(values[i].c_str(), azResult[i]) != 0;
+					}
 					if (error) {
 						print_error_header("Wrong result in query!", zScriptFile, query_line);
 						print_line_sep();
@@ -805,7 +850,13 @@ static void execute_file(string script) {
 				}
 			} else {
 				if (strcmp(sScript.zLine, zHash) != 0) {
-					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile, sScript.nLine);
+					print_error_header("Wrong result hash!", zScriptFile, sScript.nLine);
+					print_line_sep();
+					print_sql(zScript);
+					print_line_sep();
+					print_header("Actual result:");
+					print_line_sep();
+					result->Print();
 					IFAIL();
 				}
 			}
@@ -838,6 +889,13 @@ static void execute_file(string script) {
 			 */
 			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
 			break;
+		} else if (strcmp(sScript.azToken[0], "mode") == 0) {
+			if (strcmp(sScript.azToken[1], "output_hash") == 0) {
+				output_hash_mode = 1;
+			} else {
+				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				IFAIL();
+			}
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
@@ -878,13 +936,13 @@ static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
-	fprintf(stderr, "%s\n", name.c_str());
+	// fprintf(stderr, "%s\n", name.c_str());
 	execute_file(name);
 }
 
 static string ParseGroupFromPath(string file) {
 	string extension = "";
-	if (file.find("slow") != std::string::npos) {
+	if (file.find(".test_slow") != std::string::npos) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
 		extension = "[.]";
 	}
@@ -978,7 +1036,7 @@ struct AutoRegTests {
 			}
 		});
 		listFiles("test/", [excludes](const string &path) {
-			if (endsWith(path, ".test")) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {
 						return;

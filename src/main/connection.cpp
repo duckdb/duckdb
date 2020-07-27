@@ -56,7 +56,7 @@ void Connection::DisableProfiling() {
 
 static string ParseGroupFromPath(string file) {
 	string extension = "";
-	if (file.find("slow") != std::string::npos) {
+	if (file.find(".test_slow") != std::string::npos) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
 		extension = "[.]";
 	}
@@ -164,7 +164,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 								q += val.value_.boolean ? "1" : "0";
 								break;
 							default:
-								q += val.ToString();
+								q += val.ToString().size() == 0 ? "(empty)" : val.ToString();
 								break;
 							}
 						}
