@@ -21,6 +21,7 @@ using namespace std;
 void BuiltinFunctions::Initialize() {
 	RegisterSQLiteFunctions();
 	RegisterReadFunctions();
+	RegisterTableFunctions();
 
 	RegisterAlgebraicAggregates();
 	RegisterDistributiveAggregates();
