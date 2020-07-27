@@ -47,10 +47,10 @@ static void range_function(ClientContext &context, vector<Value> &input, DataChu
 	auto &data = ((RangeFunctionData &)*dataptr);
 	auto increment = data.increment.value_.bigint;
 	auto end = data.end.value_.bigint;
-	auto current_value = data.start.value_.bigint + increment * data.current_idx;
+	int64_t current_value = data.start.value_.bigint + (int64_t) increment * data.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
-	idx_t remaining = min<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
+	idx_t remaining = min<int64_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	data.current_idx += remaining;
 	output.SetCardinality(remaining);
