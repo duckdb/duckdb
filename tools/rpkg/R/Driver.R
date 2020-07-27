@@ -167,15 +167,12 @@ is_installed <- function(pkg) {
 
 
 #' @importFrom DBI dbConnect
-#' @importFrom dbplyr src_dbi
 #' @param path The file in which the DuckDB database should be stored
 #' @param create Create a new database if none is present in `path`
 #' @rdname duckdb_driver
 #' @export
 src_duckdb <- function(path = ":memory:", create = FALSE, read_only = FALSE) {
-  if (!is_installed("dbplyr")) {
-    stop("Need package `dbplyr` installed.")
-  }
+  requireNamespace("dbplyr", quietly = TRUE)
   if (path != ":memory:" && !create && !file.exists(path)) {
     stop("`path` '", path, "' must already exist, unless `create` = TRUE")
   }

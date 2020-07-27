@@ -24,12 +24,12 @@ Depends:
     DBI,
     R (>= 3.5.0)
 Imports:
-    dbplyr,
     methods,
     utils
 Suggests: 
     callr,
     DBItest,
+    dbplyr,
     nycflights13,
     testthat
 Encoding: UTF-8
