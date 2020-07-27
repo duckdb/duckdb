@@ -163,9 +163,11 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 							case SQLTypeId::BOOLEAN:
 								q += val.value_.boolean ? "1" : "0";
 								break;
-							default:
-								q += val.ToString().size() == 0 ? "(empty)" : val.ToString();
+							default: {
+								string str = val.ToString(materialized.sql_types[c]);
+								q += str.size() == 0 ? "(empty)" : str;
 								break;
+							}
 							}
 						}
 					}

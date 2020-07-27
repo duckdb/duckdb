@@ -1,0 +1,9 @@
+# name: test/sql/date/test_timestamp_ms.test
+# description: Test milliseconds with timestamp
+# group: [date]
+
+query TT
+SELECT CAST('2001-04-20 14:42:11.123' AS TIMESTAMP) a, CAST('2001-04-20 14:42:11.0' AS TIMESTAMP) b;
+----
+2001-04-20 14:42:11.123	2001-04-20 14:42:11
+

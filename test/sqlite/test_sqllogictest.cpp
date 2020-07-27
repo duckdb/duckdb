@@ -340,7 +340,7 @@ static char *sqllogictest_convert_value(Value value, SQLType sql_type) {
 			snprintf(buffer, BUFSIZ, "%d", (int) value.value_.double_);
 			break;
 		default: {
-			string str = value.ToString();
+			string str = value.ToString(sql_type);
 			snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
 			break;
 		}

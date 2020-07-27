@@ -1,0 +1,36 @@
+# name: test/sql/function/timestamp/test_now.test
+# description: NOW function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+# get the millenium of the current date
+# FIXME: this needs to be updated in 982 years
+query I
+SELECT EXTRACT(MILLENNIUM FROM NOW())
+----
+3
+
+# the NOW function should return the start time of the transaction
+# hence during a transaction it should not change
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE t1(t TIMESTAMP)
+
+statement ok
+INSERT INTO t1 VALUES (NOW());
+
+statement ok
+INSERT INTO t1 SELECT NOW();
+
+query I
+SELECT COUNT(DISTINCT t) FROM t1
+----
+1
+
+statement ok
+ROLLBACK
+

@@ -1,0 +1,34 @@
+# name: test/sql/date/test_bc_dates.test
+# description: Test BC dates
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+# create and insert into table
+statement ok
+CREATE TABLE dates(i DATE)
+
+statement ok
+INSERT INTO dates VALUES ('-1993-08-14'), (NULL)
+
+# check that we can select dates
+query T
+SELECT * FROM dates
+----
+1993-08-14 (BC)
+NULL
+
+# YEAR function
+query I
+SELECT year(i) FROM dates
+----
+-1993
+NULL
+
+query T
+SELECT cast(i AS VARCHAR) FROM dates
+----
+1993-08-14 (BC)
+NULL
+
