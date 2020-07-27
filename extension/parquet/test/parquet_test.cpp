@@ -290,8 +290,7 @@ TEST_CASE("Parquet basic write", "[parquet]") {
 	db.LoadExtension<ParquetExtension>();
 	Connection con(db);
 	con.EnableQueryVerification();
-
-	auto tempfile = string(std::tmpnam(nullptr));
+	string tempfile = TestCreatePath("test.parquet");
 
 	SECTION("single scalar value") {
 		REQUIRE_NO_FAIL(con.Query("COPY (SELECT 42) TO '" + tempfile + "' (FORMAT 'parquet')"));
@@ -312,7 +311,7 @@ TEST_CASE("Parquet file re-write", "[parquet]") {
 	db.LoadExtension<ParquetExtension>();
 	Connection con(db);
 
-	auto tempfile = string(std::tmpnam(nullptr));
+	string tempfile = TestCreatePath("test.parquet");
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=2"));
 
