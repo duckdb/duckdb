@@ -11,6 +11,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -18,7 +19,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
