@@ -641,7 +641,7 @@ matrix:
       script:
         - ./configure
         - sh build-mac
-        - deploy-mac
+        - sh deploy-mac
 
     - os: windows
       name: R Package
