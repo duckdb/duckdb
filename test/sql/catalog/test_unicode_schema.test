@@ -1,0 +1,46 @@
+# name: test/sql/catalog/test_unicode_schema.test
+# description: Unicode schema
+# group: [catalog]
+
+statement ok
+CREATE TABLE 👤(🔑 INTEGER PRIMARY KEY, 🗣 varchar(64), 🗓 DATE);
+
+statement ok
+CREATE TABLE ✍(🔑 INTEGER PRIMARY KEY, 🗣 varchar(64));
+
+statement ok
+CREATE TABLE 📕(🔑 INTEGER PRIMARY KEY, 💬 varchar(64), 🔖 varchar(64), ✍ INTEGER);
+
+statement ok
+CREATE TABLE 👤🏠📕(👤 INTEGER, 📕 INTEGER, ⭐ TEXT);
+
+statement ok
+INSERT INTO 👤 VALUES (1, 'Jeff', '2019-01-01'), (2, 'Annie', '2019-01-01');
+
+statement ok
+INSERT INTO ✍ VALUES (1, 'Herman Melville'), (2, 'Lewis Carroll');
+
+statement ok
+INSERT INTO 📕 VALUES (1, 'Alice in Wonderland', '🔮', 2), (2, 'Moby Dick', '📖', 1), (3, 'Through the Looking-Glass', '🔮', 2);
+
+statement ok
+INSERT INTO 👤🏠📕 VALUES (1, 1, '😍'), (1, 2, '🤢'), (2, 2, '🙂');
+
+query TT
+SELECT 👤.🗣 AS 👤, 📕.💬 AS 📕 FROM 👤 JOIN 👤🏠📕 ON 👤.🔑 = 👤🏠📕.👤 JOIN 📕 ON 📕.🔑 = 👤🏠📕.📕 ORDER BY 👤, 📕;
+----
+Annie	Moby Dick
+Jeff	Alice in Wonderland
+Jeff	Moby Dick
+
+query TT
+SELECT 👤.🗣, 👤🏠📕.⭐ FROM 👤🏠📕 JOIN 📕 ON 👤🏠📕.📕 = 📕.🔑 JOIN 👤 ON 👤🏠📕.👤=👤.🔑 WHERE 📕.💬 = 'Moby Dick' ORDER BY 👤.🗣;
+----
+Annie	🙂
+Jeff	🤢
+
+query TT
+SELECT type, name FROM sqlite_master() WHERE name='👤' ORDER BY name;
+----
+table	👤
+

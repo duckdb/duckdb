@@ -300,21 +300,56 @@ static int checkValue(const char *zKey, const char *zHash) {
 		return;                                                                                                        \
 	}
 
-static void print_expected_result(vector<string> &values, idx_t columns) {
-	idx_t c = 0;
-	for(idx_t r = 0; r < values.size(); r++) {
-		if (c != 0) {
-			fprintf(stderr, ", ");
+static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
+	if (row_wise) {
+		for(idx_t r = 0; r < values.size(); r++) {
+			fprintf(stderr, "%s\n", values[r].c_str());
 		}
-		fprintf(stderr, "%s", values[r].c_str());
-		c++;
-		if (c >= columns) {
-			fprintf(stderr, "\n");
-			c = 0;
+	} else {
+		idx_t c = 0;
+		for(idx_t r = 0; r < values.size(); r++) {
+			if (c != 0) {
+				fprintf(stderr, "\t");
+			}
+			fprintf(stderr, "%s", values[r].c_str());
+			c++;
+			if (c >= columns) {
+				fprintf(stderr, "\n");
+				c = 0;
+			}
 		}
 	}
 }
 
+static char *sqllogictest_convert_value(Value value, SQLType sql_type) {
+	char *buffer = (char *)malloc(BUFSIZ);
+
+	if (value.is_null) {
+		snprintf(buffer, BUFSIZ, "%s", "NULL");
+	} else {
+		switch (sql_type.id) {
+		case SQLTypeId::BOOLEAN:
+			snprintf(buffer, BUFSIZ, "%s", value.value_.boolean ? "1" : "0");
+			break;
+		case SQLTypeId::FLOAT:
+			// cast to INT seems to be the trick here
+			snprintf(buffer, BUFSIZ, "%d", (int) value.value_.float_);
+			break;
+		case SQLTypeId::DOUBLE:
+			// cast to INT seems to be the trick here
+			snprintf(buffer, BUFSIZ, "%d", (int) value.value_.double_);
+			break;
+		default: {
+			string str = value.ToString();
+			snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
+			break;
+		}
+		}
+	}
+	return buffer;
+}
+
+// standard result conversion: one line per value
 static int duckdbConvertResult(MaterializedQueryResult &result,
                        char ***pazResult, /* RETURN:  Array of result values */
                        int *pnResult      /* RETURN:  Number of result values */
@@ -330,34 +365,42 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			char *buffer = (char *)malloc(BUFSIZ);
+			char *buffer = sqllogictest_convert_value(value, result.sql_types[c]);
 
-			if (value.is_null) {
-				snprintf(buffer, BUFSIZ, "%s", "NULL");
-			} else {
-				switch (result.sql_types[c].id) {
-				case SQLTypeId::BOOLEAN:
-					snprintf(buffer, BUFSIZ, "%s", value.value_.boolean ? "1" : "0");
-					break;
-				case SQLTypeId::FLOAT:
-					// cast to INT seems to be the trick here
-					snprintf(buffer, BUFSIZ, "%d", (int) value.value_.float_);
-					break;
-				case SQLTypeId::DOUBLE:
-					// cast to INT seems to be the trick here
-					snprintf(buffer, BUFSIZ, "%d", (int) value.value_.double_);
-					break;
-				default: {
-					string str = value.ToString();
-					snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
-					break;
-				}
-				}
-			}
 			(*pazResult)[r * column_count + c] = buffer;
 		}
 	}
 	*pnResult = column_count * row_count;
+	return 0;
+}
+
+// row-wise result conversion: one line per row,
+static int duckdbConvertResultRowWise(MaterializedQueryResult &result,
+                       char ***pazResult, /* RETURN:  Array of result values */
+                       int *pnResult      /* RETURN:  Number of result values */
+) {
+	size_t r, c;
+	idx_t row_count = result.collection.count;
+	idx_t column_count = result.column_count();
+
+	*pazResult = (char **)malloc(sizeof(char *) * row_count);
+	if (!*pazResult) {
+		return 1;
+	}
+	for (r = 0; r < row_count; r++) {
+		string result_str;
+		for (c = 0; c < column_count; c++) {
+			if (c > 0) {
+				result_str += "\t";
+			}
+			auto value = result.GetValue(c, r);
+			char *buffer = sqllogictest_convert_value(value, result.sql_types[c]);
+			result_str += buffer;
+			free(buffer);
+		}
+		(*pazResult)[r] = strdup(result_str.c_str());
+	}
+	*pnResult = row_count;
 	return 0;
 }
 
@@ -422,10 +465,10 @@ static void print_error_header(const char *description, const char *file_name, i
 	std::cerr << termcolor::bold << "(" << file_name << ":" << nline << ")!" << termcolor::reset << std::endl;
 }
 
-static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count) {
+static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count, bool row_wise) {
 	print_header("Expected result:");
 	print_line_sep();
-	print_expected_result(values, expected_column_count);
+	print_expected_result(values, expected_column_count, row_wise);
 	print_line_sep();
 	print_header("Actual result:");
 	print_line_sep();
@@ -653,6 +696,7 @@ static void execute_file(string script) {
 				}
 				IFAIL();
 			}
+			REQUIRE(!rc);
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
 			int k = 0;
 			int c;
@@ -786,7 +830,15 @@ static void execute_file(string script) {
 						break;
 					}
 				}
-				if (values.size() % expected_column_count != 0) {
+				bool row_wise = false;
+				idx_t expected_rows = values.size() / expected_column_count;
+				if (expected_column_count > 1 && values.size() == result->collection.count) {
+					// values are displayed row-wise, format row wise with a tab
+					duckdbFreeResults(azResult, nResult);
+					duckdbConvertResultRowWise(*result, &azResult, &nResult);
+					expected_rows = values.size();
+					row_wise = true;
+				} else if (values.size() % expected_column_count != 0) {
 					print_error_header("Error in test!", zScriptFile, query_line);
 					print_line_sep();
 					fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int) expected_column_count, (int) values.size());
@@ -800,17 +852,16 @@ static void execute_file(string script) {
 					print_line_sep();
 					print_sql(zScript);
 					print_line_sep();
-					print_result_error(*result, values, expected_column_count);
+					print_result_error(*result, values, expected_column_count, row_wise);
 					IFAIL();
 				}
-				idx_t expected_rows = values.size() / expected_column_count;
 				if (expected_rows != result->collection.count) {
 					print_error_header("Wrong row count in query!", zScriptFile, query_line);
 					std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
 					print_line_sep();
 					print_sql(zScript);
 					print_line_sep();
-					print_result_error(*result, values, expected_column_count);
+					print_result_error(*result, values, expected_column_count, row_wise);
 					IFAIL();
 				}
 
@@ -832,10 +883,15 @@ static void execute_file(string script) {
 						print_line_sep();
 						print_sql(zScript);
 						print_line_sep();
-						std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column " << current_column << std::endl << termcolor::reset;
+						std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row;
+						if (row_wise) {
+							std::cerr << std::endl << termcolor::reset;
+						} else {
+							std::cerr << ", column " << current_column << std::endl << termcolor::reset;
+						}
 						std::cerr << values[i] << " <> " <<  azResult[i] << std::endl;
 						print_line_sep();
-						print_result_error(*result, values, expected_column_count);
+						print_result_error(*result, values, expected_column_count, row_wise);
 						IFAIL();
 					}
 					current_column++;

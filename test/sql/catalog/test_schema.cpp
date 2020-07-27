@@ -4,50 +4,6 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Schema creation/deletion", "[catalog]") {
-	unique_ptr<QueryResult> result;
-	DuckDB db(nullptr);
-	Connection con(db);
-
-	// cannot drop MAIN schema
-	REQUIRE_FAIL(con.Query("DROP SCHEMA main CASCADE;"));
-
-	// create and drop an empty schema
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
-	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test;"));
-
-	// create the schema again
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA test;"));
-	// duplicate schema
-	REQUIRE_FAIL(con.Query("CREATE SCHEMA test;"));
-	// if not exists ignores error
-	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA IF NOT EXISTS test;"));
-
-	// create table inside schema that exists should succeed
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test.hello(i INTEGER);"));
-	// create table inside schema that does not exist should fail
-	REQUIRE_FAIL(con.Query("CREATE TABLE test2.hello(i INTEGER);"));
-
-	// use the table in queries
-	// insert into table
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO test.hello VALUES (2), (3), (4)"));
-	// select from table without schema specified should fail
-	REQUIRE_FAIL(con.Query("SELECT * FROM hello"));
-
-	// with schema specified should succeed
-	result = con.Query("SELECT * FROM test.hello");
-	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
-
-	// drop schema with dependencies should fail
-	REQUIRE_FAIL(con.Query("DROP SCHEMA test;"));
-	// unless we use cascade to drop
-	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA test CASCADE;"));
-	// drop schema if exists should not fail if schema does not exist
-	REQUIRE_NO_FAIL(con.Query("DROP SCHEMA IF EXISTS test;"));
-	// but drop schema without it should fail
-	REQUIRE_FAIL(con.Query("DROP SCHEMA test;"));
-}
-
 TEST_CASE("Schema creation/deletion with transactions", "[catalog]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

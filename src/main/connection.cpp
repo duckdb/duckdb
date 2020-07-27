@@ -154,7 +154,7 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 					for(idx_t c = 0; c < materialized.sql_types.size(); c++) {
 						auto val = materialized.collection.GetValue(c, r);
 						if (c != 0) {
-							q += "\n";
+							q += "\t";
 						}
 						if (val.is_null) {
 							q += "NULL";
