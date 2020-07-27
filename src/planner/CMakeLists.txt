@@ -4,7 +4,7 @@ add_subdirectory(expression_binder)
 add_subdirectory(operator)
 add_subdirectory(subquery)
 
-add_library(duckdb_planner
+add_library_unity(duckdb_planner
                   OBJECT
                   expression_iterator.cpp
                   expression.cpp

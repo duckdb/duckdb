@@ -10,19 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 
-#include <chrono>  // chrono::system_clock
-#include <ctime>   // localtime
-#include <iomanip> // put_time
-#include <sstream> // stringstream
-#include <string>  // string
-
 namespace duckdb {
-
-struct Interval {
-	int64_t time;
-	int32_t days;   //! days, after time for alignment
-	int32_t months; //! months after time for alignment
-};
 
 struct timestamp_struct {
 	int32_t year;
@@ -51,10 +39,6 @@ public:
 	static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
 	//! Returns current timestamp
 	static timestamp_t GetCurrentTimestamp();
-	//! Gets the timestamp which correspondes to the difference between the given ones
-	static Interval GetDifference(timestamp_t timestamp_a, timestamp_t timestamp_b);
-
-	static timestamp_struct IntervalToTimestamp(Interval &interval);
 
 	// Unix epoch: milliseconds since 1970
 	static int64_t GetEpoch(timestamp_t timestamp);

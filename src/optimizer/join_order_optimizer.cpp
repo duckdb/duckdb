@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
@@ -24,9 +25,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalUnnest::PhysicalUnnest(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+PhysicalUnnest::PhysicalUnnest(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, op.types), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 
 	assert(this->select_list.size() > 0);
 }

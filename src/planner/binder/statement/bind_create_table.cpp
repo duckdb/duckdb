@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include <algorithm>
 
 using namespace duckdb;
 using namespace std;

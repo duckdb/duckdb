@@ -1,5 +1,8 @@
 # this script creates a single header + source file combination out of the DuckDB sources
-import os, re, sys, shutil
+import os
+import re
+import sys
+import shutil
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
 source_file = os.path.join(amal_dir, "duckdb.cpp")

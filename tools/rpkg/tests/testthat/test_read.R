@@ -1,6 +1,3 @@
-library("testthat")
-library("DBI")
-
 test_that("read_csv_duckdb() works as expected", {
   con <- dbConnect(duckdb::duckdb())
 

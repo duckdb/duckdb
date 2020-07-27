@@ -9,6 +9,11 @@ TEST_CASE("SQL Server functions tests", "[sqlserver]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+#if STANDARD_VECTOR_SIZE < 512
+	// window functions not supported for small vector sizes
+	return;
+#endif
+
 	REQUIRE_NO_FAIL(con.Query("CREATE SCHEMA Sales;"));
 
 	REQUIRE_NO_FAIL(con.Query(

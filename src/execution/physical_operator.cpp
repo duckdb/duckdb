@@ -1,5 +1,6 @@
 #include "duckdb/execution/physical_operator.hpp"
 
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -53,6 +54,11 @@ void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, Phy
 
 void PhysicalOperator::Print() {
 	Printer::Print(ToString());
+}
+
+void PhysicalOperator::ParallelScanInfo(ClientContext &context,
+                                        std::function<void(unique_ptr<OperatorTaskInfo>)> callback) {
+	throw InternalException("Unsupported operator for parallel scan!");
 }
 
 } // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <algorithm>
 

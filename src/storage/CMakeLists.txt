@@ -2,7 +2,7 @@ add_subdirectory(buffer)
 add_subdirectory(checkpoint)
 add_subdirectory(table)
 
-add_library(duckdb_storage
+add_library_unity(duckdb_storage
                   OBJECT
                   buffer_manager.cpp
                   checkpoint_manager.cpp

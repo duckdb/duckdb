@@ -1,4 +1,4 @@
-add_library(duckdb_main_relation
+add_library_unity(duckdb_main_relation
                   OBJECT
                   aggregate_relation.cpp
                   create_table_relation.cpp

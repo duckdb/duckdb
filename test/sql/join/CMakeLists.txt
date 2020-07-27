@@ -1,4 +1,4 @@
-add_library(test_sql_join
+add_library_unity(test_sql_join
                   OBJECT
                   test_join_on_aggregates.cpp
                   test_left_outer_join.cpp

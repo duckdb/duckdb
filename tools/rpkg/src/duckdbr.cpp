@@ -1,4 +1,5 @@
 #include "duckdb.h"
+#include <sstream>
 #include "parquet-extension.h"
 
 #include <Rdefines.h>

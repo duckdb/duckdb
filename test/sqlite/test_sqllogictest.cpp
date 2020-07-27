@@ -691,11 +691,11 @@ TEST_CASE("SQLite select1", "[sqlitelogic]") {
 	execute_file("test/sqlite/select1.test");
 }
 
-TEST_CASE("SQLite select2", "[sqlitelogic]") {
+TEST_CASE("SQLite select2", "[sqlitelogic][.]") {
 	execute_file("test/sqlite/select2.test");
 }
 
-TEST_CASE("SQLite select3", "[sqlitelogic]") {
+TEST_CASE("SQLite select3", "[sqlitelogic][.]") {
 	execute_file("test/sqlite/select3.test");
 }
 

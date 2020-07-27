@@ -1,7 +1,3 @@
-library("testthat")
-library("DBI")
-
-
 test_that("duckdb_register() works", {
   con <- dbConnect(duckdb::duckdb())
 

@@ -1,4 +1,4 @@
-add_library(test_sql_aggregate
+add_library_unity(test_sql_aggregate
                   OBJECT
                   test_aggregate.cpp
                   test_aggregate_types.cpp)

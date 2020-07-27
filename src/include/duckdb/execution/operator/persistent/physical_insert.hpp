@@ -8,16 +8,16 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 
 namespace duckdb {
 
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalSink {
 public:
-	PhysicalInsert(LogicalOperator &op, TableCatalogEntry *table, vector<idx_t> column_index_map,
+	PhysicalInsert(vector<TypeId> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults)
-	    : PhysicalSink(PhysicalOperatorType::INSERT, op.types), column_index_map(column_index_map), table(table),
+	    : PhysicalSink(PhysicalOperatorType::INSERT, move(types)), column_index_map(column_index_map), table(table),
 	      bound_defaults(move(bound_defaults)) {
 	}
 

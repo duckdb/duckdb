@@ -59,6 +59,10 @@ void Connection::DisableQueryVerification() {
 	context->query_verification_enabled = false;
 }
 
+void Connection::ForceParallelism() {
+	context->force_parallelism = true;
+}
+
 unique_ptr<QueryResult> Connection::SendQuery(string query) {
 	return context->Query(query, true);
 }

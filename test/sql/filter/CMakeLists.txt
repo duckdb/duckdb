@@ -1,4 +1,4 @@
-add_library(test_sql_filter
+add_library_unity(test_sql_filter
                   OBJECT
                   test_alias_filter.cpp
                   test_constant_comparisons.cpp

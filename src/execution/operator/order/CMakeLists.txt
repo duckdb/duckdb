@@ -1,4 +1,4 @@
-add_library(duckdb_operator_order
+add_library_unity(duckdb_operator_order
                   OBJECT
                   physical_order.cpp
                   physical_top_n.cpp)

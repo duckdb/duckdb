@@ -302,6 +302,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 		// same counts, compare tuples in chunks
 		if (!compare_chunk(*collection.chunks[collection_index], parsed_result)) {
 			error_message = show_diff(*collection.chunks[collection_index], parsed_result);
+			return false;
 		}
 
 		collection_index++;

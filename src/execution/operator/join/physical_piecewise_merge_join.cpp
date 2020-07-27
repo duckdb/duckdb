@@ -96,7 +96,7 @@ void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalOperatorS
 //===--------------------------------------------------------------------===//
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-void PhysicalPiecewiseMergeJoin::Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> state) {
+void PhysicalPiecewiseMergeJoin::Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (MergeJoinGlobalState &)*state;
 	if (gstate.right_conditions.chunks.size() > 0) {
 		// now order all the chunks
@@ -439,6 +439,9 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 		break;
 	case TypeId::DOUBLE:
 		templated_quicksort<double>(vdata, not_null, not_null_count, order.order);
+		break;
+	case TypeId::INTERVAL:
+		templated_quicksort<interval_t>(vdata, not_null, not_null_count, order.order);
 		break;
 	case TypeId::VARCHAR:
 		templated_quicksort<string_t>(vdata, not_null, not_null_count, order.order);

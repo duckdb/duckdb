@@ -6,6 +6,8 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

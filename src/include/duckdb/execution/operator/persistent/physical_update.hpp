@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -16,9 +16,9 @@ class DataTable;
 //! Physically update data in a table
 class PhysicalUpdate : public PhysicalSink {
 public:
-	PhysicalUpdate(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, vector<column_t> columns,
+	PhysicalUpdate(vector<TypeId> types, TableCatalogEntry &tableref, DataTable &table, vector<column_t> columns,
 	               vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> bound_defaults)
-	    : PhysicalSink(PhysicalOperatorType::UPDATE, op.types), tableref(tableref), table(table), columns(columns),
+	    : PhysicalSink(PhysicalOperatorType::UPDATE, move(types)), tableref(tableref), table(table), columns(columns),
 	      expressions(move(expressions)), bound_defaults(move(bound_defaults)) {
 	}
 

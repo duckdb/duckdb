@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
+#include "duckdb/common/algorithm.hpp"
+
 using namespace std;
 
 namespace duckdb {

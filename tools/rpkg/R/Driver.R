@@ -2,7 +2,7 @@ DBDIR_MEMORY <- ":memory:"
 
 #' @title DuckDB Driver
 #'
-#' @description A DuckDB database instance. 
+#' @description A DuckDB database instance.
 #'
 #' @param dbdir The file in which the DuckDB database should be stored
 #' @param read_only Whether the database file should be opened in read-only mode
@@ -12,7 +12,6 @@ DBDIR_MEMORY <- ":memory:"
 #' @export
 #' @examples
 #' \dontrun{
-#' #' library(DBI)
 #' duckdb::duckdb()
 #' }
 #'
@@ -168,15 +167,12 @@ is_installed <- function(pkg) {
 
 
 #' @importFrom DBI dbConnect
-#' @importFrom dbplyr src_dbi
 #' @param path The file in which the DuckDB database should be stored
 #' @param create Create a new database if none is present in `path`
 #' @rdname duckdb_driver
 #' @export
 src_duckdb <- function(path = ":memory:", create = FALSE, read_only = FALSE) {
-  if (!is_installed("dbplyr")) {
-    stop("Need package `dbplyr` installed.")
-  }
+  requireNamespace("dbplyr", quietly = TRUE)
   if (path != ":memory:" && !create && !file.exists(path)) {
     stop("`path` '", path, "' must already exist, unless `create` = TRUE")
   }

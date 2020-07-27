@@ -102,6 +102,9 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 	case TypeId::DOUBLE:
 		return NLTYPE::template Operation<double, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                              current_match_count);
+	case TypeId::INTERVAL:
+		return NLTYPE::template Operation<interval_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
+		                                              current_match_count);
 	case TypeId::VARCHAR:
 		return NLTYPE::template Operation<string_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                rvector, current_match_count);

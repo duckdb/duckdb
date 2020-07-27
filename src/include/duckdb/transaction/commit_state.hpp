@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/transaction/undo_buffer.hpp"
+#include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 class CatalogEntry;
