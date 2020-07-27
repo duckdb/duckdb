@@ -521,6 +521,11 @@ static void execute_file(string script) {
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
 	int output_hash_mode = 0;
+	bool skip_index = false;
+	// for the original SQLite tests we skip the index (for now)
+	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+		skip_index = true;
+	}
 
 	DuckDB db;
 	Connection con(db);
@@ -664,13 +669,13 @@ static void execute_file(string script) {
 				printf("%s;\n", zScript);
 
 			unique_ptr<QueryResult> result;
-			// if (strncasecmp(zScript, "CREATE INDEX", 12) == 0) {
-			// 	fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", zScript);
-			// 	rc = 0;
-			// } else {
+			if (skip_index && strncasecmp(zScript, "CREATE INDEX", 12) == 0) {
+				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", zScript);
+				rc = 0;
+			} else {
 				result = con.Query(zScript);
 				rc = result->success ? 0 : 1;
-			// }
+			}
 			nCmd++;
 
 			/* Check to see if we are expecting success or failure */
