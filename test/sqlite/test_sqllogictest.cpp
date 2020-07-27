@@ -499,10 +499,14 @@ bool compare_values(MaterializedQueryResult &result, Value &lvalue, string rvalu
 	auto sql_type = result.sql_types[current_column];
 	try {
 		if (rvalue_str == "NULL") {
-			rvalue = Value(GetInternalType(sql_type));
-			rvalue.is_null = true;
+			if (sql_type.id != SQLTypeId::VARCHAR && lvalue.str_value != "NULL") {
+				rvalue = Value(GetInternalType(sql_type));
+				rvalue.is_null = true;
+			} else {
+				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			}
 		} else {
-			rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);		
+			rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
 		}
 	} catch(std::exception &ex) {
 		print_error_header("Test error!", zScriptFile, query_line);
