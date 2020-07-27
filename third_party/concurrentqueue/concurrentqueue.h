@@ -34,12 +34,7 @@
 // Disable -Wconversion warnings (spuriously triggered when Traits::size_t and
 // Traits::index_t are set to < 32 bits, causing integer promotion, causing warnings
 // upon assigning any computed values)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wconversion"
 
-#ifdef MCDBGQ_USE_RELACY
-#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
-#endif
 #endif
 
 #if defined(__APPLE__)
@@ -3669,6 +3664,3 @@ inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a, ty
 
 }
 
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
