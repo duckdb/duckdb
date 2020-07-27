@@ -22,7 +22,6 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	// get file_path and is_from
 	info.file_path = stmt->filename;
 	info.is_from = stmt->is_from;
-
 	info.format = "csv";
 
 	// get select_list

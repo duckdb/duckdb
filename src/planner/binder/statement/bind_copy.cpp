@@ -67,12 +67,15 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	// lookup the table to copy into
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table);
 	vector<string> expected_names;
-	expected_names.reserve(bound_insert.expected_types.size());
 	if (bound_insert.column_index_map.size() > 0) {
-		for(idx_t i = 0; i < bound_insert.expected_types.size(); i++) {
-			expected_names.push_back(table->columns[bound_insert.column_index_map[i]].name);
+		expected_names.resize(bound_insert.expected_types.size());
+		for(idx_t i = 0; i < table->columns.size(); i++) {
+			if (bound_insert.column_index_map[i] != INVALID_INDEX) {
+				expected_names[bound_insert.column_index_map[i]] = table->columns[i].name;
+			}
 		}
 	} else {
+		expected_names.reserve(bound_insert.expected_types.size());
 		for(idx_t i = 0; i < table->columns.size(); i++) {
 			expected_names.push_back(table->columns[i].name);
 		}

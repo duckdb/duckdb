@@ -251,8 +251,9 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 
 	// set up the CSV reader
 	BufferedCSVReaderOptions options;
+	options.auto_detect = false;
 	options.delimiter = "|";
-	options.header = true;
+	options.header = has_header;
 	options.quote = "\"";
 	options.escape = "\"";
 
