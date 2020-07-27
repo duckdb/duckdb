@@ -2,7 +2,7 @@ DBDIR_MEMORY <- ":memory:"
 
 #' @title DuckDB Driver
 #'
-#' @description A DuckDB database instance. 
+#' @description A DuckDB database instance.
 #'
 #' @param dbdir The file in which the DuckDB database should be stored
 #' @param read_only Whether the database file should be opened in read-only mode
@@ -12,7 +12,6 @@ DBDIR_MEMORY <- ":memory:"
 #' @export
 #' @examples
 #' \dontrun{
-#' #' library(DBI)
 #' duckdb::duckdb()
 #' }
 #'
