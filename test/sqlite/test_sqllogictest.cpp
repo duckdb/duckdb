@@ -830,9 +830,23 @@ static void execute_file(string script) {
 						break;
 					}
 				}
-				bool row_wise = false;
 				idx_t expected_rows = values.size() / expected_column_count;
-				if (expected_column_count > 1 && values.size() == result->collection.count) {
+				// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
+				bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
+				if (!row_wise) {
+					// the counts do not match up for it to be row-wise
+					// however, this can also be because the query returned an incorrect # of rows
+					// we make a guess: if everything contains tabs, we still treat the input as row wise
+					bool all_tabs = true;
+					for(auto &val : values) {
+						if (val.find('\t') == string::npos) {
+							all_tabs = false;
+							break;
+						}
+					}
+					row_wise = all_tabs;
+				}
+				if (row_wise) {
 					// values are displayed row-wise, format row wise with a tab
 					duckdbFreeResults(azResult, nResult);
 					duckdbConvertResultRowWise(*result, &azResult, &nResult);

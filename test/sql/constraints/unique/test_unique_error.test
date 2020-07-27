@@ -1,0 +1,16 @@
+# name: test/sql/constraints/test_unique_error.test
+# description: UNIQUE constraint on temporary tables with duplicate data
+# group: [constraints]
+
+statement ok
+CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)
+
+statement ok
+INSERT INTO integers VALUES (3, '4'), (2, '4')
+
+statement error
+CREATE UNIQUE INDEX uidx ON integers (j) 
+
+statement ok
+DROP TABLE integers
+

@@ -1,0 +1,69 @@
+# name: test/sql/constraints/test_constraint_with_updates.test
+# description: Test constraints with updates
+# group: [constraints]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER CHECK(i + j < 5), k INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2, 4)
+
+# updating values that are not referenced in the CHECK should just work
+statement ok
+UPDATE integers SET k=7
+
+# update to a passing value should work
+statement ok
+UPDATE integers SET i=i, j=3
+
+statement ok
+UPDATE integers SET i=i, j=3
+
+# update to a passing value should work
+statement error
+UPDATE integers SET i=i, i=10
+
+statement error
+UPDATE integers SET i=i, j=10
+
+# now update the value without explicitly mentioning the other column
+statement ok
+UPDATE integers SET j=2
+
+statement error
+UPDATE integers SET j=10
+
+# verify that the final result is correct
+query III
+SELECT * FROM integers
+----
+1	2	7
+
+statement ok
+DROP TABLE integers
+
+# NOT NULL constraint
+statement ok
+CREATE TABLE integers(i INTEGER NOT NULL, j INTEGER NOT NULL)
+
+# insert a value that passes
+statement ok
+INSERT INTO integers VALUES (1, 2)
+
+# update to a passing value should work
+statement ok
+UPDATE integers SET j=3
+
+# now update the value so it doesn't pass
+statement error
+UPDATE integers SET i=NULL
+
+statement error
+UPDATE integers SET j=NULL
+
+# verify that the final result is correct
+query II
+SELECT * FROM integers
+----
+1	3
+

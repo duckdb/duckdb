@@ -1,6 +1,5 @@
 add_subdirectory(blob)
 add_subdirectory(catalog)
-add_subdirectory(collate)
 add_subdirectory(create)
 add_subdirectory(capi)
 add_subdirectory(date)

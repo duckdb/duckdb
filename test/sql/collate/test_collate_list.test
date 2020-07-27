@@ -1,0 +1,10 @@
+# name: test/sql/collate/test_collate_list.test
+# description: Get list of collations
+# group: [collate]
+
+statement ok
+PRAGMA collations
+
+statement error
+PRAGMA collations=3
+
