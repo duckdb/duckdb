@@ -15,7 +15,7 @@
 #include "re2/regexp.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Parses the regexp src and then simplifies it and sets *dst to the
 // string representation of the simplified form.  Returns true on success.
@@ -653,4 +653,4 @@ Regexp* SimplifyWalker::SimplifyCharClass(Regexp* re) {
   return re->Incref();
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

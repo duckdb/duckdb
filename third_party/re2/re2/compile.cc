@@ -21,7 +21,7 @@
 #include "re2/regexp.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // List of pointers to Inst* that need to be filled in (patched).
 // Because the Inst* haven't been filled in yet,
@@ -1276,4 +1276,4 @@ Prog* Prog::CompileSet(Regexp* re, RE2::Anchor anchor, int64_t max_mem) {
   return Compiler::CompileSet(re, anchor, max_mem);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

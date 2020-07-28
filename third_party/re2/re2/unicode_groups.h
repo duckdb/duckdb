@@ -23,7 +23,7 @@
 #include "util/util.h"
 #include "util/utf.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 struct URange16
 {
@@ -62,6 +62,6 @@ extern const int num_posix_groups;
 extern const UGroup perl_groups[];
 extern const int num_perl_groups;
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_UNICODE_GROUPS_H_

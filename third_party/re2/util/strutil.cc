@@ -12,7 +12,7 @@
 #define vsnprintf _vsnprintf
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // ----------------------------------------------------------------------
 // CEscapeString()
@@ -161,4 +161,4 @@ void StringAppendF(std::string* dst, const char* format, ...) {
   va_end(ap);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

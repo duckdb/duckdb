@@ -14,7 +14,7 @@
 #include "util/util.h"
 #include "util/logging.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class Bitmap256 {
  public:
@@ -113,6 +113,6 @@ int Bitmap256::FindNextSetBit(int c) const {
   }
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_BITMAP256_H_

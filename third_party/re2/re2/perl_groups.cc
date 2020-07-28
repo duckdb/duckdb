@@ -3,7 +3,7 @@
 
 #include "re2/unicode_groups.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 static const URange16 code1[] = {  /* \d */
 	{ 0x30, 0x39 },
@@ -116,4 +116,4 @@ const UGroup posix_groups[] = {
 };
 const int num_posix_groups = 28;
 
-}  // namespace re2
+}  // namespace duckdb_re2

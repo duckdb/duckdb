@@ -34,7 +34,7 @@
 #include <string_view>
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class StringPiece {
  public:
@@ -205,6 +205,6 @@ inline bool operator>=(const StringPiece& x, const StringPiece& y) {
 // Allow StringPiece to be logged.
 std::ostream& operator<<(std::ostream& o, const StringPiece& p);
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_STRINGPIECE_H_
