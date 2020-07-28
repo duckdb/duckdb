@@ -268,10 +268,10 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
 	if (strict) {
-		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0  || strcmp(input_data, "1") == 0) {
+		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0) {
 			result = true;
 		} else if (strcmp(input_data, "false") == 0 || strcmp(input_data, "False") == 0 ||
-		           strcmp(input_data, "FALSE") == 0 || strcmp(input_data, "0") == 0) {
+		           strcmp(input_data, "FALSE") == 0) {
 			result = false;
 		} else {
 			return false;
