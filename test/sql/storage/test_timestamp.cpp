@@ -41,3 +41,32 @@ TEST_CASE("Test storage for timestamp type", "[timestamp]") {
 	}
 	DeleteDatabase(storage_database);
 }
+
+TEST_CASE("Test storage for interval type", "[interval]") {
+	unique_ptr<QueryResult> result;
+	auto storage_database = TestCreatePath("storage_interval_test");
+
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	{
+		// create a database and insert values
+		DuckDB db(storage_database);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE interval (t INTERVAL);"));
+		REQUIRE_NO_FAIL(con.Query(
+		    "INSERT INTO interval VALUES (INTERVAL '1' DAY), (NULL), (INTERVAL '3 months 2 days 5 seconds')"));
+	}
+	// reload the database from disk
+	for (idx_t i = 0; i < 2; i++) {
+		DuckDB db(storage_database);
+		Connection con(db);
+		result = con.Query("SELECT t FROM interval ORDER BY t;");
+		REQUIRE(CHECK_COLUMN(result, 0,
+		                     {Value(), Value::INTERVAL(0, 1, 0), Value::INTERVAL(3, 2, 5000)}));
+		result = con.Query("SELECT t FROM interval WHERE t = INTERVAL '1' DAY;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 1, 0)}));
+		result = con.Query("SELECT t FROM interval WHERE t >= INTERVAL '1' DAY ORDER BY 1;");
+		REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(0, 1, 0), Value::INTERVAL(3, 2, 5000)}));
+	}
+	DeleteDatabase(storage_database);
+}

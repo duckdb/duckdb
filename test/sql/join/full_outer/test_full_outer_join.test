@@ -1,0 +1,51 @@
+# name: test/sql/join/test_full_outer_join.test
+# description: Test FULL OUTER JOIN
+# group: [full_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (3, 3)
+
+statement ok
+CREATE TABLE integers2(k INTEGER, l INTEGER)
+
+statement ok
+INSERT INTO integers2 VALUES (1, 10), (2, 20)
+
+# equality join
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k ORDER BY i
+----
+NULL	NULL	2	20
+1	1	1	10
+3	3	NULL	NULL
+
+# equality join with additional non-equality predicate
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k AND integers.j > integers2.l ORDER BY 1, 2, 3, 4
+----
+NULL	NULL	1	10
+NULL	NULL	2	20
+1	1	NULL	NULL
+3	3	NULL	NULL
+
+# equality join with varchar values
+query IIIT
+SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT k, l::VARCHAR AS l FROM integers2) integers2 ON integers.i=integers2.k ORDER BY 1, 2, 3, 4
+----
+NULL	NULL	2	20
+1	1	1	10
+3	3	NULL	NULL
+
+# empty RHS
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN (SELECT * FROM integers2 WHERE 1=0) integers2 ON integers.i=integers2.k ORDER BY 1, 2, 3, 4
+----
+1	1	NULL	NULL
+3	3	NULL	NULL
+

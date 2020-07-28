@@ -1,0 +1,265 @@
+# name: test/sql/types/interval/test_interval_addition.test
+# description: Test interval addition/subtraction
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+# we can add/subtract intervals to/from dates
+query T
+SELECT DATE '1992-03-01' + INTERVAL '1' YEAR
+----
+1993-03-01
+
+# check a bunch of different months to test proper month looping behavior
+query T
+SELECT DATE '1992-03-01' + INTERVAL '0' MONTH
+----
+1992-03-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '0' MONTH
+----
+1992-03-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '1' MONTH
+----
+1992-04-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '1' MONTH
+----
+1992-02-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '2' MONTH
+----
+1992-05-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '2' MONTH
+----
+1992-01-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '3' MONTH
+----
+1992-06-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '3' MONTH
+----
+1991-12-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '4' MONTH
+----
+1992-07-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '4' MONTH
+----
+1991-11-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '5' MONTH
+----
+1992-08-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '5' MONTH
+----
+1991-10-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '6' MONTH
+----
+1992-09-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '6' MONTH
+----
+1991-09-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '7' MONTH
+----
+1992-10-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '7' MONTH
+----
+1991-08-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '8' MONTH
+----
+1992-11-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '8' MONTH
+----
+1991-07-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '9' MONTH
+----
+1992-12-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '9' MONTH
+----
+1991-06-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '10' MONTH
+----
+1993-01-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '10' MONTH
+----
+1991-05-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '11' MONTH
+----
+1993-02-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '11' MONTH
+----
+1991-04-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '12' MONTH
+----
+1993-03-01
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '12' MONTH
+----
+1991-03-01
+
+query T
+SELECT DATE '1992-03-01' + INTERVAL '10' DAY
+----
+1992-03-11
+
+query T
+SELECT DATE '1992-03-01' - INTERVAL '10' DAY
+----
+1992-02-20
+
+query T
+SELECT DATE '1993-03-01' - INTERVAL '10' DAY
+----
+1993-02-19
+
+# small times have no impact on date
+query T
+SELECT DATE '1993-03-01' - INTERVAL '1' SECOND
+----
+1993-03-01
+
+# small seconds have no impact on DATE
+query T
+SELECT DATE '1993-03-01' + INTERVAL '1' SECOND
+----
+1993-03-01
+
+query T
+SELECT DATE '1993-03-01' - INTERVAL '1' SECOND
+----
+1993-03-01
+
+# but a large amount of seconds does have an impact
+query T
+SELECT DATE '1993-03-01' + INTERVAL '1000000' SECOND
+----
+1993-03-12
+
+query T
+SELECT DATE '1993-03-01' - INTERVAL '1000000' SECOND
+----
+1993-02-18
+
+# we cannot subtract dates from intervals
+statement error
+SELECT INTERVAL '1000000' SECOND - DATE '1993-03-01'
+
+# we can add/subtract them to/from times
+query T
+SELECT TIME '10:00:00' + INTERVAL '5' SECOND
+----
+10:00:05
+
+query T
+SELECT INTERVAL '5' SECOND + TIME '10:00:00'
+----
+10:00:05
+
+query T
+SELECT TIME '10:00:00' - INTERVAL '5' SECOND
+----
+09:59:55
+
+# adding large amounts does nothing
+query T
+SELECT TIME '10:00:00' + INTERVAL '1' DAY
+----
+10:00:00
+
+query T
+SELECT TIME '10:00:00' + INTERVAL '1' DAY TO HOUR
+----
+10:00:00
+
+query T
+SELECT TIME '10:00:00' - INTERVAL '1' DAY TO HOUR
+----
+10:00:00
+
+# test wrapping behavior
+query T
+SELECT TIME '23:00:00' + INTERVAL '1' HOUR
+----
+00:00:00
+
+query T
+SELECT TIME '00:00:00' - INTERVAL '1' HOUR
+----
+23:00:00
+
+query T
+SELECT TIME '00:00:00' + INTERVAL '-1' HOUR
+----
+23:00:00
+
+# we can add/subtract them to/from timestamps
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:00' + INTERVAL '1' DAY
+----
+1992-01-02 10:00:00
+
+query T
+SELECT INTERVAL '1' DAY + TIMESTAMP '1992-01-01 10:00:00'
+----
+1992-01-02 10:00:00
+
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:05' + INTERVAL '17 years 3 months 1 day 2 hours 1 minute 57 seconds'
+----
+2009-04-02 12:02:02
+
+query T
+SELECT TIMESTAMP '1992-01-01 10:00:00' - INTERVAL '1' DAY
+----
+1991-12-31 10:00:00
+
+query T
+select timestamp '1993-01-01 00:00:00' - timestamp '1991-01-01 01:00:30';
+----
+1 year 11 months 30 days 22:59:30
+

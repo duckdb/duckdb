@@ -80,10 +80,10 @@ static string ParseGroupFromPath(string file) {
 
 void Connection::Record(string file, string description, vector<string> extensions) {
 	auto &fs = context->db.GetFileSystem();
-	if (fs.FileExists(file)) {
-		throw Exception("file '" + file + "' exists!");
-	}
 	string target = StringUtil::Replace(file, ".cpp", ".test");
+	if (fs.FileExists(target)) {
+		throw Exception("file '" + target + "' exists!");
+	}
 	printf("Writing to file \"%s\"\n", target.c_str());
 	record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
 	string path = "# name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";

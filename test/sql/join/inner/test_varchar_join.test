@@ -1,0 +1,27 @@
+# name: test/sql/join/inner/test_varchar_join.test
+# description: Test joins on VARCHAR columns with NULL values
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+query TT
+select * from (select NULL::varchar as b) sq1, (select 'asdf' as b) sq2 where sq1.b = sq2.b;
+----
+
+query ITIT
+select * from (select 42 as a, NULL::varchar as b) sq1, (select 42 as a, 'asdf' as b) sq2 where sq1.b <> sq2.b;
+----
+
+query ITIT
+select * from (select 42 as a, NULL::varchar as b) sq1, (select 42 as a, 'asdf' as b) sq2 where sq1.a=sq2.a and sq1.b <> sq2.b;
+----
+
+query ITIT
+select * from (select 42 as a, 'asdf' as b) sq2, (select 42 as a, NULL::varchar as b) sq1 where sq1.b <> sq2.b;
+----
+
+query ITIT
+select * from (select 42 as a, 'asdf' as b) sq2, (select 42 as a, NULL::varchar as b) sq1 where sq1.a=sq2.a and sq1.b <> sq2.b;
+----
+
