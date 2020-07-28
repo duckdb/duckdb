@@ -367,36 +367,6 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	return 0;
 }
 
-// row-wise result conversion: one line per row,
-static int duckdbConvertResultRowWise(MaterializedQueryResult &result,
-                       char ***pazResult, /* RETURN:  Array of result values */
-                       int *pnResult      /* RETURN:  Number of result values */
-) {
-	size_t r, c;
-	idx_t row_count = result.collection.count;
-	idx_t column_count = result.column_count();
-
-	*pazResult = (char **)malloc(sizeof(char *) * row_count);
-	if (!*pazResult) {
-		return 1;
-	}
-	for (r = 0; r < row_count; r++) {
-		string result_str;
-		for (c = 0; c < column_count; c++) {
-			if (c > 0) {
-				result_str += "\t";
-			}
-			auto value = result.GetValue(c, r);
-			char *buffer = sqllogictest_convert_value(value, result.sql_types[c]);
-			result_str += buffer;
-			free(buffer);
-		}
-		(*pazResult)[r] = strdup(result_str.c_str());
-	}
-	*pnResult = row_count;
-	return 0;
-}
-
 static int duckdbFreeResults(
                              char **azResult, /* The results to be freed */
                              int nResult      /* Number of rows of result */
@@ -493,35 +463,45 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
-bool compare_values(MaterializedQueryResult &result, Value &lvalue, string rvalue_str, const char *zScriptFile, int query_line, const char *zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
-	Value rvalue;
+bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, const char *zScriptFile, int query_line, const char *zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
+	Value lvalue, rvalue;
 	bool error = false;
+	// simple first test: compare string value directly
+	if (lvalue_str == rvalue_str) {
+		return true;
+	}
+	// some times require more checking (specifically floating point numbers because of inaccuracies)
+	// if not equivalent we need to cast to the SQL type to verify
 	auto sql_type = result.sql_types[current_column];
-	try {
-		if (rvalue_str == "NULL") {
-			if (sql_type.id == SQLTypeId::VARCHAR && !lvalue.is_null && lvalue.str_value == "NULL") {
-				// lvalue is the string "NULL"
-				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+	if (sql_type.id == SQLTypeId::FLOAT || sql_type.id == SQLTypeId::DOUBLE) {
+		bool converted_lvalue = false;
+		try {
+			if (lvalue_str == "NULL") {
+				lvalue = Value(GetInternalType(sql_type));
 			} else {
-				rvalue = Value(GetInternalType(sql_type));
-				rvalue.is_null = true;
+				lvalue = Value(lvalue_str).CastAs(SQLType::VARCHAR, sql_type);
 			}
-		} else {
-			rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			converted_lvalue = true;
+			if (rvalue_str == "NULL") {
+				rvalue = Value(GetInternalType(sql_type));
+			} else {
+				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			}
+		} catch(std::exception &ex) {
+			print_error_header("Test error!", zScriptFile, query_line);
+			print_line_sep();
+			print_sql(zScript);
+			print_line_sep();
+			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << SQLTypeToString(sql_type) << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
+			print_line_sep();
+			return false;
 		}
-	} catch(std::exception &ex) {
-		print_error_header("Test error!", zScriptFile, query_line);
-		print_line_sep();
-		print_sql(zScript);
-		print_line_sep();
-		std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << rvalue_str << " to type " << SQLTypeToString(sql_type) << termcolor::reset << std::endl;
-		std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
-		print_line_sep();
-		return false;
+	} else {
+		// for other types we just mark the result as incorrect
+		error = true;
 	}
-	if (!error) {
-		error = !Value::ValuesAreEqual(lvalue, rvalue);
-	}
+	error = !Value::ValuesAreEqual(lvalue, rvalue);
 	if (error) {
 		print_error_header("Wrong result in query!", zScriptFile, query_line);
 		print_line_sep();
@@ -534,6 +514,10 @@ bool compare_values(MaterializedQueryResult &result, Value &lvalue, string rvalu
 		return false;
 	}
 	return true;
+}
+
+static void break_on_query_line(int query_line) {
+
 }
 
 static void execute_file(string script) {
@@ -768,6 +752,7 @@ static void execute_file(string script) {
 			 *record
 			 ** until the first "----" line or until end of record.
 			 */
+			int query_line = sScript.nLine;
 			k = 0;
 			while (!nextIsBlank(&sScript) && nextLine(&sScript) && sScript.zLine[0] &&
 			       strcmp(sScript.zLine, "----") != 0) {
@@ -783,6 +768,7 @@ static void execute_file(string script) {
 			azResult = 0;
 			if (enableTrace)
 				printf("%s;\n", zScript);
+			break_on_query_line(query_line);
 			auto result = con.Query(zScript);
 			rc = result->success ? 0 : 1;
 			nCmd++;
@@ -855,7 +841,6 @@ static void execute_file(string script) {
 					continue;
 				}
 			}
-			int query_line = sScript.nLine;
 
 			/* Compare subsequent lines of the script against the
 			 *results
@@ -889,8 +874,6 @@ static void execute_file(string script) {
 				}
 				if (row_wise) {
 					// values are displayed row-wise, format row wise with a tab
-					duckdbFreeResults(azResult, nResult);
-					duckdbConvertResultRowWise(*result, &azResult, &nResult);
 					expected_rows = values.size();
 					row_wise = true;
 				} else if (values.size() % expected_column_count != 0) {
@@ -936,16 +919,14 @@ static void execute_file(string script) {
 							IFAIL();
 						}
 						for(idx_t c = 0; c < splits.size(); c++) {
-							Value lvalue = result->GetValue(c, current_row);
-							REQUIRE(compare_values(*result, lvalue, splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise));
+							REQUIRE(compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise));
 						}
 						current_row++;
 					}
 				} else {
 					int current_row = 0, current_column = 0;
 					for (i = 0; i < nResult && i < values.size(); i++) {
-						Value lvalue = result->GetValue(current_column, current_row);
-						REQUIRE(compare_values(*result, lvalue, values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise));
+						REQUIRE(compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise));
 
 						current_column++;
 						if (current_column == expected_column_count) {
