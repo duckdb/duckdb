@@ -499,11 +499,12 @@ bool compare_values(MaterializedQueryResult &result, Value &lvalue, string rvalu
 	auto sql_type = result.sql_types[current_column];
 	try {
 		if (rvalue_str == "NULL") {
-			if (sql_type.id != SQLTypeId::VARCHAR && lvalue.str_value != "NULL") {
+			if (sql_type.id == SQLTypeId::VARCHAR && !lvalue.is_null && lvalue.str_value == "NULL") {
+				// lvalue is the string "NULL"
+				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			} else {
 				rvalue = Value(GetInternalType(sql_type));
 				rvalue.is_null = true;
-			} else {
-				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
 			}
 		} else {
 			rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
