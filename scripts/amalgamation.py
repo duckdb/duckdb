@@ -135,6 +135,7 @@ def generate_amalgamation(source_file, header_file):
     print("-- Writing " + header_file + " --")
     print("-----------------------")
     with open(temp_header, 'w+') as hfile:
+        hfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
         for fpath in main_header_files:
@@ -149,6 +150,7 @@ def generate_amalgamation(source_file, header_file):
     # scan all the .cpp files
     with open(temp_source, 'w+') as sfile:
         header_file_name = header_file.split(os.sep)[-1]
+        sfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
 

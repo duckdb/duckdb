@@ -24,7 +24,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 	// bind the collation
 	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
 		// binary collation: just skip
-		return move(source);
+		return source;
 	}
 	auto &catalog = Catalog::GetCatalog(context);
 	auto splits = StringUtil::Split(StringUtil::Lower(collation), ".");
