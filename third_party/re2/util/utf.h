@@ -20,7 +20,7 @@
 
 #include <stdint.h>
 
-namespace re2 {
+namespace duckdb_re2 {
 
 typedef signed int Rune;	/* Code-point values in Unicode 4.0 are 21 bits wide.*/
 
@@ -39,6 +39,6 @@ int fullrune(const char* s, int n);
 int utflen(const char* s);
 char* utfrune(const char*, Rune);
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // UTIL_UTF_H_

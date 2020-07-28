@@ -23,7 +23,7 @@
 #include "re2/stringpiece.h"
 #include "re2/walker-inl.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Constructor.  Allocates vectors as appropriate for operator.
 Regexp::Regexp(RegexpOp op, ParseFlags parse_flags)
@@ -968,4 +968,4 @@ CharClass* CharClassBuilder::GetCharClass() {
   return cc;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

@@ -18,7 +18,7 @@
 #include "util/logging.h"
 #include "re2/regexp.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 template<typename T> struct WalkState;
 
@@ -243,6 +243,6 @@ template<typename T> T Regexp::Walker<T>::WalkExponential(Regexp* re, T top_arg,
   return WalkInternal(re, top_arg, false);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_WALKER_INL_H_

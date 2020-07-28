@@ -30,7 +30,7 @@ typedef pthread_rwlock_t MutexType;
 typedef std::mutex MutexType;
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class Mutex {
  public:
@@ -127,6 +127,6 @@ class WriterMutexLock {
 #define ReaderMutexLock(x) static_assert(false, "ReaderMutexLock declaration missing variable name")
 #define WriterMutexLock(x) static_assert(false, "WriterMutexLock declaration missing variable name")
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // UTIL_MUTEX_H_

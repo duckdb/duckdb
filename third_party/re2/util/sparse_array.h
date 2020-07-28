@@ -104,7 +104,7 @@
 
 #include "util/pod_array.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 template<typename Value>
 class SparseArray {
@@ -387,6 +387,6 @@ template<typename Value> bool SparseArray<Value>::less(const IndexValue& a,
   return a.index_ < b.index_;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // UTIL_SPARSE_ARRAY_H_

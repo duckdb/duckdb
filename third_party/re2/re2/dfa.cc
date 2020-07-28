@@ -50,7 +50,7 @@
 //#pragma warning(disable: 4200)
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 #if !defined(__linux__)  /* only Linux seems to have memrchr */
 static void* memrchr(const void* s, int c, size_t n) {
@@ -2086,4 +2086,4 @@ bool Prog::PossibleMatchRange(std::string* min, std::string* max, int maxlen) {
   return GetDFA(kLongestMatch)->PossibleMatchRange(min, max, maxlen);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

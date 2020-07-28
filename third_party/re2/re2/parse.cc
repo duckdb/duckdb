@@ -42,7 +42,7 @@
 // #include "unicode/utypes.h"
 // #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Reduce the maximum repeat count by an order of magnitude when fuzzing.
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
@@ -2461,4 +2461,4 @@ Regexp* Regexp::Parse(const StringPiece& s, ParseFlags global_flags,
   return ps.DoFinish();
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
