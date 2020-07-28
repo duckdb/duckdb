@@ -590,14 +590,14 @@ matrix:
 
       dist: bionic
       language: r
-      cache: packages
+      cache:
+        - packages
+        - ccache
       r: devel
 
       before_install:
         - cd tools/rpkg
-        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
-        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
-        - echo -e "options(Ncpus = 8, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
         - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\nCXX14=ccache g++\nCXX17=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
         - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
         - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
@@ -617,7 +617,9 @@ matrix:
     - os: osx
       osx_image: xcode11.5
       name: R Package
-      cache: packages
+      cache:
+        - packages
+        - $HOME/.ccache
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
@@ -626,8 +628,8 @@ matrix:
         - cd tools/rpkg
         - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
         - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
-        - echo -e "options(Ncpus = 8, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
-        - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\nCXX14=ccache g++\nCXX17=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
+        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - mkdir -p $HOME/.R && echo -e 'CC=ccache clang\nCXX=ccache clang++\nCXX11=ccache clang++\nCXX14=ccache clang++\nCXX17=ccache clang++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
         - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
         - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
         - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
