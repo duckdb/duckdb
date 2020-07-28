@@ -1,0 +1,57 @@
+# name: test/sql/catalog/view/test_view_alias.test
+# description: Test view creation with alias
+# group: [view]
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (41), (42), (43)
+
+# this should fail because there are more aliases for the view than columns in the query
+statement error
+CREATE VIEW v1 (j, "j2") AS SELECT * FROM t1
+
+statement ok
+CREATE VIEW v1 (j, "j2") AS SELECT i,i+1 FROM t1
+
+query II
+SELECT j, j2 FROM v1
+----
+41	42
+42	43
+43	44
+
+statement ok
+DROP VIEW v1
+
+statement ok
+CREATE VIEW v1 (j, "j2") AS SELECT i,i+1, i+2 FROM t1
+
+query II
+SELECT j, j2 FROM v1
+----
+41	42
+42	43
+43	44
+
+statement ok
+DROP VIEW v1
+
+statement ok
+CREATE VIEW v1 (j, "j2") AS SELECT i,i+1, i+2 as x FROM t1
+
+query III
+SELECT j, j2, x FROM v1
+----
+41	42	43
+42	43	44
+43	44	45
+
+statement ok
+DROP VIEW v1
+

@@ -1,0 +1,59 @@
+# name: test/sql/catalog/view/test_view.test
+# description: Test view creation
+# group: [view]
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (41), (42), (43)
+
+statement ok
+CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
+
+statement error
+CREATE VIEW v1 AS SELECT 'whatever'
+
+query I
+SELECT j FROM v1 WHERE j > 41
+----
+42
+
+statement ok
+DROP VIEW v1
+
+statement error
+SELECT j FROM v1 WHERE j > 41
+
+statement ok
+CREATE VIEW v1 AS SELECT 'whatever'
+
+query T
+SELECT * FROM v1
+----
+whatever
+
+statement ok
+CREATE OR REPLACE VIEW v1 AS SELECT 42
+
+query I
+SELECT * FROM v1
+----
+42
+
+statement ok
+DROP VIEW v1
+
+statement error
+DROP VIEW v1
+
+statement ok
+DROP VIEW IF EXISTS v1
+
+statement error
+CREATE VIEW v1 AS SELECT * FROM dontexist
+
