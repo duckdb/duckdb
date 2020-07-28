@@ -1,0 +1,59 @@
+# name: test/sql/window/test_window_tpcds.test
+# description: TPC-DS inspired micro benchmarks
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_price INTEGER)
+
+statement ok
+INSERT INTO item VALUES ('toys', 'fisher-price', 100)
+
+query TTRI
+SELECT i_category, i_brand, avg(sum(i_price)) OVER (PARTITION BY i_category), rank() OVER (PARTITION BY i_category ORDER BY i_category, i_brand) rn FROM item GROUP BY i_category, i_brand;
+----
+toys	fisher-price	100.000000	1
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE item(i_category VARCHAR, i_brand VARCHAR, i_item_sk INTEGER);
+
+statement ok
+CREATE TABLE store(s_store_name VARCHAR, s_company_name VARCHAR, s_store_sk INTEGER);
+
+statement ok
+CREATE TABLE date_dim(d_year INTEGER, d_moy INTEGER, d_date_sk INTEGER);
+
+statement ok
+CREATE TABLE store_sales(ss_sales_price DECIMAL, ss_item_sk INTEGER, ss_sold_date_sk INTEGER, ss_store_sk INTEGER);
+
+statement ok
+INSERT INTO item VALUES ('Music', 'exportischolar', 1);
+
+statement ok
+INSERT INTO store VALUES ('ought', 'Unknown', 1);
+
+statement ok
+INSERT INTO date_dim VALUES (1999, 1, 1);
+
+statement ok
+INSERT INTO store_sales VALUES (2.8, 1, 1, 1);
+
+query TTTTIIRRI
+SELECT i_category, i_brand, s_store_name, s_company_name, d_year, d_moy, sum(ss_sales_price) sum_sales, avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name, d_year) avg_monthly_sales, rank() OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name ORDER BY d_year, d_moy) rn FROM item, store_sales, date_dim, store WHERE ss_item_sk = i_item_sk AND ss_sold_date_sk = d_date_sk AND ss_store_sk = s_store_sk AND (d_year = 1999 OR (d_year = 1999-1 AND d_moy =12) OR (d_year = 1999+1 AND d_moy =1)) GROUP BY i_category, i_brand, s_store_name, s_company_name, d_year, d_moy;
+----
+Music	exportischolar	ought	Unknown	1999	1	2.800000	2.800000	1
+
+statement ok
+ROLLBACK
+
