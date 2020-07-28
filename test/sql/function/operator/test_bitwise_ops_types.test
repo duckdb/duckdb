@@ -1,0 +1,103 @@
+# name: test/sql/function/operator/test_bitwise_ops_types.test
+# description: Test bitwise ops with tables and different types
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+# type TINYINT
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE bitwise_test(i TINYINT, j TINYINT)
+
+statement ok
+INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
+
+query IIIII
+SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+----
+2	0	1	1	0
+1	1	0	1	1
+0	0	0	1	1
+0	0	0	0	0
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+
+statement ok
+ROLLBACK
+
+# type SMALLINT
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE bitwise_test(i SMALLINT, j SMALLINT)
+
+statement ok
+INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
+
+query IIIII
+SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+----
+2	0	1	1	0
+1	1	0	1	1
+0	0	0	1	1
+0	0	0	0	0
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+
+statement ok
+ROLLBACK
+
+# type INTEGER
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE bitwise_test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
+
+query IIIII
+SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+----
+2	0	1	1	0
+1	1	0	1	1
+0	0	0	1	1
+0	0	0	0	0
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+
+statement ok
+ROLLBACK
+
+# type BIGINT
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE bitwise_test(i BIGINT, j BIGINT)
+
+statement ok
+INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
+
+query IIIII
+SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+----
+2	0	1	1	0
+1	1	0	1	1
+0	0	0	1	1
+0	0	0	0	0
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL
+
+statement ok
+ROLLBACK
+

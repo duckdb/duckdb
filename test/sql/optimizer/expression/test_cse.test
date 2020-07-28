@@ -1,0 +1,59 @@
+# name: test/sql/optimizer/expression/test_cse.test
+# description: Test queries involving Common SubExpressions
+# group: [expression]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test(a integer);
+
+statement ok
+insert into test values (42);
+
+# single CSE
+query I
+SELECT (a*2)+(a*2) FROM test
+----
+168
+
+# multiple CSE
+query I
+SELECT (a*2)+(a*2)+(a*2)+(a*2)+(a*2) FROM test
+----
+420
+
+# CSE in WHERE clause
+query I
+SELECT * FROM test WHERE ((a*2)+(a*2))>100
+----
+42
+
+# multiple CSE in WHERE clause
+query I
+SELECT * FROM test WHERE ((a*2)+(a*2)+(a*2)+(a*2)+(a*2))>400
+----
+42
+
+# Strings and NULL values
+statement ok
+create table test2(a VARCHAR);
+
+statement ok
+insert into test2 values ('hello'), ('world'), (NULL);
+
+# single CSE in projection
+query T
+SELECT substring(a, 1, 3)=substring(a, 1, 3) FROM test2 ORDER BY 1
+----
+NULL
+1
+1
+
+# now with GROUP BY clause
+query T
+SELECT substring(a, 1, 3)=substring(a, 1, 3) AS b FROM test2 GROUP BY b ORDER BY b
+----
+NULL
+1
+

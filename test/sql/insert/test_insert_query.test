@@ -1,0 +1,19 @@
+# name: test/sql/insert/test_insert_query.test
+# description: Test insert from constant query
+# group: [insert]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT 42
+
+statement ok
+INSERT INTO integers SELECT CAST(NULL AS VARCHAR)
+
+query I
+SELECT * FROM integers
+----
+42
+NULL
+

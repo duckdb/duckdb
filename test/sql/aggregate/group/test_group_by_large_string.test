@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/group/test_group_by_large_string.test
+# description: GROUP BY large strings
+# group: [group]
+
+statement ok
+CREATE TABLE test (a VARCHAR, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES ('helloworld', 22), ('thisisalongstring', 22), ('helloworld', 21)
+
+query TR
+SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a
+----
+helloworld	43.000000
+thisisalongstring	22.000000
+

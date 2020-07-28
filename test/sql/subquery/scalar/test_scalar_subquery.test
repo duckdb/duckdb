@@ -1,0 +1,128 @@
+# name: test/sql/subquery/scalar/test_scalar_subquery.test
+# description: Test subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar subquery
+query I
+SELECT (SELECT 42)
+----
+42
+
+# nested subquery
+query I
+SELECT (SELECT (SELECT 42))
+----
+42
+
+# test aliasing of subquery
+query I
+SELECT * FROM (SELECT 42) v1(a);
+----
+42
+
+# not enough aliases: defaults to using names for missing columns
+query II
+SELECT * FROM (SELECT 42, 41 AS x) v1(a);
+----
+42	41
+
+# too many aliases: fails
+statement error
+SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c);
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22)
+
+statement ok
+INSERT INTO test VALUES (12, 21)
+
+statement ok
+INSERT INTO test VALUES (13, 22)
+
+# select single tuple only in scalar subquery
+query I
+SELECT (SELECT a * 42 FROM test)
+----
+462
+
+# operations on subquery
+query I
+SELECT a*(SELECT 42) FROM test
+----
+462
+504
+546
+
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104)
+
+statement ok
+INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105)
+
+query R
+SELECT c-(SELECT sum(c) FROM t1) FROM t1
+----
+-106.000000
+-102.000000
+
+query I
+SELECT CASE WHEN c>(SELECT sum(c)/count(*) FROM t1) THEN a*2 ELSE b*10 END FROM t1
+----
+1000
+214
+
+# correlated subqueries
+query IR
+SELECT a, (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) FROM test
+----
+11	22.000000
+12	21.000000
+13	22.000000
+
+query II
+SELECT a, (SELECT CASE WHEN test.a=11 THEN 22 ELSE NULL END) FROM test ORDER BY a
+----
+11	22
+12	NULL
+13	NULL
+
+query II
+SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub) FROM test ORDER BY a
+----
+11	22
+12	NULL
+13	NULL
+
+query II
+SELECT a, (SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test tsub LIMIT 1) FROM test ORDER BY a
+----
+11	22
+12	NULL
+13	NULL
+
+query II
+SELECT * from test where a=(SELECT MIN(a) FROM test t WHERE t.b=test.b)
+----
+11	22
+12	21
+
+# exists / in / any subqueries
+query II
+SELECT * FROM test WHERE EXISTS (SELECT a FROM test ts WHERE ts.a = test.a AND b>21)
+----
+11	22
+13	22
+
+# duplicate name in subquery
+statement error
+SELECT * FROM (SELECT 42 AS a, 44 AS a) tbl1
+

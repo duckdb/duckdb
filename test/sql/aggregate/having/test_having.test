@@ -1,0 +1,78 @@
+# name: test/sql/aggregate/having/test_having.test
+# description: Test HAVING clause
+# group: [having]
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+# HAVING with condition on group
+query IR
+SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING b=21 ORDER BY b;
+----
+21	12.000000
+
+# HAVING with condition on sum
+query IR
+SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a) < 20 ORDER BY b;
+----
+21	12.000000
+
+# HAVING with condition on ALIAS
+# CONTROVERSIAL: this DOES work in SQLite, but not in PostgreSQL
+statement error
+SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING sum < 20 ORDER BY b;
+
+# HAVING without alias
+query IR
+SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING SUM(a) < 20 ORDER BY b;
+----
+21	12.000000
+
+# HAVING on column not in aggregate
+query IR
+SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING COUNT(*) = 1 ORDER BY b;
+----
+21	12.000000
+
+# expression in having
+query IR
+SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)+10>28;
+----
+22	24.000000
+
+# uncorrelated subquery in having
+query IR
+SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)>(SELECT SUM(t.a)*0.5 FROM test t);
+----
+22	24.000000
+
+# correlated subquery in having
+query IR
+SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)=(SELECT SUM(a) FROM test t WHERE test.b=t.b) ORDER BY test.b;
+----
+21	12.000000
+22	24.000000
+
+# use outer aggregation in inner subquery
+query IR
+SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2=(SELECT SUM(a)+SUM(t.a) FROM test t WHERE test.b=t.b) ORDER BY test.b
+----
+21	12.000000
+22	24.000000
+
+# use outer aggregation that hasn't been used yet in subquery
+query IR
+SELECT test.b, SUM(a) FROM test GROUP BY test.b HAVING SUM(a)*2+2=(SELECT SUM(a)+SUM(t.a)+COUNT(t.a) FROM test t WHERE test.b=t.b) ORDER BY test.b
+----
+22	24.000000
+
+# ORDER BY subquery
+query IR
+SELECT test.b, SUM(a) FROM test GROUP BY test.b ORDER BY (SELECT SUM(a) FROM test t WHERE test.b=t.b) DESC;
+----
+22	24.000000
+21	12.000000
+

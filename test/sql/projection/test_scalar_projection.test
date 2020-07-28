@@ -1,0 +1,59 @@
+# name: test/sql/projection/test_scalar_projection.test
+# description: Test scalar queries
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 42
+----
+42
+
+query I
+SELECT 42 + 1
+----
+43
+
+query II
+SELECT 2 * (42 + 1), 35 - 2
+----
+86	33
+
+query T
+SELECT 'hello'
+----
+hello
+
+query I
+SELECT cast('3' AS INTEGER)
+----
+3
+
+query T
+SELECT cast(3 AS VARCHAR)
+----
+3
+
+query I
+SELECT CASE WHEN 43 > 33 THEN 43 ELSE 33 END;
+----
+43
+
+# cannot reference columns like this
+statement error
+SELECT 1 AS a, a * 2
+
+# query without selection list
+statement error
+SELECT
+
+statement error
+SELECT FROM (SELECT 42) v1
+
+# Scalar query from SQLLogicTests
+query I
+SELECT + CASE WHEN NOT + 84 NOT BETWEEN - 78 + 98 * 51 AND - ( ( - 28 ) ) * COUNT ( * ) + + - 65 THEN NULL ELSE 16 / + 34 + + - 98 END / + 70 - ( - - CASE - COALESCE ( + 73, + - 66 * - 89 * - 72 ) WHEN COUNT ( * ) / + 4 * CAST ( - - 18 AS INTEGER ) + + + COUNT ( * ) - - 88 THEN NULL WHEN 92 THEN NULL ELSE COUNT ( * ) END ) AS col0
+----
+-2
+

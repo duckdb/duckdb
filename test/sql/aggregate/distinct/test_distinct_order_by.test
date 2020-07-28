@@ -1,0 +1,57 @@
+# name: test/sql/aggregate/distinct/test_distinct_order_by.test
+# description: Test DISTINCT and ORDER BY
+# group: [distinct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+query I
+SELECT DISTINCT i%2 FROM integers ORDER BY 1
+----
+0
+1
+
+# controversial: Postgres fails here with the error "with SELECT DISTINCT columns from ORDER BY must appear in the
+# SELECT clause" but SQLite succeeds
+# we also succeed here, even though it can give unintuitive results
+# this is transformed into SELECT DISTINCT(1) i % 2, i
+query I
+SELECT DISTINCT i % 2 FROM integers WHERE i<3 ORDER BY i
+----
+1
+0
+
+query II
+SELECT DISTINCT ON (1) i % 2, i FROM integers WHERE i<3 ORDER BY i
+----
+1	1
+0	2
+
+# binding of DISTINCT with column names
+query I
+SELECT DISTINCT integers.i FROM integers ORDER BY i DESC
+----
+3
+2
+1
+
+query I
+SELECT DISTINCT i FROM integers ORDER BY integers.i DESC
+----
+3
+2
+1
+
+query I
+SELECT DISTINCT integers.i FROM integers ORDER BY integers.i DESC
+----
+3
+2
+1
+

@@ -1,0 +1,68 @@
+# name: test/sql/function/operator/test_bitwise_ops.test
+# description: Test scalar bitwise ops
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+# left shift
+query III
+SELECT 1 << 2, NULL << 2, 2 << NULL
+----
+4	NULL	NULL
+
+# right shift
+query IIII
+SELECT 16 >> 2, 1 >> 2, NULL >> 2, 2 >> NULL
+----
+4	0	NULL	NULL
+
+# bitwise and
+query IIIII
+SELECT 1 & 1, 1 & 0, 0 & 0, NULL & 1, 1 & NULL
+----
+1	0	0	NULL	NULL
+
+# bitwise or
+query IIIII
+SELECT 1 | 1, 1 | 0, 0 | 0, NULL | 1, 1 | NULL
+----
+1	1	0	NULL	NULL
+
+# bitwise xor
+query IIIII
+SELECT 1 # 1, 1 # 0, 0 # 0, NULL # 1, 1 # NULL
+----
+0	1	0	NULL	NULL
+
+# out of range shifts return 0
+query IIII
+SELECT 1::TINYINT << -1::TINYINT, 1::TINYINT >> -1::TINYINT, 1::TINYINT << 12::TINYINT, 1::TINYINT >> 12::TINYINT
+----
+0	0	0	0
+
+query IIII
+SELECT 1::SMALLINT << -1::SMALLINT, 1::SMALLINT >> -1::SMALLINT, 1::SMALLINT << 20::SMALLINT, 1::SMALLINT >> 20::SMALLINT
+----
+0	0	0	0
+
+query IIII
+SELECT 1::INT << -1::INT, 1::INT >> -1::INT, 1::INT << 40::INT, 1::INT >> 40::INT
+----
+0	0	0	0
+
+query IIII
+SELECT 1::BIGINT << -1::BIGINT, 1::BIGINT >> -1::BIGINT, 1::BIGINT << 1000::BIGINT, 1::BIGINT >> 1000::BIGINT
+----
+0	0	0	0
+
+# test invalid bitwise ops
+statement error
+SELECT 'hello' << 3
+
+statement error
+SELECT 3 << 'hello'
+
+statement error
+SELECT 2.0 << 1
+

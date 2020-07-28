@@ -1,0 +1,98 @@
+# name: test/sql/function/string/test_like.test
+# description: Test LIKE statement
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar like
+query T
+SELECT 'aaa' LIKE 'bbb'
+----
+0
+
+query T
+SELECT 'aaa' LIKE 'aaa'
+----
+1
+
+query T
+SELECT 'aaa' LIKE '%'
+----
+1
+
+query T
+SELECT 'aaa' LIKE '%a'
+----
+1
+
+query T
+SELECT 'aaa' LIKE '%b'
+----
+0
+
+query T
+SELECT 'aaa' LIKE 'a%'
+----
+1
+
+query T
+SELECT 'aaa' LIKE 'b%'
+----
+0
+
+query T
+SELECT 'aaa' LIKE 'a_a'
+----
+1
+
+query T
+SELECT 'aaa' LIKE 'a_'
+----
+0
+
+query T
+SELECT 'aaa' LIKE '__%'
+----
+1
+
+query T
+SELECT 'aaa' LIKE '____%'
+----
+0
+
+query T
+SELECT 'ababac' LIKE '%abac'
+----
+1
+
+query T
+SELECT 'ababac' NOT LIKE '%abac'
+----
+0
+
+# like with table
+statement ok
+CREATE TABLE strings(s STRING, pat STRING);
+
+statement ok
+INSERT INTO strings VALUES ('abab', 'ab%'), ('aaa', 'a_a'), ('aaa', '%b%')
+
+query T
+SELECT s FROM strings WHERE s LIKE 'ab%'
+----
+abab
+
+query T
+SELECT s FROM strings WHERE 'aba' LIKE pat
+----
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE s LIKE pat
+----
+abab
+aaa
+

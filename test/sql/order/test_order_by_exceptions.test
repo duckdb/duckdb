@@ -1,0 +1,60 @@
+# name: test/sql/order/test_order_by_exceptions.test
+# description: Test ORDER BY exceptions
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
+
+# ORDER BY index out of range
+statement error
+SELECT a FROM test ORDER BY 2
+
+# ORDER BY constant works, but does nothing
+# CONTROVERSIAL: works in SQLite but not in Postgres
+query I
+SELECT a FROM test ORDER BY 'hello', a
+----
+11
+12
+13
+
+# ambiguous reference in union alias
+statement error
+SELECT a AS k, b FROM test UNION SELECT a, b AS k FROM test ORDER BY k
+
+# but works if not ambiguous
+query II
+SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
+----
+11	22
+12	21
+13	22
+
+# ambiguous reference in union parameter
+statement error
+SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2
+
+# but works if not ambiguous
+query II
+SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY a % 2
+----
+0	21
+1	22
+
+# out of range order also happens for unions
+statement error
+SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY 3
+
+statement error
+SELECT a % 2, b FROM test UNION SELECT a % 2 AS k, b FROM test ORDER BY -1
+
+# and union itself fails if amount of entries is wrong
+statement error
+SELECT a % 2, b FROM test UNION SELECT a % 2 AS k FROM test ORDER BY -1
+

@@ -1,0 +1,36 @@
+# name: test/sql/subquery/any_all/test_simple_not_in.test
+# description: Test subqueries with (NOT) IN clause
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar subquery
+query I
+SELECT 1 AS one WHERE 1 IN (SELECT 1);
+----
+1
+
+statement ok
+CREATE TABLE test (id INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1, 22)
+
+statement ok
+INSERT INTO test VALUES (2, 21)
+
+statement ok
+INSERT INTO test VALUES (3, 23)
+
+query II
+SELECT * FROM test WHERE b IN (SELECT b FROM test WHERE b * id < 30) ORDER BY id, b
+----
+1	22
+
+query II
+SELECT * FROM test WHERE b NOT IN (SELECT b FROM test WHERE b * id < 30) ORDER BY id, b
+----
+2	21
+3	23
+

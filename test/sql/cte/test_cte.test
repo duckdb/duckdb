@@ -1,0 +1,52 @@
+# name: test/sql/cte/test_cte.test
+# description: Test Common Table Expressions (CTE)
+# group: [cte]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+query I
+with cte1 as (Select i as j from a) select * from cte1;
+----
+42
+
+query II
+with cte1 as (Select i as j from a), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) select * from cte2 , cte3;
+----
+42	43
+
+query I
+with cte1 as (select i as j from a), cte2 as (select ref.j as k from cte1 as ref), cte3 as (select ref2.j+1 as i from cte1 as ref2) select * from cte2 union all select * FROM cte3;
+----
+42
+43
+
+# duplicate CTE alias
+statement error
+with cte1 as (select 42), cte1 as (select 42) select * FROM cte1;
+
+# reference to CTE before its actually defined
+query I
+with cte3 as (select ref2.j as i from cte1 as ref2), cte1 as (Select i as j from a), cte2 as (select ref.j+1 as k from cte1 as ref) select * from cte2 union all select * FROM cte3;
+----
+43
+42
+
+# multiple uses of same CTE
+query II
+with cte1 as (Select i as j from a) select * from cte1 cte11, cte1 cte12;
+----
+42	42
+
+# refer to CTE in subquery
+query I
+with cte1 as (Select i as j from a) select * from cte1 where j = (select max(j) from cte1 as cte2);
+----
+42
+
