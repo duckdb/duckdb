@@ -36,6 +36,11 @@ void BuiltinFunctions::Initialize() {
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
 
+	// binder functions
+	// FIXME shouldn't be here
+	AddFunction(ScalarFunction("alias", {SQLType::ANY}, SQLType::VARCHAR, nullptr));
+	AddFunction(ScalarFunction("typeof", {SQLType::ANY}, SQLType::VARCHAR, nullptr));
+
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
 	AddCollation("noaccent", StripAccentsFun::GetFunction());
