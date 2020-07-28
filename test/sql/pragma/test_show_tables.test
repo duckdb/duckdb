@@ -1,0 +1,52 @@
+# name: test/sql/pragma/test_show_tables.test
+# description: Test SHOW/DESCRIBE tables
+# group: [pragma]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE VIEW v1 AS SELECT DATE '1992-01-01' AS k
+
+# SHOW and DESCRIBE are aliases
+query T
+SHOW TABLES
+----
+integers
+v1
+
+query T
+DESCRIBE TABLES
+----
+integers
+v1
+
+# internally they are equivalent to PRAGMA SHOW_TABLES();
+query T
+PRAGMA show_tables
+----
+integers
+v1
+
+# Field | Type | Null | Key | Default | Extra
+query TTTITI
+SHOW integers
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# equivalent to PRAGMA SHOW('integers')
+# Field | Type | Null | Key | Default | Extra
+query TTTITI
+PRAGMA SHOW('integers')
+----
+i	INTEGER	YES	NULL	NULL	NULL
+j	INTEGER	YES	NULL	NULL	NULL
+
+# we can also describe views
+# Field | Type | Null | Key | Default | Extra
+query TTTITI
+DESCRIBE v1
+----
+k	DATE	YES	NULL	NULL	NULL
+

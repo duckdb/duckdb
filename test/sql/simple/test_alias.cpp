@@ -8,6 +8,7 @@ TEST_CASE("Test that aliases work properly in renaming columns", "[alias]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Record("test/sql/binder/test_alias.test", "Test that aliases work properly in renaming columns");
 	con.EnableQueryVerification();
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));

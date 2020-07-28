@@ -8,6 +8,7 @@ TEST_CASE("Test UNION/EXCEPT/INTERSECT", "[setop]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Record("test/sql/setops/test_setops.test", "Test UNION/EXCEPT/INTERSECT");
 
 	result = con.Query("SELECT 1 UNION ALL SELECT 2");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
