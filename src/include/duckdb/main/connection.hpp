@@ -53,7 +53,7 @@ public:
 	void SetWarningCallback(warning_callback);
 
 	void Record(string file, string test_name = "", vector<string> extensions = vector<string>());
-
+	void AddComment(string comment);
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();
 	void DisableQueryVerification();

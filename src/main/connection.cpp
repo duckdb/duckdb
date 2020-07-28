@@ -79,7 +79,12 @@ static string ParseGroupFromPath(string file) {
 }
 
 void Connection::Record(string file, string description, vector<string> extensions) {
+	auto &fs = context->db.GetFileSystem();
+	if (fs.FileExists(file)) {
+		throw Exception("file '" + file + "' exists!");
+	}
 	string target = StringUtil::Replace(file, ".cpp", ".test");
+	printf("Writing to file \"%s\"\n", target.c_str());
 	record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
 	string path = "# name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";
 	record_writer->WriteData((const_data_ptr_t) path.c_str(), path.size());
@@ -94,6 +99,11 @@ void Connection::Record(string file, string description, vector<string> extensio
 		record_writer->WriteData((const_data_ptr_t) ext.c_str(), ext.size());
 	}
 	record_writer->WriteData((const_data_ptr_t) "\n", 1);
+}
+
+void Connection::AddComment(string comment) {
+	string new_comment = "# " + StringUtil::Replace(comment, "//", "") + "\n";
+	record_writer->WriteData((const_data_ptr_t) new_comment.c_str(), new_comment.size());
 }
 
 void Connection::EnableQueryVerification() {

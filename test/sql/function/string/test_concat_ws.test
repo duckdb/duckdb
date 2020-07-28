@@ -1,0 +1,158 @@
+# name: test/sql/function/string/test_concat_ws.test
+# description: CONCAT_WS test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks')
+
+query T
+select CONCAT_WS(',',a, 'SUFFIX') FROM strings
+----
+Hello,SUFFIX
+HuLlD,SUFFIX
+MotörHead,SUFFIX
+
+query T
+select CONCAT_WS('@','PREFIX', b) FROM strings
+----
+PREFIX@World
+PREFIX
+PREFIX@RÄcks
+
+query T
+select CONCAT_WS('$',a, b) FROM strings
+----
+Hello$World
+HuLlD
+MotörHead$RÄcks
+
+query T
+select CONCAT_WS(a, b, 'SUFFIX') FROM strings
+----
+WorldHelloSUFFIX
+SUFFIX
+RÄcksMotörHeadSUFFIX
+
+query T
+select CONCAT_WS(a, b, b) FROM strings
+----
+WorldHelloWorld
+(empty)
+RÄcksMotörHeadRÄcks
+
+query T
+select CONCAT_WS('@','1', '2', '3', '4', '5', '6', '7', '8', '9')
+----
+1@2@3@4@5@6@7@8@9
+
+query T
+select CONCAT_WS(b, '[', ']') FROM strings ORDER BY a
+----
+[World]
+NULL
+[RÄcks]
+
+# filters
+query T
+select CONCAT_WS(',', a, 'SUFFIX') FROM strings WHERE a != 'Hello'
+----
+HuLlD,SUFFIX
+MotörHead,SUFFIX
+
+# concat WS needs at least two parameters
+statement error
+select CONCAT_WS()
+
+statement error
+select CONCAT_WS(',')
+
+# one entry: just returns the entry
+query T
+select CONCAT_WS(',', 'hello')
+----
+hello
+
+# NULL in separator results in null
+query T
+select CONCAT_WS(NULL, 'hello')
+----
+NULL
+
+# NULL in data results in empty string
+query T
+select CONCAT_WS(',', NULL)
+----
+(empty)
+
+# NULL separator returns in entire column being NULL
+query T
+select CONCAT_WS(NULL, b, 'SUFFIX') FROM strings
+----
+NULL
+NULL
+NULL
+
+# NULL in separator is just ignored
+query T
+select CONCAT_WS(',', NULL, 'SUFFIX') FROM strings
+----
+SUFFIX
+SUFFIX
+SUFFIX
+
+# empty strings still get split up by the separator
+query T
+select CONCAT_WS(',', '', '')
+----
+,
+
+query T
+select CONCAT_WS(',', '', '', '')
+----
+,,
+
+# but NULLs do not
+query T
+select CONCAT_WS(',', NULL, NULL)
+----
+(empty)
+
+query T
+select CONCAT_WS(',', NULL, NULL, NULL)
+----
+(empty)
+
+query T
+select CONCAT_WS(',', NULL, NULL, 'hello')
+----
+hello
+
+# now test for non-constant separators
+query T
+select CONCAT_WS(a, '', NULL, '') FROM strings ORDER BY a
+----
+Hello
+HuLlD
+MotörHead
+
+query T
+select CONCAT_WS(a, NULL, '', '') FROM strings ORDER BY a;
+----
+Hello
+HuLlD
+MotörHead
+
+# now non-constant separator with a mix of constant and non-constant strings to concatenate
+query T
+select CONCAT_WS(a, NULL, b, '') FROM strings ORDER BY a
+----
+WorldHello
+(empty)
+RÄcksMotörHead
+

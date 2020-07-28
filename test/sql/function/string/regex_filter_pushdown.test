@@ -1,0 +1,34 @@
+# name: test/sql/function/string/regex_filter_pushdown.test
+# description: regex filter push test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE regex(s STRING)
+
+statement ok
+INSERT INTO regex VALUES ('asdf'), ('xxxx'), ('aaaa')
+
+query T
+SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f')
+----
+asdf
+
+query T
+SELECT s FROM regex WHERE NOT REGEXP_MATCHES(s, 'as(c|d|e)f')
+----
+xxxx
+aaaa
+
+query T
+SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f') AND s = 'asdf'
+----
+asdf
+
+query T
+SELECT s FROM regex WHERE REGEXP_MATCHES(s, 'as(c|d|e)f') AND REGEXP_MATCHES(s, 'as[a-z]f')
+----
+asdf
+

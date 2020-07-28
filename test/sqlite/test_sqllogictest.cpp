@@ -517,7 +517,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 }
 
 static void break_on_query_line(int query_line) {
-
+	(void) query_line;
 }
 
 static void execute_file(string script) {
