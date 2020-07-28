@@ -1,6 +1,7 @@
 if(NOT WIN32 AND NOT SUN)
   add_library_unity(test_sql_storage
                     OBJECT
+                    test_blob.cpp
                     test_buffer_manager.cpp
                     test_constraints.cpp
                     test_checksum.cpp
@@ -22,6 +23,7 @@ if(NOT WIN32 AND NOT SUN)
 else()
   add_library_unity(test_sql_storage
                     OBJECT
+                    test_blob.cpp
                     test_buffer_manager.cpp
                     test_constraints.cpp
                     test_checksum.cpp

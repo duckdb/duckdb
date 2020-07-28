@@ -75,9 +75,9 @@ template <class T> static void TestExponent() {
 }
 
 TEST_CASE("Test casting to boolean", "[cast]") {
-	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F"};
-	vector<bool> expected_values = {true, false, true, false, true, false};
-	vector<string> broken_values = {"1", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
+	vector<string> working_values = {"true", "false", "TRUE", "FALSE", "T", "F", "1", "0", "False", "True"};
+	vector<bool> expected_values = {true, false, true, false, true, false, true, false, false, true};
+	vector<string> broken_values = {"304", "1002", "blabla", "", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaa"};
 
 	bool result;
 	for (idx_t i = 0; i < working_values.size(); i++) {
