@@ -16,4 +16,8 @@ struct RangeTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RepeatTableFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
