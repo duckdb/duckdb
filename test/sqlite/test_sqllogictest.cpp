@@ -487,6 +487,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			} else {
 				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
 			}
+			error = !Value::ValuesAreEqual(lvalue, rvalue);
 		} catch(std::exception &ex) {
 			print_error_header("Test error!", zScriptFile, query_line);
 			print_line_sep();
@@ -501,14 +502,13 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		// for other types we just mark the result as incorrect
 		error = true;
 	}
-	error = !Value::ValuesAreEqual(lvalue, rvalue);
 	if (error) {
 		print_error_header("Wrong result in query!", zScriptFile, query_line);
 		print_line_sep();
 		print_sql(zScript);
 		print_line_sep();
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column " << current_column << std::endl << termcolor::reset;
-		std::cerr << lvalue.ToString(result.sql_types[current_column]) << " <> " <<  rvalue.ToString(result.sql_types[current_column]) << std::endl;
+		std::cerr << lvalue_str << " <> " <<  rvalue_str << std::endl;
 		print_line_sep();
 		print_result_error(result, values, expected_column_count, row_wise);
 		return false;
