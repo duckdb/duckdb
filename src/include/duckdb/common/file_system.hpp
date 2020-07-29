@@ -40,7 +40,7 @@ public:
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
-#ifndef _WIN32
+#ifdef _WIN32
     #undef CREATE_NEW
 #endif
 
