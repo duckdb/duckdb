@@ -14,7 +14,6 @@ add_subdirectory(planner)
 add_subdirectory(optimizer)
 
 if(NOT WIN32 AND NOT SUN)
-  add_subdirectory(sqlserver)
   add_subdirectory(sqlite)
   add_subdirectory(sqlsmith)
   add_subdirectory(tpce)

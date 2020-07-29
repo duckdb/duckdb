@@ -297,7 +297,7 @@ static int checkValue(const char *zKey, const char *zHash) {
 	{                                                                                                                  \
 		if (zScript)                                                                                                   \
 			free(zScript);                                                                                             \
-		REQUIRE(false);                                                                                                \
+		FAIL();                                                                                                \
 		return;                                                                                                        \
 	}
 
@@ -473,7 +473,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
 	auto sql_type = result.sql_types[current_column];
-	if (sql_type.id == SQLTypeId::FLOAT || sql_type.id == SQLTypeId::DOUBLE) {
+	if (sql_type.IsNumeric()) {
 		bool converted_lvalue = false;
 		try {
 			if (lvalue_str == "NULL") {
@@ -919,14 +919,20 @@ static void execute_file(string script) {
 							IFAIL();
 						}
 						for(idx_t c = 0; c < splits.size(); c++) {
-							REQUIRE(compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise));
+							bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise);
+							if (!success) {
+								FAIL();
+							}
 						}
 						current_row++;
 					}
 				} else {
 					int current_row = 0, current_column = 0;
 					for (i = 0; i < nResult && i < values.size(); i++) {
-						REQUIRE(compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise));
+						bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise);
+						if (!success) {
+							FAIL();
+						}
 
 						current_column++;
 						if (current_column == expected_column_count) {
