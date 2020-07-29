@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 using namespace std;
 
@@ -420,6 +421,12 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
+	if (log_query_writer) {
+		// log query path is set: log the query
+		log_query_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+		log_query_writer->Flush();
+	}
 
 	Parser parser;
 	try {

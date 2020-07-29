@@ -135,6 +135,17 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			throw ParserException("Disable force parallelism must be a statement (PRAGMA disable_force_parallelism)");
 		}
 		context.client.force_parallelism = false;
+	} else if (keyword == "log_query_path") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Log query path must be an assignment (PRAGMA log_query_path='/path/to/file') (or empty to disable)");
+		}
+		auto str_val = pragma.parameters[0].ToString();
+		if (str_val.empty()) {
+			// empty path: clean up query writer
+			context.client.log_query_writer = nullptr;
+		} else {
+			context.client.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context.client), str_val);
+		}
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
