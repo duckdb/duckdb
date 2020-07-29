@@ -40,6 +40,10 @@ public:
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
+#ifndef _WIN32
+    #undef CREATE_NEW
+#endif
+
 class FileFlags {
 public:
 	//! Open file with read access
@@ -51,7 +55,7 @@ public:
 	//! Create file if not exists, can only be used together with WRITE
 	static constexpr uint8_t CREATE = 1 << 3;
 	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
-	static constexpr uint8_t CREATENEW = 1 << 4;
+	static constexpr uint8_t CREATE_NEW = 1 << 4;
 	//! Open file in append mode
 	static constexpr uint8_t APPEND = 1 << 5;
 };

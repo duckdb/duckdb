@@ -22,9 +22,9 @@ static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and CREATE/Append flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
 	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATENEW));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
-	assert(!(flags & FileFlags::CREATE && flags & FileFlags::CREATENEW));
+	assert(!(flags & FileFlags::CREATE && flags & FileFlags::CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -77,7 +77,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		open_flags = O_RDWR | O_CLOEXEC;
 		if (flags & FileFlags::CREATE) {
 			open_flags |= O_CREAT;
-		} else if (flags & FileFlags::CREATENEW) {
+		} else if (flags & FileFlags::CREATE_NEW) {
 			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags & FileFlags::APPEND) {
