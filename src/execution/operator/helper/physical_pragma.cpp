@@ -125,6 +125,16 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			throw ParserException("Disable verification must be a statement (PRAGMA disable_verification)");
 		}
 		context.client.query_verification_enabled = false;
+	} else if (keyword == "force_parallelism") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Force parallelism must be a statement (PRAGMA force_parallelism)");
+		}
+		context.client.force_parallelism = true;
+	}  else if (keyword == "disable_force_parallelism") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Disable force parallelism must be a statement (PRAGMA disable_force_parallelism)");
+		}
+		context.client.force_parallelism = false;
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}
