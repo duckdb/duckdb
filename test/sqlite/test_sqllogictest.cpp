@@ -38,6 +38,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "test_helpers.hpp"
 
 #include <algorithm>
 #include <dirent.h>
@@ -323,23 +324,22 @@ static void print_expected_result(vector<string> &values, idx_t columns, bool ro
 }
 
 static char *sqllogictest_convert_value(Value value, SQLType sql_type) {
-	char *buffer = (char *)malloc(BUFSIZ);
-
 	if (value.is_null) {
-		snprintf(buffer, BUFSIZ, "%s", "NULL");
+		return strdup("NULL");
 	} else {
 		switch (sql_type.id) {
 		case SQLTypeId::BOOLEAN:
-			snprintf(buffer, BUFSIZ, "%s", value.value_.boolean ? "1" : "0");
-			break;
+			return value.value_.boolean ? strdup("1") : strdup("0");
 		default: {
 			string str = value.ToString(sql_type);
-			snprintf(buffer, BUFSIZ, "%s", str.size() == 0 ? "(empty)" : str.c_str());
-			break;
+			if (str.empty()) {
+				return strdup("(empty)");
+			} else {
+				return strdup(str.c_str());
+			}
 		}
 		}
 	}
-	return buffer;
 }
 
 // standard result conversion: one line per value
@@ -463,7 +463,7 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
-bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, const char *zScriptFile, int query_line, const char *zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
+bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, const char *zScriptFile, int query_line, string zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -516,8 +516,8 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	return true;
 }
 
-static void break_on_query_line(int query_line) {
-	(void) query_line;
+static void query_break(int line) {
+	(void) line;
 }
 
 static void execute_file(string script) {
@@ -670,6 +670,7 @@ static void execute_file(string script) {
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
 			** of zScript - we are guaranteed to have enough space there. */
+			int query_line = sScript.nLine;
 			while (nextLine(&sScript) && sScript.zLine[0]) {
 				if (k > 0)
 					zScript[k++] = '\n';
@@ -678,6 +679,9 @@ static void execute_file(string script) {
 			}
 			zScript[k] = 0;
 
+			// perform any renames in zScript
+			string sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			
 			bExpectOk = strcmp(sScript.azToken[1], "ok") == 0;
 			bExpectError = strcmp(sScript.azToken[1], "error") == 0;
 
@@ -686,14 +690,15 @@ static void execute_file(string script) {
 			** printing of any errors.
 			*/
 			if (enableTrace)
-				printf("%s;\n", zScript);
+				printf("%s;\n", sql_query.c_str());
+			query_break(query_line);
 
 			unique_ptr<QueryResult> result;
-			if (skip_index && strncasecmp(zScript, "CREATE INDEX", 12) == 0) {
-				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", zScript);
+			if (skip_index && strncasecmp(sql_query.c_str(), "CREATE INDEX", 12) == 0) {
+				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", sql_query.c_str());
 				rc = 0;
 			} else {
-				result = con.Query(zScript);
+				result = con.Query(sql_query);
 				rc = result->success ? 0 : 1;
 			}
 			nCmd++;
@@ -712,7 +717,7 @@ static void execute_file(string script) {
 
 			/* Report an error if the results do not match expectation */
 			if (rc) {
-				print_error_header(bExpectError ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", zScriptFile, sScript.nLine);
+				print_error_header(bExpectError ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", zScriptFile, query_line);
 				print_line_sep();
 				print_sql(zScript);
 				print_line_sep();
@@ -763,20 +768,23 @@ static void execute_file(string script) {
 			}
 			zScript[k] = 0;
 
+			// perform any renames in zScript
+			string sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+
 			/* Run the query */
 			nResult = 0;
 			azResult = 0;
 			if (enableTrace)
-				printf("%s;\n", zScript);
-			break_on_query_line(query_line);
-			auto result = con.Query(zScript);
+				printf("%s;\n", sql_query.c_str());
+			query_break(query_line);
+			auto result = con.Query(sql_query);
 			rc = result->success ? 0 : 1;
 			nCmd++;
 			if (rc) {
 				print_line_sep();
-				fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", zScriptFile, sScript.nLine);
+				fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", zScriptFile, query_line);
 				print_line_sep();
-				print_sql(zScript);
+				print_sql(sql_query);
 				print_line_sep();
 				print_header("Actual result:");
 				result->Print();
@@ -833,7 +841,7 @@ static void execute_file(string script) {
 				}
 				if (output_hash_mode) {
 					print_line_sep();
-					print_sql(zScript);
+					print_sql(sql_query);
 					print_line_sep();
 					fprintf(stderr, "%s\n", zHash);
 					print_line_sep();
@@ -888,7 +896,7 @@ static void execute_file(string script) {
 					print_error_header("Wrong column count in query!", zScriptFile, query_line);
 					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result->column_count() << termcolor::reset << " columns" << std::endl;
 					print_line_sep();
-					print_sql(zScript);
+					print_sql(sql_query);
 					print_line_sep();
 					print_result_error(*result, values, expected_column_count, row_wise);
 					IFAIL();
@@ -897,7 +905,7 @@ static void execute_file(string script) {
 					print_error_header("Wrong row count in query!", zScriptFile, query_line);
 					std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
 					print_line_sep();
-					print_sql(zScript);
+					print_sql(sql_query);
 					print_line_sep();
 					print_result_error(*result, values, expected_column_count, row_wise);
 					IFAIL();
@@ -914,12 +922,12 @@ static void execute_file(string script) {
 							std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
 							std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
 							print_line_sep();
-							print_sql(zScript);
+							print_sql(sql_query);
 							print_line_sep();
 							IFAIL();
 						}
 						for(idx_t c = 0; c < splits.size(); c++) {
-							bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], zScriptFile, query_line, zScript, current_row, c, values, expected_column_count, row_wise);
+							bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], zScriptFile, query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
 							if (!success) {
 								FAIL();
 							}
@@ -931,7 +939,7 @@ static void execute_file(string script) {
 				} else {
 					int current_row = 0, current_column = 0;
 					for (i = 0; i < nResult && i < values.size(); i++) {
-						bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], zScriptFile, query_line, zScript, current_row, current_column, values, expected_column_count, row_wise);
+						bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], zScriptFile, query_line, sql_query, current_row, current_column, values, expected_column_count, row_wise);
 						if (!success) {
 							FAIL();
 						}
@@ -949,7 +957,7 @@ static void execute_file(string script) {
 				if (strcmp(sScript.zLine, zHash) != 0) {
 					print_error_header("Wrong result hash!", zScriptFile, sScript.nLine);
 					print_line_sep();
-					print_sql(zScript);
+					print_sql(sql_query);
 					print_line_sep();
 					print_header("Actual result:");
 					print_line_sep();

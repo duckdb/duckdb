@@ -53,12 +53,17 @@ void TestCreateDirectory(string path) {
 	fs.CreateDirectory(path);
 }
 
-string TestCreatePath(string suffix) {
+string TestDirectoryPath() {
 	FileSystem fs;
 	if (!fs.DirectoryExists(TESTING_DIRECTORY_NAME)) {
 		fs.CreateDirectory(TESTING_DIRECTORY_NAME);
 	}
-	return fs.JoinPath(TESTING_DIRECTORY_NAME, suffix);
+	return TESTING_DIRECTORY_NAME;
+}
+
+string TestCreatePath(string suffix) {
+	FileSystem fs;
+	return fs.JoinPath(TestDirectoryPath(), suffix);
 }
 
 unique_ptr<DBConfig> GetTestConfig() {

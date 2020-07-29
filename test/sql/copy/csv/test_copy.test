@@ -1,0 +1,202 @@
+# name: test/sql/copy/csv/test_copy.test
+# description: Test copy statement
+# group: [csv]
+
+# generate CSV file with ',' as delimiter and complex strings
+# load CSV file into a table
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test.csv';
+----
+5000
+
+query IR
+SELECT COUNT(a), SUM(a) FROM test;
+----
+5000	12497500.000000
+
+query IIT
+SELECT * FROM test ORDER BY 1 LIMIT 3;
+----
+0	0	 test
+1	1	 test
+2	2	 test
+
+# create CSV file from table
+query I
+COPY test TO '__TEST_DIR__/test2.csv';
+----
+5000
+
+# load the same CSV file back again
+statement ok
+CREATE TABLE test2 (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY test2 FROM '__TEST_DIR__/test2.csv';
+----
+5000
+
+query IIT
+SELECT * FROM test2 ORDER BY 1 LIMIT 3;
+----
+0	0	 test
+1	1	 test
+2	2	 test
+
+# test too few rows
+statement ok
+CREATE TABLE test_too_few_rows (a INTEGER, b INTEGER, c VARCHAR, d INTEGER);
+
+statement error
+COPY test_too_few_rows FROM '__TEST_DIR__/test2.csv';
+
+# create CSV file from query
+query I
+COPY (SELECT a,b FROM test WHERE a < 4000) TO '__TEST_DIR__/test3.csv';
+----
+4000
+
+# load the same CSV file back again
+statement ok
+CREATE TABLE test3 (a INTEGER, b INTEGER);
+
+query I
+COPY test3 FROM '__TEST_DIR__/test3.csv';
+----
+4000
+
+query II
+SELECT * FROM test3 ORDER BY 1 LIMIT 3;
+----
+0	0
+1	1
+2	2
+
+# export selected columns from a table to a CSV file
+query I
+COPY test (a,c) TO '__TEST_DIR__/test4.csv' (DELIMITER ',', HEADER false);
+----
+5000
+
+# import selected columns from CSV file
+statement ok
+CREATE TABLE test4 (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (DELIM ',', HEADER 0);
+----
+5000
+
+query IIT
+SELECT * FROM test4 ORDER BY 1 LIMIT 3;
+----
+0	NULL	 test
+1	NULL	 test
+2	NULL	 test
+
+# unsupported type for HEADER
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
+
+# empty delimiter
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
+
+# number as delimiter
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
+
+# multiple format options
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'json');
+
+# number as escape string
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
+
+# no escape string
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
+
+# number as quote string
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
+
+# no quote string
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
+
+# no format string
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT);
+
+# encoding must not be empty and must have the correct parameter type and value
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
+
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
+
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
+
+# don't allow for non-existant copy options
+statement error
+COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
+
+# use a different delimiter
+# create new table
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test_pipe.csv' (SEPARATOR '|');
+----
+10
+
+# throw exception if a line contains too many values
+statement error
+COPY test FROM 'test/sql/copy/csv/data/too_many_values.csv';
+
+# test default null string
+query I
+COPY test FROM 'test/sql/copy/csv/data/test_null_csv.csv' DELIMITER '|';
+----
+1
+
+# test invalid UTF-8
+statement error
+COPY test FROM 'test/sql/copy/csv/data/invalid_utf.csv' DELIMITER '|';
+
+# empty file
+statement ok
+CREATE TABLE empty_table (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY empty_table FROM 'test/sql/copy/csv/data/empty.csv';
+----
+0
+
+# unterminated quotes
+statement ok
+CREATE TABLE unterminated (a VARCHAR);
+
+statement error
+COPY unterminated FROM 'test/sql/copy/csv/data/unterminated.csv';
+
+# 1024 rows (vector size)
+# load CSV file into a table
+statement ok
+CREATE TABLE vsize (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY vsize FROM 'test/sql/copy/csv/data/vsize.csv';
+----
+1024
+

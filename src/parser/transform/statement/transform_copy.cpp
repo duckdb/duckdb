@@ -234,6 +234,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	// null string and delimiter must not be substrings of each other
 	if (info.null_str != "") {
 		SubstringDetection(info.delimiter, info.null_str, "DELIMITER", "NULL");
+		SubstringDetection(info.quote, info.null_str, "QUOTE", "NULL");
+		SubstringDetection(info.escape, info.null_str, "ESCAPE", "NULL");
 	}
 
 	return result;
