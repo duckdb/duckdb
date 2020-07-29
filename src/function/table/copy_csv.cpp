@@ -24,7 +24,7 @@ struct BaseCSVData : public FunctionData {
 	string delimiter = ",";
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
 	string quote = "\"";
-	//! Escape character to escape quote character
+	//! Escape character to escape quote charaƒcter
 	string escape;
 	//! Specifies the string that represents a null value
 	string null_str;
@@ -373,7 +373,7 @@ struct LocalReadCSVData : public LocalFunctionData {
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, string file_path) : fs(fs) {
-		handle = fs.OpenFile(file_path, FileFlags::WRITE | FileFlags::CREATE_NEW, FileLockType::WRITE_LOCK);
+		handle = fs.OpenFile(file_path, FileFlags::WRITE | FileFlags::FILE_CREATE_NEW, FileLockType::WRITE_LOCK);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {

@@ -23,7 +23,7 @@ SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool
 		flags = FileFlags::WRITE;
 		lock = FileLockType::WRITE_LOCK;
 		if (create_new) {
-			flags |= FileFlags::CREATE;
+			flags |= FileFlags::FILE_CREATE;
 		}
 	}
 	if (use_direct_io) {
