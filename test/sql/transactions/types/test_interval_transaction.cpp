@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test various ops involving intervals", "[interval]") {
+TEST_CASE("Test transaction ops with intervals", "[interval]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db), con2(db);
@@ -15,10 +15,6 @@ TEST_CASE("Test various ops involving intervals", "[interval]") {
 	// create table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE interval (t INTERVAL);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO interval VALUES (INTERVAL '20' DAY), (INTERVAL '1' YEAR), (INTERVAL '1' MONTH);"));
-
-	// count distinct
-	result = con.Query("SELECT COUNT(DISTINCT t) FROM interval");
-	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	// update
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION;"));
@@ -48,17 +44,4 @@ TEST_CASE("Test various ops involving intervals", "[interval]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 	result = con2.Query("SELECT COUNT(DISTINCT t) FROM interval");
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
-
-	result = con.Query("SELECT * FROM interval i1 JOIN interval i2 USING (t) ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0), Value::INTERVAL(12, 0, 0)}));
-	result = con.Query("SELECT * FROM interval i1 JOIN interval i2 ON (i1.t <> i2.t) ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0), Value::INTERVAL(12, 0, 0),  Value::INTERVAL(12, 0, 0)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTERVAL(12, 0, 0), Value::INTERVAL(12, 0, 0), Value::INTERVAL(1, 0, 0),  Value::INTERVAL(1, 0, 0)}));
-	result = con.Query("SELECT * FROM interval i1 JOIN interval i2 ON (i1.t > i2.t) ORDER BY 1");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(12, 0, 0), Value::INTERVAL(12, 0, 0)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0)}));
-
-	result = con.Query("SELECT t, row_number() OVER (PARTITION BY t ORDER BY t) FROM interval ORDER BY 1, 2;");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::INTERVAL(1, 0, 0), Value::INTERVAL(1, 0, 0), Value::INTERVAL(12, 0, 0)}));
-	REQUIRE(CHECK_COLUMN(result, 1, {1, 2, 1}));
 }

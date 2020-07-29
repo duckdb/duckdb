@@ -1,3 +1,5 @@
+add_subdirectory(types)
+
 add_library_unity(test_sql_transaction
                   OBJECT
                   test_big_transaction_abort.cpp
