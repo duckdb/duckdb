@@ -1,0 +1,25 @@
+# name: test/issues/rigger/test_534.test
+# description: Issue 534
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# UPDATE causes subsequent query to segfault
+statement ok
+CREATE TABLE t0(c0 VARCHAR, c1 DOUBLE UNIQUE);
+
+statement ok
+INSERT INTO t0(c0) VALUES (NULL);
+
+statement ok
+UPDATE t0 SET c0=0;
+
+statement ok
+INSERT INTO t0(c0, c1) VALUES (0, 0);
+
+query TR
+SELECT * FROM t0 WHERE 1 > c1;
+----
+0	0.000000
+

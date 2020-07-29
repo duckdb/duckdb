@@ -12,7 +12,6 @@ add_subdirectory(helpers)
 add_subdirectory(sql)
 add_subdirectory(planner)
 add_subdirectory(optimizer)
-add_subdirectory(rigger)
 
 if(NOT WIN32 AND NOT SUN)
   add_subdirectory(sqlserver)

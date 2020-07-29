@@ -1,0 +1,23 @@
+# name: test/issues/rigger/test_599.test
+# description: Issue 599
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# UPDATE results in crash or ASan error
+statement ok
+CREATE TABLE t0(c0 INT, c1 VARCHAR);
+
+statement ok
+INSERT INTO t0 VALUES (0, 0), (NULL, 0);
+
+statement ok
+UPDATE t0 SET c1 = c0;
+
+query IT
+SELECT * FROM t0 ORDER BY 1
+----
+NULL	NULL
+0	0
+

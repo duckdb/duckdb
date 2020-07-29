@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_562.test
+# description: Issue 562
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# SELECT with CASE expression causes an assertion failure 'Assertion `!entry.first->Equals(&expr)' failed'
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement error
+SELECT * FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);
+
+query I
+SELECT 1 FROM t0 GROUP BY -4.40304405E8 ORDER BY (CASE 1 WHEN 0 THEN 0 ELSE -440304405 END);
+----
+

@@ -1,0 +1,11 @@
+# name: test/issues/rigger/test_522.test
+# description: Issue 522
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Casting a large number to REAL and multiplying it with zero results in -nan
+statement error
+SELECT 1e100::real*0;
+

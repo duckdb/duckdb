@@ -1,0 +1,22 @@
+# name: test/issues/rigger/test_506.test
+# description: Issue 506
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query results in an error 'INTERNAL: Failed to bind column reference 'c0' [5.0] (bindings: [6.0])'
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+query II
+SELECT * FROM t1 JOIN t0 ON t1.c0 < t1.c0 - t0.c0 WHERE t0.c0 <= t1.c0;
+----
+
+query II
+SELECT * FROM t1 JOIN t0 ON t0.c0 + t1.c0 < t1.c0 - t0.c0;
+----
+

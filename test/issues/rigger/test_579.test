@@ -1,0 +1,23 @@
+# name: test/issues/rigger/test_579.test
+# description: Issue 579
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Updated value in column is not visible in a SELECT
+statement ok
+CREATE TABLE t0(c0 VARCHAR, c1 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES(0), ('');
+
+statement ok
+UPDATE t0 SET c1 = 1;
+
+# -- expected: {1}, actual: {''}
+query T
+SELECT t0.c1 FROM t0 WHERE '' = t0.c0;
+----
+1
+

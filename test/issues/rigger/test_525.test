@@ -1,0 +1,24 @@
+# name: test/issues/rigger/test_525.test
+# description: Issue 525
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 FLOAT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1), (0);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1);
+
+query R
+SELECT t1.c0 FROM t1 JOIN t0 ON t1.c0 IN (t0.c0) WHERE t1.c0<=t0.c0;
+----
+1.000000
+

@@ -1,0 +1,25 @@
+# name: test/issues/rigger/test_508.test
+# description: Issue 508
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# LEFT JOIN on column with NULL value results in a segmentation fault
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+INSERT INTO t1(c0) VALUES (NULL);
+
+query II
+SELECT * FROM t1 LEFT JOIN t0 ON t0.c0=t1.c0;
+----
+NULL	NULL
+
