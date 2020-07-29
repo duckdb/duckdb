@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/test_quoted_newline.test
+# description: Test copy statement with quoted newline
+# group: [csv]
+
+# CSV file with newlines enclosed by quotes
+statement ok
+CREATE TABLE test (a VARCHAR, b INTEGER);
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv';
+----
+2
+
+query R
+SELECT SUM(b) FROM test;
+----
+11.000000
+
+query T
+SELECT a FROM test ORDER BY a;
+----
+2 values hashing to 6874b9164ab09fd0fb7ea177f1e603aa
+
+statement ok
+DROP TABLE test;
+

@@ -1006,9 +1006,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 	idx_t row_entry = parse_chunk.size();
 
 	str_val[length] = '\0';
-	/*if (info.force_not_null.size() == 0) {
-	    info.force_not_null.resize(sql_types.size(), false);
-	}*/
+
 	// test against null string
 	if (!info.force_not_null[column] && strcmp(info.null_str.c_str(), str_val) == 0) {
 		FlatVector::SetNull(parse_chunk.data[column], row_entry, true);
@@ -1032,7 +1030,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
-			parse_data[row_entry] = StringVector::AddString(v, new_val.c_str(), new_val.size());
+			parse_data[row_entry] = StringVector::AddBlob(v, string_t(new_val));
 		} else {
 			parse_data[row_entry] = string_t(str_val, length);
 		}

@@ -1,0 +1,51 @@
+# name: test/sql/copy/csv/test_ontime.test
+# description: Test copy from/to on-time dataset
+# group: [csv]
+
+statement ok
+CREATE TABLE ontime(year SMALLINT, quarter SMALLINT, month SMALLINT, dayofmonth SMALLINT, dayofweek SMALLINT, flightdate DATE, uniquecarrier CHAR(7), airlineid DECIMAL(8,2), carrier CHAR(2), tailnum VARCHAR(50), flightnum VARCHAR(10), originairportid INTEGER, originairportseqid INTEGER, origincitymarketid INTEGER, origin CHAR(5), origincityname VARCHAR(100), originstate CHAR(2), originstatefips VARCHAR(10), originstatename VARCHAR(100), originwac DECIMAL(8,2), destairportid INTEGER, destairportseqid INTEGER, destcitymarketid INTEGER, dest CHAR(5), destcityname VARCHAR(100), deststate CHAR(2), deststatefips VARCHAR(10), deststatename VARCHAR(100), destwac DECIMAL(8,2), crsdeptime DECIMAL(8,2), deptime DECIMAL(8,2), depdelay DECIMAL(8,2), depdelayminutes DECIMAL(8,2), depdel15 DECIMAL(8,2), departuredelaygroups DECIMAL(8,2), deptimeblk VARCHAR(20), taxiout DECIMAL(8,2), wheelsoff DECIMAL(8,2), wheelson DECIMAL(8,2), taxiin DECIMAL(8,2), crsarrtime DECIMAL(8,2), arrtime DECIMAL(8,2), arrdelay DECIMAL(8,2), arrdelayminutes DECIMAL(8,2), arrdel15 DECIMAL(8,2), arrivaldelaygroups DECIMAL(8,2), arrtimeblk VARCHAR(20), cancelled SMALLINT, cancellationcode CHAR(1), diverted SMALLINT, crselapsedtime DECIMAL(8,2), actualelapsedtime DECIMAL(8,2), airtime DECIMAL(8,2), flights DECIMAL(8,2), distance DECIMAL(8,2), distancegroup SMALLINT, carrierdelay DECIMAL(8,2), weatherdelay DECIMAL(8,2), nasdelay DECIMAL(8,2), securitydelay DECIMAL(8,2), lateaircraftdelay DECIMAL(8,2), firstdeptime VARCHAR(10), totaladdgtime VARCHAR(10), longestaddgtime VARCHAR(10), divairportlandings VARCHAR(10), divreacheddest VARCHAR(10), divactualelapsedtime VARCHAR(10), divarrdelay VARCHAR(10), divdistance VARCHAR(10), div1airport VARCHAR(10), div1aiportid INTEGER, div1airportseqid INTEGER, div1wheelson VARCHAR(10), div1totalgtime VARCHAR(10), div1longestgtime VARCHAR(10), div1wheelsoff VARCHAR(10), div1tailnum VARCHAR(10), div2airport VARCHAR(10), div2airportid INTEGER, div2airportseqid INTEGER, div2wheelson VARCHAR(10), div2totalgtime VARCHAR(10), div2longestgtime VARCHAR(10), div2wheelsoff VARCHAR(10), div2tailnum VARCHAR(10), div3airport VARCHAR(10), div3airportid INTEGER, div3airportseqid INTEGER, div3wheelson VARCHAR(10), div3totalgtime VARCHAR(10), div3longestgtime VARCHAR(10), div3wheelsoff VARCHAR(10), div3tailnum VARCHAR(10), div4airport VARCHAR(10), div4airportid INTEGER, div4airportseqid INTEGER, div4wheelson VARCHAR(10), div4totalgtime VARCHAR(10), div4longestgtime VARCHAR(10), div4wheelsoff VARCHAR(10), div4tailnum VARCHAR(10), div5airport VARCHAR(10), div5airportid INTEGER, div5airportseqid INTEGER, div5wheelson VARCHAR(10), div5totalgtime VARCHAR(10), div5longestgtime VARCHAR(10), div5wheelsoff VARCHAR(10), div5tailnum VARCHAR(10));
+
+query I
+COPY ontime FROM 'test/sql/copy/csv/data/real/ontime_sample.csv' DELIMITER ',' HEADER;
+----
+9
+
+query ITTTT
+SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime;
+----
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+
+query I
+COPY ontime TO '__TEST_DIR__/ontime.csv' DELIMITER ',' HEADER;
+----
+9
+
+statement ok
+DELETE FROM ontime;
+
+query I
+COPY ontime FROM '__TEST_DIR__/ontime.csv' DELIMITER ',' HEADER;
+----
+9
+
+query ITTTT
+SELECT year, uniquecarrier, origin, origincityname, div5longestgtime FROM ontime;
+----
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+1988	AA	JFK	New York, NY	NULL
+

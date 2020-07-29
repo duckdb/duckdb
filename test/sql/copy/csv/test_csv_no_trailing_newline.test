@@ -8,7 +8,7 @@ statement ok
 CREATE TABLE no_newline (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY no_newline FROM 'test/sql/copy/csv/data/no_newline.csv';
+COPY no_newline FROM 'test/sql/copy/csv/data/test/no_newline.csv';
 ----
 1024
 
@@ -18,7 +18,7 @@ statement ok
 CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));
 
 query I
-COPY no_newline_unicode FROM 'test/sql/copy/csv/data/no_newline_unicode.csv' DELIMITER '🦆';
+COPY no_newline_unicode FROM 'test/sql/copy/csv/data/test/no_newline_unicode.csv' DELIMITER '🦆';
 ----
 1024
 

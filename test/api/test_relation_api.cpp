@@ -723,3 +723,21 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	// non-existant table function
 	REQUIRE_THROWS(con.TableFunction("blabla"));
 }
+
+TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	unique_ptr<QueryResult> result;
+
+	// write a bunch of values to a CSV
+	auto csv_file = TestCreatePath("relationtest.csv");
+
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
+
+	// now scan the CSV file
+	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
+	result = csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
+}

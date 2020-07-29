@@ -44,7 +44,7 @@ def create_csv_header(csv_dir):
 	with open(os.path.join(csv_dir, 'test_csv_header.hpp'), 'w+') as f:
 		f.write(result)
 
-create_csv_header(csv_dir)
+# create_csv_header(csv_dir)
 
 tpch_dir = 'third_party/dbgen'
 tpch_queries = os.path.join(tpch_dir, 'queries')

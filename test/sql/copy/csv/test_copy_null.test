@@ -10,7 +10,7 @@ CREATE TABLE test_null_option (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(1
 # test COPY ... FROM ...
 # implicitly using default NULL value
 query I
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv';
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv';
 ----
 3
 
@@ -26,7 +26,7 @@ DELETE FROM test_null_option;
 
 # explicitly using default NULL value
 query I
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL '');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL '');
 ----
 3
 
@@ -42,7 +42,7 @@ DELETE FROM test_null_option;
 
 # make sure a quoted null string is interpreted as a null value
 query I
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL 'test');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'test');
 ----
 3
 
@@ -58,7 +58,7 @@ DELETE FROM test_null_option;
 
 # setting specific NULL value
 query I
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL 'null');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null');
 ----
 3
 
@@ -71,28 +71,28 @@ SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 
 # invalid parameter type
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL null);
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL null);
 
 # delimiter must not appear in the NULL specification
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL 'null,');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null,');
 
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (DELIMITER 'null', NULL 'null');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'null');
 
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (DELIMITER 'null', NULL 'nu');
 
 # no parameter type
 statement error
-COPY test_null_option FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL);
+COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL);
 
 # empty integer column with non-default NULL string
 statement ok
 CREATE TABLE test_null_option_2 (col_a INTEGER, col_b INTEGER, col_c VARCHAR(10), col_d VARCHAR(10));
 
 statement error
-COPY test_null_option_2 FROM 'test/sql/copy/csv/data/test_null_option.csv' (NULL 'null');
+COPY test_null_option_2 FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL 'null');
 
 # test COPY ... TO ...
 # implicitly using default NULL value

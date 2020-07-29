@@ -1,0 +1,52 @@
+# name: test/sql/copy/csv/test_lineitem.test
+# description: Test copy from/to lineitem csv
+# group: [csv]
+
+statement ok
+CREATE TABLE lineitem(l_orderkey INT NOT NULL, l_partkey INT NOT NULL, l_suppkey INT NOT NULL, l_linenumber INT NOT NULL, l_quantity INTEGER NOT NULL, l_extendedprice DECIMAL(15,2) NOT NULL, l_discount DECIMAL(15,2) NOT NULL, l_tax DECIMAL(15,2) NOT NULL, l_returnflag VARCHAR(1) NOT NULL, l_linestatus VARCHAR(1) NOT NULL, l_shipdate DATE NOT NULL, l_commitdate DATE NOT NULL, l_receiptdate DATE NOT NULL, l_shipinstruct VARCHAR(25) NOT NULL, l_shipmode VARCHAR(10) NOT NULL, l_comment VARCHAR(44) NOT NULL);
+
+query I
+COPY lineitem FROM 'test/sql/copy/csv/data/real/lineitem_sample.csv' DELIMITER '|'
+----
+10
+
+query IT
+SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;
+----
+15519	egular courts above the
+6731	ly final dependencies: slyly bold 
+6370	riously. regular, express dep
+214	lites. fluffily even de
+2403	 pending foxes. slyly re
+1564	arefully slyly ex
+
+# test COPY ... TO ... with HEADER
+query I
+COPY lineitem TO '__TEST_DIR__/lineitem.csv' (DELIMITER ' ', HEADER);
+----
+10
+
+# clear the table
+statement ok
+DELETE FROM lineitem;
+
+query IIIIIRRRTTTTTTTT
+SELECT * FROM lineitem;
+----
+
+# now copy back into the table
+query I
+COPY lineitem FROM '__TEST_DIR__/lineitem.csv' DELIMITER ' ' HEADER;
+----
+10
+
+query IT
+SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;
+----
+15519	egular courts above the
+6731	ly final dependencies: slyly bold 
+6370	riously. regular, express dep
+214	lites. fluffily even de
+2403	 pending foxes. slyly re
+1564	arefully slyly ex
+
