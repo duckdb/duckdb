@@ -323,6 +323,7 @@ SELECT BusinessEntityID, TerritoryID ,YEAR(ModifiedDate) AS SalesYear ,SalesYTD 
 # https:docs.microsoft.com/en-us/sql/t-sql/functions/var-transact-sql?view=sql-server-2017
 #  TODO not supported
 # SELECT VAR(Bonus) FROM Sales.SalesPerson; 
+
 # FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/cume-dist-transact-sql?view=sql-server-2017
 query TTRRR
 SELECT Department, LastName, Rate, CUME_DIST () OVER (PARTITION BY Department ORDER BY Rate) AS CumeDist, PERCENT_RANK() OVER (PARTITION BY Department ORDER BY Rate ) AS PctRank FROM HumanResources.vEmployeeDepartmentHistory AS edh INNER JOIN HumanResources.EmployeePayHistory AS e ON e.BusinessEntityID = edh.BusinessEntityID WHERE Department IN (N'Information Services',N'Document Control') ORDER BY Department, Rate DESC, LastName;
@@ -362,296 +363,7 @@ HL Mountain Tire	35.0000	Patch Kit/8 Patches
 query TTIT
 SELECT JobTitle, LastName, VacationHours, FIRST_VALUE(LastName) OVER (PARTITION BY JobTitle ORDER BY VacationHours ASC ROWS UNBOUNDED PRECEDING ) AS FewestVacationHours FROM HumanResources.Employee AS e INNER JOIN Person.Person AS p ON e.BusinessEntityID = p.BusinessEntityID ORDER BY JobTitle, LastName;
 ----
-Accountant	Moreland	58	Moreland
-Accountant	Seamans	59	Moreland
-Accounts Manager	Liu	57	Liu
-Accounts Payable Specialist	Sheperdigian	64	Tomic
-Accounts Payable Specialist	Tomic	63	Tomic
-Accounts Receivable Specialist	Poe	60	Poe
-Accounts Receivable Specialist	Spoon	61	Poe
-Accounts Receivable Specialist	Walton	62	Poe
-Application Specialist	Bacon	72	Bueno
-Application Specialist	Berg	74	Bueno
-Application Specialist	Bueno	71	Bueno
-Application Specialist	Meyyappan	73	Bueno
-Assistant to the Chief Financial Officer	Barber	56	Barber
-Benefits Specialist	Martin	51	Martin
-Buyer	Hagens	53	Hee
-Buyer	Hee	52	Hee
-Buyer	Kurjan	54	Hee
-Buyer	Meisner	56	Hee
-Buyer	Miller	55	Hee
-Buyer	Ogisu	57	Hee
-Buyer	Pellow	58	Hee
-Buyer	Rao	60	Hee
-Buyer	Sandberg	59	Hee
-Chief Executive Officer	Sánchez	99	Sánchez
-Chief Financial Officer	Norman	0	Norman
-Control Specialist	Kharatishvili	76	Norred
-Control Specialist	Norred	75	Norred
-Database Administrator	Ajenstat	67	Wilson
-Database Administrator	Wilson	66	Wilson
-Design Engineer	Erickson	5	Salavaria
-Design Engineer	Goldberg	6	Salavaria
-Design Engineer	Salavaria	4	Salavaria
-Document Control Assistant	Berge	79	Chai
-Document Control Assistant	Chai	78	Chai
-Document Control Manager	Arifin	77	Arifin
-Engineering Manager	Tamburello	2	Tamburello
-European Sales Manager	Alberts	21	Alberts
-Facilities Administrative Assistant	Hedlund	87	Hedlund
-Facilities Manager	Altman	86	Altman
-Finance Manager	Kahn	55	Kahn
-Human Resources Administrative Assistant	Chen	52	Chen
-Human Resources Administrative Assistant	Culbertson	53	Chen
-Human Resources Manager	Barreto de Mattos	54	Barreto de Mattos
-Information Services Manager	Trenary	65	Trenary
-Janitor	Berry	91	Macrae
-Janitor	Coleman	89	Macrae
-Janitor	Macrae	88	Macrae
-Janitor	Penor	90	Macrae
-Maintenance Supervisor	Kleinerman	92	Kleinerman
-Marketing Assistant	Benshoof	41	Benshoof
-Marketing Assistant	Brown	42	Benshoof
-Marketing Assistant	Dempsey	43	Benshoof
-Marketing Manager	Bradley	40	Bradley
-Marketing Specialist	Eminhizer	44	Eminhizer
-Marketing Specialist	Gibson	46	Eminhizer
-Marketing Specialist	Harnpadoungsataya	45	Eminhizer
-Marketing Specialist	Williams	47	Eminhizer
-Marketing Specialist	Wood	48	Eminhizer
-Master Scheduler	Wright	44	Wright
-Network Administrator	Connelly	69	Connelly
-Network Administrator	Sharma	70	Connelly
-Network Manager	Conroy	68	Conroy
-North American Sales Manager	Jiang	14	Jiang
-Pacific Sales Manager	Abbas	20	Abbas
-Production Control Manager	Krebs	43	Krebs
-Production Supervisor - WC10	Hill	65	Hill
-Production Supervisor - WC10	Mu	66	Hill
-Production Supervisor - WC10	Petculescu	67	Hill
-Production Supervisor - WC20	Gubbels	40	Gubbels
-Production Supervisor - WC20	Li	41	Gubbels
-Production Supervisor - WC20	McAskill-White	42	Gubbels
-Production Supervisor - WC30	Randall	69	Richins
-Production Supervisor - WC30	Ray	70	Richins
-Production Supervisor - WC30	Richins	68	Richins
-Production Supervisor - WC40	D'sa	72	Diaz
-Production Supervisor - WC40	Diaz	71	Diaz
-Production Supervisor - WC40	Hamilton	73	Diaz
-Production Supervisor - WC45	Hay	74	Hay
-Production Supervisor - WC45	Kane	76	Hay
-Production Supervisor - WC45	Kim	75	Hay
-Production Supervisor - WC50	Liu	77	Liu
-Production Supervisor - WC50	Loh	78	Liu
-Production Supervisor - WC50	Maxwell	79	Liu
-Production Supervisor - WC60	Brown	80	Brown
-Production Supervisor - WC60	Campbell	81	Brown
-Production Supervisor - WC60	Dobney	82	Brown
-Production Technician - WC10	Baker	94	Ellerbrock
-Production Technician - WC10	Ellerbrock	83	Ellerbrock
-Production Technician - WC10	Ersan	93	Ellerbrock
-Production Technician - WC10	Ford	85	Ellerbrock
-Production Technician - WC10	Glimp	87	Ellerbrock
-Production Technician - WC10	Hartwig	86	Ellerbrock
-Production Technician - WC10	Higa	84	Ellerbrock
-Production Technician - WC10	Hill	91	Ellerbrock
-Production Technician - WC10	Homer	90	Ellerbrock
-Production Technician - WC10	Johnson	88	Ellerbrock
-Production Technician - WC10	Kane	92	Ellerbrock
-Production Technician - WC10	Kearney	89	Ellerbrock
-Production Technician - WC10	Stadick	99	Ellerbrock
-Production Technician - WC10	Tiedt	97	Ellerbrock
-Production Technician - WC10	Vande Velde	98	Ellerbrock
-Production Technician - WC10	Wedge	96	Ellerbrock
-Production Technician - WC10	Zimmerman	95	Ellerbrock
-Production Technician - WC20	Chen	18	Ting
-Production Technician - WC20	Decker	17	Ting
-Production Technician - WC20	Dyck	14	Ting
-Production Technician - WC20	Earls	13	Ting
-Production Technician - WC20	Fakhouri	16	Ting
-Production Technician - WC20	Feng	15	Ting
-Production Technician - WC20	Hesse	19	Ting
-Production Technician - WC20	Hines	20	Ting
-Production Technician - WC20	Mirchandani	21	Ting
-Production Technician - WC20	Randall	12	Ting
-Production Technician - WC20	Sacksteder	11	Ting
-Production Technician - WC20	Salmre	9	Ting
-Production Technician - WC20	Sam	10	Ting
-Production Technician - WC20	Samarawickrama	5	Ting
-Production Technician - WC20	Singh	6	Ting
-Production Technician - WC20	Smith	7	Ting
-Production Technician - WC20	Sousa	8	Ting
-Production Technician - WC20	Su	1	Ting
-Production Technician - WC20	Sunkammurali	2	Ting
-Production Technician - WC20	Ting	0	Ting
-Production Technician - WC20	Turner	3	Ting
-Production Technician - WC20	Valdez	4	Ting
-Production Technician - WC30	Frum	27	Ingle
-Production Technician - WC30	Ingle	22	Ingle
-Production Technician - WC30	Johnson	25	Ingle
-Production Technician - WC30	King	24	Ingle
-Production Technician - WC30	Koch	23	Ingle
-Production Technician - WC30	Lawrence	29	Ingle
-Production Technician - WC30	Li	26	Ingle
-Production Technician - WC30	Martin	28	Ingle
-Production Technician - WC30	Metters	31	Ingle
-Production Technician - WC30	Miksovsky	30	Ingle
-Production Technician - WC30	Netz	46	Ingle
-Production Technician - WC30	Osada	44	Ingle
-Production Technician - WC30	Philips	45	Ingle
-Production Technician - WC30	Poland	42	Ingle
-Production Technician - WC30	Rettig	43	Ingle
-Production Technician - WC30	Reátegui Alayo	37	Ingle
-Production Technician - WC30	Ruth	39	Ingle
-Production Technician - WC30	Selikoff	41	Ingle
-Production Technician - WC30	Shabalin	40	Ingle
-Production Technician - WC30	Vanderhyde	35	Ingle
-Production Technician - WC30	Wang	36	Ingle
-Production Technician - WC30	Watters	38	Ingle
-Production Technician - WC30	Yalovsky	32	Ingle
-Production Technician - WC30	Young	34	Ingle
-Production Technician - WC30	Zabokritski	33	Ingle
-Production Technician - WC40	Brown	60	Northup
-Production Technician - WC40	Caron	71	Northup
-Production Technician - WC40	Cetinok	72	Northup
-Production Technician - WC40	Cook	61	Northup
-Production Technician - WC40	Cornelsen	59	Northup
-Production Technician - WC40	Creasey	62	Northup
-Production Technician - WC40	Frintu	64	Northup
-Production Technician - WC40	Goldstein	63	Northup
-Production Technician - WC40	Holliday	67	Northup
-Production Technician - WC40	Kaliyath	65	Northup
-Production Technician - WC40	Komosinski	68	Northup
-Production Technician - WC40	Lee	56	Northup
-Production Technician - WC40	Liu	58	Northup
-Production Technician - WC40	Lloyd	55	Northup
-Production Technician - WC40	Mares	57	Northup
-Production Technician - WC40	Martinez	66	Northup
-Production Technician - WC40	McGuel	52	Northup
-Production Technician - WC40	Mohamed	53	Northup
-Production Technician - WC40	Myer	51	Northup
-Production Technician - WC40	Nartker	54	Northup
-Production Technician - WC40	Nay	49	Northup
-Production Technician - WC40	Northup	47	Northup
-Production Technician - WC40	Nusbaum	50	Northup
-Production Technician - WC40	Patel	48	Northup
-Production Technician - WC40	Rothkugel	70	Northup
-Production Technician - WC40	Yukish	69	Northup
-Production Technician - WC45	Alderson	85	Cencini
-Production Technician - WC45	Cencini	73	Cencini
-Production Technician - WC45	Esteves	81	Cencini
-Production Technician - WC45	Flood	87	Cencini
-Production Technician - WC45	Gode	86	Cencini
-Production Technician - WC45	Hite	80	Cencini
-Production Technician - WC45	Koenigsbauer	74	Cencini
-Production Technician - WC45	McKay	79	Cencini
-Production Technician - WC45	Munson	84	Cencini
-Production Technician - WC45	Nayberg	77	Cencini
-Production Technician - WC45	Newman	83	Cencini
-Production Technician - WC45	Penuchot	78	Cencini
-Production Technician - WC45	Preston	76	Cencini
-Production Technician - WC45	Rounthwaite	82	Cencini
-Production Technician - WC45	Steele	75	Cencini
-Production Technician - WC50	Barbariol	92	Samant
-Production Technician - WC50	Cao	90	Samant
-Production Technician - WC50	Ciccu	95	Samant
-Production Technician - WC50	Entin	94	Samant
-Production Technician - WC50	Evans	91	Samant
-Production Technician - WC50	Fatima	93	Samant
-Production Technician - WC50	Hall	88	Samant
-Production Technician - WC50	Hohman	12	Samant
-Production Technician - WC50	Hunter	6	Samant
-Production Technician - WC50	Keil	11	Samant
-Production Technician - WC50	Keyser	5	Samant
-Production Technician - WC50	Krapauskas	97	Samant
-Production Technician - WC50	Lertpiriyasuwat	89	Samant
-Production Technician - WC50	Male	13	Samant
-Production Technician - WC50	Miller	10	Samant
-Production Technician - WC50	Moschell	96	Samant
-Production Technician - WC50	Niswonger	99	Samant
-Production Technician - WC50	Patten	98	Samant
-Production Technician - WC50	Pournasseh	3	Samant
-Production Technician - WC50	Samant	0	Samant
-Production Technician - WC50	Scardelis	1	Samant
-Production Technician - WC50	Smith	9	Samant
-Production Technician - WC50	Song	7	Samant
-Production Technician - WC50	Tejani	4	Samant
-Production Technician - WC50	Tibbott	8	Samant
-Production Technician - WC50	Yu	2	Samant
-Production Technician - WC60	Abercrombie	24	Simon
-Production Technician - WC60	Adams	32	Simon
-Production Technician - WC60	Anderson	34	Simon
-Production Technician - WC60	Baker	35	Simon
-Production Technician - WC60	Dudenhoefer	25	Simon
-Production Technician - WC60	Dusza	30	Simon
-Production Technician - WC60	Fitzgerald	27	Simon
-Production Technician - WC60	Gilbert	21	Simon
-Production Technician - WC60	Heidepriem	22	Simon
-Production Technician - WC60	Khanna	28	Simon
-Production Technician - WC60	Kogan	36	Simon
-Production Technician - WC60	Kramer	39	Simon
-Production Technician - WC60	Laszlo	23	Simon
-Production Technician - WC60	Lugo	20	Simon
-Production Technician - WC60	Masters	31	Simon
-Production Technician - WC60	McArthur	19	Simon
-Production Technician - WC60	Michaels	37	Simon
-Production Technician - WC60	Mohan	15	Simon
-Production Technician - WC60	Okelberry	16	Simon
-Production Technician - WC60	Ortiz	33	Simon
-Production Technician - WC60	Rapier	38	Simon
-Production Technician - WC60	Reeves	29	Simon
-Production Technician - WC60	Shoop	18	Simon
-Production Technician - WC60	Simon	14	Simon
-Production Technician - WC60	Stahl	17	Simon
-Production Technician - WC60	Zwilling	26	Simon
-Purchasing Assistant	Hill	50	Hill
-Purchasing Assistant	Hillmann	51	Hill
-Purchasing Manager	Word	49	Word
-Quality Assurance Manager	Abolrous	80	Abolrous
-Quality Assurance Supervisor	Wu	81	Wu
-Quality Assurance Technician	Alexander	82	Alexander
-Quality Assurance Technician	Berglund	84	Alexander
-Quality Assurance Technician	Charncherngkha	85	Alexander
-Quality Assurance Technician	Harrington	83	Alexander
-Recruiter	Johnson	49	Johnson
-Recruiter	Luthra	50	Johnson
-Research and Development Engineer	Margheim	62	Margheim
-Research and Development Engineer	Matthew	63	Margheim
-Research and Development Manager	Miller	61	Raheem
-Research and Development Manager	Raheem	16	Raheem
-Sales Representative	Ansman-Wolfe	22	Ansman-Wolfe
-Sales Representative	Blythe	38	Ansman-Wolfe
-Sales Representative	Campbell	23	Ansman-Wolfe
-Sales Representative	Carson	24	Ansman-Wolfe
-Sales Representative	Ito	26	Ansman-Wolfe
-Sales Representative	Mensa-Annan	39	Ansman-Wolfe
-Sales Representative	Mitchell	27	Ansman-Wolfe
-Sales Representative	Pak	37	Ansman-Wolfe
-Sales Representative	Reiter	29	Ansman-Wolfe
-Sales Representative	Saraiva	31	Ansman-Wolfe
-Sales Representative	Tsoflias	36	Ansman-Wolfe
-Sales Representative	Valdez	35	Ansman-Wolfe
-Sales Representative	Vargas	33	Ansman-Wolfe
-Sales Representative	Varkey Chudukatil	34	Ansman-Wolfe
-Scheduling Assistant	Brewer	47	Vong
-Scheduling Assistant	LaMee	48	Vong
-Scheduling Assistant	Uddin	46	Vong
-Scheduling Assistant	Vong	45	Vong
-Senior Design Engineer	Sullivan	3	Sullivan
-Senior Tool Designer	Cracium	7	Cracium
-Senior Tool Designer	Walters	48	Cracium
-Shipping and Receiving Clerk	Berndt	94	Berndt
-Shipping and Receiving Clerk	Kuppa	95	Berndt
-Shipping and Receiving Supervisor	Ackerman	93	Ackerman
-Stocker	Bischoff	96	Bischoff
-Stocker	Eaton	97	Bischoff
-Stocker	Ralls	98	Bischoff
-Tool Designer	D'Hers	9	Galvin
-Tool Designer	Galvin	8	Galvin
-Vice President of Engineering	Duffy	1	Duffy
-Vice President of Production	Hamilton	64	Hamilton
-Vice President of Sales	Welcker	10	Welcker
+1160 values hashing to 2d7dea029628bcba179722012d0e5865
 
 # FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/last-value-transact-sql?view=sql-server-2017
 query TTRTT
@@ -848,23 +560,23 @@ Jae	Pak	1	4116871.2277	98055
 Linda	Mitchell	1	4251368.5497	98027
 
 # FIXME: ntile bug?
-# query TTIRT
-# SELECT p.FirstName, p.LastName ,NTILE(4) OVER(PARTITION BY PostalCode ORDER BY SalesYTD DESC, p.FirstName) AS Quartile ,s.SalesYTD AS SalesYTD ,a.PostalCode FROM Sales.SalesPerson AS s INNER JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0 ORDER BY PostalCode, SalesYTD DESC, p.FirstName;
-# ----
-# Linda	Mitchell	1	4251368.5497	98027
-# Michael	Blythe	1	3763178.1787	98027
-# Jillian	Carson	2	3189418.3662	98027
-# Tsvi	Reiter	2	2315185.6110	98027
-# Garrett	Vargas	3	1453719.4653	98027
-# Pamela	Ansman-Wolfe	4	1352577.1325	98027
-# Jae	Pak	1	4116871.2277	98055
-# Ranjit	Varkey Chudukatil	1	3121616.3202	98055
-# José	Saraiva	2	2604540.7172	98055
-# Shu	Ito	2	2458535.6169	98055
-# Rachel	Valdez	3	1827066.7118	98055
-# Tete	Mensa-Annan	3	1576562.1966	98055
-# David	Campbell	4	1573012.9383	98055
-# Lynn	Tsoflias	4	1421810.9242	98055
+query TTIRT
+SELECT p.FirstName, p.LastName ,NTILE(4) OVER(PARTITION BY PostalCode ORDER BY SalesYTD DESC, p.FirstName) AS Quartile ,s.SalesYTD AS SalesYTD ,a.PostalCode FROM Sales.SalesPerson AS s INNER JOIN Person.Person AS p ON s.BusinessEntityID = p.BusinessEntityID INNER JOIN Person.Address AS a ON a.AddressID = p.BusinessEntityID WHERE TerritoryID IS NOT NULL AND SalesYTD <> 0 ORDER BY PostalCode, SalesYTD DESC, p.FirstName;
+----
+Linda	Mitchell	1	4251368.5497	98027
+Michael	Blythe	1	3763178.1787	98027
+Jillian	Carson	2	3189418.3662	98027
+Tsvi	Reiter	2	2315185.6110	98027
+Garrett	Vargas	3	1453719.4653	98027
+Pamela	Ansman-Wolfe	4	1352577.1325	98027
+Jae	Pak	1	4116871.2277	98055
+Ranjit	Varkey Chudukatil	1	3121616.3202	98055
+José	Saraiva	2	2604540.7172	98055
+Shu	Ito	2	2458535.6169	98055
+Rachel	Valdez	3	1827066.7118	98055
+Tete	Mensa-Annan	3	1576562.1966	98055
+David	Campbell	4	1573012.9383	98055
+Lynn	Tsoflias	4	1421810.9242	98055
 
 # FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/rank-transact-sql?view=sql-server-2017
 query ITIII

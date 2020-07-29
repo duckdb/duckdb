@@ -1,0 +1,102 @@
+# name: test/sql/window/test_ntile.test
+# description: Test NTile function
+# group: [window]
+
+statement ok
+CREATE TABLE Scoreboard(TeamName VARCHAR, Player VARCHAR, Score INTEGER);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Mongrels', 'Apu', 350);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Mongrels', 'Ned', 666);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Mongrels', 'Meg', 1030);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Mongrels', 'Burns', 1270);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Simpsons', 'Homer', 1);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Simpsons', 'Lisa', 710);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Simpsons', 'Marge', 990);
+
+statement ok
+INSERT INTO Scoreboard VALUES ('Simpsons', 'Bart', 2010);
+
+query IIII
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(2) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+----
+Mongrels	Apu	350	1
+Mongrels	Ned	666	1
+Mongrels	Meg	1030	2
+Mongrels	Burns	1270	2
+Simpsons	Homer	1	1
+Simpsons	Lisa	710	1
+Simpsons	Marge	990	2
+Simpsons	Bart	2010	2
+
+query IIII
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(2) OVER (ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY Score;
+----
+Simpsons	Homer	1	1
+Mongrels	Apu	350	1
+Mongrels	Ned	666	1
+Simpsons	Lisa	710	1
+Simpsons	Marge	990	2
+Mongrels	Meg	1030	2
+Mongrels	Burns	1270	2
+Simpsons	Bart	2010	2
+
+query IIII
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(1000) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+----
+Mongrels	Apu	350	1
+Mongrels	Ned	666	2
+Mongrels	Meg	1030	3
+Mongrels	Burns	1270	4
+Simpsons	Homer	1	1
+Simpsons	Lisa	710	2
+Simpsons	Marge	990	3
+Simpsons	Bart	2010	4
+
+query IIII
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(1) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+----
+Mongrels	Apu	350	1
+Mongrels	Ned	666	1
+Mongrels	Meg	1030	1
+Mongrels	Burns	1270	1
+Simpsons	Homer	1	1
+Simpsons	Lisa	710	1
+Simpsons	Marge	990	1
+Simpsons	Bart	2010	1

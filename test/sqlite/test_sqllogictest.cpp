@@ -923,6 +923,8 @@ static void execute_file(string script) {
 							if (!success) {
 								FAIL();
 							}
+							// we do this just to increment the assertion counter
+							REQUIRE(success);
 						}
 						current_row++;
 					}
@@ -933,6 +935,8 @@ static void execute_file(string script) {
 						if (!success) {
 							FAIL();
 						}
+						// we do this just to increment the assertion counter
+						REQUIRE(success);
 
 						current_column++;
 						if (current_column == expected_column_count) {
