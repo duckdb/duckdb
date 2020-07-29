@@ -127,7 +127,7 @@ public:
 	//! Whether or not the value is NULL
 	bool is_null;
 
-	SQLType GetSQLType() {
+	SQLType GetSQLType() const {
 		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
 	}
 

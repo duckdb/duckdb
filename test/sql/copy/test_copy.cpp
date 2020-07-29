@@ -1653,3 +1653,44 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
 }
+
+TEST_CASE("Test BLOB with COPY INTO", "[blob]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// Creating a blob buffer with almost ALL ASCII chars
+	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
+	unique_ptr<char[]> blob_chars(new char[num_chars + 1]);
+	char ch = '\0';
+	idx_t buf_idx = 0;
+	for(idx_t i = 0; i < 255; ++i, ++ch) {
+		// skip chars: '\0', new line, shift in, comma, and crtl+Z
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
+			continue;
+		}
+		blob_chars[buf_idx] = ch;
+    	++buf_idx;
+	}
+	blob_chars[num_chars] = '\0';
+
+	// Wrinting BLOB values to a csv file
+	string blob_file_path = TestCreatePath("blob_file.csv");
+    ofstream ofs_blob_file(blob_file_path, std::ofstream::out | std::ofstream::app);
+    // Insert all ASCII chars from 1 to 255, skipping '\0', '\n', '\15', and ',' chars
+   	ofs_blob_file << blob_chars.get();
+	ofs_blob_file.close();
+
+	// COPY INTO
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
+    result = con.Query("COPY blobs FROM '" + blob_file_path + "';");
+    REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+    // Testing if the system load/store correctly the bytes
+	string blob_str(blob_chars.get(), num_chars);
+	result = con.Query("SELECT b FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(blob_str)}));
+
+	blob_chars.reset();
+	TestDeleteFile(blob_file_path);
+}

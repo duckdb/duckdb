@@ -268,14 +268,14 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
-	
+
 	switch(input_size) {
 	case 1: {
 		char c = std::tolower(*input_data);
-		if (c == 't' || c == '1') {
+		if (c == 't' || (!strict && c == '1')) {
 			result = true;
 			return true;
-		} else if (c == 'f' || c == '0') {
+		} else if (c == 'f' || (!strict && c == '0')) {
 			result = false;
 			return true;
 		}

@@ -259,7 +259,7 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	REQUIRE(!p5->success);
 }
 
-TEST_CASE("Test ANALYZE", "[analyze]") {
+TEST_CASE("Test ANALYZE", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -278,4 +278,45 @@ TEST_CASE("Test ANALYZE", "[analyze]") {
 	REQUIRE(prep->success);
 	res = prep->Execute();
 	REQUIRE(res->success);
+}
+
+TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// Creating a blob buffer with almost ALL ASCII chars
+	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
+	unique_ptr<char[]> blob_chars(new char[num_chars]);
+	char ch = '\0';
+	idx_t buf_idx = 0;
+	for(idx_t i = 0; i < 255; ++i, ++ch) {
+		// skip chars: '\0', new line, shift in, comma, and crtl+Z
+		if(ch == '\0' || ch == '\n' || ch == '\15' || ch == ',' || ch == '\32') {
+			continue;
+		}
+		blob_chars[buf_idx] = ch;
+    	++buf_idx;
+	}
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
+
+	// Insert blob values through a PreparedStatement
+	string str_blob(blob_chars.get(), num_chars);
+	unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
+	ps->Execute(str_blob);
+	REQUIRE(ps->success);
+	ps.reset();
+
+	// Testing if the bytes are stored correctly
+	result = con.Query("SELECT OCTET_LENGTH(b) FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {num_chars}));
+
+	result = con.Query("SELECT count(b) FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
+
+	result = con.Query("SELECT b FROM blobs");
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BLOB(str_blob)}));
+
+	blob_chars.reset();
 }
