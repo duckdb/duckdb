@@ -434,7 +434,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				auto lead_idx = row_idx + 1;
+				auto lead_idx = row_idx + offset;
 				if (lead_idx < bounds.partition_end) {
 					res = payload_collection.GetValue(0, lead_idx);
 				} else {

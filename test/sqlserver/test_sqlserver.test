@@ -123,13 +123,13 @@ statement ok
 CREATE TABLE Production.Product( ProductID int NOT NULL, Name string NOT NULL, ProductNumber string NOT NULL, MakeFlag string NOT NULL , FinishedGoodsFlag string NOT NULL , Color string, SafetyStockLevel smallint NOT NULL, ReorderPoint smallint NOT NULL, StandardCost decimal(22,4) NOT NULL, ListPrice decimal(22,4) NOT NULL, Size string, SizeUnitMeasureCode string, WeightUnitMeasureCode string, Weight decimal(8, 2), DaysToManufacture int NOT NULL, ProductLine string, Class string, Style string, ProductSubcategoryID int, ProductModelID int, SellStartDate datetime NOT NULL, SellEndDate datetime, DiscontinuedDate datetime, rowguid string  , ModifiedDate datetime NOT NULL );
 
 statement ok
-	COPY Production.Product FROM 'test/sqlserver/data/Product.csv.gz' DELIMITER '	';
+COPY Production.Product FROM 'test/sqlserver/data/Product.csv.gz' DELIMITER '	';
 
 statement ok
  CREATE TABLE Production.ProductInventory( ProductID int NOT NULL, LocationID smallint NOT NULL, Shelf string NOT NULL, Bin tinyint NOT NULL, Quantity smallint NOT NULL , rowguid string , ModifiedDate datetime NOT NULL ); 
 
 statement ok
-	COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '	';
+COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '	';
 
 statement ok
 CREATE VIEW Sales.vSalesPerson AS SELECT s.BusinessEntityID ,p.Title ,p.FirstName ,p.MiddleName ,p.LastName ,p.Suffix ,e.JobTitle ,pp.PhoneNumber ,pnt.Name AS PhoneNumberType ,ea.EmailAddress ,p.EmailPromotion ,a.AddressLine1 ,a.AddressLine2 ,a.City ,sp.Name AS StateProvinceName ,a.PostalCode ,cr.Name AS CountryRegionName ,st.Name AS TerritoryName ,st.Group_ AS TerritoryGroup ,s.SalesQuota ,s.SalesYTD ,s.SalesLastYear FROM Sales.SalesPerson s INNER JOIN HumanResources.Employee e ON e.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Person p ON p.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.BusinessEntityAddress bea ON bea.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Address a ON a.AddressID = bea.AddressID INNER JOIN Person.StateProvince sp ON sp.StateProvinceID = a.StateProvinceID INNER JOIN Person.CountryRegion cr ON cr.CountryRegionCode = sp.CountryRegionCode LEFT OUTER JOIN Sales.SalesTerritory st ON st.TerritoryID = s.TerritoryID LEFT OUTER JOIN Person.EmailAddress ea ON ea.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PersonPhone pp ON pp.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PhoneNumberType pnt ON pnt.PhoneNumberTypeID = pp.PhoneNumberTypeID; 
@@ -214,7 +214,7 @@ SELECT COUNT(*), AVG(Bonus) FROM Sales.SalesPerson WHERE SalesQuota > 25000;
 14	3472.1428571428571429
 
 query TRRRI
-SELECT DISTINCT Name , MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
+SELECT DISTINCT Name, MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
 ----
 Document Control	10.2500	17.7885	14.3884600000000000	5
 Engineering	32.6923	63.4615	40.1442166666666667	6
@@ -240,7 +240,7 @@ SELECT MAX(TaxRate) FROM Sales.SalesTaxRate;
 19.600000
 
 query TRRRI
-SELECT DISTINCT Name , MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
+SELECT DISTINCT Name, MIN(Rate) OVER (PARTITION BY edh.DepartmentID) AS MinSalary , MAX(Rate) OVER (PARTITION BY edh.DepartmentID) AS MaxSalary , AVG(Rate) OVER (PARTITION BY edh.DepartmentID) AS AvgSalary ,COUNT(edh.BusinessEntityID) OVER (PARTITION BY edh.DepartmentID) AS EmployeesPerDept FROM HumanResources.EmployeePayHistory AS eph JOIN HumanResources.EmployeeDepartmentHistory AS edh ON eph.BusinessEntityID = edh.BusinessEntityID JOIN HumanResources.Department AS d ON d.DepartmentID = edh.DepartmentID WHERE edh.EndDate IS NULL ORDER BY Name;
 ----
 Document Control	10.2500	17.7885	14.3884600000000000	5
 Engineering	32.6923	63.4615	40.1442166666666667	6
@@ -447,11 +447,11 @@ SELECT b, c, LAG(2*c, b*(SELECT MIN(b) FROM T), -c/2.0) OVER (ORDER BY a) AS i F
 
 # FROM https:docs.microsoft.com/en-us/sql/t-sql/functions/lead-transact-sql?view=sql-server-2017
 query IIRR
- SELECT BusinessEntityID, YEAR(QuotaDate) AS SalesYear, SalesQuota AS CurrentQuota, LEAD(SalesQuota, 1,0) OVER (ORDER BY YEAR(QuotaDate)) AS NextQuota FROM Sales.SalesPersonQuotaHistory WHERE BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');
+SELECT BusinessEntityID, YEAR(QuotaDate) AS SalesYear, SalesQuota AS CurrentQuota, LEAD(SalesQuota, 1,0) OVER (ORDER BY YEAR(QuotaDate)) AS NextQuota FROM Sales.SalesPersonQuotaHistory WHERE BusinessEntityID = 275 and YEAR(QuotaDate) IN ('2005','2006');
 ----
 
 query TIRR
- SELECT TerritoryName, BusinessEntityID, SalesYTD, LEAD (SalesYTD, 1, 0) OVER (PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS NextRepSales FROM Sales.vSalesPerson WHERE TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, BusinessEntityID DESC;
+SELECT TerritoryName, BusinessEntityID, SalesYTD, LEAD (SalesYTD, 1, 0) OVER (PARTITION BY TerritoryName ORDER BY SalesYTD DESC) AS NextRepSales FROM Sales.vSalesPerson WHERE TerritoryName IN (N'Northwest', N'Canada') ORDER BY TerritoryName, BusinessEntityID DESC;
 ----
 Canada	282	2604540.717200	1453719.465300
 Canada	278	1453719.465300	0.000000
@@ -459,16 +459,15 @@ Northwest	284	1576562.196600	1573012.938300
 Northwest	283	1573012.938300	1352577.132500
 Northwest	280	1352577.132500	0.000000
 
-# FIXME: inconsistent with postgres here?
-# query III
-# SELECT b, c, LEAD(2.0*c, b*(SELECT MIN(b) FROM T), -c/2.0) OVER (ORDER BY a) AS i FROM T;
-# ----
-# 1	-3	1.5000000000000000
-# 2	4	-2.0000000000000000
-# 1	NULL	8.0
-# 3	1	-6.0
-# 2	NULL	
-# 1	5	
+query IIII
+SELECT a, b, c, LEAD(2.0*c, b*(SELECT MIN(b) FROM T), -c/2.0) OVER (ORDER BY a, b, c) AS i FROM T ORDER BY a, b, c;
+----
+1	1	-3	8.0
+2	2	4	2.0
+3	1	NULL	2.0
+4	3	1	-0.50000000000000000000
+5	2	NULL	NULL
+6	1	5	-2.5000000000000000
 
 statement ok
 DROP TABLE T;
