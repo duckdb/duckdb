@@ -1,6 +1,5 @@
 add_subdirectory(catalog)
 add_subdirectory(constraints)
-add_subdirectory(copy)
 add_subdirectory(delete)
 add_subdirectory(alter)
 add_subdirectory(filter_pushdown)

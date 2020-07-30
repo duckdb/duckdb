@@ -1,0 +1,19 @@
+# name: test/sql/copy/csv/auto/test_auto_web_page.test
+# description: Test read_csv_auto from web_page csv
+# group: [auto]
+
+statement ok
+CREATE TABLE web_page AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/web_page.csv');
+
+query I
+SELECT COUNT(*) FROM web_page;
+----
+60
+
+query ITTTIITITTIIII
+SELECT * FROM web_page ORDER BY column00 LIMIT 3;
+----
+1	AAAAAAAABAAAAAAA	1997-09-03	NULL	2450810	2452620	Y	98539	http://www.foo.com	welcome	2531	8	3	4
+2	AAAAAAAACAAAAAAA	1997-09-03	2000-09-02	2450814	2452580	N	NULL	http://www.foo.com	protected	1564	4	3	1
+3	AAAAAAAACAAAAAAA	2000-09-03	NULL	2450814	2452611	N	NULL	http://www.foo.com	feedback	1564	4	3	4
+
