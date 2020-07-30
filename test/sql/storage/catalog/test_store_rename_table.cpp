@@ -25,7 +25,7 @@ TEST_CASE("Test storage of rename table", "[storage]") {
 
 			REQUIRE_NO_FAIL(con.Query("ALTER TABLE test RENAME TO new_name"));
 
-			result = con.Query("SELECT a FROM new_name ORDER BY k");
+			result = con.Query("SELECT a FROM new_name ORDER BY 1");
 			REQUIRE(CHECK_COLUMN(result, 0, {11, 12, 13}));
 			REQUIRE_NO_FAIL(con.Query(i == 0 ? "ROLLBACK" : "COMMIT"));
 		}

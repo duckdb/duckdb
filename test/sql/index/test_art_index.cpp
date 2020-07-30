@@ -99,45 +99,45 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	int64_t a, b;
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
-	con.AddComment("Will use 100 keys");
+	// Will use 100 keys
 	idx_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
-	con.AddComment("Generate 10 small floats (0.0 - 1.0)");
+	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
-	con.AddComment("Generate 40 floats (-50/50)");
+	// Generate 40 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
-	con.AddComment("Generate 50 floats (min/max)");
+	// Generate 50 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
-	con.AddComment("Insert values and create index");
+	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-	con.AddComment("Generate 500 small-small range queries");
+	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_small_float());
 		b = Key::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 normal-normal range queries");
+	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_float(-50, 50));
 		b = Key::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 big-big range queries");
+	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
@@ -171,45 +171,45 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	int64_t a, b;
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
-	con.AddComment("Will use 100 keys");
+	// Will use 100 keys
 	idx_t n = 100;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
-	con.AddComment("Generate 10 small floats (0.0 - 1.0)");
+	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
-	con.AddComment("Generate 40 floats (-50/50)");
+	// Generate 40 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
-	con.AddComment("Generate 50 floats (min/max)");
+	// Generate 50 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
-	con.AddComment("Insert values and create index");
+	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-	con.AddComment("Generate 500 small-small range queries");
+	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_small_double());
 		b = Key::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 normal-normal range queries");
+	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_double(-50, 50));
 		b = Key::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 big-big range queries");
+	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
 		a = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
@@ -243,45 +243,45 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	int64_t a, b;
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
-	con.AddComment("Will use 10k keys");
+	// Will use 10k keys
 	idx_t n = 10000;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
-	con.AddComment("Generate 1000 small floats (0.0 - 1.0)");
+	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
-	con.AddComment("Generate 4000 floats (-50/50)");
+	// Generate 4000 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
-	con.AddComment("Generate 5000 floats (min/max)");
+	// Generate 5000 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
-	con.AddComment("Insert values and create index");
+	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-	con.AddComment("Generate 500 small-small range queries");
+	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_small_float());
 		b = Key::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 normal-normal range queries");
+	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_float(-50, 50));
 		b = Key::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 big-big range queries");
+	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		b = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
@@ -315,45 +315,45 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	int64_t a, b;
 	vector<int64_t> min_values, max_values;
 	Connection con(db);
-	con.AddComment("Will use 10000 keys");
+	// Will use 10000 keys
 	idx_t n = 10000;
 	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
 	con.Query("CREATE TABLE numbers(i BIGINT)");
-	con.AddComment("Generate 1000 small floats (0.0 - 1.0)");
+	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
 		keys[i] = Key::EncodeFloat(generate_small_float());
 	}
 
-	con.AddComment("Generate 4000 floats (-50/50)");
+	// Generate 4000 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(-50, 50));
 	}
-	con.AddComment("Generate 5000 floats (min/max)");
+	// Generate 5000 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
 		keys[i] = Key::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
-	con.AddComment("Insert values and create index");
+	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 	for (idx_t i = 0; i < n; i++) {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO numbers VALUES (" + to_string(keys[i]) + ")"));
 	}
 	REQUIRE_NO_FAIL(con.Query("COMMIT"));
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
-	con.AddComment("Generate 500 small-small range queries");
+	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_small_double());
 		b = Key::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 normal-normal range queries");
+	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_double(-50, 50));
 		b = Key::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
-	con.AddComment("Generate 500 big-big range queries");
+	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
 		a = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		b = Key::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));

@@ -219,64 +219,8 @@ static void tokenizeLine(Script *p) {
 	}
 }
 
-
-/*
-** Entry in a hash table of prior results
-*/
-typedef struct HashEntry HashEntry;
-struct HashEntry {
-	char zKey[24];    /* The search key */
-	char zHash[33];   /* The hash value stored */
-	HashEntry *pNext; /* Next with same hash */
-	HashEntry *pAll;  /* Next overall */
-};
-
-/*
-** The hash table
-*/
-#define NHASH 1009
-static HashEntry *aHash[NHASH];
-static HashEntry *pAll;
-
-/*
-** Try to look up the value zKey in the hash table.  If the value
-** does not exist, create it and return 0.  If the value does already
-** exist return 0 if hash matches and 1 if the hash is different.
-*/
-static int checkValue(const char *zKey, const char *zHash) {
-	unsigned int h;
-	HashEntry *p;
-	unsigned int i;
-
-	h = 0;
-	for (i = 0; zKey[i] && i < sizeof(p->zKey); i++) {
-		h = h << 3 ^ h ^ zKey[i];
-	}
-	h = h % NHASH;
-	for (p = aHash[h]; p; p = p->pNext) {
-		if (strcmp(p->zKey, zKey) == 0) {
-			return strcmp(p->zHash, zHash) != 0;
-		}
-	}
-	p = (HashEntry *)malloc(sizeof(*p));
-	if (p == 0) {
-		fprintf(stderr, "out of memory at %s:%d\n", __FILE__, __LINE__);
-		exit(1);
-	}
-	for (i = 0; zKey[i] && i < sizeof(p->zKey) - 1; i++) {
-		p->zKey[i] = zKey[i];
-	}
-	p->zKey[i] = 0;
-	for (i = 0; zHash[i] && i < sizeof(p->zHash) - 1; i++) {
-		p->zHash[i] = zHash[i];
-	}
-	p->zHash[i] = 0;
-	p->pAll = pAll;
-	pAll = p;
-	p->pNext = aHash[h];
-	aHash[h] = p;
-	return 0;
-}
+//! The map converting the labels to the hash values
+unordered_map<string, string> hash_label_map;
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
@@ -539,7 +483,6 @@ void Statement::Execute() {
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
 	
-
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
 		error = !error;
@@ -660,13 +603,6 @@ void Query::Execute() {
 			md5_add("\n");
 		}
 		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
-		if (query_has_label && checkValue(query_label.c_str(), md5_finish())) {
-			fprintf(stderr,
-					"%s:%d: labeled result [%s] does not agree with "
-					"previous values\n",
-					file_name.c_str(), query_line, query_label.c_str());
-			FAIL();
-		}
 		if (output_hash_mode) {
 			print_line_sep();
 			print_sql(sql_query);
@@ -676,7 +612,6 @@ void Query::Execute() {
 			return;
 		}
 	}
-
 	/* Compare subsequent lines of the script against the
 		*results
 		** from the query.  Report an error if any differences are
@@ -773,7 +708,24 @@ void Query::Execute() {
 			}
 		}
 	} else {
-		if (strcmp(values[0].c_str(), zHash) != 0) {
+		bool hash_compare_error = false;
+		if (query_has_label) {
+			// the query has a label: check if the hash has already been computed
+			auto entry = hash_label_map.find(query_label);
+			if (entry == hash_label_map.end()) {
+				// not computed yet: add it tot he map
+				hash_label_map[query_label] = string(zHash);
+			} else {
+				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
+			}
+		} else {
+			if (values.size() <= 0) {
+				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name, query_line);
+				FAIL();
+			}
+			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
+		}
+		if (hash_compare_error) {
 			print_error_header("Wrong result hash!", file_name, query_line);
 			print_line_sep();
 			print_sql(sql_query);
@@ -783,6 +735,7 @@ void Query::Execute() {
 			result->Print();
 			FAIL();
 		}
+		REQUIRE(!hash_compare_error);
 	}
 }
 
@@ -800,7 +753,6 @@ static void execute_file(string script) {
 	FILE *in;                                   /* For reading script */
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
-	char zHash[100];                            /* Storage space for hash results */
 	int output_hash_mode = 0;
 	int output_result_mode = 0;
 	bool skip_index = false;
@@ -841,9 +793,6 @@ static void execute_file(string script) {
 	fclose(in);
 	REQUIRE(nGot <= nScript);
 	zScript[nGot] = 0;
-
-	// zap hash table as result labels are only valid within one test file
-	memset(aHash, 0, sizeof(aHash));
 
 	/* Initialize the sScript structure so that the cursor will be pointing
 	** to the start of the first line in the file after nextLine() is called
@@ -888,45 +837,7 @@ static void execute_file(string script) {
 			tokenizeLine(&sScript);
 		}
 		if (bSkip) {
-			int n;
 			nSkipped++;
-			if (strcmp(sScript.azToken[0], "query") != 0)
-				continue;
-			if (sScript.azToken[3][0] == 0)
-				continue;
-
-			/* We are skipping this record.  But we observe that it is a
-			 *query
-			 ** with a named hash value and we are in verify mode.  Even
-			 *though
-			 ** we are going to skip the SQL evaluation, we might as well
-			 *check
-			 ** the hash of the result.
-			 */
-			while (!nextIsBlank(&sScript) && nextLine(&sScript) && strcmp(sScript.zLine, "----") != 0) {
-				/* Skip over the SQL text */
-			}
-			if (strcmp(sScript.zLine, "----") == 0)
-				nextLine(&sScript);
-			if (sScript.zLine[0] == 0)
-				continue;
-			n = sscanf(sScript.zLine, "%*d values hashing to %32s", zHash);
-			if (n != 1) {
-				md5_add(sScript.zLine);
-				md5_add("\n");
-				while (!nextIsBlank(&sScript) && nextLine(&sScript)) {
-					md5_add(sScript.zLine);
-					md5_add("\n");
-				}
-				strcpy(zHash, md5_finish());
-			}
-			if (checkValue(sScript.azToken[3], zHash)) {
-				fprintf(stderr,
-				        "%s:%d: labeled result [%s] does not agree with "
-				        "previous values\n",
-				        zScriptFile, sScript.startLine, sScript.azToken[3]);
-				FAIL();
-			}
 			continue;
 		}
 
@@ -1196,22 +1107,6 @@ static string ParseGroupFromPath(string file) {
 		return "[" + file + "]" + extension;
 	}
 	return "[" + file.substr(0, group_end) + "]" + extension;
-}
-
-TEST_CASE("SQLite select1", "[sqlitelogic]") {
-	execute_file("test/sqlite/select1.test");
-}
-
-TEST_CASE("SQLite select2", "[sqlitelogic]") {
-	execute_file("test/sqlite/select2.test");
-}
-
-TEST_CASE("SQLite select3", "[sqlitelogic]") {
-	execute_file("test/sqlite/select3.test");
-}
-
-TEST_CASE("SQLite select4", "[sqlitelogic][.]") {
-	execute_file("test/sqlite/select4.test");
 }
 
 struct AutoRegTests {
