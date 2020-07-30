@@ -5,12 +5,9 @@ set -x
 
 cd $(dirname $0)
 
-R -q -f dependencies.R
 R CMD build .
 R CMD INSTALL --build duckdb_*.tar.gz
-R CMD check --as-cran duckdb_*.tar.gz
-
-R -f ../../examples/R/dbi.R
-R -f ../../examples/R/dplyr.R
+R -q -e 'tic::script()'
+R -q -e 'tic::after_success()'
 
 R -q -e "tools::write_PACKAGES(dir = '.', type = 'mac.binary')"

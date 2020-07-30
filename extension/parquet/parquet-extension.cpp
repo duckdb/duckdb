@@ -374,7 +374,6 @@ private:
 		if (file_meta_data.__isset.encryption_algorithm) {
 			throw runtime_error("Encrypted Parquet files are not supported");
 		}
-
 		// check if we like this schema
 		if (file_meta_data.schema.size() < 2) {
 			throw runtime_error("Need at least one column in the file");

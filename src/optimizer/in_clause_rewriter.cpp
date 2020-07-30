@@ -98,7 +98,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	join->conditions.push_back(move(cond));
 	root = move(join);
 
-	// we replace the original subquery with a BoundColumnRefExpression refering to the mark column
+	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
 	unique_ptr<Expression> result =
 	    make_unique<BoundColumnRefExpression>("IN (...)", TypeId::BOOL, ColumnBinding(chunk_index, 0));
 	if (!is_regular_in) {

@@ -16,7 +16,7 @@
 #include "util/util.h"
 #include "util/logging.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class RE2;
 
@@ -103,6 +103,6 @@ class Prefilter {
   Prefilter& operator=(const Prefilter&) = delete;
 };
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_PREFILTER_H_

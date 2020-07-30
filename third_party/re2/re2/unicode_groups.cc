@@ -4,7 +4,7 @@
 
 #include "re2/unicode_groups.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 
 static const URange16 Ps_range16[] = {
@@ -6054,6 +6054,6 @@ const UGroup unicode_groups[] = {
 const int num_unicode_groups = 184;
 
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 

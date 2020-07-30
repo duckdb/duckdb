@@ -261,3 +261,20 @@ TEST_CASE("Test appender with quotes", "[appender]") {
 	result = con.Query("SELECT * FROM my_schema.my_table");
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 }
+
+TEST_CASE("Test appender with string lengths", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE my_table (s STRING)"));
+	{
+		Appender appender(con, "my_table");
+		appender.BeginRow();
+		appender.Append("asdf", 3);
+		appender.EndRow();
+		appender.Close();
+	}
+	result = con.Query("SELECT * FROM my_table");
+	REQUIRE(CHECK_COLUMN(result, 0, {"asd"}));
+}
