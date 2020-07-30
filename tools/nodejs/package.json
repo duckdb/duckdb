@@ -1,0 +1,10 @@
+{
+  "name": "duckdb",
+  "version": "0.2.0",
+  "description": "DuckDB node.js API",
+  "private": true,
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": "^1.7.2"
+  }
+}
