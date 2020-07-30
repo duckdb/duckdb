@@ -21,8 +21,11 @@ target_link_libraries(
   dsdgen
   imdb
   test_helpers
-  tpce
   sqlite_transfer)
+
+if (${BUILD_TPCE})
+  target_link_libraries(benchmark_runner tpce)
+endif()
 
 if(${BUILD_PARQUET_EXTENSION})
   target_link_libraries(benchmark_runner parquet_extension)

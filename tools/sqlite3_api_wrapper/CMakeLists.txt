@@ -1,5 +1,14 @@
 include_directories(include)
 
+
+if(${BUILD_ICU_EXTENSION})
+  add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
+endif()
+
+if(${BUILD_PARQUET_EXTENSION})
+  add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
+endif()
+
 add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 
 add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp printf.c)

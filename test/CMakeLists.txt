@@ -15,8 +15,12 @@ add_subdirectory(optimizer)
 
 if(NOT WIN32 AND NOT SUN)
   add_subdirectory(sqlite)
-  add_subdirectory(sqlsmith)
-  add_subdirectory(tpce)
+  if (${BUILD_SQLSMITH})
+    add_subdirectory(sqlsmith)
+  endif()
+  if (${BUILD_TPCE})
+    add_subdirectory(tpce)
+  endif()
   add_subdirectory(persistence)
   add_subdirectory(dbtransfer)
   add_subdirectory(nested)
@@ -30,9 +34,11 @@ if(NOT WIN32 AND NOT SUN)
                         dbgen
                         dsdgen
                         test_helpers
-                        tpce
                         sqlite_transfer
                         )
+  if (${BUILD_TPCE})
+    target_link_libraries(unittest tpce)
+  endif()
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
