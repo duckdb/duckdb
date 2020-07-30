@@ -359,7 +359,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		assert(flags & FileFlags::WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags & FileFlags::FILE_CREATE_NEW) {
 			creation_disposition = CREATE_ALWAYS;
