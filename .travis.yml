@@ -15,6 +15,7 @@ matrix:
         - cd tools/nodejs
         - ./configure
         - npm install
+        - node test.js
 #        - cibuildwheel --output-dir wheelhouse duckdb_tarball
 #        - cd ../..
 #        - |
@@ -33,6 +34,7 @@ matrix:
         - cd tools/nodejs
         - ./configure
         - npm install
+        - node test.js
 #        - cibuildwheel --output-dir wheelhouse duckdb_tarball
 #        - cd ../..
 #        - |
