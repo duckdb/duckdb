@@ -1,0 +1,315 @@
+# name: test/sql/update/test_update_many_updaters.test
+# description: Test update behavior with multiple updaters
+# group: [update]
+
+# this test contains four query connections (con1, con2, con3, con4)
+# and one updating connection (updater)
+# first create a table, filled with 3 values (1), (2), (3)
+statement ok con1
+CREATE TABLE test (a INTEGER);
+
+statement ok con1
+INSERT INTO test VALUES (1), (2), (3)
+
+# now we start updating specific values and reading different versions
+# con1 sees the initial state
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=4 WHERE a=1
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=5 WHERE a=2
+
+statement ok con3
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=6 WHERE a=3
+
+statement ok con4
+BEGIN TRANSACTION
+
+# now read the different states
+# con sees {1, 2, 3}
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+# con2 sees {2, 3, 4}
+query I con2
+SELECT * FROM test ORDER BY a
+----
+2
+3
+4
+
+# con3 sees {3, 4, 5}
+query I con3
+SELECT * FROM test ORDER BY a
+----
+3
+4
+5
+
+# con4 sees {4, 5, 6}
+query I con4
+SELECT * FROM test ORDER BY a
+----
+4
+5
+6
+
+# now verify that we get conflicts when we update values that have been updated AFTER we started
+statement error con1
+UPDATE test SET a=99 WHERE a=1
+
+statement error con2
+UPDATE test SET a=99 WHERE a=2
+
+statement error con3
+UPDATE test SET a=99 WHERE a=3
+
+# revert to previous state
+statement ok updater
+UPDATE test SET a=a-3
+
+# rollback all connections
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+statement ok con3
+ROLLBACK
+
+statement ok con4
+ROLLBACK
+
+# we repeat the previous process of updates
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=4 WHERE a=1
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=5 WHERE a=2
+
+statement ok con3
+BEGIN TRANSACTION
+
+statement ok updater
+UPDATE test SET a=6 WHERE a=3
+
+statement ok con4
+BEGIN TRANSACTION
+
+# now read the different states
+# con sees {1, 2, 3}
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+# con2 sees {2, 3, 4}
+query I con2
+SELECT * FROM test ORDER BY a
+----
+2
+3
+4
+
+# con3 sees {3, 4, 5}
+query I con3
+SELECT * FROM test ORDER BY a
+----
+3
+4
+5
+
+# con4 sees {4, 5, 6}
+query I con4
+SELECT * FROM test ORDER BY a
+----
+4
+5
+6
+
+# we now verify that we CAN update values that were committed BEFORE we started
+statement ok con2
+UPDATE test SET a=7 WHERE a=4
+
+statement ok con3
+UPDATE test SET a=8 WHERE a=5
+
+statement ok con4
+UPDATE test SET a=9 WHERE a=6
+
+# now read the different states again
+# con sees {1, 2, 3} still
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+# con2 sees {2, 3, 7}
+query I con2
+SELECT * FROM test ORDER BY a
+----
+2
+3
+7
+
+# con3 sees {3, 4, 8}
+query I con3
+SELECT * FROM test ORDER BY a
+----
+3
+4
+8
+
+# con4 sees {4, 5, 9}
+query I con4
+SELECT * FROM test ORDER BY a
+----
+4
+5
+9
+
+# updater still sees {4, 5, 6}
+query I updater
+SELECT * FROM test ORDER BY a
+----
+4
+5
+6
+
+# now we commit in phases
+# first we commit con4
+statement ok con4
+COMMIT
+
+# con, con2, con3 still see the same data, con4 sees the currently committed data
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+2
+3
+7
+
+query I con3
+SELECT * FROM test ORDER BY a
+----
+3
+4
+8
+
+query I con4
+SELECT * FROM test ORDER BY a
+----
+4
+5
+9
+
+# then we commit con2
+statement ok con2
+COMMIT
+
+# con, con3 still see the same data, con2 and con4 see the committed data
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+5
+7
+9
+
+query I con3
+SELECT * FROM test ORDER BY a
+----
+3
+4
+8
+
+query I con4
+SELECT * FROM test ORDER BY a
+----
+5
+7
+9
+
+# then we commit con3
+statement ok con3
+COMMIT
+
+# con still sees the same data, but the rest all see the committed data
+query I con1
+SELECT * FROM test ORDER BY a
+----
+1
+2
+3
+
+query I con2
+SELECT * FROM test ORDER BY a
+----
+7
+8
+9
+
+query I con3
+SELECT * FROM test ORDER BY a
+----
+7
+8
+9
+
+query I con4
+SELECT * FROM test ORDER BY a
+----
+7
+8
+9
+
+# now we commit con1, this should trigger a cleanup
+statement ok con1
+COMMIT
+
+# now con1 also sees the committed data
+query I con1
+SELECT * FROM test ORDER BY a
+----
+7
+8
+9
+
