@@ -135,7 +135,7 @@ TEST_CASE("Rollback delete", "[interquery]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 }
 
-static volatile std::atomic<int> finished_threads;
+static volatile std::atomic<int> delete_finished_threads;
 
 static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
@@ -163,8 +163,8 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 			count = new_count;
 		}
 	}
-	finished_threads++;
-	while (finished_threads != CONCURRENT_DELETE_THREAD_COUNT)
+	delete_finished_threads++;
+	while (delete_finished_threads != CONCURRENT_DELETE_THREAD_COUNT)
 		;
 	con.Query("COMMIT;");
 }
@@ -183,7 +183,7 @@ TEST_CASE("Concurrent delete", "[interquery][.]") {
 		}
 	}
 
-	finished_threads = 0;
+	delete_finished_threads = 0;
 
 	bool correct[CONCURRENT_DELETE_THREAD_COUNT];
 	thread threads[CONCURRENT_DELETE_THREAD_COUNT];

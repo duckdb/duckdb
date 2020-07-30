@@ -48,7 +48,7 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 	REQUIRE(count == CONCURRENT_APPEND_THREAD_COUNT * CONCURRENT_APPEND_INSERT_ELEMENTS);
 }
 
-static volatile std::atomic<int> finished_threads;
+static volatile std::atomic<int> append_finished_threads;
 
 static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 	correct[threadnr] = true;
@@ -68,8 +68,8 @@ static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 		}
 		count = new_count;
 	}
-	finished_threads++;
-	while (finished_threads != CONCURRENT_APPEND_THREAD_COUNT)
+	append_finished_threads++;
+	while (append_finished_threads != CONCURRENT_APPEND_THREAD_COUNT)
 		;
 	con.Query("COMMIT;");
 }
@@ -82,7 +82,7 @@ TEST_CASE("Concurrent append", "[interquery][.]") {
 	// initialize the database
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
 
-	finished_threads = 0;
+	append_finished_threads = 0;
 
 	bool correct[CONCURRENT_APPEND_THREAD_COUNT];
 	thread threads[CONCURRENT_APPEND_THREAD_COUNT];

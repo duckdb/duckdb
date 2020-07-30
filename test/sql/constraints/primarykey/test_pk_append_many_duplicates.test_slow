@@ -9,30 +9,34 @@ CREATE TABLE integers(i INTEGER PRIMARY KEY);
 
 loop val 0 100
 
-# this is a bit hacky: this query fails only if integers returns any results
-# because the sequence does not exist in the database
-# however, if the table returns no results the sequence lookup is never performed
-statement ok
-SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+0
 
 #then we insert $val
 statement ok
 INSERT INTO integers VALUES (${val});
 
-# now the query fails as the sequence lookup is performed
-statement error
-SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+1
 
 endloop
 
 loop val 0 100
 
-# another hack: use a complex expression to prevent index lookup
-statement error
-SELECT nextval(i::VARCHAR) FROM integers WHERE i+i = ${val}*2
+# hack: use a complex expression to prevent index lookup
+query I
+SELECT COUNT(*) FROM integers WHERE i+i = ${val}*2
+----
+1
 
-statement error
-SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${val}
+----
+1
 
 endloop
 
