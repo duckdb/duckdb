@@ -1,0 +1,36 @@
+# name: test/sql/transactions/test_index_pending_delete.test
+# description: Test index with pending deletes
+# group: [transactions]
+
+# we can create an index with pending deletes
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3)
+
+# delete a value
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DELETE FROM integers WHERE i=1
+
+# we can create an index with pending deletes
+statement ok con1
+CREATE INDEX i_index ON integers using art(i)
+
+# now we commit
+statement ok con2
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+0
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+0
+

@@ -14,7 +14,7 @@ namespace test_concurrent_delete {
 static constexpr int THREAD_COUNT = 10;
 static constexpr int INSERT_ELEMENTS = 100;
 
-TEST_CASE("Single thread delete", "[transactions]") {
+TEST_CASE("Single thread delete", "[interquery]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -43,7 +43,7 @@ TEST_CASE("Single thread delete", "[transactions]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS}));
 }
 
-TEST_CASE("Sequential delete", "[transactions]") {
+TEST_CASE("Sequential delete", "[interquery]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -98,7 +98,7 @@ TEST_CASE("Sequential delete", "[transactions]") {
 	REQUIRE(count == 0);
 }
 
-TEST_CASE("Rollback delete", "[transactions]") {
+TEST_CASE("Rollback delete", "[interquery]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -171,7 +171,7 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	con.Query("COMMIT;");
 }
 
-TEST_CASE("Concurrent delete", "[transactions][.]") {
+TEST_CASE("Concurrent delete", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);

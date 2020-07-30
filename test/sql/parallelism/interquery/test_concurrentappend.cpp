@@ -14,7 +14,7 @@ namespace test_concurrent_append {
 static constexpr int THREAD_COUNT = 100;
 static constexpr int INSERT_ELEMENTS = 1000;
 
-TEST_CASE("Sequential append", "[transactions][.]") {
+TEST_CASE("Sequential append", "[interquery][.]") {
 	unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -76,7 +76,7 @@ static void insert_random_elements(DuckDB *db, bool *correct, int threadnr) {
 	con.Query("COMMIT;");
 }
 
-TEST_CASE("Concurrent append", "[transactions][.]") {
+TEST_CASE("Concurrent append", "[interquery][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
