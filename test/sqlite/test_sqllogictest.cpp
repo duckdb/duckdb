@@ -541,6 +541,7 @@ static void execute_file(string script) {
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
 	int output_hash_mode = 0;
+	int output_result_mode = 0;
 	bool skip_index = false;
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
@@ -790,8 +791,38 @@ static void execute_file(string script) {
 				result->Print();
 				IFAIL();
 			}
-
 			duckdbConvertResult(*result, &azResult, &nResult);
+			if (output_result_mode) {
+				print_line_sep();
+				print_sql(sql_query);
+				print_line_sep();
+				// names
+				for(idx_t c = 0; c < result->column_count(); c++) {
+					if (c != 0) {
+						std::cerr << "\t";
+					}
+					std::cerr << result->names[c];
+				}
+				std::cerr << std::endl;
+				// types
+				for(idx_t c = 0; c < result->column_count(); c++) {
+					if (c != 0) {
+						std::cerr << "\t";
+					}
+					std::cerr << SQLTypeToString(result->sql_types[c]);
+				}
+				std::cerr << std::endl;
+				print_line_sep();
+				for(idx_t r = 0; r < result->collection.count; r++) {
+					for(idx_t c = 0; c < result->column_count(); c++) {
+						if (c != 0) {
+							std::cerr << "\t";
+						}
+						std::cerr << azResult[r * result->column_count() + c];
+					}
+					std::cerr << std::endl;
+				}
+			}
 
 			/* Do any required sorting of query results */
 			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
@@ -997,6 +1028,8 @@ static void execute_file(string script) {
 		} else if (strcmp(sScript.azToken[0], "mode") == 0) {
 			if (strcmp(sScript.azToken[1], "output_hash") == 0) {
 				output_hash_mode = 1;
+			} else if (strcmp(sScript.azToken[1], "output_result") == 0) {
+				output_result_mode = 1;
 			} else {
 				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
 				IFAIL();
