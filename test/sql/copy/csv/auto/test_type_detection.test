@@ -13,6 +13,11 @@ SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
 2	2	2.000000
 3	3	3.000000
 
+query TTT
+SELECT typeof(linenr), typeof(mixed_string), typeof(mixed_double) FROM test LIMIT 1;
+----
+INTEGER	VARCHAR	DOUBLE
+
 query ITR
 SELECT linenr, mixed_string, mixed_double FROM test WHERE linenr > 27000 LIMIT 3;
 ----
@@ -34,6 +39,12 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 345	TEST2	14:15:30	2002-02-02	2002-02-02 14:15:00
 346	TEST2	15:16:17	2004-12-13	2004-12-13 15:16:00
 
+
+query TTTTT
+SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
+----
+INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+
 statement ok
 DROP TABLE test;
 
@@ -47,6 +58,11 @@ SELECT a, b, t, tf, d, df FROM test ORDER BY a;
 123	TEST2	12:12:12	12:12:12	2000-01-01	2000-01-01
 345	TEST2	14:15:30	14:15:30	2002-02-02	2000-01-01 a
 346	TEST2	15:16:17	15:16:17 01	2004-12-13	2000-01-01
+
+query TTTTTT
+SELECT typeof(a), typeof(b), typeof(t), typeof(tf), typeof(d), typeof(df) FROM test LIMIT 1;
+----
+INTEGER	VARCHAR	TIME	VARCHAR	DATE	VARCHAR
 
 statement ok
 DROP TABLE test;

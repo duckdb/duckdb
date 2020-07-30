@@ -354,7 +354,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	// type candidates, ordered by descending specificity (~ from high to low)
 	vector<SQLType> type_candidates = {SQLType::VARCHAR, SQLType::TIMESTAMP, SQLType::DATE,
 	                                   SQLType::TIME,    SQLType::DOUBLE,    /*SQLType::FLOAT,*/ SQLType::BIGINT,
-	                                   SQLType::INTEGER, SQLType::SMALLINT,  /*SQLType::TINYINT,*/ SQLType::BOOLEAN,
+	                                   SQLType::INTEGER, /*SQLType::SMALLINT,*/  /*SQLType::TINYINT,*/ SQLType::BOOLEAN,
 	                                   SQLType::SQLNULL};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
