@@ -17,7 +17,9 @@ def generate_amalgamation(source_file, header_file):
             with open(dest, 'r') as f:
                 dest_text = f.read()
             if source_text == dest_text:
+                print("Skipping copy of " + src + ", identical copy already exists at " + dest)
                 return
+        print("Copying " + src + " to " + dest)
         shutil.copyfile(src, dest)
 
 
@@ -40,7 +42,7 @@ def generate_amalgamation(source_file, header_file):
     headers = ["parquet-extension.hpp"] + myglob("third_party/parquet", "*.h") + myglob("third_party", "thrift/*.h") + myglob("third_party", "thrift/**/*.h")  + ['protocol/TCompactProtocol.tcc'] + myglob("third_party/snappy", "*.h") + myglob("third_party/miniz", "*.hpp")
 
     def rewrite(file_in, file_out):
-        print(file_in)
+        # print(file_in)
         a_file = open(file_in, "r")
         out = open(file_out, "a")
 

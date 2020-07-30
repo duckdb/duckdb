@@ -126,7 +126,9 @@ def copy_if_different(src, dest):
         with open(dest, 'r') as f:
             dest_text = f.read()
         if source_text == dest_text:
+            print("Skipping copy of " + src + ", identical copy already exists at " + dest)
             return
+    print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
 def generate_amalgamation(source_file, header_file):
