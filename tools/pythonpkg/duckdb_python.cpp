@@ -166,16 +166,6 @@ struct PandasScanFunction : public TableFunction {
 		throw runtime_error("unsupported type for ValueIsNull");
 	}
 
-	template<>
-	bool ValueIsNull(float value) {
-		return !Value::FloatIsValid(value);
-	}
-
-	template<>
-	bool ValueIsNull(double value) {
-		return !Value::DoubleIsValid(value);
-	}
-
 	template <class T> static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
 		auto tgt_ptr = (T *)FlatVector::GetData(out);
@@ -280,6 +270,19 @@ struct PandasScanFunction : public TableFunction {
 		data.position += this_count;
 	}
 };
+
+template<> bool PandasScanFunction::ValueIsNull(float value);
+template<> bool PandasScanFunction::ValueIsNull(double value);
+
+template<>
+bool PandasScanFunction::ValueIsNull(float value) {
+	return !Value::FloatIsValid(value);
+}
+
+template<>
+bool PandasScanFunction::ValueIsNull(double value) {
+	return !Value::DoubleIsValid(value);
+}
 
 struct DuckDBPyResult {
 
