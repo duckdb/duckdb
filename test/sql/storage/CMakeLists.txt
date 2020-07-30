@@ -17,6 +17,7 @@ if(NOT WIN32 AND NOT SUN)
                     test_readonly.cpp
                     test_repeated_checkpoint.cpp
                     test_timestamp.cpp
+                    test_temporary.cpp
                     test_storage_tpch.cpp
                     test_storage_scan.cpp
                     test_database_size.cpp)
@@ -36,6 +37,7 @@ else()
                     test_storage_defaults.cpp
                     test_timestamp.cpp
                     test_store_alter.cpp
+                    test_temporary.cpp
                     test_storage_scan.cpp
                     test_views.cpp
                     test_readonly.cpp
