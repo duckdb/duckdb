@@ -8,7 +8,7 @@ cd $(dirname $0)
 R_VER=$(choco info r -r | grep -o "[0-9].[0-9].[0-9]")
 
 export "PATH=/c/Rtools40/usr/bin:$PATH"
-R=C:/Program\ Files/R/$R_VER/bin/R.exe
+R=C:/Program\ Files/R/R-$R_VER/bin/R.exe
 
 echo -e "options(Ncpus = 4, pkgType = 'binary', repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
 "${R}" -q -e 'if (!requireNamespace(\\\"remotes\\\")) install.packages(\\\"remotes\\\")'
