@@ -1,4 +1,5 @@
 add_subdirectory(capi)
+add_subdirectory(udf_function)
 
 if(NOT WIN32)
   add_library_unity(test_api
