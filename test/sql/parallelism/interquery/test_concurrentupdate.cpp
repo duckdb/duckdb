@@ -11,9 +11,9 @@ using namespace std;
 
 namespace test_concurrent_update {
 
-static constexpr int TRANSACTION_UPDATE_COUNT = 1000;
-static constexpr int TOTAL_ACCOUNTS = 20;
-static constexpr int MONEY_PER_ACCOUNT = 10;
+static constexpr int CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT = 1000;
+static constexpr int CONCURRENT_UPDATE_TOTAL_ACCOUNTS = 20;
+static constexpr int CONCURRENT_UPDATE_MONEY_PER_ACCOUNT = 10;
 
 TEST_CASE("Single thread update", "[interquery]") {
 	unique_ptr<MaterializedQueryResult> result;
@@ -23,7 +23,7 @@ TEST_CASE("Single thread update", "[interquery]") {
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
-	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
 			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
@@ -36,11 +36,11 @@ TEST_CASE("Single thread update", "[interquery]") {
 
 	// simple update, we should update INSERT_ELEMENTS elements
 	result = con.Query("UPDATE integers SET i=4 WHERE i=2");
-	REQUIRE(CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS}));
+	REQUIRE(CHECK_COLUMN(result, 0, {CONCURRENT_UPDATE_TOTAL_ACCOUNTS}));
 
 	// check updated sum
 	result = con.Query("SELECT SUM(i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {sum + 2 * TOTAL_ACCOUNTS}));
+	REQUIRE(CHECK_COLUMN(result, 0, {sum + 2 * CONCURRENT_UPDATE_TOTAL_ACCOUNTS}));
 }
 
 static volatile bool finished_updating = false;
@@ -50,7 +50,7 @@ static void read_total_balance(DuckDB *db, bool *read_correct) {
 	while (!finished_updating) {
 		// the total balance should remain constant regardless of updates
 		auto result = con.Query("SELECT SUM(money) FROM accounts");
-		if (!CHECK_COLUMN(result, 0, {TOTAL_ACCOUNTS * MONEY_PER_ACCOUNT})) {
+		if (!CHECK_COLUMN(result, 0, {CONCURRENT_UPDATE_TOTAL_ACCOUNTS * CONCURRENT_UPDATE_MONEY_PER_ACCOUNT})) {
 			*read_correct = false;
 		}
 	}
@@ -64,17 +64,17 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 	// fixed seed random numbers
 	mt19937 generator;
 	generator.seed(42);
-	uniform_int_distribution<int> account_distribution(0, TOTAL_ACCOUNTS - 1);
+	uniform_int_distribution<int> account_distribution(0, CONCURRENT_UPDATE_TOTAL_ACCOUNTS - 1);
 	auto random_account = bind(account_distribution, generator);
 
-	uniform_int_distribution<int> amount_distribution(0, MONEY_PER_ACCOUNT);
+	uniform_int_distribution<int> amount_distribution(0, CONCURRENT_UPDATE_MONEY_PER_ACCOUNT);
 	auto random_amount = bind(amount_distribution, generator);
 
 	finished_updating = false;
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
-	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 
 	bool read_correct;
@@ -82,7 +82,7 @@ TEST_CASE("Concurrent update", "[interquery][.]") {
 	thread read_thread(read_total_balance, &db, &read_correct);
 
 	// start vigorously updating balances in this thread
-	for (size_t i = 0; i < TRANSACTION_UPDATE_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT; i++) {
 		int from = random_account();
 		int to = random_account();
 		while (to == from) {
@@ -126,7 +126,7 @@ static std::atomic<size_t> finished_threads;
 static void write_random_numbers_to_account(DuckDB *db, bool *correct, size_t nr) {
 	correct[nr] = true;
 	Connection con(*db);
-	for (size_t i = 0; i < TRANSACTION_UPDATE_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TRANSACTION_UPDATE_COUNT; i++) {
 		// just make some changes to the total
 		// the total amount of money after the commit is the same
 		if (!con.Query("BEGIN TRANSACTION")->success) {
@@ -156,7 +156,7 @@ static void write_random_numbers_to_account(DuckDB *db, bool *correct, size_t nr
 		}
 	}
 	finished_threads++;
-	if (finished_threads == TOTAL_ACCOUNTS) {
+	if (finished_threads == CONCURRENT_UPDATE_TOTAL_ACCOUNTS) {
 		finished_updating = true;
 	}
 }
@@ -170,21 +170,21 @@ TEST_CASE("Multiple concurrent updaters", "[interquery][.]") {
 	finished_threads = 0;
 	// initialize the database
 	con.Query("CREATE TABLE accounts(id INTEGER, money INTEGER)");
-	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
-		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(MONEY_PER_ACCOUNT) + ");");
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
+		con.Query("INSERT INTO accounts VALUES (" + to_string(i) + ", " + to_string(CONCURRENT_UPDATE_MONEY_PER_ACCOUNT) + ");");
 	}
 
-	bool correct[TOTAL_ACCOUNTS];
+	bool correct[CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
 	bool read_correct;
-	std::thread write_threads[TOTAL_ACCOUNTS];
+	std::thread write_threads[CONCURRENT_UPDATE_TOTAL_ACCOUNTS];
 	// launch a thread for reading the table
 	thread read_thread(read_total_balance, &db, &read_correct);
 	// launch several threads for updating the table
-	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
 		write_threads[i] = thread(write_random_numbers_to_account, &db, correct, i);
 	}
 	read_thread.join();
-	for (size_t i = 0; i < TOTAL_ACCOUNTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_UPDATE_TOTAL_ACCOUNTS; i++) {
 		write_threads[i].join();
 		REQUIRE(correct[i]);
 	}

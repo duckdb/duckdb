@@ -17,12 +17,12 @@ struct ConcurrentData {
 	}
 };
 
-#define THREAD_COUNT 20
-#define INSERT_COUNT 100
+#define CONCURRENT_SEQUENCE_THREAD_COUNT 20
+#define CONCURRENT_SEQUENCE_INSERT_COUNT 100
 
 static void append_values_from_sequence(ConcurrentData *data) {
 	Connection con(data->db);
-	for (size_t i = 0; i < INSERT_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_INSERT_COUNT; i++) {
 		auto result = con.Query("SELECT nextval('seq')");
 		int64_t res = result->GetValue(0, 0).GetValue<int64_t>();
 		lock_guard<mutex> lock(data->lock);
@@ -34,14 +34,14 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	thread threads[THREAD_COUNT];
+	thread threads[CONCURRENT_SEQUENCE_THREAD_COUNT];
 	ConcurrentData data(db);
 	ConcurrentData seq_data(db);
 
 	// create a sequence
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	// fetch a number of values sequentially
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		append_values_from_sequence(&seq_data);
 	}
 
@@ -49,10 +49,10 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 	// now launch threads that all use the sequence in parallel
 	// each appends the values to a vector "results"
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i] = thread(append_values_from_sequence, &data);
 	}
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 	// now we sort the output data
@@ -66,16 +66,16 @@ TEST_CASE("Test Concurrent Usage of Sequences", "[sequence][.]") {
 	// now do the same but for a cyclic sequence
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 10 CYCLE;"));
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		append_values_from_sequence(&seq_data);
 	}
 
 	REQUIRE_NO_FAIL(con.Query("DROP SEQUENCE seq;"));
 	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq MAXVALUE 10 CYCLE;"));
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i] = thread(append_values_from_sequence, &data);
 	}
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_SEQUENCE_THREAD_COUNT; i++) {
 		threads[i].join();
 	}
 	// now we sort the output data

@@ -3,6 +3,7 @@ add_library_unity(test_sql_interquery_parallelism
                   test_concurrentappend.cpp
                   test_concurrentdelete.cpp
                   test_concurrent_dependencies.cpp
+                  test_concurrent_index.cpp
                   test_concurrentupdate.cpp
                   test_concurrent_sequence.cpp)
 set(ALL_OBJECT_FILES

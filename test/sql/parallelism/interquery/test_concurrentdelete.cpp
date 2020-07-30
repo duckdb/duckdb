@@ -9,10 +9,8 @@
 using namespace duckdb;
 using namespace std;
 
-namespace test_concurrent_delete {
-
-static constexpr int THREAD_COUNT = 10;
-static constexpr int INSERT_ELEMENTS = 100;
+static constexpr int CONCURRENT_DELETE_THREAD_COUNT = 10;
+static constexpr int CONCURRENT_DELETE_INSERT_ELEMENTS = 100;
 
 TEST_CASE("Single thread delete", "[interquery]") {
 	unique_ptr<QueryResult> result;
@@ -23,7 +21,7 @@ TEST_CASE("Single thread delete", "[interquery]") {
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
-	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
 			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
@@ -34,13 +32,13 @@ TEST_CASE("Single thread delete", "[interquery]") {
 	result = con.Query("SELECT SUM(i) FROM integers");
 	REQUIRE(CHECK_COLUMN(result, 0, {sum}));
 
-	// simple delete, we should delete INSERT_ELEMENTS elements
+	// simple delete, we should delete CONCURRENT_DELETE_INSERT_ELEMENTS elements
 	result = con.Query("DELETE FROM integers WHERE i=2");
-	REQUIRE(CHECK_COLUMN(result, 0, {INSERT_ELEMENTS}));
+	REQUIRE(CHECK_COLUMN(result, 0, {CONCURRENT_DELETE_INSERT_ELEMENTS}));
 
 	// check sum again
 	result = con.Query("SELECT SUM(i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS}));
+	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * CONCURRENT_DELETE_INSERT_ELEMENTS}));
 }
 
 TEST_CASE("Sequential delete", "[interquery]") {
@@ -54,19 +52,19 @@ TEST_CASE("Sequential delete", "[interquery]") {
 	con.Query("CREATE TABLE integers(i INTEGER);");
 
 	int sum = 0;
-	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
 			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
 		}
 	}
 
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
 		connections.push_back(make_unique<Connection>(db));
 		connections[i]->Query("BEGIN TRANSACTION;");
 	}
 
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
 		// check the current count
 		result = connections[i]->Query("SELECT SUM(i) FROM integers");
 		REQUIRE_NO_FAIL(*result);
@@ -78,7 +76,7 @@ TEST_CASE("Sequential delete", "[interquery]") {
 		result = connections[i]->Query("SELECT SUM(i) FROM integers");
 		REQUIRE_NO_FAIL(*result);
 		count = result->collection.chunks[0]->GetValue(0, 0);
-		REQUIRE(count == sum - (i + 1) * INSERT_ELEMENTS);
+		REQUIRE(count == sum - (i + 1) * CONCURRENT_DELETE_INSERT_ELEMENTS);
 	}
 	// check the count on the original connection
 	result = con.Query("SELECT SUM(i) FROM integers");
@@ -87,7 +85,7 @@ TEST_CASE("Sequential delete", "[interquery]") {
 	REQUIRE(count == sum);
 
 	// commit everything
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
 		connections[i]->Query("COMMIT;");
 	}
 
@@ -107,7 +105,7 @@ TEST_CASE("Rollback delete", "[interquery]") {
 	// initialize the database
 	con.Query("CREATE TABLE integers(i INTEGER);");
 	int sum = 0;
-	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
 		for (size_t j = 0; j < 10; j++) {
 			con.Query("INSERT INTO integers VALUES (" + to_string(j + 1) + ");");
 			sum += j + 1;
@@ -127,7 +125,7 @@ TEST_CASE("Rollback delete", "[interquery]") {
 
 	// check sum again
 	result = con.Query("SELECT SUM(i) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * INSERT_ELEMENTS}));
+	REQUIRE(CHECK_COLUMN(result, 0, {sum - 2 * CONCURRENT_DELETE_INSERT_ELEMENTS}));
 
 	// rollback transaction
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
@@ -148,9 +146,9 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 	Value count = result->collection.chunks[0]->GetValue(0, 0);
 	auto start_count = count.GetValue<int64_t>();
 
-	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
 		// count should decrease by one for every delete we do
-		auto element = INSERT_ELEMENTS * threadnr + i;
+		auto element = CONCURRENT_DELETE_INSERT_ELEMENTS * threadnr + i;
 		if (!con.Query("DELETE FROM integers WHERE i=" + to_string(element))->success) {
 			correct[threadnr] = false;
 		}
@@ -166,7 +164,7 @@ static void delete_elements(DuckDB *db, bool *correct, size_t threadnr) {
 		}
 	}
 	finished_threads++;
-	while (finished_threads != THREAD_COUNT)
+	while (finished_threads != CONCURRENT_DELETE_THREAD_COUNT)
 		;
 	con.Query("COMMIT;");
 }
@@ -178,22 +176,22 @@ TEST_CASE("Concurrent delete", "[interquery][.]") {
 
 	// initialize the database
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER);"));
-	for (size_t i = 0; i < INSERT_ELEMENTS; i++) {
-		for (size_t j = 0; j < THREAD_COUNT; j++) {
-			auto element = INSERT_ELEMENTS * j + i;
+	for (size_t i = 0; i < CONCURRENT_DELETE_INSERT_ELEMENTS; i++) {
+		for (size_t j = 0; j < CONCURRENT_DELETE_THREAD_COUNT; j++) {
+			auto element = CONCURRENT_DELETE_INSERT_ELEMENTS * j + i;
 			con.Query("INSERT INTO integers VALUES (" + to_string(element) + ");");
 		}
 	}
 
 	finished_threads = 0;
 
-	bool correct[THREAD_COUNT];
-	thread threads[THREAD_COUNT];
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	bool correct[CONCURRENT_DELETE_THREAD_COUNT];
+	thread threads[CONCURRENT_DELETE_THREAD_COUNT];
+	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
 		threads[i] = thread(delete_elements, &db, correct, i);
 	}
 
-	for (size_t i = 0; i < THREAD_COUNT; i++) {
+	for (size_t i = 0; i < CONCURRENT_DELETE_THREAD_COUNT; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
@@ -205,4 +203,3 @@ TEST_CASE("Concurrent delete", "[interquery][.]") {
 	REQUIRE(count == 0);
 }
 
-} // namespace test_concurrent_delete

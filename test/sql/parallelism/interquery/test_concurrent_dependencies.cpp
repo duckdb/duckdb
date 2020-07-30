@@ -8,8 +8,8 @@
 using namespace duckdb;
 using namespace std;
 
-#define REPETITIONS 100
-#define SEQTHREADS 10
+#define CONCURRENT_DEPENDENCIES_REPETITIONS 100
+#define CONCURRENT_DEPENDENCIES_THREAD_COUNT 10
 volatile bool finished = false;
 
 static void RunQueryUntilSuccess(Connection &con, string query) {
@@ -44,7 +44,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 	Connection con(*db);
 	unique_ptr<QueryResult> result;
 
-	for (int i = 0; i < REPETITIONS; i++) {
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_REPETITIONS; i++) {
 		// printf("[PREPARE] Prepare statement\n");
 		RunQueryUntilSuccess(con, "PREPARE s1 AS SELECT SUM(i) FROM integers");
 		// printf("[PREPARE] Query prepare\n");
@@ -70,11 +70,11 @@ TEST_CASE("Test parallel dependencies in multiple connections", "[catalog][.]") 
 	// hence when the CASCADE drop is executed the prepared statement also needs to be dropped
 
 	thread table_thread = thread(create_drop_table, &db);
-	thread seq_threads[SEQTHREADS];
-	for (int i = 0; i < SEQTHREADS; i++) {
+	thread seq_threads[CONCURRENT_DEPENDENCIES_THREAD_COUNT];
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_THREAD_COUNT; i++) {
 		seq_threads[i] = thread(create_use_prepared_statement, &db);
 	}
-	for (int i = 0; i < SEQTHREADS; i++) {
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_THREAD_COUNT; i++) {
 		seq_threads[i].join();
 	}
 	finished = true;
@@ -101,7 +101,7 @@ static void create_use_table_view(DuckDB *db, int threadnr) {
 	string tname = "integers" + to_string(threadnr);
 	string vname = "v" + to_string(threadnr);
 
-	for (int i = 0; i < REPETITIONS; i++) {
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_REPETITIONS; i++) {
 		RunQueryUntilSuccess(con, "CREATE TABLE s1." + tname + "(i INTEGER)");
 		con.Query("INSERT INTO s1." + tname + " VALUES (1), (2), (3), (4), (5)");
 		RunQueryUntilSuccess(con, "CREATE VIEW s1." + vname + " AS SELECT 42");
@@ -130,11 +130,11 @@ TEST_CASE("Test parallel dependencies with schemas and tables", "[catalog][.]") 
 	// in other threads, we create tables and views and query those tables and views
 
 	thread table_thread = thread(create_drop_schema, &db);
-	thread seq_threads[SEQTHREADS];
-	for (int i = 0; i < SEQTHREADS; i++) {
+	thread seq_threads[CONCURRENT_DEPENDENCIES_THREAD_COUNT];
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_THREAD_COUNT; i++) {
 		seq_threads[i] = thread(create_use_table_view, &db, i);
 	}
-	for (int i = 0; i < SEQTHREADS; i++) {
+	for (int i = 0; i < CONCURRENT_DEPENDENCIES_THREAD_COUNT; i++) {
 		seq_threads[i].join();
 	}
 	finished = true;
