@@ -10,7 +10,7 @@
                 "<!@(node -p \"require('node-addon-api').include\")"
             ],
             "cflags_cc": [
-                "-frrti"
+                "-frtti"
             ],
             "cflags_cc!": [
                 "-fno-exceptions",
