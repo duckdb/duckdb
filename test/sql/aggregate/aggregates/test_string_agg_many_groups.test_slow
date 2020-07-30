@@ -15,7 +15,7 @@ SELECT g, STRING_AGG(x, ',') FROM strings GROUP BY g ORDER BY g
 query IT
 SELECT 1, STRING_AGG(x, ',') FROM strings GROUP BY 1 ORDER BY 1
 ----
-2 values hashing to d2ca0ce547c6a5cdfd774bad1a13cbe6
+2 values hashing to 3bd0d16b476d2ffe18a77ebe1098b89c
 
 statement error
 SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)
