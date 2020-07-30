@@ -1,6 +1,6 @@
-# name: test/sql/index/art/test_art_index_prefix.test
+# name: test/sql/index/artf/test_art_index_prefix.test
 # description: Test ART index with prefixes
-# group: [art]
+# group: [artf]
 
 statement ok
 CREATE TABLE integers(i BIGINT)
@@ -8,7 +8,10 @@ CREATE TABLE integers(i BIGINT)
 statement ok
 CREATE INDEX i_index ON integers using art(i)
 
-# insert a bunch of values with different prefixes
+# a bunch of values with different prefixes
+statement ok
+INSERT INTO integers VALUES (9312908412824241)
+
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
 ----
@@ -33,6 +36,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 0
+
+statement ok
+INSERT INTO integers VALUES (-2092042498432234)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -63,6 +69,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 1
+
+statement ok
+INSERT INTO integers VALUES (1)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -98,6 +107,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 1
+
+statement ok
+INSERT INTO integers VALUES (-100)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -138,6 +150,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 2
+
+statement ok
+INSERT INTO integers VALUES (0)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -183,6 +198,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 2
+
+statement ok
+INSERT INTO integers VALUES (-598538523852390852)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -233,6 +251,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 3
+
+statement ok
+INSERT INTO integers VALUES (4298421)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -288,6 +309,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 3
+
+statement ok
+INSERT INTO integers VALUES (-498249)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -348,6 +372,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 4
+
+statement ok
+INSERT INTO integers VALUES (9312908412824240)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -413,6 +440,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 4
+
+statement ok
+INSERT INTO integers VALUES (-2092042498432235)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -483,6 +513,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 5
+
+statement ok
+INSERT INTO integers VALUES (2)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -558,6 +591,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 5
+
+statement ok
+INSERT INTO integers VALUES (-101)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -638,6 +674,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 6
+
+statement ok
+INSERT INTO integers VALUES (-598538523852390853)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -723,6 +762,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 7
+
+statement ok
+INSERT INTO integers VALUES (4298422)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
@@ -813,6 +855,9 @@ query I
 SELECT COUNT(*) FROM integers WHERE i < 0
 ----
 7
+
+statement ok
+INSERT INTO integers VALUES (-498261)
 
 query I
 SELECT COUNT(*) FROM integers WHERE i = 9312908412824241
