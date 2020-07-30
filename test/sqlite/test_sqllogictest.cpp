@@ -423,7 +423,7 @@ static void print_sql(string sql) {
 	std::cerr << sql << std::endl;
 }
 
-static void print_error_header(const char *description, const char *file_name, int nline) {
+static void print_error_header(const char *description, string file_name, int nline) {
 	print_line_sep();
 	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	std::cerr << termcolor::bold << "(" << file_name << ":" << nline << ")!" << termcolor::reset << std::endl;
@@ -533,6 +533,53 @@ static void query_break(int line) {
 	(void) line;
 }
 
+struct Statement {
+
+	int query_line;
+	string sql_query;
+	bool expect_ok;
+	Connection *connection;
+	string file_name;
+
+	void Execute();
+	void Execute(string loop_iterator_name, int idx) {
+		// store the original query
+		auto original_query = sql_query;
+		// perform the string replacement
+		sql_query = StringUtil::Replace(sql_query, "${" + loop_iterator_name + "}", to_string(idx));
+		// execute the iterated statement
+		Execute();
+		// now restore the original query
+		sql_query = original_query;
+	}
+};
+
+void Statement::Execute() {
+	query_break(query_line);
+	
+	auto result = connection->Query(sql_query);
+	bool error = !result->success;
+	
+
+	/* Check to see if we are expecting success or failure */
+	if (!expect_ok) {
+		error = !error;
+	}
+
+	/* Report an error if the results do not match expectation */
+	if (error) {
+		print_error_header(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", file_name, query_line);
+		print_line_sep();
+		print_sql(sql_query);
+		print_line_sep();
+		if (result) {
+			result->Print();
+		}
+		FAIL();
+	}
+	REQUIRE(!error);
+}
+
 static void execute_file(string script) {
 	int haltOnError = 0;                        /* Stop on first error if true */
 	int enableTrace = 0;                        /* Trace SQL statements if true */
@@ -556,6 +603,11 @@ static void execute_file(string script) {
 	int output_hash_mode = 0;
 	int output_result_mode = 0;
 	bool skip_index = false;
+	bool in_loop = false;
+	string loop_iterator_name;
+	int loop_start;
+	int loop_end;
+	vector<unique_ptr<Statement>> loop_statements;
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
 		skip_index = true;
@@ -678,14 +730,14 @@ static void execute_file(string script) {
 
 		/* Figure out the record type and do appropriate processing */
 		if (strcmp(sScript.azToken[0], "statement") == 0) {
-			int k = 0;
-			int bExpectOk = 0;
-			int bExpectError = 0;
-
+			auto command = make_unique<Statement>();
+			
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
 			** of zScript - we are guaranteed to have enough space there. */
-			int query_line = sScript.nLine;
+			command->file_name = zScriptFile;
+			command->query_line = sScript.nLine;
+			int k = 0;
 			while (nextLine(&sScript) && sScript.zLine[0]) {
 				if (k > 0)
 					zScript[k++] = '\n';
@@ -695,58 +747,46 @@ static void execute_file(string script) {
 			zScript[k] = 0;
 
 			// perform any renames in zScript
-			string sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 			
-			bExpectOk = strcmp(sScript.azToken[1], "ok") == 0;
-			bExpectError = strcmp(sScript.azToken[1], "error") == 0;
-
-			/* Run the statement.  Remember the results
-			** If we're expecting an error, pass true to suppress
-			** printing of any errors.
-			*/
-			if (enableTrace)
-				printf("%s;\n", sql_query.c_str());
-			query_break(query_line);
-
-			unique_ptr<QueryResult> result;
-			Connection *connection = &con;
-			if (strlen(sScript.azToken[2]) > 0) {
-				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+			if (skip_index && strncasecmp(command->sql_query.c_str(), "CREATE INDEX", 12) == 0) {
+				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
+				continue;
 			}
-			if (skip_index && strncasecmp(sql_query.c_str(), "CREATE INDEX", 12) == 0) {
-				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", sql_query.c_str());
-				rc = 0;
-			} else {
-				result = connection->Query(sql_query);
-				rc = result->success ? 0 : 1;
-			}
-			nCmd++;
-
-			/* Check to see if we are expecting success or failure */
-			if (bExpectOk) {
-				/* do nothing if we expect success */
-			} else if (bExpectError) {
-				/* Invert the result if we expect failure */
-				rc = !rc;
+			// parse 
+			if (strcmp(sScript.azToken[1], "ok") == 0) {
+				command->expect_ok = true;
+			} else if (strcmp(sScript.azToken[1], "error") == 0) {
+				command->expect_ok = false;
 			} else {
 				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
 				        sScript.startLine);
 				IFAIL();
 			}
-
-			/* Report an error if the results do not match expectation */
-			if (rc) {
-				print_error_header(bExpectError ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", zScriptFile, query_line);
-				print_line_sep();
-				print_sql(zScript);
-				print_line_sep();
-				if (result) {
-					result->Print();
-				}
-				IFAIL();
+			// parse the connection to use
+			Connection *connection = &con;
+			if (strlen(sScript.azToken[2]) > 0) {
+				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
 			}
-			REQUIRE(!rc);
+
+			/* Run the statement.  Remember the results
+			** If we're expecting an error, pass true to suppress
+			** printing of any errors.
+			*/
+			command->connection = connection;
+			if (in_loop) {
+				loop_statements.push_back(move(command));
+			} else {
+				command->Execute();
+			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
+			if (in_loop) {
+				fprintf(stderr,
+						"%s:%d: Test error: only statement ok/statement error can occur in a loop\n",
+						zScriptFile, sScript.startLine);
+				FAIL();
+			}
+
 			int k = 0;
 			int c;
 			enum class SortStyle : uint8_t {
@@ -1068,6 +1108,36 @@ static void execute_file(string script) {
 				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
 				IFAIL();
 			}
+		} else if (strcmp(sScript.azToken[0], "loop") == 0) {
+			if (in_loop) {
+				fprintf(stderr, "%s:%d: Test error: nested loops not supported!\n", zScriptFile, sScript.startLine);
+				IFAIL();
+			}
+			in_loop = true;
+			if (strlen(sScript.azToken[1]) == 0 || strlen(sScript.azToken[2]) == 0 || strlen(sScript.azToken[3]) == 0) {
+				fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n", zScriptFile, sScript.startLine);
+				IFAIL();
+			}
+			// parse the loop parameters
+			loop_iterator_name = sScript.azToken[1];
+			loop_start = std::stoi(sScript.azToken[2]);
+			loop_end = std::stoi(sScript.azToken[3]);
+		} else if (strcmp(sScript.azToken[0], "endloop") == 0) {
+			if (!in_loop) {
+				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
+				IFAIL();
+			}
+			if (loop_statements.size() == 0) {
+				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
+				IFAIL();
+			}
+			for(int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+				for(auto &statement : loop_statements) {
+					statement->Execute(loop_iterator_name, loop_idx);
+				}
+			}
+			loop_statements.clear();
+			in_loop = false;
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);

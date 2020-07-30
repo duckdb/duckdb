@@ -1,0 +1,49 @@
+# name: test/sql/constraints/primarykey/test_pk_append_many_duplicates.test_slow
+# description: Test appending the same value many times to a primary key column
+# group: [primarykey]
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY);
+
+# insert a bunch of values into the index and query the index
+
+loop val 0 100
+
+# this is a bit hacky: this query fails only if integers returns any results
+# because the sequence does not exist in the database
+# however, if the table returns no results the sequence lookup is never performed
+statement ok
+SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+
+#then we insert $val
+statement ok
+INSERT INTO integers VALUES (${val});
+
+# now the query fails as the sequence lookup is performed
+statement error
+SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+
+endloop
+
+loop val 0 100
+
+# another hack: use a complex expression to prevent index lookup
+statement error
+SELECT nextval(i::VARCHAR) FROM integers WHERE i+i = ${val}*2
+
+statement error
+SELECT nextval(i::VARCHAR) FROM integers WHERE i = ${val}
+
+endloop
+
+# now insert the same values: this should fail this time
+loop it 0 10
+
+statement error
+INSERT INTO integers VALUES ($val)
+
+endloop
+
+# now test that the counts are correct 
+statement ok
+SELECT COUNT(*), COUNT(DISTINCT i) FROM integers
