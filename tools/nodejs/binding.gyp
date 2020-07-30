@@ -9,6 +9,9 @@
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")"
             ],
+            "cflags_cc": [
+                "-frrti"
+            ],
             "cflags_cc!": [
                 "-fno-exceptions",
                 "-fno-rrti"
