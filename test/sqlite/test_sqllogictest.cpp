@@ -667,7 +667,7 @@ void Query::Execute() {
 
 		if (row_wise) {
 			int current_row = 0;
-			for (int i = 0; i < nResult && i < values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
 				// split based on tab character
 				auto splits = StringUtil::Split(values[i], "\t");
 				if (splits.size() != expected_column_count) {
@@ -692,7 +692,7 @@ void Query::Execute() {
 			}
 		} else {
 			int current_row = 0, current_column = 0;
-			for (int i = 0; i < nResult && i < values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
 				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], file_name, query_line, sql_query, current_row, current_column, values, expected_column_count, row_wise);
 				if (!success) {
 					FAIL();
@@ -701,7 +701,7 @@ void Query::Execute() {
 				REQUIRE(success);
 
 				current_column++;
-				if (current_column == expected_column_count) {
+				if (current_column == (int) expected_column_count) {
 					current_row++;
 					current_column = 0;
 				}
