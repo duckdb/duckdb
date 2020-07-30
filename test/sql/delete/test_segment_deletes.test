@@ -1,0 +1,179 @@
+# name: test/sql/delete/test_segment_deletes.test
+# description: Test deletions
+# group: [delete]
+
+statement ok con1
+CREATE TABLE a(i INTEGER);
+
+# insert the values [0, 1, 2, .. 1022, 1023] repeatedly
+# however, make sure the order that we insert them is 
+loop i 0 20
+
+statement ok con1
+INSERT INTO a SELECT * FROM range(0, 1024, 1);
+
+endloop
+
+# verify the count
+
+query I con1
+SELECT COUNT(*) FROM a
+----
+20480
+
+# we test the values 0, 1, 1022 and 1023
+# for every tested value, delete it and then rollback
+
+# value = 0
+statement ok con1
+BEGIN TRANSACTION;
+DELETE FROM a WHERE i=0;
+
+# verify the deleted count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20460
+
+statement ok con1
+ROLLBACK
+
+# verify the initial count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20480
+
+# value = 1
+statement ok con1
+BEGIN TRANSACTION;
+DELETE FROM a WHERE i=1;
+
+# verify the deleted count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20460
+
+statement ok con1
+ROLLBACK
+
+# verify the initial count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20480
+
+# value = 1022
+statement ok con1
+BEGIN TRANSACTION;
+DELETE FROM a WHERE i=1022;
+
+# verify the deleted count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20460
+
+statement ok con1
+ROLLBACK
+
+# verify the initial count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20480
+
+# value = 1023
+statement ok con1
+BEGIN TRANSACTION;
+DELETE FROM a WHERE i=1023;
+
+# verify the deleted count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20460
+
+statement ok con1
+ROLLBACK
+
+# verify the initial count
+query I con1
+SELECT COUNT(*) FROM a
+----
+20480
+
+# now, for every tested value, delete it in a separate connection and verify the count
+# con2 -> 0
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con2
+DELETE FROM a WHERE i=0;
+
+query I con2
+SELECT COUNT(*) FROM a;
+----
+20460
+
+# con3 -> 1
+statement ok con3
+BEGIN TRANSACTION;
+
+statement ok con3
+DELETE FROM a WHERE i=1;
+
+query I con3
+SELECT COUNT(*) FROM a;
+----
+20460
+
+# con4 -> 1022
+statement ok con4
+BEGIN TRANSACTION;
+
+statement ok con4
+DELETE FROM a WHERE i=1022;
+
+query I con4
+SELECT COUNT(*) FROM a;
+----
+20460
+
+# con5 -> 1023
+statement ok con5
+BEGIN TRANSACTION;
+
+statement ok con5
+DELETE FROM a WHERE i=1023;
+
+query I con5
+SELECT COUNT(*) FROM a;
+----
+20460
+
+# con1 still has the original count
+query I con1
+SELECT COUNT(*) FROM a;
+----
+20480
+
+# until we update the other transactions
+statement ok con2
+COMMIT
+
+statement ok con3
+COMMIT
+
+statement ok con4
+COMMIT
+
+statement ok con5
+COMMIT
+
+# now the count is updated
+query I con1
+SELECT COUNT(*) FROM a;
+----
+20400
