@@ -21,11 +21,11 @@ ALTER TABLE test RENAME COLUMN i TO k
 statement error con1
 SELECT i FROM test
 
-statement ok
+statement ok con1
 SELECT k FROM test
 
 # second transaction should still consider old name
-statement ok
+statement ok con2
 SELECT i FROM test
 
 statement error con2
@@ -36,7 +36,7 @@ statement ok con1
 COMMIT
 
 # second transaction should still see old name
-statement ok
+statement ok con2
 SELECT i FROM test
 
 statement error con2

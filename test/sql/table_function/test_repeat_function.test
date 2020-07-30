@@ -31,6 +31,13 @@ SELECT * FROM repeat('thisisalongstring', 2)
 thisisalongstring
 thisisalongstring
 
+# blob
+query I
+SELECT * FROM repeat(blob 'hello', 2)
+----
+\x68656C6C6F
+\x68656C6C6F
+
 # many values
 query I
 SELECT * FROM repeat(1, 10000)

@@ -30,8 +30,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	// evalate the input parameters to the function
 	for (auto &child : fexpr->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
-		auto expr = binder.Bind(child);
+		SQLType sql_type;
+		auto expr = binder.Bind(child, &sql_type);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
+		constant.SetSQLType(sql_type);
 		result->parameters.push_back(constant);
 	}
 	// perform the binding

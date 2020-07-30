@@ -27,6 +27,7 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	sql_type = SQLType::VARCHAR;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:

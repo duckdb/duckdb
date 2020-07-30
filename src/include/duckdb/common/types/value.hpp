@@ -130,6 +130,9 @@ public:
 	SQLType GetSQLType() const {
 		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
 	}
+	void SetSQLType(SQLType sql_type) {
+		this->sql_type = sql_type;
+	}
 
 	//! The value of the object, if it is of a constant size Type
 	union Val {
