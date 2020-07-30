@@ -36,7 +36,9 @@ public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
-	unique_ptr<BufferedFileWriter> record_writer;
+	BufferedFileWriter *record_writer = nullptr;
+	string con_name;
+	unique_ptr<BufferedFileWriter> owned_record_writer;
 
 public:
 	//! Returns query profiling information for the current query
@@ -53,6 +55,7 @@ public:
 	void SetWarningCallback(warning_callback);
 
 	void Record(string file, string test_name = "", vector<string> extensions = vector<string>());
+	void Record(Connection &other, string con_name);
 	void AddComment(string comment);
 	//! Enable aggressive verification/testing of queries, should only be used in testing
 	void EnableQueryVerification();

@@ -38,6 +38,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "test_helpers.hpp"
 
 #include <algorithm>
@@ -516,6 +517,18 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	return true;
 }
 
+static Connection* GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map, string con_name) {
+	auto entry = named_connection_map.find(con_name);
+	if (entry == named_connection_map.end()) {
+		// not found: create a new connection
+		auto con = make_unique<Connection>(db);
+		auto res = con.get();
+		named_connection_map[con_name] = move(con);
+		return res;
+	}
+	return entry->second.get();
+}
+
 static void query_break(int line) {
 	(void) line;
 }
@@ -550,6 +563,7 @@ static void execute_file(string script) {
 
 	DuckDB db;
 	Connection con(db);
+	unordered_map<string, unique_ptr<Connection>> named_connection_map;
 
 	/*
 	** Read the entire script file contents into memory
@@ -695,11 +709,15 @@ static void execute_file(string script) {
 			query_break(query_line);
 
 			unique_ptr<QueryResult> result;
+			Connection *connection = &con;
+			if (strlen(sScript.azToken[2]) > 0) {
+				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+			}
 			if (skip_index && strncasecmp(sql_query.c_str(), "CREATE INDEX", 12) == 0) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", sql_query.c_str());
 				rc = 0;
 			} else {
-				result = con.Query(sql_query);
+				result = connection->Query(sql_query);
 				rc = result->success ? 0 : 1;
 			}
 			nCmd++;
@@ -731,6 +749,12 @@ static void execute_file(string script) {
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
 			int k = 0;
 			int c;
+			enum class SortStyle : uint8_t {
+				NO_SORT,
+				ROW_SORT,
+				VALUE_SORT
+			};
+			SortStyle sort_style;
 
 			/* Verify that the type string consists of one or more
 			 *characters
@@ -772,13 +796,27 @@ static void execute_file(string script) {
 			// perform any renames in zScript
 			string sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 
+			// figure out the sort style/connection style
+			Connection *connection = &con;
+			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
+				/* Do no sorting */
+				sort_style = SortStyle::NO_SORT;
+			} else if (strcmp(sScript.azToken[2], "rowsort") == 0) {
+				/* Row-oriented sorting */
+				sort_style = SortStyle::ROW_SORT;
+			} else if (strcmp(sScript.azToken[2], "valuesort") == 0) {
+				/* Sort all values independently */
+				sort_style = SortStyle::VALUE_SORT;
+			} else {
+				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+			}
 			/* Run the query */
 			nResult = 0;
 			azResult = 0;
 			if (enableTrace)
 				printf("%s;\n", sql_query.c_str());
 			query_break(query_line);
-			auto result = con.Query(sql_query);
+			auto result = connection->Query(sql_query);
 			rc = result->success ? 0 : 1;
 			nCmd++;
 			if (rc) {
@@ -825,20 +863,16 @@ static void execute_file(string script) {
 			}
 
 			/* Do any required sorting of query results */
-			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
+			if (sort_style == SortStyle::NO_SORT) {
 				/* Do no sorting */
-			} else if (strcmp(sScript.azToken[2], "rowsort") == 0) {
+			} else if (sort_style == SortStyle::ROW_SORT) {
 				/* Row-oriented sorting */
 				nColumn = (int)strlen(sScript.azToken[1]);
 				qsort(azResult, nResult / nColumn, sizeof(azResult[0]) * nColumn, rowCompare);
-			} else if (strcmp(sScript.azToken[2], "valuesort") == 0) {
+			} else if (sort_style == SortStyle::VALUE_SORT) {
 				/* Sort all values independently */
 				nColumn = 1;
 				qsort(azResult, nResult, sizeof(azResult[0]), rowCompare);
-			} else {
-				fprintf(stderr, "%s:%d: unknown sort method: '%s'\n", zScriptFile, sScript.startLine,
-				        sScript.azToken[2]);
-				IFAIL();
 			}
 
 			/* In verify mode, first skip over the ---- line if we are

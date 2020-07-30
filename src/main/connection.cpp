@@ -85,7 +85,8 @@ void Connection::Record(string file, string description, vector<string> extensio
 		throw Exception("file '" + target + "' exists!");
 	}
 	printf("Writing to file \"%s\"\n", target.c_str());
-	record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
+	owned_record_writer = make_unique<BufferedFileWriter>(context->db.GetFileSystem(), target.c_str());
+	record_writer = owned_record_writer.get();
 	string path = "# name: " + StringUtil::Replace(target, "/Users/myth/Programs/duckdb/", "") + "\n";
 	record_writer->WriteData((const_data_ptr_t) path.c_str(), path.size());
 	if (!description.empty()) {
@@ -99,6 +100,11 @@ void Connection::Record(string file, string description, vector<string> extensio
 		record_writer->WriteData((const_data_ptr_t) ext.c_str(), ext.size());
 	}
 	record_writer->WriteData((const_data_ptr_t) "\n", 1);
+}
+
+void Connection::Record(Connection &other, string con_name) {
+	this->record_writer = other.record_writer;
+	this->con_name = con_name;
 }
 
 void Connection::AddComment(string comment) {
@@ -157,6 +163,9 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 						break;
 					}
 				}
+				if (!con_name.empty()) {
+					q += " " + con_name;
+				}
 				q += "\n";
 				q += query + "\n";
 				q += "----\n";
@@ -185,10 +194,18 @@ unique_ptr<MaterializedQueryResult> Connection::Query(string query) {
 				}
 				q += "\n";
 			} else {
-				q = "statement ok\n"+ query + "\n\n";
+				q = "statement ok";
+				if (!con_name.empty()) {
+					q += " " + con_name;
+				}
+				q += "\n"+ query + "\n\n";
 			}
 		} else {
-			q = "statement error\n"+ query + "\n\n";
+			q = "statement error";
+			if (!con_name.empty()) {
+				q += " " + con_name;
+			}
+			q += "\n"+ query + "\n\n";
 		}
 		record_writer->WriteData((const_data_ptr_t) q.c_str(), q.size());
 	}

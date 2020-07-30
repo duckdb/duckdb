@@ -1,7 +1,6 @@
 add_subdirectory(catalog)
 add_subdirectory(constraints)
 add_subdirectory(delete)
-add_subdirectory(alter)
 add_subdirectory(index)
 add_subdirectory(parallelism)
 add_subdirectory(prepared)

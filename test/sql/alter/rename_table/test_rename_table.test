@@ -1,0 +1,59 @@
+# name: test/sql/alter/rename_table/test_rename_table.test
+# description: Test RENAME TABLE single transaction
+# group: [rename_table]
+
+statement ok
+CREATE TABLE tbl(i INTEGER);
+INSERT INTO tbl VALUES (999), (100);
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE tbl RENAME TO tbl2
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error
+SELECT * FROM tbl
+
+statement ok
+ROLLBACK
+
+query I
+SELECT * FROM tbl;
+----
+999
+100
+
+statement error
+SELECT * FROM tbl2
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER TABLE tbl RENAME TO tbl2
+
+statement ok
+COMMIT
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error
+SELECT * FROM tbl
+
+query I
+SELECT * FROM tbl2
+----
+999
+100
+
