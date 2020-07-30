@@ -39,6 +39,15 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
+
+#ifdef BUILD_ICU_EXTENSION
+#include "icu-extension.hpp"
+#endif
+
+#ifdef BUILD_PARQUET_EXTENSION
+#include "parquet-extension.hpp"
+#endif
+
 #include "test_helpers.hpp"
 
 #include <algorithm>
@@ -1045,6 +1054,27 @@ static void execute_file(string script) {
 			}
 			loop_statements.clear();
 			in_loop = false;
+		} else if (strcmp(sScript.azToken[0], "require") == 0) {
+			// require command
+			string param = StringUtil::Lower(sScript.azToken[1]);
+			if (param == "parquet") {
+#ifdef BUILD_PARQUET_EXTENSION
+				db.LoadExtension<ParquetExtension>();
+#else
+				// parquet extension required but not build: skip this test
+				return;
+#endif
+			} else if (param == "icu") {
+#ifdef BUILD_ICU_EXTENSION
+				db.LoadExtension<ICUExtension>();
+#else
+				return;
+#endif
+			} else {
+				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				FAIL();
+			}
+
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);

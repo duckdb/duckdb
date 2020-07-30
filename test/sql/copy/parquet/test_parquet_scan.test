@@ -1,0 +1,195 @@
+# name: test/sql/copy/parquet/test_parquet_scan.test
+# description: Test basic parquet reading
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# Exception on missing file
+statement error
+SELECT * FROM parquet_scan('does_not_exist')
+
+# alltypes_plain.parquet
+query ITIIIIRRTTT
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/alltypes_plain.parquet')
+----
+4	1	0	0	0	0	0.000000	0.000000	03/01/09	0	2009-03-01 00:00:00
+5	0	1	1	1	10	1.100000	10.100000	03/01/09	1	2009-03-01 00:01:00
+6	1	0	0	0	0	0.000000	0.000000	04/01/09	0	2009-04-01 00:00:00
+7	0	1	1	1	10	1.100000	10.100000	04/01/09	1	2009-04-01 00:01:00
+2	1	0	0	0	0	0.000000	0.000000	02/01/09	0	2009-02-01 00:00:00
+3	0	1	1	1	10	1.100000	10.100000	02/01/09	1	2009-02-01 00:01:00
+0	1	0	0	0	0	0.000000	0.000000	01/01/09	0	2009-01-01 00:00:00
+1	0	1	1	1	10	1.100000	10.100000	01/01/09	1	2009-01-01 00:01:00
+
+# alltypes_plain.snappy.parquet
+query ITIIIIRRTTT
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/alltypes_plain.snappy.parquet')
+----
+6	1	0	0	0	0	0.000000	0.000000	04/01/09	0	2009-04-01 00:00:00
+7	0	1	1	1	10	1.100000	10.100000	04/01/09	1	2009-04-01 00:01:00
+
+# alltypes_dictionary.parquet
+query ITIIIIRRTTT
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/alltypes_dictionary.parquet')
+----
+0	1	0	0	0	0	0.000000	0.000000	01/01/09	0	2009-01-01 00:00:00
+1	0	1	1	1	10	1.100000	10.100000	01/01/09	1	2009-01-01 00:01:00
+
+# this file was created with spark using the data-types.py script
+# data-types.parquet
+query IIIIRRITTTTI
+SELECT * FROM parquet_scan('test/sql/copy/parquet/data/data-types.parquet')
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+42	43	44	45	4.600000	4.700000	480	49	50	1	2019-11-26 20:11:42.501	18271
+-127	-32767	-2147483647	-9223372036854775807	-4.600000	-4.700000	NULL	NULL	NULL	0	NULL	NULL
+127	32767	2147483647	9223372036854775807	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+# userdata1.parquet
+query I
+SELECT COUNT(*) FROM  parquet_scan('test/sql/copy/parquet/data/userdata1.parquet')
+----
+1000
+
+statement ok
+CREATE VIEW userdata1 AS SELECT * FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet')
+
+query I
+SELECT COUNT(*) FROM userdata1
+----
+1000
+
+query IIIIIIIIIIIII
+SELECT COUNT(registration_dttm), COUNT(id), COUNT(first_name), COUNT(last_name), COUNT(email), COUNT(gender), COUNT(ip_address), COUNT(cc), COUNT(country), COUNT(birthdate), COUNT(salary), COUNT(title), COUNT(comments) FROM userdata1
+----
+1000	1000	1000	1000	1000	1000	1000	1000	1000	1000	932	1000	994
+
+query TT
+SELECT MIN(registration_dttm), MAX(registration_dttm) FROM userdata1
+----
+2016-02-03 00:01:00	2016-02-03 23:59:55
+
+query II
+SELECT MIN(id), MAX(id) FROM userdata1
+----
+1	1000
+
+query II
+SELECT FIRST(id) OVER w, LAST(id) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+1	1000
+
+query TT
+SELECT MIN(first_name), MAX(first_name) FROM userdata1
+----
+(empty)	Willie
+
+query TT
+SELECT FIRST(first_name) OVER w, LAST(first_name) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+Amanda	Julie
+
+query TT
+SELECT MIN(last_name), MAX(last_name) FROM userdata1
+----
+Adams	Young
+
+query TT
+SELECT FIRST(last_name) OVER w, LAST(last_name) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+Jordan	Meyer
+
+query TT
+SELECT MIN(email), MAX(email) FROM userdata1
+----
+(empty)	wweaver2r@google.de
+
+query TT
+SELECT FIRST(email) OVER w, LAST(email) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+ajordan0@com.com	jmeyerrr@flavors.me
+
+query TT
+SELECT MIN(gender), MAX(gender) FROM userdata1
+----
+(empty)	Male
+
+query TT
+SELECT FIRST(gender) OVER w, LAST(gender) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+Female	Female
+
+query TT
+SELECT MIN(ip_address), MAX(ip_address) FROM userdata1
+----
+0.14.221.162	99.159.168.233
+
+query TT
+SELECT FIRST(ip_address) OVER w, LAST(ip_address) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+1.197.201.2	217.1.147.132
+
+query TT
+SELECT MIN(cc), MAX(cc) FROM userdata1
+----
+(empty)	67718647521473678
+
+query TT
+SELECT FIRST(cc) OVER w, LAST(cc) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+6759521864920116	374288099198540
+
+query TT
+SELECT MIN(country), MAX(country) FROM userdata1
+----
+"Bonaire	Zimbabwe
+
+query TT
+SELECT FIRST(country) OVER w, LAST(country) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+Indonesia	China
+
+query TT
+SELECT MIN(birthdate), MAX(birthdate) FROM userdata1
+----
+(empty)	9/9/1981
+
+query TT
+SELECT FIRST(birthdate) OVER w, LAST(birthdate) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+3/8/1971	(empty)
+
+query RR
+SELECT MIN(salary), MAX(salary) FROM userdata1
+----
+12380.490000	286592.990000
+
+query RR
+SELECT FIRST(salary) OVER w, LAST(salary) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+49756.530000	222561.130000
+
+query TT
+SELECT MIN(title), MAX(title) FROM userdata1
+----
+(empty)	Web Developer IV
+
+query TT
+SELECT FIRST(title) OVER w, LAST(title) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+Internal Auditor	(empty)
+
+query TT
+SELECT MIN(comments), MAX(comments) FROM userdata1
+----
+(empty)	𠜎𠜱𠝹𠱓𠱸𠲖𠳏
+
+query TT
+SELECT FIRST(comments) OVER w, LAST(comments) OVER w FROM userdata1 WINDOW w AS (ORDER BY id RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) LIMIT 1
+----
+1E+02	(empty)
+
