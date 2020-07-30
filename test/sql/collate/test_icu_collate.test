@@ -1,0 +1,76 @@
+# name: test/sql/collate/test_icu_collate.test
+# description: Test basic ICU extension usage
+# group: [collate]
+
+require icu
+
+statement ok
+CREATE TABLE strings(s VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('Gabel'), ('Göbel'), ('Goethe'), ('Goldmann'), ('Göthe'), ('Götz')
+
+# ordering
+query T
+SELECT * FROM strings ORDER BY s COLLATE de
+----
+Gabel
+Göbel
+Goethe
+Goldmann
+Göthe
+Götz
+
+# range filter
+query T
+SELECT * FROM strings WHERE 'Goethe' > s COLLATE de ORDER BY 1
+----
+Gabel
+Göbel
+
+# default binary collation, Göbel is not smaller than Gabel in UTF8 encoding
+query T
+SELECT * FROM strings WHERE 'Goethe' > s ORDER BY 1
+----
+Gabel
+
+# we can also combine this collation with NOCASE
+query T
+SELECT * FROM strings WHERE 'goethe' > s COLLATE de.NOCASE ORDER BY 1
+----
+Gabel
+Göbel
+
+query T
+SELECT * FROM strings WHERE 'goethe' > s COLLATE NOCASE.de ORDER BY 1
+----
+Gabel
+Göbel
+
+# but not with NOACCENT
+statement error
+SELECT * FROM strings WHERE 'goethe' > s COLLATE NOACCENT.de ORDER BY 1
+
+# japanese collation
+statement ok
+DELETE FROM strings
+
+statement ok
+INSERT INTO strings VALUES ('賃貸人側連絡先 (Lessor side contact)'), ('賃借人側連絡先 (Lessee side contact)'), ('解約連絡先 (Termination contacts)'), ('更新連絡先 (Update contact)')
+
+query T
+SELECT * FROM strings ORDER BY s
+----
+更新連絡先 (Update contact)
+解約連絡先 (Termination contacts)
+賃借人側連絡先 (Lessee side contact)
+賃貸人側連絡先 (Lessor side contact)
+
+query T
+SELECT * FROM strings ORDER BY s COLLATE ja.NOCASE
+----
+解約連絡先 (Termination contacts)
+更新連絡先 (Update contact)
+賃借人側連絡先 (Lessee side contact)
+賃貸人側連絡先 (Lessor side contact)
+
