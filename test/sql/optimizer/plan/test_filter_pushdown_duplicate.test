@@ -1,0 +1,78 @@
+# name: test/sql/optimizer/plan/test_filter_pushdown_duplicate.test
+# description: Test moving/duplicating conditions
+# group: [plan]
+
+# in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+# proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+# in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+# cases
+statement ok
+CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 10000, 1) t1(i)
+
+statement ok
+CREATE TABLE vals2(k INTEGER, l INTEGER)
+
+statement ok
+INSERT INTO vals2 SELECT * FROM vals1
+
+# move conditions between joins
+# SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 INNER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# 3	3	5	5	3	3	5	5
+
+# SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 INNER JOIN (SELECT * FROM vals1, vals2 WHERE i<5000) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# (empty result)
+
+# SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 INNER JOIN (SELECT * FROM vals1, vals2 WHERE i<5002 AND k=1) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# 5001	5001	1	1	5001	5001	1	1
+
+# left outer join conditions
+# SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i>5000) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i<5002 AND tbl1.k=1;
+# 5001	5001	1	1	5001	5001	1	1
+
+# only RHS has conditions
+# SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl2.i<5000;
+# 3	3	5	5	3	3	5	5
+
+# only RHS has conditions
+# SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl2 ON tbl1.i=tbl2.i WHERE tbl1.k<10 AND tbl2.k IS NOT NULL) tbl3;
+# 10
+
+# only LHS has conditions
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2 WHERE i=3 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# 1
+
+# side channel EXCEPT/INTERSECT
+# SELECT * FROM vals1, vals2 WHERE i>5000 INTERSECT SELECT * FROM vals1, vals2 WHERE i<5002 AND k=1;
+# 5001	5001	1	1
+
+# SELECT * FROM vals1, vals2 WHERE i>5000 AND i<5002 AND k=1 EXCEPT SELECT * FROM vals1, vals2;
+# (empty result)
+
+# side channel GROUP conditions
+# SELECT * FROM (SELECT i, k, MIN(j) FROM vals1, vals2 WHERE i=1 AND k=3 GROUP BY i, k) tbl1 INNER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# 1	3	1	1	1	1	3	3
+
+# conditions in subqueries
+# uncorrelated subqueries
+# SELECT * FROM vals1 WHERE i IN (SELECT i FROM vals1, vals2) AND i=3;
+# 3	3
+
+# SELECT * FROM vals1 WHERE EXISTS(SELECT i FROM vals1, vals2) AND i=3;
+# 3	3
+
+# correlated subqueries
+# SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;
+# 3	3
+
+# SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i AND k=4) AND i=3;
+# (empty result)
+
+# SELECT * FROM vals1 v1 WHERE i IN (SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i AND k>5000) AND i<5002;
+# 5001	5001
+
+# SELECT * FROM vals1 v1 WHERE i=(SELECT i FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;
+# 3	3
+
+# SELECT * FROM vals1 v1 WHERE i=(SELECT MIN(i) FROM vals1, vals2 WHERE i=v1.i AND k=v1.i) AND i=3;
+# 3	3
+

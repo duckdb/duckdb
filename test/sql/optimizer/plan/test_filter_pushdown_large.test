@@ -1,0 +1,241 @@
+# name: test/sql/optimizer/plan/test_filter_pushdown_large.test
+# description: Test filter pushdown with more data
+# group: [plan]
+
+# in this test we run queries that will take a long time without filter pushdown, but are almost instant with
+# proper filter pushdown we create two tables with 10K elements each in most tests we cross product them together
+# in some way to create a "big table" (100M entries) but the filter can be pushed past the cross product in all
+# cases
+statement ok
+CREATE TABLE vals1 AS SELECT i AS i, i AS j FROM range(0, 10000, 1) t1(i)
+
+statement ok
+CREATE TABLE vals2(k INTEGER, l INTEGER)
+
+statement ok
+INSERT INTO vals2 SELECT * FROM vals1
+
+# pushdown filters into subqueries
+query II
+SELECT i, k FROM (SELECT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+# pushdown past DISTINCT
+query II
+SELECT i, k FROM (SELECT DISTINCT i, k FROM vals1, vals2) tbl1 WHERE i=k AND i<5 ORDER BY i
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+# pushdown conditions on group variables
+query IIR
+SELECT i, k, SUM(j) FROM vals1, vals2 GROUP BY i, k HAVING i=k AND i<5 ORDER BY i
+----
+0	0	0.000000
+1	1	1.000000
+2	2	2.000000
+3	3	3.000000
+4	4	4.000000
+
+# also inside subqueries
+query IIR
+SELECT i, k, SUM(j) FROM (SELECT * FROM vals1, vals2) tbl1 GROUP BY i, k HAVING i=k AND i<5 ORDER BY i
+----
+0	0	0.000000
+1	1	1.000000
+2	2	2.000000
+3	3	3.000000
+4	4	4.000000
+
+# and also like this
+query IIR
+SELECT i, k, sum FROM (SELECT i, k, SUM(j) AS sum FROM vals1, vals2 GROUP BY i, k) tbl1 WHERE i=k AND i<5 ORDER BY i;
+----
+0	0	0.000000
+1	1	1.000000
+2	2	2.000000
+3	3	3.000000
+4	4	4.000000
+
+# LEFT OUTER JOIN on constant "true" can be turned into cross product, and after filters can be pushed
+query IIII
+SELECT * FROM vals1 LEFT OUTER JOIN vals2 ON 1=1 WHERE i=k AND k=5
+----
+5	5	5	5
+
+# left outer join with equality filter can be turned into INNER JOIN
+query IIII
+SELECT * FROM vals1 LEFT OUTER JOIN vals2 ON 1=1 WHERE i=k ORDER BY i LIMIT 5
+----
+0	0	0	0
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+
+# left outer join can be turned into inner join after which elements can be pushed down into RHS
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2 WHERE j=5 AND l=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl2.j=5 AND tbl2.l=5;
+----
+5	5	5	5	5	5	5	5
+
+# filters can be pushed in the LHS of the LEFT OUTER JOIN
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2 WHERE i=5 AND k=10) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10
+----
+5	5	10	10	5	5	10	10
+
+# conditions in the ON clause can be pushed down into the RHS
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i=5 AND tbl2.k=5
+----
+5	5	5	5	5	5	5	5
+
+# also works if condition filters everything
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2 WHERE i=5 AND k=5) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl2.i>10000 AND tbl2.k=5
+----
+5	5	5	5	NULL	NULL	NULL	NULL
+
+# we can replicate conditions on the left join predicates on the RHS
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i=5 AND tbl1.k=10
+----
+5	5	10	10	5	5	10	10
+
+# also multiple conditions
+query IIIIIIII
+SELECT * FROM (SELECT * FROM vals1, vals2) tbl1 LEFT OUTER JOIN (SELECT * FROM vals1, vals2) tbl2 ON tbl1.i=tbl2.i AND tbl1.k=tbl2.k WHERE tbl1.i>4 AND tbl1.i<6 AND tbl1.k=10
+----
+5	5	10	10	5	5	10	10
+
+# pushdown union
+query IIII
+SELECT * FROM (SELECT * FROM vals1, vals2 UNION SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5
+----
+3	3	5	5
+
+# pushdown into except
+query IIII
+SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5
+----
+
+query IIII
+SELECT * FROM (SELECT * FROM vals1, vals2 EXCEPT SELECT * FROM vals1, vals2 WHERE i<>1) tbl1 WHERE i<5 AND k<5 ORDER BY 1, 2, 3, 4;
+----
+1	1	0	0
+1	1	1	1
+1	1	2	2
+1	1	3	3
+1	1	4	4
+
+# pushdown intersect
+query IIII
+SELECT * FROM (SELECT * FROM vals1, vals2 INTERSECT SELECT * FROM vals1, vals2) tbl1 WHERE i=3 AND k=5
+----
+3	3	5	5
+
+# constant condition on scalar projection
+query T
+SELECT * FROM (SELECT 0=1 AS cond FROM vals1, vals2) a1 WHERE cond ORDER BY 1
+----
+
+# constant condition that is more hidden
+query I
+SELECT * FROM (SELECT 1 AS a FROM vals1, vals2) a1 WHERE a=0 ORDER BY 1
+----
+
+# condition on scalar grouping
+query T
+SELECT * FROM (SELECT 0=1 AS cond FROM vals1, vals2 GROUP BY 1) a1 WHERE cond ORDER BY 1
+----
+
+query I
+SELECT * FROM (SELECT 1 AS a FROM vals1, vals2 GROUP BY a) a1 WHERE a=0 ORDER BY 1
+----
+
+# duplicate filters across equivalency sets and pushdown cross product
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i AND tbl1.i=5000;
+----
+1
+
+# also push other comparisons
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl1.k AND tbl1.i=tbl2.k AND tbl1.i=tbl2.i AND tbl1.i>4999 AND tbl1.i<5001;
+----
+1
+
+# empty result
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i<>5000;
+----
+0
+
+# also if we have a transitive condition
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i=tbl2.i AND tbl2.i<>5000;
+----
+0
+
+# useless inequality checks should be pruned
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=5000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl2.i<>5001;
+----
+1
+
+# add many useless predicates
+query I
+SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.i>10 AND tbl1.k>=500 AND tbl2.k<7000 AND tbl2.k<=6000 AND tbl2.k<>8000 AND tbl1.i<>4000 AND tbl1.i=tbl2.i AND tbl1.i=tbl2.k AND tbl1.i=tbl1.k AND tbl1.i=5000;
+----
+1
+
+# FIXME filter equivalence with expressions
+# SELECT COUNT(*) FROM vals1, vals2 WHERE i+1=5001 AND j=l AND k=i AND l+1=5001
+# 0
+
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2 WHERE i+1=5000 AND k+1=5000) tbl1, (SELECT *
+# FROM vals1, vals2) tbl2 WHERE tbl1.i=tbl2.i AND tbl1.k=tbl2.k;
+# 0
+
+# greater than/less than should also be transitive
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i>9997 AND tbl1.k>tbl1.i AND tbl2.i>tbl1.i AND tbl2.k>tbl1.i;
+# 1
+
+# equality with constant and then GT
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=9998 AND tbl1.k=9998 AND tbl2.i>tbl1.i AND tbl2.k>tbl1.k;
+# 1
+
+# equality with constant and then LT
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2 WHERE tbl1.i=1 AND tbl1.k=1 AND tbl2.i<tbl1.i AND tbl2.k<tbl1.k;
+# 1
+
+# transitive GT/LT
+# SELECT COUNT(*) FROM vals1, vals2 WHERE i>4999 AND j<=l AND k>=i AND l<5001
+# 1
+
+# these more advanced cases we don't support yet
+# filter equivalence with expressions
+# SELECT COUNT(*) FROM vals1 v1, vals1 v2 WHERE v1.i+v2.i=10; IN list
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1,
+# (SELECT * FROM vals1, vals2) tbl2 WHERE tbl2.k IN (5000, 5001, 5002) AND tbl2.k<5000;
+# 0
+
+#  CASE expression
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
+# WHERE tbl2.k<5000 AND CASE WHEN (tbl2.k>5000) THEN (tbl2.k=5001) ELSE (tbl2.k=5000) END;
+# 0
+
+#  OR expression
+# SELECT COUNT(*) FROM (SELECT * FROM vals1, vals2) tbl1, (SELECT * FROM vals1, vals2) tbl2
+# WHERE tbl2.k<5000 AND (tbl2.k=5000 OR tbl2.k>5000);
+# 0
+
