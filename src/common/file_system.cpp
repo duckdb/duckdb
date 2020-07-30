@@ -306,6 +306,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
