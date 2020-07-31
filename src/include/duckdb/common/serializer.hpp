@@ -24,10 +24,16 @@ public:
 
 	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
 
+
 	template <class T> void Write(T element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
+	//! Write data from a string buffer directly (wihtout length prefix)
+	void WriteBufferData(const string &str) {
+		WriteData((const_data_ptr_t) str.c_str(), str.size());
+	}
+	//! Write a string with a length prefix
 	void WriteString(const string &val) {
 		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());

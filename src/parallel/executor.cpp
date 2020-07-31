@@ -90,6 +90,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
 		case PhysicalOperatorType::TOP_N:
+		case PhysicalOperatorType::COPY_TO_FILE:
 			// single operator, set as child
 			pipeline->child = op->children[0].get();
 			break;

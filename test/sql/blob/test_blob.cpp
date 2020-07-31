@@ -211,7 +211,7 @@ TEST_CASE("Test BLOB with COPY INTO", "[blob]") {
 
 	// COPY INTO
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
-    result = con.Query("COPY blobs FROM '" + blob_file_path + "';");
+    result = con.Query("COPY blobs FROM '" + blob_file_path + "' (HEADER 0, DELIMITER ',');");
     REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
     // Testing if the system load/store correctly the bytes

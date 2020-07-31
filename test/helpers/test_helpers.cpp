@@ -250,11 +250,13 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	assert(collection.count == 0 || collection.types.size() == sql_types.size());
 
 	// set up the CSV reader
-	CopyInfo info;
-	info.delimiter = "|";
-	info.header = true;
-	info.quote = "\"";
-	info.escape = "\"";
+	BufferedCSVReaderOptions options;
+	options.auto_detect = false;
+	options.delimiter = "|";
+	options.header = has_header;
+	options.quote = "\"";
+	options.escape = "\"";
+
 	// set up the intermediate result chunk
 	vector<TypeId> internal_types;
 	for (auto &type : sql_types) {
@@ -266,7 +268,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	// convert the CSV string into a stringstream
 	auto source = make_unique<istringstream>(csv);
 
-	BufferedCSVReader reader(info, sql_types, move(source));
+	BufferedCSVReader reader(move(options), sql_types, move(source));
 	idx_t collection_index = 0;
 	idx_t tuple_count = 0;
 	while (true) {

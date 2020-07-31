@@ -20,6 +20,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Scalar Function";
 	case CatalogType::AGGREGATE_FUNCTION:
 		return "Aggregate Function";
+	case CatalogType::COPY_FUNCTION:
+		return "Copy Function";
 	case CatalogType::VIEW:
 		return "View";
 	case CatalogType::INDEX:

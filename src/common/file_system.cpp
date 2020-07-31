@@ -19,10 +19,12 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and Append flags
+	// cannot combine Read and CREATE/Append flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	assert(!(flags & FileFlags::FILE_CREATE && flags & FileFlags::FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -73,8 +75,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		// need Read or Write
 		assert(flags & FileFlags::WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_CREATE) {
 			open_flags |= O_CREAT;
+		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags & FileFlags::APPEND) {
 			open_flags |= O_APPEND;
@@ -302,6 +306,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
@@ -355,8 +360,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		assert(flags & FileFlags::WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
+		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+			creation_disposition = CREATE_ALWAYS;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;

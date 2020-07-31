@@ -17,6 +17,7 @@ struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
 struct CreateTableFunctionInfo;
+struct CreateCopyFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
@@ -31,6 +32,7 @@ class SchemaCatalogEntry;
 class TableCatalogEntry;
 class SequenceCatalogEntry;
 class TableFunctionCatalogEntry;
+class CopyFunctionCatalogEntry;
 class StorageManager;
 class CatalogSet;
 class DependencyManager;
@@ -60,6 +62,8 @@ public:
 	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
 	//! Create a table function in the catalog
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	//! Create a copy function in the catalog
+	CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Creates a table in the catalog.
@@ -99,6 +103,9 @@ SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_na
 template <>
 TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                              bool if_exists);
+template <>
+CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                            bool if_exists);
 template <>
 AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
                                                  bool if_exists);
