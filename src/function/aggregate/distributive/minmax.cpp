@@ -55,8 +55,8 @@ struct MinMaxBase {
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
@@ -65,8 +65,8 @@ struct MinMaxBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
 		}
@@ -139,6 +139,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
+		Destroy(state);
 		if (input.IsInlined()) {
 			state->value = input;
 		} else {

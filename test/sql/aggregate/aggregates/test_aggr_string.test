@@ -59,3 +59,12 @@ SELECT a, COUNT(*), COUNT(s), COUNT(DISTINCT s) FROM test WHERE s IS NOT NULL GR
 11	2	2	1
 12	2	2	1
 
+# string min/max with long strings
+statement ok
+CREATE TABLE test_strings(s VARCHAR);
+INSERT INTO test_strings VALUES ('aaaaaaaahello'), ('bbbbbbbbbbbbbbbbbbbbhello'), ('ccccccccccccccchello'), ('aaaaaaaaaaaaaaaaaaaaaaaahello');;
+
+query II
+SELECT MIN(s), MAX(s) FROM test_strings;
+----
+aaaaaaaaaaaaaaaaaaaaaaaahello	ccccccccccccccchello
