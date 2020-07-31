@@ -51,7 +51,6 @@
 #include "test_helpers.hpp"
 
 #include <algorithm>
-#include <dirent.h>
 #include <functional>
 #include <string.h>
 #include <string>
