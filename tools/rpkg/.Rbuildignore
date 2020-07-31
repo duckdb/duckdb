@@ -1,6 +1,7 @@
 .*\.sh
 .*\.tar.gz
 .*\.tgz
+.*\.zip
 git
 configure
 ^.*\.Rproj$
