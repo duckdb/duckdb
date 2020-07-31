@@ -13,6 +13,10 @@
 
 #include <functional>
 
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
 namespace duckdb {
 class ClientContext;
 class FileSystem;
