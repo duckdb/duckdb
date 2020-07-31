@@ -279,7 +279,7 @@ bool FileSystem::ListFiles(const string &directory, function<void(string, bool)>
 		}
 		struct stat status;
 		stat(full_path.c_str(), &status);
-		if (!status.st_mode & S_IFREG && !status.st_mode & S_IFDIR) {
+		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
 			// not a file or directory: skip
 			continue;
 		}
