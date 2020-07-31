@@ -185,7 +185,7 @@ bool FileSystem::FileExists(const string &filename) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFDIR))
+			if (!(status.st_mode & S_IFREG))
 				return true;
 		}
 	}
@@ -260,24 +260,33 @@ bool FileSystem::ListFiles(const string &directory, function<void(string, bool)>
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir(directory.c_str())) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir(dir)) != NULL) {
-			if (ent->d_type != DT_DIR && ent->d_type != DT_REG) {
-				// only callback for directories and regular files
-				continue;
-			}
-			string name = string(ent->d_name);
-			if (!name.empty() && name[0] != '.') {
-				callback(name, ent->d_type == DT_DIR);
-			}
-		}
-		closedir(dir);
-	} else {
+	DIR *dir = opendir(directory.c_str());
+	if (!dir) {
 		return false;
 	}
+	struct dirent *ent;
+	// loop over all files in the directory
+	while ((ent = readdir(dir)) != NULL) {
+		string name = string(ent->d_name);
+		// skip . .. and empty files
+		if (name.empty() || name == "." || name == "..") {
+			continue;
+		}
+		// now stat the file to figure out if it is a regular file or directory
+		string full_path = JoinPath(directory, name);
+		if (access(full_path.c_str(), 0) != 0) {
+			continue;
+		}
+		struct stat status;
+		stat(full_path.c_str(), &status);
+		if (!status.st_mode & S_IFREG && !status.st_mode & S_IFDIR) {
+			// not a file or directory: skip
+			continue;
+		}
+		// invoke callback
+		callback(name, status.st_mode & S_IFDIR);
+	}
+	closedir(dir);
 	return true;
 }
 
