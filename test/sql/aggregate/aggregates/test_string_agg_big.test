@@ -11,6 +11,6 @@ SELECT COUNT(*) FROM (SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g) t1
 100
 
 query I
-SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g
+SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g ORDER BY 1, 2
 ----
-200 values hashing to 3797d3b1f5f299bb836ed8fc4cd36032
+200 values hashing to b8126ea73f21372cdb3f2dc483106a12
