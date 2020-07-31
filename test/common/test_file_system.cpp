@@ -38,7 +38,7 @@ TEST_CASE("Make sure file system operators work as advertised", "[file_system]")
 	REQUIRE(!fs.DirectoryExists(fname_in_dir));
 
 	size_t n_files = 0;
-	REQUIRE(fs.ListFiles(dname, [&n_files](const string &path) { n_files++; }));
+	REQUIRE(fs.ListFiles(dname, [&n_files](const string &path, bool) { n_files++; }));
 
 	REQUIRE(n_files == 1);
 

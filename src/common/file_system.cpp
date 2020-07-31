@@ -256,7 +256,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -265,9 +265,13 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 	if ((dir = opendir(directory.c_str())) != NULL) {
 		/* print all the files and directories within directory */
 		while ((ent = readdir(dir)) != NULL) {
+			if (ent->d_type != DT_DIR && ent->d_type != DT_REG) {
+				// only callback for directories and regular files
+				continue;
+			}
 			string name = string(ent->d_name);
 			if (!name.empty() && name[0] != '.') {
-				callback(name);
+				callback(name, ent->d_type == DT_DIR);
 			}
 		}
 		closedir(dir);
@@ -512,7 +516,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -521,11 +525,7 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 		return false;
 	}
 	do {
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-			continue;
-		}
-
-		callback(string(ffd.cFileName));
+		callback(string(ffd.cFileName), ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	} while (FindNextFile(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();

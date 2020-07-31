@@ -871,7 +871,8 @@ static void execute_file(string script) {
 			// perform any renames in zScript
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 			
-			if (skip_index && strncasecmp(command->sql_query.c_str(), "CREATE INDEX", 12) == 0) {
+			// skip CREATE INDEX (for now...)
+			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
 				continue;
 			}
@@ -1085,21 +1086,16 @@ static void execute_file(string script) {
 
 // code below traverses the test directory and makes individual test cases out
 // of each script
-static void listFiles(const string &path, std::function<void(const string &)> cb) {
-#ifndef SUN
-	if (auto dir = opendir(path.c_str())) {
-		while (auto f = readdir(dir)) {
-			if (f->d_name[0] == '.')
-				continue;
-			if (f->d_type == DT_DIR)
-				listFiles(path + f->d_name + "/", cb);
-
-			if (f->d_type == DT_REG)
-				cb(path + f->d_name);
+static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
+	fs.ListFiles(path, [&](string fname, bool is_dir) {
+		string full_path = fs.JoinPath(path, fname);
+		if (is_dir) {
+			// recurse into directory
+			listFiles(fs, full_path, cb);
+		} else {
+			cb(full_path);
 		}
-		closedir(dir);
-	}
-#endif
+	});
 }
 
 static bool endsWith(const string &mainStr, const string &toMatch) {
@@ -1184,7 +1180,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test"               // "
 		};
-		listFiles("third_party/sqllogictest/test/", [excludes](const string &path) {
+		FileSystem fs;
+		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
 			if (endsWith(path, ".test")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {
@@ -1194,7 +1191,7 @@ struct AutoRegTests {
 				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
 			}
 		});
-		listFiles("test/", [excludes](const string &path) {
+		listFiles(fs, "test", [excludes](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {
