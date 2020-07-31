@@ -768,6 +768,7 @@ static void execute_file(string script) {
 	string loop_iterator_name;
 	int loop_start;
 	int loop_end;
+	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
@@ -896,6 +897,9 @@ static void execute_file(string script) {
 			** printing of any errors.
 			*/
 			command->connection = connection;
+			if (skip_execution) {
+				continue;
+			}
 			if (in_loop) {
 				loop_statements.push_back(move(command));
 			} else {
@@ -982,6 +986,9 @@ static void execute_file(string script) {
 			}
 			command->query_has_label = sScript.azToken[3][0];
 			command->query_label = sScript.azToken[3];
+			if (skip_execution) {
+				continue;
+			}
 			if (in_loop) {
 				// in a loop: add to loop statements
 				loop_statements.push_back(move(command));
@@ -1020,6 +1027,10 @@ static void execute_file(string script) {
 				output_hash_mode = 1;
 			} else if (strcmp(sScript.azToken[1], "output_result") == 0) {
 				output_result_mode = 1;
+			} else if (strcmp(sScript.azToken[1], "skip") == 0) {
+				skip_execution = true;
+			} else if (strcmp(sScript.azToken[1], "unskip") == 0) {
+				skip_execution = false;
 			} else {
 				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
 				FAIL();
