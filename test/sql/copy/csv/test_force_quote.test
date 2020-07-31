@@ -7,13 +7,13 @@ statement ok
 CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/force_quote.csv';
+COPY test FROM 'test/sql/copy/csv/data/test/force_quote.csv' (HEADER 0);
 ----
 3
 
 # test FORCE_QUOTE *
 query I
-COPY test TO '__TEST_DIR__/test_star.csv' (FORCE_QUOTE *);
+COPY test TO '__TEST_DIR__/test_star.csv' (FORCE_QUOTE *, HEADER 0);
 ----
 3
 

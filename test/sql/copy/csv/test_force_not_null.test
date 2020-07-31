@@ -53,12 +53,12 @@ COPY test (col_b, col_a) FROM 'test/sql/copy/csv/data/test/force_not_null_reorde
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 
-# FORCE_NOT_NULL fails on integer columns with NULL values
+# FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_a));
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 ----
 3
 
 statement error
-COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a));
+COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_inull.csv' (FORCE_NOT_NULL (col_a), HEADER 0);
 

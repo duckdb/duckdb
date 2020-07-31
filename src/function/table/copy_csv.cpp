@@ -278,7 +278,7 @@ static string AddEscapes(string &to_be_escaped, string escape, string val) {
 
 static bool RequiresQuotes(WriteCSVData &options, const char *str, idx_t len) {
 	// check if the string is equal to the null string
-	if (len != options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
+	if (len == options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
 		return true;
 	}
 	if (options.is_simple) {
