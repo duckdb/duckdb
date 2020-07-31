@@ -185,7 +185,7 @@ bool FileSystem::FileExists(const string &filename) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (!(status.st_mode & S_IFREG))
+			if (!(status.st_mode & S_IFDIR))
 				return true;
 		}
 	}
