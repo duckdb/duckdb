@@ -4,7 +4,7 @@
 
 #include "re2/unicode_casefold.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 
 // 1374 groups, 2778 pairs, 349 ranges
@@ -562,6 +562,6 @@ const int num_unicode_tolower = 194;
 
 
 
-} // namespace re2
+} // namespace duckdb_re2
 
 

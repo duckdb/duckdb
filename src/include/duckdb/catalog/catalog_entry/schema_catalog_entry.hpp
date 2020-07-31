@@ -25,7 +25,6 @@ enum class OnCreateConflict : uint8_t;
 
 struct AlterTableInfo;
 struct CreateIndexInfo;
-struct CreateTableFunctionInfo;
 struct CreateFunctionInfo;
 struct CreateCollationInfo;
 struct CreateViewInfo;
@@ -33,6 +32,8 @@ struct BoundCreateTableInfo;
 struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
+struct CreateCopyFunctionInfo;
+
 struct DropInfo;
 
 //! A schema in the catalog
@@ -46,6 +47,8 @@ public:
 	CatalogSet indexes;
 	//! The catalog set holding the table functions
 	CatalogSet table_functions;
+	//! The catalog set holding the copy functions
+	CatalogSet copy_functions;
 	//! The catalog set holding the scalar and aggregate functions
 	CatalogSet functions;
 	//! The catalog set holding the sequences
@@ -64,6 +67,8 @@ public:
 	CatalogEntry *CreateIndex(ClientContext &context, CreateIndexInfo *info);
 	//! Create a table function within the given schema
 	CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
+	//! Create a copy function within the given schema
+	CatalogEntry *CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info);
 	//! Create a scalar or aggregate function within the given schema
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Create a collation within the given schema

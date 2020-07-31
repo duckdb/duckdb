@@ -28,7 +28,7 @@
 #include "re2/prog.h"
 #include "re2/regexp.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 struct Job {
   int id;
@@ -375,4 +375,4 @@ bool Prog::SearchBitState(const StringPiece& text,
   return true;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

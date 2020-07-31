@@ -1,18 +1,14 @@
-library(testthat)
-
 test_that("read_only flag and shutdown works as expected", {
-  library("DBI")
 
   dbdir <- tempfile()
 
   # 1st: create a db and write some tables
 
   callr::r(function(dbdir) {
-    library("DBI")
-    con <- dbConnect(duckdb::duckdb(), dbdir, read_only = FALSE) # FALSE is the default
+    con <- DBI::dbConnect(duckdb::duckdb(), dbdir, read_only = FALSE) # FALSE is the default
     print(con)
-    res <- dbWriteTable(con, "iris", iris)
-    dbDisconnect(con)
+    res <- DBI::dbWriteTable(con, "iris", iris)
+    DBI::dbDisconnect(con)
     duckdb::duckdb_shutdown(con@driver)
   }, args = list(dbdir))
 
@@ -30,10 +26,9 @@ test_that("read_only flag and shutdown works as expected", {
 
   # con is still alive
   callr::r(function(dbdir) {
-    library("DBI")
-    con <- dbConnect(duckdb::duckdb(), dbdir, read_only = TRUE)
-    res <- dbReadTable(con, "iris")
-    dbDisconnect(con, shutdown = TRUE)
+    con <- DBI::dbConnect(duckdb::duckdb(), dbdir, read_only = TRUE)
+    res <- DBI::dbReadTable(con, "iris")
+    DBI::dbDisconnect(con, shutdown = TRUE)
   }, args = list(dbdir))
 
   # shut down one of them again
@@ -47,10 +42,9 @@ test_that("read_only flag and shutdown works as expected", {
   # now we can get write access again
   # TODO shutdown
   callr::r(function(dbdir) {
-    library("DBI")
-    con <- dbConnect(duckdb::duckdb(), dbdir, read_only = FALSE) # FALSE is the default
-    res <- dbWriteTable(con, "iris2", iris)
-    dbDisconnect(con)
+    con <- DBI::dbConnect(duckdb::duckdb(), dbdir, read_only = FALSE) # FALSE is the default
+    res <- DBI::dbWriteTable(con, "iris2", iris)
+    DBI::dbDisconnect(con)
   }, args = list(dbdir))
 
   expect_true(T)

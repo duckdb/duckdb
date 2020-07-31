@@ -67,7 +67,6 @@ A DuckDB database instance.
 }
 \examples{
 \dontrun{
-#' library(DBI)
 duckdb::duckdb()
 }
 

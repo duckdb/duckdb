@@ -8,7 +8,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace re2 {
+namespace duckdb_re2 {
 
 template <typename T>
 class PODArray {
@@ -50,6 +50,6 @@ class PODArray {
   std::unique_ptr<T[], Deleter> ptr_;
 };
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // UTIL_POD_ARRAY_H_

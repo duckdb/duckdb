@@ -24,14 +24,14 @@ Depends:
     DBI,
     R (>= 3.5.0)
 Imports:
-    dbplyr,
     methods,
-    testthat,
     utils
 Suggests: 
     callr,
     DBItest,
-    nycflights13
+    dbplyr,
+    nycflights13,
+    testthat
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1

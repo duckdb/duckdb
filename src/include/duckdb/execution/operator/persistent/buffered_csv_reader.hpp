@@ -44,6 +44,29 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
+struct BufferedCSVReaderOptions  {
+	//! The file path of the CSV file to read
+	string file_path;
+    //! Whether or not to automatically detect dialect and datatypes
+    bool auto_detect;
+    //! Delimiter to separate columns within each line
+    string delimiter;
+    //! Quote used for columns that contain reserved characters, e.g., delimiter
+    string quote;
+    //! Escape character to escape quote character
+    string escape;
+    //! Whether or not the file has a header line
+    bool header = false;
+    //! How many leading rows to skip
+    idx_t skip_rows = 0;
+    //! Expected number of columns
+    idx_t num_cols = 0;
+    //! Specifies the string that represents a null value
+    string null_str;
+    //! True, if column with that index must skip null check
+    vector<bool> force_not_null;
+};
+
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2 };
@@ -52,16 +75,18 @@ static DataChunk DUMMY_CHUNK;
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
+	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	static constexpr uint8_t MAX_SAMPLE_CHUNKS = 10;
 	ParserMode mode;
 
 public:
-	BufferedCSVReader(ClientContext &context, CopyInfo &info, vector<SQLType> requested_types = vector<SQLType>());
-	BufferedCSVReader(CopyInfo &info, vector<SQLType> requested_types, unique_ptr<std::istream> source);
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<SQLType> requested_types = vector<SQLType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types, unique_ptr<std::istream> source);
 
-	CopyInfo &info;
+    BufferedCSVReaderOptions options;
 	vector<SQLType> sql_types;
 	vector<string> col_names;
 	unique_ptr<std::istream> source;
@@ -131,7 +156,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, CopyInfo &info);
+	unique_ptr<std::istream> OpenCSV(ClientContext &context, BufferedCSVReaderOptions options);
 };
 
 } // namespace duckdb

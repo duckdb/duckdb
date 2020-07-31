@@ -5,7 +5,7 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds]") {
+TEST_CASE("Test TPC-DS SF0 Query Compilation", "[tpcds][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	unique_ptr<QueryResult> result;

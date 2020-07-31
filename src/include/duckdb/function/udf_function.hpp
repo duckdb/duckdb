@@ -56,17 +56,18 @@ public:
 	}
 
 	template<typename TR, typename... Args>
-	static void RegisterFunction(string name, scalar_function_t udf_function, ClientContext &context) {
+	static void RegisterFunction(string name, scalar_function_t udf_function, ClientContext &context, SQLType varargs = SQLType::INVALID) {
 	    vector<SQLType> arguments;
 	    GetArgumentTypesRecursive<Args...>(arguments);
 
 	    SQLType ret_type = GetArgumentType<TR>();
 
-	    RegisterFunction(name, arguments, ret_type, udf_function, context);
+	    RegisterFunction(name, arguments, ret_type, udf_function, context, varargs);
 	}
 
 	static void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type,
-								 scalar_function_t udf_function, ClientContext &context);
+								 scalar_function_t udf_function, ClientContext &context,
+								 SQLType varargs = SQLType::INVALID);
 
 private:
 	//-------------------------------- Templated functions --------------------------------//

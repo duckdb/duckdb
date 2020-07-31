@@ -230,7 +230,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
-	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::CREATE);
+	auto handle = fs.OpenFile(path, FileFlags::WRITE | FileFlags::FILE_CREATE);
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 	buffer.Write(*handle, sizeof(idx_t));
 }

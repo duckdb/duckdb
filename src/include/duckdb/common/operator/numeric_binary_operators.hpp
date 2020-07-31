@@ -14,7 +14,13 @@
 namespace duckdb {
 
 struct AddOperator {
-	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right)
+#if defined(__has_feature)
+    #if __has_feature(__address_sanitizer__)
+        __attribute__((__no_sanitize__("signed-integer-overflow")))
+    #endif
+#endif
+	{
 		return left + right;
 	}
 };

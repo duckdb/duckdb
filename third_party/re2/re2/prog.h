@@ -23,7 +23,7 @@
 #include "util/sparse_set.h"
 #include "re2/re2.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Opcodes for Inst
 enum InstOp {
@@ -143,7 +143,7 @@ class Prog {
                            //   and the right one captures into register 2*n+1.
 
       int32_t match_id_;   // opcode == kInstMatch
-                           //   Match ID to identify this match (for re2::Set).
+                           //   Match ID to identify this match (for duckdb_re2::Set).
 
       struct {             // opcode == kInstByteRange
         uint8_t lo_;       //   byte range is lo_-hi_ inclusive
@@ -427,6 +427,6 @@ class Prog {
   Prog& operator=(const Prog&) = delete;
 };
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_PROG_H_

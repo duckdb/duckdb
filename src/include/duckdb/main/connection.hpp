@@ -123,6 +123,16 @@ public:
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
+	template<typename TR, typename... Args>
+	void CreateVectorizedFunction(string name, scalar_function_t udf_func, SQLType varargs = SQLType::INVALID) {
+		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, varargs);
+	}
+
+	void CreateVectorizedFunction(string name, vector<SQLType> args, SQLType ret_type, scalar_function_t udf_func,
+	                              SQLType varargs = SQLType::INVALID) {
+		UDFWrapper::RegisterFunction(name, args, ret_type, udf_func, *context, varargs);
+	}
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 

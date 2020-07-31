@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -23,9 +24,12 @@
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(make_unique<CatalogSet>(*this)), dependency_manager(make_unique<DependencyManager>(*this)) {
+Catalog::Catalog(StorageManager &storage)
+    : storage(storage), schemas(make_unique<CatalogSet>(*this)),
+      dependency_manager(make_unique<DependencyManager>(*this)) {
 }
-Catalog::~Catalog(){}
+Catalog::~Catalog() {
+}
 
 Catalog &Catalog::GetCatalog(ClientContext &context) {
 	return context.catalog;
@@ -49,6 +53,11 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return schema->CreateTableFunction(context, info);
+}
+
+CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateCopyFunction(context, info);
 }
 
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
@@ -166,6 +175,13 @@ TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string sche
                                              bool if_exists) {
 	return (TableFunctionCatalogEntry *)GetEntry(context, CatalogType::TABLE_FUNCTION, move(schema_name), name,
 	                                             if_exists);
+}
+
+template <>
+CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                            bool if_exists) {
+	return (CopyFunctionCatalogEntry *)GetEntry(context, CatalogType::COPY_FUNCTION, move(schema_name), name,
+	                                            if_exists);
 }
 
 template <>
