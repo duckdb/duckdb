@@ -1068,8 +1068,16 @@ static void execute_file(string script) {
 #ifdef BUILD_ICU_EXTENSION
 				db.LoadExtension<ICUExtension>();
 #else
+				// icu extension required but not build: skip this test
 				return;
 #endif
+			} else if (param == "vector_size") {
+				// require a specific vector size
+				int required_vector_size = std::stoi(sScript.azToken[2]);
+				if (STANDARD_VECTOR_SIZE < required_vector_size) {
+					// vector size is too low for this test: skip it
+					return;
+				}
 			} else {
 				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
 				FAIL();

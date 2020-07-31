@@ -2,6 +2,8 @@
 # description: Test read_csv_auto from web_page csv
 # group: [auto]
 
+require vector_size 512
+
 statement ok
 CREATE TABLE web_page AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/web_page.csv');
 
