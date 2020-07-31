@@ -491,13 +491,24 @@ private:
 			break;
 		}
 		case CompressionCodec::GZIP: {
-			mz_stream stream;
+			struct MiniZStream {
+				~MiniZStream() {
+					if (init) {
+						mz_inflateEnd(&stream);
+					}
+				}
+
+				mz_stream stream;
+				bool init = false;
+			} s;
+			auto &stream = s.stream;
 			memset(&stream, 0, sizeof(mz_stream));
 
 			auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
 			if (mz_ret != MZ_OK) {
 				throw Exception("Failed to initialize miniz");
 			}
+			s.init = true;
 
 			col_data.buf.available(GZIP_HEADER_MINSIZE);
 			auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
