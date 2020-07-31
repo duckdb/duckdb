@@ -352,10 +352,11 @@ bool checkZonemapString(TableScanState &state, TableFilter &table_filter, const 
 
 bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<TableFilter>> &table_filters,
                              idx_t &current_row) {
-	bool readSegment = true;
 	for (auto &table_filter : table_filters) {
 		for (auto &predicate_constant : table_filter.second) {
-			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
+            bool readSegment = true;
+
+            if (!state.column_scans[predicate_constant.column_index].segment_checked) {
 				state.column_scans[predicate_constant.column_index].segment_checked = true;
 				if (!state.column_scans[predicate_constant.column_index].current) {
 					return true;
@@ -363,32 +364,32 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 				switch (state.column_scans[predicate_constant.column_index].current->type) {
 				case TypeId::INT8: {
 					int8_t constant = predicate_constant.constant.value_.tinyint;
-					readSegment &= checkZonemap<int8_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int8_t>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::INT16: {
 					int16_t constant = predicate_constant.constant.value_.smallint;
-					readSegment &= checkZonemap<int16_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int16_t>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::INT32: {
 					int32_t constant = predicate_constant.constant.value_.integer;
-					readSegment &= checkZonemap<int32_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int32_t>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::INT64: {
 					int64_t constant = predicate_constant.constant.value_.bigint;
-					readSegment &= checkZonemap<int64_t>(state, predicate_constant, constant);
+					readSegment = checkZonemap<int64_t>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::FLOAT: {
 					float constant = predicate_constant.constant.value_.float_;
-					readSegment &= checkZonemap<float>(state, predicate_constant, constant);
+					readSegment = checkZonemap<float>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::DOUBLE: {
 					double constant = predicate_constant.constant.value_.double_;
-					readSegment &= checkZonemap<double>(state, predicate_constant, constant);
+					readSegment = checkZonemap<double>(state, predicate_constant, constant);
 					break;
 				}
 				case TypeId::VARCHAR: {
@@ -400,7 +401,7 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 					for (size_t i = 0; i < value_size; i++) {
 						constant += predicate_constant.constant.str_value[i];
 					}
-					readSegment &= checkZonemapString(state, predicate_constant, constant.c_str());
+					readSegment = checkZonemapString(state, predicate_constant, constant.c_str());
 					break;
 				}
 				default:
