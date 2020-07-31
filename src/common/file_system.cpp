@@ -525,7 +525,11 @@ bool FileSystem::ListFiles(const string &directory, function<void(string, bool)>
 		return false;
 	}
 	do {
-		callback(string(ffd.cFileName), ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+		string cFileName = string(ffd.cFileName);
+		if (cFileName == "." || cFileName == "..") {
+			continue;
+		}
+		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	} while (FindNextFile(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
