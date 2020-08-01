@@ -1,0 +1,102 @@
+# name: test/sql/function/string/test_pad.test
+# description: LPAD/RPAD test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test lpad on NULLs
+query TTTTTTT
+select LPAD(NULL, 7, '-'), LPAD('Base', NULL, '-'), LPAD('Base', 7, NULL), LPAD(NULL, NULL, '-'), LPAD(NULL, 7, NULL), LPAD('Base', NULL, NULL), LPAD(NULL, NULL, NULL)
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+# test rpad on NULLs
+query TTTTTTT
+select RPAD(NULL, 7, '-'), RPAD('Base', NULL, '-'), RPAD('Base', 7, NULL), RPAD(NULL, NULL, '-'), RPAD(NULL, 7, NULL), RPAD('Base', NULL, NULL), RPAD(NULL, NULL, NULL)
+----
+NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+# test lpad/rpad on scalar values
+query TTTT
+select LPAD('Base', 7, '-'), LPAD('Base', 4, '-'), LPAD('Base', 2, ''), LPAD('Base', -1, '-')
+----
+---Base	Base	Ba	(empty)
+
+query TTTT
+select RPAD('Base', 7, '-'), RPAD('Base', 4, '-'), RPAD('Base', 2, ''), RPAD('Base', -1, '-')
+----
+Base---	Base	Ba	(empty)
+
+query TTTT
+select LPAD('Base', 7, '-|'), LPAD('Base', 6, '-|'), LPAD('Base', 5, '-|'), LPAD('Base', 4, '-|')
+----
+-|-Base	-|Base	-Base	Base
+
+query TTTT
+select RPAD('Base', 7, '-|'), RPAD('Base', 6, '-|'), RPAD('Base', 5, '-|'), RPAD('Base', 4, '-|')
+----
+Base-|-	Base-|	Base-	Base
+
+query TTT
+select LPAD('MotörHead', 16, 'RÄcks'), LPAD('MotörHead', 12, 'RÄcks'), LPAD('MotörHead', 10, 'RÄcks')
+----
+RÄcksRÄMotörHead	RÄcMotörHead	RMotörHead
+
+query TTT
+select RPAD('MotörHead', 16, 'RÄcks'), RPAD('MotörHead', 12, 'RÄcks'), RPAD('MotörHead', 10, 'RÄcks')
+----
+MotörHeadRÄcksRÄ	MotörHeadRÄc	MotörHeadR
+
+# test on entire tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('Hello', 'World'), ('HuLlD', NULL), ('MotörHead','RÄcks')
+
+query TT
+select LPAD(a, 16, b), RPAD(a, 16, b) FROM strings
+----
+WorldWorldWHello	HelloWorldWorldW
+NULL	NULL
+RÄcksRÄMotörHead	MotörHeadRÄcksRÄ
+
+# test with selection vector
+query TTTT
+select LPAD(a, 12, b), RPAD(a, 12, b), UCASE(a), LCASE(a) FROM strings WHERE b IS NOT NULL
+----
+WorldWoHello	HelloWorldWo	HELLO	hello
+RÄcMotörHead	MotörHeadRÄc	MOTÖRHEAD	motörhead
+
+# test incorrect usage
+statement error
+select LPAD()
+
+statement error
+select LPAD(1)
+
+statement error
+select LPAD(1, 2)
+
+statement error
+select LPAD('Hello', 10, '')
+
+statement error
+select LPAD('a', 100000000000000000, 0)
+
+statement error
+select RPAD()
+
+statement error
+select RPAD(1)
+
+statement error
+select RPAD(1, 2)
+
+statement error
+select RPAD('Hello', 10, '')
+
+statement error
+select RPAD('a', 100000000000000000, 0)
+

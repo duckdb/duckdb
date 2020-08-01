@@ -1,0 +1,26 @@
+# name: test/sql/alter/alter_type/test_alter_type_unique.test
+# description: ALTER TYPE with UNIQUE constraint
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER UNIQUE, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# we disallow ALTER TYPE on a column with a CHECK constraint
+statement error
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+# but we can change the other column
+statement ok
+ALTER TABLE test ALTER j SET DATA TYPE VARCHAR
+
+query IT
+SELECT * FROM test
+----
+1
+1
+2
+2
+

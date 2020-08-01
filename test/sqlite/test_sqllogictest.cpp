@@ -25,6 +25,7 @@
 */
 #include "catch.hpp"
 #include "sqllogictest.hpp"
+#include "termcolor.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -33,18 +34,33 @@
 #include <unistd.h>
 #define stricmp strcasecmp
 #endif
-#include "slt_duckdb.hpp"
+
+#include "duckdb.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_map.hpp"
+
+#ifdef BUILD_ICU_EXTENSION
+#include "icu-extension.hpp"
+#endif
+
+#ifdef BUILD_PARQUET_EXTENSION
+#include "parquet-extension.hpp"
+#endif
+
+#include "test_helpers.hpp"
 
 #include <algorithm>
-#include <dirent.h>
 #include <functional>
 #include <string.h>
 #include <string>
 #include <vector>
+#include <iostream>
 
+using namespace duckdb;
 using namespace std;
 
-#define DEFAULT_HASH_THRESHOLD 8
+#define DEFAULT_HASH_THRESHOLD 0
 
 /*
 ** A structure to keep track of the state of scanning the input script.
@@ -211,130 +227,558 @@ static void tokenizeLine(Script *p) {
 	}
 }
 
-/*
-** The number columns in a row of the current result set
-*/
-static int nColumn = 0;
+//! The map converting the labels to the hash values
+unordered_map<string, string> hash_label_map;
 
-/*
-** Comparison function for sorting the result set.
-*/
-static int rowCompare(const void *pA, const void *pB) {
-	const char **azA = (const char **)pA;
-	const char **azB = (const char **)pB;
-	int c = 0, i;
-	for (i = 0; c == 0 && i < nColumn; i++) {
-		c = strcmp(azA[i], azB[i]);
-	}
-	return c;
-}
-
-/*
-** Entry in a hash table of prior results
-*/
-typedef struct HashEntry HashEntry;
-struct HashEntry {
-	char zKey[24];    /* The search key */
-	char zHash[33];   /* The hash value stored */
-	HashEntry *pNext; /* Next with same hash */
-	HashEntry *pAll;  /* Next overall */
-};
-
-/*
-** The hash table
-*/
-#define NHASH 1009
-static HashEntry *aHash[NHASH];
-static HashEntry *pAll;
-
-/*
-** Try to look up the value zKey in the hash table.  If the value
-** does not exist, create it and return 0.  If the value does already
-** exist return 0 if hash matches and 1 if the hash is different.
-*/
-static int checkValue(const char *zKey, const char *zHash) {
-	unsigned int h;
-	HashEntry *p;
-	unsigned int i;
-
-	h = 0;
-	for (i = 0; zKey[i] && i < sizeof(p->zKey); i++) {
-		h = h << 3 ^ h ^ zKey[i];
-	}
-	h = h % NHASH;
-	for (p = aHash[h]; p; p = p->pNext) {
-		if (strcmp(p->zKey, zKey) == 0) {
-			return strcmp(p->zHash, zHash) != 0;
+static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
+	if (row_wise) {
+		for(idx_t r = 0; r < values.size(); r++) {
+			fprintf(stderr, "%s\n", values[r].c_str());
+		}
+	} else {
+		idx_t c = 0;
+		for(idx_t r = 0; r < values.size(); r++) {
+			if (c != 0) {
+				fprintf(stderr, "\t");
+			}
+			fprintf(stderr, "%s", values[r].c_str());
+			c++;
+			if (c >= columns) {
+				fprintf(stderr, "\n");
+				c = 0;
+			}
 		}
 	}
-	p = (HashEntry *)malloc(sizeof(*p));
-	if (p == 0) {
-		fprintf(stderr, "out of memory at %s:%d\n", __FILE__, __LINE__);
-		exit(1);
+}
+
+static string sqllogictest_convert_value(Value value, SQLType sql_type) {
+	if (value.is_null) {
+		return "NULL";
+	} else {
+		switch (sql_type.id) {
+		case SQLTypeId::BOOLEAN:
+			return value.value_.boolean ? "1" : "0";
+		default: {
+			string str = value.ToString(sql_type);
+			if (str.empty()) {
+				return "(empty)";
+			} else {
+				return str;
+			}
+		}
+		}
 	}
-	for (i = 0; zKey[i] && i < sizeof(p->zKey) - 1; i++) {
-		p->zKey[i] = zKey[i];
+}
+
+// standard result conversion: one line per value
+static int duckdbConvertResult(MaterializedQueryResult &result,
+                       vector<string> &pazResult, /* RETURN:  Array of result values */
+                       int &pnResult      /* RETURN:  Number of result values */
+) {
+	size_t r, c;
+	idx_t row_count = result.collection.count;
+	idx_t column_count = result.column_count();
+
+	pazResult.resize(row_count * column_count);
+	for (r = 0; r < row_count; r++) {
+		for (c = 0; c < column_count; c++) {
+			auto value = result.GetValue(c, r);
+			auto converted_value = sqllogictest_convert_value(value, result.sql_types[c]);
+			pazResult[r * column_count + c] = converted_value;
+		}
 	}
-	p->zKey[i] = 0;
-	for (i = 0; zHash[i] && i < sizeof(p->zHash) - 1; i++) {
-		p->zHash[i] = zHash[i];
-	}
-	p->zHash[i] = 0;
-	p->pAll = pAll;
-	pAll = p;
-	p->pNext = aHash[h];
-	aHash[h] = p;
+	pnResult = column_count * row_count;
 	return 0;
 }
 
-#define IFAIL()                                                                                                        \
-	{                                                                                                                  \
-		if (zScript)                                                                                                   \
-			free(zScript);                                                                                             \
-		if (pConn)                                                                                                     \
-			pEngine->xDisconnect(pConn);                                                                               \
-		REQUIRE(false);                                                                                                \
-		return;                                                                                                        \
+static void print_line_sep() {
+	string line_sep = string(80,'=');
+	std::cerr << termcolor::color<128, 128, 128> << line_sep << termcolor::reset << std::endl;
+}
+
+static void print_header(string header) {
+	std::cerr << termcolor::bold << header << termcolor::reset << std::endl;
+}
+
+static void print_sql(string sql) {
+	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
+	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER", "CREATE TABLE", "INSERT INTO", "ORDER BY", "VALUES", "ALTER TABLE", "INTEGER", "VARCHAR"};
+	// this is super inefficient, but I don't care for now
+	while(true) {
+		size_t next_keyword_pos = string::npos;
+		string next_keyword;
+		for(auto &keyword : keywords) {
+			size_t next_occurrence = sql.find(keyword);
+			if (next_occurrence < next_keyword_pos) {
+				next_keyword = keyword;
+				next_keyword_pos = next_occurrence;
+			}
+		}
+		if (next_keyword_pos == string::npos) {
+			break;
+		}
+		// found a keyword!
+		// first print the string until next_keyword_pos normally
+		std::cerr << sql.substr(0, next_keyword_pos);
+		// now print the keyword
+		std::cerr << termcolor::green << termcolor::bold << next_keyword << termcolor::reset;
+		// now subset the sql to skip forward
+		sql = sql.substr(next_keyword_pos + next_keyword.size());
 	}
+	// print the remainder of the sql string
+	std::cerr << sql << std::endl;
+}
+
+static void print_error_header(const char *description, string file_name, int nline) {
+	print_line_sep();
+	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
+	std::cerr << termcolor::bold << "(" << file_name << ":" << nline << ")!" << termcolor::reset << std::endl;
+}
+
+static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count, bool row_wise) {
+	print_header("Expected result:");
+	print_line_sep();
+	print_expected_result(values, expected_column_count, row_wise);
+	print_line_sep();
+	print_header("Actual result:");
+	print_line_sep();
+	result.Print();
+}
+
+static bool result_is_hash(string result) {
+	idx_t pos = 0;
+	// first parse the rows
+	while(result[pos] >= '0' && result[pos] <= '9') {
+		pos++;
+	}
+	if (pos == 0) {
+		return false;
+	}
+	string constant_str = " values hashing to ";
+	string example_hash = "acd848208cc35c7324ece9fcdd507823";
+	if (pos + constant_str.size() + example_hash.size() != result.size()) {
+		return false;
+	}
+	if (result.substr(pos, constant_str.size()) != constant_str) {
+		return false;
+	}
+	pos += constant_str.size();
+	// now parse the hash
+	while((result[pos] >= '0' && result[pos] <= '9') || (result[pos] >= 'a' && result[pos] <= 'z')) {
+		pos++;
+	}
+	return pos == result.size();
+}
+
+bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile, int query_line, string zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
+	Value lvalue, rvalue;
+	bool error = false;
+	// simple first test: compare string value directly
+	if (lvalue_str == rvalue_str) {
+		return true;
+	}
+	// some times require more checking (specifically floating point numbers because of inaccuracies)
+	// if not equivalent we need to cast to the SQL type to verify
+	auto sql_type = result.sql_types[current_column];
+	if (sql_type.IsNumeric()) {
+		bool converted_lvalue = false;
+		try {
+			if (lvalue_str == "NULL") {
+				lvalue = Value(GetInternalType(sql_type));
+			} else {
+				lvalue = Value(lvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			}
+			converted_lvalue = true;
+			if (rvalue_str == "NULL") {
+				rvalue = Value(GetInternalType(sql_type));
+			} else {
+				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+			}
+			error = !Value::ValuesAreEqual(lvalue, rvalue);
+		} catch(std::exception &ex) {
+			print_error_header("Test error!", zScriptFile, query_line);
+			print_line_sep();
+			print_sql(zScript);
+			print_line_sep();
+			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << SQLTypeToString(sql_type) << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
+			print_line_sep();
+			return false;
+		}
+	} else {
+		// for other types we just mark the result as incorrect
+		error = true;
+	}
+	if (error) {
+		print_error_header("Wrong result in query!", zScriptFile, query_line);
+		print_line_sep();
+		print_sql(zScript);
+		print_line_sep();
+		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column " << current_column << std::endl << termcolor::reset;
+		std::cerr << lvalue_str << " <> " <<  rvalue_str << std::endl;
+		print_line_sep();
+		print_result_error(result, values, expected_column_count, row_wise);
+		return false;
+	}
+	return true;
+}
+
+static Connection* GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map, string con_name) {
+	auto entry = named_connection_map.find(con_name);
+	if (entry == named_connection_map.end()) {
+		// not found: create a new connection
+		auto con = make_unique<Connection>(db);
+		auto res = con.get();
+		named_connection_map[con_name] = move(con);
+		return res;
+	}
+	return entry->second.get();
+}
+
+static void query_break(int line) {
+	(void) line;
+}
+
+struct Command {
+	virtual ~Command(){}
+
+	int query_line;
+	string sql_query;
+	Connection *connection;
+	string file_name;
+
+	virtual void Execute() = 0;
+	void Execute(string loop_iterator_name, int idx) {
+		// store the original query
+		auto original_query = sql_query;
+		// perform the string replacement
+		sql_query = StringUtil::Replace(sql_query, "${" + loop_iterator_name + "}", to_string(idx));
+		// execute the iterated statement
+		Execute();
+		// now restore the original query
+		sql_query = original_query;
+	}
+};
+
+struct Statement : public Command {
+	bool expect_ok;
+
+	void Execute() override;
+};
+
+enum class SortStyle : uint8_t {
+	NO_SORT,
+	ROW_SORT,
+	VALUE_SORT
+};
+
+struct Query : public Command {
+	idx_t expected_column_count;
+	SortStyle sort_style;
+	vector<string> values;
+	bool output_result_mode;
+	int hashThreshold;
+	bool output_hash_mode;
+	bool query_has_label;
+	string query_label;
+
+	void Execute() override;
+};
+
+
+void Statement::Execute() {
+	query_break(query_line);
+	auto result = connection->Query(sql_query);
+	bool error = !result->success;
+	
+	/* Check to see if we are expecting success or failure */
+	if (!expect_ok) {
+		error = !error;
+	}
+
+	/* Report an error if the results do not match expectation */
+	if (error) {
+		print_error_header(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", file_name, query_line);
+		print_line_sep();
+		print_sql(sql_query);
+		print_line_sep();
+		if (result) {
+			result->Print();
+		}
+		FAIL();
+	}
+	REQUIRE(!error);
+}
+
+void Query::Execute() {
+	query_break(query_line);
+	auto result = connection->Query(sql_query);
+	if (!result->success) {
+		print_line_sep();
+		fprintf(stderr, "Query unexpectedly failed (%s:%d)\n", file_name.c_str(), query_line);
+		print_line_sep();
+		print_sql(sql_query);
+		print_line_sep();
+		print_header("Actual result:");
+		result->Print();
+		FAIL();
+	}
+	vector<string> azResult;
+	int nResult;
+	duckdbConvertResult(*result, azResult, nResult);
+	if (output_result_mode) {
+		print_line_sep();
+		print_sql(sql_query);
+		print_line_sep();
+		// names
+		for(idx_t c = 0; c < result->column_count(); c++) {
+			if (c != 0) {
+				std::cerr << "\t";
+			}
+			std::cerr << result->names[c];
+		}
+		std::cerr << std::endl;
+		// types
+		for(idx_t c = 0; c < result->column_count(); c++) {
+			if (c != 0) {
+				std::cerr << "\t";
+			}
+			std::cerr << SQLTypeToString(result->sql_types[c]);
+		}
+		std::cerr << std::endl;
+		print_line_sep();
+		for(idx_t r = 0; r < result->collection.count; r++) {
+			for(idx_t c = 0; c < result->column_count(); c++) {
+				if (c != 0) {
+					std::cerr << "\t";
+				}
+				std::cerr << azResult[r * result->column_count() + c];
+			}
+			std::cerr << std::endl;
+		}
+	}
+
+	/* Do any required sorting of query results */
+	if (sort_style == SortStyle::NO_SORT) {
+		/* Do no sorting */
+	} else if (sort_style == SortStyle::ROW_SORT) {
+		/* Row-oriented sorting */
+		// construct rows
+		int nColumn = result->column_count();
+		int nRow = nResult / nColumn;
+		vector<vector<string>> rows;
+		rows.reserve(nRow);
+		for(int r = 0; r < nRow; r++) {
+			vector<string> row;
+			row.reserve(nColumn);
+			for(int c = 0; c < nColumn; c++) {
+				row.push_back(move(azResult[r * nColumn + c]));
+			}
+			rows.push_back(move(row));
+		}
+		// sort the individual rows
+		std::sort(rows.begin(), rows.end(),
+				[](const vector<string>& a, const vector<string>& b) {
+			for(size_t c = 0; c < a.size(); c++) {
+				if (a[c] != b[c]) {
+					return a[c] < b[c];
+				}
+			}
+			return false;
+		});
+		// now reconstruct the values from the rows
+		for(int r = 0; r < nRow; r++) {
+			for(int c = 0; c < nColumn; c++) {
+				azResult[r * nColumn + c] = move(rows[r][c]);
+			}
+		}
+	} else if (sort_style == SortStyle::VALUE_SORT) {
+		/* Sort all values independently */
+		std::sort(azResult.begin(), azResult.end());
+	}
+	char zHash[100];                            /* Storage space for hash results */
+	int compare_hash = query_has_label || (hashThreshold > 0 && nResult > hashThreshold);
+	// check if the current line (the first line of the result) is a hash value
+	if (values.size() == 1 && result_is_hash(values[0])) {
+		compare_hash = true;
+	}
+	/* Hash the results if we are over the hash threshold or if we
+	** there is a hash label */
+	if (output_hash_mode || compare_hash) {
+		md5_add(""); /* make sure md5 is reset, even if no results */
+		for (int i = 0; i < nResult; i++) {
+			md5_add(azResult[i].c_str());
+			md5_add("\n");
+		}
+		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
+		if (output_hash_mode) {
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			fprintf(stderr, "%s\n", zHash);
+			print_line_sep();
+			return;
+		}
+	}
+	/* Compare subsequent lines of the script against the
+		*results
+		** from the query.  Report an error if any differences are
+		*found.
+		*/
+	if (!compare_hash) {
+		idx_t expected_rows = values.size() / expected_column_count;
+		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
+		bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
+		if (!row_wise) {
+			// the counts do not match up for it to be row-wise
+			// however, this can also be because the query returned an incorrect # of rows
+			// we make a guess: if everything contains tabs, we still treat the input as row wise
+			bool all_tabs = true;
+			for(auto &val : values) {
+				if (val.find('\t') == string::npos) {
+					all_tabs = false;
+					break;
+				}
+			}
+			row_wise = all_tabs;
+		}
+		if (row_wise) {
+			// values are displayed row-wise, format row wise with a tab
+			expected_rows = values.size();
+			row_wise = true;
+		} else if (values.size() % expected_column_count != 0) {
+			print_error_header("Error in test!", file_name, query_line);
+			print_line_sep();
+			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int) expected_column_count, (int) values.size());
+			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
+			FAIL();
+		}
+		// check if the row/column count matches
+		if (expected_column_count != result->column_count()) {
+			print_error_header("Wrong column count in query!", file_name, query_line);
+			std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result->column_count() << termcolor::reset << " columns" << std::endl;
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			print_result_error(*result, values, expected_column_count, row_wise);
+			FAIL();
+		}
+		if (expected_rows != result->collection.count) {
+			print_error_header("Wrong row count in query!", file_name, query_line);
+			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			print_result_error(*result, values, expected_column_count, row_wise);
+			FAIL();
+		}
+
+		if (row_wise) {
+			int current_row = 0;
+			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
+				// split based on tab character
+				auto splits = StringUtil::Split(values[i], "\t");
+				if (splits.size() != expected_column_count) {
+					print_line_sep();
+					print_error_header("Error in test! Column count mismatch after splitting on tab!", file_name, query_line);
+					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
+					std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
+					print_line_sep();
+					print_sql(sql_query);
+					print_line_sep();
+					FAIL();
+				}
+				for(idx_t c = 0; c < splits.size(); c++) {
+					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name, query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
+					if (!success) {
+						FAIL();
+					}
+					// we do this just to increment the assertion counter
+					REQUIRE(success);
+				}
+				current_row++;
+			}
+		} else {
+			int current_row = 0, current_column = 0;
+			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
+				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], file_name, query_line, sql_query, current_row, current_column, values, expected_column_count, row_wise);
+				if (!success) {
+					FAIL();
+				}
+				// we do this just to increment the assertion counter
+				REQUIRE(success);
+
+				current_column++;
+				if (current_column == (int) expected_column_count) {
+					current_row++;
+					current_column = 0;
+				}
+			}
+		}
+	} else {
+		bool hash_compare_error = false;
+		if (query_has_label) {
+			// the query has a label: check if the hash has already been computed
+			auto entry = hash_label_map.find(query_label);
+			if (entry == hash_label_map.end()) {
+				// not computed yet: add it tot he map
+				hash_label_map[query_label] = string(zHash);
+			} else {
+				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
+			}
+		} else {
+			if (values.size() <= 0) {
+				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name, query_line);
+				FAIL();
+			}
+			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
+		}
+		if (hash_compare_error) {
+			print_error_header("Wrong result hash!", file_name, query_line);
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			print_header("Actual result:");
+			print_line_sep();
+			result->Print();
+			FAIL();
+		}
+		REQUIRE(!hash_compare_error);
+	}
+}
 
 static void execute_file(string script) {
 	int haltOnError = 0;                        /* Stop on first error if true */
-	int enableTrace = 0;                        /* Trace SQL statements if true */
+	const char *zDbEngine = "DuckDB";
 	const char *zScriptFile = 0;                /* Input script filename */
-	const char *zDbEngine = "DuckDB";           /* Name of database engine */
-	const char *zConnection = 0;                /* Connection string on DB engine */
-	const DbEngine *pEngine = 0;                /* Pointer to DbEngine object */
-	int i;                                      /* Loop counter */
+	unique_ptr<char[]> zScriptStorage;
 	char *zScript;                              /* Content of the script */
 	long nScript;                               /* Size of the script in bytes */
 	long nGot;                                  /* Number of bytes read */
-	void *pConn = nullptr;                      /* Connection to the database engine */
-	int rc;                                     /* Result code from subroutine call */
 	int nErr = 0;                               /* Number of errors */
-	int nCmd = 0;                               /* Number of SQL statements processed */
 	int nSkipped = 0;                           /* Number of SQL statements skipped */
-	int nResult;                                /* Number of query results */
-	char **azResult;                            /* Query result vector */
 	Script sScript;                             /* Script parsing status */
 	FILE *in;                                   /* For reading script */
-	char zHash[100];                            /* Storage space for hash results */
 	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
-	const char *zParam = 0;                     /* Argument to -parameters */
+	int output_hash_mode = 0;
+	int output_result_mode = 0;
+	bool skip_index = false;
+	bool in_loop = false;
+	string loop_iterator_name;
+	int loop_start;
+	int loop_end;
+	bool skip_execution = false;
+	vector<unique_ptr<Command>> loop_statements;
+	// for the original SQLite tests we skip the index (for now)
+	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+		skip_index = true;
+	}
 
-	const DbEngine duckdbEngine = {
-	    "DuckDB",            /* zName */
-	    0,                   /* pAuxData */
-	    duckdbConnect,       /* xConnect */
-	    duckdbGetEngineName, /* xGetEngineName */
-	    duckdbStatement,     /* xStatement */
-	    duckdbQuery,         /* xQuery */
-	    duckdbFreeResults,   /* xFreeResults */
-	    duckdbDisconnect     /* xDisconnect */
-	};
-	pEngine = &duckdbEngine;
+	DuckDB db;
+	Connection con(db);
+	unordered_map<string, unique_ptr<Connection>> named_connection_map;
 
-	REQUIRE(pEngine);
 	/*
 	** Read the entire script file contents into memory
 	*/
@@ -348,18 +792,16 @@ static void execute_file(string script) {
 	fseek(in, 0L, SEEK_END);
 	nScript = ftell(in);
 	REQUIRE(nScript > 0);
-	zScript = (char *)malloc(nScript + 1);
-	if (!zScript) {
-		IFAIL();
+	zScriptStorage = unique_ptr<char[]>(new char[nScript + 1]);
+	if (!zScriptStorage) {
+		FAIL();
 	}
+	zScript = zScriptStorage.get();
 	fseek(in, 0L, SEEK_SET);
 	nGot = fread(zScript, 1, nScript, in);
 	fclose(in);
 	REQUIRE(nGot <= nScript);
 	zScript[nGot] = 0;
-
-	// zap hash table as result labels are only valid within one test file
-	memset(aHash, 0, sizeof(aHash));
 
 	/* Initialize the sScript structure so that the cursor will be pointing
 	** to the start of the first line in the file after nextLine() is called
@@ -369,11 +811,6 @@ static void execute_file(string script) {
 	sScript.zLine = zScript;
 	sScript.iEnd = nScript;
 	sScript.copyFlag = 0;
-
-	/* Open the database engine under test
-	 */
-	rc = pEngine->xConnect(pEngine->pAuxData, zConnection, &pConn, zParam);
-	REQUIRE(rc == 0);
 
 	/* Loop over all records in the file */
 	while ((nErr == 0 || !haltOnError) && findStartOfNextRecord(&sScript)) {
@@ -409,57 +846,20 @@ static void execute_file(string script) {
 			tokenizeLine(&sScript);
 		}
 		if (bSkip) {
-			int n;
 			nSkipped++;
-			if (strcmp(sScript.azToken[0], "query") != 0)
-				continue;
-			if (sScript.azToken[3][0] == 0)
-				continue;
-
-			/* We are skipping this record.  But we observe that it is a
-			 *query
-			 ** with a named hash value and we are in verify mode.  Even
-			 *though
-			 ** we are going to skip the SQL evaluation, we might as well
-			 *check
-			 ** the hash of the result.
-			 */
-			while (!nextIsBlank(&sScript) && nextLine(&sScript) && strcmp(sScript.zLine, "----") != 0) {
-				/* Skip over the SQL text */
-			}
-			if (strcmp(sScript.zLine, "----") == 0)
-				nextLine(&sScript);
-			if (sScript.zLine[0] == 0)
-				continue;
-			n = sscanf(sScript.zLine, "%*d values hashing to %32s", zHash);
-			if (n != 1) {
-				md5_add(sScript.zLine);
-				md5_add("\n");
-				while (!nextIsBlank(&sScript) && nextLine(&sScript)) {
-					md5_add(sScript.zLine);
-					md5_add("\n");
-				}
-				strcpy(zHash, md5_finish());
-			}
-			if (checkValue(sScript.azToken[3], zHash)) {
-				fprintf(stderr,
-				        "%s:%d: labeled result [%s] does not agree with "
-				        "previous values\n",
-				        zScriptFile, sScript.startLine, sScript.azToken[3]);
-				IFAIL();
-			}
 			continue;
 		}
 
 		/* Figure out the record type and do appropriate processing */
 		if (strcmp(sScript.azToken[0], "statement") == 0) {
-			int k = 0;
-			int bExpectOk = 0;
-			int bExpectError = 0;
-
+			auto command = make_unique<Statement>();
+			
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
 			** of zScript - we are guaranteed to have enough space there. */
+			command->file_name = zScriptFile;
+			command->query_line = sScript.nLine;
+			int k = 0;
 			while (nextLine(&sScript) && sScript.zLine[0]) {
 				if (k > 0)
 					zScript[k++] = '\n';
@@ -468,43 +868,61 @@ static void execute_file(string script) {
 			}
 			zScript[k] = 0;
 
-			bExpectOk = strcmp(sScript.azToken[1], "ok") == 0;
-			bExpectError = strcmp(sScript.azToken[1], "error") == 0;
+			// perform any renames in zScript
+			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
+			
+			// skip CREATE INDEX (for now...)
+			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
+				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
+				continue;
+			}
+			// parse 
+			if (strcmp(sScript.azToken[1], "ok") == 0) {
+				command->expect_ok = true;
+			} else if (strcmp(sScript.azToken[1], "error") == 0) {
+				command->expect_ok = false;
+			} else {
+				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
+				        sScript.startLine);
+				FAIL();
+			}
+			// parse the connection to use
+			Connection *connection = &con;
+			if (strlen(sScript.azToken[2]) > 0) {
+				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+			}
 
 			/* Run the statement.  Remember the results
 			** If we're expecting an error, pass true to suppress
 			** printing of any errors.
 			*/
-			if (enableTrace)
-				printf("%s;\n", zScript);
-			rc = pEngine->xStatement(pConn, zScript, bExpectError);
-			nCmd++;
-
-			/* Check to see if we are expecting success or failure */
-			if (bExpectOk) {
-				/* do nothing if we expect success */
-			} else if (bExpectError) {
-				/* Invert the result if we expect failure */
-				rc = !rc;
-			} else {
-				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
-				        sScript.startLine);
-				IFAIL();
+			command->connection = connection;
+			if (skip_execution) {
+				continue;
 			}
-
-			/* Report an error if the results do not match expectation */
-			if (rc) {
-				fprintf(stderr, "%s:%d: statement error\n", zScriptFile, sScript.startLine);
-				IFAIL();
+			if (in_loop) {
+				loop_statements.push_back(move(command));
+			} else {
+				command->Execute();
 			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
+			auto command = make_unique<Query>();
+
 			int k = 0;
 			int c;
 
+			command->file_name = zScriptFile;
+			command->query_line = sScript.nLine;
+			command->hashThreshold = hashThreshold;
+			command->output_hash_mode = output_hash_mode;
+			command->output_result_mode = output_result_mode;
+			
 			/* Verify that the type string consists of one or more
 			 *characters
-			 ** from the set "TIR". */
+			 ** from the set 'TIR':*/
+			command->expected_column_count = 0;
 			for (k = 0; (c = sScript.azToken[1][k]) != 0; k++) {
+				command->expected_column_count++;
 				if (c != 'T' && c != 'I' && c != 'R') {
 					fprintf(stderr,
 					        "%s:%d: unknown type character '%c' in type "
@@ -518,7 +936,7 @@ static void execute_file(string script) {
 				continue;
 			if (k <= 0) {
 				fprintf(stderr, "%s:%d: missing type string\n", zScriptFile, sScript.startLine);
-				IFAIL();
+				FAIL();
 			}
 
 			/* Extract the SQL from second and subsequent lines of the
@@ -535,87 +953,49 @@ static void execute_file(string script) {
 			}
 			zScript[k] = 0;
 
-			/* Run the query */
-			nResult = 0;
-			azResult = 0;
-			if (enableTrace)
-				printf("%s;\n", zScript);
-			rc = pEngine->xQuery(pConn, zScript, sScript.azToken[1], &azResult, &nResult);
-			nCmd++;
-			if (rc) {
-				fprintf(stderr, "%s:%d: query failed\n", zScriptFile, sScript.startLine);
-				pEngine->xFreeResults(pConn, azResult, nResult);
-				IFAIL();
-			}
+			// perform any renames in zScript
+			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 
-			/* Do any required sorting of query results */
+			// figure out the sort style/connection style
+			command->connection = &con;
 			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
 				/* Do no sorting */
+				command->sort_style = SortStyle::NO_SORT;
 			} else if (strcmp(sScript.azToken[2], "rowsort") == 0) {
 				/* Row-oriented sorting */
-				nColumn = (int)strlen(sScript.azToken[1]);
-				qsort(azResult, nResult / nColumn, sizeof(azResult[0]) * nColumn, rowCompare);
+				command->sort_style = SortStyle::ROW_SORT;
 			} else if (strcmp(sScript.azToken[2], "valuesort") == 0) {
 				/* Sort all values independently */
-				nColumn = 1;
-				qsort(azResult, nResult, sizeof(azResult[0]), rowCompare);
+				command->sort_style = SortStyle::VALUE_SORT;
 			} else {
-				fprintf(stderr, "%s:%d: unknown sort method: '%s'\n", zScriptFile, sScript.startLine,
-				        sScript.azToken[2]);
-				IFAIL();
-			}
-
-			/* Hash the results if we are over the hash threshold or if we
-			** there is a hash label */
-			if (sScript.azToken[3][0] || (hashThreshold > 0 && nResult > hashThreshold)) {
-				md5_add(""); /* make sure md5 is reset, even if no results */
-				for (i = 0; i < nResult; i++) {
-					md5_add(azResult[i]);
-					md5_add("\n");
-				}
-				snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
-				sScript.azToken[3][20] = 0;
-				if (sScript.azToken[3][0] && checkValue(sScript.azToken[3], md5_finish())) {
-					fprintf(stderr,
-					        "%s:%d: labeled result [%s] does not agree with "
-					        "previous values\n",
-					        zScriptFile, sScript.startLine, sScript.azToken[3]);
-					IFAIL();
-				}
+				command->connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
 			}
 
 			/* In verify mode, first skip over the ---- line if we are
 			 *still
 			 ** pointing at it. */
-			if (strcmp(sScript.zLine, "----") == 0)
+			if (strcmp(sScript.zLine, "----") == 0) {
 				nextLine(&sScript);
-
-			/* Compare subsequent lines of the script against the
-			 *results
-			 ** from the query.  Report an error if any differences are
-			 *found.
-			 */
-			if (hashThreshold == 0 || nResult <= hashThreshold) {
-				for (i = 0; i < nResult && sScript.zLine[0]; nextLine(&sScript), i++) {
-					if (strcmp(sScript.zLine, azResult[i]) != 0) {
-						fprintf(stderr, "%s:%d: wrong result\n", zScriptFile, sScript.nLine);
-
-						fprintf(stderr, "%s <> %s\n", sScript.zLine, azResult[i]);
-						IFAIL();
-					}
-					// we check this already but this inflates the test
-					// case count as desired
-					REQUIRE(strcmp(sScript.zLine, azResult[i]) == 0);
-				}
-			} else {
-				if (strcmp(sScript.zLine, zHash) != 0) {
-					fprintf(stderr, "%s:%d: wrong result hash\n", zScriptFile, sScript.nLine);
-					IFAIL();
+			}
+			// read the expected result: keep reading until we encounter a blank line
+			while(sScript.zLine[0]) {
+				command->values.push_back(sScript.zLine);
+				if (!nextLine(&sScript)) {
+					break;
 				}
 			}
-
-			/* Free the query results */
-			pEngine->xFreeResults(pConn, azResult, nResult);
+			command->query_has_label = sScript.azToken[3][0];
+			command->query_label = sScript.azToken[3];
+			if (skip_execution) {
+				continue;
+			}
+			if (in_loop) {
+				// in a loop: add to loop statements
+				loop_statements.push_back(move(command));
+			} else {
+				// execute the command and compare it against the results
+				command->Execute();
+			}
 		} else if (strcmp(sScript.azToken[0], "hash-threshold") == 0) {
 			/* Set the maximum number of result values that will be accepted
 			** for a query.  If the number of result values exceeds this
@@ -642,36 +1022,98 @@ static void execute_file(string script) {
 			 */
 			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
 			break;
+		} else if (strcmp(sScript.azToken[0], "mode") == 0) {
+			if (strcmp(sScript.azToken[1], "output_hash") == 0) {
+				output_hash_mode = 1;
+			} else if (strcmp(sScript.azToken[1], "output_result") == 0) {
+				output_result_mode = 1;
+			} else if (strcmp(sScript.azToken[1], "skip") == 0) {
+				skip_execution = true;
+			} else if (strcmp(sScript.azToken[1], "unskip") == 0) {
+				skip_execution = false;
+			} else {
+				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				FAIL();
+			}
+		} else if (strcmp(sScript.azToken[0], "loop") == 0) {
+			if (in_loop) {
+				fprintf(stderr, "%s:%d: Test error: nested loops not supported!\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			in_loop = true;
+			if (strlen(sScript.azToken[1]) == 0 || strlen(sScript.azToken[2]) == 0 || strlen(sScript.azToken[3]) == 0) {
+				fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			// parse the loop parameters
+			loop_iterator_name = sScript.azToken[1];
+			loop_start = std::stoi(sScript.azToken[2]);
+			loop_end = std::stoi(sScript.azToken[3]);
+		} else if (strcmp(sScript.azToken[0], "endloop") == 0) {
+			if (!in_loop) {
+				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			if (loop_statements.size() == 0) {
+				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			for(int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+				for(auto &statement : loop_statements) {
+					statement->Execute(loop_iterator_name, loop_idx);
+				}
+			}
+			loop_statements.clear();
+			in_loop = false;
+		} else if (strcmp(sScript.azToken[0], "require") == 0) {
+			// require command
+			string param = StringUtil::Lower(sScript.azToken[1]);
+			if (param == "parquet") {
+#ifdef BUILD_PARQUET_EXTENSION
+				db.LoadExtension<ParquetExtension>();
+#else
+				// parquet extension required but not build: skip this test
+				return;
+#endif
+			} else if (param == "icu") {
+#ifdef BUILD_ICU_EXTENSION
+				db.LoadExtension<ICUExtension>();
+#else
+				// icu extension required but not build: skip this test
+				return;
+#endif
+			} else if (param == "vector_size") {
+				// require a specific vector size
+				int required_vector_size = std::stoi(sScript.azToken[2]);
+				if (STANDARD_VECTOR_SIZE < required_vector_size) {
+					// vector size is too low for this test: skip it
+					return;
+				}
+			} else {
+				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				FAIL();
+			}
+
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
-			IFAIL();
+			FAIL();
 		}
 	}
-
-	/* Shutdown the database connection.
-	 */
-	pEngine->xDisconnect(pConn);
-	free(zScript);
 }
 
 // code below traverses the test directory and makes individual test cases out
 // of each script
-static void listFiles(const string &path, std::function<void(const string &)> cb) {
-#ifndef SUN
-	if (auto dir = opendir(path.c_str())) {
-		while (auto f = readdir(dir)) {
-			if (f->d_name[0] == '.')
-				continue;
-			if (f->d_type == DT_DIR)
-				listFiles(path + f->d_name + "/", cb);
-
-			if (f->d_type == DT_REG)
-				cb(path + f->d_name);
+static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
+	fs.ListFiles(path, [&](string fname, bool is_dir) {
+		string full_path = fs.JoinPath(path, fname);
+		if (is_dir) {
+			// recurse into directory
+			listFiles(fs, full_path, cb);
+		} else {
+			cb(full_path);
 		}
-		closedir(dir);
-	}
-#endif
+	});
 }
 
 static bool endsWith(const string &mainStr, const string &toMatch) {
@@ -683,24 +1125,32 @@ static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
-	fprintf(stderr, "%s\n", name.c_str());
+	// fprintf(stderr, "%s\n", name.c_str());
 	execute_file(name);
 }
 
-TEST_CASE("SQLite select1", "[sqlitelogic]") {
-	execute_file("test/sqlite/select1.test");
-}
-
-TEST_CASE("SQLite select2", "[sqlitelogic][.]") {
-	execute_file("test/sqlite/select2.test");
-}
-
-TEST_CASE("SQLite select3", "[sqlitelogic][.]") {
-	execute_file("test/sqlite/select3.test");
-}
-
-TEST_CASE("SQLite select4", "[sqlitelogic][.]") {
-	execute_file("test/sqlite/select4.test");
+static string ParseGroupFromPath(string file) {
+	string extension = "";
+	if (file.find(".test_slow") != std::string::npos) {
+		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		extension = "[.]";
+	}
+	// move backwards to the last slash
+	int group_begin = -1, group_end = -1;
+	for(idx_t i = file.size(); i > 0; i--) {
+		if (file[i - 1] == '/' || file[i - 1] == '\\') {
+			if (group_end == -1) {
+				group_end = i - 1;
+			} else {
+				group_begin = i;
+				return "[" + file.substr(group_begin, group_end - group_begin) + "]" + extension;
+			}
+		}
+	}
+	if (group_end == -1) {
+		return "[" + file + "]" + extension;
+	}
+	return "[" + file.substr(0, group_end) + "]" + extension;
 }
 
 struct AutoRegTests {
@@ -748,7 +1198,8 @@ struct AutoRegTests {
 		    "evidence/slt_lang_createtrigger.test",            // "
 		    "evidence/slt_lang_droptrigger.test"               // "
 		};
-		listFiles("third_party/sqllogictest/test/", [excludes](const string &path) {
+		FileSystem fs;
+		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
 			if (endsWith(path, ".test")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {
@@ -756,6 +1207,17 @@ struct AutoRegTests {
 					}
 				}
 				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+			}
+		});
+		listFiles(fs, "test", [excludes](const string &path) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow")) {
+				for (auto excl : excludes) {
+					if (path.find(excl) != string::npos) {
+						return;
+					}
+				}
+				// parse the name / group from the test
+				REGISTER_TEST_CASE(testRunner, path, ParseGroupFromPath(path));
 			}
 		});
 	}

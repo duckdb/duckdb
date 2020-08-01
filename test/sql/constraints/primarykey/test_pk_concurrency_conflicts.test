@@ -1,0 +1,80 @@
+# name: test/sql/constraints/primarykey/test_pk_concurrency_conflicts.test
+# description: PRIMARY KEY and concurency conflicts
+# group: [primarykey]
+
+statement ok con1
+CREATE TABLE integers(i INTEGER PRIMARY KEY)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3)
+
+# con1 starts a transaction and modifies the second value
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE integers SET i=4 WHERE i=2
+
+# con2 can't update the second value
+statement error con2
+UPDATE integers SET i=4 WHERE i=2
+
+statement error con2
+UPDATE integers SET i=5 WHERE i=2
+
+# nor can it delete it
+statement error con2
+DELETE FROM integers WHERE i=2
+
+# we tried to set i=5 in con2 but it failed, we can set it in con1 now though
+statement ok con1
+UPDATE integers SET i=5 WHERE i=3
+
+# rollback con1
+statement ok con1
+ROLLBACK
+
+# now we can perform the changes in con2
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE integers SET i=4 WHERE i=2
+
+statement ok con2
+UPDATE integers SET i=5 WHERE i=3
+
+# check the results, con1 still gets the old results
+query I con1
+SELECT * FROM integers ORDER BY i
+----
+1
+2
+3
+
+query I con2
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5
+
+# now commit
+statement ok con2
+COMMIT
+
+# check the results again, both get the same (new) results now
+query I con1
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5
+
+query I con2
+SELECT * FROM integers ORDER BY i
+----
+1
+4
+5
+

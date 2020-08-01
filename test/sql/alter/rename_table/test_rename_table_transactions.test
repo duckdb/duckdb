@@ -1,0 +1,61 @@
+# name: test/sql/alter/rename_table/test_rename_table_transactions.test
+# description: Test RENAME TABLE two parallel transactions
+# group: [rename_table]
+
+statement ok con1
+CREATE TABLE tbl(i INTEGER)
+
+statement ok con1
+INSERT INTO tbl VALUES (999), (100)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE tbl RENAME TO tbl2
+
+query I con1
+SELECT * FROM tbl2
+----
+999
+100
+
+statement error con1
+SELECT * FROM tbl
+
+query I con2
+SELECT * FROM tbl
+----
+999
+100
+
+statement error con2
+SELECT * FROM tbl2
+
+statement ok con1
+COMMIT
+
+statement ok con2
+COMMIT
+
+statement error con1
+SELECT * FROM tbl
+
+statement error con2
+SELECT * FROM tbl
+
+query I con1
+SELECT * FROM tbl2
+----
+999
+100
+
+query I con2
+SELECT * FROM tbl2
+----
+999
+100
+

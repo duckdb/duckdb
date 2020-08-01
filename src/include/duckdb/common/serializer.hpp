@@ -35,7 +35,6 @@ public:
 	}
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		assert(val.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)val.size());
 		if (val.size() > 0) {
 			WriteData((const_data_ptr_t)val.c_str(), val.size());
@@ -43,7 +42,6 @@ public:
 	}
 
 	template <class T> void WriteList(vector<unique_ptr<T>> &list) {
-		assert(list.size() <= std::numeric_limits<uint32_t>::max());
 		Write<uint32_t>((uint32_t)list.size());
 		for (auto &child : list) {
 			child->Serialize(*this);

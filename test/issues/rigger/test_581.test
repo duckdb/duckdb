@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_581.test
+# description: Issue 581
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# DISTINCT malfunctions for BOOLEAN
+statement ok
+CREATE TABLE t0(c0 BOOLEAN);
+
+statement ok
+INSERT INTO t0 VALUES (NULL), (false);
+
+query T
+SELECT DISTINCT t0.c0 FROM t0 ORDER BY 1;
+----
+NULL
+0
+

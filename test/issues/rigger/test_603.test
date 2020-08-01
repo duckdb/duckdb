@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_603.test
+# description: Issue 603
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# BETWEEN with COLLATE NOACCENT.NOCASE expression results in a segfault/ASan failure
+statement ok
+CREATE TABLE t0(c0 DATE, c1 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (NULL), ('2000-01-01');
+
+query TT
+SELECT * FROM t0 WHERE 'a' BETWEEN c0 AND c1 COLLATE NOACCENT.NOCASE;
+----
+

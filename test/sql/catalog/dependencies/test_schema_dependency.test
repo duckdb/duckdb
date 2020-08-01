@@ -1,0 +1,96 @@
+# name: test/sql/catalog/dependencies/test_schema_dependency.test
+# description: Schema dependencies
+# group: [dependencies]
+
+# single schema and dependencies
+statement ok con1
+CREATE SCHEMA s1
+
+statement ok con1
+CREATE TABLE s1.integers(i INTEGER)
+
+query I con1
+SELECT * FROM s1.integers
+----
+
+# can't drop: dependency
+statement error con1
+DROP SCHEMA s1
+
+query I con1
+SELECT * FROM s1.integers
+----
+
+# we can drop with cascade though
+statement ok con1
+DROP SCHEMA s1 CASCADE
+
+# this also drops the table
+statement error con1
+SELECT * FROM s1.integers
+
+# schemas and dependencies
+# create a schema and a table inside the schema
+statement ok con1
+CREATE SCHEMA s1
+
+statement ok con1
+CREATE TABLE s1.integers(i INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# drop the table in con1
+statement ok con1
+DROP TABLE s1.integers
+
+# we can't drop the schema from con2 because the table still exists for con2!
+statement error con2
+DROP SCHEMA s1
+
+# now rollback the table drop
+statement ok con1
+ROLLBACK
+
+statement ok con2
+ROLLBACK
+
+# the table exists again
+query I con1
+SELECT * FROM s1.integers
+----
+
+# try again, but this time we commit
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# drop the schema entirely now
+statement ok con1
+DROP SCHEMA s1 CASCADE
+
+# we can still query the table from con2
+query I con2
+SELECT * FROM s1.integers
+----
+
+# even after we commit
+statement ok con1
+COMMIT
+
+query I con2
+SELECT * FROM s1.integers
+----
+
+# however if we end the transaction in con2 the schema is gone
+statement ok con2
+ROLLBACK
+
+statement error con2
+CREATE TABLE s1.dummy(i INTEGER)
+

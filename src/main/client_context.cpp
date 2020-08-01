@@ -26,6 +26,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 using namespace std;
 
@@ -420,6 +421,12 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
+	if (log_query_writer) {
+		// log query path is set: log the query
+		log_query_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+		log_query_writer->Flush();
+	}
 
 	Parser parser;
 	try {
@@ -491,7 +498,6 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	auto select_stmt = (SelectStatement *)statement.get();
 	auto copied_stmt = select_stmt->Copy();
 	auto unoptimized_stmt = select_stmt->Copy();
-	auto parallel_stmt = select_stmt->Copy();
 
 	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
@@ -548,8 +554,6 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	                                    deserialized_result =
 	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
 	                                    unoptimized_result =
-	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	                                    parallel_result =
 	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
 
 	// execute the original statement
@@ -598,23 +602,6 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		unoptimized_result->success = false;
 	}
 	enable_optimizer = true;
-	// now execute the parallel statement
-	// set the degree of parallelism to 4, if the current database is single-threaded
-	force_parallelism = true;
-	auto &scheduler = TaskScheduler::GetScheduler(*this);
-	idx_t current_threads = scheduler.NumberOfThreads();
-	if (current_threads < 4) {
-		scheduler.SetThreads(4);
-	}
-	try {
-		auto result = RunStatementInternal(query, move(parallel_stmt), false);
-		parallel_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
-	} catch (std::exception &ex) {
-		parallel_result->error = ex.what();
-		parallel_result->success = false;
-	}
-	force_parallelism = false;
-	scheduler.SetThreads(current_threads);
 
 	if (profiling_is_enabled) {
 		profiler.Enable();
@@ -626,8 +613,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	results.push_back(move(copied_result));
 	results.push_back(move(deserialized_result));
 	results.push_back(move(unoptimized_result));
-	results.push_back(move(parallel_result));
-	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result", "Parallel Result"};
+	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
 	for (idx_t i = 0; i < results.size(); i++) {
 		if (!original_result->collection.Equals(results[i]->collection)) {
 			string result = names[i] + " differs from original result!\n";

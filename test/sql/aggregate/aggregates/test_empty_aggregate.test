@@ -1,0 +1,31 @@
+# name: test/sql/aggregate/test_empty_aggregate.test
+# description: Test aggregate operators on empty set
+# group: [aggregate]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+query IIRRRIII
+SELECT COUNT(*), COUNT(i), STDDEV_SAMP(i), SUM(i), SUM(DISTINCT i), FIRST(i), MAX(i), MIN(i) FROM integers WHERE i > 100
+----
+0
+0
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+CREATE TABLE emptyaggr(i INTEGER);
+
+query I
+SELECT COUNT(*) FROM emptyaggr
+----
+0
+
+query RIIIRIIIII
+SELECT SUM(i), COUNT(i), COUNT(DISTINCT i), COUNT(*), AVG(i), COUNT(*)+1, COUNT(i)+1, MIN(i), MIN(i+1), MIN(i)+1 FROM emptyaggr
+----
+NULL	0	0	0	NULL	1	1	NULL	NULL	NULL

@@ -1,0 +1,144 @@
+# name: test/sql/types/blob/test_blob.test
+# description: BLOB tests
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE blobs (b BYTEA);
+
+# Insert valid hex strings
+statement ok
+INSERT INTO blobs VALUES('\xAAFFAA'), ('\xAAFFAAAAFFAA'), ('\xAAFFAAAAFFAAAAFFAA')
+
+query T
+SELECT * FROM blobs
+----
+\xAAFFAA
+\xAAFFAAAAFFAA
+\xAAFFAAAAFFAAAAFFAA
+
+# Insert valid hex strings, lower case
+statement ok
+DELETE FROM blobs
+
+statement ok
+INSERT INTO blobs VALUES('\xaaffaa'), ('\xaaffaaaaffaa'), ('\xaaffaaaaffaaaaffaa')
+
+query T
+SELECT * FROM blobs
+----
+\xAAFFAA
+\xAAFFAAAAFFAA
+\xAAFFAAAAFFAAAAFFAA
+
+# Insert valid hex strings with number and letters
+statement ok
+DELETE FROM blobs
+
+statement ok
+INSERT INTO blobs VALUES('\xaa1199'), ('\xaa1199aa1199'), ('\xaa1199aa1199aa1199')
+
+query T
+SELECT * FROM blobs
+----
+\xAA1199
+\xAA1199AA1199
+\xAA1199AA1199AA1199
+
+# Insert invalid hex strings (invalid hex chars: G, H, I)
+statement error
+INSERT INTO blobs VALUES('\xGAFFAA'), ('\xHAFFAAAAFFAA'), ('\xIAFFAAAAFFAAAAFFAA')
+
+# Insert invalid hex strings (odd # of chars)
+statement error
+INSERT INTO blobs VALUES('\xAAAFFAA'), ('\xAAAFFAAAAFFAA'), ('\xAAAFFAAAAFFAAAAFFAA')
+
+# insert BLOB with ‚Äúnon-printable‚Äù octets
+statement ok
+INSERT INTO blobs VALUES ('klm *©T'::BYTEA)
+
+# insert BLOB with ‚Äúnon-printable‚Äù octets, but now using VARCHAR string (should fail)
+statement error
+INSERT INTO blobs VALUES ('klm *©T'::VARCHAR)
+
+statement error
+INSERT INTO blobs VALUES ('klm *©T')
+
+# insert BLOB with ‚Äúnon-printable‚Äù octets, but now using string
+statement ok
+INSERT INTO blobs VALUES ('klm *©T'::BLOB)
+
+# BLOB with ‚Äúnon-printable‚Äù octets
+query T
+SELECT 'abc Å'::BYTEA;
+----
+\x6162632081
+
+query T
+SELECT 'abc Å'::BYTEA;
+----
+\x6162632081
+
+query T
+SELECT 'abc klm *©T'::BYTEA;
+----
+\x616263206B6C6D202AA954
+
+query T
+SELECT 'abc klm *©T'::BYTEA;
+----
+\x616263206B6C6D202AA954
+
+# now VARCHAR with ‚Äúnon-printable‚Äù octets, should fail
+statement error
+SELECT 'abc Å'::VARCHAR;
+
+statement error
+SELECT 'abc klm *©T'::VARCHAR;
+
+statement ok
+CREATE TABLE blob_invalid_octet (b BYTEA);
+
+statement ok
+INSERT INTO blob_invalid_octet VALUES ('\xFF00AA'), ('a a'::BYTEA)
+
+statement ok
+INSERT INTO blob_invalid_octet VALUES ('klm *©T'::BYTEA)
+
+query T
+SELECT * FROM blob_invalid_octet
+----
+\xFF00AA
+\x612061
+\x6B6C6D202AA954
+
+# BLOB null and empty values
+query T
+SELECT ''::BLOB
+----
+\x
+
+query T
+SELECT NULL::BLOB
+----
+NULL
+
+statement ok
+CREATE TABLE blob_empty (b BYTEA);
+
+statement ok
+INSERT INTO blob_empty VALUES(''), (''::BLOB)
+
+statement ok
+INSERT INTO blob_empty VALUES(NULL), (NULL::BLOB)
+
+query T
+SELECT * FROM blob_empty
+----
+\x
+\x
+NULL
+NULL
+

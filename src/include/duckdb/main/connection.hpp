@@ -17,6 +17,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/function/udf_function.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,6 @@ public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
-
 public:
 	//! Returns query profiling information for the current query
 	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);

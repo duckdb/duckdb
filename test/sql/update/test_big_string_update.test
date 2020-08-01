@@ -1,0 +1,96 @@
+# name: test/sql/update/test_big_string_update.test
+# description: Test update of big string
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a VARCHAR);
+
+statement ok con1
+INSERT INTO test VALUES ('abcdefghijklmnopqrstuvwxyz')
+
+# increase the size of the string until it is bigger than a block
+# 26 -> 260
+# concat the string 10x and insert it
+statement ok con1
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test
+
+# delete the old value
+statement ok con1
+DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)
+
+# 260 -> 2600
+# concat the string 10x and insert it
+statement ok con1
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test
+
+# delete the old value
+statement ok con1
+DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)
+
+# 2600 -> 26000
+# concat the string 10x and insert it
+statement ok con1
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test
+
+# delete the old value
+statement ok con1
+DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)
+
+# 26000 -> 260000
+# concat the string 10x and insert it
+statement ok con1
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test
+
+# delete the old value
+statement ok con1
+DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)
+
+# 260000 -> 2600000
+# concat the string 10x and insert it
+statement ok con1
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test
+
+# delete the old value
+statement ok con1
+DELETE FROM test WHERE length(a) = (SELECT MIN(length(a)) FROM test)
+
+# verify that the string length is correct
+query I con1
+SELECT LENGTH(a) FROM test
+----
+2600000
+
+# now update the big string in a separate transaction
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE test SET a='a'
+
+# verify the lengths
+query I con1
+SELECT LENGTH(a) FROM test
+----
+1
+
+query I con2
+SELECT LENGTH(a) FROM test
+----
+2600000
+
+# now commit
+statement ok con1
+COMMIT
+
+# the big string is gone now
+query I con1
+SELECT LENGTH(a) FROM test
+----
+1
+
+query I con2
+SELECT LENGTH(a) FROM test
+----
+1
+

@@ -1,0 +1,26 @@
+# name: test/issues/rigger/test_622.test
+# description: Issue 622
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# UPDATE on altered table results in an error 'Could not find node in column segment tree'
+statement ok
+CREATE TABLE t0(c0 TIMESTAMP);
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+DELETE FROM t0;
+
+statement ok
+ALTER TABLE t0 ALTER c0 TYPE DATE;
+
+statement ok
+INSERT INTO t0 VALUES(NULL);
+
+statement ok
+UPDATE t0 SET c0 = '1969-12-18'; 
+

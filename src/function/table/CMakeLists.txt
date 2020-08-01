@@ -1,6 +1,8 @@
 add_subdirectory(sqlite)
 add_library_unity(duckdb_func_table
                   OBJECT
+                  range.cpp
+                  repeat.cpp
                   copy_csv.cpp
                   read_csv.cpp
                   sqlite_functions.cpp)

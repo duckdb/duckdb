@@ -1,0 +1,54 @@
+# name: test/sql/function/operator/test_arithmetic_sqllogic.test
+# description: SQLogicTest inspired arithmetic tests
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tab0(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+
+statement ok
+CREATE TABLE tab1(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+
+statement ok
+CREATE TABLE tab2(col0 INTEGER, col1 INTEGER, col2 INTEGER);
+
+statement ok
+INSERT INTO tab0 VALUES(97,1,99);
+
+statement ok
+INSERT INTO tab0 VALUES(15,81,47);
+
+statement ok
+INSERT INTO tab0 VALUES(87,21,10);
+
+statement ok
+INSERT INTO tab1 VALUES(51,14,96);
+
+statement ok
+INSERT INTO tab1 VALUES(85,5,59);
+
+statement ok
+INSERT INTO tab1 VALUES(91,47,68);
+
+statement ok
+INSERT INTO tab2 VALUES(64,77,40);
+
+statement ok
+INSERT INTO tab2 VALUES(75,67,58);
+
+statement ok
+INSERT INTO tab2 VALUES(46,51,23);
+
+query I
+SELECT DISTINCT - col2 AS col2 FROM tab1 WHERE NOT 18 BETWEEN NULL AND ( + col0 * + CAST ( NULL AS INTEGER ) + - 3 / col2 ) OR NOT col0 BETWEEN col2 + + col1 AND NULL ORDER BY 1 DESC;
+----
+-68
+-96
+
+query I
+SELECT MIN ( DISTINCT + CAST ( NULL AS INTEGER ) ) * COUNT ( * ) * - + 16 * CASE + + AVG ( ALL 97 ) WHEN ( + NULLIF ( SUM ( CAST ( NULL AS REAL ) ), 6 ) ) THEN 51 * 31 + - 6 WHEN + 48 * - 34 THEN NULL WHEN 91 * + ( SUM ( CAST ( NULL AS INTEGER ) ) ) THEN NULL END * - 4 + - 67;
+----
+NULL
+

@@ -1,0 +1,54 @@
+# name: test/sql/aggregate/test_avg.test
+# description: Test AVG operator
+# group: [aggregate]
+
+# scalar average
+query RR
+SELECT AVG(3), AVG(NULL)
+----
+3
+NULL
+
+# test average on sequence
+statement ok
+CREATE SEQUENCE seq;
+
+query R
+SELECT AVG(nextval('seq'))
+----
+1
+
+query R
+SELECT AVG(nextval('seq'))
+----
+2
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+query RRRR
+SELECT AVG(i), AVG(1), AVG(DISTINCT i), AVG(NULL) FROM integers
+----
+2
+1
+2
+NULL
+
+query R
+SELECT AVG(i) FROM integers WHERE i > 100
+----
+NULL
+
+# invalid use of average
+statement error
+SELECT AVG()
+
+statement error
+SELECT AVG(1, 2, 3)
+
+statement error
+SELECT AVG(AVG(1))
+

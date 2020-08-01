@@ -1,0 +1,131 @@
+# name: test/sql/join/inner/test_eq_ineq_join.test
+# description: Equality + inequality joins
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (11, 1), (12, 1), (13, 4)
+
+query III
+SELECT test.a, b, c FROM test, test2 WHERE test.a = test2.a AND test.b <> test2.c ORDER BY test.a;
+----
+12	2	1
+13	3	4
+
+query III
+SELECT test.a, b, c FROM test, test2 WHERE test.a = test2.a AND test.b < test2.c ORDER BY test.a;
+----
+13	3	4
+
+query III
+SELECT test.a, b, c FROM test, test2 WHERE test.a = test2.a AND test.b <= test2.c ORDER BY test.a;
+----
+11	1	1
+13	3	4
+
+query III
+SELECT test.a, b, c FROM test, test2 WHERE test.a = test2.a AND test.b > test2.c ORDER BY test.a;
+----
+12	2	1
+
+query III
+SELECT test.a, b, c FROM test, test2 WHERE test.a = test2.a AND test.b >= test2.c ORDER BY test.a;
+----
+11	1	1
+12	2	1
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE test2;
+
+# Equality + inequality anti and semi joins
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')
+
+statement ok
+CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);
+
+statement ok
+INSERT INTO test2 VALUES (11, 1, 'd'), (12, 1, 'e'), (13, 4, 'f')
+
+query IIT
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c);
+----
+12	2	b
+13	3	c
+
+query IIT
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) AND NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c);
+----
+12	2	b
+
+query IIT
+SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c);
+----
+11	1	a
+12	2	b
+
+query IIT
+SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c) AND NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b>test2.c);
+----
+11	1	a
+
+query IIT
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) AND test.a > 11;
+----
+12	2	b
+13	3	c
+
+statement ok
+DROP TABLE test;
+
+statement ok
+DROP TABLE test2;
+
+# Equality + inequality anti and semi joins with selection vector
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')
+
+statement ok
+CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);
+
+statement ok
+INSERT INTO test2 VALUES (11, 1, 'd'), (12, 1, 'e'), (13, 4, 'f')
+
+query IIT
+SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c AND test2.a>14) AND NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b>test2.c AND test2.a<10);
+----
+11	1	a
+12	2	b
+13	3	c
+
+query IIT
+SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c AND test2.a=12) AND NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b>test2.c AND test2.a=12);
+----
+11	1	a
+13	3	c
+
+query IIT
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c) AND test.a < 13;
+----
+12	2	b
+

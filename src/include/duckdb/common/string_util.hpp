@@ -25,7 +25,7 @@ public:
 	static bool Contains(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
-	static bool StartsWith(const string &str, const string &prefix);
+	static bool StartsWith(string str, string prefix);
 
 	//! Returns true if the target string <b>ends</b> with the given suffix.
 	static bool EndsWith(const string &str, const string &suffix);

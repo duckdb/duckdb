@@ -1,0 +1,222 @@
+# name: test/sql/function/generic/test_between.test
+# description: Test between statement
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+# test constant BETWEEN statement
+# simple between
+query T
+SELECT 10 BETWEEN 10 AND 20
+----
+1
+
+query T
+SELECT 9 BETWEEN 10 AND 20
+----
+0
+
+# now with NULL values
+query T
+SELECT 10 BETWEEN NULL AND 20
+----
+NULL
+
+query T
+SELECT 30 BETWEEN NULL AND 20
+----
+0
+
+query T
+SELECT 10 BETWEEN 10 AND NULL
+----
+NULL
+
+query T
+SELECT 9 BETWEEN 10 AND NULL
+----
+0
+
+query T
+SELECT NULL BETWEEN 10 AND 20
+----
+NULL
+
+query T
+SELECT NULL BETWEEN NULL AND 20
+----
+NULL
+
+query T
+SELECT NULL BETWEEN 10 AND NULL
+----
+NULL
+
+query T
+SELECT NULL BETWEEN NULL AND NULL
+----
+NULL
+
+# between with table
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+query T
+SELECT i BETWEEN 1 AND 2 FROM integers ORDER BY i
+----
+NULL
+1
+1
+0
+
+query T
+SELECT i BETWEEN NULL AND 2 FROM integers ORDER BY i
+----
+NULL
+NULL
+NULL
+0
+
+query T
+SELECT i BETWEEN 2 AND NULL FROM integers ORDER BY i
+----
+NULL
+0
+NULL
+NULL
+
+# between in WHERE clause
+query I
+SELECT COUNT(*) FROM integers WHERE 10 BETWEEN 10 AND 20
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE 9 BETWEEN 10 AND 20
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 10 BETWEEN NULL AND 20
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 30 BETWEEN NULL AND 20
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 10 BETWEEN 10 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 9 BETWEEN 10 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN 10 AND 20
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN NULL AND 20
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN 10 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN NULL AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN 1 AND 2
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN NULL AND 2
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN 2 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN -1 AND +1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 0 BETWEEN -1 AND +1
+----
+4
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN i-1 AND i+1
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN i-1 AND 10
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN NULL AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN i-1 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN 0 AND i+1
+----
+3
+
+query I
+SELECT COUNT(*) FROM integers WHERE i BETWEEN NULL AND i+1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 1 BETWEEN i-1 AND i+1
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN i-1 AND i+1
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE NULL BETWEEN i-1 AND NULL
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE 1 BETWEEN i-1 AND 100
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers WHERE 1 BETWEEN 0 AND i-1
+----
+2
+

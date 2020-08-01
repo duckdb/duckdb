@@ -1,0 +1,192 @@
+# name: test/sql/function/operator/test_conjunction.test
+# description: Test conjunction statements
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+# create table
+statement ok
+CREATE TABLE a (i integer, j integer);
+
+statement ok
+INSERT INTO a VALUES (3, 4), (4, 5), (5, 6)
+
+query II
+SELECT * FROM a WHERE (i > 3 AND j < 5) OR (i > 3 AND j > 5)
+----
+5	6
+
+# test boolean logic in conjunctions
+query T
+SELECT true AND true
+----
+1
+
+query T
+SELECT true AND false
+----
+0
+
+query T
+SELECT false AND true
+----
+0
+
+query T
+SELECT false AND false
+----
+0
+
+query T
+SELECT false AND NULL
+----
+0
+
+query T
+SELECT NULL AND false
+----
+0
+
+query T
+SELECT NULL AND true
+----
+NULL
+
+query T
+SELECT true AND NULL
+----
+NULL
+
+query T
+SELECT true OR true
+----
+1
+
+query T
+SELECT true OR NULL
+----
+1
+
+query T
+SELECT NULL OR true
+----
+1
+
+query T
+SELECT false OR NULL
+----
+NULL
+
+query T
+SELECT NULL OR false
+----
+NULL
+
+query T
+SELECT true OR false
+----
+1
+
+query T
+SELECT false OR true
+----
+1
+
+query T
+SELECT false OR false
+----
+0
+
+# test single constant in conjunctions
+query T
+SELECT true AND i>3 FROM a ORDER BY i
+----
+0
+1
+1
+
+query T
+SELECT i>3 AND true FROM a ORDER BY i
+----
+0
+1
+1
+
+query T
+SELECT 2>3 AND i>3 FROM a ORDER BY i
+----
+0
+0
+0
+
+query T
+SELECT false AND i>3 FROM a ORDER BY i
+----
+0
+0
+0
+
+query T
+SELECT i>3 AND false FROM a ORDER BY i
+----
+0
+0
+0
+
+query T
+SELECT false OR i>3 FROM a ORDER BY i
+----
+0
+1
+1
+
+query T
+SELECT i>3 OR false FROM a ORDER BY i
+----
+0
+1
+1
+
+query T
+SELECT true OR i>3 FROM a ORDER BY i
+----
+1
+1
+1
+
+query T
+SELECT i>3 OR true FROM a ORDER BY i
+----
+1
+1
+1
+
+query T
+SELECT NULL OR i>3 FROM a ORDER BY i
+----
+NULL
+1
+1
+
+query T
+SELECT i>3 OR NULL FROM a ORDER BY i
+----
+NULL
+1
+1
+
+query T
+SELECT NULL AND i>3 FROM a ORDER BY i
+----
+0
+NULL
+NULL
+
+query T
+SELECT i>3 AND NULL FROM a ORDER BY i
+----
+0
+NULL
+NULL
+

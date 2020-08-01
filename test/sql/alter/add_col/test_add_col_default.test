@@ -1,0 +1,23 @@
+# name: test/sql/alter/add_col/test_add_col_default.test
+# description: Test ALTER TABLE ADD COLUMN: ADD COLUMN with default value
+# group: [add_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ADD COLUMN l INTEGER DEFAULT 3
+
+query III
+SELECT * FROM test
+----
+1
+1
+3
+2
+2
+3
+

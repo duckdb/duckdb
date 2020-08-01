@@ -27,6 +27,7 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	sql_type = SQLType::VARCHAR;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -427,6 +428,7 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.bigint);
 	case SQLTypeId::FLOAT:
 		return to_string(value_.float_);
+	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
@@ -471,7 +473,7 @@ string Value::ToString(SQLType sql_type) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing");
+		throw NotImplementedException("Unimplemented type for printing: %s", SQLTypeToString(sql_type).c_str());
 	}
 }
 

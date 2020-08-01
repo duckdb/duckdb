@@ -147,9 +147,12 @@ void BaseCSVData::Finalize() {
 	if (quote != escape) {
 		SubstringDetection(quote, escape, "QUOTE", "ESCAPE");
 	}
-	// null string and delimiter must not be substrings of each other
 	if (null_str != "") {
+		// null string and delimiter must not be substrings of each other
 		SubstringDetection(delimiter, null_str, "DELIMITER", "NULL");
+		// quote/escape and nullstr must not be substrings of each other
+		SubstringDetection(quote, null_str, "QUOTE", "NULL");
+		SubstringDetection(escape, null_str, "ESCAPE", "NULL");
 	}
 }
 
@@ -275,7 +278,7 @@ static string AddEscapes(string &to_be_escaped, string escape, string val) {
 
 static bool RequiresQuotes(WriteCSVData &options, const char *str, idx_t len) {
 	// check if the string is equal to the null string
-	if (len != options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
+	if (len == options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
 		return true;
 	}
 	if (options.is_simple) {

@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_585.test
+# description: Issue 585
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Predicate checking for an empty string yields an incorrect result
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (''), (0)
+
+query T
+SELECT * FROM t0 WHERE t0.c0 = ''; 
+----
+(empty)
+
+#  -- expected: {''}, actual: {}

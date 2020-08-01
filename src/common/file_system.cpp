@@ -256,24 +256,37 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir(directory.c_str())) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir(dir)) != NULL) {
-			string name = string(ent->d_name);
-			if (!name.empty() && name[0] != '.') {
-				callback(name);
-			}
-		}
-		closedir(dir);
-	} else {
+	DIR *dir = opendir(directory.c_str());
+	if (!dir) {
 		return false;
 	}
+	struct dirent *ent;
+	// loop over all files in the directory
+	while ((ent = readdir(dir)) != NULL) {
+		string name = string(ent->d_name);
+		// skip . .. and empty files
+		if (name.empty() || name == "." || name == "..") {
+			continue;
+		}
+		// now stat the file to figure out if it is a regular file or directory
+		string full_path = JoinPath(directory, name);
+		if (access(full_path.c_str(), 0) != 0) {
+			continue;
+		}
+		struct stat status;
+		stat(full_path.c_str(), &status);
+		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
+			// not a file or directory: skip
+			continue;
+		}
+		// invoke callback
+		callback(name, status.st_mode & S_IFDIR);
+	}
+	closedir(dir);
 	return true;
 }
 
@@ -512,7 +525,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -521,11 +534,11 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 		return false;
 	}
 	do {
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		string cFileName = string(ffd.cFileName);
+		if (cFileName == "." || cFileName == "..") {
 			continue;
 		}
-
-		callback(string(ffd.cFileName));
+		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	} while (FindNextFile(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();

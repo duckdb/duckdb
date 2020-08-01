@@ -1,0 +1,169 @@
+# name: test/sql/function/string/regex_search.test
+# description: regex search test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# constant strings
+query T
+SELECT regexp_matches('asdf', '.*sd.*')
+----
+1
+
+query T
+SELECT regexp_matches('asdf', '.*yu.*')
+----
+0
+
+query T
+SELECT regexp_matches('asdf', '')
+----
+1
+
+# partial matches okay
+query T
+SELECT regexp_matches('asdf', 'sd')
+----
+1
+
+query T
+SELECT regexp_full_match('asdf', 'sd')
+----
+0
+
+query T
+SELECT regexp_full_match('asdf', '.sd.')
+----
+1
+
+query T
+SELECT regexp_matches('asdf', '^sdf$')
+----
+0
+
+# empty strings
+query T
+SELECT regexp_matches('', '.*yu.*')
+----
+0
+
+query T
+SELECT regexp_matches('', '.*')
+----
+1
+
+# NULLs
+query T
+SELECT regexp_matches('asdf', CAST(NULL AS STRING))
+----
+NULL
+
+query T
+SELECT regexp_matches(CAST(NULL AS STRING), '.*sd.*')
+----
+NULL
+
+query T
+SELECT regexp_matches(CAST(NULL AS STRING), CAST(NULL AS STRING))
+----
+NULL
+
+query T
+SELECT regexp_matches('foobarbequebaz', '(bar)(beque)')
+----
+1
+
+# postgres says throw error on invalid regex
+statement error
+SELECT regexp_matches('', '\X')
+
+statement ok
+CREATE TABLE regex(s STRING, p STRING)
+
+statement ok
+INSERT INTO regex VALUES ('asdf', 'sd'), ('asdf', '^sd'), (NULL, '^sd'), ('asdf', NULL)
+
+query T
+SELECT regexp_matches(s, '.*') FROM regex
+----
+1
+1
+NULL
+1
+
+query T
+SELECT regexp_matches(s, p) FROM regex
+----
+1
+0
+NULL
+NULL
+
+# test regex_matches with options
+# case sensitivity
+query T
+SELECT regexp_matches('asdf', '.*SD.*', 'i')
+----
+1
+
+query T
+SELECT regexp_matches('asdf', '.*SD.*', 'c')
+----
+0
+
+# dot matches newline
+query T
+SELECT regexp_matches('hello
+world', '.*', 's')
+----
+1
+
+query T
+SELECT regexp_full_match('hello
+world', '.*', 'n')
+----
+0
+
+# whitespace is ignored
+query T
+SELECT regexp_matches('asdf', '.*SD.*', ' i 	')
+----
+1
+
+# NULL in options is ignored
+query T
+SELECT regexp_matches('asdf', '.*SD.*', NULL)
+----
+0
+
+# this also works with tables
+statement ok
+CREATE TABLE test(v VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('hello'), ('HELLO');
+
+query T
+SELECT regexp_matches(v, 'h.*', 'i') FROM test ORDER BY v
+----
+1
+1
+
+query T
+SELECT regexp_matches(v, 'h.*', 'c') FROM test ORDER BY v
+----
+0
+1
+
+statement error
+SELECT regexp_matches(v, 'h.*', v) FROM test ORDER BY v
+
+# throw on invalid options
+statement error
+SELECT regexp_matches('asdf', '.*SD.*', 'q')
+
+# can only use "g" with regexp replace
+statement error
+SELECT regexp_matches('asdf', '.*SD.*', 'g')
+

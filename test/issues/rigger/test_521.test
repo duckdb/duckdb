@@ -1,0 +1,28 @@
+# name: test/issues/rigger/test_521.test
+# description: Issue 521
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# ROUND() evaluates to -nan
+query R
+SELECT ROUND(0.1, 1000);
+----
+0.100000
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query I
+SELECT * FROM t0 WHERE t0.c0 > ROUND(0.1, 1000);
+----
+
+query I
+SELECT * FROM t0 WHERE t0.c0 <= ROUND(0.1, 1000);
+----
+0
+

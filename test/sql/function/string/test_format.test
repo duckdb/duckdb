@@ -1,0 +1,70 @@
+# name: test/sql/function/string/test_format.test
+# description: Test format
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# format without format specifiers
+query TT
+SELECT format('hello'), format(NULL)
+----
+hello	NULL
+
+# format strings
+query TT
+SELECT format('{}', 'hello'), format('{}: {}', 'hello', 'world')
+----
+hello	hello: world
+
+# format strings with NULL values
+query TT
+SELECT format('{}', NULL), format(NULL, 'hello', 'world')
+----
+NULL	NULL
+
+# booleans
+query T
+SELECT format('{} {}', TRUE, FALSE)
+----
+true false
+
+# integers
+query TT
+SELECT format('{}', 33), format('{} + {} = {}', 3, 5, 3 + 5)
+----
+33	3 + 5 = 8
+
+# integers with special formatting specifiers
+query TTT
+SELECT format('{:04d}', 33), format('{} {:02d}:{:02d}:{:02d} {}', 'time', 12, 3, 16, 'AM'), format('{:10d}', 1992)
+----
+0033	time 12:03:16 AM	      1992
+
+# numeric input of arguments
+query T
+SELECT format('{1} {1} {0} {0}', 1, 2)
+----
+2 2 1 1
+
+# incorrect number of parameters
+# too few parameters
+statement error
+SELECT format('{}')
+
+statement error
+SELECT format('{} {}', 'hello')
+
+# excess parameters are ignored
+query T
+SELECT format('{}', 'hello', 'world')
+----
+hello
+
+# incorrect types
+statement error
+SELECT format('{:s}', 42)
+
+statement error
+SELECT format('{:d}', 'hello')
+

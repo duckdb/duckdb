@@ -1,0 +1,53 @@
+# name: test/sql/types/null/test_null_aggr.test
+# description: Test NULL handling in aggregations
+# group: [null]
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22)
+
+# aggregations should ignore NULLs
+query RII
+SELECT SUM(a), MIN(a), MAX(a) FROM test
+----
+24.000000	11	13
+
+# count should ignore NULL
+# * returns full table count
+# counting "a" ignores null values
+query III
+SELECT COUNT(*), COUNT(a), COUNT(b) FROM test
+----
+3	2	3
+
+# with GROUP BY as well
+query IIRII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+21	0	NULL	NULL	NULL
+22	2	24.000000	11	13
+
+# GROUP BY null value
+statement ok
+INSERT INTO test VALUES (12, NULL), (16, NULL)
+
+query IIRII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+NULL	2	28.000000	12	16
+21	0	NULL	NULL	NULL
+22	2	24.000000	11	13
+
+# NULL values should be ignored entirely in the aggregation
+statement ok
+INSERT INTO test VALUES (NULL, NULL), (NULL, 22)
+
+query IIRII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+NULL	2	28.000000	12	16
+21	0	NULL	NULL	NULL
+22	2	24.000000	11	13
+

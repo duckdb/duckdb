@@ -155,6 +155,15 @@ static bool TryConvertDate(const char *buf, date_t &result, bool strict = false)
 		return false;
 	}
 
+	// check for an optional trailing " (BC)""
+	if (std::isspace(buf[pos]) && buf[pos + 1] == '(' &&
+	                              buf[pos + 2] == 'B' &&
+								  buf[pos + 3] == 'C' &&
+								  buf[pos + 4] == ')') {
+		year = -year;
+		pos += 5;
+	}
+
 	// in strict mode, check remaining string for non-space characters
 	if (strict) {
 		// skip trailing spaces

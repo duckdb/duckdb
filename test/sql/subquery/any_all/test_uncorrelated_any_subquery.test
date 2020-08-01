@@ -1,0 +1,131 @@
+# name: test/sql/subquery/any_all/test_uncorrelated_any_subquery.test
+# description: Test uncorrelated ANY subqueries
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# uncorrelated ANY
+query I
+SELECT i FROM integers WHERE i <= ANY(SELECT i FROM integers)
+----
+1
+2
+3
+
+query I
+SELECT i FROM integers WHERE i > ANY(SELECT i FROM integers)
+----
+2
+3
+
+query IT
+SELECT i, i > ANY(SELECT i FROM integers) FROM integers ORDER BY i
+----
+NULL	NULL
+1	NULL
+2	1
+3	1
+
+query IT
+SELECT i, i > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	0
+2	1
+3	1
+
+query IT
+SELECT i, NULL > ANY(SELECT i FROM integers) FROM integers ORDER BY i
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+query IT
+SELECT i, NULL > ANY(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+query I
+SELECT i FROM integers WHERE i = ANY(SELECT i FROM integers)
+----
+1
+2
+3
+
+query IT
+SELECT i, i = ANY(SELECT i FROM integers WHERE i>2) FROM integers ORDER BY i
+----
+NULL	NULL
+1	0
+2	0
+3	1
+
+query IT
+SELECT i, i = ANY(SELECT i FROM integers WHERE i>2 OR i IS NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	1
+
+query IT
+SELECT i, i <> ANY(SELECT i FROM integers WHERE i>2) FROM integers ORDER BY i
+----
+NULL	NULL
+1	1
+2	1
+3	0
+
+query IT
+SELECT i, i <> ANY(SELECT i FROM integers WHERE i>2 OR i IS NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	1
+2	1
+3	NULL
+
+# use a bunch of cross products to make bigger data sets (> STANDARD_VECTOR_SIZE)
+query IT
+SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	1
+2	1
+3	1
+
+query IT
+SELECT i, i = ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 2) FROM integers ORDER BY i
+----
+NULL	NULL
+1	1
+2	0
+3	1
+
+query IT
+SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	1
+2	1
+3	1
+
+query IT
+SELECT i, i >= ANY(SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4, integers i5, integers i6 WHERE i1.i IS NOT NULL AND i1.i <> 1 LIMIT 1) FROM integers ORDER BY i
+----
+NULL	NULL
+1	0
+2	1
+3	1
+

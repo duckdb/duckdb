@@ -1,0 +1,37 @@
+# name: test/sql/function/string/strip_accents.test
+# description: Test strip accents function
+# group: [string]
+
+query TT
+SELECT strip_accents('hello'), strip_accents('héllo')
+----
+hello	hello
+
+query TT
+SELECT strip_accents('mühleisen'), strip_accents('hannes mühleisen')
+----
+muhleisen	hannes muhleisen
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR, str VARCHAR)
+
+statement ok
+INSERT INTO collate_test VALUES ('äää', 'aaa')
+
+statement ok
+INSERT INTO collate_test VALUES ('hännës mühlëïsën', 'hannes muhleisen')
+
+statement ok
+INSERT INTO collate_test VALUES ('olá', 'ola')
+
+statement ok
+INSERT INTO collate_test VALUES ('ôâêóáëòõç', 'oaeoaeooc')
+
+query T
+SELECT strip_accents(s)=strip_accents(str) FROM collate_test
+----
+1
+1
+1
+1
+

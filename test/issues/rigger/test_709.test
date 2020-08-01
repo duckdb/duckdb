@@ -1,0 +1,24 @@
+# name: test/issues/rigger/test_709.test
+# description: Issue 709
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 DATETIME DEFAULT(0.45428781614730807), c1 DATE, PRIMARY KEY(c1));
+
+statement ok
+CREATE TABLE t1(c0 DOUBLE NOT NULL, c1 BOOLEAN);
+
+statement ok
+insert into t0 (c0, c1) values (NULL, '2019-11-26');
+
+statement ok
+insert into t1 values (42, true);
+
+query ITR
+SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (NOT (((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::INT1))))AND((false BETWEEN '[' AND t1.c0)))) UNION SELECT t0.rowid, t1.c1, t1.c0 FROM t1, t0 WHERE (((((t1.rowid NOT IN (((t1.c1) ::BOOLEAN), ((t1.c0) ::TINYINT))))AND((false BETWEEN '[' AND t1.c0)))) IS NULL);
+----
+0	1	42.000000
+

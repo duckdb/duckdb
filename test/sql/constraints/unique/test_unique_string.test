@@ -1,0 +1,79 @@
+# name: test/sql/constraints/test_unique_string.test
+# description: UNIQUE constraint on temporary tables with Strings
+# group: [constraints]
+
+statement ok
+CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)
+
+statement ok
+CREATE UNIQUE INDEX "uidx" ON "integers" ("j")
+
+statement ok
+INSERT INTO integers VALUES (3, '4'), (2, '5')
+
+query IT
+SELECT * FROM integers
+----
+3	4
+2	5
+
+statement error
+INSERT INTO integers VALUES (6, '6'), (3, '4');
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement error
+UPDATE integers SET j='77' WHERE j IS NULL
+
+query IT
+SELECT * FROM integers ORDER BY i, j
+----
+2	5
+3	4
+6	NULL
+7	NULL
+
+statement ok
+UPDATE integers SET j='7777777777777777777777777777' WHERE j IS NULL AND i=6
+
+# we can insert a bunch of null values
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement ok
+INSERT INTO integers VALUES (6,NULL), (7,NULL)
+
+statement error
+INSERT INTO integers VALUES  (3, '4')
+
+statement error
+INSERT INTO integers VALUES  (3, '4')
+
+statement ok
+DROP TABLE integers
+

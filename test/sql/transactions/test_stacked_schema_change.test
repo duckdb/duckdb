@@ -1,0 +1,65 @@
+# name: test/sql/transactions/test_stacked_schema_change.test
+# description: Stacked schema changes
+# group: [transactions]
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+statement ok
+INSERT INTO a VALUES (44)
+
+query I
+SELECT i FROM a
+----
+44
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP TABLE a
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+statement ok
+INSERT INTO a VALUES (45)
+
+query I
+SELECT i FROM a
+----
+45
+
+statement ok
+ROLLBACK
+
+query I
+SELECT i FROM a
+----
+44
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP TABLE a
+
+statement ok
+CREATE TABLE a(i INTEGER)
+
+statement ok
+INSERT INTO a VALUES (46)
+
+query I
+SELECT i FROM a
+----
+46
+
+statement ok
+COMMIT
+
+query I
+SELECT i FROM a
+----
+46
+

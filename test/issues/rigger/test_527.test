@@ -1,0 +1,32 @@
+# name: test/issues/rigger/test_527.test
+# description: Issue 527
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query with JOIN and WHERE condition unexpectedly fetches a value not present in the table
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+statement ok
+INSERT INTO t1 VALUES (1), (1);
+
+query I
+SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL) WHERE t0.c0 NOT IN (t1.c0);
+----
+0
+0
+
+query I
+SELECT t0.c0 FROM t0 JOIN t1 ON t0.c0=(t1.c0 IS NULL);
+----
+0
+0
+

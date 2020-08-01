@@ -1,0 +1,331 @@
+# name: test/sql/function/date/test_extract_edge_cases.test
+# description: Extract function edge cases
+# group: [date]
+
+# century changes in the year 1
+query I
+SELECT EXTRACT(century FROM cast('2000-10-10' AS DATE));
+----
+20
+
+query I
+SELECT EXTRACT(century FROM cast('2001-10-10' AS DATE));
+----
+21
+
+# millennium changes in the year 1
+query I
+SELECT EXTRACT(millennium FROM cast('2000-10-10' AS DATE));
+----
+2
+
+query I
+SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));
+----
+3
+
+# check DOW
+# start from the epoch and go up/down, every time the day should go up/down
+# one as well
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 0);
+----
+4
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 0);
+----
+4
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 1);
+----
+5
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 1);
+----
+3
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 2);
+----
+6
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 2);
+----
+2
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 3);
+----
+0
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 3);
+----
+1
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 4);
+----
+1
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 4);
+----
+0
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 5);
+----
+2
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 5);
+----
+6
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 6);
+----
+3
+
+query I
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) - 6);
+----
+5
+
+# week numbers are weird
+query I
+SELECT EXTRACT(week FROM cast('2005-01-01' AS DATE));
+----
+53
+
+query I
+SELECT EXTRACT(week FROM cast('2006-01-01' AS DATE));
+----
+52
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE));
+----
+1
+
+query I
+SELECT EXTRACT(week FROM cast('2008-01-01' AS DATE));
+----
+1
+
+query I
+SELECT EXTRACT(week FROM cast('2009-01-01' AS DATE));
+----
+1
+
+query I
+SELECT EXTRACT(week FROM cast('2010-01-01' AS DATE));
+----
+53
+
+# every 7 days the week number should go up by 7
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 0);
+----
+1
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 7);
+----
+2
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 14);
+----
+3
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 21);
+----
+4
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 28);
+----
+5
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 35);
+----
+6
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 42);
+----
+7
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 49);
+----
+8
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 56);
+----
+9
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 63);
+----
+10
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 70);
+----
+11
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 77);
+----
+12
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 84);
+----
+13
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 91);
+----
+14
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 98);
+----
+15
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 105);
+----
+16
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 112);
+----
+17
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 119);
+----
+18
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 126);
+----
+19
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 133);
+----
+20
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 140);
+----
+21
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 147);
+----
+22
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 154);
+----
+23
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 161);
+----
+24
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 168);
+----
+25
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 175);
+----
+26
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 182);
+----
+27
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 189);
+----
+28
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 196);
+----
+29
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 203);
+----
+30
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 210);
+----
+31
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 217);
+----
+32
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 224);
+----
+33
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 231);
+----
+34
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 238);
+----
+35
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 245);
+----
+36
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 252);
+----
+37
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 259);
+----
+38
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 266);
+----
+39
+
+query I
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 273);
+----
+40
+

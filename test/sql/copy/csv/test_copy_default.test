@@ -1,0 +1,23 @@
+# name: test/sql/copy/csv/test_copy_default.test
+# description: Test copy statement with default values
+# group: [csv]
+
+# load CSV file into a table
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR DEFAULT('hello'), c INTEGER DEFAULT(3+4));
+
+query I
+COPY test (a) FROM 'test/sql/copy/csv/data/test/test_default.csv';
+----
+5000
+
+query I
+COPY test (c) FROM 'test/sql/copy/csv/data/test/test_default.csv';
+----
+5000
+
+query IIIIIRR
+SELECT COUNT(a), COUNT(b), COUNT(c), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(a), SUM(c) FROM test;
+----
+5000	10000	10000	5	5	12497500.000000	12532500.000000
+

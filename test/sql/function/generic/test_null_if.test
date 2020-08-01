@@ -1,0 +1,57 @@
+# name: test/sql/function/generic/test_null_if.test
+# description: Test NULL IF statement
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+# NULL IF
+query T
+SELECT NULLIF(NULLIF ('hello', 'world'), 'blabla');
+----
+hello
+
+# NULL IF with subquery
+statement ok
+CREATE TABLE test (a STRING);
+
+statement ok
+INSERT INTO test VALUES ('hello'), ('world'), ('test')
+
+statement ok
+CREATE TABLE test2 (a STRING, b STRING);
+
+statement ok
+INSERT INTO test2 VALUES ('blabla', 'b'), ('blabla2', 'c'), ('blabla3', 'd')
+
+query T
+SELECT NULLIF(NULLIF ((SELECT a FROM test LIMIT 1 offset 1), a), b) FROM test2
+----
+world
+world
+world
+
+statement ok
+DROP TABLE test;
+
+# NULL IF with strings
+statement ok
+CREATE TABLE test3 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test3 VALUES (11, 22), (13, 22), (12, 21)
+
+query T
+SELECT NULLIF(CAST(a AS VARCHAR), 11) FROM test3;
+----
+NULL
+13
+12
+
+query IT
+SELECT a, CASE WHEN a>11 THEN CAST(a AS VARCHAR) ELSE CAST(b AS VARCHAR) END FROM test3 ORDER BY 1;
+----
+11	22
+12	12
+13	13
+

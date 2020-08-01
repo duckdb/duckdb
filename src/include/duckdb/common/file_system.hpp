@@ -13,6 +13,10 @@
 
 #include <functional>
 
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
 namespace duckdb {
 class ClientContext;
 class FileSystem;
@@ -92,8 +96,8 @@ public:
 	virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
 	virtual void RemoveDirectory(const string &directory);
-	//! List files in a directory, invoking the callback method for each one
-	virtual bool ListFiles(const string &directory, std::function<void(string)> callback);
+	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
+	virtual bool ListFiles(const string &directory, std::function<void(string, bool)> callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	virtual void MoveFile(const string &source, const string &target);

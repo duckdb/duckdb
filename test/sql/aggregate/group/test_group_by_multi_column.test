@@ -1,0 +1,17 @@
+# name: test/sql/aggregate/group/test_group_by_multi_column.test
+# description: Group by multiple columns
+# group: [group]
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4), (1, 2, NULL);
+
+query IIRII
+SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1, 2
+----
+1	1	4.000000	2	2
+1	2	6.000000	3	2
+2	1	2.000000	1	1
+

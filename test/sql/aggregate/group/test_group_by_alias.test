@@ -1,0 +1,96 @@
+# name: test/sql/aggregate/group/test_group_by_alias.test
+# description: Test aliases in group by/aggregation
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# use alias in HAVING clause
+# CONTROVERSIAL: this query DOES NOT work in PostgreSQL
+query IR
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING k>0;
+----
+1	4.000000
+
+# this is identical to this query
+# CONTROVERSIAL: this query does not work in MonetDB
+query IR
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY k HAVING i%2>0;
+----
+1	4.000000
+
+# select groups by constant (similar to order by constant)
+query IR
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%2>0;
+----
+1	4.000000
+
+# constant out of range
+statement error
+SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 42 HAVING i%2>0;
+
+# entry in GROUP BY should refer to base column
+# ...BUT the alias in ORDER BY should refer to the alias from the select list
+# note that both Postgres and MonetDB reject this query because of ambiguity. SQLite accepts it though so we do
+# too.
+query IIR
+SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;
+----
+NULL	NULL	NULL
+2	0	2.000000
+1	1	1.000000
+3	1	3.000000
+
+# changing the name of the alias makes it more explicit what should happen
+query IIR
+SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3;
+----
+NULL	NULL	NULL
+2	0	2.000000
+1	1	1.000000
+3	1	3.000000
+
+# this now orders by the actual grouping column
+query IIR
+SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i;
+----
+NULL	NULL	NULL
+1	1	1.000000
+2	0	2.000000
+3	1	3.000000
+
+# cannot use GROUP BY column in an aggregation...
+statement error
+SELECT i % 2 AS k, SUM(k) FROM integers GROUP BY k
+
+# ...unless it is one of the base columns
+query IR
+SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i
+----
+NULL	NULL
+1	1.000000
+2	2.000000
+3	3.000000
+
+# ORDER on a non-grouping column
+# this query is refused by Postgres and MonetDB
+# but SQLite resolves it by first pushing a "FIRST(i)" aggregate into the projection, and then ordering by that
+# aggregate
+statement error
+SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;
+
+# we can manually get this behavior by pushing FIRST
+query IR
+SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY FIRST(i);
+----
+NULL	NULL
+9	1.000000
+8	2.000000
+7	3.000000
+

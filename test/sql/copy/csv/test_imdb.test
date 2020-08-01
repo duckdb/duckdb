@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/test_imdb.test
+# description: Test imdb escapes
+# group: [csv]
+
+statement ok
+CREATE TABLE movie_info (id integer NOT NULL PRIMARY KEY, movie_id integer NOT NULL, info_type_id integer NOT NULL, info text NOT NULL, note text);
+
+query I
+COPY movie_info FROM 'test/sql/copy/csv/data/real/imdb_movie_info_escaped.csv' DELIMITER ',' ESCAPE '\';
+----
+201
+
+query IIITT
+SELECT * FROM movie_info;
+----
+1005 values hashing to 8903b50129194dd459083100a8492310

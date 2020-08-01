@@ -1,0 +1,83 @@
+# name: test/sql/join/inner/test_unequal_join.test
+# description: Test inequality join
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+# create tables
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)
+
+# inequality join
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b ORDER BY test.b, test2.b
+----
+1	2
+2	1
+2	1
+3	1
+3	1
+3	2
+
+# inequality join with filter
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b AND test.b <> 1 AND test2.b <> 2 ORDER BY test.b, test2.b
+----
+2	1
+2	1
+3	1
+3	1
+
+statement ok
+INSERT INTO test VALUES (NULL, NULL)
+
+statement ok
+INSERT INTO test2 VALUES (NULL, NULL)
+
+# inequality join with NULL values
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b ORDER BY test.b, test2.b
+----
+1	2
+2	1
+2	1
+3	1
+3	1
+3	2
+
+# inequality join with filter and NULL values
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b <> test2.b AND test.b <> 1 AND test2.b <> 2 ORDER BY test.b, test2.b
+----
+2	1
+2	1
+3	1
+3	1
+
+statement ok
+create table a (i integer)
+
+statement ok
+insert into a values ('28579'),('16098'),('25281'),('28877'),('18048'),('26820'),('26971'),('22812'),('11757'),('21851'),('27752'),('28354'),('29843'),('28828'),('16668'),('20534'),('28222'),('24244'),('28877'),('20150'),('23451'),('23683'),('20419'),('28048'),('24244'),('28605'),('25752'),('24466'),('26557'),('16098'),('29454'),('24854'),('13298'),('29584'),('13394'),('24843'),('22477'),('14593'),('24244'),('28722'),('25124'),('16668'),('26787'),('28877'),('27752'),('28482'),('24408'),('25752'),('24136'),('28222'),('17683'),('24244'),('19275'),('21087'),('26594'),('22293'),('25281'),('12898'),('23451'),('12898'),('21757'),('20965'),('25709'),('26614'),('10399'),('28773'),('11933'),('29584'),('29003'),('26871'),('17746'),('24092'),('26192'),('19310'),('10965'),('29275'),('20191'),('29101'),('28059'),('29584'),('20399'),('24338'),('26192'),('25124'),('28605'),('13003'),('16668'),('23511'),('26534'),('24107')
+
+statement ok
+create table b (j integer)
+
+statement ok
+insert into b values ('31904'),('31904'),('31904'),('31904'),('35709'),('31904'),('31904'),('35709'),('31904'),('31904'),('31904'),('31904')
+
+query I
+select count(*) from a,b where i <> j
+----
+1080
+

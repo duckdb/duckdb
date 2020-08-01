@@ -1,0 +1,77 @@
+# name: test/sql/catalog/dependencies/test_default_value_dependency.test
+# description: Default values and dependencies
+# group: [dependencies]
+
+# dependency on a sequence in a default value
+statement ok con1
+CREATE SEQUENCE seq
+
+statement ok con1
+CREATE TABLE integers(i INTEGER DEFAULT nextval('seq'), j INTEGER)
+
+statement ok con1
+INSERT INTO integers (j) VALUES (1), (1), (1), (1), (1)
+
+query R con2
+SELECT SUM(i) FROM integers
+----
+15.000000
+
+# we can't drop the sequence: the table depends on it
+statement error con1
+DROP SEQUENCE seq
+
+# cascade drop works
+statement ok con1
+DROP SEQUENCE seq CASCADE
+
+# but it also drops the table
+statement error con1
+SELECT * FROM integers
+
+# dependency on multiple sequences in default value
+statement ok con1
+CREATE SEQUENCE seq
+
+statement ok con1
+CREATE SEQUENCE seq1
+
+statement ok con1
+CREATE SEQUENCE seq2
+
+statement ok con1
+CREATE TABLE integers(i INTEGER DEFAULT nextval('seq' || CAST(nextval('seq') AS VARCHAR)), j INTEGER)
+
+# seq1 exists, so the result of the first default value is 1
+statement ok con1
+INSERT INTO integers (j) VALUES (1)
+
+# we can drop seq1 and seq2: the dependency is not fixed
+statement ok con1
+DROP SEQUENCE seq1
+
+statement ok con1
+DROP SEQUENCE seq2
+
+# seq2 does not exist after this drop, so another insert fails
+statement error con1
+INSERT INTO integers (j) VALUES (1)
+
+# table is now [1, 1]: query it
+query R con1
+SELECT SUM(i) FROM integers
+----
+1.000000
+
+# we can't drop seq however: the dependency is fixed
+statement error con1
+DROP SEQUENCE seq
+
+# need to do a cascading drop
+statement ok con1
+DROP SEQUENCE seq CASCADE
+
+# now the table is gone
+statement error con1
+SELECT * FROM integers
+

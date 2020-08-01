@@ -1,0 +1,157 @@
+# name: test/sql/catalog/dependencies/test_prepare_dependencies_transactions.test
+# description: Prepare dependencies and transactions
+# group: [dependencies]
+
+# case one: prepared statement is created outside of transaction and committed
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+statement ok con2
+PREPARE v AS SELECT SUM(i) FROM integers
+
+# begin a transaction in con2
+statement ok con2
+BEGIN TRANSACTION
+
+# now drop the table in con, with a cascading drop
+statement ok con1
+DROP TABLE integers CASCADE
+
+# we can still execute v in con2
+statement ok con2
+EXECUTE v
+
+# if we try to drop integers we get a conflict though
+statement error con2
+DROP TABLE integers CASCADE
+
+# now we rollback
+statement ok con2
+ROLLBACK
+
+# now we can't use the prepared statement anymore
+statement error con2
+EXECUTE v
+
+# case two: prepared statement is created inside transaction
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+# begin a transaction and create a prepared statement
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+PREPARE v AS SELECT SUM(i) FROM integers
+
+# integers has a dependency: we can't drop it
+statement error con1
+DROP TABLE integers
+
+# now we can't drop integers even with cascade, because the dependency is not yet committed, this creates a write
+# conflict on attempting to drop the dependency
+statement error con1
+DROP TABLE integers CASCADE
+
+# use the prepared statement
+statement ok con2
+EXECUTE v
+
+# and commit
+statement ok con2
+COMMIT
+
+# now we can commit the table
+statement ok con1
+DROP TABLE integers CASCADE
+
+# case three: prepared statement is created inside transaction, and then rolled back
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+# begin a transaction and create a prepared statement
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+PREPARE v AS SELECT SUM(i) FROM integers
+
+# integers has a dependency: we can't drop it
+statement error con1
+DROP TABLE integers
+
+# rollback the prepared statement
+statement ok con2
+ROLLBACK
+
+# depedency was rolled back: now we can drop it
+statement ok con1
+DROP TABLE integers
+
+# case four: deallocate happens inside transaction
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+statement ok con2
+PREPARE v AS SELECT SUM(i) FROM integers
+
+# deallocate v inside transaction
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DEALLOCATE v
+
+# we still can't drop integers because the dependency is still there
+statement error con1
+DROP TABLE integers
+
+# cascade gives a concurrency conflict
+statement error con1
+DROP TABLE integers CASCADE
+
+# now rollback the deallocation
+statement ok con2
+ROLLBACK
+
+# still can't drop the table
+statement error con1
+DROP TABLE integers
+
+# we can use the prepared statement again
+statement ok con2
+EXECUTE v
+
+# now do the same as before, but commit the transaction this time
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+DEALLOCATE v
+
+# can't drop yet: not yet committed
+statement error con1
+DROP TABLE integers
+
+statement error con1
+DROP TABLE integers CASCADE
+
+statement ok con2
+COMMIT
+
+# after committing we can drop
+statement ok con1
+DROP TABLE integers
+

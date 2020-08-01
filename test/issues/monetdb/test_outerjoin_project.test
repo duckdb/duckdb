@@ -1,0 +1,21 @@
+# name: test/issues/monetdb/test_outerjoin_project.test
+# description: MonetDB Test: outerjoin_project.Bug-3725.sql
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a (a integer);
+
+statement ok
+create table b (a integer);
+
+statement ok
+insert into a values (1);
+
+query II
+select * from a left join (select a, 20 from b) as x using (a);
+----
+1	NULL
+

@@ -39,8 +39,6 @@ matrix:
 
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
         - python3 tools/rest/test_the_rest.py build/release/tools/rest
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
@@ -67,8 +65,6 @@ matrix:
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
 
         - zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         - zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -94,14 +90,10 @@ matrix:
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
         - cmake --build . --target jdbc --config Release
-        - cmake --build . --target icu_test --config Release
-        - cmake --build . --target parquet_test --config Release
 
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb.exe
         - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - extension/icu/test/Release/icu_test.exe
-        - extension/parquet/test/Release/parquet_test.exe
 
         - zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -228,8 +220,6 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake  -DAMALGAMATION_BUILD=1  -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
 
         - zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so
         - zip -j duckdb_cli-linux-i386.zip build/release/duckdb

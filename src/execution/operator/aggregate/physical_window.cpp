@@ -396,19 +396,30 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
-			int64_t n_size = (n_total / n_param);
-			if (n_size > 0) {
-				int64_t n_large = n_total - n_param * n_size;
-				int64_t i_small = n_large * (n_size + 1);
-
-				assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-				if (row_idx < (idx_t)i_small) {
-					res = Value::Numeric(wexpr->return_type, 1 + row_idx / (n_size + 1));
-				} else {
-					res = Value::Numeric(wexpr->return_type, 1 + n_large + (row_idx - i_small) / n_size);
-				}
+			if (n_param > n_total) {
+				// more groups allowed than we have values
+				// map every entry to a unique group
+				n_param = n_total;
 			}
+			int64_t n_size = (n_total / n_param);
+			// find the row idx within the group
+			assert(row_idx >= bounds.partition_start);
+			int64_t adjusted_row_idx = row_idx - bounds.partition_start;
+			// now compute the ntile
+			int64_t n_large = n_total - n_param * n_size;
+			int64_t i_small = n_large * (n_size + 1);
+			int64_t result_ntile;
+
+			assert((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+
+			if (adjusted_row_idx < i_small) {
+				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
+			} else {
+				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
+			}
+			// result has to be between [1, NTILE]
+			assert(result_ntile >= 1 && result_ntile <= n_param);
+			res = Value::Numeric(wexpr->return_type, result_ntile);
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
@@ -423,7 +434,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
-				auto lead_idx = row_idx + 1;
+				auto lead_idx = row_idx + offset;
 				if (lead_idx < bounds.partition_end) {
 					res = payload_collection.GetValue(0, lead_idx);
 				} else {

@@ -1,0 +1,20 @@
+# name: test/sql/filter/test_alias_filter.test
+# description: Test filter on alias
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# this fails in postgres and monetdb, but succeeds in sqlite
+# for now, we have this fail as well because it simplifies our life
+# the filter occurs before the projection, hence "j" is not computed until AFTER the filter normally
+# we probably want to change this to succeed
+statement error
+SELECT i % 2 AS j FROM integers WHERE j<>0;
+

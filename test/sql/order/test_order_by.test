@@ -1,0 +1,173 @@
+# name: test/sql/order/test_order_by.test
+# description: Test ORDER BY keyword
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22);
+
+# simple ORDER BY
+query I
+SELECT b FROM test ORDER BY a DESC;
+----
+22
+21
+22
+
+query II
+SELECT a, b FROM test ORDER BY a;
+----
+11	22
+12	21
+13	22
+
+query II
+SELECT a, b FROM test ORDER BY a DESC;
+----
+13	22
+12	21
+11	22
+
+# ORDER BY on multiple columns
+query II
+SELECT a, b FROM test ORDER BY b, a;
+----
+12	21
+11	22
+13	22
+
+# ORDER BY using select indices
+query II
+SELECT a, b FROM test ORDER BY 2, 1;
+----
+12	21
+11	22
+13	22
+
+query II
+SELECT a, b FROM test ORDER BY b DESC, a;
+----
+11	22
+13	22
+12	21
+
+query II
+SELECT a, b FROM test ORDER BY b, a DESC;
+----
+12	21
+13	22
+11	22
+
+# TOP N queries
+query II
+SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1;
+----
+12	21
+
+# Offset
+query II
+SELECT a, b FROM test ORDER BY b, a DESC LIMIT 1 OFFSET 1;
+----
+13	22
+
+# Offset without limit
+query II
+SELECT a, b FROM test ORDER BY b, a DESC OFFSET 1;
+----
+13	22
+11	22
+
+query II
+SELECT a, b FROM test WHERE a < 13 ORDER BY b;
+----
+12	21
+11	22
+
+query II
+SELECT a, b FROM test WHERE a < 13 ORDER BY 2;
+----
+12	21
+11	22
+
+query II
+SELECT a, b FROM test WHERE a < 13 ORDER BY b DESC;
+----
+11	22
+12	21
+
+query II
+SELECT b, a FROM test WHERE a < 13 ORDER BY b DESC;
+----
+22	11
+21	12
+
+# order by expression
+query IR
+SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY b % 2;
+----
+0	24.000000
+1	12.000000
+
+# order by expression that is not in SELECT
+query II
+SELECT b % 2 AS f, a FROM test ORDER BY b % 4;
+----
+1	12
+0	11
+0	13
+
+# ORDER BY alias
+query IR
+SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;
+----
+0	24.000000
+1	12.000000
+
+query IR
+SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY 1;
+----
+0	24.000000
+1	12.000000
+
+# ORDER BY after union
+query I
+SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY k;
+----
+1
+2
+3
+
+# ORDER BY on alias in right-most query
+# CONTROVERSIAL: SQLite allows both "k" and "l" to be referenced here, Postgres and MonetDB give an error.
+query I
+SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY l;
+----
+1
+2
+3
+
+# computations with aliases are not allowed though
+statement error
+SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY 1-k;
+
+# but ordering on computation elements should work
+query I
+SELECT a-10 AS k FROM test UNION SELECT a-10 AS l FROM test ORDER BY a-10;
+----
+1
+2
+3
+
+query I
+SELECT a-10 AS k FROM test UNION SELECT a-11 AS l FROM test ORDER BY a-11;
+----
+0
+1
+2
+3
+

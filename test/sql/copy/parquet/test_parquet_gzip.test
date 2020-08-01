@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/test_parquet_gzip.test
+# description: Parquet file with gzip compression
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(*) from parquet_scan('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet')
+----
+10000
+

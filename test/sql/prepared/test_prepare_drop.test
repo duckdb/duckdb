@@ -1,0 +1,29 @@
+# name: test/sql/prepared/test_prepare_drop.test
+# description: PREPARE and DROPping tables
+# group: [prepared]
+
+statement ok con1
+CREATE TABLE a (i TINYINT)
+
+statement ok con2
+PREPARE p1 AS SELECT * FROM a
+
+statement ok con2
+EXECUTE p1
+
+# only the conn which did the prepare can execute
+statement error con1
+EXECUTE p1
+
+# but someone else cannot drop the table
+statement error con1
+DROP TABLE a
+
+# but when we take the statement away
+statement ok con2
+DEALLOCATE p1
+
+# we can drop
+statement ok con1
+DROP TABLE a
+

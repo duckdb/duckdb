@@ -1,0 +1,25 @@
+# name: test/sql/collate/test_combined_collation.test
+# description: Test combined collations
+# group: [collate]
+
+statement ok
+CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOCASE)
+
+statement ok
+INSERT INTO collate_test VALUES ('Mühleisen'), ('Hëllö')
+
+query T
+SELECT * FROM collate_test WHERE s='Muhleisen'
+----
+Mühleisen
+
+query T
+SELECT * FROM collate_test WHERE s='muhleisen'
+----
+Mühleisen
+
+query T
+SELECT * FROM collate_test WHERE s='hEllô'
+----
+Hëllö
+

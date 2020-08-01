@@ -330,10 +330,14 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		return true;
 	}
 
+	// all integer types can cast from INTEGER
+	// this is because INTEGER is the smallest type considered by the automatic csv sniffer
 	switch (id) {
 	case SQLTypeId::SMALLINT:
 		switch (other.id) {
 		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;
@@ -342,6 +346,7 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		switch (other.id) {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;

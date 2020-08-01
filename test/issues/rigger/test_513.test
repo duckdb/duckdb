@@ -1,0 +1,26 @@
+# name: test/issues/rigger/test_513.test
+# description: Issue 513
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# LEFT JOIN with comparison on integer columns results in 'Not implemented: Unimplemented type for nested loop
+# join!'
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t1(c0) VALUES (0);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query II
+SELECT * FROM t0 LEFT JOIN t1 ON t0.c0 <= t1.c0;
+----
+0	0
+

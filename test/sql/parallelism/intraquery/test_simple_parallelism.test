@@ -1,0 +1,44 @@
+# name: test/sql/parallelism/test_simple_parallelism.test
+# description: Test simple parallelism
+# group: [parallelism]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# perform a query with many pipelines
+query R
+SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i) FROM integers UNION ALL SELECT MAX(i) FROM integers;
+----
+6.000000
+2.000000
+1.000000
+3.000000
+
+statement ok
+CREATE VIEW v1(i) AS SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i) FROM integers UNION ALL SELECT MAX(i) FROM integers;
+
+# errors in separate pipelines
+statement error
+SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i::DATE) FROM integers UNION ALL SELECT MAX(i::DATE) FROM integers;
+
+# errors are properly cleared
+query R
+SELECT * FROM v1 t1 JOIN v1 t2 USING (i);
+----
+6.000000
+2.000000
+1.000000
+3.000000
+

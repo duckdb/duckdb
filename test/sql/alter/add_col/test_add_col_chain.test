@@ -1,0 +1,55 @@
+# name: test/sql/alter/add_col/test_add_col_chain.test
+# description: Test ALTER TABLE ADD COLUMN: multiple ADD COLUMN in the same transaction
+# group: [add_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO test VALUES (3, 3)
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+statement ok
+ALTER TABLE test ADD COLUMN l INTEGER
+
+statement ok
+ALTER TABLE test ADD COLUMN m INTEGER DEFAULT 3
+
+query IIIII
+SELECT * FROM test
+----
+1
+1
+NULL
+NULL
+3
+2
+2
+NULL
+NULL
+3
+3
+3
+NULL
+NULL
+3
+
+statement ok
+ROLLBACK
+
+query II
+SELECT * FROM test
+----
+1
+1
+2
+2
+

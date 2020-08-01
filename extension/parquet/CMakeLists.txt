@@ -15,5 +15,3 @@ add_library(
   ../../third_party/snappy/snappy.cc
   ../../third_party/snappy/snappy-sinksource.cc
   parquet-extension.cpp)
-
-add_subdirectory(test)

@@ -1,0 +1,41 @@
+# name: test/sql/transactions/test_index_pending_insert.test
+# description: Test index with pending insertions
+# group: [transactions]
+
+# we can create an index with pending insertions
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO integers VALUES (1), (2), (3)
+
+statement ok con1
+CREATE INDEX i_index ON integers using art(i)
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+0
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1
+
+# after committing, the values are added to the index
+statement ok con2
+COMMIT
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1
+
+query I con2
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1
+

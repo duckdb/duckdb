@@ -1,0 +1,43 @@
+# name: test/sql/aggregate/test_count.test
+# description: Test COUNT operator
+# group: [aggregate]
+
+# test counts on scalar values
+query IIIII
+SELECT COUNT(*), COUNT(1), COUNT(100), COUNT(NULL), COUNT(DISTINCT 1)
+----
+1
+1
+1
+0
+1
+
+# test counts on a set of values
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (NULL)
+
+query IIIIII
+SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), COUNT(DISTINCT 1) FROM integers
+----
+3
+3
+2
+3
+2
+1
+
+# ordered aggregates are not supported
+statement error
+SELECT COUNT(1 ORDER BY 1)
+
+# FILTER clause not supported
+statement error
+SELECT COUNT(1) FILTER (WHERE false)
+
+# cannot do DISTINCT *
+statement error
+SELECT COUNT(DISTINCT *) FROM integers
+

@@ -1,0 +1,17 @@
+# name: test/issues/rigger/test_531.test
+# description: Issue 531
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# SELECT on DATE column with a large negative value results in a 'double free or corruption'
+statement ok
+CREATE TABLE t0(c0 DATE);
+
+statement error
+INSERT INTO t0 VALUES (-10000000);
+
+statement error
+SELECT (-10000000)::DATE;
+

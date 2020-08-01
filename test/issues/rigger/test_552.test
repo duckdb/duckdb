@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_552.test
+# description: Issue 552
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# RIGHT JOIN results in Assertion `filter->expressions.size() == 1'
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+query II
+SELECT * FROM t0 RIGHT JOIN t1 ON 0 WHERE t0.c0 OR t1.c0 BETWEEN t0.c0 AND 1;
+----
+

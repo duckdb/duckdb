@@ -1,0 +1,65 @@
+# name: test/sql/subquery/scalar/test_many_correlated_columns.test
+# description: Test multiple correlated columns and strings
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+# multiple correlated columns and strings
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (11, 1, 'a'), (12, 2, 'b'), (13, 3, 'c')
+
+statement ok
+CREATE TABLE test2 (a INTEGER, c INTEGER, str2 VARCHAR);
+
+statement ok
+INSERT INTO test2 VALUES (11, 1, 'a'), (12, 1, 'b'), (13, 4, 'b')
+
+query IRR
+SELECT a, SUM(a), (SELECT SUM(a)+SUM(t1.b) FROM test) FROM test t1 GROUP BY a ORDER BY a;
+----
+11	11.000000	37.000000
+12	12.000000	38.000000
+13	13.000000	39.000000
+
+# scalar query with multiple correlated columns
+query R
+SELECT (SELECT test.a+test.b+SUM(test2.a) FROM test2 WHERE str=str2) FROM test ORDER BY 1;
+----
+NULL
+23.000000
+39.000000
+
+# exists with multiple correlated columns
+query IIT
+SELECT * FROM test WHERE EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<>test2.c);
+----
+12	2	b
+13	3	c
+
+# ANY with multiple correlated columns
+query IT
+SELECT a, a>=ANY(SELECT test2.a+c-b FROM test2 WHERE c>=b AND str=str2) FROM test ORDER BY 1;
+----
+11	1
+12	0
+13	0
+
+# string comparison
+query TT
+SELECT str, str=ANY(SELECT str2 FROM test2) FROM test
+----
+a	1
+b	1
+c	0
+
+query TT
+SELECT str, str=ANY(SELECT str2 FROM test2 WHERE test.a<>test2.a) FROM test
+----
+a	0
+b	1
+c	0
+

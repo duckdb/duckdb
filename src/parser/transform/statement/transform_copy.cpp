@@ -70,7 +70,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 				if (!format_val || format_val->type != T_PGString) {
 					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'csv_auto'");
 				}
-				info.format = format_val->val.str;
+				info.format = StringUtil::Lower(format_val->val.str);
 				continue;
 			}
 			// otherwise

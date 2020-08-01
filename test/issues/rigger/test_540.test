@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_540.test
+# description: Issue 540
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Nested MAX() results in nondeterministic result or double free
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0 VALUES ('aaaaaaaaaaaa');
+
+query T
+SELECT MAX(agg0) FROM (SELECT MAX(t0.c0) AS agg0 FROM t0) as s0;
+----
+aaaaaaaaaaaa
+

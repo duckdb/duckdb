@@ -133,6 +133,7 @@ private:
 	// table-producing functions
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
+	void RegisterTableFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();

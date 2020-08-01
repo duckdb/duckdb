@@ -1,0 +1,39 @@
+# name: test/sql/update/test_string_update_null.test
+# description: Test update of string columns with NULLs
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a VARCHAR);
+
+statement ok con1
+INSERT INTO test VALUES ('hello'), ('world')
+
+statement ok con2
+BEGIN TRANSACTION;
+
+# update a string to NULL
+statement ok con1
+UPDATE test SET a=NULL where a='world';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+NULL
+hello
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+statement ok con2
+COMMIT;
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+NULL
+hello
+

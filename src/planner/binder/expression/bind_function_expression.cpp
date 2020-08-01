@@ -3,6 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -48,7 +49,23 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		arguments.push_back(child.sql_type);
 		children.push_back(move(child.expr));
 	}
-
+	// special binder-only functions
+	// FIXME: these shouldn't be special
+	if (function.function_name == "alias") {
+		if (arguments.size() != 1) {
+			throw BinderException("alias function expects a single argument");
+		}
+		// alias function: returns the alias of the current expression, or the name of the child
+		string alias = !function.alias.empty() ? function.alias : children[0]->GetName();
+		return BindResult(make_unique<BoundConstantExpression>(Value(alias)), SQLType::VARCHAR);
+	} else if (function.function_name == "typeof") {
+		if (arguments.size() != 1) {
+			throw BinderException("typeof function expects a single argument");
+		}
+		// typeof function: returns the type of the child expression
+		string type = SQLTypeToString(arguments[0]);
+		return BindResult(make_unique<BoundConstantExpression>(Value(type)), SQLType::VARCHAR);
+	}
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
 	auto sql_return_type = result->sql_return_type;
 	return BindResult(move(result), sql_return_type);

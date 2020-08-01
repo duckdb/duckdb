@@ -1,0 +1,59 @@
+# name: test/sql/optimizer/plan/test_unused_column_after_join.test
+# description: Test joins with various columns that are only used in the join
+# group: [plan]
+
+statement ok
+PRAGMA enable_verification
+
+# test columns that are only used in the join (i.e. can be projected out after the join)
+# create tables
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)
+
+# count of single join
+query I
+SELECT COUNT(*) FROM test, test2 WHERE test.b = test2.b
+----
+3
+
+# now a sum
+query RII
+SELECT SUM(test.a), MIN(test.a), MAX(test.a) FROM test, test2 WHERE test.b = test2.b
+----
+34.000000	11	12
+
+# count of multi-way join
+query I
+SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b
+----
+3
+
+# now a sum
+query R
+SELECT SUM(a1.a) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b
+----
+36.000000
+
+# count of multi-way join with filters
+query I
+SELECT COUNT(*) FROM test a1, test a2, test a3 WHERE a1.b=a2.b AND a2.b=a3.b AND a1.a=11 AND a2.a=11 AND a3.a=11
+----
+1
+
+# unused columns that become unused because of optimizer
+query T
+SELECT (TRUE OR a1.a=a2.b) FROM test a1, test a2 WHERE a1.a=11 AND a2.a>=10
+----
+1
+1
+1
+

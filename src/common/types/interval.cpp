@@ -87,6 +87,9 @@ interval_parse_number:
 		if (c >= '0' && c <= '9') {
 			// the number continues
 			continue;
+		} else if (c == ':') {
+			// colon: we are parsing a time
+			goto interval_parse_time;
 		} else {
 			if (pos == start_pos) {
 				return false;
@@ -101,6 +104,13 @@ interval_parse_number:
 		}
 	}
 	goto end_of_string;
+interval_parse_time: {
+	// parse the remainder of the time as a Time type
+	dtime_t time = Time::FromCString(str + start_pos);
+	result.msecs += time;
+	found_any = true;
+	goto end_of_string;
+}
 interval_parse_identifier:
 	for(; pos < len; pos++) {
 		char c = str[pos];

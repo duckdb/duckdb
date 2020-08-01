@@ -1,0 +1,79 @@
+# name: test/sql/order/test_order_same_value.test
+# description: Test ordering the same value several times
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (0), (0), (0), (0)
+
+# 4 -> 8
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 8 -> 16
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 16 -> 32
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 32 -> 64
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 64 -> 128
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 128 -> 256
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 256 -> 512
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 512 -> 1024
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 1024 -> 2048
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 2048 -> 4096
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 4096 -> 8192
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 8192 -> 16384
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 16384 -> 32768
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 32768 -> 65536
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# 65536 -> 131072
+statement ok
+INSERT INTO integers SELECT * FROM integers
+
+# order by
+query R
+SELECT SUM(i) FROM (SELECT i FROM integers ORDER BY i) t1
+----
+0.000000
+

@@ -267,27 +267,46 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 
 template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
-	// TODO: add support for '0' and '1' as boolean
-	if (strict) {
-		if (strcmp(input_data, "true") == 0 || strcmp(input_data, "True") == 0 || strcmp(input_data, "TRUE") == 0) {
-			result = true;
-		} else if (strcmp(input_data, "false") == 0 || strcmp(input_data, "False") == 0 ||
-		           strcmp(input_data, "FALSE") == 0) {
-			result = false;
-		} else {
-			return false;
-		}
-	} else {
-		if (input_data[0] == 't' || input_data[0] == 'T') {
-			result = true;
-		} else if (input_data[0] == 'f' || input_data[0] == 'F') {
-			result = false;
-		} else {
-			return false;
-		}
-	}
+	auto input_size = input.GetSize();
 
-	return true;
+	switch(input_size) {
+	case 1: {
+		char c = std::tolower(*input_data);
+		if (c == 't' || (!strict && c == '1')) {
+			result = true;
+			return true;
+		} else if (c == 'f' || (!strict && c == '0')) {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 4: {
+		char t = std::tolower(input_data[0]);
+		char r = std::tolower(input_data[1]);
+		char u = std::tolower(input_data[2]);
+		char e = std::tolower(input_data[3]);
+		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
+	case 5: {
+		char f = std::tolower(input_data[0]);
+		char a = std::tolower(input_data[1]);
+		char l = std::tolower(input_data[2]);
+		char s = std::tolower(input_data[3]);
+		char e = std::tolower(input_data[4]);
+		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
 }
 template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict) {
 	return TryIntegerCast<int8_t>(input.GetData(), input.GetSize(), result, strict);

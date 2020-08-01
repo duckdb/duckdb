@@ -1,0 +1,25 @@
+# name: test/sql/explain/test_explain.test
+# description: Test explain
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (NULL, NULL)
+
+statement ok
+EXPLAIN SELECT * FROM integers
+
+statement ok
+EXPLAIN select sum(i), j, sum(i), j from integers group by j having j < 10;
+
+statement ok
+EXPLAIN update integers set i=i+1;
+
+statement ok
+EXPLAIN delete from integers where i=1;
+

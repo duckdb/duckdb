@@ -1,0 +1,41 @@
+# name: test/sql/update/test_update_same_string_value.test
+# description: Test repeated update of string in same transaction
+# group: [update]
+
+# create a table
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+statement ok
+INSERT INTO test VALUES ('hello'), ('world')
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE test SET a='test' WHERE a='hello';
+
+query T
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+statement ok
+UPDATE test SET a='test2' WHERE a='world';
+
+query T
+SELECT * FROM test ORDER BY a
+----
+test
+test2
+
+statement ok
+COMMIT;
+
+query T
+SELECT * FROM test ORDER BY a
+----
+test
+test2
+
