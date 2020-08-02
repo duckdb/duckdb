@@ -1,0 +1,70 @@
+# name: test/sql/date/test_date.test
+# description: Test basic DATE functionality
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+# create and insert into table
+statement ok
+CREATE TABLE dates(i DATE)
+
+statement ok
+INSERT INTO dates VALUES ('1993-08-14'), (NULL)
+
+# check that we can select dates
+query T
+SELECT * FROM dates
+----
+1993-08-14
+NULL
+
+# YEAR function
+query I
+SELECT year(i) FROM dates
+----
+1993
+NULL
+
+# check that we can convert dates to string
+query T
+SELECT cast(i AS VARCHAR) FROM dates
+----
+1993-08-14
+NULL
+
+# check that we can add days to a date
+query T
+SELECT i + 5 FROM dates
+----
+1993-08-19
+NULL
+
+# check that we can subtract days from a date
+query T
+SELECT i - 5 FROM dates
+----
+1993-08-09
+NULL
+
+# HOWEVER, we can't divide or multiply or modulo
+statement error
+SELECT i * 3 FROM dates
+
+statement error
+SELECT i / 3 FROM dates
+
+statement error
+SELECT i % 3 FROM dates
+
+# we also can't add two dates together
+statement error
+SELECT i + i FROM dates
+
+# but we can subtract them! resulting in an integer
+query I
+SELECT (i + 5) - i FROM dates
+----
+5
+NULL
+

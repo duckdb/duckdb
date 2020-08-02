@@ -1,0 +1,32 @@
+# name: test/sql/aggregate/test_first_noninlined.test
+# description: Test FIRST with non-inlined strings
+# group: [aggregate]
+
+statement ok
+CREATE TABLE tbl(a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')
+
+# non-grouped aggregate
+query T
+SELECT FIRST(b) FROM tbl WHERE a=2
+----
+thisisalongstring
+
+query T
+SELECT FIRST(b) FROM tbl WHERE a=1
+----
+NULL
+
+# grouped aggregate
+query IT
+SELECT a, FIRST(b) FROM tbl GROUP BY a ORDER BY a
+----
+1
+NULL
+2
+thisisalongstring
+3
+thisisalsoalongstring
+

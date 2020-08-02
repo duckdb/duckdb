@@ -1,4 +1,0 @@
-add_library(test_sqlserver OBJECT test_sqlserver.cpp)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlserver>
-    PARENT_SCOPE)

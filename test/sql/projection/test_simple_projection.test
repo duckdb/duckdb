@@ -1,0 +1,61 @@
+# name: test/sql/projection/test_simple_projection.test
+# description: Test simple projection statements
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+# create table
+statement ok
+CREATE TABLE a (i integer, j integer);
+
+# insertion: 1 affected row
+statement ok
+INSERT INTO a VALUES (42, 84);
+
+query II
+SELECT * FROM a;
+----
+42	84
+
+# multiple insertions
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22)
+
+# multiple projections
+query II
+SELECT a, b FROM test;
+----
+11	22
+12	21
+13	22
+
+# basic expressions and filters
+query II
+SELECT a + 2, b FROM test WHERE a = 11;
+----
+13	22
+
+query II
+SELECT a + 2, b FROM test WHERE a = 12;
+----
+14	21
+
+# casts
+query T
+SELECT cast(a AS VARCHAR) FROM test;
+----
+11
+12
+13
+
+query I
+SELECT cast(cast(a AS VARCHAR) as INTEGER) FROM test;
+----
+11
+12
+13
+

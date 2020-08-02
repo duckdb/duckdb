@@ -7,9 +7,11 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/types/sel_cache.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 DataChunk::DataChunk() : count(0) {
 }
@@ -138,7 +140,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 	this->count = count;
-	sel_cache_t merge_cache;
+	SelCache merge_cache;
 	for (idx_t c = 0; c < column_count(); c++) {
 		data[c].Slice(sel_vector, count, merge_cache);
 	}
@@ -147,7 +149,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
 void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
 	assert(other.column_count() <= col_offset + column_count());
 	this->count = count;
-	sel_cache_t merge_cache;
+	SelCache merge_cache;
 	for (idx_t c = 0; c < other.column_count(); c++) {
 		if (other.data[c].vector_type == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
@@ -187,4 +189,6 @@ void DataChunk::Verify() {
 
 void DataChunk::Print() {
 	Printer::Print(ToString());
+}
+
 }

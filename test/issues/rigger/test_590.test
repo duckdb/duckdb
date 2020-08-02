@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_590.test
+# description: Issue 590
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Comparison with a DATE yields an incorrect result
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (DATE '2000-01-02');
+
+query T
+SELECT * FROM t0 WHERE DATE '2000-01-01' < t0.c0;
+----
+2000-01-02
+

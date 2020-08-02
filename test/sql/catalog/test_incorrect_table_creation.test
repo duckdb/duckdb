@@ -1,0 +1,19 @@
+# name: test/sql/catalog/test_incorrect_table_creation.test
+# description: Test failure cases in table creation/deletion
+# group: [catalog]
+
+# primary key constraint that references unknown column
+statement error
+CREATE TABLE integers(i INTEGER, PRIMARY KEY(j))
+
+# primary key that references the same key twice
+statement error
+CREATE TABLE integers(i INTEGER, PRIMARY KEY(i, i))
+
+# multiple primary keys
+statement error
+CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)
+
+statement error
+CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)
+

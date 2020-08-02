@@ -10,8 +10,6 @@
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include <string>
-#include <vector>
 
 using namespace std;
 

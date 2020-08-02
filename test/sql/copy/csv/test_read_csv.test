@@ -1,0 +1,29 @@
+# name: test/sql/copy/csv/test_read_csv.test
+# description: Test read CSV function with lineitem
+# group: [csv]
+
+# create a view using the read_csv function
+statement ok
+CREATE VIEW lineitem AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', '|', STRUCT_PACK(l_orderkey := 'INT', l_partkey := 'INT', l_suppkey := 'INT', l_linenumber := 'INT', l_quantity := 'INTEGER', l_extendedprice := 'DOUBLE', l_discount := 'DOUBLE', l_tax := 'DOUBLE', l_returnflag := 'VARCHAR', l_linestatus := 'VARCHAR', l_shipdate := 'DATE', l_commitdate := 'DATE', l_receiptdate := 'DATE', l_shipinstruct := 'VARCHAR', l_shipmode := 'VARCHAR', l_comment := 'VARCHAR'));
+
+# each of these will read the CSV again through the view
+query I
+SELECT COUNT(*) FROM lineitem
+----
+10
+
+query IT
+SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber;
+----
+15519	egular courts above the
+6731	ly final dependencies: slyly bold 
+6370	riously. regular, express dep
+214	lites. fluffily even de
+2403	 pending foxes. slyly re
+1564	arefully slyly ex
+
+# test incorrect usage of read_csv function
+# wrong argument type
+statement error
+SELECT * FROM read_csv('test/sql/copy/csv/data/real/lineitem_sample.csv', '|', STRUCT_PACK(l_orderkey := 5))
+

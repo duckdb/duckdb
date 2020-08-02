@@ -1,0 +1,18 @@
+# name: test/sql/alter/rename_table/test_rename_table_incorrect.test
+# description: Test RENAME TABLE: table does not exist and rename to an already existing table
+# group: [rename_table]
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+CREATE TABLE tbl2(i INTEGER)
+
+# Renaming a non existing table
+statement error
+ALTER TABLE non_table RENAME TO tbl
+
+# rename to an already existing table
+statement error
+ALTER TABLE tbl2 RENAME TO tbl
+

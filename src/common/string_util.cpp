@@ -7,7 +7,6 @@
 #include <sstream>
 #include <stdarg.h>
 #include <string.h>
-#include <string>
 
 using namespace duckdb;
 using namespace std;
@@ -34,7 +33,7 @@ void StringUtil::Trim(string &str) {
 	StringUtil::RTrim(str);
 }
 
-bool StringUtil::StartsWith(const string &str, const string &prefix) {
+bool StringUtil::StartsWith(string str, string prefix) {
 	if (prefix.size() > str.size()) {
 		return false;
 	}

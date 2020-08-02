@@ -1,0 +1,39 @@
+# name: test/sql/transactions/test_index_versioned_updates.test
+# description: Test index with versioned data from updates in secondary columns
+# group: [transactions]
+
+statement ok con1
+CREATE TABLE integers(i INTEGER PRIMARY KEY, j INTEGER)
+
+statement ok con1
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE integers SET j=4 WHERE i=1
+
+query I con1
+SELECT j FROM integers WHERE i=1
+----
+4
+
+query I con2
+SELECT j FROM integers WHERE i=1
+----
+1
+
+statement ok con1
+ROLLBACK
+
+query I con1
+SELECT j FROM integers WHERE i=1
+----
+1
+
+query I con2
+SELECT j FROM integers WHERE i=1
+----
+1
+

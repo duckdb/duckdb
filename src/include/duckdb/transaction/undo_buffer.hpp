@@ -11,9 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
 
-#include <memory>
-#include <vector>
-
 namespace duckdb {
 
 class WriteAheadLog;

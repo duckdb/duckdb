@@ -19,10 +19,12 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
-	// cannot combine Read and Append flags
+	// cannot combine Read and CREATE/Append flags
 	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
-	// cannot combine Read and CREATE flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::CREATE));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE));
+	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE_NEW));
+	// cannot combine CREATE and CREATE_NEW flags
+	assert(!(flags & FileFlags::FILE_CREATE && flags & FileFlags::FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -73,8 +75,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		// need Read or Write
 		assert(flags & FileFlags::WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_CREATE) {
 			open_flags |= O_CREAT;
+		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags & FileFlags::APPEND) {
 			open_flags |= O_APPEND;
@@ -252,24 +256,37 @@ void FileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
-	DIR *dir;
-	struct dirent *ent;
-	if ((dir = opendir(directory.c_str())) != NULL) {
-		/* print all the files and directories within directory */
-		while ((ent = readdir(dir)) != NULL) {
-			string name = string(ent->d_name);
-			if (!name.empty() && name[0] != '.') {
-				callback(name);
-			}
-		}
-		closedir(dir);
-	} else {
+	DIR *dir = opendir(directory.c_str());
+	if (!dir) {
 		return false;
 	}
+	struct dirent *ent;
+	// loop over all files in the directory
+	while ((ent = readdir(dir)) != NULL) {
+		string name = string(ent->d_name);
+		// skip . .. and empty files
+		if (name.empty() || name == "." || name == "..") {
+			continue;
+		}
+		// now stat the file to figure out if it is a regular file or directory
+		string full_path = JoinPath(directory, name);
+		if (access(full_path.c_str(), 0) != 0) {
+			continue;
+		}
+		struct stat status;
+		stat(full_path.c_str(), &status);
+		if (!(status.st_mode & S_IFREG) && !(status.st_mode & S_IFDIR)) {
+			// not a file or directory: skip
+			continue;
+		}
+		// invoke callback
+		callback(name, status.st_mode & S_IFDIR);
+	}
+	closedir(dir);
 	return true;
 }
 
@@ -302,6 +319,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
+#undef FILE_CREATE // woo mingw
 
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
@@ -355,8 +373,10 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		assert(flags & FileFlags::WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
-		if (flags & FileFlags::CREATE) {
+		if (flags & FileFlags::FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
+		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+			creation_disposition = CREATE_ALWAYS;
 		}
 		if (flags & FileFlags::DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
@@ -505,7 +525,7 @@ void FileSystem::RemoveFile(const string &filename) {
 	DeleteFileA(filename.c_str());
 }
 
-bool FileSystem::ListFiles(const string &directory, function<void(string)> callback) {
+bool FileSystem::ListFiles(const string &directory, function<void(string, bool)> callback) {
 	string search_dir = JoinPath(directory, "*");
 
 	WIN32_FIND_DATA ffd;
@@ -514,11 +534,11 @@ bool FileSystem::ListFiles(const string &directory, function<void(string)> callb
 		return false;
 	}
 	do {
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		string cFileName = string(ffd.cFileName);
+		if (cFileName == "." || cFileName == "..") {
 			continue;
 		}
-
-		callback(string(ffd.cFileName));
+		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
 	} while (FindNextFile(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();

@@ -25,6 +25,10 @@ template <> hash_t Hash(double val) {
 	return std::hash<double>{}(val);
 }
 
+template <> hash_t Hash(interval_t val) {
+	return Hash(val.days) ^ Hash(val.months) ^ Hash(val.msecs);
+}
+
 template <> hash_t Hash(const char *str) {
 	hash_t hash = 5381;
 	hash_t c;

@@ -4,22 +4,29 @@
 #include <fstream>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #include "parquet-extension.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/buffered_serializer.hpp"
+
 #include "utf8proc_wrapper.hpp"
 
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 #include "parquet_types.h"
 #include "snappy.h"
+#include "miniz.hpp"
 #endif
 
 using namespace duckdb;
@@ -264,6 +271,19 @@ static timestamp_t impala_timestamp_to_timestamp_t(const Int96 &raw_ts) {
 	return Timestamp::FromDatetime(date, time);
 }
 
+static Int96 timestamp_t_to_impala_timestamp(timestamp_t &ts) {
+	int32_t hour, min, sec, msec;
+	Time::Convert(Timestamp::GetTime(ts), hour, min, sec, msec);
+	uint64_t ms_since_midnight = hour * 60 * 60 * 1000 + min * 60 * 1000 + sec * 1000 + msec;
+	auto days_since_epoch = Date::Epoch(Timestamp::GetDate(ts)) / (24 * 60 * 60);
+	// first two uint32 in Int96 are nanoseconds since midnights
+	// last uint32 is number of days since year 4713 BC ("Julian date")
+	Int96 impala_ts;
+	*((uint64_t *)impala_ts.value) = ms_since_midnight * 1000000;
+	impala_ts.value[2] = days_since_epoch + kJulianToUnixEpochDays;
+	return impala_ts;
+}
+
 struct ParquetScanColumnData {
 	idx_t chunk_offset;
 
@@ -354,7 +374,6 @@ private:
 		if (file_meta_data.__isset.encryption_algorithm) {
 			throw runtime_error("Encrypted Parquet files are not supported");
 		}
-
 		// check if we like this schema
 		if (file_meta_data.schema.size() < 2) {
 			throw runtime_error("Need at least one column in the file");
@@ -421,7 +440,7 @@ private:
 	static void _fill_from_dict(ParquetScanColumnData &col_data, idx_t count, Vector &target, idx_t target_offset) {
 		for (idx_t i = 0; i < count; i++) {
 			if (col_data.defined_buf.ptr[i]) {
-				auto offset = col_data.offset_buf.read<int32_t>();
+				auto offset = col_data.offset_buf.read<uint32_t>();
 				if (offset > col_data.dict_size) {
 					throw runtime_error("Offset " + to_string(offset) + " greater than dictionary size " +
 					                    to_string(col_data.dict_size) + " at " + to_string(i + target_offset) +
@@ -444,6 +463,10 @@ private:
 			}
 		}
 	}
+
+	static const uint8_t GZIP_HEADER_MINSIZE = 10;
+	static const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
+	static const unsigned char GZIP_FLAG_UNSUPPORTED = 0x1 | 0x2 | 0x4 | 0x10 | 0x20;
 
 	static bool _prepare_page_buffers(ParquetScanFunctionData &data, idx_t col_idx) {
 		auto &col_data = data.column_data[col_idx];
@@ -475,11 +498,7 @@ private:
 			break;
 
 		case CompressionCodec::SNAPPY: {
-			size_t decompressed_size;
-
-			snappy::GetUncompressedLength(col_data.buf.ptr, page_hdr.compressed_page_size, &decompressed_size);
-			col_data.decompressed_buf.resize(decompressed_size);
-
+			col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
 			auto res =
 			    snappy::RawUncompress(col_data.buf.ptr, page_hdr.compressed_page_size, col_data.decompressed_buf.ptr);
 			if (!res) {
@@ -488,8 +507,51 @@ private:
 			col_data.payload.ptr = col_data.decompressed_buf.ptr;
 			break;
 		}
+		case CompressionCodec::GZIP: {
+			struct MiniZStream {
+				~MiniZStream() {
+					if (init) {
+						mz_inflateEnd(&stream);
+					}
+				}
+
+				mz_stream stream;
+				bool init = false;
+			} s;
+			auto &stream = s.stream;
+			memset(&stream, 0, sizeof(mz_stream));
+
+			auto mz_ret = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
+			if (mz_ret != MZ_OK) {
+				throw Exception("Failed to initialize miniz");
+			}
+			s.init = true;
+
+			col_data.buf.available(GZIP_HEADER_MINSIZE);
+			auto gzip_hdr = (const unsigned char *)col_data.buf.ptr;
+
+			if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B || gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE ||
+			    gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+				throw Exception("Input is invalid/unsupported GZIP stream");
+			}
+
+			col_data.decompressed_buf.resize(page_hdr.uncompressed_page_size);
+
+			stream.next_in = (const unsigned char *)col_data.buf.ptr + GZIP_HEADER_MINSIZE;
+			stream.avail_in = page_hdr.compressed_page_size - GZIP_HEADER_MINSIZE;
+			stream.next_out = (unsigned char *)col_data.decompressed_buf.ptr;
+			stream.avail_out = page_hdr.uncompressed_page_size;
+
+			mz_ret = mz_inflate(&stream, MZ_FINISH);
+			if (mz_ret != MZ_OK && mz_ret != MZ_STREAM_END) {
+				throw runtime_error("Decompression failure: " + string(mz_error(mz_ret)));
+			}
+
+			col_data.payload.ptr = col_data.decompressed_buf.ptr;
+			break;
+		}
 		default:
-			throw runtime_error("Unsupported compression codec. Try uncompressed or snappy");
+			throw runtime_error("Unsupported compression codec. Try uncompressed, gzip or snappy");
 		}
 		col_data.buf.inc(page_hdr.compressed_page_size);
 
@@ -685,7 +747,7 @@ private:
 			data.current_group++;
 			data.group_offset = 0;
 
-			if (data.current_group == data.file_meta_data.row_groups.size()) {
+			if ((idx_t)data.current_group == data.file_meta_data.row_groups.size()) {
 				data.finished = true;
 				return;
 			}
@@ -706,7 +768,10 @@ private:
 
 		auto current_group = data.file_meta_data.row_groups[data.current_group];
 		output.SetCardinality(std::min((int64_t)STANDARD_VECTOR_SIZE, current_group.num_rows - data.group_offset));
-		assert(output.size() > 0);
+
+		if (output.size() == 0) {
+			return;
+		}
 
 		for (idx_t out_col_idx = 0; out_col_idx < output.column_count(); out_col_idx++) {
 			auto file_col_idx = data.column_ids[out_col_idx];
@@ -788,7 +853,7 @@ private:
 						auto out_data_ptr = FlatVector::GetData<string_t>(output.data[out_col_idx]);
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
-								auto offset = col_data.offset_buf.read<int32_t>();
+								auto offset = col_data.offset_buf.read<uint32_t>();
 								if (offset >= col_data.string_collection->count) {
 									throw runtime_error("string dictionary offset out of bounds");
 								}
@@ -815,7 +880,7 @@ private:
 						// bit packed this
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
 						int byte_pos = 0;
-						for (int32_t i = 0; i < current_batch_size; i++) {
+						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (!col_data.defined_buf.ptr[i]) {
 								FlatVector::SetNull(output.data[out_col_idx], i + output_offset, true);
 								continue;
@@ -888,15 +953,385 @@ private:
 	}
 };
 
+class MyTransport : public TTransport {
+public:
+	MyTransport(Serializer &serializer) : serializer(serializer) {
+	}
+
+	bool isOpen() const override {
+		return true;
+	}
+
+	void open() override {
+	}
+
+	void close() override {
+	}
+
+	void write_virt(const uint8_t *buf, uint32_t len) override {
+		serializer.WriteData((const_data_ptr_t)buf, len);
+	}
+
+private:
+	Serializer &serializer;
+};
+
+static Type::type duckdb_type_to_parquet_type(SQLType duckdb_type) {
+	switch (duckdb_type.id) {
+	case SQLTypeId::BOOLEAN:
+		return Type::BOOLEAN;
+	case SQLTypeId::TINYINT:
+	case SQLTypeId::SMALLINT:
+	case SQLTypeId::INTEGER:
+		return Type::INT32;
+	case SQLTypeId::BIGINT:
+		return Type::INT64;
+	case SQLTypeId::FLOAT:
+		return Type::FLOAT;
+	case SQLTypeId::DOUBLE:
+		return Type::DOUBLE;
+	case SQLTypeId::VARCHAR:
+	case SQLTypeId::BLOB:
+		return Type::BYTE_ARRAY;
+	case SQLTypeId::DATE:
+	case SQLTypeId::TIMESTAMP:
+		return Type::INT96;
+	default:
+		throw NotImplementedException(SQLTypeToString(duckdb_type));
+	}
+}
+
+static void VarintEncode(uint32_t val, Serializer &ser) {
+	do {
+		uint8_t byte = val & 127;
+		val >>= 7;
+		if (val != 0) {
+			byte |= 128;
+		}
+		ser.Write<uint8_t>(byte);
+	} while (val != 0);
+}
+
+static uint8_t GetVarintSize(uint32_t val) {
+	uint8_t res = 0;
+	do {
+		uint8_t byte = val & 127;
+		val >>= 7;
+		if (val != 0) {
+			byte |= 128;
+		}
+		res++;
+	} while (val != 0);
+	return res;
+}
+
+template <class SRC, class TGT>
+static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serializer &ser) {
+	auto *ptr = FlatVector::GetData<SRC>(col);
+	for (idx_t r = 0; r < length; r++) {
+		if (!nullmask[r]) {
+			ser.Write<TGT>((TGT)ptr[r]);
+		}
+	}
+}
+
+struct ParquetWriteBindData : public FunctionData {
+	vector<SQLType> sql_types;
+	string file_name;
+	vector<string> column_names;
+	// TODO compression flag to test the param passing stuff
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+public:
+	void Flush(ChunkCollection &buffer) {
+		if (buffer.count == 0) {
+			return;
+		}
+		std::lock_guard<std::mutex> glock(lock);
+
+		// set up a new row group for this chunk collection
+		RowGroup row_group;
+		row_group.num_rows = 0;
+		row_group.file_offset = writer->GetTotalWritten();
+		row_group.__isset.file_offset = true;
+		row_group.columns.resize(buffer.column_count());
+
+		// iterate over each of the columns of the chunk collection and write them
+		for (idx_t i = 0; i < buffer.column_count(); i++) {
+			// we start off by writing everything into a temporary buffer
+			// this is necessary to (1) know the total written size, and (2) to compress it with snappy afterwards
+			BufferedSerializer temp_writer;
+
+			// set up some metadata
+			PageHeader hdr;
+			hdr.compressed_page_size = 0;
+			hdr.uncompressed_page_size = 0;
+			hdr.type = PageType::DATA_PAGE;
+			hdr.__isset.data_page_header = true;
+
+			hdr.data_page_header.num_values = buffer.count;
+			hdr.data_page_header.encoding = Encoding::PLAIN;
+			hdr.data_page_header.definition_level_encoding = Encoding::RLE;
+			hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
+
+			// record the current offset of the writer into the file
+			// this is the starting position of the current page
+			auto start_offset = writer->GetTotalWritten();
+
+			// write the definition levels (i.e. the inverse of the nullmask)
+			// we always bit pack everything
+
+			// first figure out how many bytes we need (1 byte per 8 rows, rounded up)
+			auto define_byte_count = (buffer.count + 7) / 8;
+			// we need to set up the count as a varint, plus an added marker for the RLE scheme
+			// for this marker we shift the count left 1 and set low bit to 1 to indicate bit packed literals
+			uint32_t define_header = (define_byte_count << 1) | 1;
+			uint32_t define_size = GetVarintSize(define_header) + define_byte_count;
+
+			// we write the actual definitions into the temp_writer for now
+			temp_writer.Write<uint32_t>(define_size);
+			VarintEncode(define_header, temp_writer);
+
+			for (auto &chunk : buffer.chunks) {
+				auto defined = FlatVector::Nullmask(chunk->data[i]);
+				// flip the nullmask to go from nulls -> defines
+				defined.flip();
+				// write the bits of the nullmask
+				auto chunk_define_byte_count = (chunk->size() + 7) / 8;
+				temp_writer.WriteData((const_data_ptr_t)&defined, chunk_define_byte_count);
+			}
+
+			// now write the actual payload: we write this as PLAIN values (for now? possibly for ever?)
+			for (auto &chunk : buffer.chunks) {
+				auto &input = *chunk;
+				auto &input_column = input.data[i];
+				auto &nullmask = FlatVector::Nullmask(input_column);
+
+				// write actual payload data
+				switch (sql_types[i].id) {
+				case SQLTypeId::BOOLEAN: {
+					auto *ptr = FlatVector::GetData<bool>(input_column);
+					uint8_t byte = 0;
+					uint8_t byte_pos = 0;
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) { // only encode if non-null
+							byte |= (ptr[r] & 1) << byte_pos;
+							byte_pos++;
+
+							temp_writer.Write<uint8_t>(byte);
+							if (byte_pos == 8) {
+								temp_writer.Write<uint8_t>(byte);
+								byte = 0;
+								byte_pos = 0;
+							}
+						}
+					}
+					// flush last byte if req
+					if (byte_pos > 0) {
+						temp_writer.Write<uint8_t>(byte);
+					}
+					break;
+				}
+				case SQLTypeId::TINYINT:
+					_write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::SMALLINT:
+					_write_plain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::INTEGER:
+					_write_plain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::BIGINT:
+					_write_plain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::FLOAT:
+					_write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::DOUBLE:
+					_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
+					break;
+				case SQLTypeId::TIMESTAMP: {
+					auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) {
+							temp_writer.Write<Int96>(timestamp_t_to_impala_timestamp(ptr[r]));
+						}
+					}
+					break;
+				}
+				case SQLTypeId::VARCHAR: {
+					auto *ptr = FlatVector::GetData<string_t>(input_column);
+					for (idx_t r = 0; r < input.size(); r++) {
+						if (!nullmask[r]) {
+							temp_writer.Write<uint32_t>(ptr[r].GetSize());
+							temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+						}
+					}
+					break;
+				}
+					// TODO date blob etc.
+				default:
+					throw NotImplementedException(SQLTypeToString((sql_types[i])));
+				}
+			}
+
+			// now that we have finished writing the data we know the uncompressed size
+			hdr.uncompressed_page_size = temp_writer.blob.size;
+
+			// we perform snappy compression (FIXME: this should be a flag, possibly also include gzip?)
+			size_t compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
+			auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
+			                    (char *)compressed_buf.get(), &compressed_size);
+
+			hdr.compressed_page_size = compressed_size;
+
+			// now finally write the data to the actual file
+			hdr.write(protocol.get());
+			writer->WriteData(compressed_buf.get(), compressed_size);
+
+			auto &column_chunk = row_group.columns[i];
+			column_chunk.__isset.meta_data = true;
+			column_chunk.meta_data.data_page_offset = start_offset;
+			column_chunk.meta_data.total_compressed_size = writer->GetTotalWritten() - start_offset;
+			column_chunk.meta_data.codec = CompressionCodec::SNAPPY;
+			column_chunk.meta_data.path_in_schema.push_back(file_meta_data.schema[i + 1].name);
+			column_chunk.meta_data.num_values = buffer.count;
+			column_chunk.meta_data.type = file_meta_data.schema[i + 1].type;
+		}
+		row_group.num_rows += buffer.count;
+
+		// append the row group to the file meta data
+		file_meta_data.row_groups.push_back(row_group);
+		file_meta_data.num_rows += buffer.count;
+	}
+
+	void Finalize() {
+		auto start_offset = writer->GetTotalWritten();
+		file_meta_data.write(protocol.get());
+
+		writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
+
+		// parquet files also end with the string "PAR1"
+		writer->WriteData((const_data_ptr_t) "PAR1", 4);
+
+		// flush to disk
+		writer->Sync();
+		writer.reset();
+	}
+
+public:
+	unique_ptr<BufferedFileWriter> writer;
+	shared_ptr<TProtocol> protocol;
+	FileMetaData file_meta_data;
+	vector<SQLType> sql_types;
+	std::mutex lock;
+};
+
+struct ParquetWriteLocalState : public LocalFunctionData {
+	ParquetWriteLocalState() {
+		buffer = make_unique<ChunkCollection>();
+	}
+
+	unique_ptr<ChunkCollection> buffer;
+};
+
+unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
+                                            vector<SQLType> &sql_types) {
+	auto bind_data = make_unique<ParquetWriteBindData>();
+	bind_data->sql_types = sql_types;
+	bind_data->column_names = names;
+	bind_data->file_name = info.file_path;
+	return move(bind_data);
+}
+
+unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &context, FunctionData &bind_data) {
+	auto global_state = make_unique<ParquetWriteGlobalState>();
+	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
+
+	// initialize the file writer
+	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
+	                                                       FileFlags::WRITE | FileFlags::FILE_CREATE_NEW);
+	// parquet files start with the string "PAR1"
+	global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
+	TCompactProtocolFactoryT<MyTransport> tproto_factory;
+	global_state->protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*global_state->writer));
+	global_state->file_meta_data.num_rows = 0;
+	global_state->file_meta_data.schema.resize(parquet_bind.sql_types.size() + 1);
+
+	global_state->file_meta_data.schema[0].num_children = parquet_bind.sql_types.size();
+	global_state->file_meta_data.schema[0].__isset.num_children = true;
+	global_state->file_meta_data.version = 1;
+
+	for (idx_t i = 0; i < parquet_bind.sql_types.size(); i++) {
+		auto &schema_element = global_state->file_meta_data.schema[i + 1];
+
+		schema_element.type = duckdb_type_to_parquet_type(parquet_bind.sql_types[i]);
+		schema_element.repetition_type = FieldRepetitionType::OPTIONAL;
+		schema_element.num_children = 0;
+		schema_element.__isset.num_children = true;
+		schema_element.__isset.type = true;
+		schema_element.__isset.repetition_type = true;
+		schema_element.name = parquet_bind.column_names[i];
+	}
+	global_state->sql_types = parquet_bind.sql_types;
+	return move(global_state);
+}
+
+void parquet_write_sink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                        LocalFunctionData &lstate, DataChunk &input) {
+	auto &global_state = (ParquetWriteGlobalState &)gstate;
+	auto &local_state = (ParquetWriteLocalState &)lstate;
+
+	// append data to the local (buffered) chunk collection
+	local_state.buffer->Append(input);
+	if (local_state.buffer->count > 100000) {
+		// if the chunk collection exceeds a certain size we flush it to the parquet file
+		global_state.Flush(*local_state.buffer);
+		// and reset the buffer
+		local_state.buffer = make_unique<ChunkCollection>();
+	}
+}
+
+void parquet_write_combine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                           LocalFunctionData &lstate) {
+	auto &global_state = (ParquetWriteGlobalState &)gstate;
+	auto &local_state = (ParquetWriteLocalState &)lstate;
+	// flush any data left in the local state to the file
+	global_state.Flush(*local_state.buffer);
+}
+
+void parquet_write_finalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
+	auto &global_state = (ParquetWriteGlobalState &)gstate;
+	// finalize: write any additional metadata to the file here
+	global_state.Finalize();
+}
+
+unique_ptr<LocalFunctionData> parquet_write_initialize_local(ClientContext &context, FunctionData &bind_data) {
+	return make_unique<ParquetWriteLocalState>();
+}
+
 void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
-	CreateTableFunctionInfo info(scan_fun, true);
+	CreateTableFunctionInfo cinfo(scan_fun, true);
+	cinfo.name = "read_parquet";
+
+	CopyFunction function("parquet");
+	function.copy_to_bind = parquet_write_bind;
+	function.copy_to_initialize_global = parquet_write_initialize_global;
+	function.copy_to_initialize_local = parquet_write_initialize_local;
+	function.copy_to_sink = parquet_write_sink;
+	function.copy_to_combine = parquet_write_combine;
+	function.copy_to_finalize = parquet_write_finalize;
+	CreateCopyFunctionInfo info(function);
 
 	Connection conn(db);
 	conn.context->transaction.BeginTransaction();
-	conn.context->catalog.CreateTableFunction(*conn.context, &info);
-	info.name = "read_parquet"; // ok we will have this alias
-	conn.context->catalog.CreateTableFunction(*conn.context, &info);
+	db.catalog->CreateCopyFunction(*conn.context, &info);
+	db.catalog->CreateTableFunction(*conn.context, &cinfo);
+	cinfo.name = "parquet_scan";
+	db.catalog->CreateTableFunction(*conn.context, &cinfo);
 
 	conn.context->transaction.Commit();
 }

@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/test_distinct_string_agg.test
+# description: Test distinct STRING_AGG operator
+# group: [aggregate]
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES ('a'), ('b'), ('a');
+
+query TT
+SELECT STRING_AGG(s,','), STRING_AGG(DISTINCT s, ',') FROM strings
+----
+a,b,a
+a,b
+

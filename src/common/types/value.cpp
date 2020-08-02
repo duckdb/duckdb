@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -26,6 +27,7 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+	sql_type = SQLType::VARCHAR;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -265,6 +267,19 @@ Value Value::BLOB(string data, bool must_cast) {
 	return result;
 }
 
+Value Value::INTERVAL(int32_t months, int32_t days, int64_t msecs) {
+	Value result(TypeId::INTERVAL);
+	result.is_null = false;
+	result.value_.interval.months = months;
+	result.value_.interval.days = days;
+	result.value_.interval.msecs = msecs;
+	return result;
+}
+
+Value Value::INTERVAL(interval_t interval) {
+	return Value::INTERVAL(interval.months, interval.days, interval.msecs);
+}
+
 //===--------------------------------------------------------------------===//
 // CreateValue
 //===--------------------------------------------------------------------===//
@@ -413,6 +428,7 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.bigint);
 	case SQLTypeId::FLOAT:
 		return to_string(value_.float_);
+	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
@@ -421,6 +437,8 @@ string Value::ToString(SQLType sql_type) const {
 		return Time::ToString(value_.integer);
 	case SQLTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
+	case SQLTypeId::INTERVAL:
+		return Interval::ToString(value_.interval);
 	case SQLTypeId::VARCHAR:
 		return str_value;
 	case SQLTypeId::BLOB: {
@@ -455,7 +473,7 @@ string Value::ToString(SQLType sql_type) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing");
+		throw NotImplementedException("Unimplemented type for printing: %s", SQLTypeToString(sql_type).c_str());
 	}
 }
 

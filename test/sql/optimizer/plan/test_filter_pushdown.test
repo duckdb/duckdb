@@ -1,0 +1,183 @@
+# name: test/sql/optimizer/plan/test_filter_pushdown.test
+# description: Test filter pushdown
+# group: [plan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# test filter pushdown into cross product
+# single filter that matches both sides
+query II
+SELECT * FROM integers i1, integers i2 WHERE i1.i=i2.i ORDER BY 1
+----
+1	1
+2	2
+3	3
+
+# add filter that matches left side
+query II
+SELECT * FROM integers i1, integers i2 WHERE i1.i=i2.i AND i1.i>1 ORDER BY 1
+----
+2	2
+3	3
+
+# three cross products
+query III
+SELECT * FROM integers i1, integers i2, integers i3 WHERE i1.i=i2.i AND i1.i=i3.i AND i1.i>1 ORDER BY 1
+----
+2	2	2
+3	3	3
+
+# inner join
+query II
+SELECT * FROM integers i1 JOIN integers i2 ON i1.i=i2.i WHERE i1.i>1 ORDER BY 1
+----
+2	2
+3	3
+
+# left outer join
+# condition on LHS
+query II
+SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=1 WHERE i1.i>2 ORDER BY 2
+----
+3	NULL
+3	1
+3	2
+3	3
+
+# condition on RHS that eliminates NULL values
+query II
+SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE i2.i IS NOT NULL ORDER BY 2
+----
+
+# more complicated conditions on RHS that eliminates NULL values
+query II
+SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE i2.i>1 ORDER BY 2
+----
+
+query II
+SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE CASE WHEN i2.i IS NULL THEN False ELSE True END ORDER BY 2
+----
+
+# conditions on RHS that does not eliminate NULL values
+query II
+SELECT DISTINCT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=0 WHERE i2.i IS NULL ORDER BY 1
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+# conditions on both sides that guarantees to eliminate null values from RHS
+query II
+SELECT * FROM integers i1 LEFT OUTER JOIN integers i2 ON 1=1 WHERE i1.i=i2.i ORDER BY 1
+----
+1	1
+2	2
+3	3
+
+# MARK join
+# transform into semi join
+query I
+SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) ORDER BY i
+----
+1
+2
+3
+
+# transform into ANTI join
+query I
+SELECT * FROM integers WHERE i NOT IN ((SELECT * FROM integers WHERE i=1)) ORDER BY i
+----
+2
+3
+
+# condition pushdown
+query I
+SELECT * FROM integers WHERE i IN ((SELECT * FROM integers)) AND i<3 ORDER BY i
+----
+1
+2
+
+query II
+SELECT * FROM integers i1, integers i2 WHERE i1.i IN ((SELECT * FROM integers)) AND i1.i=i2.i ORDER BY 1
+----
+1	1
+2	2
+3	3
+
+# DELIM join
+# correlated exists: turn into semi join
+query I
+SELECT * FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i1.i
+----
+1
+2
+3
+
+# correlated not exists: turn into anti join
+query I
+SELECT * FROM integers i1 WHERE NOT EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i1.i
+----
+NULL
+
+# push condition down delim join
+query II
+SELECT * FROM integers i1, integers i2 WHERE i1.i=(SELECT i FROM integers WHERE i1.i=i) AND i1.i=i2.i ORDER BY i1.i
+----
+1	1
+2	2
+3	3
+
+# test filter pushdown into subquery
+query II
+SELECT * FROM (SELECT i1.i AS a, i2.i AS b FROM integers i1, integers i2) a1 WHERE a=b ORDER BY 1
+----
+1	1
+2	2
+3	3
+
+# filter pushdown on subquery with more complicated expression
+query T
+SELECT * FROM (SELECT i1.i=i2.i AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1
+----
+1
+1
+1
+
+# filter pushdown into distinct in subquery
+query II
+SELECT * FROM (SELECT DISTINCT i1.i AS a, i2.i AS b FROM integers i1, integers i2) res WHERE a=1 AND b=3;
+----
+1	3
+
+# filter pushdown into union in subquery
+query I
+SELECT * FROM (SELECT * FROM integers i1 UNION SELECT * FROM integers i2) a WHERE i=3;
+----
+3
+
+# filter pushdown on subquery with window function (cannot be done because it will mess up the ordering)
+query III
+SELECT * FROM (SELECT i1.i AS a, i2.i AS b, row_number() OVER (ORDER BY i1.i, i2.i) FROM integers i1, integers i2 WHERE i1.i IS NOT NULL AND i2.i IS NOT NULL) a1 WHERE a=b ORDER BY 1
+----
+1	1	1
+2	2	5
+3	3	9
+
+# condition on scalar projection
+query T
+SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2) a1 WHERE cond ORDER BY 1
+----
+
+# condition on scalar grouping
+query T
+SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1
+----
+

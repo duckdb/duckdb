@@ -50,7 +50,7 @@
 //#pragma warning(disable: 4200)
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 #if !defined(__linux__)  /* only Linux seems to have memrchr */
 static void* memrchr(const void* s, int c, size_t n) {
@@ -1284,7 +1284,7 @@ DFA::State* DFA::StateSaver::Restore() {
 // inline it to create the specialized ones.
 //
 // Note that matches are delayed by one byte, to make it easier to
-// accomodate match conditions depending on the next input byte (like $ and \b).
+// accommodate match conditions depending on the next input byte (like $ and \b).
 // When s->next[c]->IsMatch(), it means that there is a match ending just
 // *before* byte c.
 
@@ -2086,4 +2086,4 @@ bool Prog::PossibleMatchRange(std::string* min, std::string* max, int maxlen) {
   return GetDFA(kLongestMatch)->PossibleMatchRange(min, max, maxlen);
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

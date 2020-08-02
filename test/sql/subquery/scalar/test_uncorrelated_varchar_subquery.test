@@ -1,0 +1,68 @@
+# name: test/sql/subquery/scalar/test_uncorrelated_varchar_subquery.test
+# description: Test uncorrelated VARCHAR subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# varchar tests
+statement ok
+CREATE TABLE strings(v VARCHAR)
+
+statement ok
+INSERT INTO strings VALUES ('hello'), ('world'), (NULL)
+
+# ANY
+query T
+SELECT NULL IN (SELECT * FROM strings)
+----
+NULL
+
+query T
+SELECT 'hello' IN (SELECT * FROM strings)
+----
+1
+
+query T
+SELECT 'bla' IN (SELECT * FROM strings)
+----
+NULL
+
+query T
+SELECT 'bla' IN (SELECT * FROM strings WHERE v IS NOT NULL)
+----
+0
+
+# EXISTS
+query T
+SELECT * FROM strings WHERE EXISTS(SELECT NULL)
+----
+hello
+world
+NULL
+
+query T
+SELECT * FROM strings WHERE EXISTS(SELECT v FROM strings WHERE v='bla')
+----
+
+# scalar query
+query T
+SELECT (SELECT v FROM strings WHERE v='hello') FROM strings
+----
+hello
+hello
+hello
+
+query T
+SELECT (SELECT v FROM strings WHERE v='bla') FROM strings
+----
+NULL
+NULL
+NULL
+

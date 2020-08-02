@@ -11,12 +11,12 @@
 
 #include "re2/re2.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 class Prog;
 class Regexp;
-}  // namespace re2
+}  // namespace duckdb_re2
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // An RE2::Set represents a collection of regexps that can
 // be searched for simultaneously.
@@ -62,12 +62,12 @@ class RE2::Set {
              ErrorInfo* error_info) const;
 
  private:
-  typedef std::pair<std::string, re2::Regexp*> Elem;
+  typedef std::pair<std::string, duckdb_re2::Regexp*> Elem;
 
   RE2::Options options_;
   RE2::Anchor anchor_;
   std::vector<Elem> elem_;
-  re2::Prog* prog_;
+  duckdb_re2::Prog* prog_;
   bool compiled_;
   int size_;
 
@@ -75,6 +75,6 @@ class RE2::Set {
   Set& operator=(const Set&) = delete;
 };
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_SET_H_

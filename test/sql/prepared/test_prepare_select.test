@@ -1,0 +1,33 @@
+# name: test/sql/prepared/test_prepare_select.test
+# description: PREPARE for SELECT clause
+# group: [prepared]
+
+statement ok
+CREATE TABLE a (i TINYINT)
+
+statement ok
+INSERT INTO a VALUES (42)
+
+statement ok
+PREPARE s3 AS SELECT * FROM a WHERE i=$1
+
+statement error
+EXECUTE s3(10000)
+
+statement ok
+EXECUTE s3(42)
+
+statement ok
+EXECUTE s3(84)
+
+statement ok
+DEALLOCATE s3
+
+# can't run a query with a param without PREPARE
+statement error
+SELECT * FROM a WHERE i=$1
+
+# also can't run a query with a param when casting
+statement error
+SELECT * FROM a WHERE i=CAST($1 AS VARCHAR)
+

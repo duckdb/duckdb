@@ -28,6 +28,7 @@ const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
 const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
 
 const SQLType SQLType::BLOB = SQLType(SQLTypeId::BLOB);
+const SQLType SQLType::INTERVAL = SQLType(SQLTypeId::INTERVAL);
 
 // TODO these are incomplete and should maybe not exist as such
 const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
@@ -44,7 +45,7 @@ const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, 
 const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
     SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
-    SQLType::VARCHAR, SQLType::BLOB};
+    SQLType::VARCHAR, SQLType::BLOB, SQLType::INTERVAL};
 // TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;
@@ -73,6 +74,8 @@ string TypeIdToString(TypeId type) {
 		return "VARCHAR";
 	case TypeId::VARBINARY:
 		return "VARBINARY";
+	case TypeId::INTERVAL:
+		return "INTERVAL";
 	case TypeId::STRUCT:
 		return "STRUCT<?>";
 	case TypeId::LIST:
@@ -104,6 +107,8 @@ idx_t GetTypeIdSize(TypeId type) {
 		return sizeof(uintptr_t);
 	case TypeId::VARCHAR:
 		return sizeof(string_t);
+	case TypeId::INTERVAL:
+		return sizeof(interval_t);
 	case TypeId::STRUCT:
 		return 0; // no own payload
 	case TypeId::LIST:
@@ -131,6 +136,8 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::FLOAT;
 	case TypeId::DOUBLE:
 		return SQLType::DOUBLE;
+	case TypeId::INTERVAL:
+		return SQLType::INTERVAL;
 	case TypeId::VARCHAR:
 		return SQLType::VARCHAR;
 	case TypeId::VARBINARY:
@@ -147,7 +154,7 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 bool TypeIsConstantSize(TypeId type) {
 	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
 	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
-	       type == TypeId::POINTER;
+	       type == TypeId::POINTER || type == TypeId::INTERVAL;
 }
 bool TypeIsIntegral(TypeId type) {
 	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER;
@@ -206,6 +213,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "VARBINARY";
 	case SQLTypeId::CHAR:
 		return "CHAR";
+	case SQLTypeId::INTERVAL:
+		return "INTERVAL";
 	case SQLTypeId::SQLNULL:
 		return "NULL";
 	case SQLTypeId::ANY:
@@ -278,6 +287,8 @@ SQLType TransformStringToSQLType(string str) {
 		return SQLType::DATE;
 	} else if (lower_str == "time") {
 		return SQLType::TIME;
+	} else if (lower_str == "interval") {
+		return SQLType::INTERVAL;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
 	}
@@ -319,10 +330,14 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		return true;
 	}
 
+	// all integer types can cast from INTEGER
+	// this is because INTEGER is the smallest type considered by the automatic csv sniffer
 	switch (id) {
 	case SQLTypeId::SMALLINT:
 		switch (other.id) {
 		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;
@@ -331,6 +346,7 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		switch (other.id) {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;
@@ -403,6 +419,8 @@ TypeId GetInternalType(SQLType type) {
 		return TypeId::VARCHAR;
 	case SQLTypeId::VARBINARY:
 		return TypeId::VARBINARY;
+	case SQLTypeId::INTERVAL:
+		return TypeId::INTERVAL;
 	case SQLTypeId::STRUCT:
 		return TypeId::STRUCT;
 	case SQLTypeId::LIST:

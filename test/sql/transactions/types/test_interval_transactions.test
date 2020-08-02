@@ -1,0 +1,77 @@
+# name: test/sql/transactions/types/test_interval_transactions.test
+# description: Test transaction ops with intervals
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+# create table
+statement ok con1
+CREATE TABLE interval (t INTERVAL);
+
+statement ok con1
+INSERT INTO interval VALUES (INTERVAL '20' DAY), (INTERVAL '1' YEAR), (INTERVAL '1' MONTH);
+
+# update
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE interval SET t=INTERVAL '1' MONTH WHERE t=INTERVAL '20' DAY;
+
+# now we only have two distinct values in con
+query T con1
+SELECT * FROM interval ORDER BY 1
+----
+1 month
+1 month
+1 year
+
+query I con1
+SELECT COUNT(DISTINCT t) FROM interval
+----
+2
+
+# in con2 we still have 3
+query T con2
+SELECT * FROM interval ORDER BY 1
+----
+20 days
+1 month
+1 year
+
+query I con2
+SELECT COUNT(DISTINCT t) FROM interval
+----
+3
+
+# rollback
+statement ok con1
+ROLLBACK
+
+# after the rollback we are back to 3
+query I con1
+SELECT COUNT(DISTINCT t) FROM interval
+----
+3
+
+# now commit it
+statement ok con1
+UPDATE interval SET t=INTERVAL '1' MONTH WHERE t=INTERVAL '20' DAY;
+
+query TI con1
+SELECT t, COUNT(*) FROM interval GROUP BY t ORDER BY 2 DESC
+----
+1 month	2
+1 year	1
+
+query I con1
+SELECT COUNT(DISTINCT t) FROM interval
+----
+2
+
+query I con2
+SELECT COUNT(DISTINCT t) FROM interval
+----
+2
+

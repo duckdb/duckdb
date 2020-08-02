@@ -1,0 +1,42 @@
+# name: test/issues/rigger/test_528.test
+# description: Issue 528
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Incorrect result for query that uses REGEXP_MATCHES()
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0.1);
+
+query T
+SELECT * FROM t0 WHERE REGEXP_MATCHES(t0.c0, '1');
+----
+0.1
+
+query T
+SELECT * FROM t0 WHERE NOT REGEXP_MATCHES(t0.c0, '1');
+----
+
+query T
+SELECT REGEXP_MATCHES(t0.c0, '1') FROM t0;
+----
+1
+
+query T
+SELECT * FROM t0 WHERE REGEXP_FULL_MATCH(t0.c0, '1');
+----
+
+query T
+SELECT * FROM t0 WHERE NOT REGEXP_FULL_MATCH(t0.c0, '1');
+----
+0.1
+
+query T
+SELECT REGEXP_FULL_MATCH(t0.c0, '1') FROM t0;
+----
+0
+

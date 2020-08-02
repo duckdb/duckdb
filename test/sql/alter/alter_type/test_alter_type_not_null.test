@@ -1,0 +1,32 @@
+# name: test/sql/alter/alter_type/test_alter_type_not_null.test
+# description: ALTER TYPE with NOT NULL constraint
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER NOT NULL, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement error
+INSERT INTO test VALUES (NULL, 4)
+
+statement ok
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+statement ok
+INSERT INTO test VALUES ('hello', 3)
+
+statement error
+INSERT INTO test VALUES (NULL, 4)
+
+query TI
+SELECT * FROM test
+----
+1
+1
+2
+2
+hello
+3
+

@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -29,7 +30,7 @@ using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
     : CatalogEntry(CatalogType::SCHEMA, catalog, name), tables(*catalog), indexes(*catalog), table_functions(*catalog),
-      functions(*catalog), sequences(*catalog), collations(*catalog) {
+      copy_functions(*catalog), functions(*catalog), sequences(*catalog), collations(*catalog) {
 }
 
 CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<StandardEntry> entry,
@@ -106,6 +107,11 @@ CatalogEntry *SchemaCatalogEntry::CreateCollation(ClientContext &context, Create
 CatalogEntry *SchemaCatalogEntry::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {
 	auto table_function = make_unique<TableFunctionCatalogEntry>(catalog, this, info);
 	return AddEntry(context, move(table_function), info->on_conflict);
+}
+
+CatalogEntry *SchemaCatalogEntry::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
+	auto copy_function = make_unique<CopyFunctionCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(copy_function), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
@@ -213,6 +219,8 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return indexes;
 	case CatalogType::TABLE_FUNCTION:
 		return table_functions;
+	case CatalogType::COPY_FUNCTION:
+		return copy_functions;
 	case CatalogType::AGGREGATE_FUNCTION:
 	case CatalogType::SCALAR_FUNCTION:
 		return functions;

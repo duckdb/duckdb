@@ -17,6 +17,8 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 	op->function = make_unique<ManyFunctionMatcher>(unordered_set<string>{"+", "-", "*", "/"});
 	// and only with numeric results
 	op->type = make_unique<IntegerTypeMatcher>();
+	op->matchers[0]->type = make_unique<IntegerTypeMatcher>();
+	op->matchers[1]->type = make_unique<IntegerTypeMatcher>();
 	root = move(op);
 }
 

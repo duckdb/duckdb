@@ -1,0 +1,32 @@
+# name: test/sql/prepared/test_prepare_subquery.test
+# description: Prepared statements and subqueries
+# group: [prepared]
+
+# simple subquery
+statement ok
+PREPARE v1 AS SELECT * FROM (SELECT $1::INTEGER) sq1;
+
+statement ok
+EXECUTE v1(42)
+
+# subquery with non-fulfillable predicate
+statement ok
+PREPARE v2 AS SELECT * FROM (SELECT $1::INTEGER WHERE 1=0) sq1;
+
+statement ok
+EXECUTE v2(42)
+
+# prepared statement in correlated scalar subquery
+statement ok
+PREPARE v3 AS SELECT (SELECT $1::INT+sq1.i) FROM (SELECT 42 AS i) sq1;
+
+statement ok
+EXECUTE v3(42)
+
+# prepared statement in nested correlated scalar subquery
+statement ok
+PREPARE v4 AS SELECT (SELECT (SELECT $1::INT+sq1.i)+$2::INT+sq1.i) FROM (SELECT 42 AS i) sq1;
+
+statement ok
+EXECUTE v4(20, 20)
+

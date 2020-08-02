@@ -1,0 +1,59 @@
+# name: test/sql/pragma/test_table_info.test
+# description: Test table_info pragma
+# group: [pragma]
+
+statement ok
+CREATE TABLE integers(i INTEGER DEFAULT 1+3, j INTEGER)
+
+# PRAGMA table_info(table) returns information on the table
+query ITTTTT
+PRAGMA table_info('integers');
+----
+0	i	INTEGER	0	1 + 3	0
+1	j	INTEGER	0	NULL	0
+
+# table_info on view also works
+statement ok
+CREATE VIEW v1 AS SELECT 42::INTEGER AS a, 'hello' AS b
+
+query ITTTTT
+PRAGMA table_info('v1')
+----
+0	a	INTEGER	0	NULL	0
+1	b	VARCHAR	0	NULL	0
+
+# view with explicit aliases
+statement ok
+CREATE VIEW v2(c) AS SELECT 42::INTEGER AS a, 'hello' AS b
+
+query ITTTTT
+PRAGMA table_info('v2')
+----
+0	c	INTEGER	0	NULL	0
+1	b	VARCHAR	0	NULL	0
+
+statement ok
+CREATE VIEW v3(c, d) AS SELECT DATE '1992-01-01', 'hello' AS b
+
+query ITTTTT
+PRAGMA table_info('v3')
+----
+0	c	DATE	0	NULL	0
+1	d	VARCHAR	0	NULL	0
+
+# test table info with other schemas
+statement ok
+CREATE SCHEMA test
+
+statement ok
+CREATE VIEW test.v1 AS SELECT 42::INTEGER AS a, 'hello' AS b
+
+query ITTTTT
+PRAGMA table_info('test.v1')
+----
+0	a	INTEGER	0	NULL	0
+1	b	VARCHAR	0	NULL	0
+
+statement error
+PRAGMA table_info('nonexistant_table');
+

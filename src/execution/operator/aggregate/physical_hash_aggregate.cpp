@@ -29,6 +29,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
+	all_combinable = true;
 	for (auto &expr : expressions) {
 		assert(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		assert(expr->IsAggregate());
@@ -43,6 +44,9 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 		} else {
 			// COUNT(*)
 			payload_types.push_back(TypeId::INT64);
+		}
+		if (!aggr.function.combine) {
+			all_combinable = false;
 		}
 		aggregates.push_back(move(expr));
 	}

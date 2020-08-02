@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/test_string_agg_many_groups.test_slow
+# description: Test STRING_AGG operator with many groups
+# group: [aggregate][.]
+
+# generate a table
+
+statement ok
+CREATE TABLE strings AS SELECT g, 'hello' x FROM range(0, 10000, 1) t1(g);
+
+query IT
+SELECT g, STRING_AGG(x, ',') FROM strings GROUP BY g ORDER BY g
+----
+20000 values hashing to acd848208cc35c7324ece9fcdd507823
+
+query IT
+SELECT 1, STRING_AGG(x, ',') FROM strings GROUP BY 1 ORDER BY 1
+----
+2 values hashing to 3bd0d16b476d2ffe18a77ebe1098b89c
+
+statement error
+SELECT STRING_AGG(k, ','), SUM(CAST(k AS BIGINT)) FROM (SELECT CAST(g AS VARCHAR) FROM strings UNION ALL SELECT CAST(x AS VARCHAR) FROM strings) tbl1(k)
+

@@ -1,0 +1,25 @@
+# name: test/issues/rigger/test_497.test
+# description: Issue 497
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Comparison of two boolean columns in different tables results in an error 'Not implemented: Unimplemented
+# type for sort'
+statement ok
+CREATE TABLE t0(c0 BOOL);
+
+statement ok
+CREATE TABLE t1(c0 BOOL);
+
+statement ok
+INSERT INTO t1(c0) VALUES (0);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query T
+SELECT t0.c0 FROM t0, t1 WHERE t1.c0 < t0.c0;
+----
+

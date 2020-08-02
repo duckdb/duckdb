@@ -71,7 +71,7 @@
 //#pragma warning(disable: 4200)
 #endif
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // The key insight behind this implementation is that the
 // non-determinism in an NFA for a one-pass regular expression
@@ -572,4 +572,4 @@ fail:
   return false;
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

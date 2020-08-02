@@ -1,4 +1,15 @@
-add_library(test_sqlite
+
+if(${BUILD_ICU_EXTENSION})
+add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
+include_directories(../../extension/icu/include)
+endif()
+
+if(${BUILD_PARQUET_EXTENSION})
+add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
+include_directories(../../extension/parquet/include)
+endif()
+
+add_library_unity(test_sqlite
                   OBJECT
                   md5.cpp
                   test_sqllogictest.cpp)

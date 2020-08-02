@@ -1,0 +1,48 @@
+# name: test/sql/alter/drop_col/test_drop_col_check.test
+# description: Test ALTER TABLE DROP COLUMN: DROP COLUMN with check constraint
+# group: [drop_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER CHECK(j < 10))
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+query II
+SELECT * FROM test
+----
+1
+1
+2
+2
+
+statement ok
+ALTER TABLE test DROP COLUMN j
+
+statement ok
+INSERT INTO test VALUES (3)
+
+query I
+SELECT * FROM test
+----
+1
+2
+3
+
+statement ok
+CREATE TABLE test2(i INTEGER, j INTEGER CHECK(i+j < 10))
+
+statement ok
+INSERT INTO test2 VALUES (1, 1), (2, 2)
+
+query II
+SELECT * FROM test2
+----
+1
+1
+2
+2
+
+statement error
+ALTER TABLE test2 DROP COLUMN j
+

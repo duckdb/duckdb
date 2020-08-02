@@ -1,0 +1,139 @@
+# name: test/sql/function/string/test_similar_to.test
+# description: Test SIMILAR TO statement
+# group: [string]
+
+query T
+SELECT 'aaa' SIMILAR TO 'bbb'
+----
+0
+
+query T
+SELECT 'aaa' SIMILAR TO 'aaa'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO '.*'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO 'a.*'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO '.*a'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO '.*b'
+----
+0
+
+query T
+SELECT 'aaa' SIMILAR TO 'b.*'
+----
+0
+
+query T
+SELECT 'aaa' SIMILAR TO 'a[a-z]a'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO 'a[a-z]{2}'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO 'a[a-z].*'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO '[a-z][a-z].*'
+----
+1
+
+query T
+SELECT 'aaa' SIMILAR TO '[a-z]{3}'
+----
+1
+
+query T
+SELECT 'aaa' NOT SIMILAR TO '[b-z]{3}'
+----
+1
+
+query T
+SELECT 'aaa' ~ 'aaa'
+----
+1
+
+query T
+SELECT 'aaa' !~ 'bbb'
+----
+1
+
+# similar to must match entire expression
+query T
+SELECT 'aaa' ~ '^a'
+----
+0
+
+query T
+SELECT 'aaa' ~ '^a+'
+----
+1
+
+query T
+SELECT 'aaa' ~ '(a|b)*'
+----
+1
+
+query T
+SELECT 'abc' ~ '^(b|c)'
+----
+0
+
+# Test SIMILAR TO statement with expressions
+statement ok
+CREATE TABLE strings (s STRING, p STRING);
+
+statement ok
+INSERT INTO strings VALUES('aaa', 'a[a-z]a'), ('abab', 'ab.*'), ('aaa', 'a[a-z]a'), ('aaa', '.*b.*');
+
+statement ok
+
+
+query T
+SELECT s FROM strings WHERE s SIMILAR TO 'ab.*'
+----
+abab
+
+query T
+SELECT s FROM strings WHERE 'aba' SIMILAR TO p
+----
+aaa
+abab
+aaa
+aaa
+
+query T
+SELECT s FROM strings WHERE s SIMILAR TO p
+----
+aaa
+abab
+aaa
+
+query T
+SELECT s FROM strings WHERE s NOT SIMILAR TO p
+----
+aaa
+
+# invalid SIMILAR TO expression
+statement error
+SELECT s FROM strings WHERE s SIMILAR TO 'ab.*%' {escape ''}
+

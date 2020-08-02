@@ -1,0 +1,49 @@
+# name: test/sql/table_function/test_range_function.test
+# description: Test range functions
+# group: [table_function]
+
+query I
+SELECT * FROM range(0, 10, 1)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query I
+SELECT * FROM range(10, 0, -1) ORDER BY 1 ASC
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+query I
+SELECT * FROM range(0, -5, -1)
+----
+0
+-1
+-2
+-3
+-4
+
+statement error
+SELECT * FROM range(0, 10, 0)
+
+statement error
+SELECT * FROM range(0, 10, -1)
+
+statement error
+SELECT * FROM range(10, 0, 1)

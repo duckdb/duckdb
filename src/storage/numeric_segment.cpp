@@ -7,6 +7,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -453,10 +454,10 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 // Append
 //===--------------------------------------------------------------------===//
 template <class T> static void update_min_max(T value, T *__restrict min, T *__restrict max) {
-	if (value < *min) {
+	if (LessThan::Operation(value, *min)) {
 		*min = value;
 	}
-	if (value > *max) {
+	if (GreaterThan::Operation(value, *max)) {
 		*max = value;
 	}
 }
@@ -511,6 +512,8 @@ static NumericSegment::append_function_t GetAppendFunction(TypeId type) {
 		return append_loop<float>;
 	case TypeId::DOUBLE:
 		return append_loop<double>;
+	case TypeId::INTERVAL:
+		return append_loop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -581,6 +584,8 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 		return update_loop<float>;
 	case TypeId::DOUBLE:
 		return update_loop<double>;
+	case TypeId::INTERVAL:
+		return update_loop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -656,6 +661,8 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 		return merge_update_loop<float>;
 	case TypeId::DOUBLE:
 		return merge_update_loop<double>;
+	case TypeId::INTERVAL:
+		return merge_update_loop<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -691,6 +698,8 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 		return update_info_fetch<float>;
 	case TypeId::DOUBLE:
 		return update_info_fetch<double>;
+	case TypeId::INTERVAL:
+		return update_info_fetch<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -736,6 +745,8 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 		return update_info_append<float>;
 	case TypeId::DOUBLE:
 		return update_info_append<double>;
+	case TypeId::INTERVAL:
+		return update_info_append<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
@@ -770,6 +781,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 		return rollback_update<float>;
 	case TypeId::DOUBLE:
 		return rollback_update<double>;
+	case TypeId::INTERVAL:
+		return rollback_update<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

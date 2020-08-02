@@ -1,0 +1,103 @@
+# name: test/sql/filter/test_constant_comparisons.test
+# description: Test expressions with constant comparisons
+# group: [filter]
+
+statement ok
+PRAGMA enable_verification
+
+# Test various simple constant comparisons
+# The main point here is to check that the optimizer handles all these cases correctly
+
+statement ok
+CREATE TABLE integers(a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (2, 12)
+
+query II
+SELECT * FROM integers WHERE 2=2
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2=3
+
+query II
+SELECT * FROM integers WHERE 2<>3
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2<>2
+
+query II
+SELECT * FROM integers WHERE 2>1
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2>2
+
+query II
+SELECT * FROM integers WHERE 2>=2
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2>=3
+
+query II
+SELECT * FROM integers WHERE 2<3
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2<2
+
+query II
+SELECT * FROM integers WHERE 2<=2
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2<=1
+
+query T
+SELECT a=NULL FROM integers
+----
+NULL
+
+query T
+SELECT NULL=a FROM integers
+----
+NULL
+
+query II
+SELECT * FROM integers WHERE 2 IN (2, 3, 4, 5)
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2 NOT IN (2, 3, 4, 5)
+
+query II
+SELECT * FROM integers WHERE 2 IN (((1*2)+(1*0))*1, 3, 4, 5)
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE 2 IN ((1+1)*2, 3, 4, 5)
+
+query I
+SELECT CASE WHEN 1 THEN 13 ELSE 12 END;
+----
+13
+
+query II
+SELECT * FROM integers WHERE CASE WHEN 2=2 THEN true ELSE false END;
+----
+2	12
+
+statement ok
+SELECT * FROM integers WHERE CASE WHEN 2=3 THEN true ELSE false END;
+

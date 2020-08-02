@@ -1,0 +1,40 @@
+# name: test/sql/prepared/test_prepare_null.test
+# description: PREPARE with NULL
+# group: [prepared]
+
+statement ok
+CREATE TABLE b (i TINYINT)
+
+statement ok
+PREPARE s1 AS INSERT INTO b VALUES ($1)
+
+statement ok
+EXECUTE s1 (NULL)
+
+query I
+SELECT i FROM b
+----
+NULL
+
+statement ok
+PREPARE s2 AS UPDATE b SET i=$1
+
+statement ok
+EXECUTE s2 (NULL)
+
+query I
+SELECT i FROM b
+----
+NULL
+
+statement ok
+PREPARE s3 AS DELETE FROM b WHERE i=$1
+
+statement ok
+EXECUTE s3 (NULL)
+
+query I
+SELECT i FROM b
+----
+NULL
+

@@ -1,0 +1,26 @@
+# name: test/sql/catalog/view/test_view_delete_update.test
+# description: Test deleting/updating views
+# group: [view]
+
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE t1(i INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES (41), (42), (43)
+
+# create a view
+statement ok
+CREATE VIEW v1 AS SELECT i AS j FROM t1 WHERE i < 43
+
+# try to delete from the view
+statement error
+DELETE FROM v1;
+
+# try to update the view
+statement error
+UPDATE v1 SET j=1;
+

@@ -1,4 +1,4 @@
-add_library(duckdb_value_operations
+add_library_unity(duckdb_value_operations
                   OBJECT
                   comparison_operations.cpp
                   hash.cpp

@@ -19,7 +19,7 @@
 #include "re2/bitmap256.h"
 #include "re2/stringpiece.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Constructors per Inst opcode
 
@@ -911,4 +911,4 @@ void Prog::ComputeHints(std::vector<Inst>* flat, int begin, int end) {
   }
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

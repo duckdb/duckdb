@@ -1,0 +1,61 @@
+# name: test/sql/prepared/test_prepare_insert.test
+# description: PREPARE for INSERT
+# group: [prepared]
+
+statement ok
+CREATE TABLE b (i TINYINT)
+
+statement ok
+PREPARE s1 AS INSERT INTO b VALUES (cast($1 as tinyint)), ($2 + 1), ($3)
+
+statement ok
+EXECUTE s1 (42, 41, 42)
+
+query I
+SELECT * FROM b
+----
+42
+42
+42
+
+statement error
+EXECUTE s1 (42, 41, 10000)
+
+statement ok
+CREATE TABLE c (i INTEGER)
+
+statement ok
+PREPARE s2 AS INSERT INTO c VALUES ($1)
+
+loop val 0 1000
+
+statement ok
+EXECUTE s2(${val})
+
+endloop
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM c
+----
+1000	0	999
+
+# can't drop table because we still have a prepared statement on it
+statement error
+DROP TABLE b
+
+statement error
+DROP TABLE c
+
+statement ok
+DEALLOCATE s2
+
+statement ok
+DEALLOCATE s1
+
+# now we can
+statement ok
+DROP TABLE b
+
+statement ok
+DROP TABLE c
+

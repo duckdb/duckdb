@@ -198,12 +198,12 @@
 
 #include "re2/stringpiece.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 class Prog;
 class Regexp;
-}  // namespace re2
+}  // namespace duckdb_re2
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Interface for regular expression matching.  Also corresponds to a
 // pre-compiled regular expression.  An "RE2" object is safe for
@@ -296,7 +296,7 @@ class RE2 {
   // Returns the underlying Regexp; not for general use.
   // Returns entire_regexp_ so that callers don't need
   // to know about prefix_ and prefix_foldcase_.
-  re2::Regexp* Regexp() const { return entire_regexp_; }
+  duckdb_re2::Regexp* Regexp() const { return entire_regexp_; }
 
   /***** The array-based matching interface ******/
 
@@ -735,19 +735,19 @@ class RE2 {
                const Arg* const args[],
                int n) const;
 
-  re2::Prog* ReverseProg() const;
+  duckdb_re2::Prog* ReverseProg() const;
 
   std::string   pattern_;          // string regular expression
   Options       options_;          // option flags
   std::string   prefix_;           // required prefix (before regexp_)
   bool          prefix_foldcase_;  // prefix is ASCII case-insensitive
-  re2::Regexp*  entire_regexp_;    // parsed regular expression
-  re2::Regexp*  suffix_regexp_;    // parsed regular expression, prefix removed
-  re2::Prog*    prog_;             // compiled program for regexp
+  duckdb_re2::Regexp*  entire_regexp_;    // parsed regular expression
+  duckdb_re2::Regexp*  suffix_regexp_;    // parsed regular expression, prefix removed
+  duckdb_re2::Prog*    prog_;             // compiled program for regexp
   int           num_captures_;     // Number of capturing groups
   bool          is_one_pass_;      // can use prog_->SearchOnePass?
 
-  mutable re2::Prog*          rprog_;    // reverse program for regexp
+  mutable duckdb_re2::Prog*          rprog_;    // reverse program for regexp
   mutable const std::string*  error_;    // Error indicator
                                          // (or points to empty string)
   mutable ErrorCode      error_code_;    // Error code
@@ -897,12 +897,6 @@ MAKE_INTEGER_PARSER(unsigned long long, ulonglong)
 
 #ifndef SWIG
 
-// Silence warnings about missing initializers for members of LazyRE2.
-// Note that we test for Clang first because it defines __GNUC__ as well.
-#if defined(__clang__)
-#elif defined(__GNUC__) && __GNUC__ >= 6
-//#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
-#endif
 
 // Helper for writing global or static RE2s safely.
 // Write
@@ -951,9 +945,9 @@ class LazyRE2 {
 };
 #endif  // SWIG
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
-using re2::RE2;
-using re2::LazyRE2;
+using duckdb_re2::RE2;
+using duckdb_re2::LazyRE2;
 
 #endif  // RE2_RE2_H_

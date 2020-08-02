@@ -1,0 +1,82 @@
+# name: test/sql/copy/csv/test_force_quote.test
+# description: Test force_quote
+# group: [csv]
+
+# create a table
+statement ok
+CREATE TABLE test (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/force_quote.csv' (HEADER 0);
+----
+3
+
+# test FORCE_QUOTE *
+query I
+COPY test TO '__TEST_DIR__/test_star.csv' (FORCE_QUOTE *, HEADER 0);
+----
+3
+
+# test FORCE_QUOTE with specific columns and non-default quote character and non-default null character
+query I
+COPY test TO '__TEST_DIR__/test_chosen_columns.csv' (FORCE_QUOTE (col_a, col_c), QUOTE 't', NULL 'ea');
+----
+3
+
+# verify that we can load the results back in
+statement ok
+CREATE TABLE test2 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
+
+query I
+COPY test2 FROM '__TEST_DIR__/test_chosen_columns.csv' (QUOTE 't', NULL 'ea');
+----
+3
+
+query ITT
+SELECT * FROM test2
+----
+8	test	tea
+0	NULL	test
+1	NULL	test
+
+# test FORCE_QUOTE with reordered columns
+query I
+COPY test (col_b, col_c, col_a) TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_b), NULL 'test');
+----
+3
+
+statement ok
+CREATE TABLE test3 (col_a INTEGER, col_b VARCHAR(10), col_c VARCHAR(10));
+
+query I
+COPY test3(col_b, col_c, col_a) FROM '__TEST_DIR__/test_reorder.csv' (NULL 'test');
+----
+3
+
+query ITT
+SELECT * FROM test2
+----
+8	test	tea
+0	NULL	test
+1	NULL	test
+
+
+# test using a column in FORCE_QUOTE that is not set as output, but that is a column of the table
+statement error
+COPY test (col_b, col_a) TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_b));
+
+# test using a column in FORCE_QUOTE that is not a column of the table
+statement error
+COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
+
+# FORCE_QUOTE is only supported in COPY ... TO ...
+statement error
+COPY test FROM '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE (col_c, col_d));
+
+# FORCE_QUOTE must not be empty and must have the correct parameter type
+statement error
+COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE);
+
+statement error
+COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE 42);
+

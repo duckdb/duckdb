@@ -39,8 +39,6 @@ matrix:
 
         - build/release/test/unittest "*"
         - python3.7 tools/shell/shell-test.py build/release/duckdb
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
         - python3 tools/rest/test_the_rest.py build/release/tools/rest
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
         - (cd examples/embedded-c; make)
@@ -67,8 +65,6 @@ matrix:
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb
         - java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
 
         - zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         - zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -94,14 +90,10 @@ matrix:
         - cmake --build . --target unittest --config Release
         - cmake --build . --target shell --config Release
         - cmake --build . --target jdbc --config Release
-        - cmake --build . --target icu_test --config Release
-        - cmake --build . --target parquet_test --config Release
 
         - test/Release/unittest.exe
         - C:/Python37-x64/python.exe tools/shell/shell-test.py Release/duckdb.exe
         - C:/Program\ Files/Java/jdk1.8.0_211/bin/java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-        - extension/icu/test/Release/icu_test.exe
-        - extension/parquet/test/Release/parquet_test.exe
 
         - zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
         - zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
@@ -228,8 +220,6 @@ matrix:
         - mkdir -p build/release
         - (cd build/release && cmake  -DAMALGAMATION_BUILD=1  -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
         - build/release/test/unittest "*"
-        - build/release/extension/icu/test/icu_test
-        - build/release/extension/parquet/test/parquet_test
 
         - zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so
         - zip -j duckdb_cli-linux-i386.zip build/release/duckdb
@@ -467,10 +457,13 @@ matrix:
       python: 3.7 # this does not apply to the python for root, there we still run 3.6
       filter_secrets: false
 
+      services:
+        - postgresql
+
       addons:
         apt:
           packages:
-            - postgresql-plpython3-9.3 python3-pip python3-wheel python3-numpy python3-wheel
+            - postgresql-plpython3-10 python3-pip python3-wheel python3-numpy python3-wheel
 
       install:
         - pip install cibuildwheel==0.10.2 twine
@@ -587,38 +580,60 @@ matrix:
 
       dist: bionic
       language: r
+      cache:
+        - packages
+        - ccache
       r: devel
 
-      install: true
-
-      script:
+      before_install:
         - cd tools/rpkg
-        - sh configure
-        - sh build-linux
+        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - mkdir -p $HOME/.R && echo -e 'CC=ccache gcc\nCXX=ccache g++\nCXX11=ccache g++\nCXX14=ccache g++\nCXX17=ccache g++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
+        - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
+        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
+        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
+        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
+        - R -q -e 'tic::before_install()'
 
-        - python ../upload-s3.py rstats/src/contrib duckdb_*.tar.gz PACKAGES*
-        - python ../upload-s3.py rstats duckdb_*.tar.gz
-        - python3 ../../scripts/asset-upload.py duckdb_r_src.tar.gz=duckdb_*.tar.gz
+      install:
+        - R -q -e 'tic::install()'
+      before_script:
+        - R -q -e 'tic::before_script()'
+      script:
+        - ./configure
+        - sh build-linux
+        - sh deploy-linux
 
     - os: osx
       osx_image: xcode11.5
       name: R Package
+      cache:
+        - packages
+        - $HOME/.ccache
       if: (type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/
 
       language: r
-      #r: devel
 
-      install: true
-
-      script:
+      before_install:
         - cd tools/rpkg
-        - sh configure
+        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then brew install ccache; fi
+        - if [ "${TRAVIS_OS_NAME}" == "osx" ]; then export PATH="/usr/local/opt/ccache/libexec:$PATH"; fi
+        - echo -e "options(Ncpus = 4, repos = structure(c(CRAN = 'https://cloud.r-project.org/')))" > $HOME/.Rprofile
+        - mkdir -p $HOME/.R && echo -e 'CC=ccache clang\nCXX=ccache clang++\nCXX11=ccache clang++\nCXX14=ccache clang++\nCXX17=ccache clang++\nFC=ccache gfortran\nF77=ccache gfortran' > $HOME/.R/Makevars
+        - mkdir -p $HOME/.ccache &&  echo -e 'max_size = 5.0G\nsloppiness = include_file_ctime\nhash_dir=false' > $HOME/.ccache/ccache.conf
+        - R -q -e 'if (!requireNamespace("remotes")) install.packages("remotes")'
+        - R -q -e 'if (getRversion() < "3.2" && !requireNamespace("curl")) install.packages("curl")'
+        - R -q -e 'remotes::install_github("ropensci/tic", upgrade = "always"); print(tic::dsl_load()); tic::prepare_all_stages()'
+        - R -q -e 'tic::before_install()'
+
+      install:
+        - R -q -e 'tic::install()'
+      before_script:
+        - R -q -e 'tic::before_script()'
+      script:
+        - ./configure
         - sh build-mac
-
-        - python3 ../upload-s3.py rstats/bin/macosx/contrib/4.0 duckdb_*.tgz PACKAGES*
-        - python3 ../upload-s3.py rstats duckdb_*.tgz
-        - python3 ../../scripts/asset-upload.py duckdb_r_osx.tgz=duckdb_*.tgz
-
+        - sh deploy-mac
 
     - os: windows
       name: R Package
@@ -627,17 +642,12 @@ matrix:
 
       language: cpp
 
-      install:
-        - choco install r.project -y --version 4.0.2
+      script:
+        - choco install r.project -y
         - choco install rtools -y
         - choco install python3 --version 3.7.3 -y --params "/InstallDir:C:\Python37-x64"
         - choco install curl -y --force
-
-      script:
         - cd tools/rpkg
         - sh configure
         - sh build-win
-
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
-        - C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
-        - C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
+        - sh deploy-win

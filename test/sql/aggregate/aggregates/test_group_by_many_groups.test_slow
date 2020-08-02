@@ -1,0 +1,14 @@
+# name: test/sql/aggregate/test_group_by_many_groups.test
+# description: Test GROUP BY with many groups
+# group: [aggregate][.]
+
+statement ok
+CREATE TABLE integers AS SELECT i, 1 AS j FROM range(0, 10000, 1) t1(i) UNION ALL SELECT i, 2 j FROM range(0, 10000, 1) t1(i);
+
+
+query RR
+SELECT SUM(i), SUM(sums) FROM (SELECT i, SUM(j) AS sums FROM integers GROUP BY i) tbl1
+----
+49995000
+30000
+

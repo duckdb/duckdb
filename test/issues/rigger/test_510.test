@@ -1,0 +1,34 @@
+# name: test/issues/rigger/test_510.test
+# description: Issue 510
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# SIMILAR TO results in an incorrect result
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (-10);
+
+query T
+SELECT '-10' SIMILAR TO '0';
+----
+0
+
+query T
+SELECT t0.c0 SIMILAR TO 0 FROM t0;
+----
+0
+
+query T
+SELECT t0.c0 NOT SIMILAR TO 0 FROM t0;
+----
+1
+
+query I
+SELECT * FROM t0 WHERE t0.c0 NOT SIMILAR TO 0;
+----
+-10
+

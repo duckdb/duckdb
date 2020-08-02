@@ -5,11 +5,10 @@ using namespace std;
 
 namespace duckdb {
 
-struct ReadCSVData : public TableFunctionData {
-	ReadCSVData() {
+struct ReadCSVFunctionData : public TableFunctionData {
+	ReadCSVFunctionData() {
 	}
 
-	CopyInfo info;
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
@@ -26,23 +25,26 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	if (names.size() == 0) {
 		throw BinderException("read_csv requires at least a single column as input!");
 	}
-	auto result = make_unique<ReadCSVData>();
+	auto result = make_unique<ReadCSVFunctionData>();
 
-	result->info.file_path = inputs[0].str_value;
-	result->info.header = false;
-	result->info.delimiter = inputs[1].str_value;
+	BufferedCSVReaderOptions options;
+	options.auto_detect = false;
+	options.file_path = inputs[0].str_value;
+	options.header = false;
+	options.delimiter = inputs[1].str_value;
 
-	result->csv_reader = make_unique<BufferedCSVReader>(context, result->info, return_types);
+	result->csv_reader = make_unique<BufferedCSVReader>(context, move(options), return_types);
 	return move(result);
 }
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> inputs,
                                                    vector<SQLType> &return_types, vector<string> &names) {
-	auto result = make_unique<ReadCSVData>();
-	result->info.file_path = inputs[0].str_value;
-	result->info.auto_detect = true;
+	auto result = make_unique<ReadCSVFunctionData>();
+	BufferedCSVReaderOptions options;
+	options.auto_detect = true;
+	options.file_path = inputs[0].str_value;
 
-	result->csv_reader = make_unique<BufferedCSVReader>(context, result->info);
+	result->csv_reader = make_unique<BufferedCSVReader>(context, move(options));
 
 	// TODO: print detected dialect from result->csv_reader->info
 	return_types.assign(result->csv_reader->sql_types.begin(), result->csv_reader->sql_types.end());
@@ -52,7 +54,7 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vecto
 }
 
 static void read_csv_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
-	auto &data = ((ReadCSVData &)*dataptr);
+	auto &data = ((ReadCSVFunctionData &)*dataptr);
 	data.csv_reader->ParseCSV(output);
 }
 
@@ -63,6 +65,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {
+	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
 }
 

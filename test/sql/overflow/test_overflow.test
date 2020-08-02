@@ -1,0 +1,59 @@
+# name: test/sql/overflow/test_overflow.test
+# description: Test handling of overflows in basic types
+# group: [overflow]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+# insert too large value for domain should cause error
+statement error
+INSERT INTO test VALUES (-1099511627776, 3)
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (14, 22)
+
+# Casting NULL should still work though
+query I
+SELECT ALL CAST ( - SUM ( DISTINCT - CAST ( NULL AS INTEGER ) ) AS INTEGER ) FROM test
+----
+NULL
+
+# proper upcasting of integer columns in AVG
+query IR
+SELECT b, AVG(a) FROM test GROUP BY b ORDER BY b;
+----
+21	12.000000
+22	12.500000
+
+# FIXME: statistics propagation for overflows needs to be reintroduced
+# // cast to bigger type if it will overflow
+# result = con.Query("SELECT cast(200 AS TINYINT)");
+# REQUIRE(CHECK_COLUMN(result, 0, {200}));
+
+# // try to use the NULL value of a type
+# result = con.Query("SELECT cast(-127 AS TINYINT)");
+# REQUIRE(CHECK_COLUMN(result, 0, {-127}));
+
+# // promote on addition overflow
+# result = con.Query("SELECT cast(100 AS TINYINT) + cast(100 AS TINYINT)");
+# REQUIRE(CHECK_COLUMN(result, 0, {200}));
+
+# // also with tables
+# result = con.Query("CREATE TABLE test2 (a INTEGER, b TINYINT);");
+# result = con.Query("INSERT INTO test2 VALUES (200, 60), (12, 60), (14, 60)");
+
+# // cast to bigger type if it will overflow
+# result = con.Query("SELECT cast(a AS TINYINT) FROM test2");
+# REQUIRE(CHECK_COLUMN(result, 0, {200, 12, 14}));
+
+# // cast to bigger type if SUM overflows
+# result = con.Query("SELECT SUM(b) FROM test2");
+# REQUIRE(CHECK_COLUMN(result, 0, {180}));
+
+# // promote overflows in more complicated expression chains
+# // FIXME: need to fix statistics propagation
+# result = con.Query("SELECT a + b FROM (SELECT cast(100 AS TINYINT) AS a, cast(100 AS TINYINT) AS b) tbl1");
+# REQUIRE(CHECK_COLUMN(result, 0, {200}));

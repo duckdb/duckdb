@@ -1,0 +1,55 @@
+# name: test/sql/transactions/test_index_large_aborted_append.test
+# description: Test that index entries are properly removed after aborted append
+# group: [transactions]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE integers(i INTEGER PRIMARY KEY);
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con1
+INSERT INTO integers VALUES (1);
+
+# insert the values [2..2048] into the table
+statement ok con2
+INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+statement ok con2
+INSERT INTO integers VALUES (1);
+
+# con commits first
+statement ok con1
+COMMIT;
+
+# con2 fails to commit because of the conflict
+statement error con2
+COMMIT;
+
+query I con1
+SELECT * FROM integers
+----
+1
+
+# now append the rows [2..2048 again]
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con2
+INSERT INTO integers SELECT i FROM range(2, 2049, 1) t1(i)
+
+# this time the commit should work
+statement ok con2
+COMMIT;
+
+query III con1
+SELECT COUNT(*), MIN(i), MAX(i) FROM integers ORDER BY 1
+----
+2048	1	2048
+

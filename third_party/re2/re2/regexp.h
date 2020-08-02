@@ -96,7 +96,7 @@
 #include "util/utf.h"
 #include "re2/stringpiece.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Keep in sync with string list kOpcodeNames[] in testing/dump.cc
 enum RegexpOp {
@@ -647,6 +647,6 @@ inline Regexp::ParseFlags operator~(Regexp::ParseFlags a) {
       ~static_cast<int>(a) & static_cast<int>(Regexp::AllParseFlags));
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // RE2_REGEXP_H_

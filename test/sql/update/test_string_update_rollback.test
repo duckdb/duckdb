@@ -1,0 +1,117 @@
+# name: test/sql/update/test_string_update_rollback.test
+# description: Test rollback of string update
+# group: [update]
+
+# create a table
+statement ok con1
+CREATE TABLE test (a VARCHAR);
+
+statement ok con1
+INSERT INTO test VALUES ('hello'), ('world')
+
+statement ok con1
+BEGIN TRANSACTION;
+
+# perform an update within the transaction
+statement ok con1
+UPDATE test SET a='test' WHERE a='hello';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+# now rollback the update
+statement ok con1
+ROLLBACK;
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+hello
+world
+
+# rollback of a value that is updated twice
+statement ok con1
+UPDATE test SET a='test' WHERE a='hello';
+
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE test SET a='test2' WHERE a='test';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+test2
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+statement ok con1
+ROLLBACK;
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+# test rollback of string update in different part
+statement ok con1
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE test SET a='test2' WHERE a='world';
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+test
+test2
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+statement ok con1
+ROLLBACK;
+
+query T con1
+SELECT * FROM test ORDER BY a
+----
+test
+world
+
+query T con2
+SELECT * FROM test ORDER BY a
+----
+test
+world
+

@@ -1,0 +1,27 @@
+# name: test/issues/rigger/test_538.test
+# description: Issue 538
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Incorrect result for predicate with shift on a BIGINT column
+statement ok
+CREATE TABLE t0(c0 BIGINT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (-1);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query T
+SELECT t0.c0 AND (t0.c0<<64) FROM t0;
+----
+0
+0
+
+query I
+SELECT * FROM t0 WHERE t0.c0 AND (t0.c0<<64);
+----
+

@@ -1,0 +1,16 @@
+# name: test/sql/setops/test_union_subquery.test
+# description: Test UNION in subquery with aliases
+# group: [setops]
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+INSERT INTO t VALUES (42)
+
+query II
+select i, j from (select i, 1 as j from t group by i union all select i, 2 as j from t group by i) sq1
+----
+42	1
+42	2
+

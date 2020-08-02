@@ -1,39 +1,29 @@
+add_subdirectory(catalog)
+add_subdirectory(types)
 if(NOT WIN32 AND NOT SUN)
-  add_library(test_sql_storage
+  add_library_unity(test_sql_storage
                     OBJECT
                     test_buffer_manager.cpp
-                    test_constraints.cpp
                     test_checksum.cpp
                     test_commit_abort.cpp
-                    test_droptable.cpp
-                    test_storage_sequences.cpp
                     test_shutdown.cpp
                     test_big_storage.cpp
                     test_storage.cpp
-                    test_storage_defaults.cpp
-                    test_store_alter.cpp
-                    test_views.cpp
                     test_readonly.cpp
                     test_repeated_checkpoint.cpp
                     test_storage_tpch.cpp
                     test_storage_scan.cpp
                     test_database_size.cpp)
 else()
-  add_library(test_sql_storage
+  add_library_unity(test_sql_storage
                     OBJECT
                     test_buffer_manager.cpp
-                    test_constraints.cpp
                     test_checksum.cpp
-                    test_droptable.cpp
-                    test_storage_sequences.cpp
                     test_shutdown.cpp
                     test_big_storage.cpp
                     test_repeated_checkpoint.cpp
                     test_storage.cpp
-                    test_storage_defaults.cpp
-                    test_store_alter.cpp
                     test_storage_scan.cpp
-                    test_views.cpp
                     test_readonly.cpp
                     test_database_size.cpp)
 endif()

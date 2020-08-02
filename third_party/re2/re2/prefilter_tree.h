@@ -24,7 +24,7 @@
 #include "util/sparse_array.h"
 #include "re2/prefilter.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class PrefilterTree {
  public:

@@ -7,5 +7,5 @@ using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyFromFile &op) {
 	// COPY from file into a table
-	return make_unique<PhysicalCopyFromFile>(op, op.sql_types, move(op.info));
+	return make_unique<PhysicalCopyFromFile>(op.types, op.function, move(op.info), move(op.sql_types));
 }

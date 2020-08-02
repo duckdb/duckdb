@@ -1,0 +1,24 @@
+# name: test/issues/rigger/test_633.test
+# description: Issue 633
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Query using LEFT() results in a segmentation fault
+statement ok
+CREATE TABLE t0(c0 BOOL);
+
+statement ok
+INSERT INTO t0(c0) VALUES (NULL);
+
+query T
+SELECT LEFT(t0.c0, -1) FROM t0;
+----
+NULL
+
+query T
+SELECT RIGHT(t0.c0, -1) FROM t0;
+----
+NULL
+

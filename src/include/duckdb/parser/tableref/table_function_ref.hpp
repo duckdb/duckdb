@@ -19,6 +19,7 @@ public:
 	}
 
 	unique_ptr<ParsedExpression> function;
+	vector<string> column_name_alias;
 
 public:
 	string ToString() const override {

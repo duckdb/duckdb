@@ -1,4 +1,4 @@
-add_library(duckdb_parser_tableref
+add_library_unity(duckdb_parser_tableref
                   OBJECT
                   basetableref.cpp
                   crossproductref.cpp

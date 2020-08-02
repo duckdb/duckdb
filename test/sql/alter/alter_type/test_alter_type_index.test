@@ -1,0 +1,22 @@
+# name: test/sql/alter/alter_type/test_alter_type_index.test
+# description: ALTER TYPE with INDEX
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+CREATE INDEX i_index ON test(i)
+
+statement error
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+ALTER TABLE test ALTER i SET DATA TYPE VARCHAR
+

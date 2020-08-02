@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
@@ -18,8 +18,8 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalTopN : public PhysicalSink {
 public:
-	PhysicalTopN(LogicalOperator &op, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
-	    : PhysicalSink(PhysicalOperatorType::TOP_N, op.types), orders(move(orders)), limit(limit), offset(offset) {
+	PhysicalTopN(vector<TypeId> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
+	    : PhysicalSink(PhysicalOperatorType::TOP_N, move(types)), orders(move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;
@@ -29,7 +29,7 @@ public:
 public:
 	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	void Finalize(ExecutionContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	void Finalize(ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 

@@ -36,6 +36,32 @@ TEST_CASE("Test TPC-H SF0.01", "[tpch]") {
 	}
 }
 
+TEST_CASE("Test Parallel TPC-H SF0.01", "[tpch]") {
+	unique_ptr<QueryResult> result;
+	double sf = 0.01;
+
+	// generate the TPC-H data for SF 0.01
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// con.Query("PRAGMA enable_profiling");
+
+	// initialize background threads
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
+	if (STANDARD_VECTOR_SIZE >= 512) {
+		// this just takes too long on vsize = 2, because lineitem gets split into 30K tasks
+		con.ForceParallelism();
+	}
+
+	tpch::dbgen(sf, db);
+
+	// test all the basic queries
+	for (idx_t i = 1; i <= 22; i++) {
+		result = con.Query(tpch::get_query(i));
+		COMPARE_CSV(result, tpch::get_answer(sf, i), true);
+	}
+}
+
 TEST_CASE("Test Parallel TPC-H SF0.1", "[tpch][.]") {
 	unique_ptr<QueryResult> result;
 	double sf = 0.1;
@@ -86,22 +112,6 @@ TEST_CASE("Test TPC-H SF0.1", "[tpch][.]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {25}));
 	result = con.Query("SELECT COUNT(*) FROM region");
 	REQUIRE(CHECK_COLUMN(result, 0, {5}));
-
-	result = con.Query("SELECT * FROM lineitem WHERE l_orderkey <= 1 ORDER BY l_partkey;");
-	COMPARE_CSV(result,
-	            "1|214|465|4|28|31197.88|0.09|0.06|N|O|1996-04-21|1996-03-30|1996-05-"
-	            "16|NONE|AIR|lites. fluffily even "
-	            "de\n1|1564|67|6|32|46897.92|0.07|0.02|N|O|1996-01-30|1996-02-07|1996-"
-	            "02-03|DELIVER IN PERSON|MAIL|arefully slyly "
-	            "ex\n1|2403|160|5|24|31329.6|0.1|0.04|N|O|1996-03-30|1996-03-14|1996-"
-	            "04-01|NONE|FOB| pending foxes. slyly "
-	            "re\n1|6370|371|3|8|10210.96|0.1|0.02|N|O|1996-01-29|1996-03-05|1996-"
-	            "01-31|TAKE BACK RETURN|REG AIR|riously. regular, express "
-	            "dep\n1|6731|732|2|36|58958.28|0.09|0.06|N|O|1996-04-12|1996-02-28|"
-	            "1996-04-20|TAKE BACK RETURN|MAIL|ly final dependencies: slyly bold "
-	            "\n1|15519|785|1|17|24386.67|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-"
-	            "03-22|DELIVER IN PERSON|TRUCK|egular courts above the",
-	            false);
 
 	result = con.Query("SELECT SUM(l_quantity) FROM lineitem");
 	REQUIRE(CHECK_COLUMN(result, 0, {15334802}));

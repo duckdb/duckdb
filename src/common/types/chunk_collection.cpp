@@ -75,6 +75,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		idx_t added_data = std::min(remaining_data, (idx_t)(STANDARD_VECTOR_SIZE - last_chunk.size()));
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
+			new_chunk.Normalify();
+			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial decompression
 			idx_t old_count = new_chunk.size();
 			new_chunk.SetCardinality(added_data);
 
@@ -144,6 +146,8 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::VARCHAR:
 		return templated_compare_value<string_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::INTERVAL:
+		return templated_compare_value<interval_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
 		throw NotImplementedException("Type for comparison");
 	}
@@ -380,6 +384,9 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 			break;
 		case TypeId::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::INTERVAL:
+			templated_set_values<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 
 		case TypeId::LIST:

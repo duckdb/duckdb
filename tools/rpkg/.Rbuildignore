@@ -1,6 +1,7 @@
 .*\.sh
 .*\.tar.gz
-dependencies\.R
+.*\.tgz
+.*\.zip
 git
 configure
 ^.*\.Rproj$
@@ -10,3 +11,4 @@ configure
 ^_pkgdown\.yml$
 ^docs$
 build-*
+deploy-*

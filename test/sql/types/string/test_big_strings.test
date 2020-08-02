@@ -1,0 +1,29 @@
+# name: test/sql/types/string/test_big_strings.test
+# description: Insert big varchar strings
+# group: [string]
+
+statement ok
+CREATE TABLE test (a VARCHAR);
+
+# insert a big varchar
+statement ok
+INSERT INTO test VALUES ('aaaaaaaaaa')
+
+# sizes: 10, 100, 1000, 10000
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+statement ok
+INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
+
+query I
+SELECT LENGTH(a) FROM test ORDER BY 1
+----
+10
+100
+1000
+10000
+

@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/exception.hpp"
@@ -12,16 +13,22 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 using namespace duckdb;
 using namespace std;
 
-Catalog::Catalog(StorageManager &storage) : storage(storage), schemas(*this), dependency_manager(*this) {
+Catalog::Catalog(StorageManager &storage)
+    : storage(storage), schemas(make_unique<CatalogSet>(*this)),
+      dependency_manager(make_unique<DependencyManager>(*this)) {
+}
+Catalog::~Catalog() {
 }
 
 Catalog &Catalog::GetCatalog(ClientContext &context) {
@@ -48,6 +55,11 @@ CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFu
 	return schema->CreateTableFunction(context, info);
 }
 
+CatalogEntry *Catalog::CreateCopyFunction(ClientContext &context, CreateCopyFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return schema->CreateCopyFunction(context, info);
+}
+
 CatalogEntry *Catalog::CreateFunction(ClientContext &context, CreateFunctionInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return schema->CreateFunction(context, info);
@@ -69,7 +81,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 	unordered_set<CatalogEntry *> dependencies;
 	auto entry = make_unique<SchemaCatalogEntry>(this, info->schema);
 	auto result = entry.get();
-	if (!schemas.CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
+	if (!schemas->CreateEntry(context.ActiveTransaction(), info->schema, move(entry), dependencies)) {
 		if (info->on_conflict == OnCreateConflict::ERROR) {
 			throw CatalogException("Schema with name %s already exists!", info->schema.c_str());
 		} else {
@@ -89,7 +101,7 @@ void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 		                       info->name.c_str());
 	}
 
-	if (!schemas.DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {
+	if (!schemas->DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {
 		if (!info->if_exists) {
 			throw CatalogException("Schema with name \"%s\" does not exist!", info->name.c_str());
 		}
@@ -118,7 +130,7 @@ SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &sch
 	if (schema_name == TEMP_SCHEMA) {
 		return context.temporary_objects.get();
 	}
-	auto entry = schemas.GetEntry(context.ActiveTransaction(), schema_name);
+	auto entry = schemas->GetEntry(context.ActiveTransaction(), schema_name);
 	if (!entry) {
 		throw CatalogException("Schema with name %s does not exist!", schema_name.c_str());
 	}
@@ -163,6 +175,13 @@ TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string sche
                                              bool if_exists) {
 	return (TableFunctionCatalogEntry *)GetEntry(context, CatalogType::TABLE_FUNCTION, move(schema_name), name,
 	                                             if_exists);
+}
+
+template <>
+CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name,
+                                            bool if_exists) {
+	return (CopyFunctionCatalogEntry *)GetEntry(context, CatalogType::COPY_FUNCTION, move(schema_name), name,
+	                                            if_exists);
 }
 
 template <>

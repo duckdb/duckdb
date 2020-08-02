@@ -1,5 +1,8 @@
+add_subdirectory(capi)
+add_subdirectory(udf_function)
+
 if(NOT WIN32)
-  add_library(test_api
+  add_library_unity(test_api
                     OBJECT
                     test_api.cpp
                     test_results.cpp
@@ -11,7 +14,7 @@ if(NOT WIN32)
                     test_query_profiler.cpp
                     test_dbdir.cpp)
 else()
-  add_library(test_api
+  add_library_unity(test_api
                     OBJECT
                     test_api.cpp
                     test_results.cpp

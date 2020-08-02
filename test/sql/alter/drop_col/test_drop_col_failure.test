@@ -1,0 +1,25 @@
+# name: test/sql/alter/drop_col/test_drop_col_failure.test
+# description: Test ALTER TABLE DROP COLUMN: Incorrect DROP COLUMN usage
+# group: [drop_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+# cannot drop column which does not exist
+statement error
+ALTER TABLE test DROP COLUMN blabla
+
+# unless IF EXISTS is specified
+statement ok
+ALTER TABLE test DROP COLUMN IF EXISTS blabla
+
+#  cannot drop ALL columns of a table
+statement ok
+ALTER TABLE test DROP COLUMN i
+
+statement error
+ALTER TABLE test DROP COLUMN j
+

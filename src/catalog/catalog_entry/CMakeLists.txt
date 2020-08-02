@@ -1,5 +1,6 @@
-add_library(duckdb_catalog_entries
+add_library_unity(duckdb_catalog_entries
                   OBJECT
+                  copy_function_catalog_entry.cpp
                   index_catalog_entry.cpp
                   schema_catalog_entry.cpp
                   sequence_catalog_entry.cpp

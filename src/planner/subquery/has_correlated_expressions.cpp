@@ -3,6 +3,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 
+#include <algorithm>
+
 using namespace duckdb;
 using namespace std;
 

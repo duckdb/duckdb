@@ -1,0 +1,216 @@
+# name: test/sql/subquery/any_all/test_uncorrelated_all_subquery.test
+# description: Test uncorrelated ALL subqueries
+# group: [any_all]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# uncorrelated ALL
+query I
+SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers)
+----
+
+query IT
+SELECT i, i >= ALL(SELECT i FROM integers) FROM integers ORDER BY i
+----
+NULL	NULL
+1	0
+2	0
+3	NULL
+
+query I
+SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)
+----
+3
+
+query IT
+SELECT i, i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) FROM integers ORDER BY i
+----
+NULL	NULL
+1	0
+2	0
+3	1
+
+query I
+SELECT i FROM integers WHERE i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)
+----
+3
+
+query I
+SELECT i FROM integers WHERE i > ALL(SELECT MIN(i) FROM integers)
+----
+2
+3
+
+query I
+SELECT i FROM integers WHERE i < ALL(SELECT MAX(i) FROM integers)
+----
+1
+2
+
+query I
+SELECT i FROM integers WHERE i <= ALL(SELECT i FROM integers)
+----
+
+query I
+SELECT i FROM integers WHERE i <= ALL(SELECT i FROM integers WHERE i IS NOT NULL)
+----
+1
+
+query I
+SELECT i FROM integers WHERE i = ALL(SELECT i FROM integers WHERE i=1)
+----
+1
+
+query I
+SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i=1)
+----
+2
+3
+
+query I
+SELECT i FROM integers WHERE i = ALL(SELECT i FROM integers WHERE i IS NOT NULL)
+----
+
+query I
+SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i IS NOT NULL)
+----
+
+# zero results always results in TRUE for ALL, even if "i" is NULL
+query I
+SELECT i FROM integers WHERE i <> ALL(SELECT i FROM integers WHERE i>10) ORDER BY i;
+----
+NULL
+1
+2
+3
+
+query IT
+SELECT i, i <> ALL(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+# zero results always results in FALSE for ANY
+query IT
+SELECT i, i > ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query IT
+SELECT i, i = ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query IT
+SELECT i, i >= ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query IT
+SELECT i, i <= ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query IT
+SELECT i, i < ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+query IT
+SELECT i, i <> ANY(SELECT i FROM integers WHERE i>10) FROM integers ORDER BY i;
+----
+NULL	0
+1	0
+2	0
+3	0
+
+# nested uncorrelated subqueries
+query I
+SELECT (SELECT (SELECT (SELECT 42)))
+----
+42
+
+query T
+SELECT (SELECT EXISTS(SELECT * FROM integers WHERE i>2)) FROM integers;
+----
+1
+1
+1
+1
+
+query IR
+SELECT (SELECT MAX(i) FROM integers) AS k, SUM(i) FROM integers GROUP BY k;
+----
+3	6.000000
+
+# subqueries in GROUP BY clause
+query TR
+SELECT i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP BY k ORDER BY k;
+----
+NULL	NULL
+0	3.000000
+1	3.000000
+
+query R
+SELECT SUM(i) FROM integers GROUP BY (i >= ALL(SELECT i FROM integers WHERE i IS NOT NULL)) ORDER BY 1;
+----
+NULL
+3.000000
+3.000000
+
+query TR
+SELECT i >= ALL(SELECT MIN(i) FROM integers WHERE i IS NOT NULL) AS k, SUM(i) FROM integers GROUP BY k ORDER BY k;
+----
+NULL	NULL
+1	6.000000
+
+# subquery in CASE statement
+query IR
+SELECT i, SUM(CASE WHEN (i >= ALL(SELECT i FROM integers WHERE i=2)) THEN 1 ELSE 0 END) FROM integers GROUP BY i ORDER BY i;
+----
+NULL	0.000000
+1	0.000000
+2	1.000000
+3	1.000000
+
+# subquery in HAVING
+query IR
+SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k HAVING SUM(i) > (SELECT MAX(i) FROM integers)
+----
+1	4.000000
+
+query I
+SELECT i FROM integers WHERE NOT(i IN (SELECT i FROM integers WHERE i>1));
+----
+1
+
+# multiple subqueries in select without FROM
+query RI
+SELECT (SELECT SUM(i) FROM integers), (SELECT 42)
+----
+6.000000	42
+

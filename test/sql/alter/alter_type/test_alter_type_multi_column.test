@@ -1,0 +1,21 @@
+# name: test/sql/alter/alter_type/test_alter_type_multi_column.test
+# description: ALTER TYPE with expression using multiple columns
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ALTER i TYPE INTEGER USING 2*(i+j)
+
+query II
+SELECT * FROM test
+----
+4
+1
+8
+2
+

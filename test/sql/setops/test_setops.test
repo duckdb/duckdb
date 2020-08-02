@@ -1,0 +1,114 @@
+# name: test/sql/setops/test_setops.test
+# description: Test UNION/EXCEPT/INTERSECT
+# group: [setops]
+
+query I
+SELECT 1 UNION ALL SELECT 2
+----
+1
+2
+
+query IT
+SELECT 1, 'a' UNION ALL SELECT 2, 'b'
+----
+1	a
+2	b
+
+query IT
+SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT 3, 'c' order by 1
+----
+1	a
+2	b
+3	c
+
+query IT
+SELECT 1, 'a' UNION ALL SELECT 2, 'b' UNION ALL SELECT 3, 'c' UNION ALL SELECT 4, 'd' order by 1
+----
+1	a
+2	b
+3	c
+4	d
+
+# UNION/EXCEPT/INTERSECT with NULL values
+query I
+SELECT NULL UNION SELECT NULL
+----
+NULL
+
+query I
+SELECT NULL EXCEPT SELECT NULL
+----
+
+query I
+SELECT NULL INTERSECT SELECT NULL
+----
+NULL
+
+# create tables
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 1), (13, 2)
+
+# UNION ALL, no unique results
+query I
+SELECT a FROM test WHERE a < 13 UNION ALL SELECT a FROM test WHERE a = 13
+----
+11
+12
+13
+
+query I
+SELECT b FROM test WHERE a < 13 UNION ALL SELECT b FROM test WHERE a > 11
+----
+1
+1
+1
+2
+
+# mixing types, should upcast
+query T
+SELECT 1 UNION ALL SELECT 'asdf'
+----
+1
+asdf
+
+query T
+SELECT NULL UNION ALL SELECT 'asdf'
+----
+NULL
+asdf
+
+# only UNION, distinct results
+query I
+SELECT 1 UNION SELECT 1
+----
+1
+
+query IT
+SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 3, 'c' UNION SELECT 1, 'a' order by 1
+----
+1	a
+2	b
+3	c
+
+query I
+SELECT b FROM test WHERE a < 13 UNION  SELECT b FROM test WHERE a > 11 ORDER BY 1
+----
+1
+2
+
+# mixed fun
+query IT
+SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' ORDER BY 1
+----
+1	a
+2	b
+
+query IT
+SELECT 1, 'a' UNION ALL SELECT 1, 'a' UNION SELECT 2, 'b' UNION SELECT 1, 'a' ORDER BY 1 DESC
+----
+2	b
+1	a
+

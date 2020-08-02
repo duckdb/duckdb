@@ -1,0 +1,22 @@
+# name: test/issues/rigger/test_544.test
+# description: Issue 544
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# SELECT on view with text constant in ORDER BY crashes
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+statement ok
+CREATE VIEW v0(c0) AS SELECT 1 FROM t0;
+
+query I
+SELECT * FROM v0 ORDER BY 'a';
+----
+1
+

@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_602.test
+# description: Issue 602
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# GROUP BY does not take COLLATE into account
+statement ok
+CREATE TABLE t0(c0 VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO t0(c0) VALUES ('a'), ('A');
+
+query T
+SELECT t0.c0 FROM t0 GROUP BY t0.c0;
+----
+a
+

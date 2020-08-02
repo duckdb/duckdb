@@ -1,0 +1,97 @@
+# name: test/sql/copy/csv/auto/test_header_completion.test
+# description: Test csv header completion
+# group: [auto]
+
+require vector_size 512
+
+# CSV file with one missing header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/missing_header_col.csv');
+
+query ITT
+SELECT a, column1, c FROM test ORDER BY a;
+----
+123	TEST1	text1
+345	TEST1	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one duplicate header
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/duplicate_header_col.csv');
+
+query ITT
+SELECT a_0, b, a_1 FROM test ORDER BY a_0;
+----
+123	TEST2	text1
+345	TEST2	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with all column names missing
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/empty_header.csv');
+
+query ITT
+SELECT column0, column1, column2 FROM test ORDER BY column0;
+----
+123	TEST3	text1
+345	TEST3	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with 12 columns and all but one column name missing
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/missing_many_col.csv');
+
+query ITT
+SELECT a, column01, column12 FROM test;
+----
+123	TEST2	value1
+345	TEST2	value2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with 12 equally called columns
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/duplicate_header_columns.csv');
+
+query IIIT
+SELECT a_00, a_08, a_09, column12 FROM test;
+----
+123	NULL	NULL	value1
+345	NULL	NULL	value2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with 10 equally called columns, one named column12 and column 11 and 12 missing
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/test_header_mix.csv');
+
+query IIIIIT
+SELECT a_0, a_8, a_9, column12_0, column11, column12_1 FROM test;
+----
+123	NULL	NULL	NULL	NULL	value1
+345	NULL	NULL	NULL	NULL	value2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with 12 unnamed columns and check for correct naming
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/unnamed_columns.csv');
+
+query ITTIIIIIIIIIT
+SELECT column00, column01, column02, column03, column04, column05, column06, column07, column08, column09, column10, column11, column12 FROM test;
+----
+123	TEST2	text1	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	value1
+345	TEST2	text2	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	value2
+
+statement ok
+DROP TABLE test;
+

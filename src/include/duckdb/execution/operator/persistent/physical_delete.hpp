@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
 
 namespace duckdb {
 class DataTable;
@@ -16,8 +16,8 @@ class DataTable;
 //! Physically delete data from a table
 class PhysicalDelete : public PhysicalSink {
 public:
-	PhysicalDelete(LogicalOperator &op, TableCatalogEntry &tableref, DataTable &table, idx_t row_id_index)
-	    : PhysicalSink(PhysicalOperatorType::DELETE, op.types), tableref(tableref), table(table),
+	PhysicalDelete(vector<TypeId> types, TableCatalogEntry &tableref, DataTable &table, idx_t row_id_index)
+	    : PhysicalSink(PhysicalOperatorType::DELETE, move(types)), tableref(tableref), table(table),
 	      row_id_index(row_id_index) {
 	}
 

@@ -1,0 +1,28 @@
+# name: test/issues/rigger/test_489.test
+# description: Issue 489
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# A predicate NOT(NULL OR TRUE) unexpectedly evaluates to TRUE
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (0);
+
+query I
+SELECT * FROM t0 WHERE NOT(NULL OR TRUE);
+----
+
+query T
+SELECT NULL OR TRUE;
+----
+1
+
+query T
+SELECT NOT(NULL OR TRUE);
+----
+0
+

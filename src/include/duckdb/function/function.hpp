@@ -22,6 +22,7 @@ class Transaction;
 
 class AggregateFunction;
 class AggregateFunctionSet;
+class CopyFunction;
 class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunction;
@@ -30,7 +31,9 @@ struct FunctionData {
 	virtual ~FunctionData() {
 	}
 
-	virtual unique_ptr<FunctionData> Copy() = 0;
+	virtual unique_ptr<FunctionData> Copy() {
+		return make_unique<FunctionData>();
+	};
 };
 
 struct TableFunctionData : public FunctionData {
@@ -68,7 +71,8 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects, SQLType varargs = SQLType::INVALID)
+	SimpleFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects,
+	               SQLType varargs = SQLType::INVALID)
 	    : Function(name), arguments(move(arguments)), return_type(return_type), varargs(varargs),
 	      has_side_effects(has_side_effects) {
 	}
@@ -112,6 +116,7 @@ public:
 	void AddFunction(ScalarFunction function);
 	void AddFunction(vector<string> names, ScalarFunction function);
 	void AddFunction(TableFunction function);
+	void AddFunction(CopyFunction function);
 
 	void AddCollation(string name, ScalarFunction function, bool combinable = false,
 	                  bool not_required_for_equality = false);
@@ -128,6 +133,7 @@ private:
 	// table-producing functions
 	void RegisterSQLiteFunctions();
 	void RegisterReadFunctions();
+	void RegisterTableFunctions();
 
 	// aggregates
 	void RegisterAlgebraicAggregates();

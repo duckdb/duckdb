@@ -15,6 +15,7 @@
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/planner/operator/logical_execute.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -24,6 +25,8 @@
 #include "duckdb/main/relation.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/parser/statement/relation_statement.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
 
 using namespace std;
 
@@ -418,6 +421,12 @@ unique_ptr<QueryResult> ClientContext::RunStatements(const string &query, vector
 
 unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_result) {
 	lock_guard<mutex> client_guard(context_lock);
+	if (log_query_writer) {
+		// log query path is set: log the query
+		log_query_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+		log_query_writer->Flush();
+	}
 
 	Parser parser;
 	try {
@@ -483,6 +492,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// Hash() of expressions
 	// Equality() of statements and expressions
 	// Correctness of plans both with and without optimizers
+	// Correctness of plans both with and without parallelism
 
 	// copy the statement
 	auto select_stmt = (SelectStatement *)statement.get();
@@ -537,10 +547,15 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	// see below
 	auto statement_copy_for_explain = select_stmt->Copy();
 
-	auto original_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     copied_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     deserialized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
-	     unoptimized_result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+	unique_ptr<MaterializedQueryResult> original_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    copied_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    deserialized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT),
+	                                    unoptimized_result =
+	                                        make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT);
+
 	// execute the original statement
 	try {
 		auto result = RunStatementInternal(query, move(statement), false);
@@ -586,40 +601,33 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
 	}
-
 	enable_optimizer = true;
+
 	if (profiling_is_enabled) {
 		profiler.Enable();
 	}
 
 	// now compare the results
-	// the results of all four runs should be identical
-	if (!original_result->collection.Equals(copied_result->collection)) {
-		string result = "Copied result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Copied Result\n" + copied_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(deserialized_result->collection)) {
-		string result = "Deserialized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Deserialized Result\n" + deserialized_result->ToString();
-		return result;
-	}
-	if (!original_result->collection.Equals(unoptimized_result->collection)) {
-		string result = "Unoptimized result differs from original result!\n";
-		result += "Original Result:\n" + original_result->ToString();
-		result += "Unoptimized Result\n" + unoptimized_result->ToString();
-		return result;
+	// the results of all runs should be identical
+	vector<unique_ptr<MaterializedQueryResult>> results;
+	results.push_back(move(copied_result));
+	results.push_back(move(deserialized_result));
+	results.push_back(move(unoptimized_result));
+	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
+	for (idx_t i = 0; i < results.size(); i++) {
+		if (!original_result->collection.Equals(results[i]->collection)) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 	}
 
 	return "";
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
-	RunFunctionInTransaction([&]() {
-		temporary_objects.get()->CreateFunction(*this, info);
-	});
+	RunFunctionInTransaction([&]() { temporary_objects.get()->CreateFunction(*this, info); });
 }
 
 template <class T> void ClientContext::RunFunctionInTransaction(T &&fun) {

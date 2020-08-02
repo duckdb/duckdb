@@ -1,0 +1,6 @@
+# name: test/sql/function/timestamp/current_time.test
+# description: Test current_time/current_date/etc
+# group: [timestamp]
+
+statement ok
+SELECT CAST(CURRENT_TIME AS STRING), CAST(CURRENT_DATE AS STRING), CAST(CURRENT_TIMESTAMP AS STRING), CAST(NOW() AS STRING)

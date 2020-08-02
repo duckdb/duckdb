@@ -76,6 +76,9 @@ static inline void hash_type_switch(Vector &input, Vector &result, const Selecti
 	case TypeId::DOUBLE:
 		templated_loop_hash<HAS_RSEL, double>(input, result, rsel, count);
 		break;
+	case TypeId::INTERVAL:
+		templated_loop_hash<HAS_RSEL, interval_t>(input, result, rsel, count);
+		break;
 	case TypeId::VARCHAR:
 		templated_loop_hash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
@@ -188,6 +191,9 @@ static inline void combine_hash_type_switch(Vector &hashes, Vector &input, const
 		break;
 	case TypeId::DOUBLE:
 		templated_loop_combine_hash<HAS_RSEL, double>(input, hashes, rsel, count);
+		break;
+	case TypeId::INTERVAL:
+		templated_loop_combine_hash<HAS_RSEL, interval_t>(input, hashes, rsel, count);
 		break;
 	case TypeId::VARCHAR:
 		templated_loop_combine_hash<HAS_RSEL, string_t>(input, hashes, rsel, count);

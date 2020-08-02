@@ -1,4 +1,4 @@
-add_library(duckdb_query_node
+add_library_unity(duckdb_query_node
                   OBJECT
                   recursive_cte_node.cpp
                   select_node.cpp

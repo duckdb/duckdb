@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/auto/test_auto_imdb.test
+# description: Test read_csv_auto from imdb csv
+# group: [auto]
+
+require vector_size 512
+
+statement ok
+CREATE TABLE movie_info AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/imdb_movie_info_escaped.csv');
+
+query I
+SELECT COUNT(*) FROM movie_info;
+----
+201
+

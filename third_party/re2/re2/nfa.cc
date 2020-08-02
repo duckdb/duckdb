@@ -39,7 +39,7 @@
 #include "util/sparse_set.h"
 #include "util/strutil.h"
 
-namespace re2 {
+namespace duckdb_re2 {
 
 class NFA {
  public:
@@ -711,4 +711,4 @@ void Prog::Fanout(SparseArray<int>* fanout) {
   }
 }
 
-}  // namespace re2
+}  // namespace duckdb_re2

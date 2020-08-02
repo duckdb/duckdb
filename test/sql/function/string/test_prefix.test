@@ -1,0 +1,210 @@
+# name: test/sql/function/string/test_prefix.test
+# description: Prefix test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# "Early out prefix"
+query T
+SELECT prefix('abcd', 'a')
+----
+1
+
+query T
+SELECT prefix('abcd', 'ab')
+----
+1
+
+query T
+SELECT prefix('abcd', 'abc')
+----
+1
+
+query T
+SELECT prefix('abcd', 'abcd')
+----
+1
+
+query T
+SELECT prefix('abcd', 'b')
+----
+0
+
+# "Inlined string"
+query T
+SELECT prefix('abcdefgh', 'a')
+----
+1
+
+query T
+SELECT prefix('abcdefgh', 'ab')
+----
+1
+
+query T
+SELECT prefix('abcdefgh', 'abc')
+----
+1
+
+query T
+SELECT prefix('abcdefgh', 'abcd')
+----
+1
+
+query T
+SELECT prefix('abcdefgh', 'abcde')
+----
+1
+
+query T
+SELECT prefix('abcdefgh', 'b')
+----
+0
+
+# Longer (non-inlined) strings
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'a')
+----
+1
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'ab')
+----
+1
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'abc')
+----
+1
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'abcd')
+----
+1
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'abcde')
+----
+1
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'b')
+----
+0
+
+query T
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'abcdefghijklmnopqrstuvwx')
+----
+1
+
+# "Empty string and prefix"
+query T
+SELECT prefix('', 'aaa')
+----
+0
+
+query T
+SELECT prefix('aaa', '')
+----
+1
+
+# "Issue #572 alloc exception on empty table"
+statement ok
+CREATE TABLE t0(c0 VARCHAR)
+
+query T
+SELECT * FROM t0 WHERE PREFIX(t0.c0, '')
+----
+
+# "Prefix test with UTF8"
+query T
+SELECT prefix('átomo', 'á')
+----
+1
+
+query T
+SELECT prefix('átomo', 'á')
+----
+1
+
+query T
+SELECT prefix('átomo', 'a')
+----
+0
+
+query T
+SELECT prefix('olá mundo', 'olá')
+----
+1
+
+query T
+SELECT prefix('olá mundo', 'olá')
+----
+1
+
+query T
+SELECT prefix('olá mundo', 'ola')
+----
+0
+
+query T
+SELECT prefix('ñeft', 'ñ')
+----
+1
+
+query T
+SELECT prefix('ñeft', 'ñ')
+----
+1
+
+query T
+SELECT prefix('ñeft', 'ñeft')
+----
+1
+
+query T
+SELECT prefix('ñeft', 'neft')
+----
+0
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two n')
+----
+0
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three ₡')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three ₡ four 🦆')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three ₡ four 🦆 end')
+----
+1
+
+query T
+SELECT prefix('two ñ three ₡ four 🦆 end', 'two ñ three ₡ four 🦆 end')
+----
+1
+

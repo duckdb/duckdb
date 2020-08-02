@@ -1,0 +1,44 @@
+# name: test/sql/index/art/test_art_big_update.test
+# description: Test updates resulting from big index scans
+# group: [art]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(1, 25001, 1)
+
+statement ok
+COMMIT
+
+# check the sum and the count
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+312512500.000000	25000
+
+# update the data with an index scan
+statement ok
+UPDATE integers SET i=i+1 WHERE i>0
+
+# now check the sum and the count again
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+312537500.000000	25000
+
+# now delete from the table with an index scan
+statement ok
+DELETE FROM integers WHERE i>0
+
+query RI
+SELECT SUM(i), COUNT(i) FROM integers WHERE i>0
+----
+NULL	0
+

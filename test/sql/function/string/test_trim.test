@@ -1,0 +1,130 @@
+# name: test/sql/function/string/test_trim.test
+# description: LTRIM/RTRIM/TRIM test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test ltrim on scalars
+query TTTTTTT
+select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL), LTRIM('     ')
+----
+(empty)	Neither	Leading	Trailing   	Both 	NULL	(empty)
+
+# test rtrim on scalars
+query TTTTTTT
+select RTRIM(''), RTRIM('Neither'), RTRIM(' Leading'), RTRIM('Trailing   '), RTRIM(' Both '), RTRIM(NULL), RTRIM('    ')
+----
+(empty)	Neither	 Leading	Trailing	 Both	NULL	(empty)
+
+# test trim on scalars
+query TTTTTTT
+select TRIM(''), TRIM('Neither'), TRIM(' Leading'), TRIM('Trailing   '), TRIM(' Both '), TRIM(NULL), TRIM('     ')
+----
+(empty)	Neither	Leading	Trailing	Both	NULL	(empty)
+
+# test on tables
+statement ok
+CREATE TABLE strings(a STRING, b STRING)
+
+statement ok
+INSERT INTO strings VALUES ('', 'Neither'), (' Leading', NULL), (' Both ','Trailing   '), ('', NULL)
+
+query T
+select LTRIM(a) FROM strings
+----
+(empty)
+Leading
+Both 
+(empty)
+
+query T
+select LTRIM(b) FROM strings
+----
+Neither
+NULL
+Trailing   
+NULL
+
+query T
+select LTRIM(a) FROM strings WHERE b IS NOT NULL
+----
+(empty)
+Both 
+
+# test rtrim on tables
+query T
+select RTRIM(a) FROM strings
+----
+(empty)
+ Leading
+ Both
+(empty)
+
+query T
+select RTRIM(b) FROM strings
+----
+Neither
+NULL
+Trailing
+NULL
+
+query T
+select RTRIM(a) FROM strings WHERE b IS NOT NULL
+----
+(empty)
+ Both
+
+# test ltrim/rtrim/trim with custom trim filter
+query TTTTTTT
+select LTRIM('', 'ho'), LTRIM('hello', 'ho'), LTRIM('papapapa', 'pa'), LTRIM('blaHblabla', 'bla'), LTRIM('blabla', NULL), LTRIM(NULL, 'blabla'), LTRIM('blabla', '')
+----
+(empty)	ello	(empty)	Hblabla	NULL	NULL	blabla
+
+query TTTTTTT
+select RTRIM('', 'ho'), RTRIM('hello', 'ho'), RTRIM('papapapa', 'pa'), RTRIM('blaHblabla', 'bla'), RTRIM('blabla', NULL), RTRIM(NULL, 'blabla'), RTRIM('blabla', '')
+----
+(empty)	hell	(empty)	blaH	NULL	NULL	blabla
+
+query TTTTTTT
+select TRIM('', 'ho'), TRIM('hello', 'ho'), TRIM('papapapa', 'pa'), TRIM('blaHblabla', 'bla'), TRIM('blabla', NULL), TRIM(NULL, 'blabla'), TRIM('blabla', '')
+----
+(empty)	ell	(empty)	H	NULL	NULL	blabla
+
+# test on tables
+statement ok
+CREATE TABLE trim_test(a VARCHAR, b VARCHAR)
+
+statement ok
+INSERT INTO trim_test VALUES ('hello', 'ho'), ('test', 't'), ('mühleisen','mün'), (NULL, ' '), ('', NULL), ('', ''), (NULL, NULL)
+
+query TTT
+SELECT LTRIM(a, b), RTRIM(a, b), TRIM(a, b) FROM trim_test
+----
+ello	hell	ell
+est	tes	es
+hleisen	mühleise	hleise
+NULL	NULL	NULL
+NULL	NULL	NULL
+(empty)	(empty)	(empty)
+NULL	NULL	NULL
+
+# test incorrect usage of ltrim/rtrim/trim
+statement error
+select LTRIM()
+
+statement error
+select LTRIM('hello', 'world', 'aaa')
+
+statement error
+select RTRIM()
+
+statement error
+select RTRIM('hello', 'world', 'aaa')
+
+statement error
+select TRIM()
+
+statement error
+select TRIM('hello', 'world', 'aaa')
+

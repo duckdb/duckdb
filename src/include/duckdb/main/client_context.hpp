@@ -26,6 +26,7 @@ class Catalog;
 class DuckDB;
 class PreparedStatementData;
 class Relation;
+class BufferedFileWriter;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -57,6 +58,10 @@ public:
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+	//! Force parallelism of small tables, used for testing
+	bool force_parallelism = false;
+	//! The writer used to log queries (if logging is enabled)
+	unique_ptr<BufferedFileWriter> log_query_writer;
 
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;

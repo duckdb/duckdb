@@ -10,9 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
-
-#include <iosfwd>
-#include <memory.h>
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -85,6 +83,8 @@ public:
 	//! Create a timestamp Value from a specified timestamp in separate values
 	static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                       int32_t msec);
+	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
+	static Value INTERVAL(interval_t interval);
 
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
@@ -127,8 +127,11 @@ public:
 	//! Whether or not the value is NULL
 	bool is_null;
 
-	SQLType GetSQLType() {
+	SQLType GetSQLType() const {
 		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
+	}
+	void SetSQLType(SQLType sql_type) {
+		this->sql_type = sql_type;
 	}
 
 	//! The value of the object, if it is of a constant size Type
@@ -142,6 +145,7 @@ public:
 		double double_;
 		uintptr_t pointer;
 		uint64_t hash;
+		interval_t interval;
 	} value_;
 
 	//! The value of the object, if it is of a variable size type

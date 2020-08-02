@@ -17,6 +17,7 @@ class DuckDB;
 class Extension {
 public:
 	virtual void Load(DuckDB &db) = 0;
+	virtual ~Extension() = default;
 };
 
 } // namespace duckdb

@@ -1,0 +1,19 @@
+# name: test/issues/rigger/test_491.test
+# description: Issue 491
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# PRAGMA table_info provides no output
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+PRAGMA table_info('t0');
+
+query ITTTTT
+SELECT * FROM pragma_table_info('t0');
+----
+0	c0	INTEGER	0	NULL	0
+

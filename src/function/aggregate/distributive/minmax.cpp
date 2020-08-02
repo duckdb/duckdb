@@ -38,8 +38,11 @@ template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
 	case SQLTypeId::TIMESTAMP:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type,
 		                                                                                                     type);
+	case SQLTypeId::INTERVAL:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type,
+		                                                                                                     type);
 	default:
-		throw NotImplementedException("Unimplemented type for unary aggregate");
+		throw NotImplementedException("Unimplemented type for min/max aggregate");
 	}
 }
 
@@ -52,8 +55,8 @@ struct MinMaxBase {
 	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
 		assert(!nullmask[0]);
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[0]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[0]);
 		}
@@ -62,8 +65,8 @@ struct MinMaxBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		if (!state->isset) {
-			state->isset = true;
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
+			state->isset = true;
 		} else {
 			OP::template Execute<INPUT_TYPE, STATE>(state, input[idx]);
 		}
@@ -101,7 +104,7 @@ struct MinOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value > source.value) {
+		} else if (GreaterThan::Operation(target->value, source.value)) {
 			target->value = source.value;
 		}
 	}
@@ -122,7 +125,7 @@ struct MaxOperation : public NumericMinMaxBase {
 		if (!target->isset) {
 			// target is NULL, use source value directly
 			*target = source;
-		} else if (target->value < source.value) {
+		} else if (LessThan::Operation(target->value, source.value)) {
 			target->value = source.value;
 		}
 	}
@@ -136,6 +139,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE> static void Assign(STATE *state, INPUT_TYPE input) {
+		Destroy(state);
 		if (input.IsInlined()) {
 			state->value = input;
 		} else {

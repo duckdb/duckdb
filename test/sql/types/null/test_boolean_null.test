@@ -1,0 +1,50 @@
+# name: test/sql/types/null/test_boolean_null.test
+# description: Booleans and NULLs
+# group: [null]
+
+statement ok
+PRAGMA enable_verification
+
+# AND
+query TTTTTTTTT
+SELECT 0 AND 0, 0 AND 1, 1 AND 0, 1 AND 1, NULL AND 0, NULL AND 1, 0 AND NULL, 1 AND NULL, NULL AND NULL
+----
+0	0	0	1	0	NULL	0	NULL	NULL
+
+# OR
+query TTTTTTTTT
+SELECT 0 OR 0, 0 OR 1, 1 OR 0, 1 OR 1, NULL OR 0, NULL OR 1, 0 OR NULL, 1 OR NULL, NULL OR NULL
+----
+0	1	1	1	NULL	1	NULL	1	NULL
+
+# NOT
+query TTT
+SELECT NOT(0), NOT(1), NOT(NULL)
+----
+1	0	NULL
+
+# IS NULL
+query TTTT
+SELECT NULL IS NULL, NULL IS NOT NULL, 42 IS NULL, 42 IS NOT NULL
+----
+1	0	0	1
+
+# Comparisions
+query TTTT
+SELECT NULL = NULL, NULL <> NULL, 42 = NULL, 42 <> NULL
+----
+NULL	NULL	NULL	NULL
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (NULL, 21), (13, 22), (12, NULL), (16, NULL)
+
+query IIRII
+SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
+----
+NULL	2	28.000000	12	16
+21	0	NULL	NULL	NULL
+22	2	24.000000	11	13
+

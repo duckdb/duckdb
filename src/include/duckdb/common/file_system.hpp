@@ -13,6 +13,10 @@
 
 #include <functional>
 
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
 namespace duckdb {
 class ClientContext;
 class FileSystem;
@@ -49,9 +53,11 @@ public:
 	//! Use direct IO when reading/writing to the file
 	static constexpr uint8_t DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
-	static constexpr uint8_t CREATE = 1 << 3;
+	static constexpr uint8_t FILE_CREATE = 1 << 3;
+	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
+	static constexpr uint8_t FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
-	static constexpr uint8_t APPEND = 1 << 4;
+	static constexpr uint8_t APPEND = 1 << 5;
 };
 
 class FileSystem {
@@ -90,8 +96,8 @@ public:
 	virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
 	virtual void RemoveDirectory(const string &directory);
-	//! List files in a directory, invoking the callback method for each one
-	virtual bool ListFiles(const string &directory, std::function<void(string)> callback);
+	//! List files in a directory, invoking the callback method for each one with (filename, is_dir)
+	virtual bool ListFiles(const string &directory, std::function<void(string, bool)> callback);
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	virtual void MoveFile(const string &source, const string &target);

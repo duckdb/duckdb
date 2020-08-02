@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <limits>
 
-namespace re2 {
+namespace duckdb_re2 {
 
 // Silence "truncation of constant value" warning for kMul in 32-bit mode.
 // Since this is a header file, push and then pop to limit the scope.
@@ -36,6 +36,6 @@ class HashMix {
 //#pragma warning(pop)
 #endif
 
-}  // namespace re2
+}  // namespace duckdb_re2
 
 #endif  // UTIL_MIX_H_

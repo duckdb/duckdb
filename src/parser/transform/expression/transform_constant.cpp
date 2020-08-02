@@ -1,11 +1,12 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include <limits>
 
 using namespace duckdb;
 using namespace std;
 
-unique_ptr<ParsedExpression> Transformer::TransformValue(PGValue val) {
+unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 	switch (val.type) {
 	case T_PGInteger:
 		assert(val.val.ival <= numeric_limits<int32_t>::max());

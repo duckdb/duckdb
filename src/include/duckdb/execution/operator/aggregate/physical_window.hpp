@@ -16,7 +16,7 @@ namespace duckdb {
 //! PhysicalWindow implements window functions
 class PhysicalWindow : public PhysicalOperator {
 public:
-	PhysicalWindow(LogicalOperator &op, vector<unique_ptr<Expression>> select_list,
+	PhysicalWindow(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;

@@ -1,0 +1,205 @@
+# name: test/sql/function/numeric/test_type_resolution.test
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# test type resolution of various additions
+query I
+SELECT 1::TINYINT + 1::TINYINT
+----
+2
+
+query I
+SELECT 1::TINYINT + 1::SMALLINT
+----
+2
+
+query I
+SELECT 1::TINYINT + 1::INT
+----
+2
+
+query I
+SELECT 1::TINYINT + 1::BIGINT
+----
+2
+
+query R
+SELECT 1::TINYINT + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::TINYINT + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::TINYINT + 1::VARCHAR
+
+query I
+SELECT 1::SMALLINT + 1::TINYINT
+----
+2
+
+query I
+SELECT 1::SMALLINT + 1::SMALLINT
+----
+2
+
+query I
+SELECT 1::SMALLINT + 1::INT
+----
+2
+
+query I
+SELECT 1::SMALLINT + 1::BIGINT
+----
+2
+
+query R
+SELECT 1::SMALLINT + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::SMALLINT + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::SMALLINT + 1::VARCHAR
+
+query I
+SELECT 1::INTEGER + 1::TINYINT
+----
+2
+
+query I
+SELECT 1::INTEGER + 1::SMALLINT
+----
+2
+
+query I
+SELECT 1::INTEGER + 1::INT
+----
+2
+
+query I
+SELECT 1::INTEGER + 1::BIGINT
+----
+2
+
+query R
+SELECT 1::INTEGER + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::INTEGER + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::INTEGER + 1::VARCHAR
+
+query I
+SELECT 1::BIGINT + 1::TINYINT
+----
+2
+
+query I
+SELECT 1::BIGINT + 1::SMALLINT
+----
+2
+
+query I
+SELECT 1::BIGINT + 1::INT
+----
+2
+
+query I
+SELECT 1::BIGINT + 1::BIGINT
+----
+2
+
+query R
+SELECT 1::BIGINT + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::BIGINT + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::BIGINT + 1::VARCHAR
+
+query R
+SELECT 1::REAL + 1::TINYINT
+----
+2.000000
+
+query R
+SELECT 1::REAL + 1::SMALLINT
+----
+2.000000
+
+query R
+SELECT 1::REAL + 1::INT
+----
+2.000000
+
+query R
+SELECT 1::REAL + 1::BIGINT
+----
+2.000000
+
+query R
+SELECT 1::REAL + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::REAL + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::REAL + 1::VARCHAR
+
+query R
+SELECT 1::DOUBLE + 1::TINYINT
+----
+2.000000
+
+query R
+SELECT 1::DOUBLE + 1::SMALLINT
+----
+2.000000
+
+query R
+SELECT 1::DOUBLE + 1::INT
+----
+2.000000
+
+query R
+SELECT 1::DOUBLE + 1::BIGINT
+----
+2.000000
+
+query R
+SELECT 1::DOUBLE + 1::REAL
+----
+2.000000
+
+query R
+SELECT 1::DOUBLE + 1::DOUBLE
+----
+2.000000
+
+statement error
+SELECT 1::DOUBLE + 1::VARCHAR
+

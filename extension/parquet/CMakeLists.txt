@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.7)
 
 project(ParquetExtension)
 
-include_directories(include ../../third_party/parquet ../../third_party/snappy
+include_directories(include ../../third_party/parquet ../../third_party/snappy ../../third_party/miniz
                     ../../third_party/thrift ../../third_party)
 
 add_library(
@@ -15,5 +15,3 @@ add_library(
   ../../third_party/snappy/snappy.cc
   ../../third_party/snappy/snappy-sinksource.cc
   parquet-extension.cpp)
-
-add_subdirectory(test)

@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/test_parquet_null.test
+# description: Parquet file with random NULLs
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(col1) from parquet_scan('test/sql/copy/parquet/data/bug687_nulls.parquet')
+----
+99000
+

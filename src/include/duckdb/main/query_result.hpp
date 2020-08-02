@@ -58,6 +58,10 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	bool Equals(QueryResult &other);
 
+	idx_t column_count() {
+		return sql_types.size();
+	}
+
 private:
 	//! The current chunk used by the iterator
 	unique_ptr<DataChunk> iterator_chunk;

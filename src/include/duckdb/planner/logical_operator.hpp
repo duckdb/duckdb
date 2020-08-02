@@ -16,6 +16,7 @@
 #include "duckdb/planner/column_binding.hpp"
 
 #include <functional>
+#include <algorithm>
 
 namespace duckdb {
 

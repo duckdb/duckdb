@@ -14,7 +14,7 @@ using namespace std;
 
 namespace duckdb {
 
-RegexpMatchesBindData::RegexpMatchesBindData(re2::RE2::Options options, unique_ptr<re2::RE2> constant_pattern, string range_min, string range_max,
+RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, unique_ptr<duckdb_re2::RE2> constant_pattern, string range_min, string range_max,
                                              bool range_success)
     : options(move(options)), constant_pattern(std::move(constant_pattern)), range_min(range_min), range_max(range_max),
       range_success(range_success) {
@@ -27,11 +27,11 @@ unique_ptr<FunctionData> RegexpMatchesBindData::Copy() {
 	return make_unique<RegexpMatchesBindData>(options, move(constant_pattern), range_min, range_max, range_success);
 }
 
-static inline re2::StringPiece CreateStringPiece(string_t &input) {
-	return re2::StringPiece(input.GetData(), input.GetSize());
+static inline duckdb_re2::StringPiece CreateStringPiece(string_t &input) {
+	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-static void ParseRegexOptions(string &options, re2::RE2::Options &result, bool *global_replace = nullptr) {
+static void ParseRegexOptions(string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr) {
 	for(idx_t i = 0; i < options.size(); i++) {
 		switch(options[i]) {
 		case 'c':
@@ -72,14 +72,14 @@ static void ParseRegexOptions(string &options, re2::RE2::Options &result, bool *
 }
 
 struct RegexPartialMatch {
-	static inline bool Operation(const re2::StringPiece &input, re2::RE2 &re) {
-		return re2::RE2::PartialMatch(input, re);
+	static inline bool Operation(const duckdb_re2::StringPiece &input, duckdb_re2::RE2 &re) {
+		return duckdb_re2::RE2::PartialMatch(input, re);
 	}
 };
 
 struct RegexFullMatch {
-	static inline bool Operation(const re2::StringPiece &input, re2::RE2 &re) {
-		return re2::RE2::FullMatch(input, re);
+	static inline bool Operation(const duckdb_re2::StringPiece &input, duckdb_re2::RE2 &re) {
+		return duckdb_re2::RE2::FullMatch(input, re);
 	}
 };
 

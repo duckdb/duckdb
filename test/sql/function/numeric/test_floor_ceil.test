@@ -1,0 +1,143 @@
+# name: test/sql/function/numeric/test_floor_ceil.test
+# description: Test ceil(ing)/floor function
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE numbers(n DOUBLE)
+
+statement ok
+INSERT INTO numbers VALUES (NULL),(-42.8),(-42.2),(0), (42.2), (42.8)
+
+query I
+SELECT cast(CEIL(n::tinyint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(CEIL(n::smallint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(CEIL(n::integer) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(CEIL(n::bigint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(CEIL(n::float) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+43
+43
+
+query I
+SELECT cast(CEIL(n::double) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+43
+43
+
+query I
+SELECT cast(CEILING(n::double) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+43
+43
+
+query I
+SELECT cast(FLOOR(n::tinyint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(FLOOR(n::smallint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(FLOOR(n::integer) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(FLOOR(n::bigint) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-42
+-42
+0
+42
+42
+
+query I
+SELECT cast(FLOOR(n::float) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-43
+-43
+0
+42
+42
+
+query I
+SELECT cast(FLOOR(n::double) as bigint) FROM numbers ORDER BY n
+----
+NULL
+-43
+-43
+0
+42
+42
+

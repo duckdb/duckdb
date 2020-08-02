@@ -37,7 +37,7 @@ struct RegisterSQLSmithTests {
 	RegisterSQLSmithTests() {
 		// register a separate SQL Smith test for each file in the QUERY_DIRECTORY
 		fs.ListFiles(QUERY_DIRECTORY,
-		             [&](const string &path) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
+		             [&](const string &path, bool) { REGISTER_TEST_CASE(test_runner, path, "[sqlsmith][.]"); });
 	}
 };
 RegisterSQLSmithTests register_sqlsmith_test;

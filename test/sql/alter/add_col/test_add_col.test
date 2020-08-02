@@ -1,0 +1,23 @@
+# name: test/sql/alter/add_col/test_add_col.test
+# description: Test ALTER TABLE ADD COLUMN: standard add column
+# group: [add_col]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER
+
+query III
+SELECT * FROM test
+----
+1
+1
+NULL
+2
+2
+NULL
+

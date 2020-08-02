@@ -1,0 +1,59 @@
+# name: test/sql/join/inner/test_range_join.test
+# description: Test range joins
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+# create tables
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2), (13, 3)
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (1, 20), (2, 30)
+
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b<test2.b
+----
+1	2
+
+query II
+SELECT test.b, test2.b FROM test, test2 WHERE test.b <= test2.b ORDER BY 1,2
+----
+1	1
+1	1
+1	2
+2	2
+
+# range join on multiple predicates
+query IIII
+SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b
+----
+11	1	1	10
+
+# introduce some NULL values
+statement ok
+INSERT INTO test VALUES (11, NULL), (NULL, 1)
+
+# join result should be unchanged
+query IIII
+SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b
+----
+11	1	1	10
+
+# on the RHS as well
+statement ok
+INSERT INTO test2 VALUES (1, NULL), (NULL, 10)
+
+# join result should be unchanged
+query IIII
+SELECT test.a, test.b, test2.b, test2.c FROM test, test2 WHERE test.a>test2.c AND test.b <= test2.b
+----
+11	1	1	10
+

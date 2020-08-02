@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -33,7 +34,7 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	std::unordered_map<std::string, idx_t> function_costs = {
+	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
 	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
 	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},

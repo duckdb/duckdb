@@ -1,0 +1,27 @@
+# name: test/sql/setops/test_nested_except.test
+# description: Test nested EXCEPT
+# group: [setops]
+
+statement ok
+create table a (i integer)
+
+statement ok
+create table b(i integer)
+
+statement ok
+create table c (i integer)
+
+statement ok
+insert into a values(42), (43), (44)
+
+statement ok
+insert into b values(43)
+
+statement ok
+insert into c values(44)
+
+query I
+select * from a except select * from b except select * from c
+----
+42
+

@@ -1,0 +1,109 @@
+# name: test/sql/function/date/test_extract.test
+# description: Extract function
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(i DATE)
+
+statement ok
+INSERT INTO dates VALUES ('1993-08-14'), (NULL)
+
+# extract various parts of the date
+# year
+query I
+SELECT EXTRACT(year FROM i) FROM dates
+----
+1993
+NULL
+
+# month
+query I
+SELECT EXTRACT(month FROM i) FROM dates
+----
+8
+NULL
+
+# day
+query I
+SELECT EXTRACT(day FROM i) FROM dates
+----
+14
+NULL
+
+# decade
+query I
+SELECT EXTRACT(decade FROM i) FROM dates
+----
+199
+NULL
+
+# century
+query I
+SELECT EXTRACT(century FROM i) FROM dates
+----
+20
+NULL
+
+# day of the week (Sunday = 0, Saturday = 6)
+query I
+SELECT EXTRACT(DOW FROM i) FROM dates
+----
+6
+NULL
+
+# day of the year (1 - 365/366)
+query I
+SELECT EXTRACT(DOY FROM i) FROM dates
+----
+226
+NULL
+
+# epoch
+query I
+SELECT EXTRACT(epoch FROM i) FROM dates
+----
+745286400
+NULL
+
+# isodow (Monday = 1, Sunday = 7)
+query I
+SELECT EXTRACT(ISODOW FROM i) FROM dates
+----
+6
+NULL
+
+# millenium (change of millenium is January 1, X001)
+query I
+SELECT EXTRACT(millennium FROM i) FROM dates
+----
+2
+NULL
+
+# timestamp variants all give 0 for date
+query I
+SELECT EXTRACT(second FROM i) FROM dates
+----
+0
+NULL
+
+query I
+SELECT EXTRACT(minute FROM i) FROM dates
+----
+0
+NULL
+
+query I
+SELECT EXTRACT(hour FROM i) FROM dates
+----
+0
+NULL
+
+query I
+SELECT EXTRACT(milliseconds FROM i) FROM dates
+----
+0
+NULL
+

@@ -8,33 +8,38 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/common/unordered_set.hpp"
+
+#include <atomic>
 
 namespace duckdb {
 class Executor;
+class TaskContext;
 
 //! The Pipeline class represents an execution pipeline
-class Pipeline : public std::enable_shared_from_this<Pipeline> {
+class Pipeline {
 	friend class Executor;
 
 public:
-	Pipeline(Executor &execution_context, idx_t maximum_threads = 1);
+	Pipeline(Executor &execution_context);
 
 	Executor &executor;
 
 public:
-	//! Try to start working on this pipeline. Returns false if the pipeline is already fully occupied.
-	bool TryWork();
-
-	//! Execute the pipeline sequentially on a single thread
-	void Execute();
+	//! Execute a task within the pipeline on a single thread
+	void Execute(TaskContext &task);
 
 	void AddDependency(Pipeline *pipeline);
-	void EraseDependency(Pipeline *pipeline);
+	void CompleteDependency();
 	bool HasDependencies() {
 		return dependencies.size() != 0;
 	}
 
+	void Schedule();
+
+	//! Finish a single task of this pipeline
+	void FinishTask();
 	//! Finish executing this pipeline
 	void Finish();
 
@@ -42,7 +47,6 @@ public:
 	void Print() const;
 
 private:
-	std::mutex pipeline_lock;
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state
@@ -51,16 +55,22 @@ private:
 	PhysicalSink *sink;
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	unordered_set<Pipeline *> parents;
-	//! The dependencies of this pipeline (the pipeline can only be started after the dependencies have finished
-	//! executing)
+	//! The dependencies of this pipeline
 	unordered_set<Pipeline *> dependencies;
+	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
+	//! executing)
+	std::atomic<idx_t> finished_dependencies;
 
 	//! Whether or not the pipeline is finished executing
 	bool finished;
 	//! The current threads working on the pipeline
-	idx_t current_threads;
+	std::atomic<idx_t> finished_tasks;
 	//! The maximum amount of threads that can work on the pipeline
-	idx_t maximum_threads;
+	idx_t total_tasks;
+
+private:
+	void ScheduleSequentialTask();
+	bool ScheduleOperator(PhysicalOperator *op);
 };
 
 } // namespace duckdb

@@ -1,0 +1,68 @@
+# name: test/sql/catalog/test_standard_schema.test
+# description: Schema creation/deletion
+# group: [catalog]
+
+# cannot drop MAIN schema
+statement error
+DROP SCHEMA main CASCADE;
+
+# create and drop an empty schema
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+DROP SCHEMA test;
+
+# create the schema again
+statement ok
+CREATE SCHEMA test;
+
+# duplicate schema
+statement error
+CREATE SCHEMA test;
+
+# if not exists ignores error
+statement ok
+CREATE SCHEMA IF NOT EXISTS test;
+
+# create table inside schema that exists should succeed
+statement ok
+CREATE TABLE test.hello(i INTEGER);
+
+# create table inside schema that does not exist should fail
+statement error
+CREATE TABLE test2.hello(i INTEGER);
+
+# use the table in queries
+# insert into table
+statement ok
+INSERT INTO test.hello VALUES (2), (3), (4)
+
+# select from table without schema specified should fail
+statement error
+SELECT * FROM hello
+
+# with schema specified should succeed
+query I
+SELECT * FROM test.hello
+----
+2
+3
+4
+
+# drop schema with dependencies should fail
+statement error
+DROP SCHEMA test;
+
+# unless we use cascade to drop
+statement ok
+DROP SCHEMA test CASCADE;
+
+# drop schema if exists should not fail if schema does not exist
+statement ok
+DROP SCHEMA IF EXISTS test;
+
+# but drop schema without it should fail
+statement error
+DROP SCHEMA test;
+

@@ -1,0 +1,73 @@
+# name: test/sql/subquery/scalar/test_update_subquery.test
+# description: Test subqueries in update
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(id INTEGER, i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (4, NULL)
+
+# correlated subquery in update
+statement ok
+UPDATE integers i1 SET i=(SELECT MAX(i) FROM integers WHERE i1.i<>i)
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	3
+2	3
+3	2
+4	NULL
+
+# uncorrelated subquery in update
+statement ok
+UPDATE integers i1 SET i=(SELECT MAX(i) FROM integers) WHERE i=(SELECT MIN(i) FROM integers)
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	3
+2	3
+3	3
+4	NULL
+
+# use different correlated column in subquery
+statement ok
+UPDATE integers i1 SET i=(SELECT MAX(id) FROM integers WHERE id<i1.id)
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	NULL
+2	1
+3	2
+4	3
+
+# correlated subquery in WHERE
+statement ok
+UPDATE integers i1 SET i=2 WHERE i<(SELECT MAX(id) FROM integers WHERE i1.id<id);
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	NULL
+2	2
+3	2
+4	3
+
+# use DEFAULT with correlated subquery in WHERE
+statement ok
+UPDATE integers i1 SET i=DEFAULT WHERE i=(SELECT MIN(i) FROM integers WHERE i1.id<id);
+
+query II
+SELECT id, i FROM integers ORDER BY id
+----
+1	NULL
+2	NULL
+3	2
+4	3
+

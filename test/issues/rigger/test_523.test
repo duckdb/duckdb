@@ -1,0 +1,11 @@
+# name: test/issues/rigger/test_523.test
+# description: Issue 523
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# The trigonometric functions can result in -nan
+statement error
+SELECT SIN(1e1000);
+

@@ -6,6 +6,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
@@ -15,14 +16,14 @@ using namespace std;
 
 namespace duckdb {
 
-Executor::Executor(ClientContext &context) : context(context), finished(false) {
+Executor::Executor(ClientContext &context) : context(context) {
 }
 
 Executor::~Executor() {
 }
 
 void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
-	pipelines.clear();
+	Reset();
 
 	physical_plan = move(plan);
 	physical_state = physical_plan->GetOperatorState();
@@ -31,71 +32,47 @@ void Executor::Initialize(unique_ptr<PhysicalOperator> plan) {
 
 	BuildPipelines(physical_plan.get(), nullptr);
 
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+	this->producer = scheduler.CreateProducer();
+	this->total_pipelines = pipelines.size();
+
 	// schedule pipelines that do not have dependents
 	for (auto &pipeline : pipelines) {
 		if (!pipeline->HasDependencies()) {
-			scheduled_pipelines.push(pipeline);
+			pipeline->Schedule();
 		}
 	}
 
-	finished = false;
-
-	// schedule the executor so worker threads can help work on this query
-	auto &scheduler = TaskScheduler::GetScheduler(context);
-	scheduler.Schedule(this);
-
-	// now work on the tasks of this pipeline until the query is finished executing
-	while (pipelines.size() > 0) {
-		Work();
+	// now execute tasks from this producer until all pipelines are completed
+	while (completed_pipelines < total_pipelines) {
+		unique_ptr<Task> task;
+		while (scheduler.GetTaskFromProducer(*producer, task)) {
+			task->Execute();
+			task.reset();
+		}
 	}
 
-	// finished execution: unschedule the executor again
-	scheduler.Finish(this);
-
+	pipelines.clear();
 	if (exceptions.size() > 0) {
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
 	}
 }
 
-void Executor::Work() {
-	if (finished) {
-		return;
-	}
-
-	while (scheduled_pipelines.size() > 0) {
-		// find a pipeline to work on
-		shared_ptr<Pipeline> pipeline;
-		{
-			lock_guard<mutex> elock(executor_lock);
-			while (scheduled_pipelines.size() > 0) {
-				pipeline = scheduled_pipelines.front();
-				if (!pipeline->TryWork()) {
-					// cannot work on this pipeline!
-					scheduled_pipelines.pop();
-					pipeline.reset();
-				} else {
-					break;
-				}
-			}
-		}
-		if (pipeline) {
-			pipeline->Execute();
-			pipeline->Finish();
-		}
-	}
-}
-
 void Executor::Reset() {
+	delim_join_dependencies.clear();
 	physical_plan = nullptr;
 	physical_state = nullptr;
+	completed_pipelines = 0;
+	total_pipelines = 0;
 	exceptions.clear();
+	pipelines.clear();
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_shared<Pipeline>(*this);
+		auto pipeline = make_unique<Pipeline>(*this);
 		pipeline->sink = (PhysicalSink *)op;
 		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
 		if (parent) {
@@ -113,6 +90,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::ORDER_BY:
 		case PhysicalOperatorType::TOP_N:
+		case PhysicalOperatorType::COPY_TO_FILE:
 			// single operator, set as child
 			pipeline->child = op->children[0].get();
 			break;
@@ -191,23 +169,12 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler.Flush(tcontext.profiler);
 }
 
-void Executor::SchedulePipeline(shared_ptr<Pipeline> pipeline) {
-	assert(!pipeline->HasDependencies());
-	lock_guard<mutex> elock(executor_lock);
-	scheduled_pipelines.push(move(pipeline));
-}
-
-void Executor::ErasePipeline(Pipeline *pipeline) {
-	lock_guard<mutex> elock(executor_lock);
-	pipelines.erase(std::find_if(pipelines.begin(), pipelines.end(),
-	                             [&](shared_ptr<Pipeline> &arg) { return arg.get() == pipeline; }));
-}
-
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	assert(physical_plan);
 
 	ThreadContext thread(context);
-	ExecutionContext econtext(context, thread);
+	TaskContext task;
+	ExecutionContext econtext(context, thread, task);
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks

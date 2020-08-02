@@ -83,7 +83,7 @@ set(RE2_SOURCES
     util/strutil.cc)
 
 add_library(re2 STATIC ${RE2_SOURCES})
-add_library(re2::re2 ALIAS re2)
+add_library(duckdb_re2::re2 ALIAS re2)
 
 target_include_directories(
   re2

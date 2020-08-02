@@ -1,0 +1,21 @@
+# name: test/issues/rigger/test_505.test
+# description: Issue 505
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# A RIGHT JOIN unexpectedly fetches rows
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE TABLE t1(c1 BOOLEAN);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+query IT
+SELECT * FROM t0 RIGHT JOIN t1 on true;
+----
+

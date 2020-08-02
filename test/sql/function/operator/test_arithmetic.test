@@ -1,0 +1,146 @@
+# name: test/sql/function/operator/test_arithmetic.test
+# description: Test arithmetic statements
+# group: [operator]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# comparisons involving arithmetic
+# these are interesting because these will be folded by optimizers
+# so we test if the optimizers work correctly
+# addition is unordered (i.e. i+2=2+i)
+# i+2=5 => i=3
+query TT
+SELECT i+2=5, 5=i+2 FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+0	0
+1	1
+
+# 2+i=5 => i=3
+query TT
+SELECT 2+i=5, 5=2+i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+0	0
+1	1
+
+# multiplication is unordered
+# i*2=6 => i=3
+query TT
+SELECT i*2=6, 6=i*2 FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+0	0
+1	1
+
+# 2*i=6 => i=3
+query TT
+SELECT 2*i=6, 6=2*i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+0	0
+1	1
+
+# i*2=5 (this comparison is always FALSE, except if i is NULL in which case it is NULL)
+query T
+SELECT i*2=5 FROM integers ORDER BY i
+----
+NULL
+0
+0
+0
+
+# i*0=5
+query T
+SELECT i*0=5 FROM integers ORDER BY i
+----
+NULL
+0
+0
+0
+
+# -i>-2 => i<2
+query T
+SELECT -i>-2 FROM integers ORDER BY i
+----
+NULL
+1
+0
+0
+
+# subtraction is ordered
+# i-2=1 => i=3
+query TT
+SELECT i-2=1, 1=i-2 FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+0	0
+1	1
+
+# 3-i=1 => i=2
+query TT
+SELECT 3-i=1, 1=3-i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+0	0
+
+# non-equality comparisons should also be flipped in this case
+# 3-i<2 => i>2
+query TT
+SELECT 3-i<2, 2>3-i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+1	1
+
+query TT
+SELECT 3-i<=1, 1>=3-i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+1	1
+
+# division is ordered
+# i/2=1 => i>=2 or i<=3
+query TT
+SELECT i/2=1, 1=i/2 FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+1	1
+
+# 2/i=1 => i=2
+query TT
+SELECT 2/i=1, 1=2/i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+0	0
+
+# 3/i=2 => i=2
+query TT
+SELECT 2/i=1, 1=2/i FROM integers ORDER BY i
+----
+NULL	NULL
+0	0
+1	1
+0	0
+

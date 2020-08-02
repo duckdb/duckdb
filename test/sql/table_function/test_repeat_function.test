@@ -1,0 +1,59 @@
+# name: test/sql/table_function/test_repeat_function.test
+# description: Test repeat functions
+# group: [table_function]
+
+# test basic repeat usage
+query I
+SELECT * FROM repeat(0, 3)
+----
+0
+0
+0
+
+# NULL
+query I
+SELECT * FROM repeat(NULL, 2)
+----
+NULL
+NULL
+
+# varchar
+query I
+SELECT * FROM repeat('hello', 2)
+----
+hello
+hello
+
+# long varchar
+query I
+SELECT * FROM repeat('thisisalongstring', 2)
+----
+thisisalongstring
+thisisalongstring
+
+# blob
+query I
+SELECT * FROM repeat(blob 'hello', 2)
+----
+\x68656C6C6F
+\x68656C6C6F
+
+# many values
+query I
+SELECT * FROM repeat(1, 10000)
+----
+10000 values hashing to 532e2dcdbf025eccc86cb25898ca8e7a
+
+# date
+query I
+SELECT * FROM repeat(DATE '1992-01-01', 2)
+----
+1992-01-01
+1992-01-01
+
+# interval
+query I
+SELECT * FROM repeat(INTERVAL '30 days', 2)
+----
+30 days
+30 days

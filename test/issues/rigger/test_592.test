@@ -1,0 +1,18 @@
+# name: test/issues/rigger/test_592.test
+# description: Issue 592
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+# Expression with LIKE and comparison causes an assertion failure
+statement ok
+CREATE TABLE t0(c0 VARCHAR);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+query T
+SELECT * FROM t0 WHERE c0 LIKE '' AND c0 < true;
+----
+
