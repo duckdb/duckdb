@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 #include <string>
 #include <vector>
 
@@ -70,6 +71,54 @@ public:
 	static void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type,
 								 scalar_function_t udf_function, ClientContext &context,
 								 SQLType varargs = SQLType::INVALID);
+
+	//--------------------------------- Aggregate UDFs ------------------------------------//
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateAggregateFunction(string name) {
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateAggregateFunction(string name) {
+		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+		if(!TypesMatch<TR>(ret_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+					"The return argument don't match!");
+		}
+
+		if(!TypesMatch<TA>(input_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_type),
+					"The input argument don't match!");
+		}
+
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+		if(!TypesMatch<TR>(ret_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+					"The return argument don't match!");
+		}
+
+		if(!TypesMatch<TA>(input_typeA)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_typeA),
+					"The first input argument don't match!");
+		}
+
+		if(!TypesMatch<TB>(input_typeB)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TB>(), GetInternalType(input_typeB),
+					"The second input argument don't match!");
+		}
+
+		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+	}
+
+	static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, SQLType varargs = SQLType::INVALID);
 
 private:
 	//-------------------------------- Templated functions --------------------------------//
@@ -283,6 +332,37 @@ private:
 		default:
 			throw InvalidTypeException(GetInternalType(sql_type), "Type does not supported!");
 		}
+	}
+
+private:
+	//-------------------------------- Aggregate functions --------------------------------//
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateUnaryAggregateFunction(string name) {
+		SQLType return_type = GetArgumentType<TR>();
+		SQLType input_type = GetArgumentType<TA>();
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type);
+	}
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateUnaryAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+		AggregateFunction aggr_function = AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
+		aggr_function.name = name;
+		return aggr_function;
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateBinaryAggregateFunction(string name) {
+		SQLType return_type = GetArgumentType<TR>();
+		SQLType input_typeA = GetArgumentType<TA>();
+		SQLType input_typeB = GetArgumentType<TB>();
+		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, return_type, input_typeA, input_typeB);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateBinaryAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+		AggregateFunction aggr_function = AggregateFunction::BinaryAggregate<STATE, TR, TA, TB, UDF_OP>(input_typeA, input_typeB,
+																									   ret_type);
+		aggr_function.name = name;
+		return aggr_function;
 	}
 
 }; // end UDFWrapper

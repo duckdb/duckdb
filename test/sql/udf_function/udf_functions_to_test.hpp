@@ -248,4 +248,125 @@ static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result
 	}
 }
 
+// Aggregate UDF to test -------------------------------------------------------------------
+
+// AVG function copied from "src/function/aggregate/algebraic/avg.cpp"
+template <class T> struct udf_avg_state_t {
+	uint64_t count;
+	T sum;
+};
+
+struct UDFAverageFunction {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->count = 0;
+		state->sum = 0;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
+		state->sum += input[idx];
+		state->count++;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t count) {
+		state->count += count;
+		state->sum += input[0] * count;
+	}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		target->count += source.count;
+		target->sum += source.sum;
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (!Value::DoubleIsValid(state->sum)) {
+			throw OutOfRangeException("AVG is out of range!");
+		} else if (state->count == 0) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = state->sum / state->count;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+// COVAR function copied from "src/function/aggregate/algebraic/covar.cpp"
+
+//------------------ COVAR --------------------------------//
+struct udf_covar_state_t {
+	uint64_t count;
+	double meanx;
+	double meany;
+	double co_moment;
+};
+
+struct UDFCovarOperation {
+	template <class STATE> static void Initialize(STATE *state) {
+		state->count = 0;
+		state->meanx = 0;
+		state->meany = 0;
+		state->co_moment = 0;
+	}
+
+	template <class A_TYPE, class B_TYPE, class STATE, class OP>
+	static void Operation(STATE *state, A_TYPE *x_data, B_TYPE *y_data, nullmask_t &anullmask, nullmask_t &bnullmask,
+	                      idx_t xidx, idx_t yidx) {
+		// update running mean and d^2
+		const uint64_t n = ++(state->count);
+
+		const auto x = x_data[xidx];
+		const double dx = (x - state->meanx);
+		const double meanx = state->meanx + dx / n;
+
+		const auto y = y_data[yidx];
+		const double dy = (y - state->meany);
+		const double meany = state->meany + dy / n;
+
+		const double C = state->co_moment + dx * (y - meany);
+
+		state->meanx = meanx;
+		state->meany = meany;
+		state->co_moment = C;
+	}
+
+	template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+		if (target->count == 0) {
+			*target = source;
+		} else if (source.count > 0) {
+			const auto count = target->count + source.count;
+			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
+			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
+
+			//  Schubert and Gertz SSDBM 2018, equation 21
+			const auto deltax = target->meanx - source.meanx;
+			const auto deltay = target->meany - source.meany;
+			target->co_moment =
+			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
+			target->meanx = meanx;
+			target->meany = meany;
+			target->count = count;
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+struct UDFCovarPopOperation : public UDFCovarOperation {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
+		if (state->count == 0) {
+			nullmask[idx] = true;
+		} else {
+			target[idx] = state->co_moment / state->count;
+		}
+	}
+};
+
 }; //end namespace

@@ -125,6 +125,32 @@ public:
 		UDFWrapper::RegisterFunction(name, args, ret_type, udf_func, *context, varargs);
 	}
 
+	//------------------------------------- Aggreate Functions ----------------------------------------//
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	void CreateAggregateFunction(string name) {
+		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name);
+		UDFWrapper::RegisterAggrFunction(function, *context);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	void CreateAggregateFunction(string name) {
+		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name);
+		UDFWrapper::RegisterAggrFunction(function, *context);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	void CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA) {
+		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
+		UDFWrapper::RegisterAggrFunction(function, *context);
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	void CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+		UDFWrapper::RegisterAggrFunction(function, *context);
+	}
+
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);
 
