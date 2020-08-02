@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_unique_multi_column.test
+# name: test/sql/constraints/unique/test_unique_multi_column.test
 # description: NULL values and a multi-column UNIQUE constraint
-# group: [constraints]
+# group: [unique]
 
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER, j INTEGER)

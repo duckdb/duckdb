@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_incorrect_aggregate.test
+# name: test/sql/aggregate/aggregates/test_incorrect_aggregate.test
 # description: Test incorrect usages of aggregates
-# group: [aggregate]
+# group: [aggregates]
 
 statement error
 SELECT COUNT(1, 2, 3)

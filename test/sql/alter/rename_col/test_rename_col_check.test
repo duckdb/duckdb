@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_rename_col_check.test
+# name: test/sql/alter/rename_col/test_rename_col_check.test
 # description: Test ALTER TABLE RENAME COLUMN on a table with constraints: CHECK constraint
-# group: [alter]
+# group: [rename_col]
 
 #  create a table with a check constraint referencing the to-be-renamed column
 statement ok

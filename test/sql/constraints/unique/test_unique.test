@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_unique.test
+# name: test/sql/constraints/unique/test_unique.test
 # description: Single UNIQUE constraint
-# group: [constraints]
+# group: [unique]
 
 statement ok
 CREATE TABLE integers(i INTEGER UNIQUE, j INTEGER)

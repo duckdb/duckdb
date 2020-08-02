@@ -1,4 +1,4 @@
-# name: test/sql/prepared/test_prepare_insert.test
+# name: test/sql/prepared/test_prepare_insert.test_slow
 # description: PREPARE for INSERT
 # group: [prepared]
 

@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_multi_string.test
+# name: test/sql/constraints/primarykey/test_pk_multi_string.test
 # description: PRIMARY KEY constraint on multiple string columns with overlapping values
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE tst(a varchar, b varchar,PRIMARY KEY(a,b))

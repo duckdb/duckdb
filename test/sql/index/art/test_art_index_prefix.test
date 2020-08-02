@@ -1,6 +1,6 @@
-# name: test/sql/index/artf/test_art_index_prefix.test
+# name: test/sql/index/art/test_art_index_prefix.test
 # description: Test ART index with prefixes
-# group: [artf]
+# group: [art]
 
 statement ok
 CREATE TABLE integers(i BIGINT)

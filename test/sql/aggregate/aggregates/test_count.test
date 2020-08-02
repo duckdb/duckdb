@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_count.test
+# name: test/sql/aggregate/aggregates/test_count.test
 # description: Test COUNT operator
-# group: [aggregate]
+# group: [aggregates]
 
 # test counts on scalar values
 query IIIII

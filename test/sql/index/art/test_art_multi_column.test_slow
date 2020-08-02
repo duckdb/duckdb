@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_multi_column.test
+# name: test/sql/index/art/test_art_multi_column.test_slow
 # description: Test ART index on table with multiple columns
 # group: [art]
 

@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_rename_col_unique.test
+# name: test/sql/alter/rename_col/test_rename_col_unique.test
 # description: Test ALTER TABLE RENAME COLUMN on a table with constraints: UNIQUE constraint
-# group: [alter]
+# group: [rename_col]
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER, PRIMARY KEY(i, j))

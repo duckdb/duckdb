@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_many_columns.test
+# name: test/sql/constraints/primarykey/test_pk_many_columns.test
 # description: PRIMARY KEY constraint on more than two columns
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b,c,d,e))

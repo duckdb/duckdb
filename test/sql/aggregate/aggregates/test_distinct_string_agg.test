@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_distinct_string_agg.test
+# name: test/sql/aggregate/aggregates/test_distinct_string_agg.test
 # description: Test distinct STRING_AGG operator
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE strings(s VARCHAR);

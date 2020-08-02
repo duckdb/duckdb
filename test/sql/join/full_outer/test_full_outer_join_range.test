@@ -1,4 +1,4 @@
-# name: test/sql/join/test_full_outer_join_range.test
+# name: test/sql/join/full_outer/test_full_outer_join_range.test
 # description: Test range FULL OUTER JOIN
 # group: [full_outer]
 

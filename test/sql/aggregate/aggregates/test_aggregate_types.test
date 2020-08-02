@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_aggregate_types.test
+# name: test/sql/aggregate/aggregates/test_aggregate_types.test
 # description: Test aggregates with many different types
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE strings(s STRING, g INTEGER)

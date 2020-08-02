@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_multi_column.test
+# name: test/sql/constraints/primarykey/test_pk_multi_column.test
 # description: Multi-column PRIMARY KEY constraint
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE integers(i INTEGER, j VARCHAR, PRIMARY KEY(i, j))

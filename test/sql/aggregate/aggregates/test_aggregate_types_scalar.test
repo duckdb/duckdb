@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_aggregate_types_scalar.test
+# name: test/sql/aggregate/aggregates/test_aggregate_types_scalar.test
 # description: Test scalar aggregates with many different types
-# group: [aggregate]
+# group: [aggregates]
 
 query IIIIII
 SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '1992-02-02')

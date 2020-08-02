@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_alter_rename_col_failure.test
+# name: test/sql/alter/rename_col/test_rename_col_failure.test
 # description: Test failure conditions of ALTER TABLE
-# group: [alter]
+# group: [rename_col]
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)

@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_updel_local.test
+# name: test/sql/constraints/primarykey/test_pk_updel_local.test
 # description: PRIMARY KEY and update/delete in the same transaction
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY)

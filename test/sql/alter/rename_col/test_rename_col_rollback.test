@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_alter_rename_col_rollback.test
+# name: test/sql/alter/rename_col/test_rename_col_rollback.test
 # description: Test ALTER TABLE RENAME COLUMN with rollback
-# group: [alter]
+# group: [rename_col]
 
 # CREATE TABLE
 statement ok

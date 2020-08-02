@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_scalar_aggr.test
+# name: test/sql/aggregate/aggregates/test_scalar_aggr.test
 # description: Test aggregates with scalar inputs
-# group: [aggregate]
+# group: [aggregates]
 
 # test aggregate on scalar values
 query IIIIIT

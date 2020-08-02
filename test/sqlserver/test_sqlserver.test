@@ -1,4 +1,4 @@
-# name: test/sqlserver/test_sqlserver_2.test
+# name: test/sqlserver/test_sqlserver.test
 # description: SQL Server functions tests
 # group: [sqlserver]
 

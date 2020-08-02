@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_SMALLINT.test_slow
+# name: test/sql/index/art/test_art_smallint.test_slow
 # description: ART Integer Type: SMALLINT
 # group: [art]
 

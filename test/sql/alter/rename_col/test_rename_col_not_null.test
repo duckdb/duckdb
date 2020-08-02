@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_rename_col_not_null.test
+# name: test/sql/alter/rename_col/test_rename_col_not_null.test
 # description: Test ALTER TABLE RENAME COLUMN on a table with constraints: NOT NULL constraint
-# group: [alter]
+# group: [rename_col]
 
 statement ok
 CREATE TABLE test(i INTEGER NOT NULL, j INTEGER)
