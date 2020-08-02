@@ -16,8 +16,17 @@ from setuptools.command.sdist import sdist
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
+toolchain_args = ['-std=c++11']
+if 'DUCKDEBUG' in os.environ:
+    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
+
+existing_duckdb_dir = ''
+if 'EXISTING_DUCKDB' in os.environ:
+    existing_duckdb_dir = os.environ['EXISTING_DUCKDB']
+    print("Linking to existing DuckDB library: " + existing_duckdb_dir)
+
 # check if amalgamation exists
-if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
+if len(existing_duckdb_dir) == 0 and os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
     prev_wd = os.getcwd()
     target_header = os.path.join(prev_wd, 'duckdb.hpp')
     target_source = os.path.join(prev_wd, 'duckdb.cpp')
@@ -34,10 +43,6 @@ if os.path.isfile(os.path.join('..', '..', 'scripts', 'amalgamation.py')):
 
     os.chdir(prev_wd)
 
-
-toolchain_args = ['-std=c++11']
-if 'DUCKDEBUG' in os.environ:
-    toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -57,12 +62,27 @@ class get_numpy_include(object):
         return numpy.get_include()
 
 
-libduckdb = Extension('duckdb',
-    include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
-    sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
-    extra_compile_args=toolchain_args,
-    extra_link_args=toolchain_args,
-    language='c++')
+if len(existing_duckdb_dir) == 0:
+    # no existing library supplied: compile everything from source
+    libduckdb = Extension('duckdb',
+        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+        sources=['duckdb_python.cpp', 'duckdb.cpp', 'parquet-extension.cpp'],
+        extra_compile_args=toolchain_args,
+        extra_link_args=toolchain_args,
+        language='c++')
+else:
+    # existing lib provided: link to it
+    # 'duckdb.cpp', 'parquet-extension.cpp'
+    libs = ['-L' + os.path.join(existing_duckdb_dir, 'src'), '-lduckdb_static']
+    libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'parquet'), '-lparquet_extension']
+    libs += ['-L' + os.path.join(existing_duckdb_dir, 'extension', 'icu'), '-licu_extension']
+
+    libduckdb = Extension('duckdb',
+        include_dirs=['.', get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)],
+        sources=['duckdb_python.cpp'],
+        extra_compile_args=toolchain_args,
+        extra_link_args=toolchain_args + libs,
+        language='c++')
 
 # Only include pytest-runner in setup_requires if we're invoking tests
 if {'pytest', 'test', 'ptr'}.intersection(sys.argv):

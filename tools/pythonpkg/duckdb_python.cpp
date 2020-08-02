@@ -161,6 +161,22 @@ struct PandasScanFunction : public TableFunction {
 		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
 	}
 
+	template<class T>
+	static bool ValueIsNull(T value) {
+		throw runtime_error("unsupported type for ValueIsNull");
+	}
+
+	template <class T> static void scan_pandas_fp_column(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
+		FlatVector::SetData(out, (data_ptr_t) (src_ptr + offset));
+		auto tgt_ptr = (T *)FlatVector::GetData(out);
+		auto &nullmask = FlatVector::Nullmask(out);
+		for(idx_t i = 0; i < count; i++) {
+			if (ValueIsNull(tgt_ptr[i])) {
+				nullmask[i] = true;
+			}
+		}
+	}
+
 	static void pandas_scan_function(ClientContext &context, vector<Value> &input, DataChunk &output,
 	                                 FunctionData *dataptr) {
 		auto &data = *((PandasScanFunctionData *)dataptr);
@@ -194,17 +210,24 @@ struct PandasScanFunction : public TableFunction {
 				scan_pandas_column<int64_t>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
 			case SQLTypeId::FLOAT:
-				scan_pandas_column<float>(numpy_col, this_count, data.position, output.data[col_idx]);
+				scan_pandas_fp_column<float>((float*) numpy_col.data(), this_count, data.position, output.data[col_idx]);
 				break;
 			case SQLTypeId::DOUBLE:
-				scan_pandas_column<double>(numpy_col, this_count, data.position, output.data[col_idx]);
+				scan_pandas_fp_column<double>((double*) numpy_col.data(), this_count, data.position, output.data[col_idx]);
 				break;
 			case SQLTypeId::TIMESTAMP: {
 				auto src_ptr = (int64_t *)numpy_col.data();
 				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
+				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
-					auto ms = src_ptr[row] / 1000000; // nanoseconds
+					auto source_idx = data.position + row;
+					if (src_ptr[source_idx] <= std::numeric_limits<int64_t>::min()) {
+						// pandas Not a Time (NaT)
+						nullmask[row] = true;
+						continue;
+					}
+					auto ms = src_ptr[source_idx] / 1000000; // nanoseconds
 					auto ms_per_day = (int64_t)60 * 60 * 24 * 1000;
 					date_t date = Date::EpochToDate(ms / 1000);
 					dtime_t time = (dtime_t)(ms % ms_per_day);
@@ -217,7 +240,8 @@ struct PandasScanFunction : public TableFunction {
 				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
 
 				for (idx_t row = 0; row < this_count; row++) {
-					auto val = src_ptr[row + data.position];
+					auto source_idx = data.position + row;
+					auto val = src_ptr[source_idx];
 
 #if PY_MAJOR_VERSION >= 3
 					if (!PyUnicode_Check(val)) {
@@ -246,6 +270,19 @@ struct PandasScanFunction : public TableFunction {
 		data.position += this_count;
 	}
 };
+
+template<> bool PandasScanFunction::ValueIsNull(float value);
+template<> bool PandasScanFunction::ValueIsNull(double value);
+
+template<>
+bool PandasScanFunction::ValueIsNull(float value) {
+	return !Value::FloatIsValid(value);
+}
+
+template<>
+bool PandasScanFunction::ValueIsNull(double value) {
+	return !Value::DoubleIsValid(value);
+}
 
 struct DuckDBPyResult {
 
