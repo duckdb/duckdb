@@ -158,8 +158,8 @@ def format_file(f, full_path, directory, ext, sort_includes):
         return
     elif ext == '.test' or ext == '.test_slow':
         try:
-            with open(full_path, "r") as f:
-                lines = f.readlines()
+            with open(full_path, "r") as file_:
+                lines = file_.readlines()
         except:
             return
         found_name = False
@@ -196,8 +196,8 @@ def format_file(f, full_path, directory, ext, sort_includes):
             print(full_path)
             print(new_path_line)
             print(new_group_line)
-            with open(full_path, "w+") as f:
-                f.write(''.join(lines))
+            with open(full_path, "w+") as file_:
+                file_.write(''.join(lines))
         return
     format_command = format_commands[ext]
     cmd = format_command.replace("${FILE}", full_path).replace(
