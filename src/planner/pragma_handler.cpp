@@ -77,6 +77,13 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		auto &function = (FunctionExpression &)*table_function.function;
 		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
 		return select_statement;
+	} else if (keyword == "version") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Invalid PRAGMA version: cannot be called");
+		}
+		Parser parser;
+		parser.ParseQuery("SELECT * FROM pragma_version()");
+		return move(parser.statements[0]);
 	}
 	return nullptr;
 }
