@@ -1,4 +1,5 @@
 #include "duckdb/function/table/sqlite_functions.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -12,8 +13,8 @@ static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vect
                                                     vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("library_version");
 	return_types.push_back(SQLType::VARCHAR);
-    names.push_back("source_id");
-    return_types.push_back(SQLType::VARCHAR);
+	names.push_back("source_id");
+	return_types.push_back(SQLType::VARCHAR);
 
 	return make_unique<PragmaVersionData>();
 }
@@ -27,13 +28,21 @@ static void pragma_version_info(ClientContext &context, vector<Value> &input, Da
 		return;
 	}
 	output.SetCardinality(1);
-	output.SetValue(0, 0, "DuckDB");
-	output.SetValue(1, 0, DUCKDB_SOURCE_ID);
+	output.SetValue(0, 0, DuckDB::LibraryVersion());
+	output.SetValue(1, 0, DuckDB::SourceID());
 	data.done = true;
 }
 
 void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(TableFunction("pragma_version", {}, pragma_version_bind, pragma_version_info, nullptr));
+}
+
+const char *DuckDB::SourceID() {
+	return DUCKDB_SOURCE_ID;
+}
+
+const char *DuckDB::LibraryVersion() {
+	return "DuckDB";
 }
 
 } // namespace duckdb

@@ -1,3 +1,4 @@
+add_subdirectory(version)
 add_subdirectory(sqlite)
 add_library_unity(
   duckdb_func_table
