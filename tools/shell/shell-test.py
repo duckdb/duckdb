@@ -306,8 +306,16 @@ with open(duckdb_nonsense_db, 'w+') as f:
 test('', err='unable to open', extra_commands=[duckdb_nonsense_db])
 os.remove(duckdb_nonsense_db)
 
+# enable_profiling doesn't result in any output
+test('''
+PRAGMA enable_profiling
+''', err="")
 
-
+# only when we follow it up by an actual query does something get printed to the terminal
+test('''
+PRAGMA enable_profiling;
+SELECT 42;
+''', out="42", err="<<Query Profiling Information>>")
 
 # not working for now, probably for the better
 
