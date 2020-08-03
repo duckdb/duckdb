@@ -1,4 +1,4 @@
-# name: test/sql/date/test_date.test
+# name: test/sql/types/date/test_date.test
 # description: Test basic DATE functionality
 # group: [date]
 

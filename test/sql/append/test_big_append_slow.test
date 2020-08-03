@@ -1,6 +1,6 @@
-# name: test/sql/append/test_big_append.test
+# name: test/sql/append/test_big_append_slow.test
 # description: Test big append
-# group: [append][.]
+# group: [append]
 
 statement ok
 PRAGMA enable_verification

@@ -1,4 +1,4 @@
-# name: test/sql/transactions/test_basic_transactions.test
+# name: test/sql/transactions/test_transaction_functionality.test
 # description: Test basic transaction functionality
 # group: [transactions]
 

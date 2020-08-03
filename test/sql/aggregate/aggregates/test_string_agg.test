@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_string_agg.test
+# name: test/sql/aggregate/aggregates/test_string_agg.test
 # description: Test STRING_AGG operator
-# group: [aggregate]
+# group: [aggregates]
 
 # test incorrect usage of STRING_AGG function
 

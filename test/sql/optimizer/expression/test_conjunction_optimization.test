@@ -1,6 +1,6 @@
-# name: test/sql/function/operator/test_conjunction_optimization.test
+# name: test/sql/optimizer/expression/test_conjunction_optimization.test
 # description: Test conjunction statements that can be simplified
-# group: [operator]
+# group: [expression]
 
 statement ok
 PRAGMA enable_verification

@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_bool.test
+# name: test/sql/constraints/primarykey/test_pk_bool.test
 # description: Multi-column boolean PRIMARY KEY constraint
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE integers(i INTEGER, j BOOLEAN, PRIMARY KEY(i, j))

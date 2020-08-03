@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_string_agg_many_groups.test_slow
+# name: test/sql/aggregate/aggregates/test_string_agg_many_groups.test_slow
 # description: Test STRING_AGG operator with many groups
-# group: [aggregate][.]
+# group: [aggregates]
 
 # generate a table
 

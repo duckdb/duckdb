@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_col_subset.test
+# name: test/sql/constraints/primarykey/test_pk_col_subset.test
 # description: PRIMARY KEY constraint that only covers a subset of the columns
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE numbers(a integer, b integer, c integer, d integer, e integer, PRIMARY KEY(a,b))

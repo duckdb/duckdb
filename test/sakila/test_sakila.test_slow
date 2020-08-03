@@ -1,4 +1,4 @@
-# name: test/sakila/test_sakila.test
+# name: test/sakila/test_sakila.test_slow
 # description: Run Sakila test queries
 # group: [sakila]
 

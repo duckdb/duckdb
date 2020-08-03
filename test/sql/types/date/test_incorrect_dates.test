@@ -1,4 +1,4 @@
-# name: test/sql/date/test_incorrect_dates.test
+# name: test/sql/types/date/test_incorrect_dates.test
 # description: Test out of range/incorrect date formats
 # group: [date]
 

@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_group_by_many_groups.test
+# name: test/sql/aggregate/aggregates/test_group_by_many_groups.test_slow
 # description: Test GROUP BY with many groups
-# group: [aggregate][.]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE integers AS SELECT i, 1 AS j FROM range(0, 10000, 1) t1(i) UNION ALL SELECT i, 2 j FROM range(0, 10000, 1) t1(i);

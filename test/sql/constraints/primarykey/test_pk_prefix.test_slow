@@ -1,4 +1,4 @@
-# name: test/sql/constraints/primarykey/test_pk_prefix.test
+# name: test/sql/constraints/primarykey/test_pk_prefix.test_slow
 # description: PRIMARY KEY prefix stress test multiple columns
 # group: [primarykey]
 

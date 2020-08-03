@@ -1,4 +1,4 @@
-# name: test/sql/optimizer/plan/test_filter_pushdown_advanced.test
+# name: test/sql/optimizer/plan/test_filter_pushdown_advanced.test_slow
 # description: Test filter pushdown with more advanced expressions
 # group: [plan]
 

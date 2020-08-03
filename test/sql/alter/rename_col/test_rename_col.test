@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_rename_col.test
+# name: test/sql/alter/rename_col/test_rename_col.test
 # description: Test ALTER TABLE RENAME COLUMN
-# group: [alter]
+# group: [rename_col]
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)

@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_bit_or.test
+# name: test/sql/aggregate/aggregates/test_bit_or.test
 # description: Test BIT_OR operator
-# group: [aggregate]
+# group: [aggregates]
 
 # test on scalar values
 query II

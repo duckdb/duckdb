@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_avg.test
+# name: test/sql/aggregate/aggregates/test_avg.test
 # description: Test AVG operator
-# group: [aggregate]
+# group: [aggregates]
 
 # scalar average
 query RR

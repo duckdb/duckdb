@@ -1,6 +1,6 @@
-# name: test/sql/date/test_incorrect_timestamp.test
+# name: test/sql/types/timestamp/test_incorrect_timestamp.test
 # description: Test out of range/incorrect timestamp formats
-# group: [date]
+# group: [timestamp]
 
 statement ok
 PRAGMA enable_verification

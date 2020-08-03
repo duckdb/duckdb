@@ -1,6 +1,6 @@
-# name: test/sql/subquery/test_nested_table_subquery.test
+# name: test/sql/subquery/table/test_nested_table_subquery.test
 # description: Nested table subquery
-# group: [subquery]
+# group: [table]
 
 statement ok
 PRAGMA enable_verification

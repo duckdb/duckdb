@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_string.test
+# name: test/sql/constraints/primarykey/test_pk_string.test
 # description: ART FP String Constraint
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE numbers(i varchar PRIMARY KEY, j INTEGER)

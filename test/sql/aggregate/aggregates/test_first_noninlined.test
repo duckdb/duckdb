@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_first_noninlined.test
+# name: test/sql/aggregate/aggregates/test_first_noninlined.test
 # description: Test FIRST with non-inlined strings
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE tbl(a INTEGER, b VARCHAR)

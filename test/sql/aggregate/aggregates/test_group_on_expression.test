@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_group_on_expression.test
+# name: test/sql/aggregate/aggregates/test_group_on_expression.test
 # description: Test GROUP BY on expression
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE integer(i INTEGER, j INTEGER);

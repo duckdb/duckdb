@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_empty_aggregate.test
+# name: test/sql/aggregate/aggregates/test_empty_aggregate.test
 # description: Test aggregate operators on empty set
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 CREATE TABLE integers(i INTEGER);

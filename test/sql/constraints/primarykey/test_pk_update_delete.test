@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_update_delete.test
+# name: test/sql/constraints/primarykey/test_pk_update_delete.test
 # description: PRIMARY KEY and update/delete
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER);

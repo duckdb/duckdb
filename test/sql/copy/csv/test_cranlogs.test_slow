@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/test_cranlogs.test
+# name: test/sql/copy/csv/test_cranlogs.test_slow
 # description: Test cranlogs broken gzip copy and temp table
 # group: [csv]
 

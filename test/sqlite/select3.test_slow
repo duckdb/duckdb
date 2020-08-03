@@ -1,3 +1,5 @@
+# name: test/sqlite/select3.test_slow
+# group: [sqlite]
 hash-threshold 8
 
 statement ok

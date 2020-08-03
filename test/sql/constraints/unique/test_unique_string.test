@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_unique_string.test
+# name: test/sql/constraints/unique/test_unique_string.test
 # description: UNIQUE constraint on temporary tables with Strings
-# group: [constraints]
+# group: [unique]
 
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER, j VARCHAR)

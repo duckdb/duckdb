@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_covar.test
+# name: test/sql/aggregate/aggregates/test_covar.test
 # description: Test COVAR operators
-# group: [aggregate]
+# group: [aggregates]
 
 # test incorrect usage of COVAR_POP function
 statement error

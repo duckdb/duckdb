@@ -1,6 +1,6 @@
-# name: test/sql/date/test_timestamp.test
+# name: test/sql/types/timestamp/test_timestamp.test
 # description: Test TIMESTAMP type
-# group: [date]
+# group: [timestamp]
 
 statement ok
 PRAGMA enable_verification

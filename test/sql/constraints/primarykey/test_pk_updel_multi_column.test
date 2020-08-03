@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_pk_updel_multi_column.test
+# name: test/sql/constraints/primarykey/test_pk_updel_multi_column.test
 # description: PRIMARY KEY and update/delete on multiple columns
-# group: [constraints]
+# group: [primarykey]
 
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, PRIMARY KEY(a, b));
