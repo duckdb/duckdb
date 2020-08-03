@@ -223,9 +223,12 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "STRUCT<?>";
 	case SQLTypeId::LIST:
 		return "LIST<?>";
-	default:
+	case SQLTypeId::INVALID:
 		return "INVALID";
+	case SQLTypeId::UNKNOWN:
+		return "UNKNOWN";
 	}
+	return "UNDEFINED";
 }
 
 string SQLTypeToString(SQLType type) {

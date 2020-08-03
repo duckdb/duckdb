@@ -35,6 +35,44 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 	main_query.Start();
 }
 
+bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
+	switch(op_type) {
+	case PhysicalOperatorType::ORDER_BY:
+	case PhysicalOperatorType::LIMIT:
+	case PhysicalOperatorType::TOP_N:
+	case PhysicalOperatorType::AGGREGATE:
+	case PhysicalOperatorType::WINDOW:
+	case PhysicalOperatorType::UNNEST:
+	case PhysicalOperatorType::DISTINCT:
+	case PhysicalOperatorType::SIMPLE_AGGREGATE:
+	case PhysicalOperatorType::HASH_GROUP_BY:
+	case PhysicalOperatorType::SORT_GROUP_BY:
+	case PhysicalOperatorType::FILTER:
+	case PhysicalOperatorType::PROJECTION:
+	case PhysicalOperatorType::COPY_FROM_FILE:
+	case PhysicalOperatorType::COPY_TO_FILE:
+	case PhysicalOperatorType::TABLE_FUNCTION:
+	case PhysicalOperatorType::SEQ_SCAN:
+	case PhysicalOperatorType::INDEX_SCAN:
+	case PhysicalOperatorType::CHUNK_SCAN:
+	case PhysicalOperatorType::DELIM_SCAN:
+	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
+	case PhysicalOperatorType::QUERY_DERIVED_SCAN:
+	case PhysicalOperatorType::EXPRESSION_SCAN:
+	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
+	case PhysicalOperatorType::NESTED_LOOP_JOIN:
+	case PhysicalOperatorType::HASH_JOIN:
+	case PhysicalOperatorType::CROSS_PRODUCT:
+	case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+	case PhysicalOperatorType::DELIM_JOIN:
+	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::RECURSIVE_CTE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void QueryProfiler::EndQuery() {
 	if (!enabled || !running) {
 		return;
@@ -42,8 +80,9 @@ void QueryProfiler::EndQuery() {
 
 	main_query.End();
 	this->running = false;
-	// print the query after termination, if this is enabled
+	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
+		// check if this query should be output based on the operator types
 		string query_info;
 		if (automatic_print_format == ProfilerPrintFormat::JSON) {
 			query_info = ToJSON();
@@ -108,7 +147,16 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	if (!enabled || !running) {
 		return;
 	}
+	this->query_requires_profiling = false;
 	this->root = CreateTree(root_op);
+	if (!query_requires_profiling) {
+		// query does not require profiling: disable profiling for this query
+		this->running = false;
+		tree_map.clear();
+		root = nullptr;
+		phase_timings.clear();
+		phase_stack.clear();
+	}
 }
 
 OperatorProfiler::OperatorProfiler(bool enabled_) : enabled(enabled_) {
@@ -265,6 +313,9 @@ static string remove_padding(string l) {
 }
 
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *root, idx_t depth) {
+	if (OperatorRequiresProfiling(root->type)) {
+		this->query_requires_profiling = true;
+	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
 	node->name = PhysicalOperatorToString(root->type);
 	node->extra_info = root->ExtraRenderInformation();

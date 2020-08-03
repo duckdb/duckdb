@@ -84,9 +84,23 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 	case LogicalOperatorType::CTE_REF:
 		return "CTE_SCAN";
 	case LogicalOperatorType::INVALID:
-	default:
 		return "INVALID";
+	case LogicalOperatorType::ALTER:
+		return "ALTER";
+	case LogicalOperatorType::CREATE_SEQUENCE:
+		return "CREATE_SEQUENCE";
+	case LogicalOperatorType::CREATE_VIEW:
+		return "CREATE_VIEW";
+	case LogicalOperatorType::CREATE_SCHEMA:
+		return "CREATE_SCHEMA";
+	case LogicalOperatorType::DROP:
+		return "DROP";
+	case LogicalOperatorType::PRAGMA:
+		return "PRAGMA";
+	case LogicalOperatorType::TRANSACTION:
+		return "TRANSACTION";
 	}
+	return "UNDEFINED";
 }
 
 } // namespace duckdb
