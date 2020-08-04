@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -26,13 +27,14 @@ template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType typ
 	case SQLTypeId::BIGINT:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
+	case SQLTypeId::HUGEINT:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
 	case SQLTypeId::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
 		break;
-	case SQLTypeId::DOUBLE:
-		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
-		break;
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::DOUBLE:
 		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
 		break;
 	default:
@@ -130,7 +132,9 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
-		// Time::FromTime()
+template <> hugeint_t AddOperator::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Add(left, right);
+}
 
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
@@ -138,6 +142,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
 	}
+	// hugeint
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT, SQLType::HUGEINT}, SQLType::HUGEINT,
+	                                     GetScalarBinaryFunction<AddOperator>(SQLType::HUGEINT)));
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::INTEGER}, SQLType::DATE,
 	                                     GetScalarBinaryFunction<AddOperator>(SQLType::INTEGER)));
@@ -165,6 +172,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
 	}
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT}, SQLType::HUGEINT, ScalarFunction::NopFunction));
 	set.AddFunction(functions);
 }
 
@@ -221,12 +229,24 @@ template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t
 	return Interval::GetDifference(left, right);
 }
 
+template <> hugeint_t SubtractOperator::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Subtract(left, right);
+}
+
+template <> hugeint_t NegateOperator::Operation(hugeint_t input) {
+	input.negative = !input.negative;
+	return input;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
 	}
+	// hugeint
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT, SQLType::HUGEINT}, SQLType::HUGEINT,
+	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::HUGEINT)));
 	// we can subtract dates from each other
 	functions.AddFunction(ScalarFunction({SQLType::DATE, SQLType::DATE}, SQLType::INTEGER,
 	                                     GetScalarBinaryFunction<SubtractOperator>(SQLType::INTEGER)));
@@ -251,6 +271,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 		functions.AddFunction(
 		    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
 	}
+	functions.AddFunction(
+		ScalarFunction({SQLType::HUGEINT}, SQLType::HUGEINT, ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, NegateOperator>));
 	set.AddFunction(functions);
 }
 
@@ -284,11 +306,17 @@ template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t righ
 	return MultiplyOperator::Operation<interval_t, int64_t, interval_t>(right, left);
 }
 
+template <> hugeint_t MultiplyOperator::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Multiply(left, right);
+}
+
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT, SQLType::HUGEINT}, SQLType::HUGEINT,
+	                                     GetScalarBinaryFunction<MultiplyOperator>(SQLType::HUGEINT)));
 	functions.AddFunction(ScalarFunction({SQLType::INTERVAL, SQLType::BIGINT}, SQLType::INTERVAL,
 										ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	functions.AddFunction(ScalarFunction({SQLType::BIGINT, SQLType::INTERVAL}, SQLType::INTERVAL,

@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -146,13 +147,12 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
-//Value Value::BLOB(string value) {
-//	Value result(TypeId::VARCHAR);
-//	result.str_value = value;
-//	result.is_null = false;
-//	result.sql_type = SQLType::VARBINARY;
-//	return result;
-//}
+Value Value::HUGEINT(hugeint_t value) {
+	Value result(TypeId::INT128);
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
 
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
@@ -426,6 +426,8 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.integer);
 	case SQLTypeId::BIGINT:
 		return to_string(value_.bigint);
+	case SQLTypeId::HUGEINT:
+		return Hugeint::ToString(value_.hugeint);
 	case SQLTypeId::FLOAT:
 		return to_string(value_.float_);
 	case SQLTypeId::DECIMAL:

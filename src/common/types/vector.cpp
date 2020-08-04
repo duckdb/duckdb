@@ -168,6 +168,9 @@ void Vector::SetValue(idx_t index, Value val) {
 	case TypeId::INT64:
 		((int64_t *)data)[index] = newVal.value_.bigint;
 		break;
+	case TypeId::INT128:
+		((hugeint_t *)data)[index] = newVal.value_.hugeint;
+		break;
 	case TypeId::FLOAT:
 		((float *)data)[index] = newVal.value_.float_;
 		break;
@@ -277,6 +280,8 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTEGER(((int32_t *)data)[index]);
 	case TypeId::INT64:
 		return Value::BIGINT(((int64_t *)data)[index]);
+	case TypeId::INT128:
+		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case TypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
 	case TypeId::POINTER:

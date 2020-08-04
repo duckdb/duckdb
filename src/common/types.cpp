@@ -18,6 +18,7 @@ const SQLType SQLType::TINYINT = SQLType(SQLTypeId::TINYINT);
 const SQLType SQLType::SMALLINT = SQLType(SQLTypeId::SMALLINT);
 const SQLType SQLType::INTEGER = SQLType(SQLTypeId::INTEGER);
 const SQLType SQLType::BIGINT = SQLType(SQLTypeId::BIGINT);
+const SQLType SQLType::HUGEINT = SQLType(SQLTypeId::HUGEINT);
 const SQLType SQLType::FLOAT = SQLType(SQLTypeId::FLOAT);
 const SQLType SQLType::DOUBLE = SQLType(SQLTypeId::DOUBLE);
 const SQLType SQLType::DATE = SQLType(SQLTypeId::DATE);
@@ -62,6 +63,8 @@ string TypeIdToString(TypeId type) {
 		return "INT32";
 	case TypeId::INT64:
 		return "INT64";
+	case TypeId::INT128:
+		return "INT128";
 	case TypeId::HASH:
 		return "HASH";
 	case TypeId::POINTER:
@@ -97,6 +100,8 @@ idx_t GetTypeIdSize(TypeId type) {
 		return sizeof(int32_t);
 	case TypeId::INT64:
 		return sizeof(int64_t);
+	case TypeId::INT128:
+		return sizeof(hugeint_t);
 	case TypeId::FLOAT:
 		return sizeof(float);
 	case TypeId::DOUBLE:
@@ -132,6 +137,8 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 		return SQLType::INTEGER;
 	case TypeId::INT64:
 		return SQLType::BIGINT;
+	case TypeId::INT128:
+		return SQLType::HUGEINT;
 	case TypeId::FLOAT:
 		return SQLType::FLOAT;
 	case TypeId::DOUBLE:
@@ -154,16 +161,16 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 bool TypeIsConstantSize(TypeId type) {
 	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
 	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
-	       type == TypeId::POINTER || type == TypeId::INTERVAL;
+	       type == TypeId::POINTER || type == TypeId::INTERVAL || type == TypeId::INT128;
 }
 bool TypeIsIntegral(TypeId type) {
-	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER;
+	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER || type == TypeId::INT128;
 }
 bool TypeIsNumeric(TypeId type) {
-	return type >= TypeId::UINT8 && type <= TypeId::DOUBLE;
+	return (type >= TypeId::UINT8 && type <= TypeId::DOUBLE)|| type == TypeId::INT128;
 }
 bool TypeIsInteger(TypeId type) {
-	return type >= TypeId::UINT8 && type <= TypeId::INT64;
+	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::INT128;
 }
 
 void SQLType::Serialize(Serializer &serializer) {
@@ -193,6 +200,8 @@ string SQLTypeIdToString(SQLTypeId id) {
 		return "INTEGER";
 	case SQLTypeId::BIGINT:
 		return "BIGINT";
+	case SQLTypeId::HUGEINT:
+		return "HUGEINT";
 	case SQLTypeId::DATE:
 		return "DATE";
 	case SQLTypeId::TIME:
@@ -289,7 +298,9 @@ SQLType TransformStringToSQLType(string str) {
 		return SQLType::TIME;
 	} else if (lower_str == "interval") {
 		return SQLType::INTERVAL;
-	} else {
+	} else if (lower_str == "hugeint") {
+		return SQLType::HUGEINT;
+	}  else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
 	}
 }
@@ -300,6 +311,7 @@ bool SQLType::IsIntegral() const {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
+	case SQLTypeId::HUGEINT:
 		return true;
 	default:
 		return false;
@@ -312,6 +324,7 @@ bool SQLType::IsNumeric() const {
 	case SQLTypeId::SMALLINT:
 	case SQLTypeId::INTEGER:
 	case SQLTypeId::BIGINT:
+	case SQLTypeId::HUGEINT:
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
@@ -356,6 +369,16 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
+			return true;
+		default:
+			return false;
+		}
+	case SQLTypeId::HUGEINT:
+		switch (other.id) {
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
 			return true;
 		default:
 			return false;
@@ -406,6 +429,8 @@ TypeId GetInternalType(SQLType type) {
 	case SQLTypeId::BIGINT:
 	case SQLTypeId::TIMESTAMP:
 		return TypeId::INT64;
+	case SQLTypeId::HUGEINT:
+		return TypeId::INT128;
 	case SQLTypeId::FLOAT:
 		return TypeId::FLOAT;
 	case SQLTypeId::DOUBLE:

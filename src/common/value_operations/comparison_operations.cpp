@@ -40,6 +40,8 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.integer, right.value_.integer);
 	case TypeId::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
+	case TypeId::INT128:
+		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
 	case TypeId::HASH:

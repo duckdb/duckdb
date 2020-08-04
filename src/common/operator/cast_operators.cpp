@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -178,7 +179,8 @@ template <class T> static T try_strict_cast_string(string_t input) {
 
 template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t pos = start_pos;
 	while(pos < len) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
@@ -243,7 +245,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			result = result * 10 + digit;
 		}
 	}
-	return pos > (NEGATIVE ? 1 : 0);
+	return pos > start_pos;
 }
 
 template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
@@ -332,7 +334,8 @@ template <class T, bool NEGATIVE> static void ComputeDoubleResult(T &result, idx
 }
 
 template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
-	idx_t pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
+	idx_t pos = start_pos;
 	idx_t decimal = 0;
 	idx_t decimal_factor = 0;
 	while (pos < len) {
@@ -384,7 +387,7 @@ template <class T, bool NEGATIVE> static bool DoubleCastLoop(const char *buf, id
 		}
 	}
 	ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
-	return pos > (NEGATIVE ? 1 : 0);
+	return pos > start_pos;
 }
 
 template <class T> bool CheckDoubleValidity(T value);
@@ -960,6 +963,166 @@ template <> interval_t StrictCast::Operation(string_t input) {
 
 template <> interval_t Cast::Operation(string_t input) {
 	return try_cast_string<interval_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Hugeint
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
+	return Hugeint::FromCString(input.GetData(), input.GetSize(), result);
+}
+
+template <> hugeint_t Cast::Operation(string_t input) {
+	return try_strict_cast_string<hugeint_t>(input);
+}
+
+template <> hugeint_t StrictCast::Operation(string_t input) {
+	return try_cast_string<hugeint_t>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Numeric -> Hugeint
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(bool input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<bool, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int8_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int16_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int32_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<int64_t, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(float input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<float, hugeint_t>(input);
+	return true;
+}
+
+template <> bool TryCast::Operation(double input, hugeint_t &result, bool strict) {
+	result = Cast::Operation<double, hugeint_t>(input);
+	return true;
+}
+
+template <> hugeint_t Cast::Operation(bool input) {
+	hugeint_t result;
+	result.upper = 0;
+	result.lower = input ? 1 : 0;
+	result.negative = false;
+	return result;
+}
+template <> hugeint_t Cast::Operation(int8_t input) {
+	return Hugeint::Convert<int8_t>(input);
+}
+template <> hugeint_t Cast::Operation(int16_t input) {
+	return Hugeint::Convert<int16_t>(input);
+}
+template <> hugeint_t Cast::Operation(int32_t input) {
+	return Hugeint::Convert<int32_t>(input);
+}
+template <> hugeint_t Cast::Operation(int64_t input) {
+	return Hugeint::Convert<int64_t>(input);
+}
+template <> hugeint_t Cast::Operation(float input) {
+	return Hugeint::Convert<float>(input);
+}
+template <> hugeint_t Cast::Operation(double input) {
+	return Hugeint::Convert<double>(input);
+}
+
+//===--------------------------------------------------------------------===//
+// Hugeint -> Numeric
+//===--------------------------------------------------------------------===//
+template <> bool TryCast::Operation(hugeint_t input, bool &result, bool strict) {
+	// any positive number converts to true
+	result = input.upper > 0 || (input.upper == 0 && input.lower > 0);
+	return true;
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int8_t &result, bool strict) {
+	return Hugeint::TryCast<int8_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int16_t &result, bool strict) {
+	return Hugeint::TryCast<int16_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict) {
+	return Hugeint::TryCast<int32_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict) {
+	return Hugeint::TryCast<int64_t>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, float &result, bool strict) {
+	return Hugeint::TryCast<float>(input, result);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, double &result, bool strict) {
+	return Hugeint::TryCast<double>(input, result);
+}
+
+template <> bool Cast::Operation(hugeint_t input) {
+	bool result;
+	TryCast::Operation(input, result);
+	return result;
+}
+
+template<class T>
+static T hugeint_cast_to_numeric(hugeint_t input) {
+	T result;
+	if (!TryCast::Operation<hugeint_t, T>(input, result)) {
+		throw OutOfRangeException("Failed to cast from hugeint: value is out of range");
+	}
+	return result;
+}
+
+template <> int8_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int8_t>(input);
+}
+
+template <> int16_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int16_t>(input);
+}
+
+template <> int32_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int32_t>(input);
+}
+
+template <> int64_t Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<int64_t>(input);
+}
+
+template <> float Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<float>(input);
+}
+
+template <> double Cast::Operation(hugeint_t input) {
+	return hugeint_cast_to_numeric<double>(input);
+}
+
+template <> bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict) {
+	result = input;
+	return true;
+}
+
+template <> hugeint_t Cast::Operation(hugeint_t input) {
+	return input;
 }
 
 } // namespace duckdb

@@ -30,7 +30,8 @@ struct interval_t {
 
 struct hugeint_t {
 	uint64_t lower;
-	uint64_t upper;
+	uint64_t upper : 63;
+	bool negative : 1;
 };
 
 struct string_t;
@@ -172,6 +173,7 @@ enum class TypeId : uint8_t {
 	VARBINARY = 201,
 	POINTER = 202,
 	HASH = 203,
+	INT128 = 204, // 128-bit integers
 
 	INVALID = 255
 };
@@ -201,6 +203,8 @@ enum class SQLTypeId : uint8_t {
 	VARBINARY = 23,
 	BLOB = 24,
 	INTERVAL = 25,
+
+	HUGEINT = 50,
 
 	STRUCT = 100,
 	LIST = 101
@@ -254,6 +258,7 @@ public:
 	static const SQLType ANY;
 	static const SQLType BLOB;
 	static const SQLType INTERVAL;
+	static const SQLType HUGEINT;
 	static const SQLType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -287,6 +292,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::INT32;
 	} else if (std::is_same<T, int64_t>()) {
 		return TypeId::INT64;
+	} else if (std::is_same<T, hugeint_t>()) {
+		return TypeId::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
 		return TypeId::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {

@@ -123,7 +123,7 @@ TEST_CASE("Test casting to int8_t", "[cast]") {
 	    "aaaa",  "19A",         "",
 	    "1e3",   "1e",          "1e-",
 	    "1e100", "1e100000000", "1000e-1",
-	    " 3 2"};
+	    " 3 2", "+"};
 	TestStringCast<int8_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int8_t>();
 }
@@ -152,7 +152,7 @@ TEST_CASE("Test casting to int16_t", "[cast]") {
 	    "32768", "-32768",     "10000000000000000000000000000000000000000000000000000000000000",
 	    "aaaa",  "19A",        "",
 	    "1.A",   "1e",         "1e-",
-	    "1e100", "1e100000000"};
+	    "1e100", "1e100000000", "+"};
 	TestStringCast<int16_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int16_t>();
 }
@@ -216,7 +216,7 @@ TEST_CASE("Test casting to int64_t", "[cast]") {
 	                                    "1.2382398723A",
 										"1e++1",
 										"1e+1+1",
-										"1e+1-1"};
+										"1e+1-1", "+"};
 	TestStringCast<int64_t>(working_values_str, expected_values_str, broken_values_str);
 	TestExponent<int64_t>();
 }
@@ -251,7 +251,7 @@ TEST_CASE("Test casting to float", "[cast]") {
 	                                 "1.2e12.3",
 	                                 "1.1781237378938173987123987123981723981723981723987123",
 	                                 "1.123456789",
-	                                 "1."};
+	                                 "1.", "+"};
 	vector<float> expected_values = {
 	    1.3f,         1.34514f, 1e10f, 1e-2f, -1e-1f, 1.2e12f, 1.1781237378938173987123987123981723981723981723987123f,
 	    1.123456789f, 1.0f};
@@ -280,7 +280,7 @@ TEST_CASE("Test casting to double", "[cast]") {
 	                                 " 1.2 ",
 	                                 "  1.2e2  ",
 	                                 " \t 1.2e2 \t",
-	                                 "1.2e 2"};
+	                                 "1.2e 2", "+"};
 	vector<double> expected_values = {
 	    1.3,         1.3, 1.34514, 1e10, 1e-2, -1e-1, 1.2e12, 1.1781237378938173987123987123981723981723981723987123,
 	    1.123456789, 1.0,     -1.2, -12,  1.2,   120,    120,
@@ -290,6 +290,6 @@ TEST_CASE("Test casting to double", "[cast]") {
 	    "12aaa", "1e10e10", "1e",
 	    "1e-",   "1e10a",   "1.1781237378938173987123987123981723981723981723934834583490587123w",
 	    "1.2.3", "1.222.",  "1..",
-	    "1 . 2", "1. 2",    "1.2 e20"};
+	    "1 . 2", "1. 2",    "1.2 e20", "+"};
 	TestStringCastDouble<double>(working_values, expected_values, broken_values);
 }
