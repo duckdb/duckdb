@@ -1,8 +1,9 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -75,16 +76,24 @@ static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {
-	template <class TA, class TR> static inline TR Operation(TA left) {
-		return left < 0 ? left * -1 : left;
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return input < 0 ? input * -1 : input;
 	}
 };
+
+template <> hugeint_t AbsOperator::Operation(hugeint_t input) {
+	if (input.upper < 0) {
+		Hugeint::NegateInPlace(input);
+	}
+	return input;
+}
 
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
 	for (auto &type : SQLType::NUMERIC) {
 		abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
 	}
+	abs.AddFunction(ScalarFunction({SQLType::HUGEINT}, SQLType::HUGEINT, ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, AbsOperator>));
 	set.AddFunction(abs);
 }
 
