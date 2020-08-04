@@ -6,8 +6,9 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
     : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
@@ -444,7 +445,7 @@ idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset
 	return tuple_count - initial_count;
 }
 
-static void update_min_max(string value, char *__restrict min, char *__restrict max) {
+static void update_min_max_string_segment(string value, char *__restrict min, char *__restrict max) {
 	//! we can only fit 8 bytes, so we might need to trim our string
 	size_t value_size = value.size() > 7 ? 7 : value.size();
 	//! This marks the min/max was not initialized
@@ -514,7 +515,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				block_id_t block;
 				int32_t offset;
 				//! Update min/max of column segment
-				update_min_max(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// write the string into the current string block
 				WriteString(sdata[source_idx], block, offset);
 				dictionary_offset += BIG_STRING_MARKER_SIZE;
@@ -530,7 +531,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment
-				update_min_max(sdata[source_idx].GetData(), min, max);
+				update_min_max_string_segment(sdata[source_idx].GetData(), min, max);
 				// first write the length as u16
 				uint16_t string_length_u16 = string_length;
 				memcpy(dict_pos, &string_length_u16, sizeof(uint16_t));
@@ -682,7 +683,7 @@ string_update_info_t StringSegment::CreateStringUpdate(SegmentStatistics &stats,
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetData(), min, max);
 			WriteString(strings[i], info->block_ids[i], info->offsets[i]);
 		} else {
 			info->block_ids[i] = INVALID_BLOCK;
@@ -705,7 +706,7 @@ string_update_info_t StringSegment::MergeStringUpdate(SegmentStatistics &stats, 
 		if (!update_nullmask[i]) {
 			auto min = (char *)stats.minimum.get();
 			auto max = (char *)stats.maximum.get();
-			update_min_max(strings[i].GetData(), min, max);
+			update_min_max_string_segment(strings[i].GetData(), min, max);
 		}
 	}
 	auto pick_new = [&](idx_t id, idx_t idx, idx_t count) {
@@ -874,4 +875,6 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 		update_info.count = new_count;
 	}
 	CleanupUpdate(info);
+}
+
 }

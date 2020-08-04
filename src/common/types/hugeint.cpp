@@ -9,6 +9,9 @@ using namespace std;
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// String Conversion
+//===--------------------------------------------------------------------===//
 bool Hugeint::FromString(string str, hugeint_t &result) {
 	return Hugeint::FromCString(str.c_str(), str.size(), result);
 }
@@ -118,66 +121,6 @@ static hugeint_t positive_hugeint_divmod(hugeint_t lhs, uint32_t rhs, uint32_t &
 	return div_result;
 }
 
-static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
-	// division by zero not allowed
-	assert(!(rhs.upper == 0 && rhs.lower == 0));
-
-	bool lhs_negative = lhs.upper < 0;
-	bool rhs_negative = rhs.upper < 0;
-	if (lhs_negative) {
-		Hugeint::NegateInPlace(lhs);
-	}
-	if (rhs_negative) {
-		Hugeint::NegateInPlace(rhs);
-	}
-	// DivMod code adapted from:
-	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
-
-	// initialize the result and remainder to 0
-	hugeint_t div_result;
-	div_result.lower = 0;
-	div_result.upper = 0;
-	remainder.lower = 0;
-	remainder.upper = 0;
-
-	uint8_t highest_bit_set = positive_hugeint_highest_bit(lhs);
-	// now iterate over the amount of bits that are set in the LHS
-	for(uint8_t x = highest_bit_set; x > 0; x--) {
-		// left-shift the current result and remainder by 1
-		div_result = positive_hugeint_leftshift(div_result, 1);
-		remainder = positive_hugeint_leftshift(remainder, 1);
-		
-		// we get the value of the bit at position X, where position 0 is the least-significant bit
-		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
-			// increment the remainder
-			Hugeint::AddInPlace(remainder, 1);
-		}
-		if (Hugeint::GreaterThanEquals(remainder, rhs)) {
-			// the remainder has passed the division multiplier: add one to the divide result
-			remainder = Hugeint::Subtract(remainder, rhs);
-			Hugeint::AddInPlace(div_result, 1);
-		}
-	}
-	if (lhs_negative ^ rhs_negative) {
-		Hugeint::NegateInPlace(div_result);
-	}
-	if (lhs_negative) {
-		Hugeint::NegateInPlace(remainder);
-	}
-	return div_result;
-}
-
-hugeint_t Hugeint::Divide(hugeint_t lhs, hugeint_t rhs) {
-	hugeint_t remainder;
-	return hugeint_divmod(lhs, rhs, remainder);
-}
-
-hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
-	hugeint_t remainder;
-	hugeint_divmod(lhs, rhs, remainder);
-	return remainder;
-}
-
 string Hugeint::ToString(hugeint_t input) {
 	uint32_t remainder;
 	string result;
@@ -199,6 +142,9 @@ string Hugeint::ToString(hugeint_t input) {
 	return negative ? "-" + result : result;
 }
 
+//===--------------------------------------------------------------------===//
+// Multiply
+//===--------------------------------------------------------------------===//
 hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 	// Multiply code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
@@ -313,6 +259,73 @@ void Hugeint::MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs) {
 	lhs.upper = (first32 << 32) | second32;
 }
 
+
+//===--------------------------------------------------------------------===//
+// Divide
+//===--------------------------------------------------------------------===//
+static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
+	// division by zero not allowed
+	assert(!(rhs.upper == 0 && rhs.lower == 0));
+
+	bool lhs_negative = lhs.upper < 0;
+	bool rhs_negative = rhs.upper < 0;
+	if (lhs_negative) {
+		Hugeint::NegateInPlace(lhs);
+	}
+	if (rhs_negative) {
+		Hugeint::NegateInPlace(rhs);
+	}
+	// DivMod code adapted from:
+	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
+
+	// initialize the result and remainder to 0
+	hugeint_t div_result;
+	div_result.lower = 0;
+	div_result.upper = 0;
+	remainder.lower = 0;
+	remainder.upper = 0;
+
+	uint8_t highest_bit_set = positive_hugeint_highest_bit(lhs);
+	// now iterate over the amount of bits that are set in the LHS
+	for(uint8_t x = highest_bit_set; x > 0; x--) {
+		// left-shift the current result and remainder by 1
+		div_result = positive_hugeint_leftshift(div_result, 1);
+		remainder = positive_hugeint_leftshift(remainder, 1);
+		
+		// we get the value of the bit at position X, where position 0 is the least-significant bit
+		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
+			// increment the remainder
+			Hugeint::AddInPlace(remainder, 1);
+		}
+		if (Hugeint::GreaterThanEquals(remainder, rhs)) {
+			// the remainder has passed the division multiplier: add one to the divide result
+			remainder = Hugeint::Subtract(remainder, rhs);
+			Hugeint::AddInPlace(div_result, 1);
+		}
+	}
+	if (lhs_negative ^ rhs_negative) {
+		Hugeint::NegateInPlace(div_result);
+	}
+	if (lhs_negative) {
+		Hugeint::NegateInPlace(remainder);
+	}
+	return div_result;
+}
+
+hugeint_t Hugeint::Divide(hugeint_t lhs, hugeint_t rhs) {
+	hugeint_t remainder;
+	return hugeint_divmod(lhs, rhs, remainder);
+}
+
+hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
+	hugeint_t remainder;
+	hugeint_divmod(lhs, rhs, remainder);
+	return remainder;
+}
+
+//===--------------------------------------------------------------------===//
+// Add/Subtract
+//===--------------------------------------------------------------------===//
 void Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	int overflow = lhs.lower + rhs.lower < lhs.lower;
 	if (rhs.upper >= 0) {
@@ -367,6 +380,9 @@ hugeint_t Hugeint::Subtract(hugeint_t lhs, hugeint_t rhs) {
 	return lhs;
 }
 
+//===--------------------------------------------------------------------===//
+// Hugeint Cast/Conversion
+//===--------------------------------------------------------------------===//
 template<class DST>
 bool hugeint_try_cast_integer(hugeint_t input, DST &result) {
 	switch(input.upper) {
@@ -471,4 +487,125 @@ template<> hugeint_t Hugeint::Convert(double value) {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// hugeint_t operators
+//===--------------------------------------------------------------------===//
+hugeint_t::hugeint_t(int64_t value) {
+	auto result = Hugeint::Convert(value);
+	this->lower = result.lower;
+	this->upper = result.upper;
+}
+
+bool hugeint_t::operator==(const hugeint_t &rhs) const {
+	return Hugeint::Equals(*this, rhs);
+}
+
+bool hugeint_t::operator!=(const hugeint_t &rhs) const {
+	return Hugeint::NotEquals(*this, rhs);
+}
+
+bool hugeint_t::operator<(const hugeint_t &rhs) const {
+	return Hugeint::LessThan(*this, rhs);
+}
+
+bool hugeint_t::operator<=(const hugeint_t &rhs) const {
+	return Hugeint::LessThanEquals(*this, rhs);
+}
+
+bool hugeint_t::operator>(const hugeint_t &rhs) const {
+	return Hugeint::GreaterThan(*this, rhs);
+}
+
+bool hugeint_t::operator>=(const hugeint_t &rhs) const {
+	return Hugeint::GreaterThanEquals(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator+(const hugeint_t & rhs) const {
+	return Hugeint::Add(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator-(const hugeint_t & rhs) const {
+	return Hugeint::Subtract(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator*(const hugeint_t & rhs) const {
+	return Hugeint::Multiply(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator/(const hugeint_t & rhs) const {
+	return Hugeint::Divide(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator%(const hugeint_t & rhs) const {
+	return Hugeint::Modulo(*this, rhs);
+}
+
+hugeint_t hugeint_t::operator-() const {
+	return Hugeint::Negate(*this);	
+}
+
+hugeint_t hugeint_t::operator>>(const hugeint_t & rhs) const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t hugeint_t::operator<<(const hugeint_t & rhs) const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t hugeint_t::operator&(const hugeint_t & rhs) const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t hugeint_t::operator|(const hugeint_t & rhs) const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t hugeint_t::operator^(const hugeint_t & rhs) const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t hugeint_t::operator~() const {
+	throw NotImplementedException("FIXME: bitwise ops for hugeint");
+}
+
+hugeint_t & hugeint_t::operator+=(const hugeint_t & rhs) {
+	Hugeint::AddInPlace(*this, rhs);
+	return *this;
+}
+hugeint_t & hugeint_t::operator-=(const hugeint_t & rhs) {
+	Hugeint::SubtractInPlace(*this, rhs);
+	return *this;
+}
+hugeint_t & hugeint_t::operator*=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator/=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator%=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator>>=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator<<=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator&=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator|=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
+hugeint_t & hugeint_t::operator^=(const hugeint_t & rhs) {
+	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	return *this;
+}
 }

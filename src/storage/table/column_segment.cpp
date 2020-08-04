@@ -94,6 +94,15 @@ void SegmentStatistics::Reset() {
 	case TypeId::INT64:
 		initialize_max_min<int64_t>(minimum.get(), maximum.get());
 		break;
+	case TypeId::INT128: {
+		auto hmin = (hugeint_t *) minimum.get();
+		auto hmax = (hugeint_t *) maximum.get();
+		hmin->lower = std::numeric_limits<uint64_t>::max();
+		hmin->upper = std::numeric_limits<int64_t>::max();
+		hmax->lower = 0;
+		hmax->upper = std::numeric_limits<int64_t>::min();
+		break;
+	}
 	case TypeId::FLOAT:
 		initialize_max_min<float>(minimum.get(), maximum.get());
 		break;

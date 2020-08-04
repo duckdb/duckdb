@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 //! The Hugeint class contains static operations for the INT128 type

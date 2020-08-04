@@ -382,6 +382,11 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 					readSegment = checkZonemap<int64_t>(state, predicate_constant, constant);
 					break;
 				}
+				case TypeId::INT128: {
+					auto constant = predicate_constant.constant.value_.hugeint;
+					readSegment = checkZonemap<hugeint_t>(state, predicate_constant, constant);
+					break;
+				}
 				case TypeId::FLOAT: {
 					float constant = predicate_constant.constant.value_.float_;
 					readSegment = checkZonemap<float>(state, predicate_constant, constant);

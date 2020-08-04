@@ -115,6 +115,8 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 		return GetFirstAggregateTemplated<int32_t>(type);
 	case SQLTypeId::BIGINT:
 		return GetFirstAggregateTemplated<int64_t>(type);
+	case SQLTypeId::HUGEINT:
+		return GetFirstAggregateTemplated<hugeint_t>(type);
 	case SQLTypeId::FLOAT:
 		return GetFirstAggregateTemplated<float>(type);
 	case SQLTypeId::DOUBLE:

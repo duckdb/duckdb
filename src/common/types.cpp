@@ -38,15 +38,15 @@ const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
 const SQLType SQLType::ANY = SQLType(SQLTypeId::ANY);
 
 const vector<SQLType> SQLType::NUMERIC = {
-    SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER,           SQLType::BIGINT,
-    SQLType::FLOAT,   SQLType::DOUBLE,   SQLType(SQLTypeId::DECIMAL)};
+    SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT, SQLType::HUGEINT,
+    SQLType::FLOAT,   SQLType::DOUBLE };
 
-const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT};
+const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT, SQLType::HUGEINT};
 
 const vector<SQLType> SQLType::ALL_TYPES = {
     SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
-    SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,   SQLType(SQLTypeId::DECIMAL),
-    SQLType::VARCHAR, SQLType::BLOB, SQLType::INTERVAL};
+    SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,
+    SQLType::VARCHAR, SQLType::BLOB, SQLType::INTERVAL, SQLType::HUGEINT};
 // TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;

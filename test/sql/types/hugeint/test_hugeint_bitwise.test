@@ -1,0 +1,5 @@
+# name: test/sql/types/hugeint/test_hugeint_bitwise.test
+# description: Test bitwise operations of huge int type
+# group: [hugeint]
+
+

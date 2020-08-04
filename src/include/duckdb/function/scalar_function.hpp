@@ -113,6 +113,9 @@ public:
 		case SQLTypeId::BIGINT:
 			function = &ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
 			break;
+		case SQLTypeId::HUGEINT:
+			function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
+			break;
 		case SQLTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, float, OP>;
 			break;
@@ -143,6 +146,9 @@ public:
 		case SQLTypeId::BIGINT:
 			function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
 			break;
+		case SQLTypeId::HUGEINT:
+			function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
+			break;
 		case SQLTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, TR, OP>;
 			break;
@@ -172,6 +178,9 @@ public:
 			break;
 		case SQLTypeId::BIGINT:
 			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
+			break;
+		case SQLTypeId::HUGEINT:
+			function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");

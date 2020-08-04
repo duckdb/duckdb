@@ -27,6 +27,8 @@ template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int32_t>, int32_t, int32_t, OP>(type, type);
 	case SQLTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int64_t>, int64_t, int64_t, OP>(type, type);
+	case SQLTypeId::HUGEINT:
+		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case SQLTypeId::FLOAT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<float>, float, float, OP>(type, type);
 	case SQLTypeId::DOUBLE:

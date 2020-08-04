@@ -441,6 +441,9 @@ void Vector::Normalify(idx_t count) {
 		case TypeId::INT64:
 			flatten_constant_vector_loop<int64_t>(data, old_data, count);
 			break;
+		case TypeId::INT128:
+			flatten_constant_vector_loop<hugeint_t>(data, old_data, count);
+			break;
 		case TypeId::FLOAT:
 			flatten_constant_vector_loop<float>(data, old_data, count);
 			break;
