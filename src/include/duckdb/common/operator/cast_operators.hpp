@@ -190,6 +190,7 @@ template <> duckdb::string_t StringCast::Operation(int16_t input, Vector &result
 template <> duckdb::string_t StringCast::Operation(int32_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(int64_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(interval_t input, Vector &result);

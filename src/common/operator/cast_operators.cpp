@@ -659,6 +659,10 @@ template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
 	return StringVector::AddString(vector, s);
 }
 
+template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
+	std::string s = Hugeint::ToString(input);
+	return StringVector::AddString(vector, s);
+}
 
 //===--------------------------------------------------------------------===//
 // Cast From Date
