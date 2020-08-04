@@ -163,30 +163,6 @@ public:
 		}
 		return function;
 	}
-
-	template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(SQLType type) {
-		scalar_function_t function;
-		switch (type.id) {
-		case SQLTypeId::TINYINT:
-			function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
-			break;
-		case SQLTypeId::SMALLINT:
-			function = &ScalarFunction::BinaryFunction<int16_t, int16_t, int16_t, OP>;
-			break;
-		case SQLTypeId::INTEGER:
-			function = &ScalarFunction::BinaryFunction<int32_t, int32_t, int32_t, OP>;
-			break;
-		case SQLTypeId::BIGINT:
-			function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
-			break;
-		case SQLTypeId::HUGEINT:
-			function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
-			break;
-		default:
-			throw NotImplementedException("Unimplemented type for GetScalarIntegerBinaryFunction");
-		}
-		return function;
-	}
 };
 
 } // namespace duckdb

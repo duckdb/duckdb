@@ -1,0 +1,5 @@
+# name: test/sql/types/hugeint/test_hugeint_aggregates.test
+# description: Test hugeint aggregates
+# group: [hugeint]
+
+# min, max, first, sum

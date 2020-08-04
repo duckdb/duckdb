@@ -49,3 +49,6 @@ query I
 SELECT COUNT(*) FROM hugeints WHERE h >= 42::HUGEINT
 ----
 2
+
+# joins...
+# FIXME
