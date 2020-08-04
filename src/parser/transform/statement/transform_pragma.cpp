@@ -17,6 +17,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	info.name = stmt->name;
 	// parse the arguments, if any
 	if (stmt->args) {
+		cout << "Transform pragma\n";
 		for (auto cell = stmt->args->head; cell != nullptr; cell = cell->next) {
 			auto node = reinterpret_cast<PGNode *>(cell->data.ptr_value);
 			auto expr = TransformExpression(node);

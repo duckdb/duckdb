@@ -17,7 +17,7 @@ class ShowStatement : public SQLStatement {
 public:
 	ShowStatement() : SQLStatement(StatementType::SHOW_STATEMENT){};
 
-	unique_ptr<QueryNode> node;
+	unique_ptr<SelectStatement> selectStatement;
 };
 
 } // namespace duckdb

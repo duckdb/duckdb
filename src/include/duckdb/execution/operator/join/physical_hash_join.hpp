@@ -42,16 +42,9 @@ public:
 
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-<<<<<<< HEAD
 
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
-=======
-private:
-	void BuildHashTable(ClientContext &context, PhysicalOperatorState *state_);
-	void ProbeHashTable(ClientContext &context, DataChunk &chunk, PhysicalOperatorState *state_);
-
->>>>>>> Add cache after hash table probe that re-probes and caches if there are too few matches to avoid outputting small chunks
 };
 
 } // namespace duckdb

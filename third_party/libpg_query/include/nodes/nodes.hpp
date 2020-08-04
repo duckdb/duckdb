@@ -347,6 +347,7 @@ typedef enum PGNodeTag {
 	T_PGAlterSeqStmt,
 	T_PGVariableSetStmt,
 	T_PGVariableShowStmt,
+	T_PGVariableShowStmtSelect,
 	T_PGDiscardStmt,
 	T_PGCreateTrigStmt,
 	T_PGCreatePLangStmt,

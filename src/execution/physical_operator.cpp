@@ -30,14 +30,9 @@ void PhysicalOperator::GetChunk(ExecutionContext &context, DataChunk &chunk, Phy
 	if (context.client.interrupted) {
 		throw InterruptException();
 	}
-<<<<<<< HEAD
 	// reset the chunk back to its initial state
 	chunk.Reference(state->initial_chunk);
 
-=======
-
-	chunk.Reset();
->>>>>>> Add cache after hash table probe that re-probes and caches if there are too few matches to avoid outputting small chunks
 	if (state->finished) {
 		return;
 	}

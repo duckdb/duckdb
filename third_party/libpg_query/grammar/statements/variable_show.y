@@ -1,6 +1,13 @@
 /* allows SET or RESET without LOCAL */
 VariableShowStmt:
-			show_or_describe var_name
+			show_or_describe SelectStmt {
+				PGVariableShowStmtSelect *n = makeNode(PGVariableShowStmtSelect);
+				n->stmt = $2;
+				n->name="select";
+				$$ = (PGNode *) n;
+			}
+
+		 | show_or_describe var_name
 				{
 					PGVariableShowStmt *n = makeNode(PGVariableShowStmt);
 					n->name = $2;
@@ -24,6 +31,7 @@ VariableShowStmt:
 					n->name = (char*) "all";
 					$$ = (PGNode *) n;
 				}
+
 		;
 
 show_or_describe: SHOW | DESCRIBE
