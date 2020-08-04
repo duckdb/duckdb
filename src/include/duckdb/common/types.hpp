@@ -30,8 +30,7 @@ struct interval_t {
 
 struct hugeint_t {
 	uint64_t lower;
-	uint64_t upper : 63;
-	bool negative : 1;
+	int64_t upper;
 };
 
 struct string_t;

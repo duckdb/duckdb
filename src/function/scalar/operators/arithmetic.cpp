@@ -234,8 +234,7 @@ template <> hugeint_t SubtractOperator::Operation(hugeint_t left, hugeint_t righ
 }
 
 template <> hugeint_t NegateOperator::Operation(hugeint_t input) {
-	input.negative = !input.negative;
-	return input;
+	return Hugeint::Negate(input);
 }
 
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {

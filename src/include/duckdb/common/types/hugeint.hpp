@@ -28,18 +28,63 @@ public:
 	template<class T>
 	static hugeint_t Convert(T value);
 
+	static void NegateInPlace(hugeint_t &input) {
+		input.lower = std::numeric_limits<uint64_t>::max() - input.lower + 1;
+		input.upper = -1 - input.upper;
+	}
+	static hugeint_t Negate(hugeint_t input) {
+		NegateInPlace(input);
+		return input;
+	}
+
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs);
 
+	static void AddInPlace(hugeint_t &lhs, hugeint_t rhs);
+	static void SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
+
+	//! Simplified version of the addition above that accepts only a uint32_t on the RHS
+	static void AddInPlace(hugeint_t &lhs, uint32_t rhs);
+	// Simplified version of the multiply code above that accepts only a positive LHS and a uint32_t on the RHS
+	static void MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs);
+
+	// comparison operators
+	// note that everywhere here we intentionally use bitwise ops
+	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)
 	static bool Equals(hugeint_t lhs, hugeint_t rhs) {
-		return lhs.lower == rhs.lower && lhs.upper == rhs.upper;
+		int lower_equals = lhs.lower == rhs.lower;
+		int upper_equals = lhs.upper == rhs.upper;
+		return lower_equals & upper_equals;
+	}
+	static bool NotEquals(hugeint_t lhs, hugeint_t rhs) {
+		int lower_not_equals = lhs.lower != rhs.lower;
+		int upper_not_equals = lhs.upper != rhs.upper;
+		return lower_not_equals | upper_not_equals;
 	}
 	static bool GreaterThan(hugeint_t lhs, hugeint_t rhs) {
-		return lhs.upper > rhs.upper || (lhs.upper == rhs.upper && lhs.lower > rhs.lower);
+		int upper_bigger = lhs.upper > rhs.upper;
+		int upper_equal = lhs.upper == rhs.upper;
+		int lower_bigger = lhs.lower > rhs.lower;
+		return upper_bigger | (upper_equal & lower_bigger);
 	}
 	static bool GreaterThanEquals(hugeint_t lhs, hugeint_t rhs) {
-		return lhs.upper > rhs.upper || (lhs.upper == rhs.upper && lhs.lower >= rhs.lower);
+		int upper_bigger = lhs.upper > rhs.upper;
+		int upper_equal = lhs.upper == rhs.upper;
+		int lower_bigger_equals = lhs.lower >= rhs.lower;
+		return upper_bigger | (upper_equal & lower_bigger_equals);
+	}
+	static bool LessThan(hugeint_t lhs, hugeint_t rhs) {
+		int upper_smaller = lhs.upper < rhs.upper;
+		int upper_equal = lhs.upper == rhs.upper;
+		int lower_smaller = lhs.lower < rhs.lower;
+		return upper_smaller | (upper_equal & lower_smaller);
+	}
+	static bool LessThanEquals(hugeint_t lhs, hugeint_t rhs) {
+		int upper_smaller = lhs.upper < rhs.upper;
+		int upper_equal = lhs.upper == rhs.upper;
+		int lower_smaller_equals = lhs.lower <= rhs.lower;
+		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
 };
 

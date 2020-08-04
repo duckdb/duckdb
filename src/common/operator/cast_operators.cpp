@@ -1022,7 +1022,6 @@ template <> hugeint_t Cast::Operation(bool input) {
 	hugeint_t result;
 	result.upper = 0;
 	result.lower = input ? 1 : 0;
-	result.negative = false;
 	return result;
 }
 template <> hugeint_t Cast::Operation(int8_t input) {

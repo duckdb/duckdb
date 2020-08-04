@@ -84,17 +84,58 @@ SELECT (-42)::HUGEINT::TINYINT, (-42)::HUGEINT::SMALLINT, (-42)::HUGEINT::INTEGE
 -42	-42	-42	-42	-42	-42
 
 # overflow in hugeint -> integer conversion
+# test the exact boundaries for each type
 statement error
 SELECT 1000::HUGEINT::TINYINT;
 
+# TINYINT
+statement error
+SELECT 128::HUGEINT::TINYINT;
+
+statement error
+SELECT -128::HUGEINT::TINYINT;
+
+statement ok
+SELECT 127::HUGEINT::TINYINT, -127::HUGEINT::TINYINT;
+
+# SMALLINT
 statement error
 SELECT 100000::HUGEINT::SMALLINT;
 
 statement error
+SELECT 32768::HUGEINT::SMALLINT;
+
+statement error
+SELECT -32768::HUGEINT::SMALLINT;
+
+statement ok
+SELECT 32767::HUGEINT::SMALLINT, -32767::HUGEINT::SMALLINT;
+
+# INTEGER
+statement error
 SELECT 100000000000::HUGEINT::INTEGER;
 
 statement error
+SELECT 2147483648::HUGEINT::INTEGER;
+
+statement error
+SELECT -2147483648::HUGEINT::INTEGER;
+
+statement ok
+SELECT 2147483647::HUGEINT::INTEGER, -2147483647::HUGEINT::INTEGER;
+
+# BIGINT
+statement error
 SELECT 10000000000000000000::HUGEINT::BIGINT;
+
+statement error
+SELECT '9223372036854775808'::HUGEINT::BIGINT;
+
+statement error
+SELECT '-9223372036854775808'::HUGEINT::BIGINT;
+
+statement ok
+SELECT 9223372036854775807::HUGEINT::BIGINT, -9223372036854775807::HUGEINT::BIGINT;
 
 # overflow in double -> hugeint conversion
 statement error

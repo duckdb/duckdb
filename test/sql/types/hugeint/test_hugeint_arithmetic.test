@@ -8,6 +8,18 @@ SELECT -(100::HUGEINT), -(-(50::HUGEINT));
 ----
 -100	50
 
+# negate 0
+query I
+SELECT -(0::HUGEINT)
+----
+0
+
+# negation with large numbers
+query II
+SELECT -(100000000000000000000::HUGEINT), -(-(100000000000000000000::HUGEINT));
+----
+-100000000000000000000	100000000000000000000
+
 # addition
 # simple addition: small values
 query I

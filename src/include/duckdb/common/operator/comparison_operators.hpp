@@ -130,7 +130,7 @@ template <> inline bool Equals::Operation(hugeint_t left, hugeint_t right) {
 	return Hugeint::Equals(left, right);
 }
 template <> inline bool NotEquals::Operation(hugeint_t left, hugeint_t right) {
-	return !Equals::Operation(left, right);
+	return Hugeint::NotEquals(left, right);
 }
 template <> inline bool GreaterThan::Operation(hugeint_t left, hugeint_t right) {
 	return Hugeint::GreaterThan(left, right);
@@ -139,9 +139,9 @@ template <> inline bool GreaterThanEquals::Operation(hugeint_t left, hugeint_t r
 	return Hugeint::GreaterThanEquals(left, right);
 }
 template <> inline bool LessThan::Operation(hugeint_t left, hugeint_t right) {
-	return GreaterThan::Operation(right, left);
+	return Hugeint::LessThan(left, right);
 }
 template <> inline bool LessThanEquals::Operation(hugeint_t left, hugeint_t right) {
-	return GreaterThanEquals::Operation(right, left);
+	return Hugeint::LessThanEquals(left, right);
 }
 } // namespace duckdb
