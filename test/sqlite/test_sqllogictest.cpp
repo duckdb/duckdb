@@ -483,6 +483,7 @@ struct Query : public Command {
 	string query_label;
 
 	void Execute() override;
+	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) ;
 };
 
 
@@ -508,6 +509,16 @@ void Statement::Execute() {
 		FAIL();
 	}
 	REQUIRE(!error);
+}
+
+void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) {
+	print_error_header("Wrong column count in query!", file_name, query_line);
+	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result.column_count() << termcolor::reset << " columns" << std::endl;
+	print_line_sep();
+	print_sql(sql_query);
+	print_line_sep();
+	print_result_error(result, values, expected_column_count, row_wise);
+	FAIL();
 }
 
 void Query::Execute() {
@@ -626,6 +637,15 @@ void Query::Execute() {
 		*found.
 		*/
 	if (!compare_hash) {
+		// check if the row/column count matches
+		int original_expected_columns = expected_column_count;
+		bool column_count_mismatch = false;
+		if (expected_column_count != result->column_count()) {
+			// expected column count is different from the count found in the result
+			// we try to keep going with the number of columns in the result
+			expected_column_count = result->column_count();
+			column_count_mismatch = true;
+		}
 		idx_t expected_rows = values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
 		bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
@@ -647,23 +667,19 @@ void Query::Execute() {
 			expected_rows = values.size();
 			row_wise = true;
 		} else if (values.size() % expected_column_count != 0) {
+			if (column_count_mismatch) {
+				ColumnCountMismatch(*result, original_expected_columns, row_wise);
+			}
 			print_error_header("Error in test!", file_name, query_line);
 			print_line_sep();
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int) expected_column_count, (int) values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL();
 		}
-		// check if the row/column count matches
-		if (expected_column_count != result->column_count()) {
-			print_error_header("Wrong column count in query!", file_name, query_line);
-			std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result->column_count() << termcolor::reset << " columns" << std::endl;
-			print_line_sep();
-			print_sql(sql_query);
-			print_line_sep();
-			print_result_error(*result, values, expected_column_count, row_wise);
-			FAIL();
-		}
 		if (expected_rows != result->collection.count) {
+			if (column_count_mismatch) {
+				ColumnCountMismatch(*result, original_expected_columns, row_wise);
+			}
 			print_error_header("Wrong row count in query!", file_name, query_line);
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
 			print_line_sep();
@@ -679,6 +695,9 @@ void Query::Execute() {
 				// split based on tab character
 				auto splits = StringUtil::Split(values[i], "\t");
 				if (splits.size() != expected_column_count) {
+					if (column_count_mismatch) {
+						ColumnCountMismatch(*result, original_expected_columns, row_wise);
+					}
 					print_line_sep();
 					print_error_header("Error in test! Column count mismatch after splitting on tab!", file_name, query_line);
 					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
@@ -714,6 +733,18 @@ void Query::Execute() {
 					current_column = 0;
 				}
 			}
+		}
+		if (column_count_mismatch) {
+			print_line_sep();
+			print_error_header("Wrong column count in query!", file_name, query_line);
+			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset << " columns" << std::endl;
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result." << std::endl;
+			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query " << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset << std::endl;
+			print_line_sep();
+			FAIL();
 		}
 	} else {
 		bool hash_compare_error = false;
