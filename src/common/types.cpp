@@ -334,6 +334,27 @@ bool SQLType::IsNumeric() const {
 	}
 }
 
+int NumericTypeOrder(TypeId type) {
+	switch (type) {
+	case TypeId::INT8:
+		return 1;
+	case TypeId::INT16:
+		return 2;
+	case TypeId::INT32:
+		return 3;
+	case TypeId::INT64:
+		return 4;
+	case TypeId::INT128:
+		return 5;
+	case TypeId::FLOAT:
+		return 6;
+	case TypeId::DOUBLE:
+		return 7;
+	default:
+		throw NotImplementedException("Not a numeric type");
+	}
+}
+
 bool SQLType::IsMoreGenericThan(SQLType &other) const {
 	if (other.id == id) {
 		return false;

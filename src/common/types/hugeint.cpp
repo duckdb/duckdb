@@ -12,6 +12,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // String Conversion
 //===--------------------------------------------------------------------===//
+// Simplified version of the multiply code, returns false on overflow
+static bool hugeint_multiply_in_place_uint32(hugeint_t &lhs, uint32_t rhs);
+//! Simplified version of the addition that accepts only a uint32_t on the RHS, returns false on overflow
+static bool hugeint_add_in_place_uint32(hugeint_t &lhs, uint32_t rhs);
+
 bool Hugeint::FromString(string str, hugeint_t &result) {
 	return Hugeint::FromCString(str.c_str(), str.size(), result);
 }
@@ -41,8 +46,12 @@ bool Hugeint::FromCString(const char *buf, idx_t len, hugeint_t &result) {
 			return false;
 		}
 		uint8_t digit = buf[pos++] - '0';
-		Hugeint::MultiplyPositiveInPlace(result, 10);
-		Hugeint::AddInPlace(result, digit);
+		if (!hugeint_multiply_in_place_uint32(result, 10)) {
+			return false;
+		}
+		if (!hugeint_add_in_place_uint32(result, digit)) {
+			return false;
+		}
 	}
 	if (negative) {
 		NegateInPlace(result);
@@ -211,7 +220,7 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 	return result;
 }
 
-void Hugeint::MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs) {
+bool hugeint_multiply_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
 	// Simplified version of the multiply code above that accepts only a positive LHS and a uint32_t on the RHS
 	assert(lhs.upper >= 0);
 
@@ -240,7 +249,7 @@ void Hugeint::MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs) {
 	// fourth row
 	first32  += (products[3] & 0xffffffff);
 	if (first32 & 0xffffff80000000) {
-		throw std::runtime_error("Overflow in HUGEINT conversion!");
+		return false;
 	}
 
 	// move carry to next digit
@@ -257,6 +266,7 @@ void Hugeint::MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs) {
 	// combine components
 	lhs.lower = (third32 << 32) | fourth32;
 	lhs.upper = (first32 << 32) | second32;
+	return true;
 }
 
 
@@ -343,13 +353,14 @@ void Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	lhs.lower += rhs.lower;
 }
 
-void Hugeint::AddInPlace(hugeint_t &lhs, uint32_t rhs) {
+bool hugeint_add_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
 	int overflow = lhs.lower + rhs < lhs.lower;
 	if (lhs.upper > (std::numeric_limits<int64_t>::max() - overflow)) {
-		throw OutOfRangeException("Overflow in HUGEINT addition");
+		return false;
 	}
 	lhs.upper += overflow;
 	lhs.lower += rhs;
+	return true;
 }
 
 void Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {

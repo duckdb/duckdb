@@ -318,6 +318,9 @@ string SQLTypeToString(SQLType type);
 SQLType MaxSQLType(SQLType left, SQLType right);
 SQLType TransformStringToSQLType(string str);
 
+//! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
+int NumericTypeOrder(TypeId type);
+
 //! Gets the internal type associated with the given SQL type
 TypeId GetInternalType(SQLType type);
 //! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INT32 -> SQLTypeId::INTEGER)

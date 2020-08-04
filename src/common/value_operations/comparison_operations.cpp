@@ -12,7 +12,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 	if (left.type != right.type) {
 		TypeId left_cast = TypeId::INVALID, right_cast = TypeId::INVALID;
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
-			if (left.type < right.type) {
+			if (NumericTypeOrder(left.type) < NumericTypeOrder(right.type)) {
 				left_cast = right.type;
 			} else {
 				right_cast = left.type;

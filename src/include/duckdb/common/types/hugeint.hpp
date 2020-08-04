@@ -48,11 +48,6 @@ public:
 	static void AddInPlace(hugeint_t &lhs, hugeint_t rhs);
 	static void SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
-	//! Simplified version of the addition above that accepts only a uint32_t on the RHS
-	static void AddInPlace(hugeint_t &lhs, uint32_t rhs);
-	// Simplified version of the multiply code above that accepts only a positive LHS and a uint32_t on the RHS
-	static void MultiplyPositiveInPlace(hugeint_t &lhs, uint32_t rhs);
-
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
 	// this is because they seem to be consistently much faster (benchmarked on a Macbook Pro)
