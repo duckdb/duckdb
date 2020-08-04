@@ -286,7 +286,7 @@ SQLType TransformStringToSQLType(string str) {
 		return SQLType(SQLTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
 		return SQLType::FLOAT;
-	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8") {
+	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8" || lower_str == "decimal") {
 		return SQLType::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return SQLType::TINYINT;

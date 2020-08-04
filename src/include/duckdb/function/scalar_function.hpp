@@ -122,9 +122,6 @@ public:
 		case SQLTypeId::DOUBLE:
 			function = &ScalarFunction::UnaryFunction<double, double, OP>;
 			break;
-		case SQLTypeId::DECIMAL:
-			function = &ScalarFunction::UnaryFunction<double, double, OP>;
-			break;
 		default:
 			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
 		}
@@ -153,9 +150,6 @@ public:
 			function = &ScalarFunction::UnaryFunction<float, TR, OP>;
 			break;
 		case SQLTypeId::DOUBLE:
-			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
-			break;
-		case SQLTypeId::DECIMAL:
 			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
 			break;
 		default:

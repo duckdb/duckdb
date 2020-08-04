@@ -23,23 +23,19 @@ template <class OP> static AggregateFunction GetUnaryAggregate(SQLType type) {
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
 	case SQLTypeId::SMALLINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int16_t>, int16_t, int16_t, OP>(type, type);
+	case SQLTypeId::DATE:
 	case SQLTypeId::INTEGER:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int32_t>, int32_t, int32_t, OP>(type, type);
+	case SQLTypeId::TIMESTAMP:
 	case SQLTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int64_t>, int64_t, int64_t, OP>(type, type);
 	case SQLTypeId::HUGEINT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
 	case SQLTypeId::FLOAT:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<float>, float, float, OP>(type, type);
+	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
-	case SQLTypeId::DECIMAL:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
-	case SQLTypeId::DATE:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<date_t>, date_t, date_t, OP>(type, type);
-	case SQLTypeId::TIMESTAMP:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<timestamp_t>, timestamp_t, timestamp_t, OP>(type,
-		                                                                                                     type);
 	case SQLTypeId::INTERVAL:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type,
 		                                                                                                     type);

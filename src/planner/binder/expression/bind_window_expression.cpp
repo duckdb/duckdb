@@ -16,7 +16,7 @@ static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType c
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST:
-		return SQLType(SQLTypeId::DECIMAL);
+		return SQLType(SQLTypeId::DOUBLE);
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
