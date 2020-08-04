@@ -46,6 +46,13 @@ template <> inline interval_t NullValue() {
 	return null_value;
 }
 
+template <> inline hugeint_t NullValue() {
+	hugeint_t null_value;
+	null_value.lower = 0;
+	null_value.upper = std::numeric_limits<int64_t>::min();
+	return null_value;
+}
+
 template <class T> inline bool IsNullValue(T value) {
 	return value == NullValue<T>();
 }

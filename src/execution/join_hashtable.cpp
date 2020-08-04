@@ -167,6 +167,9 @@ void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const Se
 	case TypeId::INT64:
 		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
 		break;
+	case TypeId::INT128:
+		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
+		break;
 	case TypeId::FLOAT:
 		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
 		break;
@@ -548,6 +551,9 @@ static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const
 	case TypeId::INT64:
 		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
+	case TypeId::INT128:
+		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
+		                                                  no_match_sel, no_match_count);
 	case TypeId::FLOAT:
 		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                no_match_sel, no_match_count);
@@ -698,6 +704,9 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 		break;
 	case TypeId::INT64:
 		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
+		break;
+	case TypeId::INT128:
+		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	case TypeId::FLOAT:
 		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);

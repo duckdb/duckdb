@@ -62,6 +62,10 @@ Value Value::MinimumValue(TypeId type) {
 	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::min();
 		break;
+	case TypeId::INT128:
+		result.value_.hugeint.lower = 0;
+		result.value_.hugeint.upper = std::numeric_limits<int64_t>::min();
+		break;
 	case TypeId::FLOAT:
 		result.value_.float_ = std::numeric_limits<float>::min();
 		break;
@@ -96,6 +100,10 @@ Value Value::MaximumValue(TypeId type) {
 		break;
 	case TypeId::INT64:
 		result.value_.bigint = std::numeric_limits<int64_t>::max();
+		break;
+	case TypeId::INT128:
+		result.value_.hugeint.lower = std::numeric_limits<uint64_t>::max();
+		result.value_.hugeint.upper = std::numeric_limits<int64_t>::max();
 		break;
 	case TypeId::FLOAT:
 		result.value_.float_ = std::numeric_limits<float>::max();
@@ -397,6 +405,8 @@ Value Value::Numeric(TypeId type, int64_t value) {
 		return Value::INTEGER((int32_t)value);
 	case TypeId::INT64:
 		return Value::BIGINT(value);
+	case TypeId::INT128:
+		return Value::HUGEINT(value);
 	case TypeId::FLOAT:
 		return Value((float)value);
 	case TypeId::DOUBLE:
@@ -430,7 +440,6 @@ string Value::ToString(SQLType sql_type) const {
 		return Hugeint::ToString(value_.hugeint);
 	case SQLTypeId::FLOAT:
 		return to_string(value_.float_);
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
@@ -619,6 +628,9 @@ void Value::Serialize(Serializer &serializer) {
 		case TypeId::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
+		case TypeId::INT128:
+			serializer.Write<hugeint_t>(value_.hugeint);
+			break;
 		case TypeId::FLOAT:
 			serializer.Write<double>(value_.float_);
 			break;
@@ -627,6 +639,9 @@ void Value::Serialize(Serializer &serializer) {
 			break;
 		case TypeId::POINTER:
 			serializer.Write<uintptr_t>(value_.pointer);
+			break;
+		case TypeId::INTERVAL:
+			serializer.Write<interval_t>(value_.interval);
 			break;
 		case TypeId::VARCHAR:
 			serializer.WriteString(str_value);
@@ -661,6 +676,9 @@ Value Value::Deserialize(Deserializer &source) {
 	case TypeId::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
+	case TypeId::INT128:
+		new_value.value_.hugeint = source.Read<hugeint_t>();
+		break;
 	case TypeId::FLOAT:
 		new_value.value_.float_ = source.Read<float>();
 		break;
@@ -669,6 +687,9 @@ Value Value::Deserialize(Deserializer &source) {
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = source.Read<uint64_t>();
+		break;
+	case TypeId::INTERVAL:
+		new_value.value_.interval = source.Read<interval_t>();
 		break;
 	case TypeId::VARCHAR:
 		new_value.str_value = source.Read<string>();

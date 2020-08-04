@@ -17,6 +17,7 @@ int64_t MinimumValue(TypeId type) {
 	case TypeId::INT32:
 		return MinimumValue<int32_t>();
 	case TypeId::INT64:
+	case TypeId::INT128:
 		return MinimumValue<int64_t>();
 	case TypeId::HASH:
 		return MinimumValue<uint64_t>();
@@ -36,6 +37,7 @@ uint64_t MaximumValue(TypeId type) {
 	case TypeId::INT32:
 		return MaximumValue<int32_t>();
 	case TypeId::INT64:
+	case TypeId::INT128:
 		return MaximumValue<int64_t>();
 	case TypeId::HASH:
 		return MaximumValue<uint64_t>();

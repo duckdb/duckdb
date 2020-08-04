@@ -96,6 +96,9 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 	case TypeId::INT64:
 		return NLTYPE::template Operation<int64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                               current_match_count);
+	case TypeId::INT128:
+		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
+		                                               current_match_count);
 	case TypeId::FLOAT:
 		return NLTYPE::template Operation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                             current_match_count);

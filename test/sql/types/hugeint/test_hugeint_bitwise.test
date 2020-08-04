@@ -2,6 +2,9 @@
 # description: Test bitwise operations of huge int type
 # group: [hugeint]
 
+statement ok
+PRAGMA enable_verification
+
 # left-shift
 query I
 SELECT 1::HUGEINT << 3
