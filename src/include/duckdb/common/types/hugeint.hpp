@@ -24,6 +24,12 @@ public:
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 
+	static hugeint_t FromString(string str) {
+		hugeint_t result;
+		FromString(str, result);
+		return result;
+	}
+
 	template<class T>
 	static bool TryCast(hugeint_t input, T &result);
 

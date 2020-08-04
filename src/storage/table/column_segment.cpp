@@ -46,6 +46,10 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t stats_
 		set_min_max<int64_t>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;
 	}
+	case TypeId::INT128: {
+		set_min_max<hugeint_t>(stats_min, stats_max, minimum.get(), maximum.get());
+		break;
+	}
 	case TypeId::FLOAT: {
 		set_min_max<float>(stats_min, stats_max, minimum.get(), maximum.get());
 		break;

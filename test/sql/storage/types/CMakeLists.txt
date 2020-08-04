@@ -1,6 +1,7 @@
 add_library_unity(test_sql_storage_type
   OBJECT
   test_blob.cpp
+  test_hugeint.cpp
   test_timestamp.cpp)
 
 set(ALL_OBJECT_FILES
