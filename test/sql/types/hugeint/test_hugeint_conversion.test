@@ -143,24 +143,3 @@ SELECT 1e100::FLOAT::HUGEINT;
 
 statement error
 SELECT 1e100::DOUBLE::HUGEINT;
-
-# FIXME
-# # now test storage of the HUGEINT type
-# statement ok
-# CREATE TABLE hugeints(h HUGEINT);
-
-# statement ok
-# INSERT INTO hugeints VALUES (42::HUGEINT), ('1267650600228229401496703205376'::HUGEINT);
-
-# # out of range conversion
-# statement error
-# SELECT h::INTEGER FROM hugeints
-
-# # filter before cast works
-# query I
-# SELECT h::INTEGER FROM hugeints WHERE h < 100
-# ----
-# 42
-
-
-

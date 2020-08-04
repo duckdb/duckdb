@@ -360,10 +360,31 @@ struct BinaryZeroIsNullWrapper {
 		}
 	}
 };
+struct BinaryZeroIsNullHugeintWrapper {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
+		if (right.upper == 0 && right.lower == 0) {
+			nullmask[idx] = true;
+			return left;
+		} else {
+			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+		}
+	}
+};
 
 template <class TA, class TB, class TC, class OP>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<TA, TB, TC, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result,
+	                                                                    input.size());
+}
+
+template <> hugeint_t DivideOperator::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Divide(left, right);
+}
+
+template <class OP>
+static void BinaryScalarFunctionIgnoreZeroHugeint(DataChunk &input, ExpressionState &state, Vector &result) {
+	BinaryExecutor::Execute<hugeint_t, hugeint_t, hugeint_t, OP, true, BinaryZeroIsNullHugeintWrapper>(input.data[0], input.data[1], result,
 	                                                                    input.size());
 }
 
@@ -392,6 +413,7 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
 	}
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT, SQLType::HUGEINT}, SQLType::HUGEINT, BinaryScalarFunctionIgnoreZeroHugeint<DivideOperator>));
 	functions.AddFunction(ScalarFunction({SQLType::INTERVAL, SQLType::BIGINT}, SQLType::INTERVAL, BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
 	set.AddFunction(functions);
@@ -410,11 +432,16 @@ template <> double ModuloOperator::Operation(double left, double right) {
 	return fmod(left, right);
 }
 
+template <> hugeint_t ModuloOperator::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Modulo(left, right);
+}
+
 void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
 	}
+	functions.AddFunction(ScalarFunction({SQLType::HUGEINT, SQLType::HUGEINT}, SQLType::HUGEINT, BinaryScalarFunctionIgnoreZeroHugeint<ModuloOperator>));
 	set.AddFunction(functions);
 	functions.name = "mod";
 	set.AddFunction(functions);

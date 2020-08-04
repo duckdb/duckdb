@@ -76,7 +76,7 @@ static bool positive_hugeint_is_bit_set(hugeint_t lhs, uint8_t bit_position) {
 }
 
 hugeint_t positive_hugeint_leftshift(hugeint_t lhs, uint32_t amount) {
-	// assert(amount > 0 && amount < 64);
+	assert(amount > 0 && amount < 64);
 	hugeint_t result;
 	result.lower = lhs.lower << amount;
 	result.upper = (lhs.upper << amount) + (lhs.lower >> (64 - amount));
@@ -116,6 +116,66 @@ static hugeint_t positive_hugeint_divmod(hugeint_t lhs, uint32_t rhs, uint32_t &
 		}
 	}
 	return div_result;
+}
+
+static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
+	// division by zero not allowed
+	assert(!(rhs.upper == 0 && rhs.lower == 0));
+
+	bool lhs_negative = lhs.upper < 0;
+	bool rhs_negative = rhs.upper < 0;
+	if (lhs_negative) {
+		Hugeint::NegateInPlace(lhs);
+	}
+	if (rhs_negative) {
+		Hugeint::NegateInPlace(rhs);
+	}
+	// DivMod code adapted from:
+	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
+
+	// initialize the result and remainder to 0
+	hugeint_t div_result;
+	div_result.lower = 0;
+	div_result.upper = 0;
+	remainder.lower = 0;
+	remainder.upper = 0;
+
+	uint8_t highest_bit_set = positive_hugeint_highest_bit(lhs);
+	// now iterate over the amount of bits that are set in the LHS
+	for(uint8_t x = highest_bit_set; x > 0; x--) {
+		// left-shift the current result and remainder by 1
+		div_result = positive_hugeint_leftshift(div_result, 1);
+		remainder = positive_hugeint_leftshift(remainder, 1);
+		
+		// we get the value of the bit at position X, where position 0 is the least-significant bit
+		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
+			// increment the remainder
+			Hugeint::AddInPlace(remainder, 1);
+		}
+		if (Hugeint::GreaterThanEquals(remainder, rhs)) {
+			// the remainder has passed the division multiplier: add one to the divide result
+			remainder = Hugeint::Subtract(remainder, rhs);
+			Hugeint::AddInPlace(div_result, 1);
+		}
+	}
+	if (lhs_negative ^ rhs_negative) {
+		Hugeint::NegateInPlace(div_result);
+	}
+	if (lhs_negative) {
+		Hugeint::NegateInPlace(remainder);
+	}
+	return div_result;
+}
+
+hugeint_t Hugeint::Divide(hugeint_t lhs, hugeint_t rhs) {
+	hugeint_t remainder;
+	return hugeint_divmod(lhs, rhs, remainder);
+}
+
+hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
+	hugeint_t remainder;
+	hugeint_divmod(lhs, rhs, remainder);
+	return remainder;
 }
 
 string Hugeint::ToString(hugeint_t input) {

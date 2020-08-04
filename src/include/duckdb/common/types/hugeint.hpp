@@ -40,6 +40,8 @@ public:
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs);
+	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
+	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
 
 	static void AddInPlace(hugeint_t &lhs, hugeint_t rhs);
 	static void SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
