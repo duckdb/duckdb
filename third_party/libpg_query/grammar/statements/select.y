@@ -835,7 +835,7 @@ alias_clause:
 					$$->aliasname = $2;
 					$$->colnames = $4;
 				}
-			| AS ColId
+			| AS ColIdOrString
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -2992,7 +2992,7 @@ target_list:
 			| target_list ',' target_el				{ $$ = lappend($1, $3); }
 		;
 
-target_el:	a_expr AS ColLabel
+target_el:	a_expr AS ColLabelOrString
 				{
 					$$ = makeNode(PGResTarget);
 					$$->name = $3;
@@ -3251,6 +3251,10 @@ ColId:		IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 		;
 
+ColIdOrString:	ColId											{ $$ = $1; }
+				| SCONST										{ $$ = $1; }
+		;
+
 /* Type/function identifier --- names that can be type or function names.
  */
 type_function_name:	IDENT							{ $$ = $1; }
@@ -3286,4 +3290,8 @@ ColLabel:	IDENT									{ $$ = $1; }
 			| col_name_keyword						{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
+		;
+
+ColLabelOrString:	ColLabel						{ $$ = $1; }
+					| SCONST						{ $$ = $1; }
 		;
