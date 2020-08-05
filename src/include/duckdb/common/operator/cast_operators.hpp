@@ -173,6 +173,7 @@ template <> string Cast::Operation(int8_t input);
 template <> string Cast::Operation(int16_t input);
 template <> string Cast::Operation(int32_t input);
 template <> string Cast::Operation(int64_t input);
+template <> string Cast::Operation(hugeint_t input);
 template <> string Cast::Operation(float input);
 template <> string Cast::Operation(double input);
 template <> string Cast::Operation(string_t input);

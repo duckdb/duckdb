@@ -501,6 +501,9 @@ template <> string Cast::Operation(int32_t input) {
 template <> string Cast::Operation(int64_t input) {
 	return CastToStandardString(input);
 }
+template <> string Cast::Operation(hugeint_t input) {
+	return Hugeint::ToString(input);
+}
 template <> string Cast::Operation(float input) {
 	return CastToStandardString(input);
 }

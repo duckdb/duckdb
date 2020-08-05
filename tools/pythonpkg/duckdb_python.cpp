@@ -46,6 +46,14 @@ struct StringConvert {
 	}
 };
 
+struct HugeIntConvert {
+	template <class DUCKDB_T, class NUMPY_T> static double convert_value(hugeint_t val) {
+		double result;
+		Hugeint::TryCast(val, result);
+		return result;
+	}
+};
+
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static py::array fetch_column(string numpy_type, ChunkCollection &collection, idx_t column) {
 	auto out = py::array(py::dtype(numpy_type), collection.count);
@@ -327,6 +335,11 @@ struct DuckDBPyResult {
 			case SQLTypeId::BIGINT:
 				res[col_idx] = val.GetValue<int64_t>();
 				break;
+			case SQLTypeId::HUGEINT: {
+				auto hugeint_str = val.GetValue<string>();
+				res[col_idx] = PyLong_FromString(hugeint_str.c_str(), nullptr, 10);
+				break;
+			}
 			case SQLTypeId::FLOAT:
 				res[col_idx] = val.GetValue<float>();
 				break;
@@ -424,6 +437,9 @@ struct DuckDBPyResult {
 				break;
 			case SQLTypeId::BIGINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int64_t>("int64", mres->collection, col_idx);
+				break;
+			case SQLTypeId::HUGEINT:
+				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::HugeIntConvert>("float64", mres->collection, col_idx);
 				break;
 			case SQLTypeId::FLOAT:
 				col_res = duckdb_py_convert::fetch_column_regular<float>("float32", mres->collection, col_idx);

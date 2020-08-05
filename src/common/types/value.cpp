@@ -352,6 +352,8 @@ template <class T> T Value::GetValueInternal() {
 		return Cast::Operation<int32_t, T>(value_.integer);
 	case TypeId::INT64:
 		return Cast::Operation<int64_t, T>(value_.bigint);
+	case TypeId::INT128:
+		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case TypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
 	case TypeId::DOUBLE:
