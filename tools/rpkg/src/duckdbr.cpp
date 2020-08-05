@@ -261,6 +261,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 			rtype = "difftime";
 			break;
 		case SQLTypeId::BIGINT:
+		case SQLTypeId::HUGEINT:
 		case SQLTypeId::FLOAT:
 		case SQLTypeId::DOUBLE:
 			rtype = "numeric";
@@ -271,7 +272,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 		}
 		default:
 			UNPROTECT(1); // retlist
-			Rf_error("duckdb_prepare_R: Unknown column type %s", SQLTypeToString(stype).c_str());
+			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", SQLTypeToString(stype).c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
@@ -413,6 +414,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				varvalue = PROTECT(NEW_INTEGER(nrows));
 				break;
 			case SQLTypeId::BIGINT:
+			case SQLTypeId::HUGEINT:
 			case SQLTypeId::FLOAT:
 			case SQLTypeId::DOUBLE:
 			case SQLTypeId::DECIMAL:
@@ -426,7 +428,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				break;
 			default:
 				UNPROTECT(1); // retlist
-				Rf_error("duckdb_execute_R: Unknown column type %s/%s",
+				Rf_error("duckdb_execute_R: Unknown column type for execute: %s/%s",
 				         SQLTypeToString(result->sql_types[col_idx]).c_str(),
 				         TypeIdToString(result->types[col_idx]).c_str());
 			}
@@ -531,6 +533,20 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest),
 					                             dest_offset, NA_REAL);
 					break;
+				case SQLTypeId::HUGEINT: {
+					auto &src_vec = chunk->data[col_idx];
+					auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
+					auto &nullmask = FlatVector::Nullmask(src_vec);
+					double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+						if (nullmask[row_idx]) {
+							dest_ptr[row_idx] = NA_REAL;
+						} else {
+							Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
+						}
+					}
+					break;
+				}
 				case SQLTypeId::FLOAT:
 					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 					                           NA_REAL);
@@ -553,7 +569,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					break;
 				}
 				default:
-					Rf_error("duckdb_execute_R: Unknown column type %s",
+					Rf_error("duckdb_execute_R: Unknown column type for convert: %s",
 					         TypeIdToString(chunk->GetTypes()[col_idx]).c_str());
 					break;
 				}
