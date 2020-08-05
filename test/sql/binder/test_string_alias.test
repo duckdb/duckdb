@@ -28,5 +28,5 @@ statement ok
 SELECT "hello world".i FROM integers AS 'hello world'
 
 # but not without the AS clause
-statement ok
+statement error
 SELECT "hello world".i FROM integers 'hello world'
