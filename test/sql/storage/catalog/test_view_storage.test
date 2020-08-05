@@ -16,18 +16,22 @@ statement ok
 CREATE VIEW test.v AS SELECT * FROM test.t;
 
 # read the info from the view
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
 
 # drop the table the view is based on
 statement ok
 DROP TABLE test.t
 
 # we can still query the types and column names
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
 
 # but querying the view fails
 statement error
@@ -41,9 +45,11 @@ restart
 
 # the view still exists, but the table does not
 # we can check the types, but not query it
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
 
 statement error
 SELECT * FROM test.v
@@ -58,9 +64,11 @@ SELECT * FROM test.t
 statement ok
 SELECT * FROM test.v
 
-query II nosort view_info
+query IIIIII
 PRAGMA table_info('test.v')
 ----
+0	a	INTEGER	0	NULL	0
+1	b	INTEGER	0	NULL	0
 
 # drop the table again
 statement ok
