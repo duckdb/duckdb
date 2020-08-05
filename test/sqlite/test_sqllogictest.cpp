@@ -62,15 +62,24 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
+enum class ExtensionLoadResult : uint8_t {
+	LOADED_EXTENSION = 0,
+	EXTENSION_UNKNOWN = 1,
+	NOT_LOADED = 2
+};
+
 struct SQLLogicTestRunner {
 public:
 	void ExecuteFile(string script);
+	ExtensionLoadResult LoadExtension(string extension);
+	void LoadDatabase(string dbpath);
 public:
 
 	string dbpath;
 	unique_ptr<DuckDB> db;
 	unique_ptr<Connection> con;
 	unique_ptr<DBConfig> config;
+	unordered_set<string> extensions;
 	unordered_map<string, unique_ptr<Connection>> named_connection_map;
 };
 
@@ -556,7 +565,7 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 
 void Query::Execute() {
 	auto connection = CommandConnection();
-	
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	if (!result->success) {
@@ -814,12 +823,46 @@ void Query::Execute() {
 }
 
 void RestartCommand::Execute() {
-	runner.db.reset();
-	runner.con.reset();
-	runner.named_connection_map.clear();
+	runner.LoadDatabase(runner.dbpath);
+}
+
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(string extension) {
+	if (extension == "parquet") {
+#ifdef BUILD_PARQUET_EXTENSION
+		db->LoadExtension<ParquetExtension>();
+#else
+		// parquet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "icu") {
+#ifdef BUILD_ICU_EXTENSION
+		db->LoadExtension<ICUExtension>();
+#else
+		// icu extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else {
+		// unknown extension
+		return ExtensionLoadResult::EXTENSION_UNKNOWN;
+	}
+	extensions.insert(extension);
+	return ExtensionLoadResult::LOADED_EXTENSION;
+}
+
+void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+	// restart the database with the specified db path
+	db.reset();
+	con.reset();
+	named_connection_map.clear();
 	// now re-open the current database
-	runner.db = make_unique<DuckDB>(runner.dbpath, runner.config.get());
-	runner.con = make_unique<Connection>(*runner.db);
+
+	db = make_unique<DuckDB>(dbpath, config.get());
+	con = make_unique<Connection>(*db);
+
+	// load any previously loaded extensions again
+	for(auto &extension : extensions) {
+		LoadExtension(extension);
+	}
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -1135,21 +1178,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (strcmp(sScript.azToken[0], "require") == 0) {
 			// require command
 			string param = StringUtil::Lower(sScript.azToken[1]);
-			if (param == "parquet") {
-#ifdef BUILD_PARQUET_EXTENSION
-				db->LoadExtension<ParquetExtension>();
-#else
-				// parquet extension required but not build: skip this test
-				return;
-#endif
-			} else if (param == "icu") {
-#ifdef BUILD_ICU_EXTENSION
-				db->LoadExtension<ICUExtension>();
-#else
-				// icu extension required but not build: skip this test
-				return;
-#endif
-			} else if (param == "vector_size") {
+			if (param == "vector_size") {
 				// require a specific vector size
 				int required_vector_size = std::stoi(sScript.azToken[2]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
@@ -1157,8 +1186,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			} else {
-				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
-				FAIL();
+				auto result = LoadExtension(param);
+				if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+					FAIL();
+				} else if (result == ExtensionLoadResult::NOT_LOADED) {
+					// extension known but not build: skip this test
+					return;
+				}
 			}
 		} else if (strcmp(sScript.azToken[0], "load") == 0) {
 			if (in_loop) {
@@ -1174,15 +1209,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				// delete the database file, if it exists
 				DeleteDatabase(dbpath);
 			}
-			// first clear all connections
-			db.reset();
-			con.reset();
-			named_connection_map.clear();
-
+			// set up the config file
 			config = GetTestConfig();
 			// now create the database file
-			db = make_unique<DuckDB>(dbpath, config.get());
-			con = make_unique<Connection>(*db);
+			LoadDatabase(dbpath);
 		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
 			// restart the current database
 			// first clear all connections
