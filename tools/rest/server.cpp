@@ -78,7 +78,9 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		switch (res->sql_types[col_idx].id) {
 		case SQLTypeId::DATE:
 		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP: {
+		case SQLTypeId::TIMESTAMP:
+		case SQLTypeId::INTERVAL:
+		case SQLTypeId::HUGEINT: {
 			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR, chunk->size());
 			v = &v2;
 			break;
