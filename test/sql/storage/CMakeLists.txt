@@ -1,5 +1,4 @@
 add_subdirectory(catalog)
-add_subdirectory(types)
 if(NOT WIN32 AND NOT SUN)
   add_library_unity(test_sql_storage
                     OBJECT

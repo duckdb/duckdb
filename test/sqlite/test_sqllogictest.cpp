@@ -62,6 +62,18 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
+struct SQLLogicTestRunner {
+public:
+	void ExecuteFile(string script);
+public:
+
+	string dbpath;
+	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
+	unique_ptr<DBConfig> config;
+	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+};
+
 /*
 ** A structure to keep track of the state of scanning the input script.
 */
@@ -440,12 +452,22 @@ static void query_break(int line) {
 }
 
 struct Command {
+	Command(SQLLogicTestRunner &runner) : runner(runner) {}
 	virtual ~Command(){}
 
+	SQLLogicTestRunner &runner;
+	string connection_name;
 	int query_line;
 	string sql_query;
-	Connection *connection;
 	string file_name;
+
+	Connection *CommandConnection() {
+		if (connection_name.empty()) {
+			return runner.con.get();
+		} else {
+			return GetConnection(*runner.db, runner.named_connection_map, connection_name);
+		}
+	}
 
 	virtual void Execute() = 0;
 	void Execute(string loop_iterator_name, int idx) {
@@ -461,6 +483,8 @@ struct Command {
 };
 
 struct Statement : public Command {
+	Statement(SQLLogicTestRunner &runner) : Command(runner) {}
+
 	bool expect_ok;
 
 	void Execute() override;
@@ -473,6 +497,8 @@ enum class SortStyle : uint8_t {
 };
 
 struct Query : public Command {
+	Query(SQLLogicTestRunner &runner) : Command(runner) {}
+
 	idx_t expected_column_count;
 	SortStyle sort_style;
 	vector<string> values;
@@ -486,8 +512,15 @@ struct Query : public Command {
 	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) ;
 };
 
+struct RestartCommand : public Command {
+	RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {}
+
+	void Execute() override;
+};
 
 void Statement::Execute() {
+	auto connection = CommandConnection();
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
@@ -522,6 +555,8 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 }
 
 void Query::Execute() {
+	auto connection = CommandConnection();
+	
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	if (!result->success) {
@@ -778,7 +813,16 @@ void Query::Execute() {
 	}
 }
 
-static void execute_file(string script) {
+void RestartCommand::Execute() {
+	runner.db.reset();
+	runner.con.reset();
+	runner.named_connection_map.clear();
+	// now re-open the current database
+	runner.db = make_unique<DuckDB>(runner.dbpath, runner.config.get());
+	runner.con = make_unique<Connection>(*runner.db);
+}
+
+void SQLLogicTestRunner::ExecuteFile(string script) {
 	int haltOnError = 0;                        /* Stop on first error if true */
 	const char *zDbEngine = "DuckDB";
 	const char *zScriptFile = 0;                /* Input script filename */
@@ -794,21 +838,23 @@ static void execute_file(string script) {
 	int bHt = 0;                                /* True if -ht command-line option */
 	int output_hash_mode = 0;
 	int output_result_mode = 0;
-	bool skip_index = false;
 	bool in_loop = false;
 	string loop_iterator_name;
 	int loop_start;
 	int loop_end;
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
+	bool skip_index = false;
+
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
 		skip_index = true;
 	}
 
-	DuckDB db;
-	Connection con(db);
-	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+	// initialize an in-memory database
+	db = make_unique<DuckDB>();
+	con = make_unique<Connection>(*db);
+
 
 	/*
 	** Read the entire script file contents into memory
@@ -883,7 +929,7 @@ static void execute_file(string script) {
 
 		/* Figure out the record type and do appropriate processing */
 		if (strcmp(sScript.azToken[0], "statement") == 0) {
-			auto command = make_unique<Statement>();
+			auto command = make_unique<Statement>(*this);
 			
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
@@ -917,17 +963,8 @@ static void execute_file(string script) {
 				        sScript.startLine);
 				FAIL();
 			}
-			// parse the connection to use
-			Connection *connection = &con;
-			if (strlen(sScript.azToken[2]) > 0) {
-				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
-			}
 
-			/* Run the statement.  Remember the results
-			** If we're expecting an error, pass true to suppress
-			** printing of any errors.
-			*/
-			command->connection = connection;
+			command->connection_name = sScript.azToken[2];
 			if (skip_execution) {
 				continue;
 			}
@@ -937,7 +974,7 @@ static void execute_file(string script) {
 				command->Execute();
 			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
-			auto command = make_unique<Query>();
+			auto command = make_unique<Query>(*this);
 
 			int k = 0;
 			int c;
@@ -988,7 +1025,6 @@ static void execute_file(string script) {
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 
 			// figure out the sort style/connection style
-			command->connection = &con;
 			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
 				/* Do no sorting */
 				command->sort_style = SortStyle::NO_SORT;
@@ -999,7 +1035,7 @@ static void execute_file(string script) {
 				/* Sort all values independently */
 				command->sort_style = SortStyle::VALUE_SORT;
 			} else {
-				command->connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+				command->connection_name = sScript.azToken[2];
 			}
 
 			/* In verify mode, first skip over the ---- line if we are
@@ -1101,14 +1137,14 @@ static void execute_file(string script) {
 			string param = StringUtil::Lower(sScript.azToken[1]);
 			if (param == "parquet") {
 #ifdef BUILD_PARQUET_EXTENSION
-				db.LoadExtension<ParquetExtension>();
+				db->LoadExtension<ParquetExtension>();
 #else
 				// parquet extension required but not build: skip this test
 				return;
 #endif
 			} else if (param == "icu") {
 #ifdef BUILD_ICU_EXTENSION
-				db.LoadExtension<ICUExtension>();
+				db->LoadExtension<ICUExtension>();
 #else
 				// icu extension required but not build: skip this test
 				return;
@@ -1124,7 +1160,38 @@ static void execute_file(string script) {
 				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
 				FAIL();
 			}
+		} else if (strcmp(sScript.azToken[0], "load") == 0) {
+			if (in_loop) {
+				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			// first clear the current database
+			if (!*sScript.azToken[1]) {
+				// load an in-memory database
+				dbpath = "";
+			} else {
+				dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
+				// delete the database file, if it exists
+				DeleteDatabase(dbpath);
+			}
+			// first clear all connections
+			db.reset();
+			con.reset();
+			named_connection_map.clear();
 
+			config = GetTestConfig();
+			// now create the database file
+			db = make_unique<DuckDB>(dbpath, config.get());
+			con = make_unique<Connection>(*db);
+		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
+			// restart the current database
+			// first clear all connections
+			auto command = make_unique<RestartCommand>(*this);
+			if (in_loop) {
+				loop_statements.push_back(move(command));
+			} else {
+				command->Execute();
+			}
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
@@ -1157,7 +1224,8 @@ static void testRunner() {
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
 	// fprintf(stderr, "%s\n", name.c_str());
-	execute_file(name);
+	SQLLogicTestRunner runner;
+	runner.ExecuteFile(name);
 }
 
 static string ParseGroupFromPath(string file) {

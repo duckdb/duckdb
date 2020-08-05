@@ -1,0 +1,42 @@
+# name: test/sql/storage/types/test_interval_storage.test
+# description: Test INTERVAL with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/interval_storage_test.db
+
+# create a table with hugeints
+statement ok
+CREATE TABLE interval (t INTERVAL);
+
+statement ok
+INSERT INTO interval VALUES (INTERVAL '1' DAY), (NULL), (INTERVAL '3 months 2 days 5 seconds')
+
+# reload the database from disk a few times, and check that the data is still there
+loop i 0 2
+
+restart
+
+query I
+SELECT * FROM interval
+----
+1 day
+NULL
+3 months 2 days 00:00:05
+
+query I
+SELECT t FROM interval WHERE t = INTERVAL '1' DAY;
+----
+1 day
+
+query I
+SELECT t FROM interval WHERE t >= INTERVAL '1' DAY ORDER BY 1;
+----
+1 day
+3 months 2 days 00:00:05
+
+query I
+SELECT t FROM interval WHERE t > INTERVAL '10' YEAR ORDER BY 1;
+----
+
+endloop
