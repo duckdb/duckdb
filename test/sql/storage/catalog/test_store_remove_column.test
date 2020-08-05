@@ -1,0 +1,33 @@
+# name: test/sql/storage/catalog/test_store_remove_column.test
+# description: Remove column from persistent table
+# group: [catalog]
+
+load __TEST_DIR__/test_store_add_column.db
+
+# create a table and add a column to it
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+restart
+
+statement ok
+ALTER TABLE test DROP COLUMN b
+
+query I
+SELECT * FROM test ORDER BY 1
+----
+11
+12
+13
+
+restart
+
+query I
+SELECT * FROM test ORDER BY 1
+----
+11
+12
+13

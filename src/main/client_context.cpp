@@ -480,6 +480,9 @@ void ClientContext::Invalidate() {
 		appender->Invalidate("Database that this appender belongs to has been closed!", false);
 	}
 	appenders.clear();
+	// clear temporary objects and prepared statemnts
+	temporary_objects.reset();
+	prepared_statements.reset();
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {

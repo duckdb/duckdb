@@ -1,0 +1,56 @@
+# name: test/sql/storage/catalog/test_store_defaults.test
+# description: Test storage of default values
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_defaults.db
+
+# create a table with a default value
+statement ok
+CREATE TABLE test (a INTEGER DEFAULT 1, b INTEGER);
+
+statement ok
+INSERT INTO test (b) VALUES (11)
+
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+
+# reload the database
+restart
+
+# verify that the table contains the correct contents
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+
+# append more entries
+statement ok
+INSERT INTO test (b) VALUES (12), (13)
+
+# check that the default value was used in the INSERT
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+1	12
+1	13
+
+# reload and append one more time
+restart
+
+# append more entries
+statement ok
+INSERT INTO test (b) VALUES (14), (15)
+
+# check that the default value was used in the INSERT
+query II
+SELECT * FROM test ORDER BY b
+----
+1	11
+1	12
+1	13
+1	14
+1	15

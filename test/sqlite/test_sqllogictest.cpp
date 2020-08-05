@@ -1200,20 +1200,23 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			// first clear the current database
-			if (!*sScript.azToken[1]) {
-				// load an in-memory database
-				dbpath = "";
-			} else {
-				dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
-				// delete the database file, if it exists
-				DeleteDatabase(dbpath);
+			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
+			if (dbpath.empty() || dbpath == ":memory:") {
+				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n", zScriptFile, sScript.startLine);
+				FAIL();
 			}
+			// delete the target database file, if it exists
+			DeleteDatabase(dbpath);
+			
 			// set up the config file
 			config = GetTestConfig();
 			// now create the database file
 			LoadDatabase(dbpath);
 		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
+			if (dbpath.empty()) {
+				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
 			// restart the current database
 			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);

@@ -1,0 +1,50 @@
+# name: test/sql/storage/catalog/test_store_remove_column.test
+# description: Remove column from persistent table
+# group: [catalog]
+
+# FIXME: this test crashes
+# this is likely because the ALTER TYPE causes the persistent and transient segments to be unaligned between columns
+# the data-table should be persistent/transient agnostic, persistent/transient manager need to be merged...
+mode skip
+
+load __TEST_DIR__/test_store_alter_type.db
+
+# create a table and add a column to it
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+restart
+
+statement ok
+ALTER TABLE test ALTER b TYPE VARCHAR
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+11	22
+12	21
+13	22
+
+statement ok
+INSERT INTO test VALUES (10, 'hello')
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
+
+restart
+
+query IT
+SELECT * FROM test ORDER BY 1
+----
+10	hello
+11	22
+12	21
+13	22
