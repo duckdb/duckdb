@@ -1,0 +1,34 @@
+# name: test/sql/storage/test_store_updates.test
+# description: Test updates with storage
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_store_updates.db
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+statement ok
+UPDATE test SET b=b+1 WHERE a=11
+
+statement ok
+UPDATE test SET b=b+1 WHERE a=11
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	24
+12	21
+13	22
+
+restart
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	24
+12	21
+13	22
