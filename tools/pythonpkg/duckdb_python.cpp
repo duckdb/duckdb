@@ -337,7 +337,7 @@ struct DuckDBPyResult {
 				break;
 			case SQLTypeId::HUGEINT: {
 				auto hugeint_str = val.GetValue<string>();
-				res[col_idx] = PyLong_FromString(hugeint_str.c_str(), nullptr, 10);
+				res[col_idx] = PyLong_FromString((char*) hugeint_str.c_str(), nullptr, 10);
 				break;
 			}
 			case SQLTypeId::FLOAT:
