@@ -579,7 +579,7 @@ struct StringToIntegerCast {
 	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
 		UNSIGNED unsigned_value = (value ^ sign) - sign;
-		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
+		int length = UnsignedLength<UNSIGNED>(unsigned_value) + 1 - sign;
 		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetData();
 		auto endptr = dataptr + length;
@@ -692,9 +692,125 @@ template <> string_t StringCast::Operation(interval_t input, Vector &vector) {
 	return StringVector::AddString(vector, s);
 }
 
+struct HugeintToStringCast {
+	static int UnsignedLength(hugeint_t value) {
+		assert(value.upper >= 0);
+		if (value.upper == 0) {
+			return StringToIntegerCast::UnsignedLength<uint64_t>(value.lower);
+		}
+		// search the length using the PowersOfTen array
+		// the length has to be between [17] and [38], because the hugeint is bigger than 2^63
+		// we use the same approach as above, but split a bit more because comparisons for hugeints are more expensive
+		if (value >= Hugeint::PowersOfTen[27]) {
+			// [27..38]
+			if (value >= Hugeint::PowersOfTen[32]) {
+				if (value >= Hugeint::PowersOfTen[36]) {
+					int length = 37;
+					length += value >= Hugeint::PowersOfTen[37];
+					length += value >= Hugeint::PowersOfTen[38];
+					return length;
+				} else {
+					int length = 33;
+					length += value >= Hugeint::PowersOfTen[33];
+					length += value >= Hugeint::PowersOfTen[34];
+					length += value >= Hugeint::PowersOfTen[35];
+					return length;
+				}
+			} else {
+				if (value >= Hugeint::PowersOfTen[30]) {
+					int length = 31;
+					length += value >= Hugeint::PowersOfTen[31];
+					length += value >= Hugeint::PowersOfTen[32];
+					return length;
+				} else {
+					int length = 28;
+					length += value >= Hugeint::PowersOfTen[28];
+					length += value >= Hugeint::PowersOfTen[29];
+					return length;
+				}
+			}
+		} else {
+			// [17..27]
+			if (value >= Hugeint::PowersOfTen[22]) {
+				// [22..27]
+				if (value >= Hugeint::PowersOfTen[25]) {
+					int length = 26;
+					length += value >= Hugeint::PowersOfTen[26];
+					return length;
+				} else {
+					int length = 23;
+					length += value >= Hugeint::PowersOfTen[23];
+					length += value >= Hugeint::PowersOfTen[24];
+					return length;
+				}
+			} else {
+				// [17..22]
+				if (value >= Hugeint::PowersOfTen[20]) {
+					int length = 21;
+					length += value >= Hugeint::PowersOfTen[21];
+					return length;
+				} else {
+					int length = 18;
+					length += value >= Hugeint::PowersOfTen[18];
+					length += value >= Hugeint::PowersOfTen[19];
+					return length;
+				}
+			}
+		}
+	}
+
+	// Formats value in reverse and returns a pointer to the beginning.
+	static char *FormatUnsigned(hugeint_t value, char *ptr) {
+		while (value.upper > 0) {
+			// while integer division is slow, hugeint division is MEGA slow
+			// we want to avoid doing as many divisions as possible
+			// for that reason we start off doing a division by a large power of ten that uint64_t can hold
+			// (100000000000000000) - this is the third largest
+			// the reason we don't use the largest is because that can result in an overflow inside the division function
+			uint64_t remainder;
+			value = Hugeint::DivModPositive(value, 100000000000000000ULL, remainder);
+
+			auto startptr = ptr;
+			// now we format the remainder: note that we need to pad with zero's in case
+			// the remainder is small (i.e. less than 10000000000000000)
+			ptr = StringToIntegerCast::FormatUnsigned<uint64_t>(remainder, ptr);
+
+			int format_length = startptr - ptr;
+			// pad with zero
+			for(int i = format_length; i < 17; i++) {
+				*--ptr = '0';
+			}
+		}
+		// once the value falls in the range of a uint64_t, fallback to formatting as uint64_t to avoid hugeint division
+		return StringToIntegerCast::FormatUnsigned<uint64_t>(value.lower, ptr);
+	}
+
+	static string_t FormatSigned(hugeint_t value, Vector &vector) {
+		int negative = value.upper < 0;
+		if (negative) {
+			Hugeint::NegateInPlace(value);
+		}
+		int length = UnsignedLength(value) + negative;
+		string_t result = StringVector::EmptyString(vector, length);
+		auto dataptr = result.GetData();
+		auto endptr = dataptr + length;
+		if (value.upper == 0) {
+			// small value: format as uint64_t
+			endptr = StringToIntegerCast::FormatUnsigned<uint64_t>(value.lower, endptr);
+		} else {
+			endptr = FormatUnsigned(value, endptr);
+		}
+		if (negative) {
+			*--endptr = '-';
+		}
+		assert(endptr == dataptr);
+		result.Finalize();
+		return result;
+	}
+};
+
 template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
-	std::string s = Hugeint::ToString(input);
-	return StringVector::AddString(vector, s);
+	return HugeintToStringCast::FormatSigned(move(input), vector);
 }
 
 //===--------------------------------------------------------------------===//

@@ -90,7 +90,7 @@ hugeint_t positive_hugeint_leftshift(hugeint_t lhs, uint32_t amount) {
 	return result;
 }
 
-static hugeint_t positive_hugeint_divmod(hugeint_t lhs, uint32_t rhs, uint32_t &remainder) {
+hugeint_t Hugeint::DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder) {
 	assert(lhs.upper >= 0);
 	// DivMod code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
@@ -126,7 +126,7 @@ static hugeint_t positive_hugeint_divmod(hugeint_t lhs, uint32_t rhs, uint32_t &
 }
 
 string Hugeint::ToString(hugeint_t input) {
-	uint32_t remainder;
+	uint64_t remainder;
 	string result;
 	bool negative = input.upper < 0;
 	if (negative) {
@@ -136,7 +136,7 @@ string Hugeint::ToString(hugeint_t input) {
 		if (!input.lower && !input.upper) {
 			break;
 		}
-		input = positive_hugeint_divmod(input, 10, remainder);
+		input = Hugeint::DivModPositive(input, 10, remainder);
 		result = string(1, '0' + remainder) + result;
 	}
 	if (result.empty()) {
@@ -226,7 +226,7 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
-static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
+hugeint_t Hugeint::DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder) {
 	// division by zero not allowed
 	assert(!(rhs.upper == 0 && rhs.lower == 0));
 
@@ -277,12 +277,12 @@ static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remaind
 
 hugeint_t Hugeint::Divide(hugeint_t lhs, hugeint_t rhs) {
 	hugeint_t remainder;
-	return hugeint_divmod(lhs, rhs, remainder);
+	return Hugeint::DivMod(lhs, rhs, remainder);
 }
 
 hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
 	hugeint_t remainder;
-	hugeint_divmod(lhs, rhs, remainder);
+	Hugeint::DivMod(lhs, rhs, remainder);
 	return remainder;
 }
 
@@ -631,6 +631,10 @@ hugeint_t & hugeint_t::operator^=(const hugeint_t & rhs) {
 	lower ^= rhs.lower;
 	upper ^= rhs.upper;
 	return *this;
+}
+
+string hugeint_t::ToString() {
+	return Hugeint::ToString(*this);
 }
 
 }

@@ -59,6 +59,11 @@ public:
 	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
 
+	// DivMod -> returns the result of the division (lhs / rhs), and fills up the remainder
+	static hugeint_t DivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remainder);
+	// DivMod but lhs MUST be positive, and rhs is a uint64_t
+	static hugeint_t DivModPositive(hugeint_t lhs, uint64_t rhs, uint64_t &remainder);
+
 	static bool AddInPlace(hugeint_t &lhs, hugeint_t rhs);
 	static bool SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
