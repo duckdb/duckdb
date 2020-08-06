@@ -18,8 +18,8 @@ SELECT LENGTH(b) FROM test ORDER BY a;
 10000
 20000
 
-query RR
+query II
 SELECT SUM(a), SUM(c) FROM test;
 ----
-30.000000	50.000000
+30	50
 

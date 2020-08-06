@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
 

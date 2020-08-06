@@ -9,8 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -37,7 +36,7 @@ public:
 	static hugeint_t Convert(T value);
 
 	static void NegateInPlace(hugeint_t &input) {
-		input.lower = std::numeric_limits<uint64_t>::max() - input.lower + 1;
+		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
 		input.upper = -1 - input.upper;
 	}
 	static hugeint_t Negate(hugeint_t input) {

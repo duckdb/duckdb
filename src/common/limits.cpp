@@ -1,28 +1,123 @@
 #include "duckdb/common/limits.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include <limits>
 
 using namespace std;
 
 namespace duckdb {
+
+int8_t NumericLimits<int8_t>::Minimum() {
+	return numeric_limits<int8_t>::min() + 1;
+}
+
+int8_t NumericLimits<int8_t>::Maximum() {
+	return numeric_limits<int8_t>::max();
+}
+
+int16_t NumericLimits<int16_t>::Minimum() {
+	return numeric_limits<int16_t>::min() + 1;
+}
+
+int16_t NumericLimits<int16_t>::Maximum() {
+	return numeric_limits<int16_t>::max();
+}
+
+int32_t NumericLimits<int32_t>::Minimum() {
+	return numeric_limits<int32_t>::min() + 1;
+}
+
+int32_t NumericLimits<int32_t>::Maximum() {
+	return numeric_limits<int32_t>::max();
+}
+
+int64_t NumericLimits<int64_t>::Minimum() {
+	return numeric_limits<int64_t>::min() + 1;
+}
+
+int64_t NumericLimits<int64_t>::Maximum() {
+	return numeric_limits<int64_t>::max();
+}
+
+float NumericLimits<float>::Minimum() {
+	return numeric_limits<float>::min();
+}
+
+float NumericLimits<float>::Maximum() {
+	return numeric_limits<float>::max();
+}
+
+double NumericLimits<double>::Minimum() {
+	return numeric_limits<double>::min();
+}
+
+double NumericLimits<double>::Maximum() {
+	return numeric_limits<double>::max();
+}
+
+uint16_t NumericLimits<uint16_t>::Minimum() {
+	return numeric_limits<uint16_t>::min();
+}
+
+uint16_t NumericLimits<uint16_t>::Maximum() {
+	return numeric_limits<uint16_t>::max();
+}
+
+uint32_t NumericLimits<uint32_t>::Minimum() {
+	return numeric_limits<uint32_t>::min();
+}
+
+uint32_t NumericLimits<uint32_t>::Maximum() {
+	return numeric_limits<uint32_t>::max();
+}
+
+uint64_t NumericLimits<uint64_t>::Minimum() {
+	return numeric_limits<uint64_t>::min();
+}
+
+uint64_t NumericLimits<uint64_t>::Maximum() {
+	return numeric_limits<uint64_t>::max();
+}
+
+uintptr_t NumericLimits<uintptr_t>::Minimum() {
+	return numeric_limits<uintptr_t>::min();
+}
+
+uintptr_t NumericLimits<uintptr_t>::Maximum() {
+	return numeric_limits<uintptr_t>::max();
+}
+
+hugeint_t NumericLimits<hugeint_t>::Minimum() {
+	hugeint_t result;
+	result.lower = 1;
+	result.upper = numeric_limits<int64_t>::min() + 1;
+	return result;
+}
+
+hugeint_t NumericLimits<hugeint_t>::Maximum() {
+	hugeint_t result;
+	result.lower = numeric_limits<uint64_t>::max();
+	result.upper = numeric_limits<int64_t>::max();
+	return result;
+}
 
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
 int64_t MinimumValue(TypeId type) {
 	switch (type) {
 	case TypeId::INT8:
-		return MinimumValue<int8_t>();
+		return NumericLimits<int8_t>::Minimum();
 	case TypeId::INT16:
-		return MinimumValue<int16_t>();
+		return NumericLimits<int16_t>::Minimum();
 	case TypeId::INT32:
-		return MinimumValue<int32_t>();
+		return NumericLimits<int32_t>::Minimum();
 	case TypeId::INT64:
 	case TypeId::INT128:
-		return MinimumValue<int64_t>();
+		return NumericLimits<int64_t>::Minimum();
 	case TypeId::HASH:
-		return MinimumValue<uint64_t>();
+		return NumericLimits<uint64_t>::Minimum();
 	case TypeId::POINTER:
-		return MinimumValue<uintptr_t>();
+		return NumericLimits<uintptr_t>::Minimum();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
@@ -31,18 +126,18 @@ int64_t MinimumValue(TypeId type) {
 uint64_t MaximumValue(TypeId type) {
 	switch (type) {
 	case TypeId::INT8:
-		return MaximumValue<int8_t>();
+		return NumericLimits<int8_t>::Maximum();
 	case TypeId::INT16:
-		return MaximumValue<int16_t>();
+		return NumericLimits<int16_t>::Maximum();
 	case TypeId::INT32:
-		return MaximumValue<int32_t>();
+		return NumericLimits<int32_t>::Maximum();
 	case TypeId::INT64:
 	case TypeId::INT128:
-		return MaximumValue<int64_t>();
+		return NumericLimits<int64_t>::Maximum();
 	case TypeId::HASH:
-		return MaximumValue<uint64_t>();
+		return NumericLimits<uint64_t>::Maximum();
 	case TypeId::POINTER:
-		return MaximumValue<uintptr_t>();
+		return NumericLimits<uintptr_t>::Maximum();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}

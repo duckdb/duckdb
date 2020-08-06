@@ -12,8 +12,8 @@ COPY test FROM 'test/sql/copy/csv/data/test/many_empty_lines.csv' (HEADER 0);
 ----
 20000
 
-query R
+query I
 SELECT SUM(a) FROM test;
 ----
-1.000000
+1
 

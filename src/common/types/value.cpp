@@ -51,29 +51,29 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.boolean = false;
 		break;
 	case TypeId::INT8:
-		result.value_.tinyint = std::numeric_limits<int8_t>::min();
+		result.value_.tinyint = NumericLimits<int8_t>::Minimum();
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = std::numeric_limits<int16_t>::min();
+		result.value_.smallint = NumericLimits<int16_t>::Minimum();
 		break;
 	case TypeId::INT32:
-		result.value_.integer = std::numeric_limits<int32_t>::min();
+		result.value_.integer = NumericLimits<int32_t>::Minimum();
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = std::numeric_limits<int64_t>::min();
+		result.value_.bigint = NumericLimits<int64_t>::Minimum();
 		break;
 	case TypeId::INT128:
 		result.value_.hugeint.lower = 0;
-		result.value_.hugeint.upper = std::numeric_limits<int64_t>::min();
+		result.value_.hugeint.upper = NumericLimits<int64_t>::Minimum();
 		break;
 	case TypeId::FLOAT:
-		result.value_.float_ = std::numeric_limits<float>::min();
+		result.value_.float_ = NumericLimits<float>::Minimum();
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = std::numeric_limits<double>::min();
+		result.value_.double_ = NumericLimits<double>::Minimum();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uintptr_t>::min();
+		result.value_.pointer = NumericLimits<uintptr_t>::Minimum();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -90,29 +90,28 @@ Value Value::MaximumValue(TypeId type) {
 		result.value_.boolean = true;
 		break;
 	case TypeId::INT8:
-		result.value_.tinyint = std::numeric_limits<int8_t>::max();
+		result.value_.tinyint = NumericLimits<int8_t>::Maximum();
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = std::numeric_limits<int16_t>::max();
+		result.value_.smallint = NumericLimits<int16_t>::Maximum();
 		break;
 	case TypeId::INT32:
-		result.value_.integer = std::numeric_limits<int32_t>::max();
+		result.value_.integer = NumericLimits<int32_t>::Maximum();
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = std::numeric_limits<int64_t>::max();
+		result.value_.bigint = NumericLimits<int64_t>::Maximum();
 		break;
 	case TypeId::INT128:
-		result.value_.hugeint.lower = std::numeric_limits<uint64_t>::max();
-		result.value_.hugeint.upper = std::numeric_limits<int64_t>::max();
+		result.value_.hugeint = NumericLimits<hugeint_t>::Maximum();
 		break;
 	case TypeId::FLOAT:
-		result.value_.float_ = std::numeric_limits<float>::max();
+		result.value_.float_ = NumericLimits<float>::Maximum();
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = std::numeric_limits<double>::max();
+		result.value_.double_ = NumericLimits<double>::Maximum();
 		break;
 	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uintptr_t>::max();
+		result.value_.pointer = NumericLimits<uintptr_t>::Maximum();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -366,7 +365,7 @@ template <class T> T Value::GetValueInternal() {
 }
 
 template <> bool Value::GetValue() {
-	return GetValueInternal<bool>();
+	return GetValueInternal<int8_t>();
 }
 template <> int8_t Value::GetValue() {
 	return GetValueInternal<int8_t>();
@@ -397,13 +396,13 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	val.is_null = false;
 	switch (type) {
 	case TypeId::INT8:
-		assert(value <= std::numeric_limits<int8_t>::max());
+		assert(value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
 	case TypeId::INT16:
-		assert(value <= std::numeric_limits<int16_t>::max());
+		assert(value <= NumericLimits<int16_t>::Maximum());
 		return Value::SMALLINT((int16_t)value);
 	case TypeId::INT32:
-		assert(value <= std::numeric_limits<int32_t>::max());
+		assert(value <= NumericLimits<int32_t>::Maximum());
 		return Value::INTEGER((int32_t)value);
 	case TypeId::INT64:
 		return Value::BIGINT(value);

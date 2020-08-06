@@ -71,7 +71,7 @@ struct IntegerSumOperation : public BaseSumOperation {
 		// fast path: check if value * count fits into a uint64_t
 		// note that we check if value * VECTOR_SIZE fits in a uint64_t to avoid having to actually do a division
 		// this is still a pretty high number (18014398509481984) so most positive numbers will fit
-		if (*input >= 0 && ((uint64_t)*input) < (std::numeric_limits<uint64_t>::max() / STANDARD_VECTOR_SIZE)) {
+		if (*input >= 0 && ((uint64_t)*input) < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
 			// if it does just multiply it and add the value
 			uint64_t value = ((uint64_t) *input) * count;
 			AddValue(state, value, 1);

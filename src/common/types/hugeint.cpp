@@ -1,8 +1,8 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/limits.hpp"
 
-#include <limits>
 #include <cmath>
 
 using namespace std;
@@ -340,12 +340,12 @@ void Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	int overflow = lhs.lower + rhs.lower < lhs.lower;
 	if (rhs.upper >= 0) {
 		// RHS is positive: check for overflow
-		if (lhs.upper > (std::numeric_limits<int64_t>::max() - rhs.upper - overflow)) {
+		if (lhs.upper > (NumericLimits<int64_t>::Maximum() - rhs.upper - overflow)) {
 			throw OutOfRangeException("Overflow in HUGEINT addition");
 		}
 	} else {
 		// RHS is negative: check for underflow
-		if (lhs.upper <= std::numeric_limits<int64_t>::min() + 1 - rhs.upper - overflow) {
+		if (lhs.upper <= NumericLimits<int64_t>::Minimum() + 1 - rhs.upper - overflow) {
 			throw OutOfRangeException("Underflow in HUGEINT addition");
 		}
 	}
@@ -355,7 +355,7 @@ void Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 
 bool hugeint_add_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
 	int overflow = lhs.lower + rhs < lhs.lower;
-	if (lhs.upper > (std::numeric_limits<int64_t>::max() - overflow)) {
+	if (lhs.upper > (NumericLimits<int64_t>::Maximum() - overflow)) {
 		return false;
 	}
 	lhs.upper += overflow;
@@ -368,12 +368,12 @@ void Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	int underflow = lhs.lower - rhs.lower > lhs.lower;
 	if (rhs.upper >= 0) {
 		// RHS is positive: check for underflow
-		if (lhs.upper < (std::numeric_limits<int64_t>::min() + rhs.upper + underflow)) {
+		if (lhs.upper < (NumericLimits<int64_t>::Minimum() + rhs.upper + underflow)) {
 			throw OutOfRangeException("Underflow in HUGEINT subtraction");
 		}
 	} else {
 		// RHS is negative: check for overflow
-		if (lhs.upper >= (std::numeric_limits<int64_t>::max() + rhs.upper + underflow - 1)) {
+		if (lhs.upper >= (NumericLimits<int64_t>::Maximum() + rhs.upper + underflow - 1)) {
 			throw OutOfRangeException("Overflow in HUGEINT subtraction");
 		}
 	}
@@ -406,8 +406,8 @@ bool hugeint_try_cast_integer(hugeint_t input, DST &result) {
 		break;
 	case -1:
 		// negative number: check if the negative number is in range
-		if (input.lower > std::numeric_limits<uint64_t>::max() - uint64_t(std::numeric_limits<DST>::max())) {
-			result = -DST(std::numeric_limits<uint64_t>::max() - input.lower + 1);
+		if (input.lower > NumericLimits<uint64_t>::Maximum() - uint64_t(std::numeric_limits<DST>::max())) {
+			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
 			return true;
 		}
 		break;
@@ -444,10 +444,10 @@ template<> bool Hugeint::TryCast(hugeint_t input, double &result) {
 	switch(input.upper) {
 	case -1:
 		// special case for upper = -1 to avoid rounding issues in small negative numbers
-		result = -double(numeric_limits<uint64_t>::max() - input.lower + 1);
+		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
 		break;
 	default:
-		result = double(input.lower) + double(input.upper) * double(numeric_limits<uint64_t>::max());
+		result = double(input.lower) + double(input.upper) * double(NumericLimits<uint64_t>::Maximum());
 		break;
 	}
 	return true;
@@ -490,8 +490,8 @@ template<> hugeint_t Hugeint::Convert(double value) {
 	if (negative) {
 		value = -value;
 	}
-	result.lower = (uint64_t) fmod(value, double(numeric_limits<uint64_t>::max()));
-	result.upper = (uint64_t) (value / double(numeric_limits<uint64_t>::max()));
+	result.lower = (uint64_t) fmod(value, double(NumericLimits<uint64_t>::Maximum()));
+	result.upper = (uint64_t) (value / double(NumericLimits<uint64_t>::Maximum()));
 	if (negative) {
 		NegateInPlace(result);
 	}

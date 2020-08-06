@@ -19,7 +19,7 @@ using namespace std;
 namespace duckdb {
 
 template <class SRC, class DST> static bool try_cast_with_overflow_check(SRC value, DST &result) {
-	if (value < MinimumValue<DST>() || value > MaximumValue<DST>()) {
+	if (value < NumericLimits<DST>::Minimum() || value > NumericLimits<DST>::Maximum()) {
 		return false;
 	}
 	result = (DST)value;
@@ -223,7 +223,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						}
 					}
 					double dbl_res = result * pow(10, exponent);
-					if (dbl_res < MinimumValue<T>() || dbl_res > MaximumValue<T>()) {
+					if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
 						return false;
 					}
 					result = (T)dbl_res;
@@ -234,12 +234,12 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 		}
 		T digit = buf[pos++] - '0';
 		if (NEGATIVE) {
-			if (result < (MinimumValue<T>() + digit) / 10) {
+			if (result < (NumericLimits<T>::Minimum() + digit) / 10) {
 				return false;
 			}
 			result = result * 10 - digit;
 		} else {
-			if (result > (MaximumValue<T>() - digit) / 10) {
+			if (result > (NumericLimits<T>::Maximum() - digit) / 10) {
 				return false;
 			}
 			result = result * 10 + digit;

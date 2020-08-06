@@ -72,8 +72,8 @@ SegmentStatistics::SegmentStatistics(TypeId type, idx_t type_size, data_t stats_
 }
 
 template <class T> void initialize_max_min(data_ptr_t min, data_ptr_t max) {
-	*((T *)min) = std::numeric_limits<T>::max();
-	*((T *)max) = std::numeric_limits<T>::min();
+	*((T *)min) = NumericLimits<T>::Maximum();
+	*((T *)max) = NumericLimits<T>::Minimum();
 }
 
 void SegmentStatistics::Reset() {
@@ -98,15 +98,9 @@ void SegmentStatistics::Reset() {
 	case TypeId::INT64:
 		initialize_max_min<int64_t>(minimum.get(), maximum.get());
 		break;
-	case TypeId::INT128: {
-		auto hmin = (hugeint_t *) minimum.get();
-		auto hmax = (hugeint_t *) maximum.get();
-		hmin->lower = std::numeric_limits<uint64_t>::max();
-		hmin->upper = std::numeric_limits<int64_t>::max();
-		hmax->lower = 0;
-		hmax->upper = std::numeric_limits<int64_t>::min();
+	case TypeId::INT128:
+		initialize_max_min<hugeint_t>(minimum.get(), maximum.get());
 		break;
-	}
 	case TypeId::FLOAT:
 		initialize_max_min<float>(minimum.get(), maximum.get());
 		break;
@@ -125,13 +119,13 @@ void SegmentStatistics::Reset() {
 	case TypeId::INTERVAL: {
 		auto min = (interval_t *) minimum.get();
 		auto max = (interval_t *) maximum.get();
-		min->months = numeric_limits<int32_t>::max();
-		min->days   = numeric_limits<int32_t>::max();
-		min->msecs  = numeric_limits<int64_t>::max();
+		min->months = NumericLimits<int32_t>::Maximum();
+		min->days   = NumericLimits<int32_t>::Maximum();
+		min->msecs  = NumericLimits<int64_t>::Maximum();
 
-		max->months = numeric_limits<int32_t>::min();
-		max->days   = numeric_limits<int32_t>::min();
-		max->msecs  = numeric_limits<int64_t>::min();
+		max->months = NumericLimits<int32_t>::Minimum();
+		max->days   = NumericLimits<int32_t>::Minimum();
+		max->msecs  = NumericLimits<int64_t>::Minimum();
 		break;
 	}
 	default:

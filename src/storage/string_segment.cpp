@@ -527,7 +527,7 @@ void StringSegment::AppendData(SegmentStatistics &stats, data_ptr_t target, data
 				stats.has_overflow_strings = true;
 			} else {
 				// string fits in block, append to dictionary and increment dictionary position
-				assert(string_length < std::numeric_limits<uint16_t>::max());
+				assert(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary_offset += total_length;
 				auto dict_pos = end - dictionary_offset;
 				//! Update min/max of column segment

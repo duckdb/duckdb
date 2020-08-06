@@ -54,7 +54,7 @@ template <class T> static void TestExponent() {
 	double value = 1;
 	T expected_value = 1;
 	for (idx_t exponent = 0; exponent < 100; exponent++) {
-		if (value < MaximumValue<T>()) {
+		if (value < NumericLimits<T>::Maximum()) {
 			// expect success
 			str = "1e" + to_string(exponent);
 			REQUIRE(TryCast::Operation<string_t, T>(string_t(str), parse_result));

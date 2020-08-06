@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -9,7 +9,7 @@ using namespace std;
 unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 	switch (val.type) {
 	case T_PGInteger:
-		assert(val.val.ival <= numeric_limits<int32_t>::max());
+		assert(val.val.ival <= NumericLimits<int32_t>::Maximum());
 		return make_unique<ConstantExpression>(SQLType::INTEGER, Value::INTEGER((int32_t)val.val.ival));
 	case T_PGBitString: // FIXME: this should actually convert to BLOB
 	case T_PGString:

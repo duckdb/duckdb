@@ -41,10 +41,10 @@ SELECT * FROM test_unicode_2 ORDER BY 1 LIMIT 4;
 ----
 16 values hashing to aba4d1f7a3b0d043a672e09344cf7d55
 
-query R
+query I
 SELECT SUM(col_a) FROM test_unicode_2;
 ----
-134209536.000000
+134209536
 
 # test correct shared substring behavior at buffer borders
 query I

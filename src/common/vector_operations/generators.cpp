@@ -5,14 +5,14 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 using namespace duckdb;
 using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
 	assert(TypeIsNumeric(result.type));
-	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
+	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
 	result.vector_type = VectorType::FLAT_VECTOR;

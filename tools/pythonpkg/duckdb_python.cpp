@@ -230,7 +230,7 @@ struct PandasScanFunction : public TableFunction {
 
 				for (idx_t row = 0; row < this_count; row++) {
 					auto source_idx = data.position + row;
-					if (src_ptr[source_idx] <= std::numeric_limits<int64_t>::min()) {
+					if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
 						// pandas Not a Time (NaT)
 						nullmask[row] = true;
 						continue;

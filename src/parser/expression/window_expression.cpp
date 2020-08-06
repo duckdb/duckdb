@@ -1,10 +1,12 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, string function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), schema(schema), function_name(StringUtil::Lower(function_name)) {
@@ -107,7 +109,7 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema);
 	serializer.WriteList(children);
 	serializer.WriteList(partitions);
-	assert(orders.size() <= numeric_limits<uint32_t>::max());
+	assert(orders.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)orders.size());
 	for (auto &order : orders) {
 		order.Serialize(serializer);
@@ -140,4 +142,6 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->offset_expr = source.ReadOptional<ParsedExpression>();
 	expr->default_expr = source.ReadOptional<ParsedExpression>();
 	return move(expr);
+}
+
 }
