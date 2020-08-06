@@ -38,7 +38,7 @@ public:
 			TemplatedExecute<int64_t, OP>(left, right, result, count);
 			break;
 		case TypeId::INT128:
-			TemplatedExecute<int128_t, OP>(left, right, result, count);
+			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;
 		case TypeId::POINTER:
 			TemplatedExecute<uintptr_t, OP>(left, right, result, count);
