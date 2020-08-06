@@ -66,6 +66,10 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 		result.value_.bigint =
 		    OP::template Operation<int64_t, int64_t, int64_t>(left.value_.bigint, right.value_.bigint);
 		break;
+	case TypeId::INT128:
+		result.value_.hugeint =
+		    OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(left.value_.hugeint, right.value_.hugeint);
+		break;
 	case TypeId::FLOAT:
 		result.value_.float_ = OP::template Operation<float, float, float>(left.value_.float_, right.value_.float_);
 		break;
@@ -78,7 +82,7 @@ template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(co
 		    OP::template Operation<uint64_t, uint64_t, uint64_t>(left.value_.pointer, right.value_.pointer);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type");
+		throw NotImplementedException("Unimplemented type for value binary op");
 	}
 	return result;
 }
@@ -128,8 +132,11 @@ Value ValueOperations::Modulo(const Value &left, const Value &right) {
 	case TypeId::INT64:
 		result.value_.bigint = left.value_.bigint % right.value_.bigint;
 		break;
+	case TypeId::INT128:
+		result.value_.hugeint = left.value_.hugeint % right.value_.hugeint;
+		break;
 	default:
-		throw NotImplementedException("Unimplemented type for modulo");
+		throw NotImplementedException("Unimplemented type for value modulo");
 	}
 	return result;
 }

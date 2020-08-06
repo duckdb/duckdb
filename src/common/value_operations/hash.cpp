@@ -21,6 +21,8 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return duckdb::Hash(op.value_.integer);
 	case TypeId::INT64:
 		return duckdb::Hash(op.value_.bigint);
+	case TypeId::INT128:
+		return duckdb::Hash(op.value_.hugeint);
 	case TypeId::FLOAT:
 		return duckdb::Hash(op.value_.float_);
 	case TypeId::DOUBLE:
@@ -30,6 +32,6 @@ hash_t ValueOperations::Hash(const Value &op) {
 	case TypeId::VARCHAR:
 		return duckdb::Hash(op.str_value.c_str());
 	default:
-		throw NotImplementedException("Unimplemented type for hash");
+		throw NotImplementedException("Unimplemented type for value hash");
 	}
 }
