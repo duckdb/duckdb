@@ -298,7 +298,7 @@ SQLType TransformStringToSQLType(string str) {
 		return SQLType::TIME;
 	} else if (lower_str == "interval") {
 		return SQLType::INTERVAL;
-	} else if (lower_str == "hugeint") {
+	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return SQLType::HUGEINT;
 	}  else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
