@@ -48,6 +48,14 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		Parser parser;
 		parser.ParseQuery("SELECT name FROM sqlite_master() ORDER BY name");
 		return move(parser.statements[0]);
+	} else if (keyword == "database_list") {
+		if (pragma.pragma_type != PragmaType::NOTHING) {
+			throw ParserException("Invalid PRAGMA database_list: cannot be called");
+		}
+		// turn into SELECT * FROM pragma_collations();
+		Parser parser;
+		parser.ParseQuery("SELECT * FROM pragma_database_list() ORDER BY 1");
+		return move(parser.statements[0]);
 	} else if (keyword == "collations") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
 			throw ParserException("Invalid PRAGMA collations: cannot be called");

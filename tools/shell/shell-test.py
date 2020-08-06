@@ -140,7 +140,7 @@ test('.limit length 42', err='sqlite3_limit')
 test('.lint fkey-indexes')
 
 # this should probably be fixed, sqlite generates an internal query that duckdb does not like
-test('.indexes', err='syntax error')
+test('.indexes', err='indexes not supported')
 
 
 test('.timeout', err='sqlite3_busy_timeout')
@@ -160,33 +160,37 @@ test('.stats on')
 test('.stats off')
 
 # FIXME
-test('.schema', err="pragma_database_list")
+test('.schema', err="subquery in FROM must have an alias")
 
 # FIXME need sqlite3_strlike for this
 test('''
 CREATE TABLE asdf (i INTEGER);
 .schema as%
-''', err="pragma_database_list")
+''', err="subquery in FROM must have an alias")
 
 test('.fullschema')
 
-test('.tables', err="syntax error")
+test('''
+CREATE TABLE asda (i INTEGER);
+CREATE TABLE bsdf (i INTEGER);
+CREATE TABLE csda (i INTEGER);
+.tables
+''', out="asda  bsdf  csda")
 
 test('''
-CREATE TABLE asdf (i INTEGER);
-.tables as%
-''', err="syntax error")
+CREATE TABLE asda (i INTEGER);
+CREATE TABLE bsdf (i INTEGER);
+CREATE TABLE csda (i INTEGER);
+.tables %da
+''', out="asda  csda")
 
-
-test('.indexes',  err="syntax error")
+test('.indexes',  err="indexes not supported")
 
 test('''
 CREATE TABLE a (i INTEGER);
 CREATE INDEX a_idx ON a(i);
 .indexes a_%
-''',  err="syntax error")
-
-
+''',  err="indexes not supported")
 
 # this does not seem to output anything
 test('.sha3sum')
@@ -342,7 +346,7 @@ SELECT 42;
 
 # fails because view pragma_database_list does not exist
 
-# test('.databases')
+test('.databases', out='main:')
 
 
 # fails

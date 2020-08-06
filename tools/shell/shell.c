@@ -12901,7 +12901,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		data.cMode = data.mode = MODE_List;
 		sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, ": ");
 		data.cnt = 0;
-		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list", callback, &data, &zErrMsg);
+		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list()", callback, &data, &zErrMsg);
 		if (zErrMsg) {
 			utf8_printf(stderr, "Error: %s\n", zErrMsg);
 			sqlite3_free(zErrMsg);
@@ -13851,7 +13851,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		}
 		if (zDiv) {
 			sqlite3_stmt *pStmt = 0;
-			rc = sqlite3_prepare_v2(p->db, "SELECT name FROM pragma_database_list", -1, &pStmt, 0);
+			rc = sqlite3_prepare_v2(p->db, "SELECT name FROM pragma_database_list()", -1, &pStmt, 0);
 			if (rc) {
 				utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(p->db));
 				sqlite3_finalize(pStmt);
@@ -14469,45 +14469,13 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		if (rc)
 			return shellDatabaseError(p->db);
 
-		if (nArg > 2 && c == 'i') {
-			/* It is an historical accident that the .indexes command shows an error
-			** when called with the wrong number of arguments whereas the .tables
-			** command does not. */
-			raw_printf(stderr, "Usage: .indexes ?LIKE-PATTERN?\n");
+		if (c == 'i') {
+			raw_printf(stderr, ".indexes not supported currently");
 			rc = 1;
 			goto meta_command_exit;
 		}
-		for (ii = 0; sqlite3_step(pStmt) == SQLITE_ROW; ii++) {
-			const char *zDbName = (const char *)sqlite3_column_text(pStmt, 1);
-			if (zDbName == 0)
-				continue;
-			if (s.z && s.z[0])
-				appendText(&s, " UNION ALL ", 0);
-			if (sqlite3_stricmp(zDbName, "main") == 0) {
-				appendText(&s, "SELECT name FROM ", 0);
-			} else {
-				appendText(&s, "SELECT ", 0);
-				appendText(&s, zDbName, '\'');
-				appendText(&s, "||'.'||name FROM ", 0);
-			}
-			appendText(&s, zDbName, '"');
-			appendText(&s, ".sqlite_master ", 0);
-			if (c == 't') {
-				appendText(&s,
-				           " WHERE type IN ('table','view')"
-				           "   AND name NOT LIKE 'sqlite_%'"
-				           "   AND name LIKE ?1",
-				           0);
-			} else {
-				appendText(&s,
-				           " WHERE type='index'"
-				           "   AND tbl_name LIKE ?1",
-				           0);
-			}
-		}
-		rc = sqlite3_finalize(pStmt);
-		appendText(&s, " ORDER BY 1", 0);
-		rc = sqlite3_prepare_v2(p->db, s.z, -1, &pStmt, 0);
+
+		rc = sqlite3_prepare_v2(p->db, "SELECT name FROM sqlite_master() WHERE name LIKE $1 ORDER BY name", -1, &pStmt, 0);
 		freeText(&s);
 		if (rc)
 			return shellDatabaseError(p->db);
