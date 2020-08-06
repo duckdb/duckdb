@@ -190,14 +190,15 @@ bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 
 	// fourth row
 	first32  += (products[3][3] & 0xffffffff);
-	if (first32 & 0xffffff80000000) {
-		return false;
-	}
 
 	// move carry to next digit
 	third32  += fourth32 >> 32;
 	second32 += third32  >> 32;
 	first32  += second32 >> 32;
+
+	if (products[3][3] & 0xffffff80000000 || first32 & 0xffffff80000000) {
+		return false;
+	}
 
 	// remove carry from current digit
 	fourth32 &= 0xffffffff;
