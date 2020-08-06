@@ -160,13 +160,13 @@ test('.stats on')
 test('.stats off')
 
 # FIXME
-test('.schema', err="pragma_database_list")
+test('.schema', err="subquery in FROM must have an alias")
 
 # FIXME need sqlite3_strlike for this
 test('''
 CREATE TABLE asdf (i INTEGER);
 .schema as%
-''', err="pragma_database_list")
+''', err="subquery in FROM must have an alias")
 
 test('.fullschema')
 
@@ -346,7 +346,7 @@ SELECT 42;
 
 # fails because view pragma_database_list does not exist
 
-# test('.databases')
+test('.databases', out='main:')
 
 
 # fails

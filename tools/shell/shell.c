@@ -12901,7 +12901,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		data.cMode = data.mode = MODE_List;
 		sqlite3_snprintf(sizeof(data.colSeparator), data.colSeparator, ": ");
 		data.cnt = 0;
-		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list", callback, &data, &zErrMsg);
+		sqlite3_exec(p->db, "SELECT name, file FROM pragma_database_list()", callback, &data, &zErrMsg);
 		if (zErrMsg) {
 			utf8_printf(stderr, "Error: %s\n", zErrMsg);
 			sqlite3_free(zErrMsg);
@@ -13851,7 +13851,7 @@ static int do_meta_command(char *zLine, ShellState *p) {
 		}
 		if (zDiv) {
 			sqlite3_stmt *pStmt = 0;
-			rc = sqlite3_prepare_v2(p->db, "SELECT name FROM pragma_database_list", -1, &pStmt, 0);
+			rc = sqlite3_prepare_v2(p->db, "SELECT name FROM pragma_database_list()", -1, &pStmt, 0);
 			if (rc) {
 				utf8_printf(stderr, "Error: %s\n", sqlite3_errmsg(p->db));
 				sqlite3_finalize(pStmt);

@@ -1,0 +1,25 @@
+# name: test/sql/pragma/test_pragma_database_list.test
+# description: Test PRAGMA database_list
+# group: [pragma]
+
+query III
+PRAGMA database_list
+----
+0	main	(empty)
+
+query III
+SELECT * FROM pragma_database_list()
+----
+0	main	(empty)
+
+statement error
+PRAGMA database_list()
+
+# FIXME: need to merge changes from hugeint branch
+# # load a database file
+# load __TEST_DIR__/test.db
+
+# query III
+# SELECT * FROM pragma_database_list()
+# ----
+# 0	main	(empty)
