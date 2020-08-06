@@ -28,7 +28,7 @@ template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType typ
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
 	case SQLTypeId::HUGEINT:
-		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
 		break;
 	case SQLTypeId::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
