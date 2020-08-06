@@ -508,13 +508,13 @@ enum class SortStyle : uint8_t {
 struct Query : public Command {
 	Query(SQLLogicTestRunner &runner) : Command(runner) {}
 
-	idx_t expected_column_count;
-	SortStyle sort_style;
+	idx_t expected_column_count = 0;
+	SortStyle sort_style = SortStyle::NO_SORT;
 	vector<string> values;
-	bool output_result_mode;
-	int hashThreshold;
-	bool output_hash_mode;
-	bool query_has_label;
+	bool output_result_mode = false;
+	int hashThreshold = 0;
+	bool output_hash_mode = false;
+	bool query_has_label = false;
 	string query_label;
 
 	void Execute() override;
@@ -1068,6 +1068,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 
 			// figure out the sort style/connection style
+			command->sort_style = SortStyle::NO_SORT;
 			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
 				/* Do no sorting */
 				command->sort_style = SortStyle::NO_SORT;
