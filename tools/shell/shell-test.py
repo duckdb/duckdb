@@ -140,7 +140,7 @@ test('.limit length 42', err='sqlite3_limit')
 test('.lint fkey-indexes')
 
 # this should probably be fixed, sqlite generates an internal query that duckdb does not like
-test('.indexes', err='syntax error')
+test('.indexes', err='indexes not supported')
 
 
 test('.timeout', err='sqlite3_busy_timeout')
@@ -170,23 +170,27 @@ CREATE TABLE asdf (i INTEGER);
 
 test('.fullschema')
 
-test('.tables', err="syntax error")
+test('''
+CREATE TABLE asda (i INTEGER);
+CREATE TABLE bsdf (i INTEGER);
+CREATE TABLE csda (i INTEGER);
+.tables
+''', out="asda  bsdf  csda")
 
 test('''
-CREATE TABLE asdf (i INTEGER);
-.tables as%
-''', err="syntax error")
+CREATE TABLE asda (i INTEGER);
+CREATE TABLE bsdf (i INTEGER);
+CREATE TABLE csda (i INTEGER);
+.tables %da
+''', out="asda  csda")
 
-
-test('.indexes',  err="syntax error")
+test('.indexes',  err="indexes not supported")
 
 test('''
 CREATE TABLE a (i INTEGER);
 CREATE INDEX a_idx ON a(i);
 .indexes a_%
-''',  err="syntax error")
-
-
+''',  err="indexes not supported")
 
 # this does not seem to output anything
 test('.sha3sum')
