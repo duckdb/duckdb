@@ -1,0 +1,15 @@
+# name: test/sql/pragma/version.test
+# description: Test version pragma
+# group: [pragma]
+
+statement ok
+PRAGMA version;
+
+statement ok
+select * from pragma_version();
+
+query I
+select library_version from pragma_version();
+----
+DuckDB
+

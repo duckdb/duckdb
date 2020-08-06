@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import shutil
+import subprocess
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
 source_file = os.path.join(amal_dir, "duckdb.cpp")
@@ -25,7 +26,7 @@ utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 
 # files included in the amalgamated "duckdb.hpp" file
-main_header_files = [os.path.join(include_dir, 'duckdb.hpp'), 
+main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
 	os.path.join(include_dir, 'duckdb.h'),
 	os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
 	os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
@@ -143,6 +144,9 @@ def copy_if_different(src, dest):
     print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
+def git_commit_hash():
+    return subprocess.check_output(['git','log','-1','--format=%h']).strip()
+
 def generate_amalgamation(source_file, header_file):
     # now construct duckdb.hpp from these headers
     print("-----------------------")
@@ -152,6 +156,7 @@ def generate_amalgamation(source_file, header_file):
         hfile.write("// See https://raw.githubusercontent.com/cwida/duckdb/master/LICENSE for licensing information\n\n")
         hfile.write("#pragma once\n")
         hfile.write("#define DUCKDB_AMALGAMATION 1\n")
+        hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 

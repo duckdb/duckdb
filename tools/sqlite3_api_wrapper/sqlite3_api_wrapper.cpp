@@ -12,9 +12,6 @@
 using namespace duckdb;
 using namespace std;
 
-#define SOURCE_ID DUCKDB_SOURCE_ID
-#define LIB_VERSION "DuckDB"
-
 static char *sqlite3_strdup(const char *str);
 
 struct sqlite3_string_buffer {
@@ -82,37 +79,37 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
                     const char *zVfs      /* Name of VFS module to use */
 ) {
 	if (filename && strcmp(filename, ":memory:") == 0) {
-			filename = NULL;
+		filename = NULL;
+	}
+	*ppDb = nullptr;
+	if (zVfs) { /* unsupported so if set we complain */
+		return SQLITE_ERROR;
+	}
+	sqlite3 *pDb = nullptr;
+	try {
+		pDb = new sqlite3();
+		DBConfig config;
+		config.access_mode = AccessMode::AUTOMATIC;
+		if (flags & SQLITE_OPEN_READONLY) {
+			config.access_mode = AccessMode::READ_ONLY;
 		}
-		*ppDb = nullptr;
-		if (zVfs) { /* unsupported so if set we complain */
-			return SQLITE_ERROR;
-		}
-		sqlite3 *pDb = nullptr;
-		try {
-			pDb = new sqlite3();
-			DBConfig config;
-			config.access_mode = AccessMode::AUTOMATIC;
-			if (flags & SQLITE_OPEN_READONLY) {
-				config.access_mode = AccessMode::READ_ONLY;
-			}
-			pDb->db = make_unique<DuckDB>(filename, &config);
-			pDb->con = make_unique<Connection>(*pDb->db);
+		pDb->db = make_unique<DuckDB>(filename, &config);
+		pDb->con = make_unique<Connection>(*pDb->db);
 
 #ifdef BUILD_ICU_EXTENSION
-			pDb->db->LoadExtension<ICUExtension>();
+		pDb->db->LoadExtension<ICUExtension>();
 #endif
 #ifdef BUILD_PARQUET_EXTENSION
-			pDb->db->LoadExtension<ParquetExtension>();
+		pDb->db->LoadExtension<ParquetExtension>();
 #endif
-		} catch (std::exception &ex) {
-			if (pDb) {
-				pDb->last_error = ex.what();
-			}
-			return SQLITE_ERROR;
+	} catch (std::exception &ex) {
+		if (pDb) {
+			pDb->last_error = ex.what();
 		}
-		*ppDb = pDb;
-		return SQLITE_OK;
+		return SQLITE_ERROR;
+	}
+	*ppDb = pDb;
+	return SQLITE_OK;
 }
 
 int sqlite3_close(sqlite3 *db) {
@@ -692,10 +689,10 @@ void sqlite3_interrupt(sqlite3 *db) {
 }
 
 const char *sqlite3_libversion(void) {
-	return LIB_VERSION;
+	return DuckDB::LibraryVersion();
 }
 const char *sqlite3_sourceid(void) {
-	return SOURCE_ID;
+	return DuckDB::SourceID();
 }
 
 int sqlite3_reset(sqlite3_stmt *stmt) {

@@ -45,6 +45,9 @@ public:
 
 	FileSystem &GetFileSystem();
 
+	static const char *SourceID();
+	static const char *LibraryVersion();
+
 private:
 	void Configure(DBConfig &config);
 };
