@@ -39,6 +39,8 @@ private:
 	string benchmark_path;
 	string init_query;
 	string run_query;
+	int64_t result_column_count = 0;
+	vector<vector<string>> result_values;
 };
 
 } // namespace duckdb

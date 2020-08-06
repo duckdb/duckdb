@@ -6,4 +6,7 @@ load
 CREATE TABLE integers AS SELECT i::HUGEINT AS i FROM range(0, 10000000, 1) tbl(i);
 
 run
-SELECT CAST(i AS VARCHAR) FROM integers
+SELECT MAX(CAST(i AS VARCHAR)) FROM integers
+
+result I
+9999999
