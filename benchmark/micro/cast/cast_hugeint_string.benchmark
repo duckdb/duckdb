@@ -1,4 +1,4 @@
-# name: benchmark/micro/cast/cast_hugeint.benchmark
+# name: benchmark/micro/cast/cast_hugeint_string.benchmark
 # description: Cast HUGEINT to string
 # group: [cast]
 
