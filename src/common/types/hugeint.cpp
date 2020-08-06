@@ -12,52 +12,47 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // String Conversion
 //===--------------------------------------------------------------------===//
-// Simplified version of the multiply code, returns false on overflow
-static bool hugeint_multiply_in_place_uint32(hugeint_t &lhs, uint32_t rhs);
-//! Simplified version of the addition that accepts only a uint32_t on the RHS, returns false on overflow
-static bool hugeint_add_in_place_uint32(hugeint_t &lhs, uint32_t rhs);
-
-bool Hugeint::FromString(string str, hugeint_t &result) {
-	return Hugeint::FromCString(str.c_str(), str.size(), result);
-}
-
-bool Hugeint::FromCString(const char *buf, idx_t len, hugeint_t &result) {
-	if (len == 0) {
-		return false;
-	}
-	result.lower = 0;
-	result.upper = 0;
-	bool negative = buf[0] == '-';
-	
-	idx_t start_pos = negative || buf[0] == '+' ? 1 : 0;
-	idx_t pos = start_pos;
-	while(pos < len) {
-		if (!std::isdigit((unsigned char)buf[pos])) {
-			// not a digit!
-			if (std::isspace((unsigned char)buf[pos])) {
-				// skip any trailing spaces
-				while(++pos < len) {
-					if (!std::isspace((unsigned char)buf[pos])) {
-						return false;
-					}
-				}
-				break;
-			}
-			return false;
-		}
-		uint8_t digit = buf[pos++] - '0';
-		if (!hugeint_multiply_in_place_uint32(result, 10)) {
-			return false;
-		}
-		if (!hugeint_add_in_place_uint32(result, digit)) {
-			return false;
-		}
-	}
-	if (negative) {
-		NegateInPlace(result);
-	}
-	return pos > start_pos;
-}
+hugeint_t Hugeint::PowersOfTen[] {
+	hugeint_t(1),
+	hugeint_t(10),
+	hugeint_t(100),
+	hugeint_t(1000),
+	hugeint_t(10000),
+	hugeint_t(100000),
+	hugeint_t(1000000),
+	hugeint_t(10000000),
+	hugeint_t(100000000),
+	hugeint_t(1000000000),
+	hugeint_t(10000000000),
+	hugeint_t(100000000000),
+	hugeint_t(1000000000000),
+	hugeint_t(10000000000000),
+	hugeint_t(100000000000000),
+	hugeint_t(1000000000000000),
+	hugeint_t(10000000000000000),
+	hugeint_t(100000000000000000),
+	hugeint_t(1000000000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(10),
+	hugeint_t(1000000000000000000) * hugeint_t(100),
+	hugeint_t(1000000000000000000) * hugeint_t(1000),
+	hugeint_t(1000000000000000000) * hugeint_t(10000),
+	hugeint_t(1000000000000000000) * hugeint_t(100000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000),
+	hugeint_t(1000000000000000000) * hugeint_t(10000000),
+	hugeint_t(1000000000000000000) * hugeint_t(100000000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(10000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(100000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(10000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(100000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(10000000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(100000000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(10),
+	hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(100)
+};
 
 static uint8_t positive_hugeint_highest_bit(hugeint_t bits) {
 	uint8_t out = 0;
@@ -154,7 +149,7 @@ string Hugeint::ToString(hugeint_t input) {
 //===--------------------------------------------------------------------===//
 // Multiply
 //===--------------------------------------------------------------------===//
-hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
+bool Hugeint::TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result) {
 	// Multiply code adapted from:
 	// https://github.com/calccrypto/uint128_t/blob/master/uint128_t.cpp
 
@@ -196,59 +191,6 @@ hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
 	// fourth row
 	first32  += (products[3][3] & 0xffffffff);
 	if (first32 & 0xffffff80000000) {
-		throw std::runtime_error("Overflow in HUGEINT conversion!");
-	}
-
-	// move carry to next digit
-	third32  += fourth32 >> 32;
-	second32 += third32  >> 32;
-	first32  += second32 >> 32;
-
-	// remove carry from current digit
-	fourth32 &= 0xffffffff;
-	third32  &= 0xffffffff;
-	second32 &= 0xffffffff;
-	first32  &= 0xffffffff;
-
-	// combine components
-	hugeint_t result;
-	result.lower = (third32 << 32) | fourth32;
-	result.upper = (first32 << 32) | second32;
-	if (lhs_negative ^ rhs_negative) {
-		NegateInPlace(result);
-	}
-	return result;
-}
-
-bool hugeint_multiply_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
-	// Simplified version of the multiply code above that accepts only a positive LHS and a uint32_t on the RHS
-	assert(lhs.upper >= 0);
-
-	// split values into 4 32-bit parts
-	uint64_t top[4] = {uint64_t(lhs.upper) >> 32, uint64_t(lhs.upper) & 0xffffffff, lhs.lower >> 32, lhs.lower & 0xffffffff};
-	uint64_t bottom = (uint64_t) rhs ;
-	uint64_t products[4];
-
-	// multiply each component of the values
-	for(int x = 3; x > -1; x--){
-		products[3 - x] = top[x] * bottom;
-	}
-
-	// first row
-	uint64_t fourth32 = (products[0] & 0xffffffff);
-	uint64_t third32  = (products[0] >> 32);
-
-	// second row
-	third32  += (products[1] & 0xffffffff);
-	uint64_t second32 = (products[1] >> 32);
-
-	// third row
-	second32 += (products[2] & 0xffffffff);
-	uint64_t first32  = (products[2] >> 32);
-
-	// fourth row
-	first32  += (products[3] & 0xffffffff);
-	if (first32 & 0xffffff80000000) {
 		return false;
 	}
 
@@ -264,11 +206,21 @@ bool hugeint_multiply_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
 	first32  &= 0xffffffff;
 
 	// combine components
-	lhs.lower = (third32 << 32) | fourth32;
-	lhs.upper = (first32 << 32) | second32;
+	result.lower = (third32 << 32) | fourth32;
+	result.upper = (first32 << 32) | second32;
+	if (lhs_negative ^ rhs_negative) {
+		NegateInPlace(result);
+	}
 	return true;
 }
 
+hugeint_t Hugeint::Multiply(hugeint_t lhs, hugeint_t rhs) {
+	hugeint_t result;
+	if (!TryMultiply(lhs, rhs, result)) {
+		throw OutOfRangeException("Overflow in HUGEINT multiplication!");
+	}
+	return result;
+}
 
 //===--------------------------------------------------------------------===//
 // Divide
@@ -301,7 +253,7 @@ static hugeint_t hugeint_divmod(hugeint_t lhs, hugeint_t rhs, hugeint_t &remaind
 		// left-shift the current result and remainder by 1
 		div_result = positive_hugeint_leftshift(div_result, 1);
 		remainder = positive_hugeint_leftshift(remainder, 1);
-		
+
 		// we get the value of the bit at position X, where position 0 is the least-significant bit
 		if (positive_hugeint_is_bit_set(lhs, x - 1)) {
 			// increment the remainder
@@ -336,58 +288,54 @@ hugeint_t Hugeint::Modulo(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Add/Subtract
 //===--------------------------------------------------------------------===//
-void Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
+bool Hugeint::AddInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	int overflow = lhs.lower + rhs.lower < lhs.lower;
 	if (rhs.upper >= 0) {
 		// RHS is positive: check for overflow
-		if (lhs.upper > (NumericLimits<int64_t>::Maximum() - rhs.upper - overflow)) {
-			throw OutOfRangeException("Overflow in HUGEINT addition");
+		if (lhs.upper > (std::numeric_limits<int64_t>::max() - (rhs.upper + overflow))) {
+			return false;
 		}
 	} else {
 		// RHS is negative: check for underflow
-		if (lhs.upper <= NumericLimits<int64_t>::Minimum() + 1 - rhs.upper - overflow) {
-			throw OutOfRangeException("Underflow in HUGEINT addition");
+		if (lhs.upper < std::numeric_limits<int64_t>::min() - (rhs.upper + overflow)) {
+			return false;
 		}
 	}
-	lhs.upper = lhs.upper + rhs.upper + overflow;
+	lhs.upper = lhs.upper + overflow + rhs.upper;
 	lhs.lower += rhs.lower;
-}
-
-bool hugeint_add_in_place_uint32(hugeint_t &lhs, uint32_t rhs) {
-	int overflow = lhs.lower + rhs < lhs.lower;
-	if (lhs.upper > (NumericLimits<int64_t>::Maximum() - overflow)) {
-		return false;
-	}
-	lhs.upper += overflow;
-	lhs.lower += rhs;
 	return true;
 }
 
-void Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
+bool Hugeint::SubtractInPlace(hugeint_t &lhs, hugeint_t rhs) {
 	// underflow
 	int underflow = lhs.lower - rhs.lower > lhs.lower;
 	if (rhs.upper >= 0) {
 		// RHS is positive: check for underflow
-		if (lhs.upper < (NumericLimits<int64_t>::Minimum() + rhs.upper + underflow)) {
-			throw OutOfRangeException("Underflow in HUGEINT subtraction");
+		if (lhs.upper < (std::numeric_limits<int64_t>::min() + rhs.upper + underflow)) {
+			return false;
 		}
 	} else {
 		// RHS is negative: check for overflow
-		if (lhs.upper >= (NumericLimits<int64_t>::Maximum() + rhs.upper + underflow - 1)) {
-			throw OutOfRangeException("Overflow in HUGEINT subtraction");
+		if (lhs.upper >= (std::numeric_limits<int64_t>::max() + rhs.upper + underflow - 1)) {
+			return false;
 		}
 	}
 	lhs.upper = lhs.upper - rhs.upper - underflow;
 	lhs.lower -= rhs.lower;
+	return true;
 }
 
 hugeint_t Hugeint::Add(hugeint_t lhs, hugeint_t rhs) {
-	AddInPlace(lhs, rhs);
-	return lhs;	
+	if (!AddInPlace(lhs, rhs)) {
+		throw OutOfRangeException("Overflow in HUGEINT addition");
+	}
+	return lhs;
 }
 
 hugeint_t Hugeint::Subtract(hugeint_t lhs, hugeint_t rhs) {
-	SubtractInPlace(lhs, rhs);
+	if (!SubtractInPlace(lhs, rhs)) {
+		throw OutOfRangeException("Underflow in HUGEINT addition");
+	}
 	return lhs;
 }
 
@@ -399,14 +347,14 @@ bool hugeint_try_cast_integer(hugeint_t input, DST &result) {
 	switch(input.upper) {
 	case 0:
 		// positive number: check if the positive number is in range
-		if (input.lower <= std::numeric_limits<DST>::max()) {
+		if (input.lower <= uint64_t(NumericLimits<DST>::Maximum())) {
 			result = DST(input.lower);
 			return true;
 		}
 		break;
 	case -1:
 		// negative number: check if the negative number is in range
-		if (input.lower > NumericLimits<uint64_t>::Maximum() - uint64_t(std::numeric_limits<DST>::max())) {
+		if (input.lower > NumericLimits<uint64_t>::Maximum() - uint64_t(NumericLimits<DST>::Maximum())) {
 			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
 			return true;
 		}
@@ -552,7 +500,7 @@ hugeint_t hugeint_t::operator%(const hugeint_t & rhs) const {
 }
 
 hugeint_t hugeint_t::operator-() const {
-	return Hugeint::Negate(*this);	
+	return Hugeint::Negate(*this);
 }
 
 hugeint_t hugeint_t::operator>>(const hugeint_t & rhs) const {
@@ -643,23 +591,23 @@ hugeint_t & hugeint_t::operator-=(const hugeint_t & rhs) {
 	return *this;
 }
 hugeint_t & hugeint_t::operator*=(const hugeint_t & rhs) {
-	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	*this = Hugeint::Multiply(*this, rhs);
 	return *this;
 }
 hugeint_t & hugeint_t::operator/=(const hugeint_t & rhs) {
-	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	*this = Hugeint::Divide(*this, rhs);
 	return *this;
 }
 hugeint_t & hugeint_t::operator%=(const hugeint_t & rhs) {
-	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	*this = Hugeint::Modulo(*this, rhs);
 	return *this;
 }
 hugeint_t & hugeint_t::operator>>=(const hugeint_t & rhs) {
-	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	*this = *this >> rhs;
 	return *this;
 }
 hugeint_t & hugeint_t::operator<<=(const hugeint_t & rhs) {
-	throw NotImplementedException("FIXME unimplemented op for hugeint");
+	*this = *this << rhs;
 	return *this;
 }
 hugeint_t & hugeint_t::operator&=(const hugeint_t & rhs) {
@@ -677,4 +625,5 @@ hugeint_t & hugeint_t::operator^=(const hugeint_t & rhs) {
 	upper ^= rhs.upper;
 	return *this;
 }
+
 }

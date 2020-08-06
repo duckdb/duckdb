@@ -533,7 +533,7 @@ void Statement::Execute() {
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
-	
+
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
 		error = !error;
@@ -973,7 +973,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		/* Figure out the record type and do appropriate processing */
 		if (strcmp(sScript.azToken[0], "statement") == 0) {
 			auto command = make_unique<Statement>(*this);
-			
+
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
 			** of zScript - we are guaranteed to have enough space there. */
@@ -990,13 +990,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// perform any renames in zScript
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
-			
+
 			// skip CREATE INDEX (for now...)
 			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
 				continue;
 			}
-			// parse 
+			// parse
 			if (strcmp(sScript.azToken[1], "ok") == 0) {
 				command->expect_ok = true;
 			} else if (strcmp(sScript.azToken[1], "error") == 0) {
@@ -1027,7 +1027,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->hashThreshold = hashThreshold;
 			command->output_hash_mode = output_hash_mode;
 			command->output_result_mode = output_result_mode;
-			
+
 			/* Verify that the type string consists of one or more
 			 *characters
 			 ** from the set 'TIR':*/
@@ -1146,6 +1146,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				FAIL();
 			}
 		} else if (strcmp(sScript.azToken[0], "loop") == 0) {
+			if (skip_execution) {
+				continue;
+			}
 			if (in_loop) {
 				fprintf(stderr, "%s:%d: Test error: nested loops not supported!\n", zScriptFile, sScript.startLine);
 				FAIL();
@@ -1160,6 +1163,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			loop_start = std::stoi(sScript.azToken[2]);
 			loop_end = std::stoi(sScript.azToken[3]);
 		} else if (strcmp(sScript.azToken[0], "endloop") == 0) {
+			if (skip_execution) {
+				continue;
+			}
 			if (!in_loop) {
 				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
@@ -1207,7 +1213,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// delete the target database file, if it exists
 			DeleteDatabase(dbpath);
-			
+
 			// set up the config file
 			config = GetTestConfig();
 			// now create the database file

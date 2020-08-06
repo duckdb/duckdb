@@ -33,6 +33,13 @@ public:
 	static bool TryCast(hugeint_t input, T &result);
 
 	template<class T>
+	static T Cast(hugeint_t input) {
+		T value;
+		TryCast(input, value);
+		return value;
+	}
+
+	template<class T>
 	static hugeint_t Convert(T value);
 
 	static void NegateInPlace(hugeint_t &input) {
@@ -44,14 +51,16 @@ public:
 		return input;
 	}
 
+	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
+
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Multiply(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Divide(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Modulo(hugeint_t lhs, hugeint_t rhs);
 
-	static void AddInPlace(hugeint_t &lhs, hugeint_t rhs);
-	static void SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
+	static bool AddInPlace(hugeint_t &lhs, hugeint_t rhs);
+	static bool SubtractInPlace(hugeint_t &lhs, hugeint_t rhs);
 
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops
@@ -90,6 +99,7 @@ public:
 		int lower_smaller_equals = lhs.lower <= rhs.lower;
 		return upper_smaller | (upper_equal & lower_smaller_equals);
 	}
+	static hugeint_t PowersOfTen[40];
 };
 
 template<> bool Hugeint::TryCast(hugeint_t input, int8_t &result);

@@ -177,7 +177,40 @@ template <class T> static T try_strict_cast_string(string_t input) {
 	return result;
 }
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT>
+struct IntegerCastOperation {
+	template<class T, bool NEGATIVE>
+	static bool HandleDigit(T &result, uint8_t digit) {
+		if (NEGATIVE) {
+			if (result < (NumericLimits<T>::Minimum() + digit) / 10) {
+				return false;
+			}
+			result = result * 10 - digit;
+		} else {
+			if (result > (NumericLimits<T>::Maximum() - digit) / 10) {
+				return false;
+			}
+			result = result * 10 + digit;
+		}
+		return true;
+	}
+
+	template<class T>
+	static bool HandleExponent(T &result, int64_t exponent) {
+		double dbl_res = result * pow(10, exponent);
+		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
+			return false;
+		}
+		result = (T)dbl_res;
+		return true;
+	}
+
+	template<class T>
+	static bool Finalize(T &result) {
+		return true;
+	}
+};
+
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP=IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t pos = start_pos;
@@ -188,16 +221,23 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 				if (strict) {
 					return false;
 				}
+				bool number_before_period = pos > start_pos;
+				if (!OP::template Finalize<T>(result)) {
+					return false;
+				}
 				// decimal point: we accept decimal values for integers as well
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
+				idx_t start_digit = pos;
 				while(pos < len) {
 					if (!std::isdigit((unsigned char)buf[pos++])) {
 						return false;
 					}
 				}
-				return true;
+				// make sure there is either (1) one number after the period, or (2) one number before the period
+				// i.e. we accept "1." and ".1" as valid numbers, but not "."
+				return number_before_period || pos > start_digit;
 			}
 			if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
@@ -206,7 +246,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 				}
-				return true;
+				break;
 			}
 			if (ALLOW_EXPONENT) {
 				if (buf[pos] == 'e' || buf[pos] == 'E') {
@@ -222,33 +262,23 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 							return false;
 						}
 					}
-					double dbl_res = result * pow(10, exponent);
-					if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
-						return false;
-					}
-					result = (T)dbl_res;
-					return true;
+					return OP::template HandleExponent<T>(result, exponent);
 				}
 			}
 			return false;
 		}
-		T digit = buf[pos++] - '0';
-		if (NEGATIVE) {
-			if (result < (NumericLimits<T>::Minimum() + digit) / 10) {
-				return false;
-			}
-			result = result * 10 - digit;
-		} else {
-			if (result > (NumericLimits<T>::Maximum() - digit) / 10) {
-				return false;
-			}
-			result = result * 10 + digit;
+		uint8_t digit = buf[pos++] - '0';
+		if (!OP::template HandleDigit<T, NEGATIVE>(result, digit)) {
+			return false;
 		}
+	}
+	if (!OP::template Finalize<T>(result)) {
+		return false;
 	}
 	return pos > start_pos;
 }
 
-template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while(len > 0 && std::isspace(*buf)) {
 		buf++;
@@ -259,11 +289,11 @@ template <class T, bool ALLOW_EXPONENT = true> static bool TryIntegerCast(const 
 	}
 	int negative = *buf == '-';
 
-	result = 0;
+	memset(&result, 0, sizeof(T));
 	if (!negative) {
-		return IntegerCastLoop<T, false, ALLOW_EXPONENT>(buf, len, result, strict);
+		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	} else {
-		return IntegerCastLoop<T, true, ALLOW_EXPONENT>(buf, len, result, strict);
+		return IntegerCastLoop<T, true, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	}
 }
 
@@ -975,16 +1005,93 @@ template <> interval_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast From Hugeint
 //===--------------------------------------------------------------------===//
+// parsing hugeint from string is done a bit differently for performance reasons
+// for other integer types we keep track of a single value
+// and multiply that value by 10 for every digit we read
+// however, for hugeints, multiplication is very expensive (>20X as expensive as for int64)
+// for that reason, we parse numbers first into an int64 value
+// when that value is full, we perform a HUGEINT multiplication to flush it into the hugeint
+// this takes the number of HUGEINT multiplications down from [0-38] to [0-2]
+struct HugeIntCastData {
+	hugeint_t hugeint;
+	int64_t intermediate;
+	uint8_t digits;
+
+	bool Flush() {
+		if (digits == 0 && intermediate == 0) {
+			return true;
+		}
+		if (hugeint.lower != 0 || hugeint.upper != 0) {
+			if (digits > 38) {
+				return false;
+			}
+			if (!Hugeint::TryMultiply(hugeint, Hugeint::PowersOfTen[digits], hugeint)) {
+				return false;
+			}
+		}
+		if (!Hugeint::AddInPlace(hugeint, hugeint_t(intermediate))) {
+			return false;
+		}
+		digits = 0;
+		intermediate = 0;
+		return true;
+	}
+};
+
+struct HugeIntegerCastOperation {
+	template<class T, bool NEGATIVE>
+	static bool HandleDigit(T &result, uint8_t digit) {
+		if (NEGATIVE) {
+			if (result.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
+				// intermediate is full: need to flush it
+				if (!result.Flush()) {
+					return false;
+				}
+			}
+			result.intermediate = result.intermediate * 10 - digit;
+		} else {
+			if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10) {
+				if (!result.Flush()) {
+					return false;
+				}
+			}
+			result.intermediate = result.intermediate * 10 + digit;
+		}
+		result.digits++;
+		return true;
+	}
+
+	template<class T>
+	static bool HandleExponent(T &result, int64_t exponent) {
+		double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
+		if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) || dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+			return false;
+		}
+		result.hugeint = Hugeint::Convert(dbl_res);
+		return true;
+	}
+
+	template<class T>
+	static bool Finalize(T &result) {
+		return result.Flush();
+	}
+};
+
 template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	return Hugeint::FromCString(input.GetData(), input.GetSize(), result);
+	HugeIntCastData data;
+	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data, strict)) {
+		return false;
+	}
+	result = data.hugeint;
+	return true;
 }
 
 template <> hugeint_t Cast::Operation(string_t input) {
-	return try_strict_cast_string<hugeint_t>(input);
+	return try_cast_string<hugeint_t>(input);
 }
 
 template <> hugeint_t StrictCast::Operation(string_t input) {
-	return try_cast_string<hugeint_t>(input);
+	return try_strict_cast_string<hugeint_t>(input);
 }
 
 //===--------------------------------------------------------------------===//
