@@ -17,8 +17,8 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 	case T_PGFloat: {
 		bool cast_as_double = false;
 		for (auto ptr = val.val.str; *ptr; ptr++) {
-			if (*ptr == '.') {
-				// found decimal point, cast as double
+			if (*ptr == '.' || *ptr == 'e') {
+				// found decimal point or exponent, cast as double
 				cast_as_double = true;
 				break;
 			}

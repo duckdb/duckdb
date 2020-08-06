@@ -165,7 +165,6 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : SQLType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
 	}
-	functions.AddFunction(ScalarFunction({SQLType::HUGEINT}, SQLType::HUGEINT, ScalarFunction::NopFunction));
 	set.AddFunction(functions);
 }
 

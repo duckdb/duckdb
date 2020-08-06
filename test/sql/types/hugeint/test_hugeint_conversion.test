@@ -153,7 +153,7 @@ SELECT typeof(10), typeof(10000000000), typeof(170141183460469231731687303715884
 ----
 INTEGER	BIGINT	HUGEINT	DOUBLE	DOUBLE
 
-# same with exponents
+# exponents are always double
 query III
 select 1e30, 1e100, 1e-1
 ----
@@ -164,4 +164,4 @@ select 1e30, 1e100, 1e-1
 query III
 select typeof(1e30), typeof(1e100), typeof(1e-1)
 ----
-HUGEINT	DOUBLE	DOUBLE
+DOUBLE	DOUBLE	DOUBLE
