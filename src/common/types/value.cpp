@@ -72,9 +72,6 @@ Value Value::MinimumValue(TypeId type) {
 	case TypeId::DOUBLE:
 		result.value_.double_ = NumericLimits<double>::Minimum();
 		break;
-	case TypeId::POINTER:
-		result.value_.pointer = NumericLimits<uintptr_t>::Minimum();
-		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -109,9 +106,6 @@ Value Value::MaximumValue(TypeId type) {
 		break;
 	case TypeId::DOUBLE:
 		result.value_.double_ = NumericLimits<double>::Maximum();
-		break;
-	case TypeId::POINTER:
-		result.value_.pointer = NumericLimits<uintptr_t>::Maximum();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -390,8 +384,6 @@ template <> double Value::GetValue() {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) ||
-	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {

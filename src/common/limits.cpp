@@ -79,14 +79,6 @@ uint64_t NumericLimits<uint64_t>::Maximum() {
 	return numeric_limits<uint64_t>::max();
 }
 
-uintptr_t NumericLimits<uintptr_t>::Minimum() {
-	return numeric_limits<uintptr_t>::min();
-}
-
-uintptr_t NumericLimits<uintptr_t>::Maximum() {
-	return numeric_limits<uintptr_t>::max();
-}
-
 hugeint_t NumericLimits<hugeint_t>::Minimum() {
 	hugeint_t result;
 	result.lower = 1;
@@ -103,7 +95,7 @@ hugeint_t NumericLimits<hugeint_t>::Maximum() {
 
 // we offset the minimum value by 1 to account for the NULL value in the
 // hashtables
-int64_t MinimumValue(TypeId type) {
+static int64_t MinimumValue(TypeId type) {
 	switch (type) {
 	case TypeId::INT8:
 		return NumericLimits<int8_t>::Minimum();
@@ -114,16 +106,12 @@ int64_t MinimumValue(TypeId type) {
 	case TypeId::INT64:
 	case TypeId::INT128:
 		return NumericLimits<int64_t>::Minimum();
-	case TypeId::HASH:
-		return NumericLimits<uint64_t>::Minimum();
-	case TypeId::POINTER:
-		return NumericLimits<uintptr_t>::Minimum();
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires integral type");
 	}
 }
 
-uint64_t MaximumValue(TypeId type) {
+static uint64_t MaximumValue(TypeId type) {
 	switch (type) {
 	case TypeId::INT8:
 		return NumericLimits<int8_t>::Maximum();
@@ -134,10 +122,6 @@ uint64_t MaximumValue(TypeId type) {
 	case TypeId::INT64:
 	case TypeId::INT128:
 		return NumericLimits<int64_t>::Maximum();
-	case TypeId::HASH:
-		return NumericLimits<uint64_t>::Maximum();
-	case TypeId::POINTER:
-		return NumericLimits<uintptr_t>::Maximum();
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires integral type");
 	}
