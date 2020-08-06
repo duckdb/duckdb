@@ -196,6 +196,9 @@ struct IntegerCastOperation {
 
 	template<class T>
 	static bool HandleExponent(T &result, int64_t exponent) {
+		if (exponent < 0) {
+			return false;
+		}
 		double dbl_res = result * pow(10, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
 			return false;
@@ -1063,12 +1066,12 @@ struct HugeIntegerCastOperation {
 
 	template<class T>
 	static bool HandleExponent(T &result, int64_t exponent) {
-		double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
-		if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) || dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+		if (exponent < 0 || exponent > 38) {
 			return false;
 		}
-		result.hugeint = Hugeint::Convert(dbl_res);
-		return true;
+		result.Flush();
+
+		return Hugeint::TryMultiply(result.hugeint, Hugeint::PowersOfTen[exponent], result.hugeint);
 	}
 
 	template<class T>
