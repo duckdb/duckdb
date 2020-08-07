@@ -1318,6 +1318,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
 	CreateTableFunctionInfo cinfo(scan_fun);
 	cinfo.name = "read_parquet";
+	CreateTableFunctionInfo pq_scan = cinfo;
+	pq_scan.name = "parquet_scan";
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = parquet_write_bind;
@@ -1332,8 +1334,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	conn.context->transaction.BeginTransaction();
 	db.catalog->CreateCopyFunction(*conn.context, &info);
 	db.catalog->CreateTableFunction(*conn.context, &cinfo);
-	cinfo.name = "parquet_scan";
-	db.catalog->CreateTableFunction(*conn.context, &cinfo);
+	db.catalog->CreateTableFunction(*conn.context, &pq_scan);
 
 	conn.context->transaction.Commit();
 }

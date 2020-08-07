@@ -7,4 +7,5 @@ using namespace std;
 TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                      CreateTableFunctionInfo *info)
     : StandardEntry(CatalogType::TABLE_FUNCTION, schema, catalog, info->name), functions(move(info->functions)) {
+    assert(this->functions.size() > 0);
 }
