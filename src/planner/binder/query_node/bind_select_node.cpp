@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/table_star_expression.hpp"
+#include "duckdb/common/limits.hpp"
 
 using namespace std;
 
@@ -58,7 +59,7 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	if (limit_mod.offset) {
 		result->offset = BindConstant(*this, context, "OFFSET clause", limit_mod.offset);
 		if (!limit_mod.limit) {
-			result->limit = std::numeric_limits<int64_t>::max();
+			result->limit = NumericLimits<int64_t>::Maximum();
 		}
 	}
 	return move(result);

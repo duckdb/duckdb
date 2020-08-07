@@ -60,7 +60,7 @@ matrix:
       script:
         - mkdir -p build/release
         - python3 scripts/amalgamation.py
-        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && cmake --build .)
+        - (cd build/release && cmake -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DJDBC_DRIVER=1 ../.. && travis_wait 30 cmake --build .)
 
         - build/release/test/unittest
         - python3 tools/shell/shell-test.py build/release/duckdb

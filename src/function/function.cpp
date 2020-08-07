@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
@@ -15,8 +16,9 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {
@@ -165,7 +167,7 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<SQLType> &arguments
 template <class T>
 static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<SQLType> &arguments) {
 	idx_t best_function = INVALID_INDEX;
-	int64_t lowest_cost = numeric_limits<int64_t>::max();
+	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> conflicting_functions;
 	for (idx_t f_idx = 0; f_idx < functions.size(); f_idx++) {
 		auto &func = functions[f_idx];
@@ -266,4 +268,6 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 		result->bind_info = bound_function.bind(*result, context);
 	}
 	return result;
+}
+
 }

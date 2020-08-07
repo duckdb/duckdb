@@ -140,6 +140,8 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::INT64:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
+	case TypeId::INT128:
+		return templated_compare_value<hugeint_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::FLOAT:
 		return templated_compare_value<float>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	case TypeId::DOUBLE:
@@ -376,6 +378,9 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 		case TypeId::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
+		case TypeId::INT128:
+			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
 		case TypeId::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
@@ -537,6 +542,9 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 			break;
 		case TypeId::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
+			break;
+		case TypeId::INT128:
+			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 		case TypeId::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);

@@ -11,9 +11,11 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/limits.hpp"
 
-#include <cstring>
 #include <limits>
+#include <cstring>
+#include <cmath>
 
 namespace duckdb {
 
@@ -38,12 +40,31 @@ template <> inline char *NullValue() {
 	return (char *)NullValue<const char *>();
 }
 
+template <> inline string NullValue() {
+	return string(NullValue<const char *>());
+}
+
 template <> inline interval_t NullValue() {
 	interval_t null_value;
 	null_value.days = NullValue<int32_t>();
 	null_value.months = NullValue<int32_t>();
 	null_value.msecs = NullValue<int64_t>();
 	return null_value;
+}
+
+template <> inline hugeint_t NullValue() {
+	hugeint_t min;
+	min.lower = 0;
+	min.upper = std::numeric_limits<int64_t>::min();
+	return min;
+}
+
+template <> inline float NullValue() {
+	return NAN;
+}
+
+template <> inline double NullValue() {
+	return NAN;
 }
 
 template <class T> inline bool IsNullValue(T value) {
@@ -64,6 +85,14 @@ template <> inline bool IsNullValue(interval_t value) {
 
 template <> inline bool IsNullValue(char *value) {
 	return IsNullValue<const char *>(value);
+}
+
+template <> inline bool IsNullValue(float value) {
+	return std::isnan(value);
+}
+
+template <> inline bool IsNullValue(double value) {
+	return std::isnan(value);
 }
 
 //! Compares a specific memory region against the types NULL value

@@ -6,7 +6,7 @@
 
 #include "miniz.hpp"
 
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 using namespace std;
 using namespace duckdb;
@@ -156,10 +156,10 @@ streambuf::int_type GzipStreamBuf::underflow() {
 			// actually decompress
 			assert(zstrm_p);
 			zstrm_p->next_in = (data_ptr_t)in_buff_start;
-			assert(in_buff_end - in_buff_start < numeric_limits<int32_t>::max());
+			assert(in_buff_end - in_buff_start < NumericLimits<int32_t>::Maximum());
 			zstrm_p->avail_in = (uint32_t)(in_buff_end - in_buff_start);
 			zstrm_p->next_out = (data_ptr_t)out_buff_free_start;
-			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < numeric_limits<int32_t>::max());
+			assert((out_buff + BUFFER_SIZE) - out_buff_free_start < NumericLimits<int32_t>::Maximum());
 			zstrm_p->avail_out = (uint32_t)((out_buff + BUFFER_SIZE) - out_buff_free_start);
 			auto ret = mz_inflate(zstrm_p, MZ_NO_FLUSH);
 			if (ret != MZ_OK && ret != MZ_STREAM_END) {

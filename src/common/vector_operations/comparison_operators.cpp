@@ -37,6 +37,9 @@ public:
 		case TypeId::INT64:
 			TemplatedExecute<int64_t, OP>(left, right, result, count);
 			break;
+		case TypeId::INT128:
+			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
+			break;
 		case TypeId::POINTER:
 			TemplatedExecute<uintptr_t, OP>(left, right, result, count);
 			break;

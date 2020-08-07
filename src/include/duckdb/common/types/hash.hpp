@@ -37,6 +37,7 @@ inline hash_t CombineHash(hash_t left, hash_t right) {
 
 template <> hash_t Hash(uint64_t val);
 template <> hash_t Hash(int64_t val);
+template <> hash_t Hash(hugeint_t val);
 template <> hash_t Hash(float val);
 template <> hash_t Hash(double val);
 template <> hash_t Hash(const char *val);

@@ -32,6 +32,9 @@ endif
 ifeq (${BUILD_TPCE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCE=1
 endif
+ifeq (${BUILD_JDBC}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
+endif
 
 clean:
 	rm -rf build
@@ -82,19 +85,6 @@ amaldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${EXTENSIONS} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build .
 
-jdbc:
-	mkdir -p build/release && \
-	python scripts/amalgamation.py && \
-	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release -DAMALGAMATION_BUILD=1 -DJDBC_DRIVER=1 ../.. && \
-	cmake --build .
-
-
-jdbcdebug:
-	mkdir -p build/jdbcdebug && \
-	cd build/jdbcdebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${EXTENSIONS} -DJDBC_DRIVER=1 -DENABLE_SANITIZER=FALSE -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build .
 
 test_compile: # test compilation of individual cpp files
 	python scripts/amalgamation.py --compile

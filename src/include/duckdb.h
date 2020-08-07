@@ -42,6 +42,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_DATE,
 	// duckdb_time
 	DUCKDB_TYPE_TIME,
+	// duckdb_interval
+	DUCKDB_TYPE_INTERVAL,
+	// duckdb_hugeint
+	DUCKDB_TYPE_HUGEINT,
 	// const char*
 	DUCKDB_TYPE_VARCHAR
 } duckdb_type;
@@ -63,6 +67,17 @@ typedef struct {
 	duckdb_date date;
 	duckdb_time time;
 } duckdb_timestamp;
+
+typedef struct {
+	int32_t months;
+	int32_t days;
+	int64_t msecs;
+} duckdb_interval;
+
+typedef struct {
+	uint64_t lower;
+	int64_t upper;
+} duckdb_hugeint;
 
 typedef struct {
 	void *data;

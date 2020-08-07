@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -26,13 +27,14 @@ template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType typ
 	case SQLTypeId::BIGINT:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
+	case SQLTypeId::HUGEINT:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP, true>;
+		break;
 	case SQLTypeId::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
 		break;
-	case SQLTypeId::DOUBLE:
-		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
-		break;
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::DOUBLE:
 		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
 		break;
 	default:
@@ -129,8 +131,6 @@ template <> timestamp_t AddOperator::Operation(timestamp_t left, interval_t righ
 template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t right) {
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
-
-		// Time::FromTime()
 
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
@@ -333,6 +333,17 @@ struct BinaryZeroIsNullWrapper {
 		}
 	}
 };
+struct BinaryZeroIsNullHugeintWrapper {
+	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, nullmask_t &nullmask, idx_t idx) {
+		if (right.upper == 0 && right.lower == 0) {
+			nullmask[idx] = true;
+			return left;
+		} else {
+			return OP::template Operation<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(left, right);
+		}
+	}
+};
 
 template <class TA, class TB, class TC, class OP>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -350,6 +361,8 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(SQLType
 		return BinaryScalarFunctionIgnoreZero<int32_t, int32_t, int32_t, OP>;
 	case SQLTypeId::BIGINT:
 		return BinaryScalarFunctionIgnoreZero<int64_t, int64_t, int64_t, OP>;
+	case SQLTypeId::HUGEINT:
+		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP>;
 	case SQLTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case SQLTypeId::DOUBLE:

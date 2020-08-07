@@ -189,8 +189,8 @@ void TableDataWriter::WriteDataPointers() {
 			manager.tabledata_writer->Write<idx_t>(data_pointer.tuple_count);
 			manager.tabledata_writer->Write<block_id_t>(data_pointer.block_id);
 			manager.tabledata_writer->Write<uint32_t>(data_pointer.offset);
-			manager.tabledata_writer->WriteData(data_pointer.min_stats, 8);
-			manager.tabledata_writer->WriteData(data_pointer.max_stats, 8);
+			manager.tabledata_writer->WriteData(data_pointer.min_stats, 16);
+			manager.tabledata_writer->WriteData(data_pointer.max_stats, 16);
 		}
 	}
 }

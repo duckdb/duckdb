@@ -480,6 +480,9 @@ void ClientContext::Invalidate() {
 		appender->Invalidate("Database that this appender belongs to has been closed!", false);
 	}
 	appenders.clear();
+	// clear temporary objects and prepared statemnts
+	temporary_objects.reset();
+	prepared_statements.reset();
 }
 
 string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> statement) {
@@ -563,6 +566,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
 		original_result->success = false;
+		interrupted = false;
 	}
 
 	// check explain, only if q does not already contain EXPLAIN
@@ -583,6 +587,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
 		copied_result->success = false;
+		interrupted = false;
 	}
 	// now execute the deserialized statement
 	try {
@@ -591,6 +596,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
 		deserialized_result->success = false;
+		interrupted = false;
 	}
 	// now execute the unoptimized statement
 	enable_optimizer = false;
@@ -600,6 +606,7 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
 		unoptimized_result->success = false;
+		interrupted = false;
 	}
 	enable_optimizer = true;
 

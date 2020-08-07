@@ -37,10 +37,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 				}
 				if (info->increment < 0) {
 					info->start_value = info->max_value = -1;
-					info->min_value = numeric_limits<int64_t>::min();
+					info->min_value = NumericLimits<int64_t>::Minimum();
 				} else {
 					info->start_value = info->min_value = 1;
-					info->max_value = numeric_limits<int64_t>::max();
+					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
 				assert(val->type == T_PGInteger);

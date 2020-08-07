@@ -19,6 +19,8 @@ template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(SQLType t
 		return AggregateFunction::UnaryAggregate<uint32_t, int32_t, int32_t, OP>(type, type);
 	case SQLTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<uint64_t, int64_t, int64_t, OP>(type, type);
+	case SQLTypeId::HUGEINT:
+		return AggregateFunction::UnaryAggregate<hugeint_t, hugeint_t, hugeint_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
 	}

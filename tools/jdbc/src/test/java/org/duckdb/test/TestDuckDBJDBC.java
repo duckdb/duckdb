@@ -2,6 +2,8 @@ package org.duckdb.test;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -659,6 +661,30 @@ public class TestDuckDBJDBC {
 		conn_ro1.close();
 		conn_ro2.close();
 
+	}
+
+	public static void test_hugeint() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT 42::hugeint hi1, -42::hugeint hi2, 454564646545646546545646545::hugeint hi3, -454564646545646546545646545::hugeint hi4");
+		assertTrue(rs.next());
+		assertEquals(rs.getObject("hi1"), new BigInteger("42"));
+		assertEquals(rs.getObject("hi2"), new BigInteger("-42"));
+		assertEquals(rs.getLong("hi1"), 42L);
+		assertEquals(rs.getLong("hi2"), -42L);
+		assertEquals(rs.getObject("hi3"), new BigInteger("454564646545646546545646545"));
+		assertEquals(rs.getObject("hi4"), new BigInteger("-454564646545646546545646545"));
+		assertEquals(rs.getBigDecimal("hi1"), new BigDecimal("42"));
+		assertEquals(rs.getBigDecimal("hi2"), new BigDecimal("-42"));
+		assertEquals(rs.getBigDecimal("hi3"), new BigDecimal("454564646545646546545646545"));
+		assertEquals(rs.getBigDecimal("hi4"), new BigDecimal("-454564646545646546545646545"));
+
+		assertFalse(rs.next());
+		rs.close();
+		stmt.close();
+		conn.close();
 	}
 
 	public static void main(String[] args) throws Exception {

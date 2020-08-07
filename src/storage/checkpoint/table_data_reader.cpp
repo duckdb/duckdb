@@ -40,8 +40,8 @@ void TableDataReader::ReadTableData() {
 			data_pointer.tuple_count = reader.Read<idx_t>();
 			data_pointer.block_id = reader.Read<block_id_t>();
 			data_pointer.offset = reader.Read<uint32_t>();
-			reader.ReadData(data_pointer.min_stats, 8);
-			reader.ReadData(data_pointer.max_stats, 8);
+			reader.ReadData(data_pointer.min_stats, 16);
+			reader.ReadData(data_pointer.max_stats, 16);
 
 			column_count += data_pointer.tuple_count;
 			// create a persistent segment

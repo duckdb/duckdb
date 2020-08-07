@@ -15,4 +15,5 @@ void BuiltinFunctions::RegisterOperators() {
 	Register<BitwiseAndFun>();
 	Register<BitwiseOrFun>();
 	Register<BitwiseXorFun>();
+	Register<BitwiseNotFun>();
 }

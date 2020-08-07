@@ -230,6 +230,37 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
+		case SQLTypeId::HUGEINT: {
+			idx_t row = 0;
+			auto target = (duckdb_hugeint *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				auto source = FlatVector::GetData<hugeint_t>(chunk->data[col]);
+				for (idx_t k = 0; k < chunk->size(); k++) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
+						target[row].lower = source[k].lower;
+						target[row].upper = source[k].upper;
+					}
+					row++;
+				}
+			}
+			break;
+		}
+		case SQLTypeId::INTERVAL: {
+			idx_t row = 0;
+			auto target = (duckdb_interval *)out->columns[col].data;
+			for (auto &chunk : result->collection.chunks) {
+				auto source = FlatVector::GetData<interval_t>(chunk->data[col]);
+				for (idx_t k = 0; k < chunk->size(); k++) {
+					if (!FlatVector::IsNull(chunk->data[col], k)) {
+						target[row].days = source[k].days;
+						target[row].months = source[k].months;
+						target[row].msecs = source[k].msecs;
+					}
+					row++;
+				}
+			}
+			break;
+		}
 		default:
 			// unsupported type for C API
 			assert(0);
@@ -394,6 +425,8 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_INTEGER;
 	case SQLTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
+	case SQLTypeId::HUGEINT:
+		return DUCKDB_TYPE_HUGEINT;
 	case SQLTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
 	case SQLTypeId::DECIMAL:
@@ -407,6 +440,8 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_TIME;
 	case SQLTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
+	case SQLTypeId::INTERVAL:
+		return DUCKDB_TYPE_INTERVAL;
 	default:
 		return DUCKDB_TYPE_INVALID;
 	}
@@ -424,6 +459,8 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 		return SQLType::INTEGER;
 	case DUCKDB_TYPE_BIGINT:
 		return SQLType::BIGINT;
+	case DUCKDB_TYPE_HUGEINT:
+		return SQLType::HUGEINT;
 	case DUCKDB_TYPE_FLOAT:
 		return SQLType::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
@@ -436,6 +473,8 @@ SQLType ConvertCTypeToCPP(duckdb_type type) {
 		return SQLType::TIME;
 	case DUCKDB_TYPE_VARCHAR:
 		return SQLType::VARCHAR;
+	case DUCKDB_TYPE_INTERVAL:
+		return SQLType::INTERVAL;
 	default:
 		return SQLType(SQLTypeId::INVALID);
 	}
@@ -453,6 +492,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);
+	case DUCKDB_TYPE_HUGEINT:
+		return sizeof(duckdb_hugeint);
 	case DUCKDB_TYPE_FLOAT:
 		return sizeof(float);
 	case DUCKDB_TYPE_DOUBLE:
@@ -465,6 +506,8 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
+	case DUCKDB_TYPE_INTERVAL:
+		return sizeof(duckdb_interval);
 	default:
 		// unsupported type
 		assert(0);
@@ -514,6 +557,21 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
 		                        timestamp.time.min, timestamp.time.sec, timestamp.time.msec);
+	}
+	case DUCKDB_TYPE_HUGEINT: {
+		hugeint_t val;
+		auto hugeint = UnsafeFetch<duckdb_hugeint>(result, col, row);
+		val.lower = hugeint.lower;
+		val.upper = hugeint.upper;
+		return Value::HUGEINT(val);
+	}
+	case DUCKDB_TYPE_INTERVAL: {
+		interval_t val;
+		auto interval = UnsafeFetch<duckdb_interval>(result, col, row);
+		val.days = interval.days;
+		val.months = interval.months;
+		val.msecs = interval.msecs;
+		return Value::INTERVAL(val);
 	}
 	case DUCKDB_TYPE_VARCHAR:
 		return Value(string(UnsafeFetch<const char *>(result, col, row)));

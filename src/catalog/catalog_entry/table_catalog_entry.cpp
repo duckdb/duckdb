@@ -415,12 +415,12 @@ vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
 void TableCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	assert(columns.size() <= std::numeric_limits<uint32_t>::max());
+	assert(columns.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)columns.size());
 	for (auto &column : columns) {
 		column.Serialize(serializer);
 	}
-	assert(constraints.size() <= std::numeric_limits<uint32_t>::max());
+	assert(constraints.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)constraints.size());
 	for (auto &constraint : constraints) {
 		constraint->Serialize(serializer);

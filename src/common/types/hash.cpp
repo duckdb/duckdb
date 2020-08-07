@@ -17,6 +17,10 @@ template <> hash_t Hash(int64_t val) {
 	return murmurhash64((uint64_t)val);
 }
 
+template <> hash_t Hash(hugeint_t val) {
+	return murmurhash64(val.lower) ^ murmurhash64(val.upper);
+}
+
 template <> hash_t Hash(float val) {
 	return std::hash<float>{}(val);
 }

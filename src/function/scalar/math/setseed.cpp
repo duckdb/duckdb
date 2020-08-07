@@ -27,7 +27,7 @@ static void setseed_function(DataChunk &args, ExpressionState &state, Vector &re
 	input.Normalify(args.size());
 
 	auto input_seeds = FlatVector::GetData<double>(input);
-	uint32_t half_max = numeric_limits<uint32_t>::max() / 2;
+	uint32_t half_max = NumericLimits<uint32_t>::Maximum() / 2;
 
 	for (idx_t i = 0; i < args.size(); i++) {
 		if (input_seeds[i] < -1.0 || input_seeds[i] > 1.0) {

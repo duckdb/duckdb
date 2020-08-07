@@ -92,6 +92,9 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	case TypeId::INT64:
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
+	case TypeId::INT128:
+		TemplatedCopy<hugeint_t>(source, sel, target, source_offset, target_offset, copy_count);
+		break;
 	case TypeId::POINTER:
 		TemplatedCopy<uintptr_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;

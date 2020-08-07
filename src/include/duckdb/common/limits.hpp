@@ -10,56 +10,55 @@
 
 #include "duckdb/common/types.hpp"
 
-#include <limits>
-
 namespace duckdb {
 
-//! Returns the minimum value that can be stored in a given type
-template <class T> int64_t MinimumValue() {
-	assert(IsIntegerType<T>());
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::min() + 1;
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::min() + 1;
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::min() + 1;
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::min() + 1;
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<uint64_t>::min();
-	} else if (std::is_same<T, uintptr_t>()) {
-		return std::numeric_limits<uintptr_t>::min();
-	} else {
-		assert(0);
-		return 0;
-	}
-}
+template<class T>
+struct NumericLimits {
+	static T Minimum();
+	static T Maximum();
+};
 
-//! Returns the maximum value that can be stored in a given type
-template <class T> int64_t MaximumValue() {
-	assert(IsIntegerType<T>());
-	if (std::is_same<T, int8_t>()) {
-		return std::numeric_limits<int8_t>::max();
-	} else if (std::is_same<T, int16_t>()) {
-		return std::numeric_limits<int16_t>::max();
-	} else if (std::is_same<T, int32_t>()) {
-		return std::numeric_limits<int32_t>::max();
-	} else if (std::is_same<T, int64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else if (std::is_same<T, uint64_t>()) {
-		return std::numeric_limits<int64_t>::max();
-	} else if (std::is_same<T, uintptr_t>()) {
-		return std::numeric_limits<uintptr_t>::max();
-	} else {
-		assert(0);
-		return 0;
-	}
-}
+template<> struct NumericLimits<int8_t> {
+	static int8_t Minimum();
+	static int8_t Maximum();
+};
+template<> struct NumericLimits<int16_t> {
+	static int16_t Minimum();
+	static int16_t Maximum();
+};
+template<> struct NumericLimits<int32_t> {
+	static int32_t Minimum();
+	static int32_t Maximum();
+};
+template<> struct NumericLimits<int64_t> {
+	static int64_t Minimum();
+	static int64_t Maximum();
+};
+template<> struct NumericLimits<hugeint_t> {
+	static hugeint_t Minimum();
+	static hugeint_t Maximum();
+};
+template<> struct NumericLimits<uint16_t> {
+	static uint16_t Minimum();
+	static uint16_t Maximum();
+};
+template<> struct NumericLimits<uint32_t> {
+	static uint32_t Minimum();
+	static uint32_t Maximum();
+};
+template<> struct NumericLimits<uint64_t> {
+	static uint64_t Minimum();
+	static uint64_t Maximum();
+};
+template<> struct NumericLimits<float> {
+	static float Minimum();
+	static float Maximum();
+};
+template<> struct NumericLimits<double> {
+	static double Minimum();
+	static double Maximum();
+};
 
-//! Returns the minimum value that can be stored in a given type
-int64_t MinimumValue(TypeId type);
-//! Returns the maximum value that can be stored in a given type
-uint64_t MaximumValue(TypeId type);
 //! Returns the minimal type that guarantees an integer value from not
 //! overflowing
 TypeId MinimalType(int64_t value);

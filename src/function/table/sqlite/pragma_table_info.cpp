@@ -57,7 +57,7 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		auto &column = table->columns[i];
 		// return values:
 		// "cid", TypeId::INT32
-		assert(column.oid < (idx_t)std::numeric_limits<int32_t>::max());
+		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
 
 		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
 		// "name", TypeId::VARCHAR

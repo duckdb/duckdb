@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 
 #include <cstring>
@@ -121,5 +122,26 @@ template <> inline bool LessThan::Operation(interval_t left, interval_t right) {
 }
 template <> inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
 	return GreaterThanEquals::Operation(right, left);
+}
+//===--------------------------------------------------------------------===//
+// Specialized Hugeint Comparison Operators
+//===--------------------------------------------------------------------===//
+template <> inline bool Equals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::Equals(left, right);
+}
+template <> inline bool NotEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::NotEquals(left, right);
+}
+template <> inline bool GreaterThan::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::GreaterThan(left, right);
+}
+template <> inline bool GreaterThanEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::GreaterThanEquals(left, right);
+}
+template <> inline bool LessThan::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::LessThan(left, right);
+}
+template <> inline bool LessThanEquals::Operation(hugeint_t left, hugeint_t right) {
+	return Hugeint::LessThanEquals(left, right);
 }
 } // namespace duckdb

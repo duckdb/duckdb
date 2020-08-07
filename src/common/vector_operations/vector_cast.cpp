@@ -59,6 +59,10 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		assert(result.type == TypeId::INT64);
 		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast, true>(source, result, count);
 		break;
+	case SQLTypeId::HUGEINT:
+		assert(result.type == TypeId::INT128);
+		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast, true>(source, result, count);
+		break;
 	case SQLTypeId::FLOAT:
 		assert(result.type == TypeId::FLOAT);
 		UnaryExecutor::Execute<SRC, float, duckdb::Cast, true>(source, result, count);
@@ -109,6 +113,10 @@ static void string_cast_numeric_switch(Vector &source, Vector &result, SQLType s
 	case SQLTypeId::BIGINT:
 		assert(result.type == TypeId::INT64);
 		UnaryExecutor::Execute<string_t, int64_t, OP, true>(source, result, count);
+		break;
+	case SQLTypeId::HUGEINT:
+		assert(result.type == TypeId::INT128);
+		UnaryExecutor::Execute<string_t, hugeint_t, OP, true>(source, result, count);
 		break;
 	case SQLTypeId::FLOAT:
 		assert(result.type == TypeId::FLOAT);
@@ -270,6 +278,10 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 	case SQLTypeId::BIGINT:
 		assert(source.type == TypeId::INT64);
 		numeric_cast_switch<int64_t>(source, result, source_type, target_type, count);
+		break;
+	case SQLTypeId::HUGEINT:
+		assert(source.type == TypeId::INT128);
+		numeric_cast_switch<hugeint_t>(source, result, source_type, target_type, count);
 		break;
 	case SQLTypeId::FLOAT:
 		assert(source.type == TypeId::FLOAT);

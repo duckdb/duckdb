@@ -13,6 +13,8 @@ static int64_t TargetTypeCost(SQLType type) {
 		return 101;
 	case SQLTypeId::DOUBLE:
 		return 102;
+	case SQLTypeId::HUGEINT:
+		return 120;
 	case SQLTypeId::VARCHAR:
 		return 199;
 	default:
@@ -28,6 +30,7 @@ static int64_t ImplicitCastTinyint(SQLType to) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::HUGEINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -41,6 +44,7 @@ static int64_t ImplicitCastSmallint(SQLType to) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::HUGEINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -53,6 +57,7 @@ static int64_t ImplicitCastInteger(SQLType to) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::HUGEINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -64,6 +69,7 @@ static int64_t ImplicitCastBigint(SQLType to) {
 	case SQLTypeId::FLOAT:
 	case SQLTypeId::DOUBLE:
 	case SQLTypeId::DECIMAL:
+	case SQLTypeId::HUGEINT:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -83,6 +89,16 @@ static int64_t ImplicitCastFloat(SQLType to) {
 static int64_t ImplicitCastDouble(SQLType to) {
 	switch (to.id) {
 	case SQLTypeId::DECIMAL:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+static int64_t ImplicitCastHugeint(SQLType to) {
+	switch (to.id) {
+	case SQLTypeId::FLOAT:
+	case SQLTypeId::DOUBLE:
 		return TargetTypeCost(to);
 	default:
 		return -1;
@@ -115,6 +131,8 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		return ImplicitCastInteger(to);
 	case SQLTypeId::BIGINT:
 		return ImplicitCastBigint(to);
+	case SQLTypeId::HUGEINT:
+		return ImplicitCastHugeint(to);
 	case SQLTypeId::FLOAT:
 		return ImplicitCastFloat(to);
 	case SQLTypeId::DOUBLE:

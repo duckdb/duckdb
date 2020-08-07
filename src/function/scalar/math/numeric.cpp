@@ -1,8 +1,9 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -24,6 +25,9 @@ template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunc
 		break;
 	case SQLTypeId::BIGINT:
 		function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
+		break;
+	case SQLTypeId::HUGEINT:
+		function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarIntegerUnaryFunctionFixedReturn");
@@ -75,8 +79,8 @@ static void BinaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state
 // abs
 //===--------------------------------------------------------------------===//
 struct AbsOperator {
-	template <class TA, class TR> static inline TR Operation(TA left) {
-		return left < 0 ? left * -1 : left;
+	template <class TA, class TR> static inline TR Operation(TA input) {
+		return input < 0 ? -input : input;
 	}
 };
 
@@ -104,10 +108,10 @@ struct BitCntOperator {
 
 void BitCountFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("bit_count");
-	for (auto &type : SQLType::INTEGRAL) {
-		functions.AddFunction(ScalarFunction({type}, SQLType::TINYINT,
-		                                     GetScalarIntegerUnaryFunctionFixedReturn<int8_t, BitCntOperator>(type)));
-	}
+	functions.AddFunction(ScalarFunction({SQLType::TINYINT}, SQLType::TINYINT, ScalarFunction::UnaryFunction<int8_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({SQLType::SMALLINT}, SQLType::TINYINT, ScalarFunction::UnaryFunction<int16_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({SQLType::INTEGER}, SQLType::TINYINT, ScalarFunction::UnaryFunction<int32_t, int8_t, BitCntOperator>));
+	functions.AddFunction(ScalarFunction({SQLType::BIGINT}, SQLType::TINYINT, ScalarFunction::UnaryFunction<int64_t, int8_t, BitCntOperator>));
 	set.AddFunction(functions);
 }
 
@@ -150,8 +154,12 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// ceil on integral type is a nop
 			func = ScalarFunction::NopFunction;
+		} else if (type.id == SQLTypeId::FLOAT) {
+			func = ScalarFunction::UnaryFunction<float, float, CeilOperator>;
+		} else if (type.id == SQLTypeId::DOUBLE) {
+			func = ScalarFunction::UnaryFunction<double, double, CeilOperator>;
 		} else {
-			func = ScalarFunction::GetScalarUnaryFunction<CeilOperator>(type);
+			throw NotImplementedException("Unimplemented numeric type for function \"ceil\"");
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -176,8 +184,12 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// floor on integral type is a nop
 			func = ScalarFunction::NopFunction;
+		} else if (type.id == SQLTypeId::FLOAT) {
+			func = ScalarFunction::UnaryFunction<float, float, FloorOperator>;
+		} else if (type.id == SQLTypeId::DOUBLE) {
+			func = ScalarFunction::UnaryFunction<double, double, FloorOperator>;
 		} else {
-			func = ScalarFunction::GetScalarUnaryFunction<FloorOperator>(type);
+			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func));
 	}
@@ -210,9 +222,10 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			func = ScalarFunction::NopFunction;
 		} else if (type.id == SQLTypeId::FLOAT) {
 			func = ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperator>;
-		} else {
-			assert(type.id == SQLTypeId::DOUBLE || type.id == SQLTypeId::DECIMAL);
+		} else if (type.id == SQLTypeId::DOUBLE) {
 			func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperator>;
+		} else {
+			throw NotImplementedException("Unimplemented numeric type for function \"round\"");
 		}
 		round.AddFunction(ScalarFunction({type, SQLType::INTEGER}, type, func));
 	}

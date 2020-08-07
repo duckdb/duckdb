@@ -1,0 +1,42 @@
+# name: test/sql/storage/types/test_timestamp_storage.test
+# description: Test storage for timestamp type
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/timestamp_storage_test.db
+
+# create a table with hugeints
+statement ok
+CREATE TABLE timestamp (t TIMESTAMP)
+
+statement ok
+INSERT INTO timestamp VALUES ('2008-01-01 00:00:01'), (NULL), ('2007-01-01 00:00:01'), ('2008-02-01 00:00:01'), ('2008-01-02 00:00:01'), ('2008-01-01 10:00:00'), ('2008-01-01 00:10:00'), ('2008-01-01 00:00:10')
+
+# reload the database from disk a few times
+loop i 0 2
+
+restart
+
+query I
+SELECT * FROM timestamp ORDER BY t
+----
+NULL
+2007-01-01 00:00:01
+2008-01-01 00:00:01
+2008-01-01 00:00:10
+2008-01-01 00:10:00
+2008-01-01 10:00:00
+2008-01-02 00:00:01
+2008-02-01 00:00:01
+
+query I
+SELECT * FROM timestamp WHERE t=TIMESTAMP '2007-01-01 00:00:01' ORDER BY t
+----
+2007-01-01 00:00:01
+
+query I
+SELECT * FROM timestamp WHERE t=TIMESTAMP '2000-01-01 00:00:01' ORDER BY t
+----
+
+
+endloop

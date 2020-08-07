@@ -29,8 +29,54 @@ struct interval_t {
 };
 
 struct hugeint_t {
+public:
 	uint64_t lower;
-	uint64_t upper;
+	int64_t upper;
+public:
+	hugeint_t() = default;
+	hugeint_t(int64_t value);
+	hugeint_t(const hugeint_t & rhs) = default;
+	hugeint_t(hugeint_t && rhs) = default;
+	hugeint_t & operator=(const hugeint_t & rhs) = default;
+	hugeint_t & operator=(hugeint_t && rhs) = default;
+
+	string ToString();
+
+	// comparison operators
+	bool operator==(const hugeint_t &rhs) const;
+	bool operator!=(const hugeint_t &rhs) const;
+	bool operator<=(const hugeint_t &rhs) const;
+	bool operator<(const hugeint_t &rhs) const;
+	bool operator>(const hugeint_t &rhs) const;
+	bool operator>=(const hugeint_t &rhs) const;
+
+	// arithmetic operators
+	hugeint_t operator+(const hugeint_t & rhs) const;
+	hugeint_t operator-(const hugeint_t & rhs) const;
+	hugeint_t operator*(const hugeint_t & rhs) const;
+	hugeint_t operator/(const hugeint_t & rhs) const;
+	hugeint_t operator%(const hugeint_t & rhs) const;
+	hugeint_t operator-() const;
+
+	// bitwise operators
+	hugeint_t operator>>(const hugeint_t & rhs) const;
+	hugeint_t operator<<(const hugeint_t & rhs) const;
+	hugeint_t operator&(const hugeint_t & rhs) const;
+	hugeint_t operator|(const hugeint_t & rhs) const;
+	hugeint_t operator^(const hugeint_t & rhs) const;
+	hugeint_t operator~() const;
+
+	// in-place operators
+	hugeint_t & operator+=(const hugeint_t & rhs);
+	hugeint_t & operator-=(const hugeint_t & rhs);
+	hugeint_t & operator*=(const hugeint_t & rhs);
+	hugeint_t & operator/=(const hugeint_t & rhs);
+	hugeint_t & operator%=(const hugeint_t & rhs);
+	hugeint_t & operator>>=(const hugeint_t & rhs);
+	hugeint_t & operator<<=(const hugeint_t & rhs);
+	hugeint_t & operator&=(const hugeint_t & rhs);
+	hugeint_t & operator|=(const hugeint_t & rhs);
+	hugeint_t & operator^=(const hugeint_t & rhs);
 };
 
 struct string_t;
@@ -172,6 +218,7 @@ enum class TypeId : uint8_t {
 	VARBINARY = 201,
 	POINTER = 202,
 	HASH = 203,
+	INT128 = 204, // 128-bit integers
 
 	INVALID = 255
 };
@@ -202,6 +249,8 @@ enum class SQLTypeId : uint8_t {
 	BLOB = 24,
 	INTERVAL = 25,
 
+	HUGEINT = 50,
+
 	STRUCT = 100,
 	LIST = 101
 };
@@ -216,7 +265,7 @@ struct SQLType {
 	child_list_t<SQLType> child_type;
 
 	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
-	    : id(id), width(width), scale(scale), collation(move(collation)) {
+		: id(id), width(width), scale(scale), collation(move(collation)) {
 	}
 
 	bool operator==(const SQLType &rhs) const {
@@ -254,6 +303,7 @@ public:
 	static const SQLType ANY;
 	static const SQLType BLOB;
 	static const SQLType INTERVAL;
+	static const SQLType HUGEINT;
 	static const SQLType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -269,6 +319,9 @@ string SQLTypeToString(SQLType type);
 
 SQLType MaxSQLType(SQLType left, SQLType right);
 SQLType TransformStringToSQLType(string str);
+
+//! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
+int NumericTypeOrder(TypeId type);
 
 //! Gets the internal type associated with the given SQL type
 TypeId GetInternalType(SQLType type);
@@ -287,6 +340,8 @@ template <class T> TypeId GetTypeId() {
 		return TypeId::INT32;
 	} else if (std::is_same<T, int64_t>()) {
 		return TypeId::INT64;
+	} else if (std::is_same<T, hugeint_t>()) {
+		return TypeId::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
 		return TypeId::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {

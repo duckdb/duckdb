@@ -12,7 +12,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 	if (left.type != right.type) {
 		TypeId left_cast = TypeId::INVALID, right_cast = TypeId::INVALID;
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
-			if (left.type < right.type) {
+			if (NumericTypeOrder(left.type) < NumericTypeOrder(right.type)) {
 				left_cast = right.type;
 			} else {
 				right_cast = left.type;
@@ -40,6 +40,8 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		return OP::Operation(left.value_.integer, right.value_.integer);
 	case TypeId::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
+	case TypeId::INT128:
+		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
 	case TypeId::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
 	case TypeId::HASH:
