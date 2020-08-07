@@ -66,6 +66,8 @@ public:
 	static Value INTEGER(int32_t value);
 	//! Create a bigint Value from a specified value
 	static Value BIGINT(int64_t value);
+	//! Create a hugeint Value from a specified value
+	static Value HUGEINT(hugeint_t value);
 	//! Create a hash Value from a specified value
 	static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
@@ -141,6 +143,7 @@ public:
 		int16_t smallint;
 		int32_t integer;
 		int64_t bigint;
+		hugeint_t hugeint;
 		float float_;
 		double double_;
 		uintptr_t pointer;

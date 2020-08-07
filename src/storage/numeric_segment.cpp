@@ -8,9 +8,11 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/vector_size.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static NumericSegment::append_function_t GetAppendFunction(TypeId type);
 
@@ -132,6 +134,10 @@ static void templated_select_operation(SelectionVector &sel, Vector &result, Typ
 		Select<int64_t, OP>(sel, result, source, source_mask, constant.value_.bigint, approved_tuple_count);
 		break;
 	}
+	case TypeId::INT128: {
+		Select<hugeint_t, OP>(sel, result, source, source_mask, constant.value_.hugeint, approved_tuple_count);
+		break;
+	}
 	case TypeId::FLOAT: {
 		Select<float, OP>(sel, result, source, source_mask, constant.value_.float_, approved_tuple_count);
 		break;
@@ -169,6 +175,11 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	case TypeId::INT64: {
 		Select<int64_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.bigint,
 		                          constantRight.value_.bigint, approved_tuple_count);
+		break;
+	}
+	case TypeId::INT128: {
+		Select<hugeint_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.hugeint,
+		                          constantRight.value_.hugeint, approved_tuple_count);
 		break;
 	}
 	case TypeId::FLOAT: {
@@ -346,6 +357,11 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 		                              approved_tuple_count);
 		break;
 	}
+	case TypeId::INT128: {
+		templated_assignment<hugeint_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
+		                              approved_tuple_count);
+		break;
+	}
 	case TypeId::FLOAT: {
 		templated_assignment<float>(sel, source_data, result_data, *source_nullmask, result_nullmask,
 		                            approved_tuple_count);
@@ -453,7 +469,7 @@ void NumericSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-template <class T> static void update_min_max(T value, T *__restrict min, T *__restrict max) {
+template <class T> static void update_min_max_numeric_segment(T value, T *__restrict min, T *__restrict max) {
 	if (LessThan::Operation(value, *min)) {
 		*min = value;
 	}
@@ -483,7 +499,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 				nullmask[target_idx] = true;
 				stats.has_null = true;
 			} else {
-				update_min_max(sdata[source_idx], min, max);
+				update_min_max_numeric_segment(sdata[source_idx], min, max);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -491,7 +507,7 @@ static void append_loop(SegmentStatistics &stats, data_ptr_t target, idx_t targe
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);
 			auto target_idx = target_offset + i;
-			update_min_max(sdata[source_idx], min, max);
+			update_min_max_numeric_segment(sdata[source_idx], min, max);
 			tdata[target_idx] = sdata[source_idx];
 		}
 	}
@@ -508,6 +524,8 @@ static NumericSegment::append_function_t GetAppendFunction(TypeId type) {
 		return append_loop<int32_t>;
 	case TypeId::INT64:
 		return append_loop<int64_t>;
+	case TypeId::INT128:
+		return append_loop<hugeint_t>;
 	case TypeId::FLOAT:
 		return append_loop<float>;
 	case TypeId::DOUBLE:
@@ -534,7 +552,7 @@ static void update_loop_null(T *__restrict undo_data, T *__restrict base_data, T
 		base_data[base_sel[i]] = new_data[i];
 		base_nullmask[base_sel[i]] = new_nullmask[i];
 		// update the min max with the new data
-		update_min_max(new_data[i], min, max);
+		update_min_max_numeric_segment(new_data[i], min, max);
 	}
 }
 
@@ -547,7 +565,7 @@ static void update_loop_no_null(T *__restrict undo_data, T *__restrict base_data
 		// now move the new data in-place into the base table
 		base_data[base_sel[i]] = new_data[i];
 		// update the min max with the new data
-		update_min_max(new_data[i], min, max);
+		update_min_max_numeric_segment(new_data[i], min, max);
 	}
 }
 
@@ -580,6 +598,8 @@ static NumericSegment::update_function_t GetUpdateFunction(TypeId type) {
 		return update_loop<int32_t>;
 	case TypeId::INT64:
 		return update_loop<int64_t>;
+	case TypeId::INT128:
+		return update_loop<hugeint_t>;
 	case TypeId::FLOAT:
 		return update_loop<float>;
 	case TypeId::DOUBLE:
@@ -605,7 +625,7 @@ static void merge_update_loop(SegmentStatistics &stats, UpdateInfo *node, data_p
 	auto min = (T *)stats.minimum.get();
 	auto max = (T *)stats.maximum.get();
 	for (idx_t i = 0; i < count; i++) {
-		update_min_max<T>(update_data[i], min, max);
+		update_min_max_numeric_segment<T>(update_data[i], min, max);
 	}
 
 	// first we copy the old update info into a temporary structure
@@ -657,6 +677,8 @@ static NumericSegment::merge_update_function_t GetMergeUpdateFunction(TypeId typ
 		return merge_update_loop<int32_t>;
 	case TypeId::INT64:
 		return merge_update_loop<int64_t>;
+	case TypeId::INT128:
+		return merge_update_loop<hugeint_t>;
 	case TypeId::FLOAT:
 		return merge_update_loop<float>;
 	case TypeId::DOUBLE:
@@ -694,6 +716,8 @@ static NumericSegment::update_info_fetch_function_t GetUpdateInfoFetchFunction(T
 		return update_info_fetch<int32_t>;
 	case TypeId::INT64:
 		return update_info_fetch<int64_t>;
+	case TypeId::INT128:
+		return update_info_fetch<hugeint_t>;
 	case TypeId::FLOAT:
 		return update_info_fetch<float>;
 	case TypeId::DOUBLE:
@@ -741,6 +765,8 @@ static NumericSegment::update_info_append_function_t GetUpdateInfoAppendFunction
 		return update_info_append<int32_t>;
 	case TypeId::INT64:
 		return update_info_append<int64_t>;
+	case TypeId::INT128:
+		return update_info_append<hugeint_t>;
 	case TypeId::FLOAT:
 		return update_info_append<float>;
 	case TypeId::DOUBLE:
@@ -777,6 +803,8 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 		return rollback_update<int32_t>;
 	case TypeId::INT64:
 		return rollback_update<int64_t>;
+	case TypeId::INT128:
+		return rollback_update<hugeint_t>;
 	case TypeId::FLOAT:
 		return rollback_update<float>;
 	case TypeId::DOUBLE:
@@ -786,4 +814,6 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Type
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}
+}
+
 }

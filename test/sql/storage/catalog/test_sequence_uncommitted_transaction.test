@@ -1,0 +1,33 @@
+# name: test/sql/storage/catalog/test_sequence_uncommitted_transaction.test
+# description: Use sequences with uncommited transaction
+# group: [catalog]
+
+load __TEST_DIR__/store_sequences.db
+
+statement ok
+CREATE SEQUENCE seq
+
+# start a transaction in con2
+statement ok con2
+BEGIN transaction
+
+# select the nextval
+query I con2
+SELECT nextval('seq')
+----
+1
+
+# query the sequence in con as well
+query I
+SELECT nextval('seq')
+----
+2
+
+# restart the database
+restart
+
+# the sequence is now at position 3
+query I
+SELECT nextval('seq')
+----
+3

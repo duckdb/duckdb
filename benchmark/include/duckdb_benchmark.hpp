@@ -41,10 +41,6 @@ public:
 
 	//! Load data into DuckDB
 	virtual void Load(DuckDBBenchmarkState *state) = 0;
-	//! A single query to run against the database
-	virtual string GetQuery() {
-		return string();
-	}
 	//! Run a bunch of queries, only called if GetQuery() returns an empty string
 	virtual void RunBenchmark(DuckDBBenchmarkState *state) {
 	}

@@ -62,6 +62,27 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
+enum class ExtensionLoadResult : uint8_t {
+	LOADED_EXTENSION = 0,
+	EXTENSION_UNKNOWN = 1,
+	NOT_LOADED = 2
+};
+
+struct SQLLogicTestRunner {
+public:
+	void ExecuteFile(string script);
+	ExtensionLoadResult LoadExtension(string extension);
+	void LoadDatabase(string dbpath);
+public:
+
+	string dbpath;
+	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
+	unique_ptr<DBConfig> config;
+	unordered_set<string> extensions;
+	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+};
+
 /*
 ** A structure to keep track of the state of scanning the input script.
 */
@@ -440,12 +461,22 @@ static void query_break(int line) {
 }
 
 struct Command {
+	Command(SQLLogicTestRunner &runner) : runner(runner) {}
 	virtual ~Command(){}
 
+	SQLLogicTestRunner &runner;
+	string connection_name;
 	int query_line;
 	string sql_query;
-	Connection *connection;
 	string file_name;
+
+	Connection *CommandConnection() {
+		if (connection_name.empty()) {
+			return runner.con.get();
+		} else {
+			return GetConnection(*runner.db, runner.named_connection_map, connection_name);
+		}
+	}
 
 	virtual void Execute() = 0;
 	void Execute(string loop_iterator_name, int idx) {
@@ -461,6 +492,8 @@ struct Command {
 };
 
 struct Statement : public Command {
+	Statement(SQLLogicTestRunner &runner) : Command(runner) {}
+
 	bool expect_ok;
 
 	void Execute() override;
@@ -473,24 +506,34 @@ enum class SortStyle : uint8_t {
 };
 
 struct Query : public Command {
-	idx_t expected_column_count;
-	SortStyle sort_style;
+	Query(SQLLogicTestRunner &runner) : Command(runner) {}
+
+	idx_t expected_column_count = 0;
+	SortStyle sort_style = SortStyle::NO_SORT;
 	vector<string> values;
-	bool output_result_mode;
-	int hashThreshold;
-	bool output_hash_mode;
-	bool query_has_label;
+	bool output_result_mode = false;
+	int hashThreshold = 0;
+	bool output_hash_mode = false;
+	bool query_has_label = false;
 	string query_label;
+
+	void Execute() override;
+	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) ;
+};
+
+struct RestartCommand : public Command {
+	RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {}
 
 	void Execute() override;
 };
 
-
 void Statement::Execute() {
+	auto connection = CommandConnection();
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
-	
+
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
 		error = !error;
@@ -510,7 +553,19 @@ void Statement::Execute() {
 	REQUIRE(!error);
 }
 
+void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) {
+	print_error_header("Wrong column count in query!", file_name, query_line);
+	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result.column_count() << termcolor::reset << " columns" << std::endl;
+	print_line_sep();
+	print_sql(sql_query);
+	print_line_sep();
+	print_result_error(result, values, expected_column_count, row_wise);
+	FAIL();
+}
+
 void Query::Execute() {
+	auto connection = CommandConnection();
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	if (!result->success) {
@@ -626,6 +681,15 @@ void Query::Execute() {
 		*found.
 		*/
 	if (!compare_hash) {
+		// check if the row/column count matches
+		int original_expected_columns = expected_column_count;
+		bool column_count_mismatch = false;
+		if (expected_column_count != result->column_count()) {
+			// expected column count is different from the count found in the result
+			// we try to keep going with the number of columns in the result
+			expected_column_count = result->column_count();
+			column_count_mismatch = true;
+		}
 		idx_t expected_rows = values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
 		bool row_wise = expected_column_count > 1 && values.size() == result->collection.count;
@@ -647,23 +711,19 @@ void Query::Execute() {
 			expected_rows = values.size();
 			row_wise = true;
 		} else if (values.size() % expected_column_count != 0) {
+			if (column_count_mismatch) {
+				ColumnCountMismatch(*result, original_expected_columns, row_wise);
+			}
 			print_error_header("Error in test!", file_name, query_line);
 			print_line_sep();
 			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int) expected_column_count, (int) values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL();
 		}
-		// check if the row/column count matches
-		if (expected_column_count != result->column_count()) {
-			print_error_header("Wrong column count in query!", file_name, query_line);
-			std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result->column_count() << termcolor::reset << " columns" << std::endl;
-			print_line_sep();
-			print_sql(sql_query);
-			print_line_sep();
-			print_result_error(*result, values, expected_column_count, row_wise);
-			FAIL();
-		}
 		if (expected_rows != result->collection.count) {
+			if (column_count_mismatch) {
+				ColumnCountMismatch(*result, original_expected_columns, row_wise);
+			}
 			print_error_header("Wrong row count in query!", file_name, query_line);
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
 			print_line_sep();
@@ -679,6 +739,9 @@ void Query::Execute() {
 				// split based on tab character
 				auto splits = StringUtil::Split(values[i], "\t");
 				if (splits.size() != expected_column_count) {
+					if (column_count_mismatch) {
+						ColumnCountMismatch(*result, original_expected_columns, row_wise);
+					}
 					print_line_sep();
 					print_error_header("Error in test! Column count mismatch after splitting on tab!", file_name, query_line);
 					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
@@ -715,6 +778,18 @@ void Query::Execute() {
 				}
 			}
 		}
+		if (column_count_mismatch) {
+			print_line_sep();
+			print_error_header("Wrong column count in query!", file_name, query_line);
+			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset << " columns" << std::endl;
+			print_line_sep();
+			print_sql(sql_query);
+			print_line_sep();
+			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result." << std::endl;
+			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query " << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset << std::endl;
+			print_line_sep();
+			FAIL();
+		}
 	} else {
 		bool hash_compare_error = false;
 		if (query_has_label) {
@@ -747,7 +822,50 @@ void Query::Execute() {
 	}
 }
 
-static void execute_file(string script) {
+void RestartCommand::Execute() {
+	runner.LoadDatabase(runner.dbpath);
+}
+
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(string extension) {
+	if (extension == "parquet") {
+#ifdef BUILD_PARQUET_EXTENSION
+		db->LoadExtension<ParquetExtension>();
+#else
+		// parquet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "icu") {
+#ifdef BUILD_ICU_EXTENSION
+		db->LoadExtension<ICUExtension>();
+#else
+		// icu extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else {
+		// unknown extension
+		return ExtensionLoadResult::EXTENSION_UNKNOWN;
+	}
+	extensions.insert(extension);
+	return ExtensionLoadResult::LOADED_EXTENSION;
+}
+
+void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+	// restart the database with the specified db path
+	db.reset();
+	con.reset();
+	named_connection_map.clear();
+	// now re-open the current database
+
+	db = make_unique<DuckDB>(dbpath, config.get());
+	con = make_unique<Connection>(*db);
+
+	// load any previously loaded extensions again
+	for(auto &extension : extensions) {
+		LoadExtension(extension);
+	}
+}
+
+void SQLLogicTestRunner::ExecuteFile(string script) {
 	int haltOnError = 0;                        /* Stop on first error if true */
 	const char *zDbEngine = "DuckDB";
 	const char *zScriptFile = 0;                /* Input script filename */
@@ -763,21 +881,23 @@ static void execute_file(string script) {
 	int bHt = 0;                                /* True if -ht command-line option */
 	int output_hash_mode = 0;
 	int output_result_mode = 0;
-	bool skip_index = false;
 	bool in_loop = false;
 	string loop_iterator_name;
 	int loop_start;
 	int loop_end;
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
+	bool skip_index = false;
+
 	// for the original SQLite tests we skip the index (for now)
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
 		skip_index = true;
 	}
 
-	DuckDB db;
-	Connection con(db);
-	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+	// initialize an in-memory database
+	db = make_unique<DuckDB>();
+	con = make_unique<Connection>(*db);
+
 
 	/*
 	** Read the entire script file contents into memory
@@ -852,8 +972,8 @@ static void execute_file(string script) {
 
 		/* Figure out the record type and do appropriate processing */
 		if (strcmp(sScript.azToken[0], "statement") == 0) {
-			auto command = make_unique<Statement>();
-			
+			auto command = make_unique<Statement>(*this);
+
 			/* Extract the SQL from second and subsequent lines of the
 			** record.  Copy the SQL into contiguous memory at the beginning
 			** of zScript - we are guaranteed to have enough space there. */
@@ -870,13 +990,13 @@ static void execute_file(string script) {
 
 			// perform any renames in zScript
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
-			
+
 			// skip CREATE INDEX (for now...)
 			if (skip_index && StringUtil::StartsWith(StringUtil::Upper(command->sql_query), "CREATE INDEX")) {
 				fprintf(stderr, "Ignoring CREATE INDEX statement %s\n", command->sql_query.c_str());
 				continue;
 			}
-			// parse 
+			// parse
 			if (strcmp(sScript.azToken[1], "ok") == 0) {
 				command->expect_ok = true;
 			} else if (strcmp(sScript.azToken[1], "error") == 0) {
@@ -886,17 +1006,8 @@ static void execute_file(string script) {
 				        sScript.startLine);
 				FAIL();
 			}
-			// parse the connection to use
-			Connection *connection = &con;
-			if (strlen(sScript.azToken[2]) > 0) {
-				connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
-			}
 
-			/* Run the statement.  Remember the results
-			** If we're expecting an error, pass true to suppress
-			** printing of any errors.
-			*/
-			command->connection = connection;
+			command->connection_name = sScript.azToken[2];
 			if (skip_execution) {
 				continue;
 			}
@@ -906,7 +1017,7 @@ static void execute_file(string script) {
 				command->Execute();
 			}
 		} else if (strcmp(sScript.azToken[0], "query") == 0) {
-			auto command = make_unique<Query>();
+			auto command = make_unique<Query>(*this);
 
 			int k = 0;
 			int c;
@@ -916,7 +1027,7 @@ static void execute_file(string script) {
 			command->hashThreshold = hashThreshold;
 			command->output_hash_mode = output_hash_mode;
 			command->output_result_mode = output_result_mode;
-			
+
 			/* Verify that the type string consists of one or more
 			 *characters
 			 ** from the set 'TIR':*/
@@ -957,7 +1068,7 @@ static void execute_file(string script) {
 			command->sql_query = StringUtil::Replace(zScript, "__TEST_DIR__", TestDirectoryPath());
 
 			// figure out the sort style/connection style
-			command->connection = &con;
+			command->sort_style = SortStyle::NO_SORT;
 			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
 				/* Do no sorting */
 				command->sort_style = SortStyle::NO_SORT;
@@ -968,7 +1079,7 @@ static void execute_file(string script) {
 				/* Sort all values independently */
 				command->sort_style = SortStyle::VALUE_SORT;
 			} else {
-				command->connection = GetConnection(db, named_connection_map, sScript.azToken[2]);
+				command->connection_name = sScript.azToken[2];
 			}
 
 			/* In verify mode, first skip over the ---- line if we are
@@ -1036,6 +1147,9 @@ static void execute_file(string script) {
 				FAIL();
 			}
 		} else if (strcmp(sScript.azToken[0], "loop") == 0) {
+			if (skip_execution) {
+				continue;
+			}
 			if (in_loop) {
 				fprintf(stderr, "%s:%d: Test error: nested loops not supported!\n", zScriptFile, sScript.startLine);
 				FAIL();
@@ -1050,6 +1164,9 @@ static void execute_file(string script) {
 			loop_start = std::stoi(sScript.azToken[2]);
 			loop_end = std::stoi(sScript.azToken[3]);
 		} else if (strcmp(sScript.azToken[0], "endloop") == 0) {
+			if (skip_execution) {
+				continue;
+			}
 			if (!in_loop) {
 				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
@@ -1068,21 +1185,7 @@ static void execute_file(string script) {
 		} else if (strcmp(sScript.azToken[0], "require") == 0) {
 			// require command
 			string param = StringUtil::Lower(sScript.azToken[1]);
-			if (param == "parquet") {
-#ifdef BUILD_PARQUET_EXTENSION
-				db.LoadExtension<ParquetExtension>();
-#else
-				// parquet extension required but not build: skip this test
-				return;
-#endif
-			} else if (param == "icu") {
-#ifdef BUILD_ICU_EXTENSION
-				db.LoadExtension<ICUExtension>();
-#else
-				// icu extension required but not build: skip this test
-				return;
-#endif
-			} else if (param == "vector_size") {
+			if (param == "vector_size") {
 				// require a specific vector size
 				int required_vector_size = std::stoi(sScript.azToken[2]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
@@ -1090,10 +1193,45 @@ static void execute_file(string script) {
 					return;
 				}
 			} else {
-				fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				auto result = LoadExtension(param);
+				if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+					FAIL();
+				} else if (result == ExtensionLoadResult::NOT_LOADED) {
+					// extension known but not build: skip this test
+					return;
+				}
+			}
+		} else if (strcmp(sScript.azToken[0], "load") == 0) {
+			if (in_loop) {
+				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
+			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
+			if (dbpath.empty() || dbpath == ":memory:") {
+				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			// delete the target database file, if it exists
+			DeleteDatabase(dbpath);
 
+			// set up the config file
+			config = GetTestConfig();
+			// now create the database file
+			LoadDatabase(dbpath);
+		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
+			if (dbpath.empty()) {
+				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n", zScriptFile, sScript.startLine);
+				FAIL();
+			}
+			// restart the current database
+			// first clear all connections
+			auto command = make_unique<RestartCommand>(*this);
+			if (in_loop) {
+				loop_statements.push_back(move(command));
+			} else {
+				command->Execute();
+			}
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
@@ -1126,7 +1264,8 @@ static void testRunner() {
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
 	// fprintf(stderr, "%s\n", name.c_str());
-	execute_file(name);
+	SQLLogicTestRunner runner;
+	runner.ExecuteFile(name);
 }
 
 static string ParseGroupFromPath(string file) {

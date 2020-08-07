@@ -93,6 +93,7 @@ template <> bool TryCast::Operation(string_t input, int8_t &result, bool strict)
 template <> bool TryCast::Operation(string_t input, int16_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, int32_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict);
 template <> bool TryCast::Operation(string_t input, float &result, bool strict);
 template <> bool TryCast::Operation(string_t input, double &result, bool strict);
 
@@ -101,6 +102,7 @@ template <> int8_t Cast::Operation(string_t input);
 template <> int16_t Cast::Operation(string_t input);
 template <> int32_t Cast::Operation(string_t input);
 template <> int64_t Cast::Operation(string_t input);
+template <> hugeint_t Cast::Operation(string_t input);
 template <> float Cast::Operation(string_t input);
 template <> double Cast::Operation(string_t input);
 template <> string Cast::Operation(string_t input);
@@ -110,9 +112,50 @@ template <> int8_t StrictCast::Operation(string_t input);
 template <> int16_t StrictCast::Operation(string_t input);
 template <> int32_t StrictCast::Operation(string_t input);
 template <> int64_t StrictCast::Operation(string_t input);
+template <> hugeint_t StrictCast::Operation(string_t input);
 template <> float StrictCast::Operation(string_t input);
 template <> double StrictCast::Operation(string_t input);
 template <> string StrictCast::Operation(string_t input);
+
+//===--------------------------------------------------------------------===//
+// Hugeint casts
+//===--------------------------------------------------------------------===//
+// Numeric -> Hugeint casts
+template <> bool TryCast::Operation(bool input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(float input, hugeint_t &result, bool strict);
+template <> bool TryCast::Operation(double input, hugeint_t &result, bool strict);
+
+template <> hugeint_t Cast::Operation(bool input);
+template <> hugeint_t Cast::Operation(int8_t input);
+template <> hugeint_t Cast::Operation(int16_t input);
+template <> hugeint_t Cast::Operation(int32_t input);
+template <> hugeint_t Cast::Operation(int64_t input);
+template <> hugeint_t Cast::Operation(float input);
+template <> hugeint_t Cast::Operation(double input);
+// Hugeint -> numeric casts
+template <> bool TryCast::Operation(hugeint_t input, bool &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int8_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int16_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, float &result, bool strict);
+template <> bool TryCast::Operation(hugeint_t input, double &result, bool strict);
+
+template <> bool Cast::Operation(hugeint_t input);
+template <> int8_t Cast::Operation(hugeint_t input);
+template <> int16_t Cast::Operation(hugeint_t input);
+template <> int32_t Cast::Operation(hugeint_t input);
+template <> int64_t Cast::Operation(hugeint_t input);
+template <> float Cast::Operation(hugeint_t input);
+template <> double Cast::Operation(hugeint_t input);
+// nop cast
+template <> bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict);
+template <> hugeint_t Cast::Operation(hugeint_t input);
+
 
 //===--------------------------------------------------------------------===//
 // Interval -> String Casts
@@ -130,6 +173,7 @@ template <> string Cast::Operation(int8_t input);
 template <> string Cast::Operation(int16_t input);
 template <> string Cast::Operation(int32_t input);
 template <> string Cast::Operation(int64_t input);
+template <> string Cast::Operation(hugeint_t input);
 template <> string Cast::Operation(float input);
 template <> string Cast::Operation(double input);
 template <> string Cast::Operation(string_t input);
@@ -147,6 +191,7 @@ template <> duckdb::string_t StringCast::Operation(int16_t input, Vector &result
 template <> duckdb::string_t StringCast::Operation(int32_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(int64_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(uint64_t input, Vector &result);
+template <> duckdb::string_t StringCast::Operation(hugeint_t input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(interval_t input, Vector &result);

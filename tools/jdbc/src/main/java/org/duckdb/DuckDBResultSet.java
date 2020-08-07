@@ -3,6 +3,7 @@ package org.duckdb;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.net.URL;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -124,6 +125,8 @@ public class DuckDBResultSet implements ResultSet {
 			return getInt(columnIndex);
 		} else if (column_type.equals("BIGINT")) {
 			return getLong(columnIndex);
+		} else if (column_type.equals("HUGEINT")) {
+			return getHugeint(columnIndex);
 		} else if (column_type.equals("FLOAT")) {
 			return getFloat(columnIndex);
 		} else if (column_type.equals("DOUBLE")) {
@@ -234,6 +237,26 @@ public class DuckDBResultSet implements ResultSet {
 			return ((Number) o).longValue();
 		}
 		return Long.parseLong(o.toString());
+	}
+	
+	public BigInteger getHugeint(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return BigInteger.ZERO;
+		}
+		if ("HUGEINT".equals(meta.column_types[columnIndex - 1])) {
+			byte[] buf = new byte[16];
+			getbuf(columnIndex, 16).get(buf);
+
+			for (int i = 0; i < 8; i++) {
+				byte keep = buf[i];
+				buf[i] = buf[15-i];
+				buf[15-i] = keep;
+			}
+			return new BigInteger(buf);
+
+		}
+		Object o = getObject(columnIndex);
+		return new BigInteger(o.toString());
 	}
 
 	public float getFloat(int columnIndex) throws SQLException {
@@ -397,11 +420,11 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return new BigDecimal(getHugeint(columnIndex));
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return getBigDecimal(findColumn(columnLabel));
 	}
 
 	public boolean isBeforeFirst() throws SQLException {

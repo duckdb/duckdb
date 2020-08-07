@@ -2,9 +2,11 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 unique_ptr<SelectStatement> SelectStatement::Copy() {
 	auto result = make_unique<SelectStatement>();
@@ -17,7 +19,7 @@ unique_ptr<SelectStatement> SelectStatement::Copy() {
 
 void SelectStatement::Serialize(Serializer &serializer) {
 	// with clauses
-	assert(cte_map.size() <= numeric_limits<uint32_t>::max());
+	assert(cte_map.size() <= NumericLimits<uint32_t>::Maximum());
 	serializer.Write<uint32_t>((uint32_t)cte_map.size());
 	for (auto &cte : cte_map) {
 		serializer.WriteString(cte.first);
@@ -57,4 +59,6 @@ bool SelectStatement::Equals(const SQLStatement *other_) const {
 		}
 	}
 	return node->Equals(other->node.get());
+}
+
 }

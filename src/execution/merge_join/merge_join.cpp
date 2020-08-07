@@ -17,6 +17,8 @@ template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, 
 		return MJ::template Operation<int32_t>(l, r);
 	case TypeId::INT64:
 		return MJ::template Operation<int64_t>(l, r);
+	case TypeId::INT128:
+		return MJ::template Operation<hugeint_t>(l, r);
 	case TypeId::FLOAT:
 		return MJ::template Operation<float>(l, r);
 	case TypeId::DOUBLE:

@@ -46,6 +46,9 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 	case TypeId::INT64:
 		templated_gather_loop<int64_t>(source, dest, count);
 		break;
+	case TypeId::INT128:
+		templated_gather_loop<hugeint_t>(source, dest, count);
+		break;
 	case TypeId::FLOAT:
 		templated_gather_loop<float>(source, dest, count);
 		break;

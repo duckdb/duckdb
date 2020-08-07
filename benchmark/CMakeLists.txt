@@ -12,7 +12,7 @@ add_subdirectory(tpcds)
 add_subdirectory(imdb)
 add_subdirectory(expression_reordering)
 
-add_executable(benchmark_runner benchmark_runner.cpp ${BENCHMARK_OBJECT_FILES})
+add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp ${BENCHMARK_OBJECT_FILES})
 
 target_link_libraries(
   benchmark_runner

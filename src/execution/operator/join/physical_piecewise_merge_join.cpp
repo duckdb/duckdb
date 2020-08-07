@@ -434,6 +434,9 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 	case TypeId::INT64:
 		templated_quicksort<int64_t>(vdata, not_null, not_null_count, order.order);
 		break;
+	case TypeId::INT128:
+		templated_quicksort<hugeint_t>(vdata, not_null, not_null_count, order.order);
+		break;
 	case TypeId::FLOAT:
 		templated_quicksort<float>(vdata, not_null, not_null_count, order.order);
 		break;

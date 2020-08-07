@@ -100,6 +100,7 @@ static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
 	fun_set.AddFunction(ScalarFunction({SQLType::DATE}, SQLType::DATE, least_greatest_impl<date_t, OP>, false, nullptr, nullptr, SQLType::DATE));
 	fun_set.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::TIMESTAMP, least_greatest_impl<timestamp_t, OP>, false, nullptr, nullptr, SQLType::TIMESTAMP));
 	fun_set.AddFunction(ScalarFunction({SQLType::BIGINT}, SQLType::BIGINT, least_greatest_impl<int64_t, OP>, false, nullptr, nullptr, SQLType::BIGINT));
+	fun_set.AddFunction(ScalarFunction({SQLType::HUGEINT}, SQLType::HUGEINT, least_greatest_impl<hugeint_t, OP>, false, nullptr, nullptr, SQLType::HUGEINT));
 	fun_set.AddFunction(ScalarFunction({SQLType::DOUBLE}, SQLType::DOUBLE, least_greatest_impl<double, OP>, false, nullptr, nullptr, SQLType::DOUBLE));
 	fun_set.AddFunction(ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, least_greatest_impl<string_t, OP, true>, false, nullptr, nullptr, SQLType::VARCHAR));
 	set.AddFunction(fun_set);

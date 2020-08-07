@@ -29,6 +29,8 @@ moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
 	os.path.join(include_dir, 'duckdb.h'),
 	os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
+	os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
+	os.path.join(include_dir, 'duckdb', 'common', 'types', 'interval.hpp'),
 	os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
 	os.path.join(include_dir, 'duckdb', 'common', 'types', 'time.hpp'),
 	os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_file_writer.hpp'),

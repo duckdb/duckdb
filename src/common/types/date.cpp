@@ -3,11 +3,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <cstring>
 #include <cctype>
 #include <algorithm>
-#include <limits>
 
 using namespace duckdb;
 using namespace std;
@@ -237,7 +237,7 @@ bool Date::IsValidDay(int32_t year, int32_t month, int32_t day) {
 }
 
 date_t Date::EpochToDate(int64_t epoch) {
-	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= numeric_limits<int32_t>::max());
+	assert((epoch / SECONDS_PER_DAY) + EPOCH_DATE <= NumericLimits<int32_t>::Maximum());
 	return (date_t)((epoch / SECONDS_PER_DAY) + EPOCH_DATE);
 }
 

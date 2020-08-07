@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -50,25 +51,26 @@ Value Value::MinimumValue(TypeId type) {
 		result.value_.boolean = false;
 		break;
 	case TypeId::INT8:
-		result.value_.tinyint = std::numeric_limits<int8_t>::min();
+		result.value_.tinyint = NumericLimits<int8_t>::Minimum();
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = std::numeric_limits<int16_t>::min();
+		result.value_.smallint = NumericLimits<int16_t>::Minimum();
 		break;
 	case TypeId::INT32:
-		result.value_.integer = std::numeric_limits<int32_t>::min();
+		result.value_.integer = NumericLimits<int32_t>::Minimum();
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = std::numeric_limits<int64_t>::min();
+		result.value_.bigint = NumericLimits<int64_t>::Minimum();
+		break;
+	case TypeId::INT128:
+		result.value_.hugeint.lower = 0;
+		result.value_.hugeint.upper = NumericLimits<int64_t>::Minimum();
 		break;
 	case TypeId::FLOAT:
-		result.value_.float_ = std::numeric_limits<float>::min();
+		result.value_.float_ = NumericLimits<float>::Minimum();
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = std::numeric_limits<double>::min();
-		break;
-	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uintptr_t>::min();
+		result.value_.double_ = NumericLimits<double>::Minimum();
 		break;
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
@@ -85,25 +87,25 @@ Value Value::MaximumValue(TypeId type) {
 		result.value_.boolean = true;
 		break;
 	case TypeId::INT8:
-		result.value_.tinyint = std::numeric_limits<int8_t>::max();
+		result.value_.tinyint = NumericLimits<int8_t>::Maximum();
 		break;
 	case TypeId::INT16:
-		result.value_.smallint = std::numeric_limits<int16_t>::max();
+		result.value_.smallint = NumericLimits<int16_t>::Maximum();
 		break;
 	case TypeId::INT32:
-		result.value_.integer = std::numeric_limits<int32_t>::max();
+		result.value_.integer = NumericLimits<int32_t>::Maximum();
 		break;
 	case TypeId::INT64:
-		result.value_.bigint = std::numeric_limits<int64_t>::max();
+		result.value_.bigint = NumericLimits<int64_t>::Maximum();
+		break;
+	case TypeId::INT128:
+		result.value_.hugeint = NumericLimits<hugeint_t>::Maximum();
 		break;
 	case TypeId::FLOAT:
-		result.value_.float_ = std::numeric_limits<float>::max();
+		result.value_.float_ = NumericLimits<float>::Maximum();
 		break;
 	case TypeId::DOUBLE:
-		result.value_.double_ = std::numeric_limits<double>::max();
-		break;
-	case TypeId::POINTER:
-		result.value_.pointer = std::numeric_limits<uintptr_t>::max();
+		result.value_.double_ = NumericLimits<double>::Maximum();
 		break;
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
@@ -146,13 +148,12 @@ Value Value::BIGINT(int64_t value) {
 	return result;
 }
 
-//Value Value::BLOB(string value) {
-//	Value result(TypeId::VARCHAR);
-//	result.str_value = value;
-//	result.is_null = false;
-//	result.sql_type = SQLType::VARBINARY;
-//	return result;
-//}
+Value Value::HUGEINT(hugeint_t value) {
+	Value result(TypeId::INT128);
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
 
 bool Value::FloatIsValid(float value) {
 	return !(std::isnan(value) || std::isinf(value));
@@ -344,6 +345,8 @@ template <class T> T Value::GetValueInternal() {
 		return Cast::Operation<int32_t, T>(value_.integer);
 	case TypeId::INT64:
 		return Cast::Operation<int64_t, T>(value_.bigint);
+	case TypeId::INT128:
+		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case TypeId::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
 	case TypeId::DOUBLE:
@@ -356,7 +359,7 @@ template <class T> T Value::GetValueInternal() {
 }
 
 template <> bool Value::GetValue() {
-	return GetValueInternal<bool>();
+	return GetValueInternal<int8_t>();
 }
 template <> int8_t Value::GetValue() {
 	return GetValueInternal<int8_t>();
@@ -381,22 +384,22 @@ template <> double Value::GetValue() {
 }
 
 Value Value::Numeric(TypeId type, int64_t value) {
-	assert(!TypeIsIntegral(type) ||
-	       (value >= duckdb::MinimumValue(type) && (value < 0 || (uint64_t)value <= duckdb::MaximumValue(type))));
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
 	case TypeId::INT8:
-		assert(value <= std::numeric_limits<int8_t>::max());
+		assert(value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
 	case TypeId::INT16:
-		assert(value <= std::numeric_limits<int16_t>::max());
+		assert(value <= NumericLimits<int16_t>::Maximum());
 		return Value::SMALLINT((int16_t)value);
 	case TypeId::INT32:
-		assert(value <= std::numeric_limits<int32_t>::max());
+		assert(value <= NumericLimits<int32_t>::Maximum());
 		return Value::INTEGER((int32_t)value);
 	case TypeId::INT64:
 		return Value::BIGINT(value);
+	case TypeId::INT128:
+		return Value::HUGEINT(value);
 	case TypeId::FLOAT:
 		return Value((float)value);
 	case TypeId::DOUBLE:
@@ -426,9 +429,10 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.integer);
 	case SQLTypeId::BIGINT:
 		return to_string(value_.bigint);
+	case SQLTypeId::HUGEINT:
+		return Hugeint::ToString(value_.hugeint);
 	case SQLTypeId::FLOAT:
 		return to_string(value_.float_);
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
 	case SQLTypeId::DATE:
@@ -617,6 +621,9 @@ void Value::Serialize(Serializer &serializer) {
 		case TypeId::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
+		case TypeId::INT128:
+			serializer.Write<hugeint_t>(value_.hugeint);
+			break;
 		case TypeId::FLOAT:
 			serializer.Write<double>(value_.float_);
 			break;
@@ -625,6 +632,9 @@ void Value::Serialize(Serializer &serializer) {
 			break;
 		case TypeId::POINTER:
 			serializer.Write<uintptr_t>(value_.pointer);
+			break;
+		case TypeId::INTERVAL:
+			serializer.Write<interval_t>(value_.interval);
 			break;
 		case TypeId::VARCHAR:
 			serializer.WriteString(str_value);
@@ -659,6 +669,9 @@ Value Value::Deserialize(Deserializer &source) {
 	case TypeId::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
+	case TypeId::INT128:
+		new_value.value_.hugeint = source.Read<hugeint_t>();
+		break;
 	case TypeId::FLOAT:
 		new_value.value_.float_ = source.Read<float>();
 		break;
@@ -667,6 +680,9 @@ Value Value::Deserialize(Deserializer &source) {
 		break;
 	case TypeId::POINTER:
 		new_value.value_.pointer = source.Read<uint64_t>();
+		break;
+	case TypeId::INTERVAL:
+		new_value.value_.interval = source.Read<interval_t>();
 		break;
 	case TypeId::VARCHAR:
 		new_value.str_value = source.Read<string>();

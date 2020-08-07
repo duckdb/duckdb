@@ -1,0 +1,53 @@
+# name: test/sql/storage/catalog/test_not_null_constraints.test
+# description: Test serialization of NOT NULL constraint
+# group: [catalog]
+
+# load the DB from disk
+load __TEST_DIR__/test_drop_table.db
+
+
+# create a schema and table and insert values
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# drop the schema/table
+statement ok
+DROP TABLE test.test
+
+statement ok
+DROP SCHEMA test
+
+# now create then again
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test.test VALUES (11, 22), (13, 22);
+
+# restart the database
+restart
+
+# after reload the table and schema are there: we can drop them again
+statement ok
+DROP TABLE test.test
+
+statement ok
+DROP SCHEMA test
+
+restart
+
+# after another reload they are still gone: create them again
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.test (a INTEGER, b INTEGER);
