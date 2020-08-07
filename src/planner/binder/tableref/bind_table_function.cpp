@@ -40,7 +40,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	// cast the parameters to the type of the function
 	auto result = make_unique<BoundTableFunction>(table_function, bind_index);
 	for(idx_t i = 0; i < arguments.size(); i++) {
-		result->parameters.push_back(parameters[i].CastAs(arguments[i], table_function.arguments[i]));
+		if (table_function.arguments[i] == SQLType::ANY) {
+			result->parameters.push_back(move(parameters[i]));
+		} else {
+			result->parameters.push_back(parameters[i].CastAs(arguments[i], table_function.arguments[i]));
+		}
 	}
 
 	// perform the binding
