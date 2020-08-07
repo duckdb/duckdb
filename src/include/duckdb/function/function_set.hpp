@@ -10,6 +10,7 @@
 
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,12 @@ public:
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
 	AggregateFunctionSet(string name) : FunctionSet(move(name)) {
+	}
+};
+
+class TableFunctionSet : public FunctionSet<TableFunction> {
+public:
+	TableFunctionSet(string name) : FunctionSet(move(name)) {
 	}
 };
 

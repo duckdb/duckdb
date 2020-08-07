@@ -24,5 +24,5 @@ void LogicalTableFunction::ResolveTypes() {
 }
 
 string LogicalTableFunction::ParamsToString() const {
-	return "(" + function->name + ")";
+	return "(" + function.name + ")";
 }

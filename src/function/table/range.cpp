@@ -1,4 +1,6 @@
 #include "duckdb/function/table/range.hpp"
+#include "duckdb/function/table_function.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 using namespace std;
@@ -57,12 +59,14 @@ static void range_function(ClientContext &context, vector<Value> &input, DataChu
 }
 
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
+	TableFunctionSet range("range");
+
 	// single argument range: (end) - implicit start = 0 and increment = 1
-	// TableFunction range("range", {SQLType::BIGINT}, range_function_bind, range_function<int64_t>);
+	range.AddFunction(TableFunction({SQLType::BIGINT}, range_function_bind, range_function));
 	// two arguments range: (start, end) - implicit increment = 1
-	// TableFunction range_two_args("range", {SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function<int64_t>);
+	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
 	// three arguments range: (start, end, increment)
-	TableFunction range("range", {SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function, nullptr);
+	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
 	set.AddFunction(range);
 }
 

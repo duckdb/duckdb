@@ -15,29 +15,36 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	assert(ref.function->type == ExpressionType::FUNCTION);
 	auto fexpr = (FunctionExpression *)ref.function.get();
-	// parse the parameters of the function
-	auto function =
-	    Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
 
-	// check if the argument lengths match
-	if (fexpr->children.size() != function->function.arguments.size()) {
-		throw CatalogException("Function with name %s exists, but argument length does not match! "
-		                       "Expected %d arguments but got %d.",
-		                       fexpr->function_name.c_str(), (int)function->function.arguments.size(),
-		                       (int)fexpr->children.size());
-	}
-	auto result = make_unique<BoundTableFunction>(function, bind_index);
 	// evalate the input parameters to the function
+	vector<SQLType> arguments;
+	vector<Value> parameters;
 	for (auto &child : fexpr->children) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		SQLType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
 		constant.SetSQLType(sql_type);
-		result->parameters.push_back(constant);
+
+		arguments.push_back(sql_type);
+		parameters.push_back(move(constant));
 	}
+	// fetch the function from the catalog
+	auto function =
+	    Catalog::GetCatalog(context).GetEntry<TableFunctionCatalogEntry>(context, fexpr->schema, fexpr->function_name);
+
+	// select the function based on the input parameters
+	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments);
+	auto &table_function = function->functions[best_function_idx];
+
+	// cast the parameters to the type of the function
+	auto result = make_unique<BoundTableFunction>(table_function, bind_index);
+	for(idx_t i = 0; i < arguments.size(); i++) {
+		result->parameters.push_back(parameters[i].CastAs(arguments[i], table_function.arguments[i]));
+	}
+
 	// perform the binding
-	result->bind_data = function->function.bind(context, result->parameters, result->return_types, result->names);
+	result->bind_data = table_function.bind(context, result->parameters, result->return_types, result->names);
 	assert(result->return_types.size() == result->names.size());
 	assert(result->return_types.size() > 0);
 	vector<string> names;

@@ -26,12 +26,12 @@ typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BoundFunctionExpressi
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
-class ScalarFunction : public SimpleFunction {
+class ScalarFunction : public BaseScalarFunction {
 public:
 	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, SQLType varargs = SQLType::INVALID)
-	    : SimpleFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
+	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency) {
 	}
 

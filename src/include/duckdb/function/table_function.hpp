@@ -21,21 +21,30 @@ typedef void (*table_function_t)(ClientContext &context, vector<Value> &input, D
 //! Type used for final (cleanup) function
 typedef void (*table_function_final_t)(ClientContext &context, FunctionData *dataptr);
 
-class TableFunction : public Function {
+class TableFunction : public SimpleFunction {
 public:
 	TableFunction(string name, vector<SQLType> arguments, table_function_bind_t bind, table_function_t function,
-	              table_function_final_t final)
-	    : Function(name), arguments(move(arguments)), bind(bind), function(function), final(final) {
+	              table_function_final_t final = nullptr, bool supports_projection = false)
+	    : SimpleFunction(name, move(arguments)), bind(bind), function(function), final(final), supports_projection(supports_projection) {
+	}
+	TableFunction(vector<SQLType> arguments, table_function_bind_t bind, table_function_t function,
+	              table_function_final_t final = nullptr, bool supports_projection = false)
+	    : TableFunction(string(), move(arguments), bind, function, final, supports_projection) {
 	}
 
-	//! Input arguments
-	vector<SQLType> arguments;
+
 	//! The bind function
 	table_function_bind_t bind;
 	//! The function pointer
 	table_function_t function;
 	//! Final function pointer
 	table_function_final_t final;
+	//! Whether or not the table function supports projection
+	bool supports_projection;
+
+	string ToString() {
+		return Function::CallToString(name, arguments);
+	}
 };
 
 } // namespace duckdb

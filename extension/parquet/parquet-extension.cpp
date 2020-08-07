@@ -323,7 +323,9 @@ struct ParquetScanFunctionData : public TableFunctionData {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr){};
+	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
+		supports_projection = true;
+	}
 
 private:
 	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> inputs,
@@ -1314,7 +1316,7 @@ unique_ptr<LocalFunctionData> parquet_write_initialize_local(ClientContext &cont
 
 void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
-	CreateTableFunctionInfo cinfo(scan_fun, true);
+	CreateTableFunctionInfo cinfo(scan_fun);
 	cinfo.name = "read_parquet";
 
 	CopyFunction function("parquet");

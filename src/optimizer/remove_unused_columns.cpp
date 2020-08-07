@@ -153,7 +153,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::TABLE_FUNCTION: {
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		auto &fun = (LogicalTableFunction &)op;
-		if (!everything_referenced && fun.function->supports_projection) {
+		if (!everything_referenced && fun.function.supports_projection) {
 			// table producing function: figure out which columns are referenced
 			ClearUnusedExpressions(fun.column_ids, fun.table_index);
 			// see above for this special case
