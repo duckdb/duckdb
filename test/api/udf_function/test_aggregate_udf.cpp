@@ -111,4 +111,16 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_int_args(1)"));
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_double_args(1)"));
 	}
+
+	SECTION("Testing no-parallel UDFs") {
+		REQUIRE_NOTHROW(con.CreateNonParallelAggregateFunction<UDFStringAggFunction, udf_string_agg_state_t, string_t, string_t, string_t>
+																("udf_string_agg_again",
+																SQLType::VARCHAR,
+																SQLType::VARCHAR,
+																SQLType::VARCHAR));
+
+		REQUIRE_NO_FAIL(con.Query("SELECT udf_string_agg_again('a',',')"));
+
+		// TODO it's missing to test an unary non-parallel aggregate (e.g., maybe nested/list.cpp)
+	}
 }
