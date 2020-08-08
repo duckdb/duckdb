@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/function/function.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
@@ -17,15 +17,15 @@ namespace duckdb {
 //! LogicalTableFunction represents a call to a table-producing function
 class LogicalTableFunction : public LogicalOperator {
 public:
-	LogicalTableFunction(TableFunctionCatalogEntry *function, idx_t table_index, unique_ptr<FunctionData> bind_data,
+	LogicalTableFunction(TableFunction function, idx_t table_index, unique_ptr<FunctionData> bind_data,
 	                     vector<Value> parameters, vector<SQLType> return_types, vector<string> names)
-	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(function), table_index(table_index),
+	    : LogicalOperator(LogicalOperatorType::TABLE_FUNCTION), function(move(function)), table_index(table_index),
 	      bind_data(move(bind_data)), parameters(move(parameters)), return_types(move(return_types)),
 	      names(move(names)) {
 	}
 
 	//! The function
-	TableFunctionCatalogEntry *function;
+	TableFunction function;
 	//! The table index of the table-producing function
 	idx_t table_index;
 	//! The bind data of the function

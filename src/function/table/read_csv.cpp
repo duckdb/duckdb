@@ -1,5 +1,6 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/function/function_set.hpp"
 
 using namespace std;
 
@@ -59,8 +60,11 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("read_csv", {SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind,
-	                              read_csv_info, nullptr));
+	TableFunctionSet read_csv("read_csv");
+	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
+	read_csv.AddFunction(TableFunction({SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+
+	set.AddFunction(read_csv);
 	set.AddFunction(TableFunction("read_csv_auto", {SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
 }
 

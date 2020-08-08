@@ -34,13 +34,13 @@ typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count);
 
-class AggregateFunction : public SimpleFunction {
+class AggregateFunction : public BaseScalarFunction {
 public:
 	AggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr)
-	    : SimpleFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
+	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), bind(bind),
 	      destructor(destructor) {
 	}

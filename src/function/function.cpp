@@ -90,6 +90,11 @@ void BuiltinFunctions::AddFunction(TableFunction function) {
 	catalog.CreateTableFunction(context, &info);
 }
 
+void BuiltinFunctions::AddFunction(TableFunctionSet set) {
+	CreateTableFunctionInfo info(set);
+	catalog.CreateTableFunction(context, &info);
+}
+
 void BuiltinFunctions::AddFunction(CopyFunction function) {
 	CreateCopyFunctionInfo info(function);
 	catalog.CreateCopyFunction(context, &info);
@@ -219,7 +224,11 @@ idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, 
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-void SimpleFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<SQLType> &arguments) {
+	return BindFunctionFromArguments(name, functions, arguments);
+}
+
+void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {

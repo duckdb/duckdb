@@ -47,3 +47,43 @@ SELECT * FROM range(0, 10, -1)
 
 statement error
 SELECT * FROM range(10, 0, 1)
+
+# overloads
+# only one parameter defaults to start=0, interval=1
+query I
+SELECT * FROM range(10)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# two parameters defaults to interval=1
+query I
+SELECT * FROM range(0, 10)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement error
+SELECT * FROM range('hello')
+
+statement error
+SELECT * FROM range(10, 'hello')
+
+statement error
+SELECT * FROM range(10, 10, 'hello')

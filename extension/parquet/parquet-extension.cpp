@@ -323,7 +323,9 @@ struct ParquetScanFunctionData : public TableFunctionData {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr){};
+	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
+		supports_projection = true;
+	}
 
 private:
 	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> inputs,
@@ -1314,8 +1316,10 @@ unique_ptr<LocalFunctionData> parquet_write_initialize_local(ClientContext &cont
 
 void ParquetExtension::Load(DuckDB &db) {
 	ParquetScanFunction scan_fun;
-	CreateTableFunctionInfo cinfo(scan_fun, true);
+	CreateTableFunctionInfo cinfo(scan_fun);
 	cinfo.name = "read_parquet";
+	CreateTableFunctionInfo pq_scan = cinfo;
+	pq_scan.name = "parquet_scan";
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = parquet_write_bind;
@@ -1330,8 +1334,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	conn.context->transaction.BeginTransaction();
 	db.catalog->CreateCopyFunction(*conn.context, &info);
 	db.catalog->CreateTableFunction(*conn.context, &cinfo);
-	cinfo.name = "parquet_scan";
-	db.catalog->CreateTableFunction(*conn.context, &cinfo);
+	db.catalog->CreateTableFunction(*conn.context, &pq_scan);
 
 	conn.context->transaction.Commit();
 }
