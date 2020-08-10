@@ -140,3 +140,15 @@ query T
 SELECT AGE(NULL, TIMESTAMP '1957-06-13');
 ----
 NULL
+
+# date can also be used with AGE
+# hopefully the clock is not off by more than a century
+query T
+SELECT INTERVAL '1' DAY < AGE(DATE '1900-06-13');
+----
+1
+
+query T
+SELECT AGE(DATE '1900-01-01', DATE '1950-01-01');
+----
+50 years

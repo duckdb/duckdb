@@ -15,6 +15,8 @@ static int64_t TargetTypeCost(SQLType type) {
 		return 102;
 	case SQLTypeId::HUGEINT:
 		return 120;
+	case SQLTypeId::TIMESTAMP:
+		return 120;
 	case SQLTypeId::VARCHAR:
 		return 199;
 	default:
@@ -105,6 +107,16 @@ static int64_t ImplicitCastHugeint(SQLType to) {
 	}
 }
 
+static int64_t ImplicitCastDate(SQLType to) {
+	switch (to.id) {
+	case SQLTypeId::TIMESTAMP:
+		return TargetTypeCost(to);
+	default:
+		return -1;
+	}
+}
+
+
 int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 	if (to.id == SQLTypeId::ANY) {
 		// anything can be cast to ANY type for no cost
@@ -137,6 +149,8 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		return ImplicitCastFloat(to);
 	case SQLTypeId::DOUBLE:
 		return ImplicitCastDouble(to);
+	case SQLTypeId::DATE:
+		return ImplicitCastDate(to);
 	default:
 		return -1;
 	}

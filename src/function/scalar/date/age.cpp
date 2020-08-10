@@ -15,7 +15,7 @@ static void age_function_standard(DataChunk &input, ExpressionState &state, Vect
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
 	UnaryExecutor::Execute<timestamp_t, interval_t, true>(input.data[0], result, input.size(), [&](timestamp_t input) {
-		return Interval::GetDifference(input, current_timestamp);
+		return Interval::GetDifference(current_timestamp, input);
 	});
 }
 
