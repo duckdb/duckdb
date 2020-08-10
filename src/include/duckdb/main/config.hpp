@@ -46,6 +46,8 @@ public:
 	OrderType default_order_type = OrderType::ASCENDING;
 	//! Null ordering used when none is specified (default: NULLS FIRST)
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
+	//! enable COPY and related commands
+	bool enable_copy = true;
 
 public:
 	static DBConfig &GetConfig(ClientContext &context);
