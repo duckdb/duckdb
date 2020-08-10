@@ -1,0 +1,12 @@
+# name: benchmark/micro/cast/strftime.benchmark
+# description: Use strftime to convert dates to strings
+# group: [cast]
+
+load
+CREATE TABLE dates AS SELECT DATE '1992-01-01' + i::INTEGER AS d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(strftime(d, '%Y/%m/%d')) FROM dates
+
+result I
+1992/01/01
