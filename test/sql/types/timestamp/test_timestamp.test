@@ -29,9 +29,15 @@ SELECT timestamp '    2017-07-23     13:10:11    ';
 ----
 2017-07-23 13:10:11
 
-# other trailing gunk is not accepted
+# other trailing, preceding, or middle gunk is not accepted
 statement error
 SELECT timestamp '    2017-07-23     13:10:11    AA';
+
+statement error
+SELECT timestamp 'AA2017-07-23 13:10:11';
+
+statement error
+SELECT timestamp '2017-07-23A13:10:11';
 
 query T
 SELECT t FROM timestamp ORDER BY t;
