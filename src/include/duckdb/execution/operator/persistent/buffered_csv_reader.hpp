@@ -10,6 +10,8 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+
 #include <sstream>
 
 #define SAMPLE_CHUNK_SIZE 100
@@ -20,6 +22,7 @@
 
 namespace duckdb {
 struct CopyInfo;
+struct StrpTimeFormat;
 
 //! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
 //! position given that we encounter a byte with the given value.
@@ -65,6 +68,14 @@ struct BufferedCSVReaderOptions  {
     string null_str;
     //! True, if column with that index must skip null check
     vector<bool> force_not_null;
+	//! The date format to use (if any is specified)
+	StrpTimeFormat date_format;
+	//! Whether or not a date format is specified
+	bool has_date_format = false;
+	//! The timestamp format to use (if any is specified)
+	StrpTimeFormat timestamp_format;
+	//! Whether or not a timestamp format is specified
+	bool has_timestamp_format = false;
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -86,7 +97,7 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<SQLType> requested_types = vector<SQLType>());
 	BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types, unique_ptr<std::istream> source);
 
-    BufferedCSVReaderOptions options;
+	BufferedCSVReaderOptions options;
 	vector<SQLType> sql_types;
 	vector<string> col_names;
 	unique_ptr<std::istream> source;

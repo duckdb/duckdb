@@ -5,7 +5,9 @@
 #include "duckdb/common/gzip_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_from_file.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -14,10 +16,10 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
-#include <queue>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 static char is_newline(char c) {
 	return c == '\n' || c == '\r';
@@ -1084,7 +1086,6 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
 		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
-
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
@@ -1107,8 +1108,17 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					}
 				}
 			}
-
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
+		} else if (options.has_date_format && sql_types[col_idx].id == SQLTypeId::DATE) {
+			// use the date format to cast the chunk
+			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
+				return options.date_format.ParseDate(input);
+			});
+		} else if (options.has_timestamp_format && sql_types[col_idx].id == SQLTypeId::TIMESTAMP) {
+			// use the date format to cast the chunk
+			UnaryExecutor::Execute<string_t, timestamp_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
+				return options.timestamp_format.ParseTimestamp(input);
+			});
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
@@ -1116,4 +1126,6 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 		}
 	}
 	parse_chunk.Reset();
+}
+
 }
