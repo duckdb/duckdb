@@ -40,10 +40,22 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> inputs,
                                                    vector<SQLType> &return_types, vector<string> &names) {
+	
+
 	auto result = make_unique<ReadCSVFunctionData>();
 	BufferedCSVReaderOptions options;
 	options.auto_detect = true;
 	options.file_path = inputs[0].str_value;
+
+	if (inputs.size() == 3) {
+		options.sample_size = inputs[1].CastAs(TypeId::INT64).value_.bigint;
+		if (options.sample_size > STANDARD_VECTOR_SIZE) {
+			throw BinderException(
+				"Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				STANDARD_VECTOR_SIZE);
+		}
+		options.num_samples = inputs[2].CastAs(TypeId::INT64).value_.bigint;
+	}
 
 	result->csv_reader = make_unique<BufferedCSVReader>(context, move(options));
 
@@ -63,9 +75,16 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet read_csv("read_csv");
 	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
 	read_csv.AddFunction(TableFunction({SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
-
+	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR}, read_csv_auto_bind,
+	                                   read_csv_info, nullptr));
 	set.AddFunction(read_csv);
-	set.AddFunction(TableFunction("read_csv_auto", {SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+
+	TableFunctionSet read_csv_auto("read_csv_auto");
+	read_csv_auto.AddFunction(TableFunction({SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+	read_csv_auto.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
+	                                        read_csv_auto_bind,
+	                                        read_csv_info, nullptr));
+	set.AddFunction(read_csv_auto);
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {

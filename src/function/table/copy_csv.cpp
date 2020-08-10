@@ -60,6 +60,10 @@ struct ReadCSVData : public BaseCSVData {
 	vector<SQLType> sql_types;
 	//! True, if column with that index must be quoted
 	vector<bool> force_not_null;
+	//! The size of a sample for format/data type detection (csv)
+	int sample_size;
+	//! The number of samples for data type detection (csv)
+	int num_samples;
 };
 
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
@@ -93,6 +97,18 @@ static string ParseString(vector<Value> &set) {
 	}
 	return set[0].str_value;
 }
+
+static idx_t ParseInteger(vector<Value> &set) {
+	if (set.size() != 1) {
+		// no option specified or multiple options specified
+		throw BinderException("Expected a single argument as a integer value");
+	}
+	if (set[0].type == TypeId::FLOAT || set[0].type == TypeId::DOUBLE) {
+		throw BinderException("Expected a integer argument!");
+	}
+	return set[0].CastAs(TypeId::INT64).value_.bigint;
+}
+
 
 //===--------------------------------------------------------------------===//
 // Bind
@@ -129,6 +145,22 @@ static bool ParseBaseOption(BaseCSVData &bind_data, string &loption, vector<Valu
 		}
 	} else {
 		// unrecognized option in base CSV
+		return false;
+	}
+	return true;
+}
+
+static bool ParseCSVAutoOption(ReadCSVData &bind_data, string &loption, vector<Value> &set) {
+	if (loption == "sample_size") {
+		bind_data.sample_size = ParseInteger(set);
+		if (bind_data.sample_size > STANDARD_VECTOR_SIZE) {
+			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    STANDARD_VECTOR_SIZE);
+		}
+	} else if (loption == "num_samples") {
+		bind_data.num_samples = ParseInteger(set);
+	} else {
+		// unrecognized option in CSV auto
 		return false;
 	}
 	return true;
@@ -224,6 +256,9 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 		if (ParseBaseOption(*bind_data, loption, set)) {
 			// parsed option in base CSV options: continue
 			continue;
+		} else if (ParseCSVAutoOption(*bind_data, loption, set)) {
+			// parsed CSV auto options: continue
+			continue;
 		} else if (loption == "force_not_null") {
 			bind_data->force_not_null = ParseColumnList(set, expected_names);
 		} else {
@@ -244,8 +279,12 @@ static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, CopyI
 
 	for(auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
-		// auto &set = option.second;
-		// CSV auto accepts no options!
+		auto &set = option.second;
+		if (ParseCSVAutoOption(*bind_data, loption, set)) {
+			// parsed CSV auto options: continue
+			continue;
+		} 
+		// CSV auto accepts no other options!
 		throw NotImplementedException("Unrecognized option for CSV_AUTO: %s", option.first.c_str());
 	}
 
@@ -513,6 +552,8 @@ unique_ptr<GlobalFunctionData> read_csv_initialize(ClientContext &context, Funct
 	options.skip_rows = 0;
 	options.num_cols = bind_data.sql_types.size();
 	options.force_not_null = bind_data.force_not_null;
+	options.sample_size = bind_data.sample_size;
+	options.num_samples = bind_data.num_samples;
 
 	global_data->csv_reader = make_unique<BufferedCSVReader>(context, move(options), bind_data.sql_types);
 	return move(global_data);

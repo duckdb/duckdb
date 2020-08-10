@@ -97,6 +97,21 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
+void BufferedCSVReader::ConfigureSampling() {
+	if (options.sample_size) {
+		if (options.sample_size > STANDARD_VECTOR_SIZE) {
+			throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
+			                      options.sample_size,
+			                      STANDARD_VECTOR_SIZE);
+		}
+		SAMPLE_CHUNK_SIZE = options.sample_size;
+	}
+
+	if (options.num_samples) {
+		MAX_SAMPLE_CHUNKS = options.num_samples;
+	}
+}
+
 unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
 	if (!FileSystem::GetFileSystem(context).FileExists(options.file_path)) {
 		throw IOException("File \"%s\" not found", options.file_path.c_str());
@@ -257,6 +272,8 @@ bool BufferedCSVReader::JumpToNextSample() {
 }
 
 vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
+	ConfigureSampling();
+
 	// TODO: sniff for uncommon (UTF-8) delimiter variants in first lines and add them to the list
 	const vector<string> delim_candidates = {",", "|", ";", "\t"};
 	const vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER,

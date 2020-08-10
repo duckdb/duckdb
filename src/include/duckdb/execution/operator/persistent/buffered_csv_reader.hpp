@@ -12,10 +12,10 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include <sstream>
 
-#define SAMPLE_CHUNK_SIZE 100
+#define DEFAULT_SAMPLE_CHUNK_SIZE 100
 #if STANDARD_VECTOR_SIZE < SAMPLE_CHUNK_SIZE
-#undef SAMPLE_CHUNK_SIZE
-#define SAMPLE_CHUNK_SIZE STANDARD_VECTOR_SIZE
+#undef DEFAULT_SAMPLE_CHUNK_SIZE
+#define DEFAULT_SAMPLE_CHUNK_SIZE STANDARD_VECTOR_SIZE
 #endif
 
 namespace duckdb {
@@ -65,6 +65,10 @@ struct BufferedCSVReaderOptions  {
     string null_str;
     //! True, if column with that index must skip null check
     vector<bool> force_not_null;
+	//! Size of sample chunk used for dialect and type detection
+	idx_t sample_size = DEFAULT_SAMPLE_CHUNK_SIZE;
+	//! Number of sample chunks used for type detection
+	idx_t num_samples = 10;
 };
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -79,7 +83,6 @@ class BufferedCSVReader {
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
-	static constexpr uint8_t MAX_SAMPLE_CHUNKS = 10;
 	ParserMode mode;
 
 public:
@@ -100,6 +103,9 @@ public:
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
+
+	idx_t SAMPLE_CHUNK_SIZE;
+	idx_t MAX_SAMPLE_CHUNKS;
 
 	vector<idx_t> sniffed_column_counts;
 	uint8_t sample_chunk_idx = 0;
@@ -141,6 +147,8 @@ private:
 	void ResetStream();
 	//! Resets the parse_chunk and related internal states, keep_types keeps the parse_chunk initialized
 	void ResetParseChunk();
+	//! Sets size of sample chunk and number of chunks for dialect and type detection
+	void ConfigureSampling();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);
