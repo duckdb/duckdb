@@ -6,12 +6,14 @@
 #include "duckdb.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
+#define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 0
+#define CPPHTTPLIB_THREAD_POOL_COUNT 16
 
 #include "httplib.hpp"
 #include "json.hpp"
@@ -28,8 +30,10 @@ void print_help() {
 	fprintf(stderr, "          --port=[no]           listening port\n");
 	fprintf(stderr, "          --database=[file]     use given database file\n");
 	fprintf(stderr, "          --read_only           open database in read-only mode\n");
+	fprintf(stderr, "          --disable_copy        disallow file import/export, e.g. in COPY\n");
 	fprintf(stderr, "          --query_timeout=[sec] query timeout in seconds\n");
 	fprintf(stderr, "          --fetch_timeout=[sec] result set timeout in seconds\n");
+	fprintf(stderr, "          --static=[folder]     static resource folder to serve\n");
 	fprintf(stderr, "          --log=[file]          log queries to file\n\n");
 	fprintf(stderr, "Version: %s\n", DuckDB::SourceID());
 }
@@ -234,6 +238,7 @@ int main(int argc, char **argv) {
 	string logfile_name;
 
 	string listen = "localhost";
+	string static_files;
 	int port = 1294;
 	std::ofstream logfile;
 
@@ -248,6 +253,8 @@ int main(int argc, char **argv) {
 			exit(0);
 		} else if (arg == "--read_only") {
 			config.access_mode = AccessMode::READ_ONLY;
+		} else if (arg == "--disable_copy") {
+			config.enable_copy = false;
 		} else if (StringUtil::StartsWith(arg, "--database=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -262,6 +269,13 @@ int main(int argc, char **argv) {
 				exit(1);
 			}
 			logfile_name = string(splits[1]);
+		} else if (StringUtil::StartsWith(arg, "--static=")) {
+			auto splits = StringUtil::Split(arg, '=');
+			if (splits.size() != 2) {
+				print_help();
+				exit(1);
+			}
+			static_files = string(splits[1]);
 		} else if (StringUtil::StartsWith(arg, "--listen=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -308,6 +322,8 @@ int main(int argc, char **argv) {
 	if (!logfile_name.empty()) {
 		logfile.open(logfile_name, std::ios_base::app);
 	}
+
+	config.maximum_memory = 10737418240;
 
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
 
@@ -428,6 +444,17 @@ int main(int argc, char **argv) {
 
 		serialize_json(req, resp, j);
 	});
+
+	svr.Get("/", [&](const Request &req, Response &resp) {
+		resp.status = 302;
+
+		resp.set_header("Location", "/select.html");
+		resp.set_content("<a href='/select.html'>select.html</a>", "text/html");
+	});
+
+	if (!static_files.empty()) {
+		svr.set_base_dir(static_files.c_str());
+	}
 
 	std::cout << "🦆 serving " + dbfile + " on http://" + listen + ":" + std::to_string(port) + "\n";
 
