@@ -25,7 +25,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	database.reset();
 
 	// now write random values into the file
-	auto handle = fs.OpenFile(storage_database, FileFlags::WRITE);
+	auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_WRITE);
 	int8_t value = 0x22;
 	fs.Write(*handle, &value, sizeof(int8_t), 100);
 	handle->Sync();
