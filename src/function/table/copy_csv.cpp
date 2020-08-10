@@ -60,6 +60,14 @@ struct ReadCSVData : public BaseCSVData {
 	vector<SQLType> sql_types;
 	//! True, if column with that index must be quoted
 	vector<bool> force_not_null;
+	//! The DATE_FORMAT to use to read or write dates
+	StrpTimeFormat date_format;
+	//! Whether or not there is a date format specified
+	bool has_date_format = false;
+	//! The DATE_FORMAT to use to read or write dates
+	StrpTimeFormat timestamp_format;
+	//! Whether or not there is a date format specified
+	bool has_timestamp_format = false;
 };
 
 void SubstringDetection(string &str_1, string &str_2, string name_str_1, string name_str_2) {
@@ -226,6 +234,22 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 			continue;
 		} else if (loption == "force_not_null") {
 			bind_data->force_not_null = ParseColumnList(set, expected_names);
+		}  else if (loption == "date_format" || loption == "dateformat") {
+			string format = ParseString(set);
+			string error = StrTimeFormat::ParseFormatSpecifier(format, bind_data->date_format);
+			bind_data->date_format.format_specifier = format;
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+			}
+			bind_data->has_date_format = true;
+		} else if (loption == "timestamp_format" || loption == "timestampformat") {
+			string format = ParseString(set);
+			string error = StrTimeFormat::ParseFormatSpecifier(format, bind_data->timestamp_format);
+			bind_data->timestamp_format.format_specifier = format;
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+			}
+			bind_data->has_timestamp_format = true;
 		} else {
 			throw NotImplementedException("Unrecognized option for CSV: %s", option.first.c_str());
 		}
@@ -376,7 +400,7 @@ struct LocalReadCSVData : public LocalFunctionData {
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(FileSystem &fs, string file_path) : fs(fs) {
-		handle = fs.OpenFile(file_path, FileFlags::WRITE | FileFlags::FILE_CREATE_NEW, FileLockType::WRITE_LOCK);
+		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, FileLockType::WRITE_LOCK);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {
@@ -513,6 +537,10 @@ unique_ptr<GlobalFunctionData> read_csv_initialize(ClientContext &context, Funct
 	options.skip_rows = 0;
 	options.num_cols = bind_data.sql_types.size();
 	options.force_not_null = bind_data.force_not_null;
+	options.has_date_format = bind_data.has_date_format;
+	options.date_format = move(bind_data.date_format);
+	options.has_timestamp_format = bind_data.has_timestamp_format;
+	options.timestamp_format = move(bind_data.timestamp_format);
 
 	global_data->csv_reader = make_unique<BufferedCSVReader>(context, move(options), bind_data.sql_types);
 	return move(global_data);

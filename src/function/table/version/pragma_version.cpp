@@ -9,7 +9,7 @@ struct PragmaVersionData : public TableFunctionData {
 	bool done;
 };
 
-static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vector<Value> inputs,
+static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                                     vector<SQLType> &return_types, vector<string> &names) {
 	names.push_back("library_version");
 	return_types.push_back(SQLType::VARCHAR);

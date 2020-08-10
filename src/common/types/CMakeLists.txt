@@ -7,6 +7,7 @@ add_library_unity(duckdb_common_types
                   hugeint.cpp
                   hyperloglog.cpp
                   interval.cpp
+                  numeric_helper.cpp
                   null_value.cpp
                   selection_vector.cpp
                   string_heap.cpp

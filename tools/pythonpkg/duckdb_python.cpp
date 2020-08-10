@@ -112,7 +112,7 @@ struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
 	    : TableFunction("pandas_scan", {SQLType::VARCHAR}, pandas_scan_bind, pandas_scan_function, nullptr){};
 
-	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> inputs,
+	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
 	                                                 vector<SQLType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));

@@ -161,7 +161,7 @@ template <> int64_t DayOfYearOperator::Operation(timestamp_t input) {
 
 struct WeekOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return Date::ExtractWeekNumber(input);
+		return Date::ExtractISOWeekNumber(input);
 	}
 };
 
@@ -306,20 +306,15 @@ template <> date_t LastDayOperator::Operation(timestamp_t input) {
 	return LastDayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
-static string_t s_monthNames[] = {"January", "February", "March",     "April",   "May",      "June",
-                                  "July",    "August",   "September", "October", "November", "December"};
-
 struct MonthNameOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return s_monthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
+		return Date::MonthNames[MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
-static string_t s_dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-
 struct DayNameOperator {
 	template <class TA, class TR> static inline TR Operation(TA input) {
-		return s_dayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
+		return Date::DayNames[DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };
 

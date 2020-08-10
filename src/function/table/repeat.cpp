@@ -12,7 +12,7 @@ struct RepeatFunctionData : public TableFunctionData {
 	idx_t target_count;
 };
 
-static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value> inputs,
+static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                               vector<SQLType> &return_types, vector<string> &names) {
 	// the repeat function returns the type of the first argument
 	return_types.push_back(inputs[0].GetSQLType());

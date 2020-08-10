@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
 //! Function used for determining the return type of a table producing function
-typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> inputs,
+typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                                           vector<SQLType> &return_types, vector<string> &names);
 //! Type used for table-returning function
 typedef void (*table_function_t)(ClientContext &context, vector<Value> &input, DataChunk &output,
@@ -39,6 +40,8 @@ public:
 	table_function_t function;
 	//! Final function pointer
 	table_function_final_t final;
+	//! Supported named parameters by the function
+	unordered_map<string, SQLType> named_parameters;
 	//! Whether or not the table function supports projection
 	bool supports_projection;
 

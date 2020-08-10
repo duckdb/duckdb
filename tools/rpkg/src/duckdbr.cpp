@@ -612,7 +612,7 @@ struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
 	    : TableFunction("dataframe_scan", {SQLType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function, nullptr){};
 
-	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> inputs,
+	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
 	                                                    vector<SQLType> &return_types, vector<string> &names) {
 		// TODO have a better way to pass this pointer
 		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));

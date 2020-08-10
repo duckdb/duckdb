@@ -5,6 +5,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/numeric_helper.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -552,129 +553,19 @@ template <> string_t StringCast::Operation(bool input, Vector &vector) {
 	}
 }
 
-struct StringToIntegerCast {
-	template <class T> static int UnsignedLength(T value);
-
-	// Formats value in reverse and returns a pointer to the beginning.
-	template <class T> static char *FormatUnsigned(T value, char *ptr) {
-		while (value >= 100) {
-			// Integer division is slow so do it for a group of two digits instead
-			// of for every digit. The idea comes from the talk by Alexandrescu
-			// "Three Optimization Tips for C++". See speed-test for a comparison.
-			auto index = static_cast<unsigned>((value % 100) * 2);
-			value /= 100;
-			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-			*--ptr = duckdb_fmt::internal::data::digits[index];
-		}
-		if (value < 10) {
-			*--ptr = static_cast<char>('0' + value);
-			return ptr;
-		}
-		auto index = static_cast<unsigned>(value * 2);
-		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-		*--ptr = duckdb_fmt::internal::data::digits[index];
-		return ptr;
-	}
-
-	template <class SIGNED, class UNSIGNED> static string_t FormatSigned(SIGNED value, Vector &vector) {
-		int sign = -(value < 0);
-		UNSIGNED unsigned_value = (value ^ sign) - sign;
-		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
-		string_t result = StringVector::EmptyString(vector, length);
-		auto dataptr = result.GetData();
-		auto endptr = dataptr + length;
-		endptr = FormatUnsigned(unsigned_value, endptr);
-		if (sign) {
-			*--endptr = '-';
-		}
-		result.Finalize();
-		return result;
-	}
-};
-
-template <> int StringToIntegerCast::UnsignedLength(uint8_t value) {
-	int length = 1;
-	length += value >= 10;
-	length += value >= 100;
-	return length;
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint16_t value) {
-	int length = 1;
-	length += value >= 10;
-	length += value >= 100;
-	length += value >= 1000;
-	length += value >= 10000;
-	return length;
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint32_t value) {
-	if (value >= 10000) {
-		int length = 5;
-		length += value >= 100000;
-		length += value >= 1000000;
-		length += value >= 10000000;
-		length += value >= 100000000;
-		length += value >= 1000000000;
-		return length;
-	} else {
-		int length = 1;
-		length += value >= 10;
-		length += value >= 100;
-		length += value >= 1000;
-		return length;
-	}
-}
-
-template <> int StringToIntegerCast::UnsignedLength(uint64_t value) {
-	if (value >= 10000000000ULL) {
-		if (value >= 1000000000000000ULL) {
-			int length = 16;
-			length += value >= 10000000000000000ULL;
-			length += value >= 100000000000000000ULL;
-			length += value >= 1000000000000000000ULL;
-			length += value >= 10000000000000000000ULL;
-			return length;
-		} else {
-			int length = 11;
-			length += value >= 100000000000ULL;
-			length += value >= 1000000000000ULL;
-			length += value >= 10000000000000ULL;
-			length += value >= 100000000000000ULL;
-			return length;
-		}
-	} else {
-		if (value >= 100000ULL) {
-			int length = 6;
-			length += value >= 1000000ULL;
-			length += value >= 10000000ULL;
-			length += value >= 100000000ULL;
-			length += value >= 1000000000ULL;
-			return length;
-		} else {
-			int length = 1;
-			length += value >= 10ULL;
-			length += value >= 100ULL;
-			length += value >= 1000ULL;
-			length += value >= 10000ULL;
-			return length;
-		}
-	}
-}
-
 template <> string_t StringCast::Operation(int8_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int8_t, uint8_t>(input, vector);
+	return NumericHelper::FormatSigned<int8_t, uint8_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(int16_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int16_t, uint16_t>(input, vector);
+	return NumericHelper::FormatSigned<int16_t, uint16_t>(input, vector);
 }
 template <> string_t StringCast::Operation(int32_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int32_t, uint32_t>(input, vector);
+	return NumericHelper::FormatSigned<int32_t, uint32_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(int64_t input, Vector &vector) {
-	return StringToIntegerCast::FormatSigned<int64_t, uint64_t>(input, vector);
+	return NumericHelper::FormatSigned<int64_t, uint64_t>(input, vector);
 }
 
 template <> string_t StringCast::Operation(float input, Vector &vector) {
@@ -696,7 +587,7 @@ struct HugeintToStringCast {
 	static int UnsignedLength(hugeint_t value) {
 		assert(value.upper >= 0);
 		if (value.upper == 0) {
-			return StringToIntegerCast::UnsignedLength<uint64_t>(value.lower);
+			return NumericHelper::UnsignedLength<uint64_t>(value.lower);
 		}
 		// search the length using the PowersOfTen array
 		// the length has to be between [17] and [38], because the hugeint is bigger than 2^63
@@ -773,7 +664,7 @@ struct HugeintToStringCast {
 			auto startptr = ptr;
 			// now we format the remainder: note that we need to pad with zero's in case
 			// the remainder is small (i.e. less than 10000000000000000)
-			ptr = StringToIntegerCast::FormatUnsigned<uint64_t>(remainder, ptr);
+			ptr = NumericHelper::FormatUnsigned<uint64_t>(remainder, ptr);
 
 			int format_length = startptr - ptr;
 			// pad with zero
@@ -782,7 +673,7 @@ struct HugeintToStringCast {
 			}
 		}
 		// once the value falls in the range of a uint64_t, fallback to formatting as uint64_t to avoid hugeint division
-		return StringToIntegerCast::FormatUnsigned<uint64_t>(value.lower, ptr);
+		return NumericHelper::FormatUnsigned<uint64_t>(value.lower, ptr);
 	}
 
 	static string_t FormatSigned(hugeint_t value, Vector &vector) {
@@ -796,7 +687,7 @@ struct HugeintToStringCast {
 		auto endptr = dataptr + length;
 		if (value.upper == 0) {
 			// small value: format as uint64_t
-			endptr = StringToIntegerCast::FormatUnsigned<uint64_t>(value.lower, endptr);
+			endptr = NumericHelper::FormatUnsigned<uint64_t>(value.lower, endptr);
 		} else {
 			endptr = FormatUnsigned(value, endptr);
 		}
@@ -842,7 +733,7 @@ struct DateToStringCast {
 	static void Format(char *data, int32_t date[], idx_t year_length, bool add_bc) {
 		// now we write the string, first write the year
 		auto endptr = data + year_length;
-		endptr = StringToIntegerCast::FormatUnsigned(date[0], endptr);
+		endptr = NumericHelper::FormatUnsigned(date[0], endptr);
 		// add optional leading zeros
 		while (endptr > data) {
 			*--endptr = '0';
@@ -930,7 +821,7 @@ struct TimeToStringCast {
 		// now optionally write ms at the end
 		if (time[3] > 0) {
 			auto start = ptr;
-			ptr = StringToIntegerCast::FormatUnsigned(time[3], data + length);
+			ptr = NumericHelper::FormatUnsigned(time[3], data + length);
 			while (ptr > start) {
 				*--ptr = '0';
 			}
@@ -1011,7 +902,7 @@ template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <> timestamp_t CastToTimestamp::Operation(string_t input) {
-	return Timestamp::FromString(input.GetData());
+	return Timestamp::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//

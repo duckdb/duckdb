@@ -47,17 +47,17 @@ enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 }
 class FileFlags {
 public:
 	//! Open file with read access
-	static constexpr uint8_t READ = 1 << 0;
+	static constexpr uint8_t FILE_FLAGS_READ = 1 << 0;
 	//! Open file with read/write access
-	static constexpr uint8_t WRITE = 1 << 1;
+	static constexpr uint8_t FILE_FLAGS_WRITE = 1 << 1;
 	//! Use direct IO when reading/writing to the file
-	static constexpr uint8_t DIRECT_IO = 1 << 2;
+	static constexpr uint8_t FILE_FLAGS_DIRECT_IO = 1 << 2;
 	//! Create file if not exists, can only be used together with WRITE
-	static constexpr uint8_t FILE_CREATE = 1 << 3;
+	static constexpr uint8_t FILE_FLAGS_FILE_CREATE = 1 << 3;
 	//! Always create a new file. If a file exists, the file is truncated. Cannot be used together with CREATE.
-	static constexpr uint8_t FILE_CREATE_NEW = 1 << 4;
+	static constexpr uint8_t FILE_FLAGS_FILE_CREATE_NEW = 1 << 4;
 	//! Open file in append mode
-	static constexpr uint8_t APPEND = 1 << 5;
+	static constexpr uint8_t FILE_FLAGS_APPEND = 1 << 5;
 };
 
 class FileSystem {
