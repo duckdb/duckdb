@@ -258,6 +258,22 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
+bool BufferedCSVReader::TryCastValue(Value value, SQLType sql_type) {
+	try {
+		if (options.has_date_format && sql_type.id == SQLTypeId::DATE) {
+			options.date_format.ParseDate(value.str_value);
+		} else if (options.has_timestamp_format && sql_type.id == SQLTypeId::TIMESTAMP) {
+			options.timestamp_format.ParseTimestamp(value.str_value);
+		} else {
+			value.CastAs(SQLType::VARCHAR, sql_type, true);
+		}
+		return true;
+	} catch (const Exception &e) {
+		return false;
+	}
+	return false;
+}
+
 vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	// TODO: sniff for uncommon (UTF-8) delimiter variants in first lines and add them to the list
 	const vector<string> delim_candidates = {",", "|", ";", "\t"};
@@ -388,10 +404,9 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
 					auto dummy_val = parse_chunk.GetValue(col, row);
-					try {
-						dummy_val.CastAs(SQLType::VARCHAR, sql_type, true);
+					if (TryCastValue(dummy_val, sql_type)) {
 						break;
-					} catch (const Exception &e) {
+					} else {
 						col_type_candidates.pop_back();
 					}
 				}
@@ -481,12 +496,8 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 			// try cast to sql_type of column
 			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
 			const auto &sql_type = col_type_candidates.back();
-
-			try {
-				dummy_val.CastAs(SQLType::VARCHAR, sql_type, true);
-			} catch (const Exception &e) {
+			if (!TryCastValue(dummy_val, sql_type)) {
 				first_row_consistent = false;
-				break;
 			}
 		}
 	}

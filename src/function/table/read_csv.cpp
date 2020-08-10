@@ -14,31 +14,78 @@ struct ReadCSVFunctionData : public TableFunctionData {
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> inputs,
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                               vector<SQLType> &return_types, vector<string> &names) {
-	for (auto &val : inputs[2].struct_value) {
-		names.push_back(val.first);
-		if (val.second.type != TypeId::VARCHAR) {
-			throw BinderException("read_csv requires a type specification as string");
-		}
-		return_types.push_back(TransformStringToSQLType(val.second.str_value.c_str()));
-	}
-	if (names.size() == 0) {
-		throw BinderException("read_csv requires at least a single column as input!");
-	}
 	auto result = make_unique<ReadCSVFunctionData>();
 
 	BufferedCSVReaderOptions options;
-	options.auto_detect = false;
 	options.file_path = inputs[0].str_value;
+	options.auto_detect = true;
 	options.header = false;
-	options.delimiter = inputs[1].str_value;
+	options.delimiter = ",";
+	options.quote = "\"";
 
-	result->csv_reader = make_unique<BufferedCSVReader>(context, move(options), return_types);
+	for(auto &kv : named_parameters) {
+		if (kv.first == "sep") {
+			options.auto_detect = false;
+			options.delimiter = kv.second.str_value;
+		} else if (kv.first == "header") {
+			options.auto_detect = false;
+			options.header = kv.second.value_.boolean;
+		} else if (kv.first == "quote") {
+			options.auto_detect = false;
+			options.quote = kv.second.str_value;
+		} else if (kv.first == "escape") {
+			options.auto_detect = false;
+			options.escape = kv.second.str_value;
+		} else if (kv.first == "nullstr") {
+			options.auto_detect = false;
+			options.null_str = kv.second.str_value;
+		} else if (kv.first == "dateformat") {
+			options.has_date_format = true;
+			options.date_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.date_format);
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+			}
+		} else if (kv.first == "timestampformat") {
+			options.has_timestamp_format = true;
+			options.timestamp_format.format_specifier = kv.second.str_value;
+			string error = StrTimeFormat::ParseFormatSpecifier(kv.second.str_value, options.timestamp_format);
+			if (!error.empty()) {
+				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+			}
+		} else if (kv.first == "columns") {
+			options.auto_detect = false;
+			for (auto &val : kv.second.struct_value) {
+				names.push_back(val.first);
+				if (val.second.type != TypeId::VARCHAR) {
+					throw BinderException("read_csv requires a type specification as string");
+				}
+				return_types.push_back(TransformStringToSQLType(val.second.str_value.c_str()));
+			}
+			if (names.size() == 0) {
+				throw BinderException("read_csv requires at least a single column as input!");
+			}
+		}
+	}
+	if (!options.auto_detect && return_types.size() == 0) {
+		throw BinderException("Specifying CSV options requires columns to be specified as well (for now)");
+	}
+	if (return_types.size() > 0) {
+		// return types specified: no auto detect
+		result->csv_reader = make_unique<BufferedCSVReader>(context, move(options), return_types);
+	} else {
+		// auto detect options
+		result->csv_reader = make_unique<BufferedCSVReader>(context, move(options));
+
+		return_types.assign(result->csv_reader->sql_types.begin(), result->csv_reader->sql_types.end());
+		names.assign(result->csv_reader->col_names.begin(), result->csv_reader->col_names.end());
+	}
 	return move(result);
 }
 
-static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> inputs,
+static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                                    vector<SQLType> &return_types, vector<string> &names) {
 	auto result = make_unique<ReadCSVFunctionData>();
 	BufferedCSVReaderOptions options;
@@ -61,8 +108,17 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet read_csv("read_csv");
-	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
-	read_csv.AddFunction(TableFunction({SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+	TableFunction read_csv_function = TableFunction({SQLType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
+	read_csv_function.named_parameters["sep"] = SQLType::VARCHAR;
+	read_csv_function.named_parameters["quote"] = SQLType::VARCHAR;
+	read_csv_function.named_parameters["escape"] = SQLType::VARCHAR;
+	read_csv_function.named_parameters["nullstr"] = SQLType::VARCHAR;
+	read_csv_function.named_parameters["columns"] = SQLType::STRUCT;
+	read_csv_function.named_parameters["header"] = SQLType::BOOLEAN;
+	read_csv_function.named_parameters["dateformat"] = SQLType::VARCHAR;
+	read_csv_function.named_parameters["timestampformat"] = SQLType::VARCHAR;
+
+	read_csv.AddFunction(move(read_csv_function));
 
 	set.AddFunction(read_csv);
 	set.AddFunction(TableFunction("read_csv_auto", {SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));

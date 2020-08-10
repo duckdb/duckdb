@@ -140,6 +140,8 @@ private:
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<SQLType> SniffCSV(vector<SQLType> requested_types);
+	//! Try to cast a string value to the specified sql type
+	bool TryCastValue(Value value, SQLType sql_type);
 	//! Skips header rows and skip_rows in the input stream
 	void SkipHeader();
 	//! Jumps back to the beginning of input stream and resets necessary internal states
