@@ -11,7 +11,7 @@ INSERT INTO dates VALUES ('1992-01-01'), ('1993-03-20'), ('2020-08-09'), ('2020-
 
 # %a: Abbreviated weekday name
 query I
-SELECT strftime('%a', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%a') FROM dates ORDER BY d;
 ----
 NULL
 Wed
@@ -21,7 +21,7 @@ Mon
 
 # %A: Full weekday name
 query I
-SELECT strftime('%A', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%A') FROM dates ORDER BY d;
 ----
 NULL
 Wednesday
@@ -31,7 +31,7 @@ Monday
 
 # %w - Weekday as a decimal number.
 query I
-SELECT strftime('%w', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%w') FROM dates ORDER BY d;
 ----
 NULL
 3
@@ -41,7 +41,7 @@ NULL
 
 # %d - Day of the month as a zero-padded decimal.
 query I
-SELECT strftime('%d', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%d') FROM dates ORDER BY d;
 ----
 NULL
 01
@@ -51,7 +51,7 @@ NULL
 
 # %-d - Day of the month as a decimal number.
 query I
-SELECT strftime('%-d', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-d') FROM dates ORDER BY d;
 ----
 NULL
 1
@@ -61,7 +61,7 @@ NULL
 
 # %b - Abbreviated month name.
 query I
-SELECT strftime('%b', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%b') FROM dates ORDER BY d;
 ----
 NULL
 Jan
@@ -71,7 +71,7 @@ Aug
 
 # %h - alias for %b
 query I
-SELECT strftime('%h', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%h') FROM dates ORDER BY d;
 ----
 NULL
 Jan
@@ -81,7 +81,7 @@ Aug
 
 # %B - Full month name
 query I
-SELECT strftime('%B', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%B') FROM dates ORDER BY d;
 ----
 NULL
 January
@@ -91,7 +91,7 @@ August
 
 # %m - Month as a zero-padded decimal number
 query I
-SELECT strftime('%m', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%m') FROM dates ORDER BY d;
 ----
 NULL
 01
@@ -101,7 +101,7 @@ NULL
 
 # %-m - Month as a decimal number. (1, 2, ..., 12)
 query I
-SELECT strftime('%-m', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-m') FROM dates ORDER BY d;
 ----
 NULL
 1
@@ -111,7 +111,7 @@ NULL
 
 # %y - Year without century as a zero-padded decimal number.
 query I
-SELECT strftime('%y', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%y') FROM dates ORDER BY d;
 ----
 NULL
 92
@@ -121,7 +121,7 @@ NULL
 
 # %-y - Year without century as a decimal number.
 query I
-SELECT strftime('%-y', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-y') FROM dates ORDER BY d;
 ----
 NULL
 92
@@ -130,13 +130,13 @@ NULL
 20
 
 query I
-SELECT strftime('%-y', DATE '2001-01-01')
+SELECT strftime(DATE '2001-01-01', '%-y')
 ----
 1
 
 # %Y - Year with century as a decimal number.
 query I
-SELECT strftime('%Y', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%Y') FROM dates ORDER BY d;
 ----
 NULL
 1992
@@ -146,7 +146,7 @@ NULL
 
 # %H - Hour (24-hour clock) as a zero-padded decimal number.
 query I
-SELECT strftime('%H', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%H') FROM dates ORDER BY d;
 ----
 NULL
 00
@@ -156,7 +156,7 @@ NULL
 
 # %-H - Hour (24-hour clock) as a decimal number. (0, 1, ..., 23)
 query I
-SELECT strftime('%-H', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-H') FROM dates ORDER BY d;
 ----
 NULL
 0
@@ -166,7 +166,7 @@ NULL
 
 # %I - Hour (12-hour clock) as a zero-padded decimal number.
 query I
-SELECT strftime('%I', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%I') FROM dates ORDER BY d;
 ----
 NULL
 12
@@ -176,7 +176,7 @@ NULL
 
 # %-I - Hour (12-hour clock) as a decimal number. (1, 2, ... 12)
 query I
-SELECT strftime('%-I', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-I') FROM dates ORDER BY d;
 ----
 NULL
 12
@@ -186,7 +186,7 @@ NULL
 
 # %p - Locale’s AM or PM.
 query I
-SELECT strftime('%p', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%p') FROM dates ORDER BY d;
 ----
 NULL
 AM
@@ -196,7 +196,7 @@ AM
 
 # %M - Minute as a zero-padded decimal number.
 query I
-SELECT strftime('%M', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%M') FROM dates ORDER BY d;
 ----
 NULL
 00
@@ -206,7 +206,7 @@ NULL
 
 # %-M - Minute as a decimal number. (0, 1, ..., 59)
 query I
-SELECT strftime('%-M', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-M') FROM dates ORDER BY d;
 ----
 NULL
 0
@@ -216,7 +216,7 @@ NULL
 
 # %S - Second as a zero-padded decimal number.
 query I
-SELECT strftime('%S', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%S') FROM dates ORDER BY d;
 ----
 NULL
 00
@@ -226,7 +226,7 @@ NULL
 
 # %-S - Second as a decimal number. (0, 1, ..., 59)
 query I
-SELECT strftime('%-S', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-S') FROM dates ORDER BY d;
 ----
 NULL
 0
@@ -236,7 +236,7 @@ NULL
 
 # %f - Microsecond as a decimal number, zero-padded on the left.
 query I
-SELECT strftime('%f', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%f') FROM dates ORDER BY d;
 ----
 NULL
 000000
@@ -246,7 +246,7 @@ NULL
 
 # %z - UTC offset in the form +HHMM or -HHMM.
 query I
-SELECT strftime('%z', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%z') FROM dates ORDER BY d;
 ----
 NULL
 (empty)
@@ -256,7 +256,7 @@ NULL
 
 # %Z - Time zone name.
 query I
-SELECT strftime('%Z', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%Z') FROM dates ORDER BY d;
 ----
 NULL
 (empty)
@@ -266,7 +266,7 @@ NULL
 
 # %j - Day of the year as a zero-padded decimal number.
 query I
-SELECT strftime('%j', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%j') FROM dates ORDER BY d;
 ----
 NULL
 001
@@ -276,7 +276,7 @@ NULL
 
 # %-j - Day of the year as a decimal number. (1, 2, ..., 366)
 query I
-SELECT strftime('%-j', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%-j') FROM dates ORDER BY d;
 ----
 NULL
 1
@@ -286,7 +286,7 @@ NULL
 
 # %U - Week number of the year (Sunday as the first day of the week).
 query I
-SELECT strftime('%U', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%U') FROM dates ORDER BY d;
 ----
 NULL
 00
@@ -296,7 +296,7 @@ NULL
 
 # %W - Week number of the year (Monday as the first day of the week).
 query I
-SELECT strftime('%W', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%W') FROM dates ORDER BY d;
 ----
 NULL
 00
@@ -306,7 +306,7 @@ NULL
 
 # %c - Locale’s appropriate date and time representation.
 query I
-SELECT strftime('%c', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%c') FROM dates ORDER BY d;
 ----
 NULL
 1992-01-01 00:00:00
@@ -315,7 +315,7 @@ NULL
 2020-08-10 00:00:00
 
 query I
-SELECT strftime('XX%cXX', d) FROM dates ORDER BY d;
+SELECT strftime(d, 'XX%cXX') FROM dates ORDER BY d;
 ----
 NULL
 XX1992-01-01 00:00:00XX
@@ -325,7 +325,7 @@ XX2020-08-10 00:00:00XX
 
 # %x - Locale’s appropriate date representation.
 query I
-SELECT strftime('%x', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%x') FROM dates ORDER BY d;
 ----
 NULL
 1992-01-01
@@ -335,7 +335,7 @@ NULL
 
 # X - Locale’s appropriate time representation.
 query I
-SELECT strftime('%X', d) FROM dates ORDER BY d;
+SELECT strftime(d, '%X') FROM dates ORDER BY d;
 ----
 NULL
 00:00:00
@@ -345,7 +345,7 @@ NULL
 
 
 query I
-SELECT strftime('XX%cXX%xXX%XXX', d) FROM dates ORDER BY d;
+SELECT strftime(d, 'XX%cXX%xXX%XXX') FROM dates ORDER BY d;
 ----
 NULL
 XX1992-01-01 00:00:00XX1992-01-01XX00:00:00XX

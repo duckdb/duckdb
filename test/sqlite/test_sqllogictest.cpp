@@ -531,9 +531,20 @@ struct RestartCommand : public Command {
 void Statement::Execute() {
 	auto connection = CommandConnection();
 
+	if (runner.output_result_mode || runner.debug_mode) {
+		print_line_sep();
+		print_header("File " + file_name + ":" + to_string(query_line) + ")");
+		print_sql(sql_query);
+		print_line_sep();
+	}
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
+
+	if (runner.output_result_mode || runner.debug_mode) {
+		result->Print();
+	}
 
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
