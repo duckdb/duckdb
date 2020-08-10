@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
 
@@ -84,6 +85,8 @@ struct StrfTimeFormat {
 	idx_t constant_size;
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
 	vector<StrfTimeSpecifier> var_length_specifiers;
+	//! Whether or not the current specifier is a special "date" specifier (i.e. one that requires a date_t object to generate)
+	vector<bool> is_date_specifier;
 
 
 	void AddLiteral(string literal) {
@@ -94,6 +97,7 @@ struct StrfTimeFormat {
 	void AddFormatSpecifier(string preceding_literal, StrfTimeSpecifier specifier) {
 		AddLiteral(move(preceding_literal));
 		specifiers.push_back(specifier);
+		is_date_specifier.push_back(IsDateSpecifier(specifier));
 		idx_t specifier_size = StrfTimepecifierSize(specifier);
 		if (specifier_size == 0) {
 			// variable length specifier
@@ -202,8 +206,22 @@ struct StrfTimeFormat {
 		return target + padding;
 	}
 
-	char* WriteSpecifier(StrfTimeSpecifier specifier, date_t date, int32_t data[], char *target) {
-		// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec
+	bool IsDateSpecifier(StrfTimeSpecifier specifier) {
+		switch(specifier) {
+		case StrfTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
+		case StrfTimeSpecifier::FULL_WEEKDAY_NAME:
+		case StrfTimeSpecifier::WEEKDAY_DECIMAL:
+		case StrfTimeSpecifier::DAY_OF_YEAR_PADDED:
+		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+		case StrfTimeSpecifier::DAY_OF_YEAR_DECIMAL:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	char* WriteDateSpecifier(StrfTimeSpecifier specifier, date_t date, char *target) {
 		switch(specifier) {
 		case StrfTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
 			date_t dow = Date::ExtractISODayOfTheWeek(date);
@@ -221,6 +239,32 @@ struct StrfTimeFormat {
 			target++;
 			break;
 		}
+		case StrfTimeSpecifier::DAY_OF_YEAR_PADDED: {
+			int32_t doy = Date::ExtractDayOfTheYear(date);
+			target = WritePadded3(target, doy);
+			break;
+		}
+		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+			target = WritePadded2(target, Date::ExtractWeekNumberRegular(date, true));
+			break;
+		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+			target = WritePadded2(target, Date::ExtractWeekNumberRegular(date, false));
+			break;
+		case StrfTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
+			uint32_t doy = Date::ExtractDayOfTheYear(date);
+			target += NumericHelper::UnsignedLength<uint32_t>(doy);
+			NumericHelper::FormatUnsigned(doy, target);
+			break;
+		}
+		default:
+			throw NotImplementedException("Unimplemented date specifier for strftime");
+		}
+		return target;
+	}
+
+	char* WriteStandardSpecifier(StrfTimeSpecifier specifier, int32_t data[], char *target) {
+		// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec
+		switch(specifier) {
 		case StrfTimeSpecifier::DAY_OF_MONTH_PADDED:
 			target = WritePadded2(target, data[2]);
 			break;
@@ -283,17 +327,6 @@ struct StrfTimeFormat {
 		case StrfTimeSpecifier::TZ_NAME:
 			// always empty for now, FIXME when we have timestamp with tz
 			break;
-		case StrfTimeSpecifier::DAY_OF_YEAR_PADDED: {
-			int32_t doy = Date::ExtractDayOfTheYear(date);
-			target = WritePadded3(target, doy);
-			break;
-		}
-		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-			target = WritePadded2(target, Date::ExtractWeekNumberRegular(date, true));
-			break;
-		case StrfTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-			target = WritePadded2(target, Date::ExtractWeekNumberRegular(date, false));
-			break;
 		case StrfTimeSpecifier::DAY_OF_MONTH: {
 			target = Write2(target, data[2] % 100);
 			break;
@@ -326,16 +359,28 @@ struct StrfTimeFormat {
 			target = Write2(target, data[5]);
 			break;
 		}
-		case StrfTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
-			uint32_t doy = Date::ExtractDayOfTheYear(date);
-			target += NumericHelper::UnsignedLength<uint32_t>(doy);
-			NumericHelper::FormatUnsigned(doy, target);
-			break;
-		}
 		default:
-			throw NotImplementedException("Unimplemented specifier");
+			throw NotImplementedException("Unimplemented specifier for WriteStandardSpecifier in strftime");
 		}
 		return target;
+	}
+
+	void FormatString(date_t date, int32_t data[7], char *target) {
+		idx_t i;
+		for(i = 0; i < specifiers.size(); i++) {
+			// first copy the current literal
+			memcpy(target, literals[i].c_str(), literals[i].size());
+			target += literals[i].size();
+			// now copy the specifier
+			if (is_date_specifier[i]) {
+				target = WriteDateSpecifier(specifiers[i], date, target);
+			} else {
+				target = WriteStandardSpecifier(specifiers[i], data, target);
+			}
+		}
+		// copy the final literal into the target
+		memcpy(target, literals[i].c_str(), literals[i].size());
+
 	}
 
 	void FormatString(date_t date, char *target) {
@@ -343,16 +388,18 @@ struct StrfTimeFormat {
 		Date::Convert(date, data[0], data[1], data[2]);
 		data[3] = data[4] = data[5] = data[6] = 0;
 
-		idx_t i;
-		for(i = 0; i < specifiers.size(); i++) {
-			// first copy the current literal
-			memcpy(target, literals[i].c_str(), literals[i].size());
-			target += literals[i].size();
-			// now copy the specifier
-			target = WriteSpecifier(specifiers[i], date, data, target);
-		}
-		// copy the final literal into the target
-		memcpy(target, literals[i].c_str(), literals[i].size());
+		FormatString(date, data, target);
+	}
+
+	void FormatString(timestamp_t timestamp, char *target) {
+		int32_t data[7]; // year, month, day, hour, min, sec, msec
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(timestamp, date, time);
+		Date::Convert(date, data[0], data[1], data[2]);
+		Time::Convert(time, data[3], data[4], data[5], data[6]);
+
+		FormatString(date, data, target);
 	}
 };
 
@@ -541,6 +588,7 @@ static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &
 	return make_unique<StrfTimeBindData>(format);
 }
 
+template<class T>
 static void strftime_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
@@ -551,7 +599,7 @@ static void strftime_function(DataChunk &args, ExpressionState &state, Vector &r
 		return;
 	}
 
-	UnaryExecutor::Execute<date_t, string_t, true>(args.data[1], result, args.size(), [&](date_t date) {
+	UnaryExecutor::Execute<T, string_t, true>(args.data[1], result, args.size(), [&](T date) {
 		idx_t len = info.format.GetLength(date);
 		string_t target = StringVector::EmptyString(result, len);
 		info.format.FormatString(date, target.GetData());
@@ -565,7 +613,10 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strftime("strftime");
 
 	strftime.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::VARCHAR,
-	                               strftime_function, false, strftime_bind_function));
+	                               strftime_function<date_t>, false, strftime_bind_function));
+
+	strftime.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::VARCHAR,
+	                               strftime_function<timestamp_t>, false, strftime_bind_function));
 
 	set.AddFunction(strftime);
 }
