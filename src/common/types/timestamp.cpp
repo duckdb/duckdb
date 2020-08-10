@@ -21,33 +21,53 @@ constexpr const int32_t TM_START_YEAR = 1900;
 // Z is optional
 // ISO 8601
 
-timestamp_t Timestamp::FromString(string str) {
-	assert(sizeof(timestamp_t) == 8);
-	assert(sizeof(date_t) == 4);
-	assert(sizeof(dtime_t) == 4);
-
-	// In case we have only date we add a default time
-	if (str.size() == 10) {
-		str += " 00:00:00";
-	}
-	// Character length	19 positions minimum to 23 maximum
-	if (str.size() < STD_TIMESTAMP_LENGTH) {
+timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
+	idx_t pos;
+	date_t date;
+	dtime_t time;
+	if (!Date::TryConvertDate(str, pos, date)) {
 		throw ConversionException("timestamp field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          str.c_str());
+		                          str);
 	}
-
-	date_t date = Date::FromString(str.substr(0, 10));
-	dtime_t time = Time::FromString(str.substr(10));
-
+	if (pos == len) {
+		// no time: only a date
+		return (int64_t)date << 32;
+	}
+	// try to parse a time field
+	if (str[pos] == ' ' || str[pos] == 'T') {
+		pos++;
+	}
+	idx_t time_pos = 0;
+	if (!Time::TryConvertTime(str + pos, time_pos, time)) {
+		throw ConversionException("timestamp field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+		                          str);
+	}
+	pos += time_pos;
+	if (pos < len) {
+		// skip a "Z" at the end (as per the ISO8601 specs)
+		if (str[pos] == 'Z') {
+			pos++;
+		}
+		// skip any spaces at the end
+		while(pos < len && std::isspace(str[pos])) {
+			pos++;
+		}
+		if (pos < len) {
+			throw ConversionException("timestamp field value out of range: \"%s\", "
+									"expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+									str);
+		}
+	}
 	return ((int64_t)date << 32 | (int32_t)time);
 }
 
-string Timestamp::ToString(timestamp_t timestamp) {
-	assert(sizeof(timestamp_t) == 8);
-	assert(sizeof(date_t) == 4);
-	assert(sizeof(dtime_t) == 4);
+timestamp_t Timestamp::FromString(string str) {
+	return Timestamp::FromCString(str.c_str(), str.size());
+}
 
+string Timestamp::ToString(timestamp_t timestamp) {
 	return Date::ToString(GetDate(timestamp)) + " " + Time::ToString(GetTime(timestamp));
 }
 

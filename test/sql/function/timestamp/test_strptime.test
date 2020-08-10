@@ -83,7 +83,6 @@ SELECT strptime('', NULL)
 ----
 NULL
 
-
 # different errors
 # month out of range
 statement error

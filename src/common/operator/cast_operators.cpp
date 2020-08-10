@@ -902,7 +902,7 @@ template <> dtime_t CastTimestampToTime::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <> timestamp_t CastToTimestamp::Operation(string_t input) {
-	return Timestamp::FromString(input.GetData());
+	return Timestamp::FromCString(input.GetData(), input.GetSize());
 }
 
 //===--------------------------------------------------------------------===//

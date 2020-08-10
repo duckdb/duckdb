@@ -19,6 +19,7 @@ public:
 	//! Convert a string in the format "hh:mm:ss" to a time object
 	static dtime_t FromString(string str, bool strict = false);
 	static dtime_t FromCString(const char *buf, bool strict = false);
+	static bool TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool strict = false);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	static string ToString(dtime_t time);

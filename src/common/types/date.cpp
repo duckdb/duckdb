@@ -116,10 +116,10 @@ static bool ParseDoubleDigit(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertDate(const char *buf, date_t &result, bool strict = false) {
+bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool strict) {
 	int32_t day = 0, month = -1;
 	int32_t year = 0, yearneg = (buf[0] == '-');
-	idx_t pos = 0;
+	pos = 0;
 	int sep;
 
 	// skip leading spaces
@@ -192,7 +192,8 @@ static bool TryConvertDate(const char *buf, date_t &result, bool strict = false)
 
 date_t Date::FromCString(const char *buf, bool strict) {
 	date_t result;
-	if (!TryConvertDate(buf, result, strict)) {
+	idx_t pos;
+	if (!TryConvertDate(buf, pos, result, strict)) {
 		throw ConversionException("date/time field value out of range: \"%s\", "
 		                          "expected format is (YYYY-MM-DD)",
 		                          buf);
