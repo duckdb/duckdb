@@ -41,4 +41,8 @@ struct EpochFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StrfTimeFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

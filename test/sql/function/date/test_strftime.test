@@ -1,0 +1,82 @@
+# name: test/sql/function/date/test_strftime.test
+# description: Test strftime function
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+# simple single specifier
+query I
+SELECT strftime('%Y', DATE '1992-01-01');
+----
+1992
+
+# some literals
+query I
+SELECT strftime('(%Y)', DATE '1992-01-01');
+----
+(1992)
+
+# escapes
+query I
+SELECT strftime('%% %Y %%', DATE '1992-01-01');
+----
+% 1992 %
+
+# many consecutive escapes
+query I
+SELECT strftime('%%%%%% %Y %%%%%%', DATE '1992-01-01');
+----
+%%% 1992 %%%
+
+# multiple specifiers
+query I
+SELECT strftime('%d/%m/%Y', DATE '1992-02-01');
+----
+01/02/1992
+
+# we can repeat the same specifier many times
+query I
+SELECT strftime('%Y %Y %Y %Y', DATE '1992-02-01');
+----
+1992 1992 1992 1992
+
+# test on a table
+statement ok
+CREATE TABLE dates(d DATE);
+INSERT INTO dates VALUES ('1992-01-01'), ('1993-03-20'), (NULL);
+
+query I
+SELECT strftime('%d/%m/%Y', d) FROM dates ORDER BY d;
+----
+NULL
+01/01/1992
+20/03/1993
+
+# null date
+query I
+SELECT strftime('%d/%m/%Y', NULL) FROM dates ORDER BY d;
+----
+NULL
+NULL
+NULL
+
+# null format
+query I
+SELECT strftime(NULL, d) FROM dates ORDER BY d;
+----
+NULL
+NULL
+NULL
+
+# non-constant format not supported
+statement error
+SELECT strftime(d, d) FROM dates ORDER BY d;
+
+# unterminated escape
+statement error
+SELECT strftime('%', DATE '1992-01-01');
+
+# unrecognized code
+statement error
+SELECT strftime('%R', DATE '1992-01-01');

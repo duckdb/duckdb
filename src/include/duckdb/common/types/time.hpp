@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! The Date class is a static class that holds helper functions for the Time
+//! The Time class is a static class that holds helper functions for the Time
 //! type.
 class Time {
 public:
