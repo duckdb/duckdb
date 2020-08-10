@@ -6,6 +6,8 @@
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 
@@ -14,6 +16,9 @@ using namespace std;
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
+	if (!context.db.config.enable_copy) {
+		throw Exception("COPY TO is disabled by configuration");
+	}
 	BoundStatement result;
 	result.types = {SQLType::BIGINT};
 	result.names = {"Count"};
@@ -40,6 +45,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 }
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
+	if (!context.db.config.enable_copy) {
+		throw Exception("COPY FROM is disabled by configuration");
+	}
 	BoundStatement result;
 	result.types = {SQLType::BIGINT};
 	result.names = {"Count"};
@@ -69,14 +77,14 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	vector<string> expected_names;
 	if (bound_insert.column_index_map.size() > 0) {
 		expected_names.resize(bound_insert.expected_types.size());
-		for(idx_t i = 0; i < table->columns.size(); i++) {
+		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (bound_insert.column_index_map[i] != INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = table->columns[i].name;
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
-		for(idx_t i = 0; i < table->columns.size(); i++) {
+		for (idx_t i = 0; i < table->columns.size(); i++) {
 			expected_names.push_back(table->columns[i].name);
 		}
 	}
@@ -85,7 +93,8 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	    copy_function->function.copy_from_bind(context, *stmt.info, expected_names, bound_insert.expected_types);
 
 	// now create the copy statement and set it as a child of the insert statement
-	auto copy = make_unique<LogicalCopyFromFile>(0, copy_function->function, move(function_data), bound_insert.expected_types);
+	auto copy =
+	    make_unique<LogicalCopyFromFile>(0, copy_function->function, move(function_data), bound_insert.expected_types);
 	insert_statement.plan->children.push_back(move(copy));
 	result.plan = move(insert_statement.plan);
 	return result;

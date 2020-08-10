@@ -1,6 +1,8 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 using namespace std;
 
@@ -16,6 +18,10 @@ struct ReadCSVFunctionData : public TableFunctionData {
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> inputs,
                                               vector<SQLType> &return_types, vector<string> &names) {
+
+	if (!context.db.config.enable_copy) {
+		throw Exception("read_csv is disabled by configuration");
+	}
 	for (auto &val : inputs[2].struct_value) {
 		names.push_back(val.first);
 		if (val.second.type != TypeId::VARCHAR) {
@@ -40,7 +46,9 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> inputs,
                                                    vector<SQLType> &return_types, vector<string> &names) {
-	
+	if (!context.db.config.enable_copy) {
+		throw Exception("read_csv_auto is disabled by configuration");
+	}
 
 	auto result = make_unique<ReadCSVFunctionData>();
 	BufferedCSVReaderOptions options;
@@ -73,7 +81,8 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet read_csv("read_csv");
-	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
+	read_csv.AddFunction(
+	    TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::STRUCT}, read_csv_bind, read_csv_info, nullptr));
 	read_csv.AddFunction(TableFunction({SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
 	read_csv.AddFunction(TableFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR}, read_csv_auto_bind,
 	                                   read_csv_info, nullptr));
