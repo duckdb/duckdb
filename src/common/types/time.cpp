@@ -107,8 +107,10 @@ bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool str
 	sep = buf[pos++];
 	if (sep == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit((unsigned char)buf[pos]) && mult > 0; pos++, mult /= 10) {
-			msec += (buf[pos] - '0') * mult;
+		for (; std::isdigit((unsigned char)buf[pos]); pos++, mult /= 10) {
+			if (mult > 0) {
+				msec += (buf[pos] - '0') * mult;
+			}
 		}
 	}
 
