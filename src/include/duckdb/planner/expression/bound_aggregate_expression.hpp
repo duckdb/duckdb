@@ -14,7 +14,9 @@
 namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct);
+	BoundAggregateExpression(TypeId return_type, SQLType sql_type, AggregateFunction function, bool distinct);
+	BoundAggregateExpression(SQLType sql_type, AggregateFunction function, bool distinct) :
+		BoundAggregateExpression(GetInternalType(sql_type), move(sql_type), move(function), distinct) {}
 
 	//! The bound function expression
 	AggregateFunction function;

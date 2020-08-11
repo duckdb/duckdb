@@ -4,8 +4,8 @@
 using namespace duckdb;
 using namespace std;
 
-BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type)
-    : Expression(type, ExpressionClass::BOUND_OPERATOR, return_type) {
+BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type, SQLType sql_type)
+    : Expression(type, ExpressionClass::BOUND_OPERATOR, return_type, move(sql_type)) {
 }
 
 string BoundOperatorExpression::ToString() const {
@@ -43,7 +43,7 @@ bool BoundOperatorExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundOperatorExpression::Copy() {
-	auto copy = make_unique<BoundOperatorExpression>(type, return_type);
+	auto copy = make_unique<BoundOperatorExpression>(type, return_type, sql_type);
 	copy->CopyProperties(*this);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());

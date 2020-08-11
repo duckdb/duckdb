@@ -31,6 +31,5 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	    BoundCastExpression::AddCastToType(move(result_if_false.expr), result_if_false.sql_type, return_type);
 	// now create the bound case expression
 	return BindResult(
-	    make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)),
-	    return_type);
+	    make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)));
 }

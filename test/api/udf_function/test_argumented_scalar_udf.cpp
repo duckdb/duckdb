@@ -281,7 +281,7 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 		for(SQLType sql_type: all_sql_types) {
 			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
 			func_name = table_name;
-			if(sql_type.IsNumeric()) {
+			if(sql_type.IsNumeric() && sql_type.id != SQLTypeId::DECIMAL) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
@@ -357,6 +357,9 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 
 	SECTION("Cheking NULLs with UDF functions") {
 		for(SQLType sql_type: all_sql_types) {
+			if (sql_type.id == SQLTypeId::DECIMAL) {
+				continue;
+			}
 			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
 			func_name = table_name;
 

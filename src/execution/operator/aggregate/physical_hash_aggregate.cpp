@@ -20,7 +20,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
 	if (this->groups.size() == 0) {
-		auto ce = make_unique<BoundConstantExpression>(Value::TINYINT(42));
+		auto ce = make_unique<BoundConstantExpression>(SQLType::TINYINT, Value::TINYINT(42));
 		this->groups.push_back(move(ce));
 		is_implicit_aggr = true;
 	} else {

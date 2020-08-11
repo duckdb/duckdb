@@ -71,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
 
-	auto result = make_unique<BoundSubqueryExpression>(GetInternalType(return_type));
+	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {
 		// ANY comparison
 		// cast child and subquery child to equivalent types
@@ -87,5 +87,5 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	result->child = child ? move(child->expr) : nullptr;
 	result->comparison_type = expr.comparison_type;
 
-	return BindResult(move(result), return_type);
+	return BindResult(move(result));
 }

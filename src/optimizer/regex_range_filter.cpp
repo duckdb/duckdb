@@ -41,10 +41,10 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 			}
 			auto filter_left = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO, func.children[0]->Copy(),
-			    make_unique<BoundConstantExpression>(Value::BLOB(info.range_min)));
+			    make_unique<BoundConstantExpression>(SQLType::VARCHAR, Value::BLOB(info.range_min)));
 			auto filter_right = make_unique<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_LESSTHANOREQUALTO, func.children[0]->Copy(),
-			    make_unique<BoundConstantExpression>(Value::BLOB(info.range_max)));
+			    make_unique<BoundConstantExpression>(SQLType::VARCHAR, Value::BLOB(info.range_max)));
 			auto filter_expr = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 			                                                           move(filter_left), move(filter_right));
 

@@ -275,6 +275,8 @@ struct SQLType {
 		return !(*this == rhs);
 	}
 
+	//! Computes a hash over this SQL type
+	hash_t Hash() const;
 	//! Serializes a SQLType to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into an SQLType

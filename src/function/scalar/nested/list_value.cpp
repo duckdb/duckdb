@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, C
 	}
 
 	// this is more for completeness reasons
-	expr.sql_return_type = stype;
+	expr.sql_type = stype;
 	return make_unique<VariableReturnBindData>(stype);
 }
 

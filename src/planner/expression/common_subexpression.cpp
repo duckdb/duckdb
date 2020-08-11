@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 CommonSubExpression::CommonSubExpression(unique_ptr<Expression> child, string alias)
-    : Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type) {
+    : Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type, child->sql_type) {
 	this->child = child.get();
 	this->owned_child = move(child);
 	this->alias = alias;
@@ -14,7 +14,7 @@ CommonSubExpression::CommonSubExpression(unique_ptr<Expression> child, string al
 }
 
 CommonSubExpression::CommonSubExpression(Expression *child, string alias)
-    : Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type),
+    : Expression(ExpressionType::COMMON_SUBEXPRESSION, ExpressionClass::COMMON_SUBEXPRESSION, child->return_type, child->sql_type),
       child(child) {
 	this->alias = alias;
 	assert(child);

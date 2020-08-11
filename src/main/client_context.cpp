@@ -622,6 +622,12 @@ string ClientContext::VerifyQuery(string query, unique_ptr<SQLStatement> stateme
 	results.push_back(move(unoptimized_result));
 	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
 	for (idx_t i = 0; i < results.size(); i++) {
+		if (original_result->success != results[i]->success) {
+			string result = names[i] + " differs from original result!\n";
+			result += "Original Result:\n" + original_result->ToString();
+			result += names[i] + ":\n" + results[i]->ToString();
+			return result;
+		}
 		if (!original_result->collection.Equals(results[i]->collection)) {
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();

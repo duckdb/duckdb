@@ -32,11 +32,12 @@ struct BoundCreateTableInfo;
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	TypeId type;
+	SQLType sql_type;
 	string name;
 	idx_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
+	    : binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {

@@ -115,7 +115,7 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(GetInternalType(columns[i].type)));
+			bound_default = make_unique<BoundConstantExpression>(columns[i].type, Value(GetInternalType(columns[i].type)));
 		}
 		bound_defaults.push_back(move(bound_default));
 	}

@@ -7,8 +7,8 @@
 using namespace duckdb;
 using namespace std;
 
-Expression::Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type)
-    : BaseExpression(type, expression_class), return_type(return_type) {
+Expression::Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type, SQLType sql_type)
+    : BaseExpression(type, expression_class), return_type(return_type), sql_type(move(sql_type)) {
 }
 
 bool Expression::IsAggregate() const {
@@ -59,6 +59,7 @@ bool Expression::HasSubquery() const {
 hash_t Expression::Hash() const {
 	hash_t hash = duckdb::Hash<uint32_t>((uint32_t)type);
 	hash = CombineHash(hash, duckdb::Hash<uint32_t>((uint32_t)return_type));
+	hash = CombineHash(hash, sql_type.Hash());
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;

@@ -15,10 +15,11 @@ namespace duckdb {
 class BoundDefaultExpression : public Expression {
 public:
 	BoundDefaultExpression(TypeId type = TypeId::INVALID, SQLType sql_type = SQLType())
-	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type), sql_type(sql_type) {
+	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type, sql_type) {
 	}
-
-	SQLType sql_type;
+	BoundDefaultExpression(SQLType sql_type)
+	    : BoundDefaultExpression(GetInternalType(sql_type), move(sql_type)) {
+	}
 
 public:
 	bool IsScalar() const override {

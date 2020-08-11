@@ -114,7 +114,7 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 					upper_index = k;
 					upper_inclusive = info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 				} else {
-					auto constant = make_unique<BoundConstantExpression>(info.constant);
+					auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, info.constant);
 					auto comparison = make_unique<BoundComparisonExpression>(info.comparison_type, entries[i]->Copy(),
 					                                                         move(constant));
 					callback(move(comparison));
@@ -122,20 +122,20 @@ void FilterCombiner::GenerateFilters(std::function<void(unique_ptr<Expression> f
 			}
 			if (lower_index >= 0 && upper_index >= 0) {
 				// found both lower and upper index, create a BETWEEN expression
-				auto lower_constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
-				auto upper_constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto lower_constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[lower_index].constant);
+				auto upper_constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[upper_index].constant);
 				auto between = make_unique<BoundBetweenExpression>(
 				    entries[i]->Copy(), move(lower_constant), move(upper_constant), lower_inclusive, upper_inclusive);
 				callback(move(between));
 			} else if (lower_index >= 0) {
 				// only lower index found, create simple comparison expression
-				auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
+				auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[lower_index].constant);
 				auto comparison = make_unique<BoundComparisonExpression>(constant_list[lower_index].comparison_type,
 				                                                         entries[i]->Copy(), move(constant));
 				callback(move(comparison));
 			} else if (upper_index >= 0) {
 				// only upper index found, create simple comparison expression
-				auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+				auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[upper_index].constant);
 				auto comparison = make_unique<BoundComparisonExpression>(constant_list[upper_index].comparison_type,
 				                                                         entries[i]->Copy(), move(constant));
 				callback(move(comparison));
@@ -202,7 +202,7 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 							           info.comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 								upper_index = k;
 							} else {
-								auto constant = make_unique<BoundConstantExpression>(info.constant);
+								auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, info.constant);
 								auto comparison = make_unique<BoundComparisonExpression>(
 								    info.comparison_type, entries[i]->Copy(), move(constant));
 								callback(move(comparison));
@@ -210,14 +210,14 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 						}
 						if (lower_index >= 0) {
 							// only lower index found, create simple comparison expression
-							auto constant = make_unique<BoundConstantExpression>(constant_list[lower_index].constant);
+							auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[lower_index].constant);
 							auto comparison = make_unique<BoundComparisonExpression>(
 							    constant_list[lower_index].comparison_type, entries[i]->Copy(), move(constant));
 							callback(move(comparison));
 						}
 						if (upper_index >= 0) {
 							// only upper index found, create simple comparison expression
-							auto constant = make_unique<BoundConstantExpression>(constant_list[upper_index].constant);
+							auto constant = make_unique<BoundConstantExpression>(entries[i]->sql_type, constant_list[upper_index].constant);
 							auto comparison = make_unique<BoundComparisonExpression>(
 							    constant_list[upper_index].comparison_type, entries[i]->Copy(), move(constant));
 							callback(move(comparison));

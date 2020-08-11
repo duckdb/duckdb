@@ -123,8 +123,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 			if (distinct.target_distincts.size() == 0) {
 				// DISTINCT without a target: push references to the standard select list
 				for (idx_t i = 0; i < sql_types.size(); i++) {
-					distinct.target_distincts.push_back(make_unique<BoundColumnRefExpression>(
-					    GetInternalType(sql_types[i]), ColumnBinding(projection_index, i)));
+					distinct.target_distincts.push_back(make_unique<BoundColumnRefExpression>(sql_types[i], ColumnBinding(projection_index, i)));
 				}
 			} else {
 				// DISTINCT with target list: set types
@@ -136,7 +135,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 						throw BinderException("Ambiguous name in DISTINCT ON!");
 					}
 					assert(bound_colref.binding.column_index < sql_types.size());
-					bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+					bound_colref.sql_type = sql_types[bound_colref.binding.column_index];
+					bound_colref.return_type = GetInternalType(bound_colref.sql_type);
 				}
 			}
 			for (idx_t i = 0; i < distinct.target_distincts.size(); i++) {
@@ -160,7 +160,8 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sq
 				}
 				assert(bound_colref.binding.column_index < sql_types.size());
 				auto sql_type = sql_types[bound_colref.binding.column_index];
-				bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+				bound_colref.sql_type = sql_types[bound_colref.binding.column_index];
+				bound_colref.return_type = GetInternalType(bound_colref.sql_type);
 				if (sql_type.id == SQLTypeId::VARCHAR) {
 					order.orders[i].expression =
 					    ExpressionBinder::PushCollation(context, move(order.orders[i].expression), sql_type.collation);
@@ -281,9 +282,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
-			auto group_type = expr->return_type;
 			auto group_ref = make_unique<BoundColumnRefExpression>(
-			    group_type, ColumnBinding(result->group_index, result->groups.size()));
+			    expr->sql_type, ColumnBinding(result->group_index, result->groups.size()));
 			result->groups.push_back(move(expr));
 			expr = move(group_ref);
 		}

@@ -106,7 +106,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// fetch the child of the non-aggregate window function (if any)
 		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? SQLType() : types[0]);
 	}
-	auto result = make_unique<BoundWindowExpression>(window.type, GetInternalType(sql_type), move(aggregate));
+	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate));
 	result->children = move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
@@ -127,11 +127,11 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
+	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->sql_type,
 	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));
-	return BindResult(move(colref), sql_type);
+	return BindResult(move(colref));
 }
 
 } // namespace duckdb

@@ -46,7 +46,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
 		if (!constant_value.value_.boolean) {
 			// FALSE in AND, result of expression is false
-			return make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
+			return make_unique<BoundConstantExpression>(SQLType::BOOLEAN, Value::BOOLEAN(false));
 		} else {
 			// TRUE in AND, remove the expression from the set
 			return RemoveExpression(*conjunction, constant_expr);
@@ -58,7 +58,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return RemoveExpression(*conjunction, constant_expr);
 		} else {
 			// TRUE in OR, result of expression is true
-			return make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
+			return make_unique<BoundConstantExpression>(SQLType::BOOLEAN, Value::BOOLEAN(true));
 		}
 	}
 }

@@ -46,11 +46,10 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<SQLType> &
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			unique_ptr<Expression> result =
-			    make_unique<BoundColumnRefExpression>(GetInternalType(source_types[i]), setop_columns[i]);
+			    make_unique<BoundColumnRefExpression>(source_types[i], setop_columns[i]);
 			if (source_types[i] != target_types[i]) {
 				// add a cast only if the source and target types are not equivalent
-				result = make_unique<BoundCastExpression>(GetInternalType(target_types[i]), move(result),
-				                                          source_types[i], target_types[i]);
+				result = make_unique<BoundCastExpression>(move(result), source_types[i], target_types[i]);
 			}
 			select_list.push_back(move(result));
 		}

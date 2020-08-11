@@ -80,7 +80,10 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
-	return result.GetValue(0);
+
+	auto result_value = result.GetValue(0);
+	result_value.SetSQLType(expr.sql_type);
+	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {

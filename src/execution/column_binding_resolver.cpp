@@ -75,7 +75,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
-			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
+			return make_unique<BoundReferenceExpression>(expr.alias, expr.sql_type, i);
 		}
 	}
 	// could not bind the column reference, this should never happen and indicates a bug in the code

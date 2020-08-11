@@ -4,10 +4,13 @@
 using namespace duckdb;
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type,
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type, SQLType sql_type,
                                              unique_ptr<AggregateFunction> aggregate)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type), aggregate(move(aggregate)) {
+    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type, move(sql_type)), aggregate(move(aggregate)) {
 }
+
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, SQLType sql_type, unique_ptr<AggregateFunction> aggregate) :
+	BoundWindowExpression(type, GetInternalType(sql_type), move(sql_type), move(aggregate)) {}
 
 string BoundWindowExpression::ToString() const {
 	return "WINDOW";
@@ -65,7 +68,7 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr);
+	auto new_window = make_unique<BoundWindowExpression>(type, sql_type, nullptr);
 	new_window->CopyProperties(*this);
 
 	if (aggregate) {

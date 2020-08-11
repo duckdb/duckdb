@@ -15,7 +15,7 @@ namespace duckdb {
 
 class BoundConstantExpression : public Expression {
 public:
-	BoundConstantExpression(Value value);
+	BoundConstantExpression(SQLType sql_type, Value value);
 
 	Value value;
 

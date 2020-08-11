@@ -69,11 +69,11 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
 	idx_t cast_cost = 0;
-	if (expr.target_type != expr.source_type) {
+	if (expr.sql_type != expr.source_type) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
-		if (expr.target_type == SQLType::VARCHAR || expr.source_type == SQLType::VARCHAR ||
-            expr.target_type == SQLType::BLOB || expr.source_type == SQLType::BLOB) {
+		if (expr.sql_type == SQLType::VARCHAR || expr.source_type == SQLType::VARCHAR ||
+            expr.sql_type == SQLType::BLOB || expr.source_type == SQLType::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;

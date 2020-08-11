@@ -5,18 +5,14 @@
 using namespace duckdb;
 using namespace std;
 
-BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, idx_t depth)
-    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type), binding(binding),
+BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, SQLType sql_type, ColumnBinding binding, idx_t depth)
+    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, type, move(sql_type)), binding(binding),
       depth(depth) {
-	this->alias = alias;
-}
-
-BoundColumnRefExpression::BoundColumnRefExpression(TypeId type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), type, binding, depth) {
+	this->alias = move(alias);
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {
-	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
+	return make_unique<BoundColumnRefExpression>(alias, return_type, sql_type, binding, depth);
 }
 
 hash_t BoundColumnRefExpression::Hash() const {

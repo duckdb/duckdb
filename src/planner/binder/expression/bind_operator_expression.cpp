@@ -62,9 +62,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// now resolve the types
 	SQLType result_type = ResolveOperatorType(op, children);
 
-	auto result = make_unique<BoundOperatorExpression>(op.type, GetInternalType(result_type));
+	auto result = make_unique<BoundOperatorExpression>(op.type, result_type);
 	for (auto &child : children) {
 		result->children.push_back(move(child->expr));
 	}
-	return BindResult(move(result), result_type);
+	return BindResult(move(result));
 }

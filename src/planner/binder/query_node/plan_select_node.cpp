@@ -96,7 +96,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		vector<unique_ptr<Expression>> prune_expressions;
 		for (idx_t i = 0; i < statement.column_count; i++) {
 			prune_expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    projection.expressions[i]->return_type, ColumnBinding(statement.projection_index, i)));
+			    projection.expressions[i]->sql_type, ColumnBinding(statement.projection_index, i)));
 		}
 		auto prune = make_unique<LogicalProjection>(statement.prune_index, move(prune_expressions));
 		prune->AddChild(move(root));

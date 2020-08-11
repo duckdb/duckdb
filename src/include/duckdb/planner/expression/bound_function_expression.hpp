@@ -17,8 +17,13 @@ class ScalarFunctionCatalogEntry;
 //! Represents a function call that has been bound to a base function
 class BoundFunctionExpression : public Expression {
 public:
-	BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator = false);
-	BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, vector<SQLType> arguments, SQLType sql_return_type, bool is_operator = false);
+	BoundFunctionExpression(TypeId return_type, SQLType sql_type, ScalarFunction bound_function, bool is_operator = false);
+	BoundFunctionExpression(TypeId return_type, SQLType sql_type, ScalarFunction bound_function, vector<SQLType> arguments, bool is_operator = false);
+	BoundFunctionExpression(SQLType return_type, ScalarFunction bound_function, bool is_operator = false) :
+		BoundFunctionExpression(GetInternalType(return_type), move(return_type), move(bound_function), is_operator) {}
+	BoundFunctionExpression(SQLType return_type, ScalarFunction bound_function, vector<SQLType> arguments, bool is_operator = false) :
+		BoundFunctionExpression(GetInternalType(return_type), move(return_type), move(bound_function), move(arguments), is_operator) {}
+
 
 	// The bound function expression
 	ScalarFunction function;
@@ -26,8 +31,6 @@ public:
 	vector<unique_ptr<Expression>> children;
 	//! Argument types of the function. This is separate from the actual function in case of e.g. varargs functions, where the function definition only contains "varargs", this will contain the number of arguments for this invocation.
 	vector<SQLType> arguments;
-	//! The SQL return type; separate from the actual function because certain functions change output depending on input types, e.g. LIST_VALUE returns a LIST(INPUT_TYPE) as return type
-	SQLType sql_return_type;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! The bound function data (if any)

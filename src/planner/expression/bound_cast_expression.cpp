@@ -7,8 +7,8 @@ using namespace std;
 
 BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, SQLType source_type,
                                          SQLType target_type)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)),
-      source_type(source_type), target_type(target_type) {
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target, move(target_type)), child(move(child)),
+      source_type(source_type) {
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, SQLType source_type,
@@ -59,14 +59,14 @@ bool BoundCastExpression::Equals(const BaseExpression *other_) const {
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}
-	if (source_type != other->source_type || target_type != other->target_type) {
+	if (source_type != other->source_type || sql_type != other->sql_type) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<Expression> BoundCastExpression::Copy() {
-	auto copy = make_unique<BoundCastExpression>(return_type, child->Copy(), source_type, target_type);
+	auto copy = make_unique<BoundCastExpression>(return_type, child->Copy(), source_type, sql_type);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

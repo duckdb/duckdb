@@ -18,8 +18,6 @@ public:
 	BoundUnnestExpression(SQLType return_type);
 
 	unique_ptr<Expression> child;
-	//! The child and return type
-	SQLType sql_return_type;
 
 public:
 	bool IsFoldable() const override;

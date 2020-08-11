@@ -1,6 +1,7 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -172,6 +173,13 @@ bool TypeIsNumeric(TypeId type) {
 }
 bool TypeIsInteger(TypeId type) {
 	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::INT128;
+}
+
+hash_t SQLType::Hash() const {
+	hash_t hash = duckdb::Hash<uint8_t>((uint8_t)id);
+	hash = CombineHash(hash, duckdb::Hash<uint16_t>(width));
+	hash = CombineHash(hash, duckdb::Hash<uint8_t>(scale));
+	return hash;
 }
 
 void SQLType::Serialize(Serializer &serializer) {

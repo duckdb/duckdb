@@ -23,5 +23,5 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 		// otherwise add a cast to the target type
 		child.expr = BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, expr.cast_type);
 	}
-	return BindResult(move(child.expr), expr.cast_type);
+	return BindResult(move(child.expr));
 }

@@ -28,7 +28,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 
 	if (constant.is_null) {
 		// NULL specifier: return constant NULL
-		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
+		return make_unique<BoundConstantExpression>(date_part.sql_type, Value(date_part.return_type));
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(constant.str_value);

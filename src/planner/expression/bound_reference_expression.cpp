@@ -6,12 +6,9 @@
 using namespace duckdb;
 using namespace std;
 
-BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, idx_t index)
-    : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, type), index(index) {
+BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, SQLType sql_type, idx_t index)
+    : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, type, move(sql_type)), index(index) {
 	this->alias = alias;
-}
-BoundReferenceExpression::BoundReferenceExpression(TypeId type, idx_t index)
-    : BoundReferenceExpression(string(), type, index) {
 }
 
 string BoundReferenceExpression::ToString() const {
@@ -31,5 +28,5 @@ hash_t BoundReferenceExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundReferenceExpression::Copy() {
-	return make_unique<BoundReferenceExpression>(alias, return_type, index);
+	return make_unique<BoundReferenceExpression>(alias, return_type, sql_type, index);
 }

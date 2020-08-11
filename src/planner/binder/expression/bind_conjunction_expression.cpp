@@ -25,5 +25,5 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 		    BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, SQLType(SQLTypeId::BOOLEAN)));
 	}
 	// now create the bound conjunction expression
-	return BindResult(move(result), SQLType(SQLTypeId::BOOLEAN));
+	return BindResult(move(result));
 }

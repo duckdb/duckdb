@@ -16,7 +16,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinct(unique_ptr<Ph
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
 	for (idx_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundReferenceExpression>(types[i], i));
+
+		groups.push_back(make_unique<BoundReferenceExpression>(types[i], SQLTypeFromInternalType(types[i]), i));
 	}
 
 	auto groupby =
@@ -38,14 +39,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	}
 	// we need to create one aggregate per column in the select_list
 	for (idx_t i = 0; i < types.size(); ++i) {
+		auto sql_type = SQLTypeFromInternalType(types[i]);
 		// first we create an aggregate that returns the FIRST element
-		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
+		auto bound = make_unique<BoundReferenceExpression>(types[i], sql_type, i);
 		auto first_aggregate = make_unique<BoundAggregateExpression>(
-		    types[i], FirstFun::GetFunction(SQLTypeFromInternalType(types[i])), false);
+		    types[i], sql_type, FirstFun::GetFunction(sql_type), false);
 		first_aggregate->children.push_back(move(bound));
 		// and push it to the list of aggregates
 		aggregates.push_back(move(first_aggregate));
-		projections.push_back(make_unique<BoundReferenceExpression>(types[i], i));
+		projections.push_back(make_unique<BoundReferenceExpression>(types[i], sql_type, i));
 	}
 
 	// we add a physical hash aggregation in the plan to select the distinct groups

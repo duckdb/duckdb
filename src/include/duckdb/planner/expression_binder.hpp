@@ -27,7 +27,7 @@ class SimpleFunction;
 struct BindResult {
 	BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr, SQLType sql_type) : expression(move(expr)), sql_type(sql_type) {
+	BindResult(unique_ptr<Expression> expr) : expression(move(expr)), sql_type(expression->sql_type) {
 	}
 
 	bool HasError() {

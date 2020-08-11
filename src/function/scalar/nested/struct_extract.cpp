@@ -83,7 +83,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	}
 
 	expr.return_type = GetInternalType(return_type);
-	expr.sql_return_type = return_type;
+	expr.sql_type = return_type;
 	expr.children.pop_back();
 	return make_unique<StructExtractBindData>(key, key_index, GetInternalType(return_type));
 }

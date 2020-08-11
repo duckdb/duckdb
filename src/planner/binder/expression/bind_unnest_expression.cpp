@@ -42,7 +42,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias,
-	    node.unnests[unnest_index]->return_type, ColumnBinding(node.unnest_index, unnest_index), depth);
+	    return_type, ColumnBinding(node.unnest_index, unnest_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	return BindResult(move(colref), return_type);
+	return BindResult(move(colref));
 }

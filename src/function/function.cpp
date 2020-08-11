@@ -262,7 +262,7 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 
 	// now create the function
 	auto result =
-	    make_unique<BoundFunctionExpression>(GetInternalType(bound_function.return_type), bound_function, move(arguments), bound_function.return_type, is_operator);
+	    make_unique<BoundFunctionExpression>(bound_function.return_type, bound_function, move(arguments), is_operator);
 	result->children = move(children);
 	if (bound_function.bind) {
 		result->bind_info = bound_function.bind(*result, context);
