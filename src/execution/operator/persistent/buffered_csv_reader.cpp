@@ -409,8 +409,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	    SQLType::VARCHAR, SQLType::TIMESTAMP,
 	    SQLType::DATE,    SQLType::TIME,
 	    SQLType::DOUBLE,  /*SQLType::FLOAT,*/ SQLType::BIGINT,
-	    SQLType::INTEGER, /* SQLType::SMALLINT, */ /*SQLType::TINYINT,*/ SQLType::BOOLEAN,
-	    SQLType::SQLNULL};
+	    SQLType::INTEGER, /* SQLType::SMALLINT, */ /*SQLType::TINYINT,*/ SQLType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
