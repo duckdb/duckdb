@@ -138,6 +138,7 @@ public:
 	vector<idx_t> sniffed_column_counts;
 	uint8_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
+	bool end_of_file_reached = false;
 
 	idx_t bytes_in_chunk = 0;
 	double bytes_per_line_avg = 0;

@@ -206,7 +206,7 @@ void BufferedCSVReader::JumpToBeginning(idx_t skip_rows, bool skip_header) {
 }
 
 bool BufferedCSVReader::JumpToNextSample() {
-	if (source->eof() || sample_chunk_idx >= MAX_SAMPLE_CHUNKS) {
+	if (end_of_file_reached || sample_chunk_idx >= MAX_SAMPLE_CHUNKS) {
 		return false;
 	}
 
@@ -836,6 +836,8 @@ final_state:
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
+
+	end_of_file_reached = true;
 }
 
 void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
@@ -1006,6 +1008,8 @@ final_state:
 	if (mode == ParserMode::PARSING) {
 		Flush(insert_chunk);
 	}
+
+	end_of_file_reached = true;
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
@@ -1110,6 +1114,8 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 }
 
 bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
+	linenr++;
+
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
 		throw ParserException("Error on line %s: expected %lld values but got %d",
 		                      GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column);
@@ -1135,7 +1141,6 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 	}
 
 	column = 0;
-	linenr++;
 	return false;
 }
 
