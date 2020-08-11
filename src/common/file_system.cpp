@@ -18,13 +18,13 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 
 static void AssertValidFileFlags(uint8_t flags) {
 	// cannot combine Read and Write flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::WRITE));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
 	// cannot combine Read and CREATE/Append flags
-	assert(!(flags & FileFlags::READ && flags & FileFlags::APPEND));
-	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE));
-	assert(!(flags & FileFlags::READ && flags & FileFlags::FILE_CREATE_NEW));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	assert(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
-	assert(!(flags & FileFlags::FILE_CREATE && flags & FileFlags::FILE_CREATE_NEW));
+	assert(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 }
 
 #ifndef _WIN32
@@ -69,22 +69,22 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 
 	int open_flags = 0;
 	int rc;
-	if (flags & FileFlags::READ) {
+	if (flags & FileFlags::FILE_FLAGS_READ) {
 		open_flags = O_RDONLY;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::WRITE);
+		assert(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags = O_RDWR | O_CLOEXEC;
-		if (flags & FileFlags::FILE_CREATE) {
+		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
-		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
 			open_flags |= O_CREAT | O_TRUNC;
 		}
-		if (flags & FileFlags::APPEND) {
+		if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			open_flags |= O_APPEND;
 		}
 	}
-	if (flags & FileFlags::DIRECT_IO) {
+	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 #if defined(__sun) && defined(__SVR4)
 		throw Exception("DIRECT_IO not supported on Solaris");
 #endif
@@ -100,7 +100,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
-	// 	if (flags & FileFlags::DIRECT_IO) {
+	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 	// 		// OSX requires fcntl for Direct IO
 	// 		rc = fcntl(fd, F_NOCACHE, 1);
 	// 		if (fd == -1) {
@@ -365,24 +365,24 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL;
-	if (flags & FileFlags::READ) {
+	if (flags & FileFlags::FILE_FLAGS_READ) {
 		desired_access = GENERIC_READ;
 		share_mode = FILE_SHARE_READ;
 	} else {
 		// need Read or Write
-		assert(flags & FileFlags::WRITE);
+		assert(flags & FileFlags::FILE_FLAGS_WRITE);
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
-		if (flags & FileFlags::FILE_CREATE) {
+		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
-		} else if (flags & FileFlags::FILE_CREATE_NEW) {
+		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
 			creation_disposition = CREATE_ALWAYS;
 		}
-		if (flags & FileFlags::DIRECT_IO) {
+		if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 			flags_and_attributes |= FILE_FLAG_WRITE_THROUGH;
 		}
 	}
-	if (flags & FileFlags::DIRECT_IO) {
+	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	HANDLE hFile =
@@ -392,7 +392,7 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const char *path, uint8_t flags, Fil
 		throw IOException("Cannot open file \"%s\": %s", path, error.c_str());
 	}
 	auto handle = make_unique<WindowsFileHandle>(*this, path, hFile);
-	if (flags & FileFlags::APPEND) {
+	if (flags & FileFlags::FILE_FLAGS_APPEND) {
 		SetFilePointer(*handle, GetFileSize(*handle));
 	}
 	return move(handle);

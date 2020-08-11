@@ -40,7 +40,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	// get the size of the database
 	int64_t size;
 	{
-		auto handle = fs.OpenFile(storage_database, FileFlags::READ);
+		auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
 		size = fs.GetFileSize(*handle);
 		REQUIRE(size >= 0);
 	}
@@ -61,7 +61,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	// get the new file size
 	int64_t new_size;
 	{
-		auto handle = fs.OpenFile(storage_database, FileFlags::READ);
+		auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
 		new_size = fs.GetFileSize(*handle);
 		REQUIRE(new_size >= 0);
 	}

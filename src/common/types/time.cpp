@@ -57,9 +57,9 @@ static bool ParseDoubleDigit2(const char *buf, idx_t &pos, int32_t &result) {
 	return false;
 }
 
-static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false) {
+bool Time::TryConvertTime(const char *buf, idx_t &pos, dtime_t &result, bool strict) {
 	int32_t hour = -1, min = -1, sec = -1, msec = -1;
-	idx_t pos = 0;
+	pos = 0;
 	int sep;
 
 	// skip leading spaces
@@ -107,8 +107,10 @@ static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false
 	sep = buf[pos++];
 	if (sep == '.') { // we expect some milliseconds
 		uint8_t mult = 100;
-		for (; std::isdigit((unsigned char)buf[pos]) && mult > 0; pos++, mult /= 10) {
-			msec += (buf[pos] - '0') * mult;
+		for (; std::isdigit((unsigned char)buf[pos]); pos++, mult /= 10) {
+			if (mult > 0) {
+				msec += (buf[pos] - '0') * mult;
+			}
 		}
 	}
 
@@ -130,9 +132,10 @@ static bool TryConvertTime(const char *buf, dtime_t &result, bool strict = false
 
 dtime_t Time::FromCString(const char *buf, bool strict) {
 	dtime_t result;
-	if (!TryConvertTime(buf, result, strict)) {
+	idx_t pos;
+	if (!TryConvertTime(buf, pos, result, strict)) {
 		// last chance, check if we can parse as timestamp
-		if (strlen(buf) > 10 && !strict) {
+		if (!strict) {
 			return Timestamp::GetTime(Timestamp::FromString(buf));
 		}
 		throw ConversionException("time field value out of range: \"%s\", "

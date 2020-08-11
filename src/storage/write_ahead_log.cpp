@@ -13,7 +13,7 @@ WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(da
 }
 
 void WriteAheadLog::Initialize(string &path) {
-	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(), FileFlags::WRITE | FileFlags::FILE_CREATE | FileFlags::APPEND);
+	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_APPEND);
 	initialized = true;
 }
 

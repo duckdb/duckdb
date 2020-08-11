@@ -81,6 +81,10 @@ public:
 	unique_ptr<DBConfig> config;
 	unordered_set<string> extensions;
 	unordered_map<string, unique_ptr<Connection>> named_connection_map;
+	bool output_hash_mode = false;
+	bool output_result_mode = false;
+	bool debug_mode = false;
+	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 };
 
 /*
@@ -511,9 +515,6 @@ struct Query : public Command {
 	idx_t expected_column_count = 0;
 	SortStyle sort_style = SortStyle::NO_SORT;
 	vector<string> values;
-	bool output_result_mode = false;
-	int hashThreshold = 0;
-	bool output_hash_mode = false;
 	bool query_has_label = false;
 	string query_label;
 
@@ -530,9 +531,20 @@ struct RestartCommand : public Command {
 void Statement::Execute() {
 	auto connection = CommandConnection();
 
+	if (runner.output_result_mode || runner.debug_mode) {
+		print_line_sep();
+		print_header("File " + file_name + ":" + to_string(query_line) + ")");
+		print_sql(sql_query);
+		print_line_sep();
+	}
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	bool error = !result->success;
+
+	if (runner.output_result_mode || runner.debug_mode) {
+		result->Print();
+	}
 
 	/* Check to see if we are expecting success or failure */
 	if (!expect_ok) {
@@ -566,6 +578,13 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 void Query::Execute() {
 	auto connection = CommandConnection();
 
+	if (runner.output_result_mode || runner.debug_mode) {
+		print_line_sep();
+		print_header("File " + file_name + ":" + to_string(query_line) + ")");
+		print_sql(sql_query);
+		print_line_sep();
+	}
+
 	query_break(query_line);
 	auto result = connection->Query(sql_query);
 	if (!result->success) {
@@ -581,10 +600,7 @@ void Query::Execute() {
 	vector<string> azResult;
 	int nResult;
 	duckdbConvertResult(*result, azResult, nResult);
-	if (output_result_mode) {
-		print_line_sep();
-		print_sql(sql_query);
-		print_line_sep();
+	if (runner.output_result_mode) {
 		// names
 		for(idx_t c = 0; c < result->column_count(); c++) {
 			if (c != 0) {
@@ -652,21 +668,21 @@ void Query::Execute() {
 		std::sort(azResult.begin(), azResult.end());
 	}
 	char zHash[100];                            /* Storage space for hash results */
-	int compare_hash = query_has_label || (hashThreshold > 0 && nResult > hashThreshold);
+	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
 	// check if the current line (the first line of the result) is a hash value
 	if (values.size() == 1 && result_is_hash(values[0])) {
 		compare_hash = true;
 	}
 	/* Hash the results if we are over the hash threshold or if we
 	** there is a hash label */
-	if (output_hash_mode || compare_hash) {
+	if (runner.output_hash_mode || compare_hash) {
 		md5_add(""); /* make sure md5 is reset, even if no results */
 		for (int i = 0; i < nResult; i++) {
 			md5_add(azResult[i].c_str());
 			md5_add("\n");
 		}
 		snprintf(zHash, sizeof(zHash), "%d values hashing to %s", nResult, md5_finish());
-		if (output_hash_mode) {
+		if (runner.output_hash_mode) {
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
@@ -877,10 +893,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	int nSkipped = 0;                           /* Number of SQL statements skipped */
 	Script sScript;                             /* Script parsing status */
 	FILE *in;                                   /* For reading script */
-	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
 	int bHt = 0;                                /* True if -ht command-line option */
-	int output_hash_mode = 0;
-	int output_result_mode = 0;
 	bool in_loop = false;
 	string loop_iterator_name;
 	int loop_start;
@@ -1024,9 +1037,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			command->file_name = zScriptFile;
 			command->query_line = sScript.nLine;
-			command->hashThreshold = hashThreshold;
-			command->output_hash_mode = output_hash_mode;
-			command->output_result_mode = output_result_mode;
 
 			/* Verify that the type string consists of one or more
 			 *characters
@@ -1135,9 +1145,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			break;
 		} else if (strcmp(sScript.azToken[0], "mode") == 0) {
 			if (strcmp(sScript.azToken[1], "output_hash") == 0) {
-				output_hash_mode = 1;
+				output_hash_mode = true;
 			} else if (strcmp(sScript.azToken[1], "output_result") == 0) {
-				output_result_mode = 1;
+				output_result_mode = true;
+			} else if (strcmp(sScript.azToken[1], "debug") == 0) {
+				debug_mode = true;
 			} else if (strcmp(sScript.azToken[1], "skip") == 0) {
 				skip_execution = true;
 			} else if (strcmp(sScript.azToken[1], "unskip") == 0) {

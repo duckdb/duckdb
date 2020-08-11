@@ -328,7 +328,7 @@ public:
 	}
 
 private:
-	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> inputs,
+	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
 	                                                  vector<SQLType> &return_types, vector<string> &names) {
 
 		auto file_name = inputs[0].GetValue<string>();
@@ -1254,7 +1254,7 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 
 	// initialize the file writer
 	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
-	                                                       FileFlags::WRITE | FileFlags::FILE_CREATE_NEW);
+	                                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
 	global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;

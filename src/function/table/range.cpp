@@ -14,7 +14,7 @@ struct RangeFunctionData : public TableFunctionData {
 	idx_t current_idx;
 };
 
-static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> inputs,
+static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                               vector<SQLType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionData>();
 	if (inputs.size() < 2) {

@@ -120,7 +120,10 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 	LoadBenchmark();
 
 	auto state = make_unique<InterpretedBenchmarkState>();
-	state->con.Query(init_query);
+	auto result = state->con.Query(init_query);
+	if (!result->success) {
+		throw Exception(result->error);
+	}
 	return state;
 }
 
