@@ -36,7 +36,7 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	return std::to_string(linenr) + estimated;
+	return std::to_string(linenr+1) + estimated;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
