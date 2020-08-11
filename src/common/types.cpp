@@ -408,6 +408,18 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		default:
 			return false;
 		}
+	case SQLTypeId::FLOAT:
+		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
 	case SQLTypeId::DOUBLE:
 		switch (other.id) {
 		case SQLTypeId::BOOLEAN:

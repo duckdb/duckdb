@@ -290,6 +290,29 @@ bool BufferedCSVReader::TryCastValue(Value value, SQLType sql_type) {
 	return false;
 }
 
+bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, SQLType sql_type) {
+	try {
+		// try vector-cast from string to sql_type
+		Vector dummy_result(GetInternalType(sql_type));
+		if (options.has_date_format && sql_type == SQLTypeId::DATE) {
+			// use the date format to cast the chunk
+			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk_col, dummy_result, size,
+			    [&](string_t input) { return options.date_format.ParseDate(input); });
+		} else if (options.has_timestamp_format && sql_type == SQLTypeId::TIMESTAMP) {
+			// use the date format to cast the chunk
+			UnaryExecutor::Execute<string_t, timestamp_t, true>(
+			    parse_chunk_col, dummy_result, size,
+			    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+		} else {
+			// target type is not varchar: perform a cast
+			VectorOperations::Cast(parse_chunk_col, dummy_result, SQLType::VARCHAR, sql_type, size);
+		}
+	} catch (const Exception &e) {
+		return false;
+	}
+	return true;
+}
+
 void BufferedCSVReader::PrepareCandidateSets() {
 	if (options.has_delimiter) {
 		delim_candidates = {options.delimiter};
@@ -408,8 +431,8 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	vector<SQLType> type_candidates = {
 	    SQLType::VARCHAR, SQLType::TIMESTAMP,
 	    SQLType::DATE,    SQLType::TIME,
-	    SQLType::DOUBLE,  /*SQLType::FLOAT,*/ SQLType::BIGINT,
-	    SQLType::INTEGER, /* SQLType::SMALLINT, */ /*SQLType::TINYINT,*/ SQLType::BOOLEAN};
+	    SQLType::DOUBLE,  SQLType::FLOAT, SQLType::BIGINT,
+	    SQLType::INTEGER, SQLType::SMALLINT, SQLType::TINYINT, SQLType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
@@ -491,15 +514,10 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
 			while (col_type_candidates.size() > 1) {
-				try {
-					const auto &sql_type = col_type_candidates.back();
-					// try vector-cast from string to sql_type
-					parse_chunk.data[col];
-					Vector dummy_result(GetInternalType(sql_type));
-					VectorOperations::Cast(parse_chunk.data[col], dummy_result, SQLType::VARCHAR, sql_type,
-					                       parse_chunk.size(), true);
+				const auto &sql_type = col_type_candidates.back();
+				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)){
 					break;
-				} catch (const Exception &e) {
+				} else{
 					col_type_candidates.pop_back();
 				}
 			}

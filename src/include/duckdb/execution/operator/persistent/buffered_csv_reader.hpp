@@ -165,6 +165,8 @@ private:
 	vector<SQLType> SniffCSV(vector<SQLType> requested_types);
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(Value value, SQLType sql_type);
+	//! Try to cast a vector of values to the specified sql type
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, SQLType sql_type);
 	//! Skips header rows and skip_rows in the input stream
 	void SkipHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
