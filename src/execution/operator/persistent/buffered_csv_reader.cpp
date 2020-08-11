@@ -1161,8 +1161,8 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
 					switch (utf_type) {
 					case UnicodeType::INVALID:
-						throw ParserException("Error on line %s: file is not valid UTF8",
-						                      GetLineNumberStr(linenr, linenr_estimated).c_str());
+						throw ParserException("Error between line %d and %d: file is not valid UTF8",
+						                      linenr-parse_chunk.size(), linenr);
 					case UnicodeType::ASCII:
 						break;
 					case UnicodeType::UNICODE: {
@@ -1176,19 +1176,34 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else if (options.has_date_format && sql_types[col_idx].id == SQLTypeId::DATE) {
-			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, date_t, true>(
-			    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-			    [&](string_t input) { return options.date_format.ParseDate(input); });
+			try {
+				// use the date format to cast the chunk
+				UnaryExecutor::Execute<string_t, date_t, true>(
+				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
+				    [&](string_t input) { return options.date_format.ParseDate(input); });
+			} catch (InvalidInputException e) {
+				throw ParserException("Error between line %d and %d: %s",
+				                      linenr - parse_chunk.size(), linenr, e.what());
+			}
 		} else if (options.has_timestamp_format && sql_types[col_idx].id == SQLTypeId::TIMESTAMP) {
-			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, timestamp_t, true>(
-			    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-			    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+			try {
+				// use the date format to cast the chunk
+				UnaryExecutor::Execute<string_t, timestamp_t, true>(
+					parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
+					[&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+			} catch (InvalidInputException e) {
+				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				                      e.what());
+			}
 		} else {
-			// target type is not varchar: perform a cast
-			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
-			                       sql_types[col_idx], parse_chunk.size());
+			try {
+				// target type is not varchar: perform a cast
+				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
+									   sql_types[col_idx], parse_chunk.size());
+			} catch (Exception e) {
+				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				                      e.what());
+			}
 		}
 	}
 	parse_chunk.Reset();
