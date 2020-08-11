@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
@@ -205,6 +206,11 @@ struct IntegerCastOperation {
 		return true;
 	}
 
+	template<class T, bool NEGATIVE>
+	static bool HandleDecimal(T &result, uint8_t digit) {
+		return true;
+	}
+
 	template<class T>
 	static bool Finalize(T &result) {
 		return true;
@@ -223,18 +229,22 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 					return false;
 				}
 				bool number_before_period = pos > start_pos;
-				if (!OP::template Finalize<T>(result)) {
-					return false;
-				}
 				// decimal point: we accept decimal values for integers as well
 				// we just truncate them
 				// make sure everything after the period is a number
 				pos++;
 				idx_t start_digit = pos;
 				while(pos < len) {
-					if (!std::isdigit((unsigned char)buf[pos++])) {
+					if (!std::isdigit((unsigned char)buf[pos])) {
 						return false;
 					}
+					if (!OP::template HandleDecimal<T, NEGATIVE>(result, buf[pos] - '0')) {
+						return false;
+					}
+					pos++;
+				}
+				if (!OP::template Finalize<T>(result)) {
+					return false;
 				}
 				// make sure there is either (1) one number after the period, or (2) one number before the period
 				// i.e. we accept "1." and ".1" as valid numbers, but not "."
@@ -279,7 +289,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	return pos > start_pos;
 }
 
-template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation, bool ZERO_INITIALIZE=true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while(len > 0 && std::isspace(*buf)) {
 		buf++;
@@ -290,7 +300,9 @@ template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation> st
 	}
 	int negative = *buf == '-';
 
-	memset(&result, 0, sizeof(T));
+	if (ZERO_INITIALIZE) {
+		memset(&result, 0, sizeof(T));
+	}
 	if (!negative) {
 		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	} else {
@@ -1090,6 +1102,11 @@ struct HugeIntegerCastOperation {
 		}
 	}
 
+	template<class T, bool NEGATIVE>
+	static bool HandleDecimal(T &result, uint8_t digit) {
+		return true;
+	}
+
 	template<class T>
 	static bool Finalize(T &result) {
 		return result.Flush();
@@ -1255,6 +1272,118 @@ template <> bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool str
 
 template <> hugeint_t Cast::Operation(hugeint_t input) {
 	return input;
+}
+
+//===--------------------------------------------------------------------===//
+// Decimal Cast
+//===--------------------------------------------------------------------===//
+template<class T>
+struct DecimalCastData {
+	T result;
+	uint16_t width;
+	uint8_t scale;
+	uint8_t digit_count;
+	uint8_t decimal_count;
+};
+
+struct DecimalCastOperation {
+	template<class T, bool NEGATIVE>
+	static bool HandleDigit(T &state, uint8_t digit) {
+		if (state.result == 0 && digit == 0) {
+			// leading zero's don't count towards the digit count
+			return true;
+		}
+		if (state.digit_count == state.width - state.scale) {
+			// width of decimal type is exceeded!
+			return false;
+		}
+		state.digit_count++;
+		if (NEGATIVE) {
+			state.result = state.result * 10 - digit;
+		} else {
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+	}
+
+	template<class T>
+	static bool HandleExponent(T &state, int64_t exponent) {
+		return false;
+	}
+
+	template<class T, bool NEGATIVE>
+	static bool HandleDecimal(T &state, uint8_t digit) {
+		if (state.decimal_count == state.scale) {
+			// we exceeded the amount of supported decimals
+			// however, we don't throw an error here
+			// we just truncate the decimal
+			return true;
+		}
+		state.decimal_count++;
+		if (NEGATIVE) {
+			state.result = state.result * 10 - digit;
+		} else {
+			state.result = state.result * 10 + digit;
+		}
+		return true;
+	}
+
+	template<class T>
+	static bool Finalize(T &state) {
+		// if we have not gotten exactly "scale" decimals, we need to multiply the result
+		// e.g. if we have a string "1.0" that is cast to a DECIMAL(9,3), the value needs to be 1000
+		// but we have only gotten the value "10" so far, so we multiply by 1000
+		for(uint8_t i = state.decimal_count; i < state.scale; i++) {
+			state.result *= 10;
+		}
+		return true;
+	}
+};
+
+template<class T>
+T decimal_string_cast(string_t input, uint16_t width, uint8_t scale) {
+	DecimalCastData<T> state;
+	state.result = 0;
+	state.width = width;
+	state.scale = scale;
+	state.digit_count = 0;
+	state.decimal_count = 0;
+	if (!TryIntegerCast<DecimalCastData<T>, false, DecimalCastOperation, false>(input.GetData(), input.GetSize(), state, false)) {
+		throw OutOfRangeException("Could not cast string value \"%s\" to DECIMAL(%d,%d)", input.GetData(), (int) width, (int) scale);
+	}
+	return state.result;
+}
+
+template<> int16_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale) {
+	return decimal_string_cast<int16_t>(input, width, scale);
+}
+
+template<> int32_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale) {
+	return decimal_string_cast<int32_t>(input, width, scale);
+}
+
+template<> int64_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale) {
+	return decimal_string_cast<int64_t>(input, width, scale);
+}
+
+template<> hugeint_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale) {
+	return decimal_string_cast<hugeint_t>(input, width, scale);
+}
+
+template<> string_t StringCastFromDecimal::Operation(int16_t input, uint16_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int16_t, uint16_t>(input, scale, result);
+}
+
+template<> string_t StringCastFromDecimal::Operation(int32_t input, uint16_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int32_t, uint32_t>(input, scale, result);
+}
+
+template<> string_t StringCastFromDecimal::Operation(int64_t input, uint16_t width, uint8_t scale, Vector &result) {
+	return DecimalToString::Format<int64_t, uint64_t>(input, scale, result);
+}
+
+template<> string_t StringCastFromDecimal::Operation(hugeint_t input, uint16_t width, uint8_t scale, Vector &result) {
+	throw NotImplementedException("FIXME: format hugeint");
 }
 
 } // namespace duckdb

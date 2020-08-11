@@ -6,9 +6,11 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
 	assert(result.type == TypeId::VARCHAR);
@@ -67,7 +69,6 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		assert(result.type == TypeId::FLOAT);
 		UnaryExecutor::Execute<SRC, float, duckdb::Cast, true>(source, result, count);
 		break;
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
 		UnaryExecutor::Execute<SRC, double, duckdb::Cast, true>(source, result, count);
@@ -81,6 +82,112 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 		auto list_child = make_unique<ChunkCollection>();
 		ListVector::SetEntry(result, move(list_child));
 		null_cast(source, result, source_type, target_type, count);
+		break;
+	}
+	default:
+		null_cast(source, result, source_type, target_type, count);
+		break;
+	}
+}
+
+template<class T>
+static void to_decimal_cast(Vector &source, Vector &result, SQLType decimal_type, idx_t count) {
+	if (decimal_type.width <= Decimal::MAX_WIDTH_INT16) {
+		UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
+			return CastToDecimal::Operation<T, int16_t>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT32) {
+		UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
+			return CastToDecimal::Operation<T, int32_t>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT64) {
+		UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
+			return CastToDecimal::Operation<T, int64_t>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else {
+		assert(decimal_type.width <= Decimal::MAX_WIDTH_INT128);
+		UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
+			return CastToDecimal::Operation<T, hugeint_t>(input, decimal_type.width, decimal_type.scale);
+		});
+	}
+}
+
+template<class T>
+static void from_decimal_cast(Vector &source, Vector &result, SQLType decimal_type, idx_t count) {
+	if (decimal_type.width <= Decimal::MAX_WIDTH_INT16) {
+		UnaryExecutor::Execute<int16_t, T, true>(source, result, count, [&](int16_t input) {
+			return CastFromDecimal::Operation<int16_t, T>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT32) {
+		UnaryExecutor::Execute<int32_t, T, true>(source, result, count, [&](int32_t input) {
+			return CastFromDecimal::Operation<int32_t, T>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT64) {
+		UnaryExecutor::Execute<int64_t, T, true>(source, result, count, [&](int64_t input) {
+			return CastFromDecimal::Operation<int64_t, T>(input, decimal_type.width, decimal_type.scale);
+		});
+	} else {
+		assert(decimal_type.width <= Decimal::MAX_WIDTH_INT128);
+		UnaryExecutor::Execute<hugeint_t, T, true>(source, result, count, [&](hugeint_t input) {
+			return CastFromDecimal::Operation<hugeint_t, T>(input, decimal_type.width, decimal_type.scale);
+		});
+	}
+}
+
+static void decimal_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+	// now switch on the result type
+	switch (target_type.id) {
+	case SQLTypeId::BOOLEAN:
+		assert(result.type == TypeId::BOOL);
+		from_decimal_cast<bool>(source, result, source_type, count);
+		break;
+	case SQLTypeId::TINYINT:
+		assert(result.type == TypeId::INT8);
+		from_decimal_cast<int8_t>(source, result, source_type, count);
+		break;
+	case SQLTypeId::SMALLINT:
+		assert(result.type == TypeId::INT16);
+		from_decimal_cast<int16_t>(source, result, source_type, count);
+		break;
+	case SQLTypeId::INTEGER:
+		assert(result.type == TypeId::INT32);
+		from_decimal_cast<int32_t>(source, result, source_type, count);
+		break;
+	case SQLTypeId::BIGINT:
+		assert(result.type == TypeId::INT64);
+		from_decimal_cast<int64_t>(source, result, source_type, count);
+		break;
+	case SQLTypeId::HUGEINT:
+		assert(result.type == TypeId::INT128);
+		from_decimal_cast<hugeint_t>(source, result, source_type, count);
+		break;
+	case SQLTypeId::FLOAT:
+		assert(result.type == TypeId::FLOAT);
+		from_decimal_cast<float>(source, result, source_type, count);
+		break;
+	case SQLTypeId::DOUBLE:
+		assert(result.type == TypeId::DOUBLE);
+		from_decimal_cast<double>(source, result, source_type, count);
+		break;
+	case SQLTypeId::VARCHAR: {
+		if (source_type.width <= Decimal::MAX_WIDTH_INT16) {
+			UnaryExecutor::Execute<int16_t, string_t, true>(source, result, count, [&](int16_t input) {
+				return StringCastFromDecimal::Operation<int16_t>(input, source_type.width, source_type.scale, result);
+			});
+		} else if (source_type.width <= Decimal::MAX_WIDTH_INT32) {
+			UnaryExecutor::Execute<int32_t, string_t, true>(source, result, count, [&](int32_t input) {
+				return StringCastFromDecimal::Operation<int32_t>(input, source_type.width, source_type.scale, result);
+			});
+		} else if (source_type.width <= Decimal::MAX_WIDTH_INT64) {
+			UnaryExecutor::Execute<int64_t, string_t, true>(source, result, count, [&](int64_t input) {
+				return StringCastFromDecimal::Operation<int64_t>(input, source_type.width, source_type.scale, result);
+			});
+		} else {
+			assert(source_type.width <= Decimal::MAX_WIDTH_INT128);
+			UnaryExecutor::Execute<hugeint_t, string_t, true>(source, result, count, [&](hugeint_t input) {
+				return StringCastFromDecimal::Operation<hugeint_t>(input, source_type.width, source_type.scale, result);
+			});
+		}
 		break;
 	}
 	default:
@@ -122,7 +229,6 @@ static void string_cast_numeric_switch(Vector &source, Vector &result, SQLType s
 		assert(result.type == TypeId::FLOAT);
 		UnaryExecutor::Execute<string_t, float, OP, true>(source, result, count);
 		break;
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(result.type == TypeId::DOUBLE);
 		UnaryExecutor::Execute<string_t, double, OP, true>(source, result, count);
@@ -130,6 +236,9 @@ static void string_cast_numeric_switch(Vector &source, Vector &result, SQLType s
 	case SQLTypeId::INTERVAL:
 		assert(result.type == TypeId::INTERVAL);
 		UnaryExecutor::Execute<string_t, interval_t, OP, true>(source, result, count);
+		break;
+	case SQLTypeId::DECIMAL:
+		to_decimal_cast<string_t>(source, result, target_type, count);
 		break;
 	default:
 		null_cast(source, result, source_type, target_type, count);
@@ -283,11 +392,13 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 		assert(source.type == TypeId::INT128);
 		numeric_cast_switch<hugeint_t>(source, result, source_type, target_type, count);
 		break;
+	case SQLTypeId::DECIMAL:
+		decimal_cast_switch(source, result, source_type, target_type, count);
+		break;
 	case SQLTypeId::FLOAT:
 		assert(source.type == TypeId::FLOAT);
 		numeric_cast_switch<float>(source, result, source_type, target_type, count);
 		break;
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		assert(source.type == TypeId::DOUBLE);
 		numeric_cast_switch<double>(source, result, source_type, target_type, count);
@@ -330,4 +441,6 @@ void VectorOperations::Cast(Vector &source, Vector &result, SQLType source_type,
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
 	return VectorOperations::Cast(source, result, SQLTypeFromInternalType(source.type),
 	                              SQLTypeFromInternalType(result.type), count, strict);
+}
+
 }

@@ -83,7 +83,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 					case SQLTypeId::TIMESTAMP:
 						// TODO
 						throw NotImplementedException("Transferring timestamps is not supported yet");
-					case SQLTypeId::DECIMAL:
+					case SQLTypeId::DOUBLE:
 						rc = sqlite3_bind_double(stmt, bind_index, value.value_.double_);
 						break;
 					case SQLTypeId::VARCHAR:
@@ -167,7 +167,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 				case SQLTypeId::BIGINT:
 					((int64_t *)dataptr)[result_idx] = (int64_t)sqlite3_column_int64(stmt, i);
 					break;
-				case SQLTypeId::DECIMAL:
+				case SQLTypeId::DOUBLE:
 					((double *)dataptr)[result_idx] = (double)sqlite3_column_double(stmt, i);
 					break;
 				case SQLTypeId::VARCHAR: {

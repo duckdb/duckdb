@@ -145,7 +145,6 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		case SQLTypeId::FLOAT:
 			WriteData<float>(out, result->collection, col);
 			break;
-		case SQLTypeId::DECIMAL:
 		case SQLTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
@@ -429,7 +428,6 @@ duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
 		return DUCKDB_TYPE_HUGEINT;
 	case SQLTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case SQLTypeId::TIMESTAMP:

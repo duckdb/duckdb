@@ -19,7 +19,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 	const vector<SQLTypeId> all_sql_types = {SQLTypeId::BOOLEAN, SQLTypeId::TINYINT, SQLTypeId::SMALLINT,
 											 SQLTypeId::DATE, SQLTypeId::TIME, SQLTypeId::INTEGER,
 											 SQLTypeId::BIGINT, SQLTypeId::TIMESTAMP, SQLTypeId::FLOAT,
-											 SQLTypeId::DOUBLE, SQLTypeId::DECIMAL, SQLTypeId::VARCHAR,
+											 SQLTypeId::DOUBLE, SQLTypeId::VARCHAR,
 											 SQLTypeId::BLOB};
 
 	//Creating the tables
@@ -137,18 +137,6 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 										 SQLType::DOUBLE, &udf_ternary_function<double>);
 			break;
 		}
-		case SQLTypeId::DECIMAL:
-		{
-			con.CreateVectorizedFunction(func_name + "_1", {SQLType::DOUBLE}, SQLType::DOUBLE, &udf_unary_function<double>);
-
-			con.CreateVectorizedFunction(func_name + "_2", {SQLType::DOUBLE, SQLType::DOUBLE}, SQLType::DOUBLE,
-										 &udf_binary_function<double>);
-
-			con.CreateVectorizedFunction(func_name + "_3", {SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE},
-										 SQLType::DOUBLE, &udf_ternary_function<double>);
-			break;
-		}
-
 		case SQLTypeId::VARCHAR:
 		{ 	con.CreateVectorizedFunction(func_name + "_1", {SQLType::VARCHAR}, SQLType::VARCHAR, &udf_unary_function<char *>);
 
@@ -201,7 +189,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 								  "('2008-01-01 00:00:00', '2009-01-01 00:00:00', '2010-01-01 00:00:00')");
 			}
 		}
-		
+
 		//Running the UDF functions and checking the results
 		for(SQLType sql_type: all_sql_types) {
 			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
@@ -209,23 +197,23 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function]") {
 			if(sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {10, 20, 30}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {100, 100, 100}));
-				
+
 			} else if(sql_type == SQLType::BOOLEAN) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, false, false}));
-				
+
 			} else if(sql_type == SQLType::VARCHAR || sql_type == SQLType::BLOB) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"a", "a", "a"}));

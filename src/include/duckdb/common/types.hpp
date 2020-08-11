@@ -174,7 +174,7 @@ enum class TypeId : uint8_t {
 
 	/// Precision- and scale-based decimal type. Storage type depends on the
 	/// parameters.
-	DECIMAL = 22,
+	// DECIMAL = 22,
 
 	/// A list of some logical data type
 	LIST = 23,

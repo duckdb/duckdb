@@ -3,6 +3,7 @@ add_library_unity(duckdb_common_types
                   chunk_collection.cpp
                   data_chunk.cpp
                   date.cpp
+                  decimal.cpp
                   hash.cpp
                   hugeint.cpp
                   hyperloglog.cpp

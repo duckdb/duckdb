@@ -121,8 +121,6 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 		return GetFirstAggregateTemplated<float>(type);
 	case SQLTypeId::DOUBLE:
 		return GetFirstAggregateTemplated<double>(type);
-	case SQLTypeId::DECIMAL:
-		return GetFirstAggregateTemplated<double>(type);
 	case SQLTypeId::DATE:
 		return GetFirstAggregateTemplated<date_t>(type);
 	case SQLTypeId::TIMESTAMP:

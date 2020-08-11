@@ -33,7 +33,6 @@ template <class OP> static scalar_function_t GetScalarBinaryFunction(SQLType typ
 	case SQLTypeId::FLOAT:
 		function = &ScalarFunction::BinaryFunction<float, float, float, OP, true>;
 		break;
-	case SQLTypeId::DECIMAL:
 	case SQLTypeId::DOUBLE:
 		function = &ScalarFunction::BinaryFunction<double, double, double, OP, true>;
 		break;
@@ -366,7 +365,6 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(SQLType
 	case SQLTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
 		return BinaryScalarFunctionIgnoreZero<double, double, double, OP>;
 	default:
 		throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");

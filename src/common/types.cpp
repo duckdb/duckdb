@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 #include <cmath>
 
@@ -160,7 +161,7 @@ SQLType SQLTypeFromInternalType(TypeId type) {
 
 bool TypeIsConstantSize(TypeId type) {
 	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
-	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
+	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::INTERVAL) || type == TypeId::HASH ||
 	       type == TypeId::POINTER || type == TypeId::INTERVAL || type == TypeId::INT128;
 }
 bool TypeIsIntegral(TypeId type) {
@@ -263,6 +264,12 @@ string SQLTypeToString(SQLType type) {
 		}
 		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
 	}
+	case SQLTypeId::DECIMAL: {
+		if (type.width == 0) {
+			return "DECIMAL(?,?)";
+		}
+		return "DECIMAL(" + to_string(type.width) + "," + to_string(type.scale) + ")";
+	}
 	default:
 		return SQLTypeIdToString(type.id);
 	}
@@ -289,7 +296,9 @@ SQLType TransformStringToSQLType(string str) {
 		return SQLType(SQLTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
 		return SQLType::FLOAT;
-	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8" || lower_str == "decimal") {
+	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
+		return SQLType(SQLTypeId::DECIMAL, 18, 3);
+	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
 		return SQLType::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return SQLType::TINYINT;
@@ -460,8 +469,17 @@ TypeId GetInternalType(SQLType type) {
 	case SQLTypeId::DOUBLE:
 		return TypeId::DOUBLE;
 	case SQLTypeId::DECIMAL:
-		// FIXME: for now
-		return TypeId::DOUBLE;
+		if (type.width <= Decimal::MAX_WIDTH_INT16) {
+			return TypeId::INT16;
+		} else if (type.width <= Decimal::MAX_WIDTH_INT32) {
+			return TypeId::INT32;
+		} else if (type.width <= Decimal::MAX_WIDTH_INT64) {
+			return TypeId::INT64;
+		} else if (type.width <= Decimal::MAX_WIDTH_INT128) {
+			return TypeId::INT128;
+		} else {
+			throw NotImplementedException("Widths bigger than 38 are not supported");
+		}
 	case SQLTypeId::VARCHAR:
 	case SQLTypeId::CHAR:
 	case SQLTypeId::BLOB:

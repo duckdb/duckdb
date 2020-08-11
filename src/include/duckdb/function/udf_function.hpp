@@ -319,7 +319,6 @@ private:
 		case SQLTypeId::FLOAT:
 			return std::is_same<T, float>();
 		case SQLTypeId::DOUBLE:
-		case SQLTypeId::DECIMAL:
 			return std::is_same<T, double>();
 		case SQLTypeId::VARCHAR:
 		case SQLTypeId::CHAR:

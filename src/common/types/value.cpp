@@ -11,6 +11,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -435,6 +436,18 @@ string Value::ToString(SQLType sql_type) const {
 		return to_string(value_.float_);
 	case SQLTypeId::DOUBLE:
 		return to_string(value_.double_);
+	case SQLTypeId::DECIMAL: {
+		if (sql_type.width <= Decimal::MAX_WIDTH_INT16) {
+			return Decimal::ToString(value_.smallint, sql_type.scale);
+		} else if (sql_type.width <= Decimal::MAX_WIDTH_INT32) {
+			return Decimal::ToString(value_.integer, sql_type.scale);
+		} else if (sql_type.width <= Decimal::MAX_WIDTH_INT64) {
+			return Decimal::ToString(value_.bigint, sql_type.scale);
+		} else {
+			assert(sql_type.width <= Decimal::MAX_WIDTH_DECIMAL);
+			return Decimal::ToString(value_.hugeint, sql_type.scale);
+		}
+	}
 	case SQLTypeId::DATE:
 		return Date::ToString(value_.integer);
 	case SQLTypeId::TIME:

@@ -196,6 +196,43 @@ template <> duckdb::string_t StringCast::Operation(float input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(double input, Vector &result);
 template <> duckdb::string_t StringCast::Operation(interval_t input, Vector &result);
 
+//===--------------------------------------------------------------------===//
+// Decimal Casts
+//===--------------------------------------------------------------------===//
+struct CastToDecimal {
+	template<class SRC, class DST>
+	static inline DST Operation(SRC input, uint16_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for CastToDecimal!");
+	}
+};
+
+template<> int16_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale);
+template<> int32_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale);
+template<> int64_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale);
+template<> hugeint_t CastToDecimal::Operation(string_t input, uint16_t width, uint8_t scale);
+
+struct StringCastFromDecimal {
+	template <class SRC> static inline string_t Operation(SRC input, uint16_t width, uint8_t scale, Vector &result) {
+		throw NotImplementedException("Unimplemented type for string cast!");
+	}
+};
+
+template<> string_t StringCastFromDecimal::Operation(int16_t input, uint16_t width, uint8_t scale, Vector &result);
+template<> string_t StringCastFromDecimal::Operation(int32_t input, uint16_t width, uint8_t scale, Vector &result);
+template<> string_t StringCastFromDecimal::Operation(int64_t input, uint16_t width, uint8_t scale, Vector &result);
+template<> string_t StringCastFromDecimal::Operation(hugeint_t input, uint16_t width, uint8_t scale, Vector &result);
+
+struct CastFromDecimal {
+	template<class SRC, class DST>
+	static inline DST Operation(SRC input, uint16_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for CastFromDecimal!");
+	}
+};
+
+
+//===--------------------------------------------------------------------===//
+// Date Casts
+//===--------------------------------------------------------------------===//
 struct CastFromDate {
 	template <class SRC> static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from date could not be performed!");
