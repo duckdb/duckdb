@@ -51,13 +51,21 @@ struct BufferedCSVReaderOptions  {
 	//! The file path of the CSV file to read
 	string file_path;
     //! Whether or not to automatically detect dialect and datatypes
-    bool auto_detect;
+    bool auto_detect = true;
+	//! Whether or not a delimiter was defined by the user
+	bool has_delimiter = false;
     //! Delimiter to separate columns within each line
     string delimiter;
+	//! Whether or not a quote sign was defined by the user
+	bool has_quote = false;
     //! Quote used for columns that contain reserved characters, e.g., delimiter
     string quote;
+	//! Whether or not an escape character was defined by the user
+	bool has_escape = false;
     //! Escape character to escape quote character
     string escape;
+	//! Whether or not a header information was given by the user
+	bool has_header = false;
     //! Whether or not the file has a header line
     bool header = false;
     //! How many leading rows to skip
@@ -95,6 +103,15 @@ class BufferedCSVReader {
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	ParserMode mode;
+
+	//! Candidates for delimiter auto detection
+	vector<string> delim_candidates = {",", "|", ";", "\t"};
+	//! Candidates for quote rule auto detection
+	vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+	//! Candidates for quote sign auto detection (per quote rule)
+	vector<vector<string>> quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
+	//! Candidates for escape character auto detection (per quote rule)
+	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<SQLType> requested_types = vector<SQLType>());
@@ -149,9 +166,9 @@ private:
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(Value value, SQLType sql_type);
 	//! Skips header rows and skip_rows in the input stream
-	void SkipHeader();
+	void SkipHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
-	void JumpToBeginning();
+	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	bool JumpToNextSample();
 	//! Resets the buffer
@@ -162,7 +179,9 @@ private:
 	void ResetParseChunk();
 	//! Sets size of sample chunk and number of chunks for dialect and type detection
 	void ConfigureSampling();
-
+	//! Prepare candidate sets for auto detection based on user input
+	void PrepareCandidateSets();
+	
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
