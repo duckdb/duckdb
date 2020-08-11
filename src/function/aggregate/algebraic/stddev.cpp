@@ -4,7 +4,7 @@
 
 #include <cmath>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct stddev_state_t {
@@ -145,3 +145,5 @@ void VarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	    SQLType::DOUBLE, SQLType::DOUBLE));
 	set.AddFunction(var_samp);
 }
+
+} // namespace duckdb

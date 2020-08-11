@@ -7,7 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 #include <cstdio>
@@ -609,3 +609,5 @@ void FileHandle::Sync() {
 void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
 }
+
+} // namespace duckdb

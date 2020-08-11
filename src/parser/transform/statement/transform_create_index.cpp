@@ -5,7 +5,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static IndexType StringToIndexType(const string &str) {
@@ -63,3 +63,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

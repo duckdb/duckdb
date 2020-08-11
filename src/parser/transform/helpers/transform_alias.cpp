@@ -1,6 +1,6 @@
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 string Transformer::TransformAlias(PGAlias *root) {
@@ -9,3 +9,5 @@ string Transformer::TransformAlias(PGAlias *root) {
 	}
 	return root->aliasname;
 }
+
+} // namespace duckdb

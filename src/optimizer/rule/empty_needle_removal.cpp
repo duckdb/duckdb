@@ -8,7 +8,7 @@
 
 #include <regex>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -57,3 +57,5 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 
 	return nullptr;
 }
+
+} // namespace duckdb

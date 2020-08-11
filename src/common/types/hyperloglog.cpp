@@ -3,7 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "hyperloglog.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 HyperLogLog::HyperLogLog() : hll(nullptr) {
@@ -54,3 +54,5 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
 	}
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
 }
+
+} // namespace duckdb

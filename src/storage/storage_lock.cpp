@@ -2,7 +2,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 StorageLockKey::StorageLockKey(StorageLock &lock, StorageLockType type) : lock(lock), type(type) {
@@ -41,3 +41,5 @@ void StorageLock::ReleaseExclusiveLock() {
 void StorageLock::ReleaseSharedLock() {
 	read_count--;
 }
+
+} // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //! The target type determines the preferred implicit casts
@@ -116,7 +116,6 @@ static int64_t ImplicitCastDate(SQLType to) {
 	}
 }
 
-
 int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 	if (to.id == SQLTypeId::ANY) {
 		// anything can be cast to ANY type for no cost
@@ -127,7 +126,7 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		return TargetTypeCost(to);
 	}
 	if (from.id == SQLTypeId::BLOB && to.id == SQLTypeId::VARCHAR) {
-		//Implicit cast not allowed from BLOB to VARCHAR
+		// Implicit cast not allowed from BLOB to VARCHAR
 		return -1;
 	}
 	if (to.id == SQLTypeId::VARCHAR) {
@@ -155,3 +154,5 @@ int64_t CastRules::ImplicitCast(SQLType from, SQLType to) {
 		return -1;
 	}
 }
+
+} // namespace duckdb

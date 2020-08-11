@@ -5,14 +5,14 @@
 
 #include <cmath>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
     : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
       input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
-		throw NotImplementedException("Window functions are not supported for vector sizes < 512");
+	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
 
 	statep.SetCount(STANDARD_VECTOR_SIZE);
@@ -162,3 +162,5 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 
 	return AggegateFinal();
 }
+
+} // namespace duckdb

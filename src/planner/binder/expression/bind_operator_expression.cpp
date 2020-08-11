@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static SQLType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
@@ -68,3 +68,5 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	}
 	return BindResult(move(result), result_type);
 }
+
+} // namespace duckdb

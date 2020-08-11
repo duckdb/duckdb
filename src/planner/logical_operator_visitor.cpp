@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
@@ -242,3 +242,5 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(CommonSubExpression 
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
+
+} // namespace duckdb

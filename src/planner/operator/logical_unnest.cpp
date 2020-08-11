@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_unnest.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 vector<ColumnBinding> LogicalUnnest::GetColumnBindings() {
@@ -17,3 +17,5 @@ void LogicalUnnest::ResolveTypes() {
 		types.push_back(expr->return_type);
 	}
 }
+
+} // namespace duckdb

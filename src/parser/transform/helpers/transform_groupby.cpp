@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 // FIXME: what is the difference between GroupBy and expression list?
@@ -16,3 +16,5 @@ bool Transformer::TransformGroupBy(PGList *group, vector<unique_ptr<ParsedExpres
 	}
 	return true;
 }
+
+} // namespace duckdb

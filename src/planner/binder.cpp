@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Binder::Binder(ClientContext &context, Binder *parent_)
@@ -220,3 +220,5 @@ void Binder::AddCorrelatedColumn(CorrelatedColumnInfo info) {
 		correlated_columns.push_back(info);
 	}
 }
+
+} // namespace duckdb

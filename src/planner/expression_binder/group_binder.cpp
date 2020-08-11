@@ -5,7 +5,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, idx_t group_index,
@@ -104,3 +104,5 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	}
 	return result;
 }
+
+} // namespace duckdb

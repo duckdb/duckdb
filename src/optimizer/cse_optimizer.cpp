@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -94,3 +94,5 @@ void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &o
 		PerformCSEReplacement(&op.expressions[i], expression_count);
 	}
 }
+
+} // namespace duckdb

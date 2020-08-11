@@ -9,7 +9,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
@@ -571,3 +571,5 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 		return InvertValueComparisonResult(CompareValueInformation(right, left));
 	}
 }
+
+} // namespace duckdb

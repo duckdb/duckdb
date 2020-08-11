@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ColumnSegment::ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count)
@@ -117,18 +117,20 @@ void SegmentStatistics::Reset() {
 		break;
 	}
 	case TypeId::INTERVAL: {
-		auto min = (interval_t *) minimum.get();
-		auto max = (interval_t *) maximum.get();
+		auto min = (interval_t *)minimum.get();
+		auto max = (interval_t *)maximum.get();
 		min->months = NumericLimits<int32_t>::Maximum();
-		min->days   = NumericLimits<int32_t>::Maximum();
-		min->msecs  = NumericLimits<int64_t>::Maximum();
+		min->days = NumericLimits<int32_t>::Maximum();
+		min->msecs = NumericLimits<int64_t>::Maximum();
 
 		max->months = NumericLimits<int32_t>::Minimum();
-		max->days   = NumericLimits<int32_t>::Minimum();
-		max->msecs  = NumericLimits<int64_t>::Minimum();
+		max->days = NumericLimits<int32_t>::Minimum();
+		max->msecs = NumericLimits<int64_t>::Minimum();
 		break;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for SEGMENT statistics");
 	}
 }
+
+} // namespace duckdb

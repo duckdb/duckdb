@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CastExpression::CastExpression(SQLType target, unique_ptr<ParsedExpression> child)
@@ -42,3 +42,5 @@ unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, De
 	auto cast_type = SQLType::Deserialize(source);
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child));
 }
+
+} // namespace duckdb

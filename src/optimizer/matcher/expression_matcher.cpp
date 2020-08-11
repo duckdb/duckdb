@@ -2,7 +2,7 @@
 
 #include "duckdb/planner/expression/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
@@ -105,3 +105,5 @@ bool FoldableConstantMatcher::Match(Expression *expr, vector<Expression *> &bind
 	bindings.push_back(expr);
 	return true;
 }
+
+} // namespace duckdb

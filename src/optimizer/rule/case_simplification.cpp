@@ -3,7 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -31,3 +31,5 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 		return move(root->result_if_true);
 	}
 }
+
+} // namespace duckdb

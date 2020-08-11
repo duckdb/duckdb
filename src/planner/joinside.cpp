@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
@@ -80,3 +80,5 @@ JoinSide JoinSide::GetJoinSide(unordered_set<idx_t> bindings, unordered_set<idx_
 	}
 	return side;
 }
+
+} // namespace duckdb

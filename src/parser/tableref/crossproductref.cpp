@@ -2,7 +2,7 @@
 
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool CrossProductRef::Equals(const TableRef *other_) const {
@@ -40,3 +40,5 @@ unique_ptr<TableRef> CrossProductRef::Deserialize(Deserializer &source) {
 
 	return move(result);
 }
+
+} // namespace duckdb

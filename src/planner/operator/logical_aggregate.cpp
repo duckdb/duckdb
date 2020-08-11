@@ -1,7 +1,7 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vector<unique_ptr<Expression>> select_list)
@@ -41,3 +41,5 @@ string LogicalAggregate::ParamsToString() const {
 
 	return result;
 }
+
+} // namespace duckdb

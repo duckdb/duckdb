@@ -4,7 +4,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ColumnData::ColumnData(BufferManager &manager, DataTableInfo &table_info)
@@ -183,3 +183,5 @@ void ColumnData::AppendTransientSegment(idx_t start_row) {
 	auto new_segment = make_unique<TransientSegment>(manager, type, start_row);
 	data.AppendSegment(move(new_segment));
 }
+
+} // namespace duckdb

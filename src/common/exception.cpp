@@ -2,7 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 #define FORMAT_CONSTRUCTOR(msg)                                                                                        \
@@ -189,3 +189,5 @@ InternalException::InternalException(string msg, ...) : Exception(ExceptionType:
 InvalidInputException::InvalidInputException(string msg, ...) : Exception(ExceptionType::INVALID_INPUT, msg) {
 	FORMAT_CONSTRUCTOR(msg);
 }
+
+} // namespace duckdb

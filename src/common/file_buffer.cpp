@@ -6,7 +6,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 FileBuffer::FileBuffer(FileBufferType type, uint64_t bufsiz) : type(type) {
@@ -66,3 +66,4 @@ void FileBuffer::Write(FileHandle &handle, uint64_t location) {
 void FileBuffer::Clear() {
 	memset(internal_buffer, 0, internal_size);
 }
+} // namespace duckdb

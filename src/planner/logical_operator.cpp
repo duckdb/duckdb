@@ -3,7 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 string LogicalOperator::ParamsToString() const {
@@ -81,3 +81,5 @@ string LogicalOperator::ToString(idx_t depth) const {
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
+
+} // namespace duckdb

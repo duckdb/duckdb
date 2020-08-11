@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static bool UseVersion(Transaction &transaction, transaction_t id) {
@@ -88,3 +88,5 @@ idx_t ChunkInsertInfo::GetSelVector(Transaction &transaction, SelectionVector &s
 bool ChunkInsertInfo::Fetch(Transaction &transaction, row_t row) {
 	return UseVersion(transaction, inserted[row]) && !UseVersion(transaction, deleted[row]);
 }
+
+} // namespace duckdb

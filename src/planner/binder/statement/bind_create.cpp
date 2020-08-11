@@ -13,7 +13,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
@@ -123,3 +123,5 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	return result;
 }
+
+} // namespace duckdb

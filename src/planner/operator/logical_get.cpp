@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalGet::LogicalGet(idx_t table_index)
@@ -51,3 +51,5 @@ idx_t LogicalGet::EstimateCardinality() {
 		return 1;
 	}
 }
+
+} // namespace duckdb

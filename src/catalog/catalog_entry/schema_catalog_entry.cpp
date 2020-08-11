@@ -25,7 +25,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name)
@@ -232,3 +232,5 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		throw CatalogException("Unsupported catalog type in schema");
 	}
 }
+
+} // namespace duckdb

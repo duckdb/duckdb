@@ -9,7 +9,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TransactionManager::TransactionManager(StorageManager &storage) : storage(storage) {
@@ -190,3 +190,5 @@ void TransactionManager::AddCatalogSet(ClientContext &context, unique_ptr<Catalo
 		old_catalog_sets.push_back(move(set));
 	}
 }
+
+} // namespace duckdb

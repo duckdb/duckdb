@@ -9,7 +9,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/algorithm.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
@@ -28,9 +28,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		ConstantBinder binder(*this, context, "TABLE FUNCTION parameter");
 		if (child->type == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
-			auto &comp = (ComparisonExpression&) *child;
+			auto &comp = (ComparisonExpression &)*child;
 			if (comp.left->type == ExpressionType::COLUMN_REF) {
-				auto &colref = (ColumnRefExpression &) *comp.left;
+				auto &colref = (ColumnRefExpression &)*comp.left;
 				if (colref.table_name.empty()) {
 					parameter_name = colref.column_name;
 					child = move(comp.right);
@@ -61,17 +61,18 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto &table_function = function->functions[best_function_idx];
 
 	// now check the named parameters
-	for(auto &kv : named_parameters) {
+	for (auto &kv : named_parameters) {
 		auto entry = table_function.named_parameters.find(kv.first);
 		if (entry == table_function.named_parameters.end()) {
-			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first.c_str(), table_function.name.c_str());
+			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first.c_str(),
+			                      table_function.name.c_str());
 		}
 		kv.second = kv.second.CastAs(kv.second.GetSQLType(), entry->second);
 	}
 
 	// cast the parameters to the type of the function
 	auto result = make_unique<BoundTableFunction>(table_function, bind_index);
-	for(idx_t i = 0; i < arguments.size(); i++) {
+	for (idx_t i = 0; i < arguments.size(); i++) {
 		if (table_function.arguments[i] == SQLType::ANY) {
 			result->parameters.push_back(move(parameters[i]));
 		} else {
@@ -80,16 +81,17 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	}
 
 	// perform the binding
-	result->bind_data = table_function.bind(context, result->parameters, named_parameters, result->return_types, result->names);
+	result->bind_data =
+	    table_function.bind(context, result->parameters, named_parameters, result->return_types, result->names);
 	assert(result->return_types.size() == result->names.size());
 	assert(result->return_types.size() > 0);
 	vector<string> names;
 	// first push any column name aliases
-	for(idx_t i = 0; i < min<idx_t>(ref.column_name_alias.size(), result->names.size()); i++) {
+	for (idx_t i = 0; i < min<idx_t>(ref.column_name_alias.size(), result->names.size()); i++) {
 		names.push_back(ref.column_name_alias[i]);
 	}
 	// then fill up the remainder with the given result names
-	for(idx_t i = names.size(); i < result->names.size(); i++) {
+	for (idx_t i = names.size(); i < result->names.size(); i++) {
 		names.push_back(result->names[i]);
 	}
 	// now add the table function to the bind context so its columns can be bound
@@ -98,3 +100,5 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	return move(result);
 }
+
+} // namespace duckdb

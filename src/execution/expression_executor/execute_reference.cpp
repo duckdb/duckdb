@@ -1,7 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundReferenceExpression &expr,
@@ -19,3 +19,5 @@ void ExpressionExecutor::Execute(BoundReferenceExpression &expr, ExpressionState
 		result.Reference(chunk->data[expr.index]);
 	}
 }
+
+} // namespace duckdb

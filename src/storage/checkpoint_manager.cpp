@@ -27,7 +27,7 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 // constexpr uint64_t CheckpointManager::DATA_BLOCK_HEADER_SIZE;
@@ -53,7 +53,7 @@ void CheckpointManager::CreateCheckpoint() {
 	vector<SchemaCatalogEntry *> schemas;
 	// we scan the schemas
 	database.catalog->schemas->Scan(*transaction,
-	                               [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
+	                                [&](CatalogEntry *entry) { schemas.push_back((SchemaCatalogEntry *)entry); });
 	// write the actual data into the database
 	// write the amount of schemas
 	metadata_writer->Write<uint32_t>(schemas.size());
@@ -210,3 +210,5 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// finally create the table in the catalog
 	database.catalog->CreateTable(context, bound_info.get());
 }
+
+} // namespace duckdb

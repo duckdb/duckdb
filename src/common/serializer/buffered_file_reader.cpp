@@ -5,7 +5,7 @@
 #include <cstring>
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path)
@@ -43,3 +43,5 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 bool BufferedFileReader::Finished() {
 	return total_read + offset == file_size;
 }
+
+} // namespace duckdb

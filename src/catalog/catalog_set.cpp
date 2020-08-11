@@ -8,7 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CatalogSet::CatalogSet(Catalog &catalog) : catalog(catalog) {
@@ -238,3 +238,5 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 		entry->parent = nullptr;
 	}
 }
+
+} // namespace duckdb

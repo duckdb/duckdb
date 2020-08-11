@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SingleFileBlockManager::SingleFileBlockManager(FileSystem &fs, string path, bool read_only, bool create_new,
@@ -205,3 +205,5 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	used_blocks.clear();
 }
+
+} // namespace duckdb

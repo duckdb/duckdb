@@ -4,7 +4,7 @@
 
 #include "duckdb/common/assert.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 VectorBuffer::VectorBuffer(idx_t data_size) : type(VectorBufferType::STANDARD_BUFFER) {
@@ -39,3 +39,5 @@ void VectorListBuffer::SetChild(unique_ptr<ChunkCollection> new_child) {
 
 VectorListBuffer::~VectorListBuffer() {
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) {
@@ -38,3 +38,5 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) 
 	}
 	return move(result);
 }
+
+} // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool SelectNode::Equals(const QueryNode *other_) const {
@@ -86,3 +86,5 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	result->having = source.ReadOptional<ParsedExpression>();
 	return move(result);
 }
+
+} // namespace duckdb

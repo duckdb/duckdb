@@ -3,7 +3,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, idx_t index)
@@ -33,3 +33,5 @@ hash_t BoundReferenceExpression::Hash() const {
 unique_ptr<Expression> BoundReferenceExpression::Copy() {
 	return make_unique<BoundReferenceExpression>(alias, return_type, index);
 }
+
+} // namespace duckdb

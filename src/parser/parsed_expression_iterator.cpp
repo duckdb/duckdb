@@ -2,7 +2,7 @@
 
 #include "duckdb/parser/expression/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
@@ -92,3 +92,5 @@ void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expr,
 		throw NotImplementedException("Unimplemented expression class");
 	}
 }
+
+} // namespace duckdb

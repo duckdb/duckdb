@@ -2,7 +2,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
@@ -30,3 +30,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSchema(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

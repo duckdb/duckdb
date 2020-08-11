@@ -4,11 +4,11 @@
 #include <algorithm>
 #include <ctgmath>
 
-using namespace duckdb;
+namespace duckdb {
+
 using namespace std;
 
-ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions,
-         bool is_unique)
+ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	tree = nullptr;
 	expression_result.Initialize(types);
@@ -796,3 +796,4 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 	// move to the next set of row ids
 	state->result_index += scan_count;
 }
+} // namespace duckdb

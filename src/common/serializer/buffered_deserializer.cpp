@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferedDeserializer::BufferedDeserializer(data_ptr_t ptr, idx_t data_size) : ptr(ptr), endptr(ptr + data_size) {
@@ -19,3 +19,5 @@ void BufferedDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {
 	memcpy(buffer, ptr, read_size);
 	ptr += read_size;
 }
+
+} // namespace duckdb

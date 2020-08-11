@@ -6,7 +6,7 @@
 
 #include <regex>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -69,3 +69,5 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 
 	return expr->Copy();
 }
+
+} // namespace duckdb

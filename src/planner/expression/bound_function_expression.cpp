@@ -4,17 +4,20 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), arguments(bound_function.arguments), sql_return_type(bound_function.return_type), is_operator(is_operator) {
+      function(bound_function), arguments(bound_function.arguments), sql_return_type(bound_function.return_type),
+      is_operator(is_operator) {
 }
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, vector<SQLType> arguments, SQLType sql_return_type, bool is_operator)
+BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function,
+                                                 vector<SQLType> arguments, SQLType sql_return_type, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), arguments(move(arguments)), sql_return_type(move(sql_return_type)), is_operator(is_operator) {
+      function(bound_function), arguments(move(arguments)), sql_return_type(move(sql_return_type)),
+      is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -63,3 +66,5 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

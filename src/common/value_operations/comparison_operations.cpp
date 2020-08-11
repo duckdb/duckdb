@@ -2,7 +2,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //===--------------------------------------------------------------------===//
@@ -114,3 +114,5 @@ bool ValueOperations::LessThan(const Value &left, const Value &right) {
 bool ValueOperations::LessThanEquals(const Value &left, const Value &right) {
 	return ValueOperations::GreaterThanEquals(right, left);
 }
+
+} // namespace duckdb

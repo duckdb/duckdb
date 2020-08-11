@@ -1,7 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct FunctionState : public ExpressionState {
@@ -50,3 +50,5 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		                            "but the function returned the latter");
 	}
 }
+
+} // namespace duckdb

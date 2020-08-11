@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundSubqueryExpression::BoundSubqueryExpression(TypeId return_type)
@@ -21,3 +21,5 @@ bool BoundSubqueryExpression::Equals(const BaseExpression *other_) const {
 unique_ptr<Expression> BoundSubqueryExpression::Copy() {
 	throw SerializationException("Cannot copy BoundSubqueryExpression");
 }
+
+} // namespace duckdb

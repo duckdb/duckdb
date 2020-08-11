@@ -3,10 +3,12 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
                                                    CreateCopyFunctionInfo *info)
     : StandardEntry(CatalogType::COPY_FUNCTION, schema, catalog, info->name), function(info->function) {
 }
+
+} // namespace duckdb

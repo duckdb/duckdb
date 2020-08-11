@@ -10,7 +10,7 @@
 #include <sstream>
 #include <cctype>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 // string format is hh:mm:ssZ
@@ -175,3 +175,5 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mil
 void Time::Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_msec) {
 	number_to_time(time, out_hour, out_min, out_sec, out_msec);
 }
+
+} // namespace duckdb

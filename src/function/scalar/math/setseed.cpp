@@ -5,7 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct SetseedBindData : public FunctionData {
@@ -49,3 +49,5 @@ void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
 	    ScalarFunction("setseed", {SQLType::DOUBLE}, SQLType::SQLNULL, setseed_function, true, setseed_bind));
 }
+
+} // namespace duckdb

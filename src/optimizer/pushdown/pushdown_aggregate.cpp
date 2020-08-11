@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -54,3 +54,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	op->children[0] = child_pushdown.Rewrite(move(op->children[0]));
 	return FinishPushdown(move(op));
 }
+
+} // namespace duckdb

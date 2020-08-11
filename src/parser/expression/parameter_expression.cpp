@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ParameterExpression::ParameterExpression()
@@ -36,3 +36,5 @@ unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType typ
 	expression->parameter_nr = source.Read<idx_t>();
 	return move(expression);
 }
+
+} // namespace duckdb
