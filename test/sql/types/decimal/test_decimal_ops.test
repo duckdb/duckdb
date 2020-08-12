@@ -1,0 +1,63 @@
+# name: test/sql/types/decimal/test_decimal_ops.test
+# description: Test various operations with decimals
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimals(d DECIMAL(3, 2));
+
+statement ok
+INSERT INTO decimals VALUES ('0.1'), ('0.2');
+
+# basic projection
+query I
+SELECT * FROM decimals
+----
+0.1
+0.2
+
+# ORDER BY
+query I
+SELECT * FROM decimals ORDER BY d DESC
+----
+0.2
+0.1
+
+# equality
+query I
+SELECT * FROM decimals WHERE d='0.1'::DECIMAL(3,2)
+----
+0.1
+
+# greater than equals
+query I
+SELECT * FROM decimals WHERE d>='0.1'::DECIMAL(3,2)
+----
+0.1
+0.2
+
+# what about if we use different decimal scales?
+query I
+SELECT * FROM decimals WHERE d='0.1'::DECIMAL(9,5)
+----
+0.1
+
+query I
+SELECT * FROM decimals WHERE d >= '0.1'::DECIMAL(9,5)
+----
+0.1
+0.2
+
+
+# query I
+# SELECT d + '0.1'::DECIMAL FROM decimals;
+# ----
+# 0.2
+# 0.3
+
+# query I
+# SELECT SUM(d) FROM decimals
+# ----
+# 0.3
