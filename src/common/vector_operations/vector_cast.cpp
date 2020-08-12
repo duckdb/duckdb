@@ -7,6 +7,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/numeric_helper.hpp"
 
 using namespace std;
 
@@ -92,45 +93,124 @@ static void numeric_cast_switch(Vector &source, Vector &result, SQLType source_t
 
 template<class T>
 static void to_decimal_cast(Vector &source, Vector &result, SQLType decimal_type, idx_t count) {
-	if (decimal_type.width <= Decimal::MAX_WIDTH_INT16) {
+	TypeId internal_type = GetInternalType(decimal_type);
+	switch(internal_type) {
+	case TypeId::INT16:
 		UnaryExecutor::Execute<T, int16_t, true>(source, result, count, [&](T input) {
 			return CastToDecimal::Operation<T, int16_t>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT32) {
+		break;
+	case TypeId::INT32:
 		UnaryExecutor::Execute<T, int32_t, true>(source, result, count, [&](T input) {
 			return CastToDecimal::Operation<T, int32_t>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT64) {
+		break;
+	case TypeId::INT64:
 		UnaryExecutor::Execute<T, int64_t, true>(source, result, count, [&](T input) {
 			return CastToDecimal::Operation<T, int64_t>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else {
-		assert(decimal_type.width <= Decimal::MAX_WIDTH_INT128);
+		break;
+	case TypeId::INT128:
 		UnaryExecutor::Execute<T, hugeint_t, true>(source, result, count, [&](T input) {
 			return CastToDecimal::Operation<T, hugeint_t>(input, decimal_type.width, decimal_type.scale);
 		});
+		break;
+	default:
+		throw NotImplementedException("Unimplemented internal type for decimal");
 	}
 }
 
 template<class T>
 static void from_decimal_cast(Vector &source, Vector &result, SQLType decimal_type, idx_t count) {
-	if (decimal_type.width <= Decimal::MAX_WIDTH_INT16) {
+	TypeId internal_type = GetInternalType(decimal_type);
+	switch(internal_type) {
+	case TypeId::INT16:
 		UnaryExecutor::Execute<int16_t, T, true>(source, result, count, [&](int16_t input) {
 			return CastFromDecimal::Operation<int16_t, T>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT32) {
+		break;
+	case TypeId::INT32:
 		UnaryExecutor::Execute<int32_t, T, true>(source, result, count, [&](int32_t input) {
 			return CastFromDecimal::Operation<int32_t, T>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else if (decimal_type.width <= Decimal::MAX_WIDTH_INT64) {
+		break;
+	case TypeId::INT64:
 		UnaryExecutor::Execute<int64_t, T, true>(source, result, count, [&](int64_t input) {
 			return CastFromDecimal::Operation<int64_t, T>(input, decimal_type.width, decimal_type.scale);
 		});
-	} else {
-		assert(decimal_type.width <= Decimal::MAX_WIDTH_INT128);
+		break;
+	case TypeId::INT128:
 		UnaryExecutor::Execute<hugeint_t, T, true>(source, result, count, [&](hugeint_t input) {
 			return CastFromDecimal::Operation<hugeint_t, T>(input, decimal_type.width, decimal_type.scale);
 		});
+		break;
+	default:
+		throw NotImplementedException("Unimplemented internal type for decimal");
+	}
+}
+
+template<class T>
+static void decimal_decimal_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+	TypeId internal_target_type = GetInternalType(target_type);
+
+	// we need to either multiply or divide by the difference in scales
+	if (target_type.scale > source_type.scale) {
+		// multiply
+		int64_t multiply_factor = NumericHelper::PowersOfTen[target_type.scale - source_type.scale];
+		switch(internal_target_type) {
+		case TypeId::INT16:
+			UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int16_t>(input * multiply_factor);
+			});
+			break;
+		case TypeId::INT32:
+			UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int32_t>(input * multiply_factor);
+			});
+			break;
+		case TypeId::INT64:
+			UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int64_t>(input * multiply_factor);
+			});
+			break;
+		case TypeId::INT128:
+			UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, hugeint_t>(input * multiply_factor);
+			});
+			break;
+		default:
+			throw NotImplementedException("Unimplemented internal type for decimal");
+		}
+	} else if (target_type.scale < source_type.scale) {
+		// divide
+		int64_t divide_factor = NumericHelper::PowersOfTen[source_type.scale - target_type.scale];
+		switch(internal_target_type) {
+		case TypeId::INT16:
+			UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int16_t>(input / divide_factor);
+			});
+			break;
+		case TypeId::INT32:
+			UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int32_t>(input / divide_factor);
+			});
+			break;
+		case TypeId::INT64:
+			UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, int64_t>(input / divide_factor);
+			});
+			break;
+		case TypeId::INT128:
+			UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
+				return Cast::Operation<T, hugeint_t>(input / divide_factor);
+			});
+			break;
+		default:
+			throw NotImplementedException("Unimplemented internal type for decimal");
+		}
+	} else {
+		// scale is the same: only need to cast
+		VectorOperations::Cast(source, result, SQLTypeFromInternalType(GetInternalType(source_type)), SQLTypeFromInternalType(internal_target_type), count);
 	}
 }
 
@@ -161,6 +241,28 @@ static void decimal_cast_switch(Vector &source, Vector &result, SQLType source_t
 		assert(result.type == TypeId::INT128);
 		from_decimal_cast<hugeint_t>(source, result, source_type, count);
 		break;
+	case SQLTypeId::DECIMAL: {
+		// decimal to decimal cast
+		// first we need to figure out the source and target internal types
+		TypeId internal_source_type = GetInternalType(source_type);
+		switch(internal_source_type) {
+		case TypeId::INT16:
+			decimal_decimal_cast_switch<int16_t>(source, result, source_type, target_type, count);
+			break;
+		case TypeId::INT32:
+			decimal_decimal_cast_switch<int32_t>(source, result, source_type, target_type, count);
+			break;
+		case TypeId::INT64:
+			decimal_decimal_cast_switch<int64_t>(source, result, source_type, target_type, count);
+			break;
+		case TypeId::INT128:
+			decimal_decimal_cast_switch<hugeint_t>(source, result, source_type, target_type, count);
+			break;
+		default:
+			throw NotImplementedException("Unimplemented internal type for decimal in decimal_decimal cast");
+		}
+		break;
+	}
 	case SQLTypeId::FLOAT:
 		assert(result.type == TypeId::FLOAT);
 		from_decimal_cast<float>(source, result, source_type, count);
@@ -170,23 +272,30 @@ static void decimal_cast_switch(Vector &source, Vector &result, SQLType source_t
 		from_decimal_cast<double>(source, result, source_type, count);
 		break;
 	case SQLTypeId::VARCHAR: {
-		if (source_type.width <= Decimal::MAX_WIDTH_INT16) {
+		TypeId internal_source_type = GetInternalType(source_type);
+		switch(internal_source_type) {
+		case TypeId::INT16:
 			UnaryExecutor::Execute<int16_t, string_t, true>(source, result, count, [&](int16_t input) {
 				return StringCastFromDecimal::Operation<int16_t>(input, source_type.width, source_type.scale, result);
 			});
-		} else if (source_type.width <= Decimal::MAX_WIDTH_INT32) {
+			break;
+		case TypeId::INT32:
 			UnaryExecutor::Execute<int32_t, string_t, true>(source, result, count, [&](int32_t input) {
 				return StringCastFromDecimal::Operation<int32_t>(input, source_type.width, source_type.scale, result);
 			});
-		} else if (source_type.width <= Decimal::MAX_WIDTH_INT64) {
+			break;
+		case TypeId::INT64:
 			UnaryExecutor::Execute<int64_t, string_t, true>(source, result, count, [&](int64_t input) {
 				return StringCastFromDecimal::Operation<int64_t>(input, source_type.width, source_type.scale, result);
 			});
-		} else {
-			assert(source_type.width <= Decimal::MAX_WIDTH_INT128);
+			break;
+		case TypeId::INT128:
 			UnaryExecutor::Execute<hugeint_t, string_t, true>(source, result, count, [&](hugeint_t input) {
 				return StringCastFromDecimal::Operation<hugeint_t>(input, source_type.width, source_type.scale, result);
 			});
+			break;
+		default:
+			throw NotImplementedException("Unimplemented internal decimal type");
 		}
 		break;
 	}

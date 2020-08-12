@@ -37,14 +37,17 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			return nullptr;
 		}
 		auto new_constant =
-		    constant_value.TryCastAs(cast_expression->sql_type.id, cast_expression->source_type.id);
+		    constant_value.TryCastAs(cast_expression->sql_type, cast_expression->source_type);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);
-			constant_expr->return_type = constant_value.type;
+			auto new_constant_expr = make_unique<BoundConstantExpression>(cast_expression->source_type, constant_value);
+
 			//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
 			if (column_ref_left) {
 				expr->left = move(child_expression);
+				expr->right = move(new_constant_expr);
 			} else {
+				expr->left = move(new_constant_expr);
 				expr->right = move(child_expression);
 			}
 		}

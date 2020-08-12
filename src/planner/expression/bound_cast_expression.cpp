@@ -48,7 +48,7 @@ bool BoundCastExpression::CastIsInvertible(SQLType source_type, SQLType target_t
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST[" + TypeIdToString(return_type) + "](" + child->GetName() + ")";
+	return "CAST[" + SQLTypeToString(sql_type) + "](" + child->GetName() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_) const {

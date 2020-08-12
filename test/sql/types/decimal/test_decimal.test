@@ -11,15 +11,11 @@ SELECT typeof('0.1'::DECIMAL);
 ----
 DECIMAL(18,3)
 
-mode skip
-
 # test basic string conversions
 query II
 SELECT '0.1'::DECIMAL::VARCHAR, '922337203685478.758'::DECIMAL::VARCHAR;
 ----
 0.100	922337203685478.758
-
-mode unskip
 
 # negative values
 query II
@@ -68,6 +64,15 @@ SELECT '1'::DECIMAL(3, 3)::VARCHAR;
 statement error
 SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
 
+# repeat the same cast many times
+query I
+select '0.1'::decimal::decimal::decimal;
+----
+0.1
+
+# test various decimal to decimal casts
+
+# various error conditions
 # scale must be bigger than or equal to width
 statement error
 SELECT '0.1'::DECIMAL(3, 4);

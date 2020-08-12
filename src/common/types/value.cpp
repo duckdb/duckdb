@@ -605,6 +605,7 @@ bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
 	} catch (Exception &) {
 		return false;
 	}
+	sql_type = target_type;
 	type = new_value.type;
 	is_null = new_value.is_null;
 	value_ = new_value.value_;
@@ -707,7 +708,7 @@ Value Value::Deserialize(Deserializer &source) {
 }
 
 void Value::Print() {
-	Printer::Print(ToString());
+	Printer::Print(ToString(GetSQLType()));
 }
 
 bool Value::ValuesAreEqual(Value result_value, Value value) {
