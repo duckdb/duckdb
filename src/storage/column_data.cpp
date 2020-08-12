@@ -25,12 +25,10 @@ void ColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t vector_idx) {
-	// FIXME: this is obviously not very efficient
-	InitializeScan(state);
-	for (idx_t i = 0; i < vector_idx; i++) {
-		state.Next();
-	}
-	assert(state.current);
+	idx_t row_idx = vector_idx * STANDARD_VECTOR_SIZE;
+	state.current = (ColumnSegment*) data.GetSegment(row_idx);
+	state.vector_index = (row_idx - state.current->start) / STANDARD_VECTOR_SIZE;
+	state.initialized = false;
 }
 
 void ColumnData::Scan(Transaction &transaction, ColumnScanState &state, Vector &result) {
