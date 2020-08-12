@@ -4,7 +4,7 @@
 #include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) {
@@ -42,3 +42,5 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(PGColumnRef *root) 
 	}
 	throw NotImplementedException("ColumnRef not implemented!");
 }
+
+} // namespace duckdb

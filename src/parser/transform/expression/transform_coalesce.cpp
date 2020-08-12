@@ -2,7 +2,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 // COALESCE(a,b,c) returns the first argument that is NOT NULL, so
@@ -35,3 +35,5 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(PGAExpr *root) {
 	}
 	return move(exp_root);
 }
+
+} // namespace duckdb

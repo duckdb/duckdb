@@ -10,7 +10,7 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class WriteOverflowStringsToDisk : public OverflowStringWriter {
@@ -251,3 +251,5 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
 	offset = 0;
 	block_id = new_block_id;
 }
+
+} // namespace duckdb

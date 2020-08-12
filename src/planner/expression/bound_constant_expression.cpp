@@ -3,7 +3,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundConstantExpression::BoundConstantExpression(SQLType return_type, Value value)
@@ -34,3 +34,5 @@ unique_ptr<Expression> BoundConstantExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

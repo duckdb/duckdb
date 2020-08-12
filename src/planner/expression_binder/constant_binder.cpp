@@ -1,6 +1,6 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ConstantBinder::ConstantBinder(Binder &binder, ClientContext &context, string clause)
@@ -25,3 +25,5 @@ BindResult ConstantBinder::BindExpression(ParsedExpression &expr, idx_t depth, b
 string ConstantBinder::UnsupportedAggregateMessage() {
 	return clause + "cannot contain aggregates!";
 }
+
+} // namespace duckdb

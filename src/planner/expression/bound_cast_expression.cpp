@@ -2,7 +2,7 @@
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, SQLType source_type,
@@ -70,3 +70,5 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

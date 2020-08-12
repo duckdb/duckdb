@@ -11,7 +11,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated)
@@ -313,3 +313,5 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		                              LogicalOperatorToString(plan->type).c_str());
 	}
 }
+
+} // namespace duckdb

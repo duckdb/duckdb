@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ConjunctionSimplificationRule::ConjunctionSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -62,3 +62,5 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 		}
 	}
 }
+
+} // namespace duckdb

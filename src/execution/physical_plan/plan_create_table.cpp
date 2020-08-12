@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static void ExtractDependencies(Expression &expr, unordered_set<CatalogEntry *> &dependencies) {
@@ -33,3 +33,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTabl
 	}
 	return move(create);
 }
+
+} // namespace duckdb

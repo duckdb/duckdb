@@ -18,7 +18,7 @@
 
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
@@ -198,3 +198,5 @@ unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpressio
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
+
+} // namespace duckdb

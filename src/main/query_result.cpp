@@ -1,7 +1,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/printer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
@@ -73,3 +73,5 @@ string QueryResult::HeaderToString() {
 	result += "\n";
 	return result;
 }
+
+} // namespace duckdb

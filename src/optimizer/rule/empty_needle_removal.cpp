@@ -6,9 +6,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 
-#include <regex>
-
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -57,3 +55,5 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 
 	return nullptr;
 }
+
+} // namespace duckdb

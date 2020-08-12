@@ -2,7 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
@@ -27,3 +27,5 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *sta
 		VectorOperations::Cast(child, result, expr.source_type, expr.sql_type, count);
 	}
 }
+
+} // namespace duckdb

@@ -9,7 +9,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 static void CreateColumnMap(BoundCreateTableInfo &info) {
@@ -154,3 +154,5 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 	return result;
 }
+
+} // namespace duckdb

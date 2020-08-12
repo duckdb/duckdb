@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct BothInclusiveBetweenOperator {
@@ -50,7 +50,7 @@ static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &uppe
 		                                                              false_sel);
 	case TypeId::INT128:
 		return TernaryExecutor::Select<hugeint_t, hugeint_t, hugeint_t, OP>(input, lower, upper, sel, count, true_sel,
-		                                                              false_sel);
+		                                                                    false_sel);
 	case TypeId::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
 	case TypeId::DOUBLE:
@@ -121,3 +121,5 @@ idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *
 		return between_loop_type_switch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
 }
+
+} // namespace duckdb

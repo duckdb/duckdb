@@ -6,7 +6,7 @@
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ExpressionIterator::EnumerateChildren(const Expression &expr, function<void(const Expression &child)> callback) {
@@ -219,3 +219,5 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		}
 	}
 }
+
+} // namespace duckdb

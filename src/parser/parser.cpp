@@ -11,7 +11,7 @@
 
 #include "parser/parser.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Parser::Parser() {
@@ -134,3 +134,5 @@ vector<ColumnDefinition> Parser::ParseColumnList(string column_list) {
 	auto &info = ((CreateTableInfo &)*create.info);
 	return move(info.columns);
 }
+
+} // namespace duckdb

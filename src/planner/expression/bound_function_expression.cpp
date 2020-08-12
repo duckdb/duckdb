@@ -4,7 +4,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, SQLType sql_type, ScalarFunction bound_function, bool is_operator)
@@ -63,3 +63,5 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

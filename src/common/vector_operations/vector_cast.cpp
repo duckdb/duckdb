@@ -9,9 +9,8 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/numeric_helper.hpp"
 
-using namespace std;
-
 namespace duckdb {
+using namespace std;
 
 template <class SRC, class OP> static void string_cast(Vector &source, Vector &result, idx_t count) {
 	assert(result.type == TypeId::VARCHAR);
@@ -307,7 +306,7 @@ static void decimal_cast_switch(Vector &source, Vector &result, SQLType source_t
 
 template <class OP>
 static void string_cast_numeric_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
-                                      idx_t count) {
+                                       idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::BOOLEAN:
@@ -445,7 +444,8 @@ static void timestamp_cast_switch(Vector &source, Vector &result, SQLType source
 	}
 }
 
-static void interval_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
+static void interval_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
+                                 idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::VARCHAR:
@@ -458,8 +458,7 @@ static void interval_cast_switch(Vector &source, Vector &result, SQLType source_
 	}
 }
 
-static void blob_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type,
-                                  idx_t count) {
+static void blob_cast_switch(Vector &source, Vector &result, SQLType source_type, SQLType target_type, idx_t count) {
 	// now switch on the result type
 	switch (target_type.id) {
 	case SQLTypeId::VARCHAR:
@@ -552,4 +551,4 @@ void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool st
 	                              SQLTypeFromInternalType(result.type), count, strict);
 }
 
-}
+} // namespace duckdb

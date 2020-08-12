@@ -5,7 +5,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void Transformer::TransformCTE(PGWithClause *de_with_clause, SelectStatement &select) {
@@ -110,3 +110,5 @@ unique_ptr<QueryNode> Transformer::TransformRecursiveCTE(PGCommonTableExpr *cte)
 	}
 	return node;
 }
+
+} // namespace duckdb

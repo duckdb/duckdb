@@ -12,7 +12,7 @@
 #include "duckdb/planner/operator/logical_index_scan.hpp"
 
 #include "duckdb/storage/data_table.hpp"
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> IndexScan::Optimize(unique_ptr<LogicalOperator> op) {
@@ -151,3 +151,5 @@ unique_ptr<LogicalOperator> IndexScan::TransformFilterToIndexScan(unique_ptr<Log
 	}
 	return op;
 }
+
+} // namespace duckdb

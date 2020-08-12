@@ -1,6 +1,6 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower,
@@ -36,3 +36,5 @@ unique_ptr<Expression> BoundBetweenExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PhysicalHashAggregate::PhysicalHashAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
@@ -214,3 +214,5 @@ unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
 	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_types,
 	                                               children.size() == 0 ? nullptr : children[0].get());
 }
+
+} // namespace duckdb

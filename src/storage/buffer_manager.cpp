@@ -2,7 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferManager::BufferManager(FileSystem &fs, BlockManager &manager, string tmp, idx_t maximum_memory)
@@ -269,3 +269,5 @@ void BufferManager::DeleteTemporaryFile(block_id_t id) {
 		fs.RemoveFile(path);
 	}
 }
+
+} // namespace duckdb

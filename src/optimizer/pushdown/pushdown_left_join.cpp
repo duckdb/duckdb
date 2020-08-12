@@ -9,7 +9,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -124,3 +124,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return FinishPushdown(move(op));
 }
+
+} // namespace duckdb

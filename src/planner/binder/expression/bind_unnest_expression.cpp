@@ -8,7 +8,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
@@ -46,3 +46,5 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref));
 }
+
+} // namespace duckdb

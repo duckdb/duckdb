@@ -9,7 +9,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ColumnBindingResolver::ColumnBindingResolver() {
@@ -92,3 +92,5 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias.c_str(),
 	                        (int)expr.binding.table_index, (int)expr.binding.column_index, bound_columns.c_str());
 }
+
+} // namespace duckdb

@@ -1,6 +1,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 IndexBinder::IndexBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
@@ -20,3 +20,5 @@ BindResult IndexBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool
 string IndexBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in index expressions";
 }
+
+} // namespace duckdb

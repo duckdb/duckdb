@@ -22,7 +22,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
@@ -256,7 +256,7 @@ Value Value::BLOB(string data, bool must_cast) {
 	// single '\x' is a special char for hex chars in C++,
 	// e.g., '\xAA' will be transformed into the char "ª" (1010 1010),
 	// and Postgres uses double "\\x" for hex -> SELECT E'\\xDEADBEEF';
-	if(must_cast && data.size() >= 2 && data.substr(0,2) == "\\x") {
+	if (must_cast && data.size() >= 2 && data.substr(0, 2) == "\\x") {
 		size_t hex_size = (data.size() - 2) / 2;
 		unique_ptr<char[]> hex_data(new char[hex_size + 1]);
 		string_t hex_str(hex_data.get(), hex_size);
@@ -746,3 +746,5 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 		return value == result_value;
 	}
 }
+
+} // namespace duckdb

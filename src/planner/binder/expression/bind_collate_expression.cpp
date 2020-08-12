@@ -1,7 +1,7 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth) {
@@ -17,3 +17,5 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	child.sql_type.collation = expr.collation;
 	return BindResult(move(child.expr));
 }
+
+} // namespace duckdb

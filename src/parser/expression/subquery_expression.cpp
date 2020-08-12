@@ -3,7 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SubqueryExpression::SubqueryExpression()
@@ -51,3 +51,5 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	expression->comparison_type = source.Read<ExpressionType>();
 	return move(expression);
 }
+
+} // namespace duckdb

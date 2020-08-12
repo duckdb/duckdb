@@ -2,7 +2,7 @@
 
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias, TypeId type, SQLType sql_type, ColumnBinding binding, idx_t depth)
@@ -33,3 +33,5 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_) const {
 string BoundColumnRefExpression::ToString() const {
 	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
+
+} // namespace duckdb

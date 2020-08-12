@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
@@ -16,3 +16,5 @@ void LogicalProjection::ResolveTypes() {
 		types.push_back(expr->return_type);
 	}
 }
+
+} // namespace duckdb

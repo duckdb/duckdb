@@ -12,7 +12,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //! Create a JoinCondition from a comparison
@@ -69,7 +69,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 					continue;
 				}
 			} else if (expr->type >= ExpressionType::COMPARE_EQUAL &&
-					expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+			           expr->type <= ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 				// comparison, check if we can create a comparison JoinCondition
 				if (CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 					// successfully created the join condition
@@ -186,3 +186,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	return result;
 }
+
+} // namespace duckdb

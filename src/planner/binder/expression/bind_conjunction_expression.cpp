@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t depth) {
@@ -27,3 +27,5 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 	// now create the bound conjunction expression
 	return BindResult(move(result));
 }
+
+} // namespace duckdb

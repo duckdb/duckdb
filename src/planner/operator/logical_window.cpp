@@ -1,6 +1,6 @@
 #include "duckdb/planner/operator/logical_window.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
@@ -17,3 +17,5 @@ void LogicalWindow::ResolveTypes() {
 		types.push_back(expr->return_type);
 	}
 }
+
+} // namespace duckdb

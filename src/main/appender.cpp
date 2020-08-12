@@ -9,7 +9,7 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Appender::Appender(Connection &con, string schema_name, string table_name) : con(con), column(0) {
@@ -204,3 +204,4 @@ void Appender::Invalidate(string msg, bool close) {
 	assert(!msg.empty());
 	invalidated_msg = msg;
 }
+} // namespace duckdb

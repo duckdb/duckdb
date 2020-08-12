@@ -8,7 +8,7 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
@@ -204,3 +204,5 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 
 template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);
 template void CommitState::CommitEntry<false>(UndoFlags type, data_ptr_t data);
+
+} // namespace duckdb

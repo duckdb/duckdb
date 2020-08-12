@@ -4,7 +4,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -54,3 +54,5 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	}
 	return nullptr;
 }
+
+} // namespace duckdb

@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void Constraint::Serialize(Serializer &serializer) {
@@ -29,3 +29,5 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 void Constraint::Print() {
 	Printer::Print(ToString());
 }
+
+} // namespace duckdb

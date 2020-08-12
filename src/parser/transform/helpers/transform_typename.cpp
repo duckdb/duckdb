@@ -3,9 +3,8 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
-using namespace std;
-
 namespace duckdb {
+using namespace std;
 
 SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
 	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
@@ -59,4 +58,4 @@ SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
 	return base_type;
 }
 
-}
+} // namespace duckdb

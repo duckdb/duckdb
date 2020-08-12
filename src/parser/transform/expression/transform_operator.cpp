@@ -7,7 +7,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {
@@ -185,3 +185,5 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}
 }
+
+} // namespace duckdb

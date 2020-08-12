@@ -10,7 +10,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
@@ -174,3 +174,5 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr) {
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child); });
 }
+
+} // namespace duckdb

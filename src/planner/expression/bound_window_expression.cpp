@@ -1,7 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type, SQLType sql_type,
@@ -94,3 +94,5 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 
 	return move(new_window);
 }
+
+} // namespace duckdb

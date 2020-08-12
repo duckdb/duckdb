@@ -9,7 +9,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 string BindContext::GetMatchingBinding(const string &column_name) {
@@ -136,3 +136,5 @@ void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string>
 	cte_bindings[alias] = move(binding);
 	cte_references[alias] = std::make_shared<idx_t>(0);
 }
+
+} // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/expression/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -197,3 +197,5 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	// return a very high value if nothing matches
 	return 1000;
 }
+
+} // namespace duckdb

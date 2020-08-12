@@ -2,7 +2,7 @@
 
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool ExpressionListRef::Equals(const TableRef *other_) const {
@@ -77,3 +77,5 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(Deserializer &source) {
 	}
 	return move(result);
 }
+
+} // namespace duckdb

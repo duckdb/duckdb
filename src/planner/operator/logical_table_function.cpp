@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 vector<ColumnBinding> LogicalTableFunction::GetColumnBindings() {
@@ -26,3 +26,5 @@ void LogicalTableFunction::ResolveTypes() {
 string LogicalTableFunction::ParamsToString() const {
 	return "(" + function.name + ")";
 }
+
+} // namespace duckdb

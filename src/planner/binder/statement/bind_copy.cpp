@@ -11,7 +11,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
@@ -107,3 +107,5 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		return BindCopyFrom(stmt);
 	}
 }
+
+} // namespace duckdb

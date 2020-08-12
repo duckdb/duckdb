@@ -12,7 +12,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 using namespace chrono;
 
@@ -354,9 +354,9 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
                              idx_t &current_row) {
 	for (auto &table_filter : table_filters) {
 		for (auto &predicate_constant : table_filter.second) {
-            bool readSegment = true;
+			bool readSegment = true;
 
-            if (!state.column_scans[predicate_constant.column_index].segment_checked) {
+			if (!state.column_scans[predicate_constant.column_index].segment_checked) {
 				state.column_scans[predicate_constant.column_index].segment_checked = true;
 				if (!state.column_scans[predicate_constant.column_index].current) {
 					return true;
@@ -1056,3 +1056,5 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	}
 	info->indexes.push_back(move(index));
 }
+
+} // namespace duckdb

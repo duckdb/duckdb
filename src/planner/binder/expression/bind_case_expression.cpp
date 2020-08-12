@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
@@ -33,3 +33,4 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	return BindResult(
 	    make_unique<BoundCaseExpression>(move(check.expr), move(result_if_true.expr), move(result_if_false.expr)));
 }
+} // namespace duckdb

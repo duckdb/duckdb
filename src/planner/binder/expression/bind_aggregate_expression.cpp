@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
@@ -88,3 +88,4 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref));
 }
+} // namespace duckdb

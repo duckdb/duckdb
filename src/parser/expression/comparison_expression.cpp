@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
@@ -45,3 +45,5 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType ty
 	auto right_child = ParsedExpression::Deserialize(source);
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
 }
+
+} // namespace duckdb

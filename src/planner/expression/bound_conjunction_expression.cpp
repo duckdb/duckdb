@@ -1,7 +1,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
@@ -39,3 +39,5 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	copy->CopyProperties(*this);
 	return move(copy);
 }
+
+} // namespace duckdb

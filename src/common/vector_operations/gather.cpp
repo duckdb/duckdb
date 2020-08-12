@@ -8,7 +8,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T> static void templated_gather_loop(Vector &source, Vector &dest, idx_t count) {
@@ -68,3 +68,5 @@ void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 		throw NotImplementedException("Unimplemented type for gather");
 	}
 }
+
+} // namespace duckdb

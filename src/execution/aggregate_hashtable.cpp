@@ -12,7 +12,7 @@
 #include <cmath>
 #include <map>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> group_types,
@@ -630,3 +630,4 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 	scan_position = ptr - data;
 	return entry;
 }
+} // namespace duckdb

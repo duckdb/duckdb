@@ -6,7 +6,7 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/catalog/catalog_entry/prepared_statement_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(ExecuteStatement &stmt) {
@@ -39,3 +39,5 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 
 	return result;
 }
+
+} // namespace duckdb

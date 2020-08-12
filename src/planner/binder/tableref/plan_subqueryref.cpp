@@ -1,7 +1,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSubqueryRef &ref) {
@@ -14,3 +14,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSubqueryRef &ref) {
 	}
 	return subquery;
 }
+
+} // namespace duckdb

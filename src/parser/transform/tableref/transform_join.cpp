@@ -4,7 +4,7 @@
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
@@ -58,3 +58,5 @@ unique_ptr<TableRef> Transformer::TransformJoin(PGJoinExpr *root) {
 	result->condition = TransformExpression(root->quals);
 	return move(result);
 }
+
+} // namespace duckdb

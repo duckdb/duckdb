@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
@@ -30,3 +30,5 @@ BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 		return ExpressionBinder::BindExpression(expr, depth);
 	}
 }
+
+} // namespace duckdb

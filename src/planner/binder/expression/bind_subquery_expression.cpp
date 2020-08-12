@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class BoundSubqueryNode : public QueryNode {
@@ -89,3 +89,5 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 
 	return BindResult(move(result));
 }
+
+} // namespace duckdb
