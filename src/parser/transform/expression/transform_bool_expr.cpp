@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(PGBoolExpr *root) {
 	unique_ptr<ParsedExpression> result;

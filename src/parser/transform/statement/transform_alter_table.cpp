@@ -5,9 +5,9 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/constraint.hpp"
 
-using namespace std;
-
 namespace duckdb {
+using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 	auto stmt = reinterpret_cast<PGAlterTableStmt *>(node);

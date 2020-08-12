@@ -7,6 +7,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 static IndexType StringToIndexType(const string &str) {
 	string upper_str = StringUtil::Upper(str);

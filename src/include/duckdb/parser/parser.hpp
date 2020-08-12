@@ -13,10 +13,13 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
+namespace duckdb_libpgquery {
 struct PGNode;
 struct PGList;
+} // namespace duckdb_libpgquery
 
 namespace duckdb {
+
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
 //! plan and executed.
@@ -49,8 +52,8 @@ public:
 
 private:
 	//! Transform a Postgres parse tree into a set of SQL Statements
-	bool TransformList(PGList *tree);
+	bool TransformList(duckdb_libpgquery::PGList *tree);
 	//! Transform a single Postgres parse node into a SQL Statement.
-	unique_ptr<SQLStatement> TransformNode(PGNode *stmt);
+	unique_ptr<SQLStatement> TransformNode(duckdb_libpgquery::PGNode *stmt);
 };
 } // namespace duckdb

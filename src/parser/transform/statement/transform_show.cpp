@@ -3,6 +3,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformShow(PGNode *node) {
 	// we transform SHOW x into PRAGMA SHOW('x')

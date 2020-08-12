@@ -6,6 +6,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 string Transformer::TransformCollation(PGCollateClause *collate) {
 	if (!collate) {

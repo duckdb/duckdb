@@ -10,8 +10,8 @@ PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_me
 
 
 void PostgresParser::Parse(string query) {
-	pg_parser_init();
-	parse_result res;
+	duckdb_libpgquery::pg_parser_init();
+    duckdb_libpgquery::parse_result res;
 	pg_parser_parse(query.c_str(), &res);
 	success = res.success;
 
@@ -24,5 +24,5 @@ void PostgresParser::Parse(string query) {
 };
 
 PostgresParser::~PostgresParser()  {
-	pg_parser_cleanup();
+    duckdb_libpgquery::pg_parser_cleanup();
 };

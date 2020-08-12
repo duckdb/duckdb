@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 bool Transformer::TransformOrderBy(PGList *order, vector<OrderByNode> &result) {
 	if (!order) {

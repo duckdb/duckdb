@@ -3,6 +3,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root) {
 	Transformer subquery_transformer(this);

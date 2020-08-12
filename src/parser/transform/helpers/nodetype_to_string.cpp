@@ -1,6 +1,7 @@
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
+using namespace duckdb_libpgquery;
 
 std::string Transformer::NodetypeToString(PGNodeTag type) {
 	switch (type) {
