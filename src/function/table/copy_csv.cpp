@@ -549,9 +549,13 @@ unique_ptr<GlobalFunctionData> read_csv_initialize(ClientContext &context, Funct
     BufferedCSVReaderOptions options;
 	options.file_path = bind_data.file_path;
 	options.auto_detect = bind_data.is_auto_detect;
+	options.has_delimiter = bind_data.has_delimiter;
 	options.delimiter = bind_data.delimiter;
+	options.has_quote = bind_data.has_quote;
 	options.quote = bind_data.quote;
+	options.has_escape = bind_data.has_escape;
 	options.escape = bind_data.escape;
+	options.has_header = bind_data.has_header;
 	options.header = bind_data.header;
 	options.null_str = bind_data.null_str;
 	options.skip_rows = 0;

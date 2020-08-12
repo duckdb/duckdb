@@ -210,6 +210,10 @@ bool BufferedCSVReader::JumpToNextSample() {
 		return false;
 	}
 
+	// adjust the value of bytes_in_chunk, based on current state of the buffer
+	idx_t remaining_bytes_in_buffer = buffer_size - start;
+	bytes_in_chunk -= remaining_bytes_in_buffer;
+
 	// update average bytes per line
 	double bytes_per_line = bytes_in_chunk / (double)SAMPLE_CHUNK_SIZE;
 	bytes_per_line_avg = ((bytes_per_line_avg * sample_chunk_idx) + bytes_per_line) / (sample_chunk_idx + 1);
@@ -228,10 +232,6 @@ bool BufferedCSVReader::JumpToNextSample() {
 		ResetParseChunk();
 		return true;
 	}
-
-	// adjust the value of bytes_in_chunk, based on current state of the buffer
-	idx_t remaining_bytes_in_buffer = buffer_size - start;
-	bytes_in_chunk -= remaining_bytes_in_buffer;
 
 	// if none of the previous conditions were met, we can jump
 	idx_t partition_size = (idx_t)round(file_size / (double)MAX_SAMPLE_CHUNKS);
@@ -305,7 +305,7 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, SQLTy
 			    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
 		} else {
 			// target type is not varchar: perform a cast
-			VectorOperations::Cast(parse_chunk_col, dummy_result, SQLType::VARCHAR, sql_type, size);
+			VectorOperations::Cast(parse_chunk_col, dummy_result, SQLType::VARCHAR, sql_type, size, true);
 		}
 	} catch (const Exception &e) {
 		return false;
@@ -321,15 +321,12 @@ void BufferedCSVReader::PrepareCandidateSets() {
 		quote_candidates_map = {{options.quote}, {options.quote}, {options.quote}};
 	}
 	if (options.has_escape) {
-		if (options.escape != "") {
-			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
-			quote_candidates_map = {quote_candidates_map[1]};
-			escape_candidates_map = {{options.escape}};
-		} else {
+		if (options.escape == "") {
 			quoterule_candidates = {QuoteRule::QUOTES_RFC};
-			quote_candidates_map = {quote_candidates_map[0]};
-			escape_candidates_map = {{options.escape}};
+		} else {
+			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
+		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape};
 	}
 } 
 
@@ -337,22 +334,19 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	ConfigureSampling();
 	PrepareCandidateSets();
 
+	BufferedCSVReaderOptions original_options = options;
 	vector<BufferedCSVReaderOptions> info_candidates;
 	idx_t best_consistent_rows = 0;
 	idx_t best_num_cols = 0;
 
-	// if requested_types were provided, use them already in dialect detection
-	// TODO: currently they only serve to solve the edge case of trailing empty delimiters,
-	// however, they could be used to solve additional ambigious scenarios.
-	sql_types = requested_types;
-	// TODO: add a flag to indicate that no option actually worked and default will be used (RFC-4180)
+	JumpToBeginning(0, false);
 	for (QuoteRule quoterule : quoterule_candidates) {
 		vector<string> quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delim : delim_candidates) {
 				vector<string> escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					BufferedCSVReaderOptions sniff_info = options;
+					BufferedCSVReaderOptions sniff_info = original_options;
 					sniff_info.delimiter = delim;
 					sniff_info.quote = quote;
 					sniff_info.escape = escape;
@@ -391,7 +385,9 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 					bool more_than_one_column = (num_cols > 1);
 					bool start_good = info_candidates.size() > 0 && (start_row <= info_candidates.front().skip_rows);
 
-					if ((more_values || single_column_before) && rows_consistent) {
+					if (requested_types.size() > 0 && requested_types.size() != num_cols) {
+						continue;
+					} else if ((more_values || single_column_before) && rows_consistent) {
 						sniff_info.skip_rows = start_row;
 						sniff_info.num_cols = num_cols;
 						best_consistent_rows = consistent_rows;
@@ -417,13 +413,17 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		}
 	}
 
-	// then, file was most likely empty and we can do no more
+	// if not dialect candidate was found, then file was most likely empty and we default to RFC-4180 dialect
 	if (info_candidates.size() < 1) {
 		if (requested_types.size() == 0) {
 			// no types requested and no types/names could be deduced: default to a single varchar column
 			col_names.push_back("col0");
 			requested_types.push_back(SQLType::VARCHAR);
 		}
+
+		// back to normal
+		options = original_options;
+		JumpToBeginning(0, false);
 		return requested_types;
 	}
 
@@ -431,8 +431,8 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	vector<SQLType> type_candidates = {
 	    SQLType::VARCHAR, SQLType::TIMESTAMP,
 	    SQLType::DATE,    SQLType::TIME,
-	    SQLType::DOUBLE,  SQLType::FLOAT, SQLType::BIGINT,
-	    SQLType::INTEGER, SQLType::SMALLINT, SQLType::TINYINT, SQLType::BOOLEAN};
+	    SQLType::DOUBLE, /* SQLType::FLOAT,*/ SQLType::BIGINT,
+	    SQLType::INTEGER, /*SQLType::SMALLINT, SQLType::TINYINT,*/ SQLType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
@@ -480,7 +480,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 			}
 		}
 
-		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 40% of best_num_cols.
+		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && parse_chunk.column_count() > (best_num_cols * 0.7)) {
 			// we have a new best_info candidate
 			best_options = info_candidate;
@@ -491,47 +491,65 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 
 	options = best_options;
 
-	// if data types were provided, exit here if number of columns does not match
-	// TODO: we could think about postponing this to see if the csv happens to contain a superset of requested columns
-	if (requested_types.size() > 0 && requested_types.size() != options.num_cols) {
-		throw ParserException("Error while determining column types: found %lld columns but expected %d",
-		                      options.num_cols, requested_types.size());
-	}
-
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
 	sql_types.assign(options.num_cols, SQLType::VARCHAR);
 	InitParseChunk(sql_types.size());
 
-	// jump through the rest of the file and continue to refine the sql type guess
-	while (JumpToNextSample()) {
-		// if jump ends up a bad line, we just skip this chunk
-		try {
-			ParseCSV(ParserMode::SNIFFING_DATATYPES);
-		} catch (const ParserException &e) {
-			continue;
+	vector<SQLType> detected_types;
+
+	// if data types were provided, exit here if number of columns does not match
+	if (requested_types.size() > 0) {
+		if (requested_types.size() != options.num_cols) {
+			throw ParserException("Error while determining column types: found %lld columns but expected %d",
+			                      options.num_cols, requested_types.size());
+		} else {
+			detected_types = requested_types;
 		}
-		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
-			while (col_type_candidates.size() > 1) {
-				const auto &sql_type = col_type_candidates.back();
-				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)){
-					break;
-				} else{
-					col_type_candidates.pop_back();
+	} else {
+		// jump through the rest of the file and continue to refine the sql type guess
+		while (JumpToNextSample()) {
+			// if jump ends up a bad line, we just skip this chunk
+			try {
+				ParseCSV(ParserMode::SNIFFING_DATATYPES);
+			} catch (const ParserException &e) {
+				continue;
+			}
+			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+				vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
+				while (col_type_candidates.size() > 1) {
+					const auto &sql_type = col_type_candidates.back();
+					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)){
+						break;
+					} else{
+						col_type_candidates.pop_back();
+					}
 				}
 			}
 		}
+
+		// set sql types
+		for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
+			SQLType d_type = best_sql_types_candidates[col].back();
+			detected_types.push_back(d_type);
+		}
 	}
 
-	
+	// if all rows are of type string, we will currently make the assumption there is no header.
+	// TODO: Do some kind of string-distance based constistency metic between first row and others
+	/*bool all_types_string = true;
+	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
+	    const auto &col_type = best_sql_types_candidates[col].back();
+	    all_types_string &= (col_type == SQLType::VARCHAR);
+	}*/
+
 	// information for header detection
 	bool first_row_consistent = true;
 	bool first_row_nulls = true;
 
 	// parse first row again with knowledge from the rest of the file to check
 	// whether first row is consistent with the others or not.
-	JumpToBeginning(options.skip_rows,false);
+	JumpToBeginning(options.skip_rows, false);
 	ParseCSV(ParserMode::SNIFFING_DATATYPES);
 	if (parse_chunk.size() > 0) {
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
@@ -543,20 +561,12 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 				first_row_nulls = false;
 			}
 			// try cast to sql_type of column
-			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
-			const auto &sql_type = col_type_candidates.back();
+			const auto &sql_type = detected_types[col];
 			if (!TryCastValue(dummy_val, sql_type)) {
 				first_row_consistent = false;
 			}
 		}
 	}
-	// if all rows are of type string, we will currently make the assumption there is no header.
-	// TODO: Do some kind of string-distance based constistency metic between first row and others
-	/*bool all_types_string = true;
-	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-	    const auto &col_type = best_sql_types_candidates[col].back();
-	    all_types_string &= (col_type == SQLType::VARCHAR);
-	}*/
 
 	// update parser info, and read, generate & set col_names based on previous findings
 	if ((!first_row_consistent || first_row_nulls ||
@@ -591,34 +601,8 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		}
 	}
 
-	// set sql types
-	vector<SQLType> detected_types;
-	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-		SQLType d_type = best_sql_types_candidates[col].back();
-
-		if (requested_types.size() > 0) {
-			SQLType r_type = requested_types[col];
-
-			// check if the detected types are in line with the provided types
-			if (r_type != d_type) {
-				if (r_type.IsMoreGenericThan(d_type)) {
-					d_type = r_type;
-				} else {
-					throw ParserException(
-					    "Error while sniffing data type for column '%s': Requested column type %s, detected type %s",
-					    col_names[col].c_str(), SQLTypeToString(r_type).c_str(), SQLTypeToString(d_type).c_str());
-				}
-			}
-		}
-
-		detected_types.push_back(d_type);
-	}
-
 	// back to normal
-	ResetBuffer();
-	ResetStream();
-	ResetParseChunk();
-	sniffed_column_counts.clear();
+	JumpToBeginning(0, false);
 
 	return detected_types;
 }

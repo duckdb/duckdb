@@ -32,7 +32,9 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	options.quote = "\"";
 
 	for(auto &kv : named_parameters) {
-		if (kv.first == "sep" || kv.first == "delim") {
+		if (kv.first == "auto_detect") {
+			options.auto_detect = kv.second.value_.boolean;
+		} else if (kv.first == "sep" || kv.first == "delim") {
 			options.delimiter = kv.second.str_value;
 			options.has_delimiter = true;
 		} else if (kv.first == "header") {
