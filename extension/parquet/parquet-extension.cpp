@@ -30,6 +30,7 @@
 #endif
 
 using namespace duckdb;
+using namespace duckdb_miniz;
 using namespace std;
 
 using namespace parquet;
