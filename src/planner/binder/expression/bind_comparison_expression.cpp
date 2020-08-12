@@ -68,8 +68,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	auto &right = (BoundExpression &)*expr.right;
 	// cast the input types to the same type
 	// now obtain the result type of the input types
-	auto input_type = MaxSQLType(left.sql_type, right.sql_type);
-	if (input_type.id == SQLTypeId::VARCHAR) {
+	auto input_type = MaxLogicalType(left.sql_type, right.sql_type);
+	if (input_type.id == LogicalTypeId::VARCHAR) {
 		// for comparison with strings, we prefer to bind to the numeric types
 		if (left.sql_type.IsNumeric()) {
 			input_type = left.sql_type;
@@ -83,13 +83,13 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 			}
 		}
 	}
-	if (input_type.id == SQLTypeId::UNKNOWN) {
+	if (input_type.id == LogicalTypeId::UNKNOWN) {
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
 	// add casts (if necessary)
 	left.expr = BoundCastExpression::AddCastToType(move(left.expr), left.sql_type, input_type);
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), right.sql_type, input_type);
-	if (input_type.id == SQLTypeId::VARCHAR) {
+	if (input_type.id == LogicalTypeId::VARCHAR) {
 		// handle collation
 		left.expr =
 		    PushCollation(context, move(left.expr), input_type.collation, expr.type == ExpressionType::COMPARE_EQUAL);
@@ -98,7 +98,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)),
-	                  SQLType(SQLTypeId::BOOLEAN));
+	                  LogicalType(LogicalTypeId::BOOLEAN));
 }
 
 } // namespace duckdb

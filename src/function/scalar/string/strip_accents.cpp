@@ -36,7 +36,7 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 }
 
 ScalarFunction StripAccentsFun::GetFunction() {
-	return ScalarFunction("strip_accents", {SQLType::VARCHAR}, SQLType::VARCHAR, strip_accents_function);
+	return ScalarFunction("strip_accents", {LogicalType::VARCHAR}, LogicalType::VARCHAR, strip_accents_function);
 }
 
 void StripAccentsFun::RegisterFunction(BuiltinFunctions &set) {

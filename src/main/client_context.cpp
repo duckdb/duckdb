@@ -233,7 +233,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		}
 #ifdef DEBUG
 		for (idx_t i = 0; i < chunk->column_count(); i++) {
-			if (statement.sql_types[i].id == SQLTypeId::VARCHAR) {
+			if (statement.sql_types[i].id == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
 		}
@@ -303,7 +303,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
 	for (auto &val : values) {
-		execute->values.push_back(make_unique<ConstantExpression>(val.GetSQLType(), val));
+		execute->values.push_back(make_unique<ConstantExpression>(val.GetLogicalType(), val));
 	}
 
 	return RunStatement(query, move(execute), allow_stream_result);
@@ -744,12 +744,12 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	string err_str = "Result mismatch in query!\nExpected the following columns: ";
 	for (idx_t i = 0; i < expected_columns.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
+		err_str += expected_columns[i].name + " " + LogicalTypeToString(expected_columns[i].type);
 	}
 	err_str += "]\nBut result contained the following: ";
 	for (idx_t i = 0; i < result->types.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
+		err_str += result->names[i] + " " + LogicalTypeToString(result->sql_types[i]);
 	}
 	err_str += "]";
 	return make_unique<MaterializedQueryResult>(err_str);

@@ -124,13 +124,13 @@ void TrimFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet rtrim("rtrim");
 	ScalarFunctionSet trim("trim");
 
-	ltrim.AddFunction(ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, unary_trim_function<true, false>));
-	rtrim.AddFunction(ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, unary_trim_function<false, true>));
-	trim.AddFunction(ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, unary_trim_function<true, true>));
+	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, unary_trim_function<true, false>));
+	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, unary_trim_function<false, true>));
+	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, unary_trim_function<true, true>));
 
-	ltrim.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, binary_trim_function<true, false>));
-	rtrim.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, binary_trim_function<false, true>));
-	trim.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, binary_trim_function<true, true>));
+	ltrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, binary_trim_function<true, false>));
+	rtrim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, binary_trim_function<false, true>));
+	trim.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, binary_trim_function<true, true>));
 
 	set.AddFunction(ltrim);
 	set.AddFunction(rtrim);

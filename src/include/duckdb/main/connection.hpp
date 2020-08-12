@@ -111,18 +111,18 @@ public:
 	}
 
 	template <typename TR, typename... Args>
-	void CreateScalarFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+	void CreateScalarFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
 	template<typename TR, typename... Args>
-	void CreateVectorizedFunction(string name, scalar_function_t udf_func, SQLType varargs = SQLType::INVALID) {
+	void CreateVectorizedFunction(string name, scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, varargs);
 	}
 
-	void CreateVectorizedFunction(string name, vector<SQLType> args, SQLType ret_type, scalar_function_t udf_func,
-	                              SQLType varargs = SQLType::INVALID) {
+	void CreateVectorizedFunction(string name, vector<LogicalType> args, LogicalType ret_type, scalar_function_t udf_func,
+	                              LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction(name, args, ret_type, udf_func, *context, varargs);
 	}
 
@@ -141,13 +141,13 @@ public:
 	}
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA) {
+	void CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+	void CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}

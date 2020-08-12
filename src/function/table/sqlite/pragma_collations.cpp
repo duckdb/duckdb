@@ -20,9 +20,9 @@ struct PragmaCollateData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                    vector<SQLType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("collname");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	return make_unique<PragmaCollateData>();
 }

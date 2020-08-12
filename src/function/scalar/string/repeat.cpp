@@ -43,8 +43,8 @@ static void repeat_function(DataChunk &args, ExpressionState &state, Vector &res
 
 void RepeatFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("repeat",                            // name of the function
-	                               {SQLType::VARCHAR, SQLType::BIGINT}, // argument list
-	                               SQLType::VARCHAR,                    // return type
+	                               {LogicalType::VARCHAR, LogicalType::BIGINT}, // argument list
+	                               LogicalType::VARCHAR,                    // return type
 	                               repeat_function));                   // pointer to function implementation
 }
 

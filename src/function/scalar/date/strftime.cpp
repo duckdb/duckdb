@@ -603,10 +603,10 @@ static void strftime_function_timestamp(DataChunk &args, ExpressionState &state,
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strftime("strftime");
 
-	strftime.AddFunction(ScalarFunction({SQLType::DATE, SQLType::VARCHAR}, SQLType::VARCHAR,
+	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               strftime_function_date, false, strftime_bind_function));
 
-	strftime.AddFunction(ScalarFunction({SQLType::TIMESTAMP, SQLType::VARCHAR}, SQLType::VARCHAR,
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                               strftime_function_timestamp, false, strftime_bind_function));
 
 	set.AddFunction(strftime);
@@ -1010,7 +1010,7 @@ static void strptime_function(DataChunk &args, ExpressionState &state, Vector &r
 void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strptime("strptime");
 
-	strptime.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::TIMESTAMP,
+	strptime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                               strptime_function, false, strptime_bind_function));
 
 	set.AddFunction(strptime);

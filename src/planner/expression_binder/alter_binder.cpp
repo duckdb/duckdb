@@ -8,7 +8,7 @@ using namespace std;
 namespace duckdb {
 
 AlterBinder::AlterBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
-                         vector<column_t> &bound_columns, SQLType target_type)
+                         vector<column_t> &bound_columns, LogicalType target_type)
     : ExpressionBinder(binder, context), table(table), columns(columns), bound_columns(bound_columns) {
 	this->target_type = target_type;
 }

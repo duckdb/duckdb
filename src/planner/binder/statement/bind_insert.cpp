@@ -26,7 +26,7 @@ static void CheckInsertColumnCountMismatch(int64_t expected_columns, int64_t res
 BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	assert(table);

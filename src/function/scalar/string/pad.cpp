@@ -133,17 +133,17 @@ template <class Op> static void pad_function(DataChunk &args, ExpressionState &s
 
 void LpadFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("lpad",                              // name of the function
-	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
-	                                SQLType::VARCHAR},
-	                               SQLType::VARCHAR,             // return type
+	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
+	                                LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR,             // return type
 	                               pad_function<LpadOperator>)); // pointer to function implementation
 }
 
 void RpadFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("rpad",                              // name of the function
-	                               {SQLType::VARCHAR, SQLType::INTEGER, // argument list
-	                                SQLType::VARCHAR},
-	                               SQLType::VARCHAR,             // return type
+	                               {LogicalType::VARCHAR, LogicalType::INTEGER, // argument list
+	                                LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR,             // return type
 	                               pad_function<RpadOperator>)); // pointer to function implementation
 }
 

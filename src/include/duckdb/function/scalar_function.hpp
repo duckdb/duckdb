@@ -28,16 +28,16 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_s
 
 class ScalarFunction : public BaseScalarFunction {
 public:
-	ScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
+	ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, SQLType varargs = SQLType::INVALID)
+	               dependency_function_t dependency = nullptr, LogicalType varargs = LogicalType::INVALID)
 	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency) {
 	}
 
-	ScalarFunction(vector<SQLType> arguments, SQLType return_type, scalar_function_t function,
+	ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
-	               dependency_function_t dependency = nullptr, SQLType varargs = SQLType::INVALID)
+	               dependency_function_t dependency = nullptr, LogicalType varargs = LogicalType::INVALID)
 	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, varargs) {
 	}
 
@@ -49,11 +49,11 @@ public:
 	dependency_function_t dependency;
 
 	static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context, string schema, string name,
-	                                                              vector<SQLType> &arguments,
+	                                                              vector<LogicalType> &arguments,
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              bool is_operator = false);
 	static unique_ptr<BoundFunctionExpression>
-	BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<SQLType> &arguments,
+	BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &function, vector<LogicalType> &arguments,
 	                   vector<unique_ptr<Expression>> children, bool is_operator = false);
 
 	bool operator==(const ScalarFunction &rhs) const {
@@ -98,28 +98,28 @@ public:
 	};
 
 public:
-	template <class OP> static scalar_function_t GetScalarUnaryFunction(SQLType type) {
+	template <class OP> static scalar_function_t GetScalarUnaryFunction(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id) {
-		case SQLTypeId::TINYINT:
+		case LogicalTypeId::TINYINT:
 			function = &ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
 			break;
-		case SQLTypeId::SMALLINT:
+		case LogicalTypeId::SMALLINT:
 			function = &ScalarFunction::UnaryFunction<int16_t, int16_t, OP>;
 			break;
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::INTEGER:
 			function = &ScalarFunction::UnaryFunction<int32_t, int32_t, OP>;
 			break;
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::BIGINT:
 			function = &ScalarFunction::UnaryFunction<int64_t, int64_t, OP>;
 			break;
-		case SQLTypeId::HUGEINT:
+		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, hugeint_t, OP>;
 			break;
-		case SQLTypeId::FLOAT:
+		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, float, OP>;
 			break;
-		case SQLTypeId::DOUBLE:
+		case LogicalTypeId::DOUBLE:
 			function = &ScalarFunction::UnaryFunction<double, double, OP>;
 			break;
 		default:
@@ -128,28 +128,28 @@ public:
 		return function;
 	}
 
-	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(SQLType type) {
+	template <class TR, class OP> static scalar_function_t GetScalarUnaryFunctionFixedReturn(LogicalType type) {
 		scalar_function_t function;
 		switch (type.id) {
-		case SQLTypeId::TINYINT:
+		case LogicalTypeId::TINYINT:
 			function = &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
 			break;
-		case SQLTypeId::SMALLINT:
+		case LogicalTypeId::SMALLINT:
 			function = &ScalarFunction::UnaryFunction<int16_t, TR, OP>;
 			break;
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::INTEGER:
 			function = &ScalarFunction::UnaryFunction<int32_t, TR, OP>;
 			break;
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::BIGINT:
 			function = &ScalarFunction::UnaryFunction<int64_t, TR, OP>;
 			break;
-		case SQLTypeId::HUGEINT:
+		case LogicalTypeId::HUGEINT:
 			function = &ScalarFunction::UnaryFunction<hugeint_t, TR, OP>;
 			break;
-		case SQLTypeId::FLOAT:
+		case LogicalTypeId::FLOAT:
 			function = &ScalarFunction::UnaryFunction<float, TR, OP>;
 			break;
-		case SQLTypeId::DOUBLE:
+		case LogicalTypeId::DOUBLE:
 			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
 			break;
 		default:

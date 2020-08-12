@@ -20,7 +20,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 		throw Exception("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
 	// bind the select statement
@@ -49,7 +49,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		throw Exception("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
 
 	assert(!stmt.info->table.empty());

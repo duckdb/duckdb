@@ -21,9 +21,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	auto &result_if_true = (BoundExpression &)*expr.result_if_true;
 	auto &result_if_false = (BoundExpression &)*expr.result_if_false;
 	// add a cast to BOOLEAN in the CHECK condition
-	check.expr = BoundCastExpression::AddCastToType(move(check.expr), check.sql_type, SQLType(SQLTypeId::BOOLEAN));
+	check.expr = BoundCastExpression::AddCastToType(move(check.expr), check.sql_type, LogicalType(LogicalTypeId::BOOLEAN));
 	// now obtain the result type of the input types
-	auto return_type = MaxSQLType(result_if_true.sql_type, result_if_false.sql_type);
+	auto return_type = MaxLogicalType(result_if_true.sql_type, result_if_false.sql_type);
 	// add casts (if necessary)
 	result_if_true.expr =
 	    BoundCastExpression::AddCastToType(move(result_if_true.expr), result_if_true.sql_type, return_type);

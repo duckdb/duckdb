@@ -94,7 +94,7 @@ struct CovarSampOperation : public CovarOperation {
 void CovarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_pop("covar_pop");
 	covar_pop.AddFunction(AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarPopOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_pop);
 }
 
@@ -102,7 +102,7 @@ void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet covar_samp("covar_samp");
 	covar_samp.AddFunction(
 	    AggregateFunction::BinaryAggregate<covar_state_t, double, double, double, CovarSampOperation>(
-	        SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
+	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(covar_samp);
 }
 

@@ -47,7 +47,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 
 	result.plan = move(del);
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	return result;
 }
 

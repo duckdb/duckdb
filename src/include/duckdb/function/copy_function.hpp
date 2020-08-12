@@ -25,7 +25,7 @@ struct GlobalFunctionData {
 };
 
 typedef unique_ptr<FunctionData> (*copy_to_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                                   vector<SQLType> &sql_types);
+                                                   vector<LogicalType> &sql_types);
 typedef unique_ptr<LocalFunctionData> (*copy_to_initialize_local_t)(ClientContext &context, FunctionData &bind_data);
 typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientContext &context, FunctionData &bind_data);
 typedef void (*copy_to_sink_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
@@ -34,7 +34,7 @@ typedef void (*copy_to_combine_t)(ClientContext &context, FunctionData &bind_dat
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
 
-typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<SQLType> &expected_types);
+typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<LogicalType> &expected_types);
 typedef unique_ptr<GlobalFunctionData> (*copy_from_initialize_t)(ClientContext &context, FunctionData &bind_data);
 typedef void (*copy_from_get_chunk_t)(ExecutionContext &context, GlobalFunctionData &gstate, FunctionData &bind_data, DataChunk &chunk);
 

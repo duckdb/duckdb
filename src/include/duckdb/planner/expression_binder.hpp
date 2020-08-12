@@ -27,7 +27,7 @@ class SimpleFunction;
 struct BindResult {
 	BindResult(string error) : error(error) {
 	}
-	BindResult(unique_ptr<Expression> expr, SQLType sql_type) : expression(move(expr)), sql_type(sql_type) {
+	BindResult(unique_ptr<Expression> expr, LogicalType sql_type) : expression(move(expr)), sql_type(sql_type) {
 	}
 
 	bool HasError() {
@@ -35,7 +35,7 @@ struct BindResult {
 	}
 
 	unique_ptr<Expression> expression;
-	SQLType sql_type;
+	LogicalType sql_type;
 	string error;
 };
 
@@ -44,7 +44,7 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
-	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type = nullptr,
+	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
 
 	//! Returns whether or not any columns have been bound by the expression binder
@@ -63,7 +63,7 @@ public:
 
 	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
 	//! be added. Defaults to INVALID.
-	SQLType target_type;
+	LogicalType target_type;
 
 protected:
 	virtual BindResult BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression = false);

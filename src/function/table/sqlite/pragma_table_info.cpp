@@ -20,24 +20,24 @@ struct PragmaTableFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> pragma_table_info_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                       vector<SQLType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("cid");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("type");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("notnull");
-	return_types.push_back(SQLType::BOOLEAN);
+	return_types.push_back(LogicalType::BOOLEAN);
 
 	names.push_back("dflt_value");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("pk");
-	return_types.push_back(SQLType::BOOLEAN);
+	return_types.push_back(LogicalType::BOOLEAN);
 
 	return make_unique<PragmaTableFunctionData>();
 }
@@ -63,7 +63,7 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		// "name", TypeId::VARCHAR
 		output.SetValue(1, index, Value(column.name));
 		// "type", TypeId::VARCHAR
-		output.SetValue(2, index, Value(SQLTypeToString(column.type)));
+		output.SetValue(2, index, Value(LogicalTypeToString(column.type)));
 		// "notnull", TypeId::BOOL
 		// FIXME: look at constraints
 		output.SetValue(3, index, Value::BOOLEAN(false));
@@ -98,7 +98,7 @@ static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEnt
 		// "name", TypeId::VARCHAR
 		output.SetValue(1, index, Value(name));
 		// "type", TypeId::VARCHAR
-		output.SetValue(2, index, Value(SQLTypeToString(type)));
+		output.SetValue(2, index, Value(LogicalTypeToString(type)));
 		// "notnull", TypeId::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(false));
 		// "dflt_value", TypeId::VARCHAR
@@ -137,7 +137,7 @@ static void pragma_table_info(ClientContext &context, vector<Value> &input, Data
 
 void PragmaTableInfo::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    TableFunction("pragma_table_info", {SQLType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
+	    TableFunction("pragma_table_info", {LogicalType::VARCHAR}, pragma_table_info_bind, pragma_table_info, nullptr));
 }
 
 } // namespace duckdb

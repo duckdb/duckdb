@@ -14,11 +14,11 @@ namespace duckdb {
 
 class BoundDefaultExpression : public Expression {
 public:
-	BoundDefaultExpression(TypeId type = TypeId::INVALID, SQLType sql_type = SQLType())
+	BoundDefaultExpression(TypeId type = TypeId::INVALID, LogicalType sql_type = LogicalType())
 	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type), sql_type(sql_type) {
 	}
 
-	SQLType sql_type;
+	LogicalType sql_type;
 
 public:
 	bool IsScalar() const override {

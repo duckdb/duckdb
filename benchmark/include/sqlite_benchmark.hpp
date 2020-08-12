@@ -23,7 +23,7 @@ struct SQLiteBenchmarkState : public BenchmarkState {
 	//! Flag used to interrupt query execution. Set to 1 to interrupt query.
 	volatile int interrupt = 0;
 	//! The result types
-	vector<SQLType> types;
+	vector<LogicalType> types;
 
 	SQLiteBenchmarkState() : db(nullptr), interrupt(0) {
 	}

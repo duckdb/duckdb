@@ -41,7 +41,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 		// first we create an aggregate that returns the FIRST element
 		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
 		auto first_aggregate = make_unique<BoundAggregateExpression>(
-		    types[i], FirstFun::GetFunction(SQLTypeFromInternalType(types[i])), false);
+		    types[i], FirstFun::GetFunction(LogicalTypeFromInternalType(types[i])), false);
 		first_aggregate->children.push_back(move(bound));
 		// and push it to the list of aggregates
 		aggregates.push_back(move(first_aggregate));

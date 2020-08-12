@@ -40,8 +40,8 @@ struct InstrOperator {
 
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("instr",                              // name of the function
-	                               {SQLType::VARCHAR, SQLType::VARCHAR}, // argument list
-	                               SQLType::BIGINT,                      // return type
+	                               {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
+	                               LogicalType::BIGINT,                      // return type
 	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
 }
 

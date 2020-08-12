@@ -22,10 +22,10 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 	for (auto &child_expr : expr.children) {
 		auto &child = (BoundExpression &)*child_expr;
 		result->children.push_back(
-		    BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, SQLType(SQLTypeId::BOOLEAN)));
+		    BoundCastExpression::AddCastToType(move(child.expr), child.sql_type, LogicalType(LogicalTypeId::BOOLEAN)));
 	}
 	// now create the bound conjunction expression
-	return BindResult(move(result), SQLType(SQLTypeId::BOOLEAN));
+	return BindResult(move(result), LogicalType(LogicalTypeId::BOOLEAN));
 }
 
 } // namespace duckdb

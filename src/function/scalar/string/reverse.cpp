@@ -50,7 +50,7 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 }
 
 void ReverseFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("reverse", {SQLType::VARCHAR}, SQLType::VARCHAR, reverse_chunk_function));
+	set.AddFunction(ScalarFunction("reverse", {LogicalType::VARCHAR}, LogicalType::VARCHAR, reverse_chunk_function));
 }
 
 } // namespace duckdb

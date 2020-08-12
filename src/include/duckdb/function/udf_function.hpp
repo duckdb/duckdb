@@ -33,7 +33,7 @@ public:
 	}
 
 	template<typename TR, typename... Args>
-	static scalar_function_t CreateScalarFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateScalarFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		if(!TypesMatch<TR>(ret_type)) {
 			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
 					"Return type doesn't match with the first template type.");
@@ -41,7 +41,7 @@ public:
 
 		const std::size_t num_template_types = sizeof...(Args);
 		if(num_template_types != args.size()) {
-			throw duckdb::InvalidInputException("The number of templated types should be the same quantity of the SQLType arguments.");
+			throw duckdb::InvalidInputException("The number of templated types should be the same quantity of the LogicalType arguments.");
 		}
 
 		switch(num_template_types) {
@@ -57,18 +57,18 @@ public:
 	}
 
 	template<typename TR, typename... Args>
-	static void RegisterFunction(string name, scalar_function_t udf_function, ClientContext &context, SQLType varargs = SQLType::INVALID) {
-	    vector<SQLType> arguments;
+	static void RegisterFunction(string name, scalar_function_t udf_function, ClientContext &context, LogicalType varargs = LogicalType::INVALID) {
+	    vector<LogicalType> arguments;
 	    GetArgumentTypesRecursive<Args...>(arguments);
 
-	    SQLType ret_type = GetArgumentType<TR>();
+	    LogicalType ret_type = GetArgumentType<TR>();
 
 	    RegisterFunction(name, arguments, ret_type, udf_function, context, varargs);
 	}
 
-	static void RegisterFunction(string name, vector<SQLType> args, SQLType ret_type,
+	static void RegisterFunction(string name, vector<LogicalType> args, LogicalType ret_type,
 								 scalar_function_t udf_function, ClientContext &context,
-								 SQLType varargs = SQLType::INVALID);
+								 LogicalType varargs = LogicalType::INVALID);
 
 	//--------------------------------- Aggregate UDFs ------------------------------------//
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
@@ -82,7 +82,7 @@ public:
 	}
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
-	static AggregateFunction CreateAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+	static AggregateFunction CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_type) {
 		if(!TypesMatch<TR>(ret_type)) {
 			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
 					"The return argument don't match!");
@@ -97,7 +97,7 @@ public:
 	}
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	static AggregateFunction CreateAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+	static AggregateFunction CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
 		if(!TypesMatch<TR>(ret_type)) {
 			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
 					"The return argument don't match!");
@@ -116,7 +116,7 @@ public:
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 	}
 
-	static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, SQLType varargs = SQLType::INVALID);
+	static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, LogicalType varargs = LogicalType::INVALID);
 
 private:
 	//-------------------------------- Templated functions --------------------------------//
@@ -174,23 +174,23 @@ private:
 		return udf_function;
 	}
 
-	template<typename T> static SQLType GetArgumentType() {
+	template<typename T> static LogicalType GetArgumentType() {
 		if (std::is_same<T, bool>()) {
-			return SQLType::BOOLEAN;
+			return LogicalType::BOOLEAN;
 		} else if (std::is_same<T, int8_t>()) {
-			return SQLType::TINYINT;
+			return LogicalType::TINYINT;
 		} else if (std::is_same<T, int16_t>()) {
-			return SQLType::SMALLINT;
+			return LogicalType::SMALLINT;
 		} else if (std::is_same<T, int32_t>()) {
-			return SQLType::INTEGER;
+			return LogicalType::INTEGER;
 		} else if (std::is_same<T, int64_t>()) {
-			return SQLType::BIGINT;
+			return LogicalType::BIGINT;
 		} else if (std::is_same<T, float>()) {
-			return SQLType::FLOAT;
+			return LogicalType::FLOAT;
 		} else if (std::is_same<T, double>()) {
-			return SQLType::DOUBLE;
+			return LogicalType::DOUBLE;
 		} else if (std::is_same<T, string_t>()) {
-			return SQLType::VARCHAR;
+			return LogicalType::VARCHAR;
 		} else {
 			// unrecognized type
 			throw duckdb::InternalException("Unrecognized type!");
@@ -198,13 +198,13 @@ private:
 	}
 
 	template<typename TA, typename TB, typename... Args>
-	static void GetArgumentTypesRecursive(vector<SQLType> &arguments) {
+	static void GetArgumentTypesRecursive(vector<LogicalType> &arguments) {
 		arguments.push_back(GetArgumentType<TA>());
 		GetArgumentTypesRecursive<TB, Args...>(arguments);
 	}
 
 	template <typename TA>
-	static void GetArgumentTypesRecursive(vector<SQLType> &arguments) {
+	static void GetArgumentTypesRecursive(vector<LogicalType> &arguments) {
 		arguments.push_back(GetArgumentType<TA>());
 	}
 
@@ -212,15 +212,15 @@ private:
 	//-------------------------------- Argumented functions --------------------------------//
 
 	template<typename TR, typename... Args>
-	static scalar_function_t CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateUnaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		assert(sizeof...(Args) == 1);
 		return CreateUnaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
 	template<typename TR, typename TA>
-	static scalar_function_t CreateUnaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA)) {
+	static scalar_function_t CreateUnaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(TA)) {
 		if(args.size() != 1) {
-			throw duckdb::InvalidInputException("The number of SQLType arguments (\"args\") should be 1!");
+			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 1!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
 			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
@@ -237,15 +237,15 @@ private:
 	}
 
 	template<typename TR, typename... Args>
-	static scalar_function_t CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateBinaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		assert(sizeof...(Args) == 2);
 		return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
 	template<typename TR, typename TA, typename TB>
-	static scalar_function_t CreateBinaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA, TB)) {
+	static scalar_function_t CreateBinaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(TA, TB)) {
 		if(args.size() != 2) {
-			throw duckdb::InvalidInputException("The number of SQLType arguments (\"args\") should be 2!");
+			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 2!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
 			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
@@ -267,15 +267,15 @@ private:
 	}
 
 	template<typename TR, typename... Args>
-	static scalar_function_t CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateTernaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		assert(sizeof...(Args) == 3);
 		return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 	}
 
 	template<typename TR, typename TA, typename TB, typename TC>
-	static scalar_function_t CreateTernaryFunction(string name, vector<SQLType> args, SQLType ret_type, TR (*udf_func)(TA, TB, TC)) {
+	static scalar_function_t CreateTernaryFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(TA, TB, TC)) {
 		if(args.size() != 3) {
-			throw duckdb::InvalidInputException("The number of SQLType arguments (\"args\") should be 3!");
+			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 3!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
 			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
@@ -301,31 +301,31 @@ private:
 		return udf_function;
 	}
 
-	template <typename T> static bool TypesMatch(SQLType sql_type) {
+	template <typename T> static bool TypesMatch(LogicalType sql_type) {
 		switch(sql_type.id) {
-		case SQLTypeId::BOOLEAN:
+		case LogicalTypeId::BOOLEAN:
 			return std::is_same<T, bool>();
-		case SQLTypeId::TINYINT:
+		case LogicalTypeId::TINYINT:
 			return std::is_same<T, int8_t>();
-		case SQLTypeId::SMALLINT:
+		case LogicalTypeId::SMALLINT:
 			return std::is_same<T, int16_t>();
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::INTEGER:
 			return std::is_same<T, int32_t>();
-		case SQLTypeId::BIGINT:
-		case SQLTypeId::TIMESTAMP:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::TIMESTAMP:
 			return std::is_same<T, int64_t>();
-		case SQLTypeId::FLOAT:
+		case LogicalTypeId::FLOAT:
 			return std::is_same<T, float>();
-		case SQLTypeId::DOUBLE:
-		case SQLTypeId::DECIMAL:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
 			return std::is_same<T, double>();
-		case SQLTypeId::VARCHAR:
-		case SQLTypeId::CHAR:
-		case SQLTypeId::BLOB:
+		case LogicalTypeId::VARCHAR:
+		case LogicalTypeId::CHAR:
+		case LogicalTypeId::BLOB:
 			return std::is_same<T, string_t>();
-		case SQLTypeId::VARBINARY:
+		case LogicalTypeId::VARBINARY:
 			return std::is_same<T, blob_t>();
 		default:
 			throw InvalidTypeException(GetInternalType(sql_type), "Type does not supported!");
@@ -336,12 +336,12 @@ private:
 	//-------------------------------- Aggregate functions --------------------------------//
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateUnaryAggregateFunction(string name) {
-		SQLType return_type = GetArgumentType<TR>();
-		SQLType input_type = GetArgumentType<TA>();
+		LogicalType return_type = GetArgumentType<TR>();
+		LogicalType input_type = GetArgumentType<TA>();
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type);
 	}
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
-	static AggregateFunction CreateUnaryAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+	static AggregateFunction CreateUnaryAggregateFunction(string name, LogicalType ret_type, LogicalType input_type) {
 		AggregateFunction aggr_function = AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
 		aggr_function.name = name;
 		return aggr_function;
@@ -349,14 +349,14 @@ private:
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	static AggregateFunction CreateBinaryAggregateFunction(string name) {
-		SQLType return_type = GetArgumentType<TR>();
-		SQLType input_typeA = GetArgumentType<TA>();
-		SQLType input_typeB = GetArgumentType<TB>();
+		LogicalType return_type = GetArgumentType<TR>();
+		LogicalType input_typeA = GetArgumentType<TA>();
+		LogicalType input_typeB = GetArgumentType<TB>();
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, return_type, input_typeA, input_typeB);
 	}
 
 	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	static AggregateFunction CreateBinaryAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+	static AggregateFunction CreateBinaryAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
 		AggregateFunction aggr_function = AggregateFunction::BinaryAggregate<STATE, TR, TA, TB, UDF_OP>(input_typeA, input_typeB,
 																									   ret_type);
 		aggr_function.name = name;

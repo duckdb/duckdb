@@ -72,8 +72,8 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	if (expr.target_type != expr.source_type) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
-		if (expr.target_type == SQLType::VARCHAR || expr.source_type == SQLType::VARCHAR ||
-		    expr.target_type == SQLType::BLOB || expr.source_type == SQLType::BLOB) {
+		if (expr.target_type == LogicalType::VARCHAR || expr.source_type == LogicalType::VARCHAR ||
+		    expr.target_type == LogicalType::BLOB || expr.source_type == LogicalType::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;

@@ -11,42 +11,42 @@ using namespace std;
 
 namespace duckdb {
 
-const SQLType SQLType::INVALID = SQLType(SQLTypeId::INVALID);
-const SQLType SQLType::SQLNULL = SQLType(SQLTypeId::SQLNULL);
-const SQLType SQLType::BOOLEAN = SQLType(SQLTypeId::BOOLEAN);
-const SQLType SQLType::TINYINT = SQLType(SQLTypeId::TINYINT);
-const SQLType SQLType::SMALLINT = SQLType(SQLTypeId::SMALLINT);
-const SQLType SQLType::INTEGER = SQLType(SQLTypeId::INTEGER);
-const SQLType SQLType::BIGINT = SQLType(SQLTypeId::BIGINT);
-const SQLType SQLType::HUGEINT = SQLType(SQLTypeId::HUGEINT);
-const SQLType SQLType::FLOAT = SQLType(SQLTypeId::FLOAT);
-const SQLType SQLType::DOUBLE = SQLType(SQLTypeId::DOUBLE);
-const SQLType SQLType::DATE = SQLType(SQLTypeId::DATE);
-const SQLType SQLType::TIMESTAMP = SQLType(SQLTypeId::TIMESTAMP);
-const SQLType SQLType::TIME = SQLType(SQLTypeId::TIME);
+const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
+const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
+const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
+const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
+const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
+const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
+const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
+const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
+const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
+const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
+const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
+const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
 
-const SQLType SQLType::VARCHAR = SQLType(SQLTypeId::VARCHAR);
-const SQLType SQLType::VARBINARY = SQLType(SQLTypeId::VARBINARY);
+const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
+const LogicalType LogicalType::VARBINARY = LogicalType(LogicalTypeId::VARBINARY);
 
-const SQLType SQLType::BLOB = SQLType(SQLTypeId::BLOB);
-const SQLType SQLType::INTERVAL = SQLType(SQLTypeId::INTERVAL);
+const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
+const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
 
 // TODO these are incomplete and should maybe not exist as such
-const SQLType SQLType::STRUCT = SQLType(SQLTypeId::STRUCT);
-const SQLType SQLType::LIST = SQLType(SQLTypeId::LIST);
+const LogicalType LogicalType::STRUCT = LogicalType(LogicalTypeId::STRUCT);
+const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
 
-const SQLType SQLType::ANY = SQLType(SQLTypeId::ANY);
+const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
-const vector<SQLType> SQLType::NUMERIC = {
-    SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT, SQLType::HUGEINT,
-    SQLType::FLOAT,   SQLType::DOUBLE };
+const vector<LogicalType> LogicalType::NUMERIC = {
+    LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::HUGEINT,
+    LogicalType::FLOAT,   LogicalType::DOUBLE };
 
-const vector<SQLType> SQLType::INTEGRAL = {SQLType::TINYINT, SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT, SQLType::HUGEINT};
+const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::HUGEINT};
 
-const vector<SQLType> SQLType::ALL_TYPES = {
-    SQLType::BOOLEAN, SQLType::TINYINT,   SQLType::SMALLINT, SQLType::INTEGER, SQLType::BIGINT,
-    SQLType::DATE,    SQLType::TIMESTAMP, SQLType::DOUBLE,   SQLType::FLOAT,
-    SQLType::VARCHAR, SQLType::BLOB, SQLType::INTERVAL, SQLType::HUGEINT};
+const vector<LogicalType> LogicalType::ALL_TYPES = {
+    LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
+    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,
+    LogicalType::VARCHAR, LogicalType::BLOB, LogicalType::INTERVAL, LogicalType::HUGEINT};
 // TODO add LIST/STRUCT here
 
 const TypeId ROW_TYPE = TypeId::INT64;
@@ -125,34 +125,34 @@ idx_t GetTypeIdSize(TypeId type) {
 	}
 }
 
-SQLType SQLTypeFromInternalType(TypeId type) {
+LogicalType LogicalTypeFromInternalType(TypeId type) {
 	switch (type) {
 	case TypeId::BOOL:
-		return SQLType(SQLTypeId::BOOLEAN);
+		return LogicalType(LogicalTypeId::BOOLEAN);
 	case TypeId::INT8:
-		return SQLType::TINYINT;
+		return LogicalType::TINYINT;
 	case TypeId::INT16:
-		return SQLType::SMALLINT;
+		return LogicalType::SMALLINT;
 	case TypeId::INT32:
-		return SQLType::INTEGER;
+		return LogicalType::INTEGER;
 	case TypeId::INT64:
-		return SQLType::BIGINT;
+		return LogicalType::BIGINT;
 	case TypeId::INT128:
-		return SQLType::HUGEINT;
+		return LogicalType::HUGEINT;
 	case TypeId::FLOAT:
-		return SQLType::FLOAT;
+		return LogicalType::FLOAT;
 	case TypeId::DOUBLE:
-		return SQLType::DOUBLE;
+		return LogicalType::DOUBLE;
 	case TypeId::INTERVAL:
-		return SQLType::INTERVAL;
+		return LogicalType::INTERVAL;
 	case TypeId::VARCHAR:
-		return SQLType::VARCHAR;
+		return LogicalType::VARCHAR;
 	case TypeId::VARBINARY:
-		return SQLType(SQLTypeId::VARBINARY);
+		return LogicalType(LogicalTypeId::VARBINARY);
 	case TypeId::STRUCT:
-		return SQLType(SQLTypeId::STRUCT); // TODO we do not know the child types here
+		return LogicalType(LogicalTypeId::STRUCT); // TODO we do not know the child types here
 	case TypeId::LIST:
-		return SQLType(SQLTypeId::LIST);
+		return LogicalType(LogicalTypeId::LIST);
 	default:
 		throw ConversionException("Invalid TypeId %d", type);
 	}
@@ -173,80 +173,80 @@ bool TypeIsInteger(TypeId type) {
 	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::INT128;
 }
 
-void SQLType::Serialize(Serializer &serializer) {
+void LogicalType::Serialize(Serializer &serializer) {
 	serializer.Write(id);
 	serializer.Write(width);
 	serializer.Write(scale);
 	serializer.WriteString(collation);
 }
 
-SQLType SQLType::Deserialize(Deserializer &source) {
-	auto id = source.Read<SQLTypeId>();
+LogicalType LogicalType::Deserialize(Deserializer &source) {
+	auto id = source.Read<LogicalTypeId>();
 	auto width = source.Read<uint16_t>();
 	auto scale = source.Read<uint8_t>();
 	auto collation = source.Read<string>();
-	return SQLType(id, width, scale, collation);
+	return LogicalType(id, width, scale, collation);
 }
 
-string SQLTypeIdToString(SQLTypeId id) {
+string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {
-	case SQLTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return "TINYINT";
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return "SMALLINT";
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		return "INTEGER";
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return "BIGINT";
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
-	case SQLTypeId::DATE:
+	case LogicalTypeId::DATE:
 		return "DATE";
-	case SQLTypeId::TIME:
+	case LogicalTypeId::TIME:
 		return "TIME";
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP:
 		return "TIMESTAMP";
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return "FLOAT";
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return "DOUBLE";
-	case SQLTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL:
 		return "DECIMAL";
-	case SQLTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return "VARCHAR";
-	case SQLTypeId::BLOB:
+	case LogicalTypeId::BLOB:
 		return "BLOB";
-	case SQLTypeId::VARBINARY:
+	case LogicalTypeId::VARBINARY:
 		return "VARBINARY";
-	case SQLTypeId::CHAR:
+	case LogicalTypeId::CHAR:
 		return "CHAR";
-	case SQLTypeId::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return "INTERVAL";
-	case SQLTypeId::SQLNULL:
+	case LogicalTypeId::SQLNULL:
 		return "NULL";
-	case SQLTypeId::ANY:
+	case LogicalTypeId::ANY:
 		return "ANY";
-	case SQLTypeId::STRUCT:
+	case LogicalTypeId::STRUCT:
 		return "STRUCT<?>";
-	case SQLTypeId::LIST:
+	case LogicalTypeId::LIST:
 		return "LIST<?>";
-	case SQLTypeId::INVALID:
+	case LogicalTypeId::INVALID:
 		return "INVALID";
-	case SQLTypeId::UNKNOWN:
+	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
 	}
 	return "UNDEFINED";
 }
 
-string SQLTypeToString(SQLType type) {
+string LogicalTypeToString(LogicalType type) {
 	// FIXME: display width/scale
 	switch (type.id) {
-	case SQLTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT: {
 		string ret = "STRUCT<";
 		for (size_t i = 0; i < type.child_type.size(); i++) {
-			ret += type.child_type[i].first + ": " + SQLTypeToString(type.child_type[i].second);
+			ret += type.child_type[i].first + ": " + LogicalTypeToString(type.child_type[i].second);
 			if (i < type.child_type.size() - 1) {
 				ret += ", ";
 			}
@@ -254,83 +254,83 @@ string SQLTypeToString(SQLType type) {
 		ret += ">";
 		return ret;
 	}
-	case SQLTypeId::LIST: {
+	case LogicalTypeId::LIST: {
 		if (type.child_type.size() == 0) {
 			return "LIST<?>";
 		}
 		if (type.child_type.size() != 1) {
 			throw Exception("List needs a single child element");
 		}
-		return "LIST<" + SQLTypeToString(type.child_type[0].second) + ">";
+		return "LIST<" + LogicalTypeToString(type.child_type[0].second) + ">";
 	}
 	default:
-		return SQLTypeIdToString(type.id);
+		return LogicalTypeIdToString(type.id);
 	}
 }
 
-SQLType TransformStringToSQLType(string str) {
+LogicalType TransformStringToLogicalType(string str) {
 	auto lower_str = StringUtil::Lower(str);
 	// Transform column type
 	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
 	    lower_str == "integral" || lower_str == "int32") {
-		return SQLType::INTEGER;
+		return LogicalType::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
 	           lower_str == "char") {
-		return SQLType::VARCHAR;
+		return LogicalType::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob") {
-		return SQLType::BLOB;
+		return LogicalType::BLOB;
 	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long") {
-		return SQLType::BIGINT;
+		return LogicalType::BIGINT;
 	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
-		return SQLType::SMALLINT;
+		return LogicalType::SMALLINT;
 	} else if (lower_str == "timestamp" || lower_str == "datetime") {
-		return SQLType::TIMESTAMP;
+		return LogicalType::TIMESTAMP;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
-		return SQLType(SQLTypeId::BOOLEAN);
+		return LogicalType(LogicalTypeId::BOOLEAN);
 	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return SQLType::FLOAT;
+		return LogicalType::FLOAT;
 	} else if (lower_str == "double" || lower_str == "numeric" || lower_str == "float8" || lower_str == "decimal") {
-		return SQLType::DOUBLE;
+		return LogicalType::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
-		return SQLType::TINYINT;
+		return LogicalType::TINYINT;
 	} else if (lower_str == "varbinary") {
-		return SQLType(SQLTypeId::VARBINARY);
+		return LogicalType(LogicalTypeId::VARBINARY);
 	} else if (lower_str == "date") {
-		return SQLType::DATE;
+		return LogicalType::DATE;
 	} else if (lower_str == "time") {
-		return SQLType::TIME;
+		return LogicalType::TIME;
 	} else if (lower_str == "interval") {
-		return SQLType::INTERVAL;
+		return LogicalType::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
-		return SQLType::HUGEINT;
+		return LogicalType::HUGEINT;
 	}  else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
 	}
 }
 
-bool SQLType::IsIntegral() const {
+bool LogicalType::IsIntegral() const {
 	switch (id) {
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
 		return true;
 	default:
 		return false;
 	}
 }
 
-bool SQLType::IsNumeric() const {
+bool LogicalType::IsNumeric() const {
 	switch (id) {
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::HUGEINT:
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
 		return true;
 	default:
 		return false;
@@ -358,77 +358,77 @@ int NumericTypeOrder(TypeId type) {
 	}
 }
 
-bool SQLType::IsMoreGenericThan(SQLType &other) const {
+bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	if (other.id == id) {
 		return false;
 	}
 
-	if (other.id == SQLTypeId::SQLNULL) {
+	if (other.id == LogicalTypeId::SQLNULL) {
 		return true;
 	}
 
 	// all integer types can cast from INTEGER
 	// this is because INTEGER is the smallest type considered by the automatic csv sniffer
 	switch (id) {
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		switch (other.id) {
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		switch (other.id) {
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		switch (other.id) {
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		switch (other.id) {
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
 			return true;
 		default:
 			return false;
 		}
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		switch (other.id) {
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
 			return true;
 		default:
 			return false;
 		}
 		return false;
-	case SQLTypeId::DATE:
+	case LogicalTypeId::DATE:
 		return false;
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP:
 		switch (other.id) {
-		case SQLTypeId::TIME:
-		case SQLTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::DATE:
 			return true;
 		default:
 			return false;
 		}
-	case SQLTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return true;
 	default:
 		return false;
@@ -437,51 +437,51 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 	return true;
 }
 
-TypeId GetInternalType(SQLType type) {
+TypeId GetInternalType(LogicalType type) {
 	switch (type.id) {
-	case SQLTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN:
 		return TypeId::BOOL;
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return TypeId::INT8;
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return TypeId::INT16;
-	case SQLTypeId::SQLNULL:
-	case SQLTypeId::DATE:
-	case SQLTypeId::TIME:
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::INTEGER:
 		return TypeId::INT32;
-	case SQLTypeId::BIGINT:
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
 		return TypeId::INT64;
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return TypeId::INT128;
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return TypeId::FLOAT;
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return TypeId::DOUBLE;
-	case SQLTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL:
 		// FIXME: for now
 		return TypeId::DOUBLE;
-	case SQLTypeId::VARCHAR:
-	case SQLTypeId::CHAR:
-	case SQLTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::BLOB:
 		return TypeId::VARCHAR;
-	case SQLTypeId::VARBINARY:
+	case LogicalTypeId::VARBINARY:
 		return TypeId::VARBINARY;
-	case SQLTypeId::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return TypeId::INTERVAL;
-	case SQLTypeId::STRUCT:
+	case LogicalTypeId::STRUCT:
 		return TypeId::STRUCT;
-	case SQLTypeId::LIST:
+	case LogicalTypeId::LIST:
 		return TypeId::LIST;
-	case SQLTypeId::ANY:
+	case LogicalTypeId::ANY:
 		return TypeId::INVALID;
 	default:
-		throw ConversionException("Invalid SQLType %s", SQLTypeToString(type).c_str());
+		throw ConversionException("Invalid LogicalType %s", LogicalTypeToString(type).c_str());
 	}
 }
 
-SQLType MaxSQLType(SQLType left, SQLType right) {
+LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
 	if (left.id < right.id) {
 		return right;
 	} else if (right.id < left.id) {

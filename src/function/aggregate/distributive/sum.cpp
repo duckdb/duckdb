@@ -137,13 +137,13 @@ struct NumericSumOperation : public BaseSumOperation {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(SQLType::INTEGER,
-	                                                                                              SQLType::HUGEINT));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(SQLType::BIGINT,
-	                                                                                              SQLType::HUGEINT));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(LogicalType::INTEGER,
+	                                                                                              LogicalType::HUGEINT));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(LogicalType::BIGINT,
+	                                                                                              LogicalType::HUGEINT));
 	// float sums to float
 	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(SQLType::DOUBLE, SQLType::DOUBLE));
+	    AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	// for now disable combine on all FP sums (FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf)
 	sum.functions[2].combine = nullptr;

@@ -25,7 +25,7 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &parameter : parameters) {
-		children.push_back(make_unique<ConstantExpression>(parameter.GetSQLType(), parameter));
+		children.push_back(make_unique<ConstantExpression>(parameter.GetLogicalType(), parameter));
 	}
 
 	auto table_function = make_unique<TableFunctionRef>();

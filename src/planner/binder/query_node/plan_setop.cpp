@@ -8,8 +8,8 @@
 namespace duckdb {
 using namespace std;
 
-unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<SQLType> &source_types,
-                                                               vector<SQLType> &target_types,
+unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
+                                                               vector<LogicalType> &target_types,
                                                                unique_ptr<LogicalOperator> op) {
 	assert(op);
 	// first check if we even need to cast

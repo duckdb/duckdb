@@ -86,16 +86,16 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	ListVector::SetEntry(result, move(list_child));
 }
 
-unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, SQLType &return_type) {
+unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, LogicalType &return_type) {
 	assert(expr.children.size() == 1);
-	return_type = SQLType::LIST;
+	return_type = LogicalType::LIST;
 	return_type.child_type.push_back(make_pair("", expr.arguments[0]));
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
 	                                    // except for sanity checking
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
-	auto agg = AggregateFunction("list", {SQLType::ANY}, SQLType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
+	auto agg = AggregateFunction("list", {LogicalType::ANY}, LogicalType::LIST, AggregateFunction::StateSize<list_agg_state_t>,
 	                             AggregateFunction::StateInitialize<list_agg_state_t, ListFunction>, list_update,
 	                             nullptr, list_finalize, nullptr, list_bind,
 	                             AggregateFunction::StateDestroy<list_agg_state_t, ListFunction>);

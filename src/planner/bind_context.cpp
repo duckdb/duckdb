@@ -123,11 +123,11 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
 	auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {

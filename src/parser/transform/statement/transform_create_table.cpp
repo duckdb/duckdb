@@ -34,7 +34,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(PGCollateClause *
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(PGColumnDef *cdef) {
-	SQLType target_type = TransformTypeName(cdef->typeName);
+	LogicalType target_type = TransformTypeName(cdef->typeName);
 	target_type.collation = TransformCollation(cdef->collClause);
 
 	return ColumnDefinition(cdef->colname, target_type);

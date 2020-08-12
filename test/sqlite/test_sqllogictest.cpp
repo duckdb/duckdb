@@ -276,12 +276,12 @@ static void print_expected_result(vector<string> &values, idx_t columns, bool ro
 	}
 }
 
-static string sqllogictest_convert_value(Value value, SQLType sql_type) {
+static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 	if (value.is_null) {
 		return "NULL";
 	} else {
 		switch (sql_type.id) {
-		case SQLTypeId::BOOLEAN:
+		case LogicalTypeId::BOOLEAN:
 			return value.value_.boolean ? "1" : "0";
 		default: {
 			string str = value.ToString(sql_type);
@@ -411,13 +411,13 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			if (lvalue_str == "NULL") {
 				lvalue = Value(GetInternalType(sql_type));
 			} else {
-				lvalue = Value(lvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+				lvalue = Value(lvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
 			}
 			converted_lvalue = true;
 			if (rvalue_str == "NULL") {
 				rvalue = Value(GetInternalType(sql_type));
 			} else {
-				rvalue = Value(rvalue_str).CastAs(SQLType::VARCHAR, sql_type);
+				rvalue = Value(rvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
 			}
 			error = !Value::ValuesAreEqual(lvalue, rvalue);
 		} catch(std::exception &ex) {
@@ -425,7 +425,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			print_line_sep();
 			print_sql(zScript);
 			print_line_sep();
-			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << SQLTypeToString(sql_type) << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << LogicalTypeToString(sql_type) << termcolor::reset << std::endl;
 			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
 			print_line_sep();
 			return false;
@@ -614,7 +614,7 @@ void Query::Execute() {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
-			std::cerr << SQLTypeToString(result->sql_types[c]);
+			std::cerr << LogicalTypeToString(result->sql_types[c]);
 		}
 		std::cerr << std::endl;
 		print_line_sep();

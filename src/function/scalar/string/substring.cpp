@@ -95,8 +95,8 @@ static void substring_function(DataChunk &args, ExpressionState &state, Vector &
 }
 
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"substring", "substr"}, ScalarFunction({SQLType::VARCHAR, SQLType::INTEGER, SQLType::INTEGER},
-	                                                        SQLType::VARCHAR, substring_function));
+	set.AddFunction({"substring", "substr"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
+	                                                        LogicalType::VARCHAR, substring_function));
 }
 
 } // namespace duckdb

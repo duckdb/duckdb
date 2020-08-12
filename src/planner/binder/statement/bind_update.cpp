@@ -165,7 +165,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	update->AddChild(move(proj));
 
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 	result.plan = move(update);
 	return result;
 }

@@ -5,14 +5,14 @@
 namespace duckdb {
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, SQLType source_type,
-                                         SQLType target_type)
+BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, LogicalType source_type,
+                                         LogicalType target_type)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)),
       source_type(source_type), target_type(target_type) {
 }
 
-unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, SQLType source_type,
-                                                          SQLType target_type) {
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, LogicalType source_type,
+                                                          LogicalType target_type) {
 	assert(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
@@ -28,21 +28,21 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 	return expr;
 }
 
-bool BoundCastExpression::CastIsInvertible(SQLType source_type, SQLType target_type) {
-	if (source_type.id == SQLTypeId::BOOLEAN || target_type.id == SQLTypeId::BOOLEAN) {
+bool BoundCastExpression::CastIsInvertible(LogicalType source_type, LogicalType target_type) {
+	if (source_type.id == LogicalTypeId::BOOLEAN || target_type.id == LogicalTypeId::BOOLEAN) {
 		return false;
 	}
-	if (source_type.id == SQLTypeId::FLOAT || target_type.id == SQLTypeId::FLOAT) {
+	if (source_type.id == LogicalTypeId::FLOAT || target_type.id == LogicalTypeId::FLOAT) {
 		return false;
 	}
-	if (source_type.id == SQLTypeId::DOUBLE || target_type.id == SQLTypeId::DOUBLE) {
+	if (source_type.id == LogicalTypeId::DOUBLE || target_type.id == LogicalTypeId::DOUBLE) {
 		return false;
 	}
-	if (source_type.id == SQLTypeId::VARCHAR) {
-		return target_type.id == SQLTypeId::DATE || target_type.id == SQLTypeId::TIMESTAMP;
+	if (source_type.id == LogicalTypeId::VARCHAR) {
+		return target_type.id == LogicalTypeId::DATE || target_type.id == LogicalTypeId::TIMESTAMP;
 	}
-	if (target_type.id == SQLTypeId::VARCHAR) {
-		return source_type.id == SQLTypeId::DATE || source_type.id == SQLTypeId::TIMESTAMP;
+	if (target_type.id == LogicalTypeId::VARCHAR) {
+		return source_type.id == LogicalTypeId::DATE || source_type.id == LogicalTypeId::TIMESTAMP;
 	}
 	return true;
 }

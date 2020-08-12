@@ -33,7 +33,7 @@ void PreparedStatementData::Bind(vector<Value> values) {
 	}
 }
 
-SQLType PreparedStatementData::GetType(idx_t param_idx) {
+LogicalType PreparedStatementData::GetType(idx_t param_idx) {
 	auto it = value_map.find(param_idx);
 	if (it == value_map.end()) {
 		throw BinderException("Could not find parameter with index %llu", param_idx);

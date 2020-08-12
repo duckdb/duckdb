@@ -15,12 +15,12 @@ namespace duckdb {
 //! ConstantExpression represents a constant value in the query
 class ConstantExpression : public ParsedExpression {
 public:
-	ConstantExpression(SQLType sql_type, Value val);
+	ConstantExpression(LogicalType sql_type, Value val);
 
 	//! The constant value referenced
 	Value value;
 	//! The SQL Type of the value
-	SQLType sql_type;
+	LogicalType sql_type;
 
 public:
 	string ToString() const override;

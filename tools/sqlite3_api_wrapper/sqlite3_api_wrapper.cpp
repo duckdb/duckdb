@@ -373,22 +373,22 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	}
 	auto column_type = pStmt->result->sql_types[iCol];
 	switch (column_type.id) {
-	case SQLTypeId::BOOLEAN:
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
-	case SQLTypeId::BIGINT: /* TODO: Maybe blob? */
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT: /* TODO: Maybe blob? */
 		return SQLITE_INTEGER;
-	case SQLTypeId::FLOAT:
-	case SQLTypeId::DOUBLE:
-	case SQLTypeId::DECIMAL:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
 		return SQLITE_FLOAT;
-	case SQLTypeId::DATE:
-	case SQLTypeId::TIME:
-	case SQLTypeId::TIMESTAMP:
-	case SQLTypeId::VARCHAR:
-	case SQLTypeId::LIST:
-	case SQLTypeId::STRUCT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::STRUCT:
 		return SQLITE_BLOB;
 	default:
 		return 0;
@@ -403,7 +403,7 @@ const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N) {
 	return pStmt->prepared->names[N].c_str();
 }
 
-static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType target_type, Value &val) {
+static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType target_type, Value &val) {
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return false;
 	}
@@ -425,7 +425,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, SQLType targ
 
 double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::DOUBLE, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::DOUBLE, val)) {
 		return 0;
 	}
 	return val.value_.double_;
@@ -433,7 +433,7 @@ double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 
 int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::INTEGER, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::INTEGER, val)) {
 		return 0;
 	}
 	return val.value_.integer;
@@ -441,7 +441,7 @@ int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 
 sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, SQLTypeId::BIGINT, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::BIGINT, val)) {
 		return 0;
 	}
 	return val.value_.bigint;
@@ -449,7 +449,7 @@ sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(pStmt, iCol, SQLTypeId::VARCHAR, val)) {
+	if (!sqlite3_column_has_value(pStmt, iCol, LogicalTypeId::VARCHAR, val)) {
 		return nullptr;
 	}
 	try {

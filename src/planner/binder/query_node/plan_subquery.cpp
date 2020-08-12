@@ -80,7 +80,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		vector<unique_ptr<Expression>> expressions;
 		auto bound = make_unique<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
 		auto first_agg = make_unique<BoundAggregateExpression>(
-		    expr.return_type, FirstFun::GetFunction(SQLTypeFromInternalType(expr.return_type)), false);
+		    expr.return_type, FirstFun::GetFunction(LogicalTypeFromInternalType(expr.return_type)), false);
 		first_agg->children.push_back(move(bound));
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();

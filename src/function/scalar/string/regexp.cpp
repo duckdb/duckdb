@@ -184,24 +184,24 @@ static unique_ptr<FunctionData> regexp_replace_bind_function(BoundFunctionExpres
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_full_match("regexp_full_match");
-	regexp_full_match.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               regexp_matches_function<RegexFullMatch>, false, regexp_matches_get_bind_function));
-	regexp_full_match.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               regexp_matches_function<RegexFullMatch>, false, regexp_matches_get_bind_function));
 
 	ScalarFunctionSet regexp_partial_match("regexp_matches");
-	regexp_partial_match.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               regexp_matches_function<RegexPartialMatch>, false,
 	                               regexp_matches_get_bind_function));
-	regexp_partial_match.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               regexp_matches_function<RegexPartialMatch>, false,
 	                               regexp_matches_get_bind_function));
 
 	ScalarFunctionSet regexp_replace("regexp_replace");
-	regexp_replace.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                               SQLType::VARCHAR, regexp_replace_function, false, regexp_replace_bind_function));
-	regexp_replace.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                               SQLType::VARCHAR, regexp_replace_function, false, regexp_replace_bind_function));
+	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR, regexp_replace_function, false, regexp_replace_bind_function));
+	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::VARCHAR, regexp_replace_function, false, regexp_replace_bind_function));
 
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);

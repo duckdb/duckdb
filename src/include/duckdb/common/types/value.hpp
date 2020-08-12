@@ -115,24 +115,24 @@ public:
 	//! Convert this value to a string
 	string ToString() const;
 	//! Convert this value to a string, with the given display format
-	string ToString(SQLType type) const;
+	string ToString(LogicalType type) const;
 
 	//! Cast this value to another type
 	Value CastAs(TypeId target_type, bool strict = false) const;
 	//! Cast this value to another type
-	Value CastAs(SQLType source_type, SQLType target_type, bool strict = false);
+	Value CastAs(LogicalType source_type, LogicalType target_type, bool strict = false);
 	//! Tries to cast value to another type, throws exception if its not possible
-	bool TryCastAs(SQLType source_type, SQLType target_type, bool strict = false);
+	bool TryCastAs(LogicalType source_type, LogicalType target_type, bool strict = false);
 
 	//! The type of the value
 	TypeId type;
 	//! Whether or not the value is NULL
 	bool is_null;
 
-	SQLType GetSQLType() const {
-		return sql_type.id == SQLTypeId::INVALID ? SQLTypeFromInternalType(type) : sql_type;
+	LogicalType GetLogicalType() const {
+		return sql_type.id == LogicalTypeId::INVALID ? LogicalTypeFromInternalType(type) : sql_type;
 	}
-	void SetSQLType(SQLType sql_type) {
+	void SetLogicalType(LogicalType sql_type) {
 		this->sql_type = sql_type;
 	}
 
@@ -201,7 +201,7 @@ public:
 	void Print();
 
 private:
-	SQLType sql_type = SQLType(SQLTypeId::INVALID);
+	LogicalType sql_type = LogicalType(LogicalTypeId::INVALID);
 
 private:
 	template <class T> T GetValueInternal();

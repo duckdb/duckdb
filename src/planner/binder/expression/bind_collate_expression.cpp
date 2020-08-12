@@ -11,7 +11,7 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*expr.child;
-	if (child.sql_type.id != SQLTypeId::VARCHAR) {
+	if (child.sql_type.id != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
 	child.sql_type.collation = expr.collation;

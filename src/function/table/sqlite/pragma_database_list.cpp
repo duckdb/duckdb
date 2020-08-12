@@ -14,15 +14,15 @@ struct PragmaDatabaseListData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> pragma_database_list_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("seq");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("file");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	// initialize the function data structure
 	return make_unique<PragmaDatabaseListData>();

@@ -30,8 +30,8 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet age("age");
-	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP}, SQLType::INTERVAL, age_function_standard));
-	age.AddFunction(ScalarFunction({SQLType::TIMESTAMP, SQLType::TIMESTAMP}, SQLType::INTERVAL, age_function));
+	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function_standard));
+	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function));
 	set.AddFunction(age);
 }
 

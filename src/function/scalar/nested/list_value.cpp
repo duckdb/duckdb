@@ -45,7 +45,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	SQLType stype(SQLTypeId::LIST);
+	LogicalType stype(LogicalTypeId::LIST);
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
@@ -61,8 +61,8 @@ static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, C
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, SQLType::LIST, list_value_fun, false, list_value_bind);
-	fun.varargs = SQLType::ANY;
+	ScalarFunction fun("list_value", {}, LogicalType::LIST, list_value_fun, false, list_value_bind);
+	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }
 

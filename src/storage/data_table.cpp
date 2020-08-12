@@ -112,7 +112,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	parent.is_root = false;
 }
 
-DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
     : info(parent.info), types(parent.types), storage(parent.storage), persistent_manager(parent.persistent_manager),
       transient_manager(parent.transient_manager), columns(parent.columns), is_root(true) {

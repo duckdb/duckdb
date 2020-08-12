@@ -70,18 +70,18 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<SQLType> requested_types)
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<LogicalType> requested_types)
 	: options(options), buffer_size(0), position(0), start(0) {
 	source = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types, unique_ptr<istream> ssource)
+BufferedCSVReader::BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types, unique_ptr<istream> ssource)
 	: options(options), source(move(ssource)), buffer_size(0), position(0), start(0) {
 	Initialize(requested_types);
 }
 
-void BufferedCSVReader::Initialize(vector<SQLType> requested_types) {
+void BufferedCSVReader::Initialize(vector<LogicalType> requested_types) {
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
 	} else {
@@ -258,14 +258,14 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-bool BufferedCSVReader::TryCastValue(Value value, SQLType sql_type) {
+bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 	try {
-		if (options.has_date_format && sql_type.id == SQLTypeId::DATE) {
+		if (options.has_date_format && sql_type.id == LogicalTypeId::DATE) {
 			options.date_format.ParseDate(value.str_value);
-		} else if (options.has_timestamp_format && sql_type.id == SQLTypeId::TIMESTAMP) {
+		} else if (options.has_timestamp_format && sql_type.id == LogicalTypeId::TIMESTAMP) {
 			options.timestamp_format.ParseTimestamp(value.str_value);
 		} else {
-			value.CastAs(SQLType::VARCHAR, sql_type, true);
+			value.CastAs(LogicalType::VARCHAR, sql_type, true);
 		}
 		return true;
 	} catch (const Exception &e) {
@@ -274,7 +274,7 @@ bool BufferedCSVReader::TryCastValue(Value value, SQLType sql_type) {
 	return false;
 }
 
-vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
+vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_types) {
 	// TODO: sniff for uncommon (UTF-8) delimiter variants in first lines and add them to the list
 	const vector<string> delim_candidates = {",", "|", ";", "\t"};
 	const vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER,
@@ -370,28 +370,28 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		if (requested_types.size() == 0) {
 			// no types requested and no types/names could be deduced: default to a single varchar column
 			col_names.push_back("col0");
-			requested_types.push_back(SQLType::VARCHAR);
+			requested_types.push_back(LogicalType::VARCHAR);
 		}
 		return requested_types;
 	}
 
 	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<SQLType> type_candidates = {SQLType::VARCHAR, SQLType::TIMESTAMP, SQLType::DATE,
-									   SQLType::TIME,    SQLType::DOUBLE,    /*SQLType::FLOAT,*/ SQLType::BIGINT,
-									   SQLType::INTEGER, /* SQLType::SMALLINT, */  /*SQLType::TINYINT,*/ SQLType::BOOLEAN,
-									   SQLType::SQLNULL};
+	vector<LogicalType> type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
+									   LogicalType::TIME,    LogicalType::DOUBLE,    /*LogicalType::FLOAT,*/ LogicalType::BIGINT,
+									   LogicalType::INTEGER, /* LogicalType::SMALLINT, */  /*LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+									   LogicalType::SQLNULL};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
-	vector<vector<SQLType>> best_sql_types_candidates;
+	vector<vector<LogicalType>> best_sql_types_candidates;
 	for (auto &info_candidate : info_candidates) {
 		options = info_candidate;
-		vector<vector<SQLType>> info_sql_types_candidates(options.num_cols, type_candidates);
+		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, type_candidates);
 
 		// set all sql_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		sql_types.clear();
-		sql_types.assign(options.num_cols, SQLType::VARCHAR);
+		sql_types.assign(options.num_cols, LogicalType::VARCHAR);
 		InitParseChunk(sql_types.size());
 
 		// detect types in first chunk
@@ -399,7 +399,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
 		for (idx_t row = 0; row < parse_chunk.size(); row++) {
 			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-				vector<SQLType> &col_type_candidates = info_sql_types_candidates[col];
+				vector<LogicalType> &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
@@ -414,7 +414,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 			// reset type detection for second row, because first row could be header,
 			// but only do it if csv has more than one line
 			if (parse_chunk.size() > 1 && row == 0) {
-				info_sql_types_candidates = vector<vector<SQLType>>(options.num_cols, type_candidates);
+				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
 			}
 		}
 
@@ -422,7 +422,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		idx_t varchar_cols = 0;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 			const auto &col_type = info_sql_types_candidates[col].back();
-			if (col_type == SQLType::VARCHAR) {
+			if (col_type == LogicalType::VARCHAR) {
 				varchar_cols++;
 			}
 		}
@@ -447,7 +447,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
-	sql_types.assign(options.num_cols, SQLType::VARCHAR);
+	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
 	InitParseChunk(sql_types.size());
 
 	// jump through the rest of the file and continue to refine the sql type guess
@@ -459,14 +459,14 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 			continue;
 		}
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
-			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
+			vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 			while (col_type_candidates.size() > 1) {
 				try {
 					const auto &sql_type = col_type_candidates.back();
 					// try vector-cast from string to sql_type
 					parse_chunk.data[col];
 					Vector dummy_result(GetInternalType(sql_type));
-					VectorOperations::Cast(parse_chunk.data[col], dummy_result, SQLType::VARCHAR, sql_type,
+					VectorOperations::Cast(parse_chunk.data[col], dummy_result, LogicalType::VARCHAR, sql_type,
 										   parse_chunk.size(), true);
 					break;
 				} catch (const Exception &e) {
@@ -489,12 +489,12 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 			auto dummy_val = parse_chunk.GetValue(col, 0);
 			// try cast as SQLNULL
 			try {
-				dummy_val.CastAs(SQLType::VARCHAR, SQLType::SQLNULL, true);
+				dummy_val.CastAs(LogicalType::VARCHAR, LogicalType::SQLNULL, true);
 			} catch (const Exception &e) {
 				first_row_nulls = false;
 			}
 			// try cast to sql_type of column
-			vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
+			vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 			const auto &sql_type = col_type_candidates.back();
 			if (!TryCastValue(dummy_val, sql_type)) {
 				first_row_consistent = false;
@@ -507,7 +507,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	/*bool all_types_string = true;
 	for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 		const auto &col_type = best_sql_types_candidates[col].back();
-		all_types_string &= (col_type == SQLType::VARCHAR);
+		all_types_string &= (col_type == LogicalType::VARCHAR);
 	}*/
 
 	// update parser info, and read, generate & set col_names based on previous findings
@@ -543,12 +543,12 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}
 
 	// set sql types
-	vector<SQLType> detected_types;
+	vector<LogicalType> detected_types;
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-		SQLType d_type = best_sql_types_candidates[col].back();
+		LogicalType d_type = best_sql_types_candidates[col].back();
 
 		if (requested_types.size() > 0) {
-			SQLType r_type = requested_types[col];
+			LogicalType r_type = requested_types[col];
 
 			// check if the detected types are in line with the provided types
 			if (r_type != d_type) {
@@ -557,7 +557,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 				} else {
 					throw ParserException(
 						"Error while sniffing data type for column '%s': Requested column type %s, detected type %s",
-						col_names[col].c_str(), SQLTypeToString(r_type).c_str(), SQLTypeToString(d_type).c_str());
+						col_names[col].c_str(), LogicalTypeToString(r_type).c_str(), LogicalTypeToString(d_type).c_str());
 				}
 			}
 		}
@@ -1096,7 +1096,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
-		if (sql_types[col_idx].id == SQLTypeId::VARCHAR) {
+		if (sql_types[col_idx].id == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
@@ -1120,19 +1120,19 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
-		} else if (options.has_date_format && sql_types[col_idx].id == SQLTypeId::DATE) {
+		} else if (options.has_date_format && sql_types[col_idx].id == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
 				return options.date_format.ParseDate(input);
 			});
-		} else if (options.has_timestamp_format && sql_types[col_idx].id == SQLTypeId::TIMESTAMP) {
+		} else if (options.has_timestamp_format && sql_types[col_idx].id == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, timestamp_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
 				return options.timestamp_format.ParseTimestamp(input);
 			});
 		} else {
 			// target type is not varchar: perform a cast
-			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
+			VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], LogicalType::VARCHAR,
 								   sql_types[col_idx], parse_chunk.size());
 		}
 	}

@@ -16,7 +16,7 @@ namespace duckdb {
 class AlterBinder : public ExpressionBinder {
 public:
 	AlterBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
-	            vector<column_t> &bound_columns, SQLType target_type);
+	            vector<column_t> &bound_columns, LogicalType target_type);
 
 	string table;
 	vector<ColumnDefinition> &columns;

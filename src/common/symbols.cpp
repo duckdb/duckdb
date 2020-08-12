@@ -163,7 +163,7 @@ template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);
 INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>);
 template class std::vector<std::vector<Expression *>>;
-template class std::vector<SQLType>;
+template class std::vector<LogicalType>;
 
 template struct std::atomic<uint64_t>;
 template class std::bitset<STANDARD_VECTOR_SIZE>;

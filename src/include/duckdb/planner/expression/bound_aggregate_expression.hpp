@@ -23,7 +23,7 @@ public:
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
 	//! Argument types
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
 	//! The bound function data (if any)
 	unique_ptr<FunctionData> bind_info;
 

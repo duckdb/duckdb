@@ -17,7 +17,7 @@ struct ReadCSVFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {
 		throw Exception("read_csv is disabled by configuration");
@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				if (val.second.type != TypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.push_back(TransformStringToSQLType(val.second.str_value.c_str()));
+				return_types.push_back(TransformStringToLogicalType(val.second.str_value.c_str()));
 			}
 			if (names.size() == 0) {
 				throw BinderException("read_csv requires at least a single column as input!");
@@ -92,7 +92,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 }
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {
 		throw Exception("read_csv_auto is disabled by configuration");
@@ -119,20 +119,20 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet read_csv("read_csv");
 
-	TableFunction read_csv_function = TableFunction({SQLType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
-	read_csv_function.named_parameters["sep"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["quote"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["escape"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["nullstr"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["columns"] = SQLType::STRUCT;
-	read_csv_function.named_parameters["header"] = SQLType::BOOLEAN;
-	read_csv_function.named_parameters["dateformat"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["timestampformat"] = SQLType::VARCHAR;
+	TableFunction read_csv_function = TableFunction({LogicalType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
+	read_csv_function.named_parameters["sep"] = LogicalType::VARCHAR;
+	read_csv_function.named_parameters["quote"] = LogicalType::VARCHAR;
+	read_csv_function.named_parameters["escape"] = LogicalType::VARCHAR;
+	read_csv_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
+	read_csv_function.named_parameters["columns"] = LogicalType::STRUCT;
+	read_csv_function.named_parameters["header"] = LogicalType::BOOLEAN;
+	read_csv_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
+	read_csv_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 
 	read_csv.AddFunction(move(read_csv_function));
 
 	set.AddFunction(read_csv);
-	set.AddFunction(TableFunction("read_csv_auto", {SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+	set.AddFunction(TableFunction("read_csv_auto", {LogicalType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {

@@ -15,7 +15,7 @@ struct RangeFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionData>();
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vect
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
 	result->current_idx = 0;
-	return_types.push_back(SQLType::BIGINT);
+	return_types.push_back(LogicalType::BIGINT);
 	names.push_back("range");
 	return move(result);
 }
@@ -62,11 +62,11 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
-	range.AddFunction(TableFunction({SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT}, range_function_bind, range_function));
 	// two arguments range: (start, end) - implicit increment = 1
-	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
 	// three arguments range: (start, end, increment)
-	range.AddFunction(TableFunction({SQLType::BIGINT, SQLType::BIGINT, SQLType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
 	set.AddFunction(range);
 }
 

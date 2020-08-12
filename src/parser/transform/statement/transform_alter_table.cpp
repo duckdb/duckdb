@@ -52,7 +52,7 @@ unique_ptr<AlterTableStatement> Transformer::TransformAlter(PGNode *node) {
 		}
 		case PG_AT_AlterColumnType: {
 			auto cdef = (PGColumnDef *)command->def;
-			SQLType target_type = TransformTypeName(cdef->typeName);
+			LogicalType target_type = TransformTypeName(cdef->typeName);
 			target_type.collation = TransformCollation(cdef->collClause);
 
 			unique_ptr<ParsedExpression> expr;

@@ -99,21 +99,21 @@ std::string generate() {
 } // namespace random_string
 
 struct PandasScanFunctionData : public TableFunctionData {
-	PandasScanFunctionData(py::handle df, idx_t row_count, vector<SQLType> sql_types)
+	PandasScanFunctionData(py::handle df, idx_t row_count, vector<LogicalType> sql_types)
 	    : df(df), row_count(row_count), sql_types(sql_types), position(0) {
 	}
 	py::handle df;
 	idx_t row_count;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	idx_t position;
 };
 
 struct PandasScanFunction : public TableFunction {
 	PandasScanFunction()
-	    : TableFunction("pandas_scan", {SQLType::VARCHAR}, pandas_scan_bind, pandas_scan_function, nullptr){};
+	    : TableFunction("pandas_scan", {LogicalType::VARCHAR}, pandas_scan_bind, pandas_scan_function, nullptr){};
 
 	static unique_ptr<FunctionData> pandas_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-	                                                 vector<SQLType> &return_types, vector<string> &names) {
+	                                                 vector<LogicalType> &return_types, vector<string> &names) {
 		// Hey, it works (TM)
 		py::handle df((PyObject *)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
@@ -135,26 +135,26 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < py::len(df_names); col_idx++) {
 			auto col_type = string(py::str(df_types[col_idx]));
 			names.push_back(string(py::str(df_names[col_idx])));
-			SQLType duckdb_col_type;
+			LogicalType duckdb_col_type;
 			if (col_type == "bool") {
-				duckdb_col_type = SQLType::BOOLEAN;
+				duckdb_col_type = LogicalType::BOOLEAN;
 			} else if (col_type == "int8") {
-				duckdb_col_type = SQLType::TINYINT;
+				duckdb_col_type = LogicalType::TINYINT;
 			} else if (col_type == "int16") {
-				duckdb_col_type = SQLType::SMALLINT;
+				duckdb_col_type = LogicalType::SMALLINT;
 			} else if (col_type == "int32") {
-				duckdb_col_type = SQLType::INTEGER;
+				duckdb_col_type = LogicalType::INTEGER;
 			} else if (col_type == "int64") {
-				duckdb_col_type = SQLType::BIGINT;
+				duckdb_col_type = LogicalType::BIGINT;
 			} else if (col_type == "float32") {
-				duckdb_col_type = SQLType::FLOAT;
+				duckdb_col_type = LogicalType::FLOAT;
 			} else if (col_type == "float64") {
-				duckdb_col_type = SQLType::DOUBLE;
+				duckdb_col_type = LogicalType::DOUBLE;
 			} else if (col_type == "datetime64[ns]") {
-				duckdb_col_type = SQLType::TIMESTAMP;
+				duckdb_col_type = LogicalType::TIMESTAMP;
 			} else if (col_type == "object") {
 				// this better be strings
-				duckdb_col_type = SQLType::VARCHAR;
+				duckdb_col_type = LogicalType::VARCHAR;
 			} else {
 				throw runtime_error("unsupported python type " + col_type);
 			}
@@ -202,28 +202,28 @@ struct PandasScanFunction : public TableFunction {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
 			switch (data.sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			case LogicalTypeId::BOOLEAN:
 				scan_pandas_column<bool>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::TINYINT:
+			case LogicalTypeId::TINYINT:
 				scan_pandas_column<int8_t>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::SMALLINT:
+			case LogicalTypeId::SMALLINT:
 				scan_pandas_column<int16_t>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::INTEGER:
 				scan_pandas_column<int32_t>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::BIGINT:
+			case LogicalTypeId::BIGINT:
 				scan_pandas_column<int64_t>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::FLOAT:
+			case LogicalTypeId::FLOAT:
 				scan_pandas_fp_column<float>((float*) numpy_col.data(), this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::DOUBLE:
+			case LogicalTypeId::DOUBLE:
 				scan_pandas_fp_column<double>((double*) numpy_col.data(), this_count, data.position, output.data[col_idx]);
 				break;
-			case SQLTypeId::TIMESTAMP: {
+			case LogicalTypeId::TIMESTAMP: {
 				auto src_ptr = (int64_t *)numpy_col.data();
 				auto tgt_ptr = (timestamp_t *)FlatVector::GetData(output.data[col_idx]);
 				auto &nullmask = FlatVector::Nullmask(output.data[col_idx]);
@@ -243,7 +243,7 @@ struct PandasScanFunction : public TableFunction {
 				}
 				break;
 			} break;
-			case SQLTypeId::VARCHAR: {
+			case LogicalTypeId::VARCHAR: {
 				auto src_ptr = (PyObject **)numpy_col.data();
 				auto tgt_ptr = (string_t *)FlatVector::GetData(output.data[col_idx]);
 
@@ -272,7 +272,7 @@ struct PandasScanFunction : public TableFunction {
 				break;
 			}
 			default:
-				throw runtime_error("Unsupported type " + SQLTypeToString(data.sql_types[col_idx]));
+				throw runtime_error("Unsupported type " + LogicalTypeToString(data.sql_types[col_idx]));
 			}
 		}
 		data.position += this_count;
@@ -320,37 +320,37 @@ struct DuckDBPyResult {
 			}
 			auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
 			switch (result->sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			case LogicalTypeId::BOOLEAN:
 				res[col_idx] = val.GetValue<bool>();
 				break;
-			case SQLTypeId::TINYINT:
+			case LogicalTypeId::TINYINT:
 				res[col_idx] = val.GetValue<int8_t>();
 				break;
-			case SQLTypeId::SMALLINT:
+			case LogicalTypeId::SMALLINT:
 				res[col_idx] = val.GetValue<int16_t>();
 				break;
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::INTEGER:
 				res[col_idx] = val.GetValue<int32_t>();
 				break;
-			case SQLTypeId::BIGINT:
+			case LogicalTypeId::BIGINT:
 				res[col_idx] = val.GetValue<int64_t>();
 				break;
-			case SQLTypeId::HUGEINT: {
+			case LogicalTypeId::HUGEINT: {
 				auto hugeint_str = val.GetValue<string>();
 				res[col_idx] = PyLong_FromString((char*) hugeint_str.c_str(), nullptr, 10);
 				break;
 			}
-			case SQLTypeId::FLOAT:
+			case LogicalTypeId::FLOAT:
 				res[col_idx] = val.GetValue<float>();
 				break;
-			case SQLTypeId::DOUBLE:
+			case LogicalTypeId::DOUBLE:
 				res[col_idx] = val.GetValue<double>();
 				break;
-			case SQLTypeId::VARCHAR:
+			case LogicalTypeId::VARCHAR:
 				res[col_idx] = val.GetValue<string>();
 				break;
 
-			case SQLTypeId::TIMESTAMP: {
+			case LogicalTypeId::TIMESTAMP: {
 				if (result->types[col_idx] != TypeId::INT64) {
 					throw runtime_error("expected int64 for timestamp");
 				}
@@ -363,7 +363,7 @@ struct DuckDBPyResult {
 
 				break;
 			}
-			case SQLTypeId::TIME: {
+			case LogicalTypeId::TIME: {
 				if (result->types[col_idx] != TypeId::INT32) {
 					throw runtime_error("expected int32 for time");
 				}
@@ -373,7 +373,7 @@ struct DuckDBPyResult {
 				res[col_idx] = PyTime_FromTime(hour, min, sec, msec * 1000);
 				break;
 			}
-			case SQLTypeId::DATE: {
+			case LogicalTypeId::DATE: {
 				if (result->types[col_idx] != TypeId::INT32) {
 					throw runtime_error("expected int32 for date");
 				}
@@ -384,7 +384,7 @@ struct DuckDBPyResult {
 			}
 
 			default:
-				throw runtime_error("unsupported type: " + SQLTypeToString(result->sql_types[col_idx]));
+				throw runtime_error("unsupported type: " + LogicalTypeToString(result->sql_types[col_idx]));
 			}
 		}
 		chunk_offset++;
@@ -423,48 +423,48 @@ struct DuckDBPyResult {
 			// convert the actual payload
 			py::array col_res;
 			switch (mres->sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			case LogicalTypeId::BOOLEAN:
 				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TINYINT:
+			case LogicalTypeId::TINYINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int8_t>("int8", mres->collection, col_idx);
 				break;
-			case SQLTypeId::SMALLINT:
+			case LogicalTypeId::SMALLINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int16_t>("int16", mres->collection, col_idx);
 				break;
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::INTEGER:
 				col_res = duckdb_py_convert::fetch_column_regular<int32_t>("int32", mres->collection, col_idx);
 				break;
-			case SQLTypeId::BIGINT:
+			case LogicalTypeId::BIGINT:
 				col_res = duckdb_py_convert::fetch_column_regular<int64_t>("int64", mres->collection, col_idx);
 				break;
-			case SQLTypeId::HUGEINT:
+			case LogicalTypeId::HUGEINT:
 				col_res = duckdb_py_convert::fetch_column<hugeint_t, double, duckdb_py_convert::HugeIntConvert>("float64", mres->collection, col_idx);
 				break;
-			case SQLTypeId::FLOAT:
+			case LogicalTypeId::FLOAT:
 				col_res = duckdb_py_convert::fetch_column_regular<float>("float32", mres->collection, col_idx);
 				break;
-			case SQLTypeId::DOUBLE:
+			case LogicalTypeId::DOUBLE:
 				col_res = duckdb_py_convert::fetch_column_regular<double>("float64", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP:
 				col_res = duckdb_py_convert::fetch_column<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
 				    "datetime64[ms]", mres->collection, col_idx);
 				break;
-			case SQLTypeId::DATE:
+			case LogicalTypeId::DATE:
 				col_res = duckdb_py_convert::fetch_column<date_t, int64_t, duckdb_py_convert::DateConvert>(
 				    "datetime64[s]", mres->collection, col_idx);
 				break;
-			case SQLTypeId::TIME:
+			case LogicalTypeId::TIME:
 				col_res = duckdb_py_convert::fetch_column<time_t, py::str, duckdb_py_convert::TimeConvert>(
 				    "object", mres->collection, col_idx);
 				break;
-			case SQLTypeId::VARCHAR:
+			case LogicalTypeId::VARCHAR:
 				col_res = duckdb_py_convert::fetch_column<string_t, py::str, duckdb_py_convert::StringConvert>(
 				    "object", mres->collection, col_idx);
 				break;
 			default:
-				throw runtime_error("unsupported type " + SQLTypeToString(mres->sql_types[col_idx]));
+				throw runtime_error("unsupported type " + LogicalTypeToString(mres->sql_types[col_idx]));
 			}
 
 			// convert the nullmask
@@ -971,7 +971,7 @@ struct DuckDBPyRelation {
 		} else if (key_s == "types" || key_s == "dtypes") {
 			py::list res;
 			for (auto &col : rel->Columns()) {
-				res.append(SQLTypeToString(col.type));
+				res.append(LogicalTypeToString(col.type));
 			}
 			return move(res);
 		}

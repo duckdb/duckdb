@@ -53,7 +53,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 	}
 
 	SECTION("Testing aggregate UDF with arguments") {
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", SQLType::INTEGER, SQLType::INTEGER));
+		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", LogicalType::INTEGER, LogicalType::INTEGER));
 
 		con.Query("CREATE TABLE integers (i INTEGER)");
 		con.Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)");
@@ -61,7 +61,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 		// using TIMEs to test disambiguation
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<dtime_t>, dtime_t, dtime_t>("udf_avg_time_args", SQLType::TIME, SQLType::TIME));
+		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<dtime_t>, dtime_t, dtime_t>("udf_avg_time_args", LogicalType::TIME, LogicalType::TIME));
 		con.Query("CREATE TABLE times (t TIME)");
 		con.Query("INSERT INTO times VALUES ('01:00:00'), ('01:00:00'), ('01:00:00'), ('01:00:00'), ('01:00:00')");
 		result = con.Query("SELECT udf_avg_time_args(t) FROM times");
@@ -69,7 +69,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {Time::FromString("01:00:00")}));
 
 		// using DOUBLEs and a binary UDF
-		con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, double>("udf_covar_pop_double_args", SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE);
+		con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, double>("udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
 
 		result = con.Query("SELECT udf_covar_pop_double_args(3,3), udf_covar_pop_double_args(NULL,3), udf_covar_pop_double_args(3,NULL), udf_covar_pop_double_args(NULL,NULL)");
 		REQUIRE(CHECK_COLUMN(result, 0, {0}));
@@ -80,23 +80,23 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 
 	SECTION("Testing aggregate UDF with WRONG arguments") {
 		// wrong return type
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, double, int>("udf_avg_int_args", SQLType::INTEGER, SQLType::INTEGER));
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", SQLType::DOUBLE, SQLType::INTEGER));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, double, int>("udf_avg_int_args", LogicalType::INTEGER, LogicalType::INTEGER));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", LogicalType::DOUBLE, LogicalType::INTEGER));
 
 		//wrong first argument
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, double>("udf_avg_int_args", SQLType::INTEGER, SQLType::INTEGER));
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", SQLType::INTEGER, SQLType::DOUBLE));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, double>("udf_avg_int_args", LogicalType::INTEGER, LogicalType::INTEGER));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", LogicalType::INTEGER, LogicalType::DOUBLE));
 
 		//wrong first argument
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, int>("udf_covar_pop_double_args", SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
-		REQUIRE_THROWS(con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, double>("udf_covar_pop_double_args", SQLType::DOUBLE, SQLType::DOUBLE, SQLType::INTEGER));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, int>("udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
+		REQUIRE_THROWS(con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, double>("udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::INTEGER));
 	}
 
 	SECTION("Cheking if aggregate UDFs are temporary") {
 		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double"));
 		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int"));
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", SQLType::INTEGER, SQLType::INTEGER));
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double_args", SQLType::DOUBLE, SQLType::DOUBLE));
+		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int_args", LogicalType::INTEGER, LogicalType::INTEGER));
+		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_double(1)"));
 		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_int(1)"));

@@ -35,11 +35,11 @@ struct BaseCSVData : public FunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<SQLType> sql_types, vector<string> names) :
+	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names) :
 		BaseCSVData(move(file_path)), sql_types(move(sql_types)), names(move(names)) {}
 
 	//! The SQL types to write
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	//! The column names of the columns to write
 	vector<string> names;
 	//! True, if column with that index must be quoted
@@ -53,11 +53,11 @@ struct WriteCSVData : public BaseCSVData {
 };
 
 struct ReadCSVData : public BaseCSVData {
-	ReadCSVData(string file_path, vector<SQLType> sql_types) :
+	ReadCSVData(string file_path, vector<LogicalType> sql_types) :
 		BaseCSVData(move(file_path)), sql_types(move(sql_types)) {}
 
 	//! The expected SQL types to read
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	//! True, if column with that index must be quoted
 	vector<bool> force_not_null;
 	//! The DATE_FORMAT to use to read or write dates
@@ -196,7 +196,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 }
 
 static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                           vector<SQLType> &sql_types) {
+                                           vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
@@ -222,7 +222,7 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 	return move(bind_data);
 }
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<SQLType> &expected_types) {
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>(info.file_path, expected_types);
 
 	// check all the options in the copy info
@@ -263,7 +263,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 	return move(bind_data);
 }
 
-static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<SQLType> &expected_types) {
+static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names, vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>(info.file_path, expected_types);
 
 	for(auto &option : info.options) {
@@ -459,13 +459,13 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
-		if (csv_data.sql_types[col_idx].id == SQLTypeId::VARCHAR || csv_data.sql_types[col_idx].id == SQLTypeId::BLOB) {
+		if (csv_data.sql_types[col_idx].id == LogicalTypeId::VARCHAR || csv_data.sql_types[col_idx].id == LogicalTypeId::BLOB) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
 		} else {
 			// non varchar column, perform the cast
 			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], csv_data.sql_types[col_idx],
-									SQLType::VARCHAR, input.size());
+									LogicalType::VARCHAR, input.size());
 		}
 	}
 

@@ -33,7 +33,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 }
 
 static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	SQLType stype(SQLTypeId::STRUCT);
+	LogicalType stype(LogicalTypeId::STRUCT);
 	set<string> name_collision_set;
 
 	// collect names and deconflict, construct return type
@@ -61,8 +61,8 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, SQLType::STRUCT, struct_pack_fun, false, struct_pack_bind);
-	fun.varargs = SQLType::ANY;
+	ScalarFunction fun("struct_pack", {}, LogicalType::STRUCT, struct_pack_fun, false, struct_pack_bind);
+	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }
 

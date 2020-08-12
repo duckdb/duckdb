@@ -113,7 +113,7 @@ static void nextval_dependency(BoundFunctionExpression &expr, unordered_set<Cata
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", {SQLType::VARCHAR}, SQLType::BIGINT, nextval_function, true, nextval_bind,
+	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, nextval_function, true, nextval_bind,
 	                               nextval_dependency));
 }
 

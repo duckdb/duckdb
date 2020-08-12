@@ -31,14 +31,14 @@ struct BitLenOperator {
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"length", "len"},
-	                ScalarFunction({SQLType::VARCHAR}, SQLType::BIGINT,
+	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator, true>));
-	set.AddFunction(ScalarFunction("strlen", {SQLType::VARCHAR}, SQLType::BIGINT,
+	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
-	set.AddFunction(ScalarFunction("bit_length", {SQLType::VARCHAR}, SQLType::BIGINT,
+	set.AddFunction(ScalarFunction("bit_length", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, BitLenOperator, true>));
 	// length for BLOB type
-	set.AddFunction(ScalarFunction("octet_length", {SQLType::BLOB}, SQLType::BIGINT,
+	set.AddFunction(ScalarFunction("octet_length", {LogicalType::BLOB}, LogicalType::BIGINT,
 	                               ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator, true>));
 }
 
@@ -53,7 +53,7 @@ struct UnicodeOperator {
 };
 
 void UnicodeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("unicode", {SQLType::VARCHAR}, SQLType::INTEGER,
+	set.AddFunction(ScalarFunction("unicode", {LogicalType::VARCHAR}, LogicalType::INTEGER,
 	                               ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator, true>));
 }
 

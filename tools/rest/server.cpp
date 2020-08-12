@@ -79,12 +79,12 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 		Vector *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
-		case SQLTypeId::DATE:
-		case SQLTypeId::TIME:
-		case SQLTypeId::TIMESTAMP:
-		case SQLTypeId::INTERVAL:
-		case SQLTypeId::HUGEINT: {
-			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], SQLType::VARCHAR, chunk->size());
+		case LogicalTypeId::DATE:
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::INTERVAL:
+		case LogicalTypeId::HUGEINT: {
+			VectorOperations::Cast(*v, v2, res->sql_types[col_idx], LogicalType::VARCHAR, chunk->size());
 			v = &v2;
 			break;
 		}
@@ -364,7 +364,7 @@ int main(int argc, char **argv) {
 			     {"data", json::array()}};
 
 			for (auto &sql_type : state.res->sql_types) {
-				j["sql_types"] += SQLTypeToString(sql_type);
+				j["sql_types"] += LogicalTypeToString(sql_type);
 			}
 			for (auto &type : state.res->types) {
 				j["types"] += TypeIdToString(type);

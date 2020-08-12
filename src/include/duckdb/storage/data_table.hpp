@@ -71,7 +71,7 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
-	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, SQLType target_type,
+	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, LogicalType target_type,
 	          vector<column_t> bound_columns, Expression &cast_expr);
 
 	shared_ptr<DataTableInfo> info;

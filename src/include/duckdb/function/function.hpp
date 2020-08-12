@@ -58,33 +58,33 @@ public:
 
 public:
 	//! Returns the formatted string name(arg1, arg2, ...)
-	static string CallToString(string name, vector<SQLType> arguments);
+	static string CallToString(string name, vector<LogicalType> arguments);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
-	static string CallToString(string name, vector<SQLType> arguments, SQLType return_type);
+	static string CallToString(string name, vector<LogicalType> arguments, LogicalType return_type);
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, or throws an exception if none could be found.
-	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<SQLType> &arguments);
+	static idx_t BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<SQLType> arguments, SQLType varargs = SQLType::INVALID)
+	SimpleFunction(string name, vector<LogicalType> arguments, LogicalType varargs = LogicalType::INVALID)
 	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
 	virtual ~SimpleFunction() {
 	}
 
 	//! The set of arguments of the function
-	vector<SQLType> arguments;
-	//! The type of varargs to support, or SQLTypeId::INVALID if the function does not accept variable length arguments
-	SQLType varargs;
+	vector<LogicalType> arguments;
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length arguments
+	LogicalType varargs;
 
 public:
 	virtual string ToString() {
@@ -92,14 +92,14 @@ public:
 	}
 
 	bool HasVarArgs() {
-		return varargs.id != SQLTypeId::INVALID;
+		return varargs.id != LogicalTypeId::INVALID;
 	}
 };
 
 class BaseScalarFunction : public SimpleFunction {
 public:
-	BaseScalarFunction(string name, vector<SQLType> arguments, SQLType return_type, bool has_side_effects,
-	               SQLType varargs = SQLType::INVALID)
+	BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
+	               LogicalType varargs = LogicalType::INVALID)
 	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
 	      has_side_effects(has_side_effects) {
 	}
@@ -107,14 +107,14 @@ public:
 	}
 
 	//! Return type of the function
-	SQLType return_type;
+	LogicalType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
 	bool has_side_effects;
 
 public:
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types);
+	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types);
 
 	string ToString() override {
 		return Function::CallToString(name, arguments, return_type);

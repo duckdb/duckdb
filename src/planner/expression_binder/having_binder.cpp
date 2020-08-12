@@ -10,7 +10,7 @@ using namespace std;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : SelectBinder(binder, context, node, info) {
-	target_type = SQLType(SQLTypeId::BOOLEAN);
+	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {

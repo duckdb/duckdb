@@ -244,19 +244,19 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// e.g.:
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
-	ScalarFunction concat = ScalarFunction("concat", {SQLType::VARCHAR}, SQLType::VARCHAR, concat_function);
-	concat.varargs = SQLType::VARCHAR;
+	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_function);
+	concat.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat);
 
     ScalarFunctionSet concat_op("||");
-    concat_op.AddFunction(ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_operator));
-    concat_op.AddFunction(ScalarFunction({SQLType::BLOB, SQLType::BLOB}, SQLType::BLOB, concat_operator));
+    concat_op.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_operator));
+    concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, concat_operator));
     set.AddFunction(concat_op);
 
 
 	ScalarFunction concat_ws =
-	    ScalarFunction("concat_ws", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, concat_ws_function);
-	concat_ws.varargs = SQLType::VARCHAR;
+	    ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_ws_function);
+	concat_ws.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat_ws);
 }
 

@@ -40,8 +40,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 	// all children bound successfully
 	// extract the children and types
-	vector<SQLType> types;
-	vector<SQLType> arguments;
+	vector<LogicalType> types;
+	vector<LogicalType> arguments;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = (BoundExpression &)*aggr.children[i];

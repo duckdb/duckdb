@@ -21,7 +21,7 @@ class BoundSelectNode;
 struct BoundGroupInformation {
 	expression_map_t<idx_t> map;
 	unordered_map<string, idx_t> alias_map;
-	vector<SQLType> group_types;
+	vector<LogicalType> group_types;
 };
 
 //! The SELECT binder is responsible for binding an expression within the SELECT clause of a SQL statement

@@ -9,17 +9,17 @@ using namespace std;
 
 namespace duckdb {
 
-template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(SQLType type) {
+template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 	switch (type.id) {
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return AggregateFunction::UnaryAggregate<uint8_t, int8_t, int8_t, OP>(type, type);
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return AggregateFunction::UnaryAggregate<uint16_t, int16_t, int16_t, OP>(type, type);
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		return AggregateFunction::UnaryAggregate<uint32_t, int32_t, int32_t, OP>(type, type);
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return AggregateFunction::UnaryAggregate<uint64_t, int64_t, int64_t, OP>(type, type);
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return AggregateFunction::UnaryAggregate<hugeint_t, hugeint_t, hugeint_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented bitfield type for unary aggregate");
@@ -61,7 +61,7 @@ struct BitAndOperation {
 
 void BitAndFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_and("bit_and");
-	for (auto type : SQLType::INTEGRAL) {
+	for (auto type : LogicalType::INTEGRAL) {
 		bit_and.AddFunction(GetBitfieldUnaryAggregate<BitAndOperation>(type));
 	}
 	set.AddFunction(bit_and);
@@ -101,7 +101,7 @@ struct BitOrOperation {
 
 void BitOrFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_or("bit_or");
-	for (auto type : SQLType::INTEGRAL) {
+	for (auto type : LogicalType::INTEGRAL) {
 		bit_or.AddFunction(GetBitfieldUnaryAggregate<BitOrOperation>(type));
 	}
 	set.AddFunction(bit_or);
@@ -141,7 +141,7 @@ struct BitXorOperation {
 
 void BitXorFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet bit_xor("bit_xor");
-	for (auto type : SQLType::INTEGRAL) {
+	for (auto type : LogicalType::INTEGRAL) {
 		bit_xor.AddFunction(GetBitfieldUnaryAggregate<BitXorOperation>(type));
 	}
 	set.AddFunction(bit_xor);

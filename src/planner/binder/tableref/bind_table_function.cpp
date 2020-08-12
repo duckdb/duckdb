@@ -19,7 +19,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	auto fexpr = (FunctionExpression *)ref.function.get();
 
 	// evalate the input parameters to the function
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
 	vector<Value> parameters;
 	unordered_map<string, Value> named_parameters;
 	for (auto &child : fexpr->children) {
@@ -37,10 +37,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 				}
 			}
 		}
-		SQLType sql_type;
+		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
-		constant.SetSQLType(sql_type);
+		constant.SetLogicalType(sql_type);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (named_parameters.size() > 0) {
@@ -67,13 +67,13 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first.c_str(),
 			                      table_function.name.c_str());
 		}
-		kv.second = kv.second.CastAs(kv.second.GetSQLType(), entry->second);
+		kv.second = kv.second.CastAs(kv.second.GetLogicalType(), entry->second);
 	}
 
 	// cast the parameters to the type of the function
 	auto result = make_unique<BoundTableFunction>(table_function, bind_index);
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (table_function.arguments[i] == SQLType::ANY) {
+		if (table_function.arguments[i] == LogicalType::ANY) {
 			result->parameters.push_back(move(parameters[i]));
 		} else {
 			result->parameters.push_back(parameters[i].CastAs(arguments[i], table_function.arguments[i]));

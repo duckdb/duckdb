@@ -105,7 +105,7 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
-unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, SQLType *result_type,
+unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
 	auto error_msg = Bind(&expr, 0, root_expression);
@@ -121,14 +121,14 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	assert(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 	auto bound_expr = (BoundExpression *)expr.get();
 	unique_ptr<Expression> result = move(bound_expr->expr);
-	if (target_type.id != SQLTypeId::INVALID) {
+	if (target_type.id != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, target_type);
 	} else {
-		if (bound_expr->sql_type.id == SQLTypeId::SQLNULL) {
+		if (bound_expr->sql_type.id == LogicalTypeId::SQLNULL) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			bound_expr->sql_type = SQLType::INTEGER;
+			bound_expr->sql_type = LogicalType::INTEGER;
 			result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
 		}
 	}

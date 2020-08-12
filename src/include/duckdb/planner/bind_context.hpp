@@ -49,11 +49,11 @@ public:
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
-	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
+	void AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
-	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types);
+	void AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types);
 
 	bool BindingIsHidden(const string &binding_name, const string &column_name);
 	unordered_set<string> hidden_columns;

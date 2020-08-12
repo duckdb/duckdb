@@ -13,13 +13,13 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 
 	string func_name, table_name, col_type;
 	//The types supported by the templated CreateScalarFunction
-	const vector<SQLType> sql_templated_types = {SQLType::BOOLEAN, SQLType::TINYINT, SQLType::SMALLINT,
-												 SQLType::INTEGER, SQLType::BIGINT, SQLType::FLOAT,
-												 SQLType::DOUBLE, SQLType::VARCHAR};
+	const vector<LogicalType> sql_templated_types = {LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT,
+												 LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::FLOAT,
+												 LogicalType::DOUBLE, LogicalType::VARCHAR};
 
 	//Creating the tables
-	for(SQLType sql_type: sql_templated_types) {
-		col_type = SQLTypeIdToString(sql_type.id);
+	for(LogicalType sql_type: sql_templated_types) {
+		col_type = LogicalTypeIdToString(sql_type.id);
 		table_name = StringUtil::Lower(col_type);
 
 		con.Query("CREATE TABLE " + table_name + " (a " + col_type +
@@ -28,46 +28,46 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 	}
 
 	//Create the UDF functions into the catalog
-	for(SQLType sql_type: sql_templated_types) {
-		func_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+	for(LogicalType sql_type: sql_templated_types) {
+		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
 
 		switch(sql_type.id) {
-		case SQLTypeId::BOOLEAN:
+		case LogicalTypeId::BOOLEAN:
 		{
 			con.CreateScalarFunction<bool, bool>(func_name + "_1", &udf_bool);
 			con.CreateScalarFunction<bool, bool, bool>(func_name + "_2", &udf_bool);
 			con.CreateScalarFunction<bool, bool, bool, bool>(func_name + "_3", &udf_bool);
 			break;
 		}
-		case SQLTypeId::TINYINT:
+		case LogicalTypeId::TINYINT:
 		{
 			con.CreateScalarFunction<int8_t, int8_t>(func_name + "_1", &udf_int8);
 			con.CreateScalarFunction<int8_t, int8_t, int8_t>(func_name + "_2", &udf_int8);
 			con.CreateScalarFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &udf_int8);
 			break;
 		}
-		case SQLTypeId::SMALLINT:
+		case LogicalTypeId::SMALLINT:
 		{
 			con.CreateScalarFunction<int16_t, int16_t>(func_name + "_1", &udf_int16);
 			con.CreateScalarFunction<int16_t, int16_t, int16_t>(func_name + "_2", &udf_int16);
 			con.CreateScalarFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &udf_int16);
 			break;
 		}
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::INTEGER:
 		{
 			con.CreateScalarFunction<int32_t, int32_t>(func_name + "_1", &udf_int);
 			con.CreateScalarFunction<int32_t, int32_t, int32_t>(func_name + "_2", &udf_int);
 			con.CreateScalarFunction<int32_t, int32_t, int32_t, int32_t>(func_name + "_3", &udf_int);
 			break;
 		}
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::BIGINT:
 		{
 			con.CreateScalarFunction<int64_t, int64_t>(func_name + "_1", &udf_int64);
 			con.CreateScalarFunction<int64_t, int64_t, int64_t>(func_name + "_2", &udf_int64);
 			con.CreateScalarFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &udf_int64);
 			break;
 		}
-		case SQLTypeId::FLOAT:
+		case LogicalTypeId::FLOAT:
 		//FIXME: there is an implicit cast to DOUBLE before calling the function: float_1(CAST[DOUBLE](a)),
 		//because of that we cannot invoke such a function: float udf_float(float a);
 //		{
@@ -76,14 +76,14 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 //			con.CreateScalarFunction<float, float, float, float>(func_name + "_3", &FLOAT);
 //			break;
 //		}
-		case SQLTypeId::DOUBLE:
+		case LogicalTypeId::DOUBLE:
 		{
 			con.CreateScalarFunction<double, double>(func_name + "_1", &udf_double);
 			con.CreateScalarFunction<double, double, double>(func_name + "_2", &udf_double);
 			con.CreateScalarFunction<double, double, double, double>(func_name + "_3", &udf_double);
 			break;
 		}
-		case SQLTypeId::VARCHAR:
+		case LogicalTypeId::VARCHAR:
 		{
 			con.CreateScalarFunction<string_t, string_t>(func_name + "_1", &udf_varchar);
 			con.CreateScalarFunction<string_t, string_t, string_t>(func_name + "_2", &udf_varchar);
@@ -97,50 +97,50 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 
 	SECTION("Testing UDF functions") {
 		//Inserting values
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for(LogicalType sql_type: sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
-			if(sql_type == SQLType::BOOLEAN) {
+			if(sql_type == LogicalType::BOOLEAN) {
 				con.Query(query + "(true, true, true), (true, true, false), (false, false, false);");
 			} else if(sql_type.IsNumeric()) {
 				con.Query(query + "(1, 10, 100),(2, 10, 100),(3, 10, 100);");
-			} else if(sql_type == SQLType::VARCHAR) {
+			} else if(sql_type == LogicalType::VARCHAR) {
 				con.Query(query + "('a', 'b', 'c'),('a', 'b', 'c'),('a', 'b', 'c');");
 			}
 		}
-		
+
 		//Running the UDF functions and checking the results
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for(LogicalType sql_type: sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
 			func_name = table_name;
 			if(sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {10, 20, 30}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {111, 112, 113}));
-				
-			} else if(sql_type == SQLType::BOOLEAN) {
+
+			} else if(sql_type == LogicalType::BOOLEAN) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, false, false}));
-				
-			} else if(sql_type == SQLType::VARCHAR) {
+
+			} else if(sql_type == LogicalType::VARCHAR) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"a", "a", "a"}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"b", "b", "b"}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"c", "c", "c"}));
 			}
@@ -149,8 +149,8 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 	SECTION("Cheking if the UDF functions are temporary") {
 		Connection con_test(db);
 		con_test.EnableQueryVerification();
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for(LogicalType sql_type: sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
 			func_name = table_name;
 
 			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
@@ -162,8 +162,8 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 	}
 
 	SECTION("Cheking NULLs with UDF functions") {
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for(LogicalType sql_type: sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
 			func_name = table_name;
 
 			//Deleting old values

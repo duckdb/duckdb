@@ -6,7 +6,7 @@
 namespace duckdb {
 using namespace std;
 
-BoundUnnestExpression::BoundUnnestExpression(SQLType sql_return_type)
+BoundUnnestExpression::BoundUnnestExpression(LogicalType sql_return_type)
     : Expression(ExpressionType::BOUND_UNNEST, ExpressionClass::BOUND_UNNEST, GetInternalType(sql_return_type)),
       sql_return_type(sql_return_type) {
 }

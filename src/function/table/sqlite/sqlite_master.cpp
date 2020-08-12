@@ -32,7 +32,7 @@ string GenerateQuery(CatalogEntry *entry) {
 
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
-			ss << column.name << " " << SQLTypeToString(column.type);
+			ss << column.name << " " << LogicalTypeToString(column.type);
 			if (i + 1 < table->columns.size()) {
 				ss << ", ";
 			}
@@ -46,21 +46,21 @@ string GenerateQuery(CatalogEntry *entry) {
 }
 
 static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("type");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("tbl_name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("rootpage");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("sql");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	// initialize the function data structure
 	return make_unique<SQLiteMasterData>();

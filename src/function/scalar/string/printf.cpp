@@ -118,14 +118,14 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun =
-	    ScalarFunction("printf", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTPrintf, duckdb_fmt::printf_context>);
-	printf_fun.varargs = SQLType::ANY;
+	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR, printf_function<FMTPrintf, duckdb_fmt::printf_context>);
+	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun =
-	    ScalarFunction("format", {SQLType::VARCHAR}, SQLType::VARCHAR, printf_function<FMTFormat, duckdb_fmt::format_context>);
-	format_fun.varargs = SQLType::ANY;
+	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR, printf_function<FMTFormat, duckdb_fmt::format_context>);
+	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }
 

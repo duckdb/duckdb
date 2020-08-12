@@ -28,7 +28,7 @@ Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
 Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
-	sql_type = SQLType::VARCHAR;
+	sql_type = LogicalType::VARCHAR;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -199,37 +199,37 @@ Value Value::POINTER(uintptr_t value) {
 
 Value Value::DATE(date_t date) {
 	auto val = Value::INTEGER(date);
-	val.sql_type = SQLType::DATE;
+	val.sql_type = LogicalType::DATE;
 	return val;
 }
 
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	auto val = Value::INTEGER(Date::FromDate(year, month, day));
-	val.sql_type = SQLType::DATE;
+	val.sql_type = LogicalType::DATE;
 	return val;
 }
 
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
-	val.sql_type = SQLType::TIME;
+	val.sql_type = LogicalType::TIME;
 	return val;
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
 	auto val = Value::BIGINT(timestamp);
-	val.sql_type = SQLType::TIMESTAMP;
+	val.sql_type = LogicalType::TIMESTAMP;
 	return val;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
 	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
-	val.sql_type = SQLType::TIMESTAMP;
+	val.sql_type = LogicalType::TIMESTAMP;
 	return val;
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
-	val.sql_type = SQLType::TIMESTAMP;
+	val.sql_type = LogicalType::TIMESTAMP;
 	return val;
 }
 
@@ -249,7 +249,7 @@ Value Value::LIST(vector<Value> values) {
 
 Value Value::BLOB(string data, bool must_cast) {
 	Value result(TypeId::VARCHAR);
-	result.sql_type = SQLType::BLOB;
+	result.sql_type = LogicalType::BLOB;
 	result.is_null = false;
 	// hex string identifier: "\\x", must be double '\'
 	// single '\x' is a special char for hex chars in C++,
@@ -414,45 +414,45 @@ Value Value::Numeric(TypeId type, int64_t value) {
 	return val;
 }
 
-string Value::ToString(SQLType sql_type) const {
+string Value::ToString(LogicalType sql_type) const {
 	if (is_null) {
 		return "NULL";
 	}
 	switch (sql_type.id) {
-	case SQLTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return to_string(value_.tinyint);
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return to_string(value_.smallint);
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		return to_string(value_.integer);
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return to_string(value_.bigint);
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return to_string(value_.float_);
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return to_string(value_.double_);
-	case SQLTypeId::DATE:
+	case LogicalTypeId::DATE:
 		return Date::ToString(value_.integer);
-	case SQLTypeId::TIME:
+	case LogicalTypeId::TIME:
 		return Time::ToString(value_.integer);
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.bigint);
-	case SQLTypeId::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return Interval::ToString(value_.interval);
-	case SQLTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return str_value;
-	case SQLTypeId::BLOB: {
+	case LogicalTypeId::BLOB: {
 		unique_ptr<char[]> hex_data(new char[str_value.size() * 2 + 2 + 1]);
 		string_t hex_str(hex_data.get(), str_value.size() * 2 + 2);
 		CastFromBlob::ToHexString(string_t(str_value), hex_str);
 		string result(hex_str.GetData());
 		return result;
 	}
-	case SQLTypeId::STRUCT: {
+	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
 			auto &child = struct_value[i];
@@ -464,7 +464,7 @@ string Value::ToString(SQLType sql_type) const {
 		ret += ">";
 		return ret;
 	}
-	case SQLTypeId::LIST: {
+	case LogicalTypeId::LIST: {
 		string ret = "[";
 		for (size_t i = 0; i < list_value.size(); i++) {
 			auto &child = list_value[i];
@@ -477,7 +477,7 @@ string Value::ToString(SQLType sql_type) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing: %s", SQLTypeToString(sql_type).c_str());
+		throw NotImplementedException("Unimplemented type for printing: %s", LogicalTypeToString(sql_type).c_str());
 	}
 }
 
@@ -488,7 +488,7 @@ string Value::ToString() const {
 	case TypeId::HASH:
 		return to_string(value_.hash);
 	default:
-		return ToString(SQLTypeFromInternalType(type));
+		return ToString(LogicalTypeFromInternalType(type));
 	}
 }
 
@@ -567,7 +567,7 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type, rhs);
 }
 
-Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
+Value Value::CastAs(LogicalType source_type, LogicalType target_type, bool strict) {
 	if (source_type == target_type) {
 		return Copy();
 	}
@@ -580,12 +580,12 @@ Value Value::CastAs(SQLType source_type, SQLType target_type, bool strict) {
 
 Value Value::CastAs(TypeId target_type, bool strict) const {
 	if (target_type == type) {
-		return Copy(); // in case of types that have no SQLType equivalent such as POINTER
+		return Copy(); // in case of types that have no LogicalType equivalent such as POINTER
 	}
-	return Copy().CastAs(SQLTypeFromInternalType(type), SQLTypeFromInternalType(target_type), strict);
+	return Copy().CastAs(LogicalTypeFromInternalType(type), LogicalTypeFromInternalType(target_type), strict);
 }
 
-bool Value::TryCastAs(SQLType source_type, SQLType target_type, bool strict) {
+bool Value::TryCastAs(LogicalType source_type, LogicalType target_type, bool strict) {
 	Value new_value;
 	try {
 		new_value = CastAs(source_type, target_type, strict);

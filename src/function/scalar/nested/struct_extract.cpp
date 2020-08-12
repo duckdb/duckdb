@@ -46,7 +46,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	// the binder should fix this for us.
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
-	assert(expr.arguments[0].id == SQLTypeId::STRUCT);
+	assert(expr.arguments[0].id == LogicalTypeId::STRUCT);
 	assert(expr.children[0]->return_type == TypeId::STRUCT);
 	if (expr.arguments[0].child_type.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
@@ -54,7 +54,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 
 	auto &key_child = expr.children[1];
 
-	if (expr.arguments[1].id != SQLTypeId::VARCHAR || key_child->return_type != TypeId::VARCHAR ||
+	if (expr.arguments[1].id != LogicalTypeId::VARCHAR || key_child->return_type != TypeId::VARCHAR ||
 	    !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
@@ -65,7 +65,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	}
 	string key = StringUtil::Lower(key_val.str_value);
 
-	SQLType return_type;
+	LogicalType return_type;
 	idx_t key_index = 0;
 	bool found_key = false;
 
@@ -90,7 +90,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_extract", {SQLType::STRUCT, SQLType::VARCHAR}, SQLType::ANY, struct_extract_fun, false,
+	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY, struct_extract_fun, false,
 	                   struct_extract_bind);
 	set.AddFunction(fun);
 }

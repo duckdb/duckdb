@@ -26,7 +26,7 @@ public:
 
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	unordered_map<idx_t, PreparedValueEntry> value_map;
 
 	Binder binder;

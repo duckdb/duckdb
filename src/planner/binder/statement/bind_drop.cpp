@@ -42,7 +42,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	}
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::DROP, move(stmt.info));
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	return result;
 }
 

@@ -65,9 +65,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto child = (BoundExpression *)expr.child.get();
 	auto subquery_binder = move(bound_subquery->subquery_binder);
 	auto bound_node = move(bound_subquery->bound_node);
-	SQLType return_type =
-	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : SQLType(SQLTypeId::BOOLEAN);
-	if (return_type.id == SQLTypeId::UNKNOWN) {
+	LogicalType return_type =
+	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
+	if (return_type.id == LogicalTypeId::UNKNOWN) {
 		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 	}
 
@@ -76,7 +76,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// ANY comparison
 		// cast child and subquery child to equivalent types
 		assert(bound_node->types.size() == 1);
-		auto compare_type = MaxSQLType(child->sql_type, bound_node->types[0]);
+		auto compare_type = MaxLogicalType(child->sql_type, bound_node->types[0]);
 		child->expr = BoundCastExpression::AddCastToType(move(child->expr), child->sql_type, compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;

@@ -268,7 +268,7 @@ string Relation::ToString() {
 	str += "---------------------\n";
 	auto &cols = Columns();
 	for (idx_t i = 0; i < cols.size(); i++) {
-		str += "- " + cols[i].name + " (" + SQLTypeToString(cols[i].type) + ")\n";
+		str += "- " + cols[i].name + " (" + LogicalTypeToString(cols[i].type) + ")\n";
 	}
 	return str;
 }

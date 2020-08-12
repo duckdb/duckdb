@@ -110,7 +110,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
-		sql_types = {SQLType(SQLTypeId::BOOLEAN)};
+		sql_types = {LogicalType(LogicalTypeId::BOOLEAN)};
 		plan = move(prepare);
 		break;
 	}

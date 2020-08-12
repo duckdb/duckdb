@@ -22,10 +22,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*function.children[0];
-	if (child.sql_type.id != SQLTypeId::LIST) {
+	if (child.sql_type.id != LogicalTypeId::LIST) {
 		return BindResult("Unnest() can only be applied to lists");
 	}
-	SQLType return_type = SQLType::ANY;
+	LogicalType return_type = LogicalType::ANY;
 	assert(child.sql_type.child_type.size() <= 1);
 	if (child.sql_type.child_type.size() == 1) {
 		return_type = child.sql_type.child_type[0].second;

@@ -182,8 +182,8 @@ private:
 	//! Transform a VALUES list into a set of expressions
 	unique_ptr<TableRef> TransformValuesList(PGList *list);
 
-	//! Transform a Postgres TypeName string into a SQLType
-	SQLType TransformTypeName(PGTypeName *name);
+	//! Transform a Postgres TypeName string into a LogicalType
+	LogicalType TransformTypeName(PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(PGList *group, vector<unique_ptr<ParsedExpression>> &result);

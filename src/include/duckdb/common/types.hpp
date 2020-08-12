@@ -226,7 +226,7 @@ enum class TypeId : uint8_t {
 //===--------------------------------------------------------------------===//
 // SQL Types
 //===--------------------------------------------------------------------===//
-enum class SQLTypeId : uint8_t {
+enum class LogicalTypeId : uint8_t {
 	INVALID = 0,
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
@@ -255,78 +255,78 @@ enum class SQLTypeId : uint8_t {
 	LIST = 101
 };
 
-struct SQLType {
-	SQLTypeId id;
+struct LogicalType {
+	LogicalTypeId id;
 	uint16_t width;
 	uint8_t scale;
 	string collation;
 
 	// TODO serialize this
-	child_list_t<SQLType> child_type;
+	child_list_t<LogicalType> child_type;
 
-	SQLType(SQLTypeId id = SQLTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
+	LogicalType(LogicalTypeId id = LogicalTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
 		: id(id), width(width), scale(scale), collation(move(collation)) {
 	}
 
-	bool operator==(const SQLType &rhs) const {
+	bool operator==(const LogicalType &rhs) const {
 		return id == rhs.id && width == rhs.width && scale == rhs.scale;
 	}
-	bool operator!=(const SQLType &rhs) const {
+	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
 
-	//! Serializes a SQLType to a stand-alone binary blob
+	//! Serializes a LogicalType to a stand-alone binary blob
 	void Serialize(Serializer &serializer);
-	//! Deserializes a blob back into an SQLType
-	static SQLType Deserialize(Deserializer &source);
+	//! Deserializes a blob back into an LogicalType
+	static LogicalType Deserialize(Deserializer &source);
 
 	bool IsIntegral() const;
 	bool IsNumeric() const;
-	bool IsMoreGenericThan(SQLType &other) const;
+	bool IsMoreGenericThan(LogicalType &other) const;
 
 public:
-	static const SQLType SQLNULL;
-	static const SQLType BOOLEAN;
-	static const SQLType TINYINT;
-	static const SQLType SMALLINT;
-	static const SQLType INTEGER;
-	static const SQLType BIGINT;
-	static const SQLType FLOAT;
-	static const SQLType DOUBLE;
-	static const SQLType DATE;
-	static const SQLType TIMESTAMP;
-	static const SQLType TIME;
-	static const SQLType VARCHAR;
-	static const SQLType VARBINARY;
-	static const SQLType STRUCT;
-	static const SQLType LIST;
-	static const SQLType ANY;
-	static const SQLType BLOB;
-	static const SQLType INTERVAL;
-	static const SQLType HUGEINT;
-	static const SQLType INVALID;
+	static const LogicalType SQLNULL;
+	static const LogicalType BOOLEAN;
+	static const LogicalType TINYINT;
+	static const LogicalType SMALLINT;
+	static const LogicalType INTEGER;
+	static const LogicalType BIGINT;
+	static const LogicalType FLOAT;
+	static const LogicalType DOUBLE;
+	static const LogicalType DATE;
+	static const LogicalType TIMESTAMP;
+	static const LogicalType TIME;
+	static const LogicalType VARCHAR;
+	static const LogicalType VARBINARY;
+	static const LogicalType STRUCT;
+	static const LogicalType LIST;
+	static const LogicalType ANY;
+	static const LogicalType BLOB;
+	static const LogicalType INTERVAL;
+	static const LogicalType HUGEINT;
+	static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
-	static const vector<SQLType> NUMERIC;
+	static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
-	static const vector<SQLType> INTEGRAL;
+	static const vector<LogicalType> INTEGRAL;
 	//! A list of ALL SQL types
-	static const vector<SQLType> ALL_TYPES;
+	static const vector<LogicalType> ALL_TYPES;
 };
 
-string SQLTypeIdToString(SQLTypeId type);
-string SQLTypeToString(SQLType type);
+string LogicalTypeIdToString(LogicalTypeId type);
+string LogicalTypeToString(LogicalType type);
 
-SQLType MaxSQLType(SQLType left, SQLType right);
-SQLType TransformStringToSQLType(string str);
+LogicalType MaxLogicalType(LogicalType left, LogicalType right);
+LogicalType TransformStringToLogicalType(string str);
 
 //! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
 int NumericTypeOrder(TypeId type);
 
 //! Gets the internal type associated with the given SQL type
-TypeId GetInternalType(SQLType type);
-//! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INT32 -> SQLTypeId::INTEGER)
-SQLType SQLTypeFromInternalType(TypeId type);
+TypeId GetInternalType(LogicalType type);
+//! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INT32 -> LogicalTypeId::INTEGER)
+LogicalType LogicalTypeFromInternalType(TypeId type);
 
 //! Returns the TypeId for the given type
 template <class T> TypeId GetTypeId() {

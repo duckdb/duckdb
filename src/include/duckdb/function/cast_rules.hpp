@@ -15,7 +15,7 @@ namespace duckdb {
 class CastRules {
 public:
 	//! Returns the cost of performing an implicit cost from "from" to "to", or -1 if an implicit cast is not possible
-	static int64_t ImplicitCast(SQLType from, SQLType to);
+	static int64_t ImplicitCast(LogicalType from, LogicalType to);
 };
 
 } // namespace duckdb

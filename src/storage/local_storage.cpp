@@ -386,7 +386,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	table_storage[new_dt] = move(new_storage);
 }
 
-void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, SQLType target_type,
+void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, LogicalType target_type,
                               vector<column_t> bound_columns, Expression &cast_expr) {
 	// check if there are any pending appends for the old version of the table
 	auto entry = table_storage.find(old_dt);

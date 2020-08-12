@@ -46,7 +46,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 		// e.g. GROUP BY k, k or GROUP BY 1, 1
 		// in this case, we can just replace the grouping with a constant since the second grouping has no effect
 		// (the constant grouping will be optimized out later)
-		return BindResult(make_unique<BoundConstantExpression>(Value(42)), SQLType::INTEGER);
+		return BindResult(make_unique<BoundConstantExpression>(Value(42)), LogicalType::INTEGER);
 	}
 	if (entry >= node.select_list.size()) {
 		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());
@@ -55,7 +55,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 	unbound_expression = node.select_list[entry]->Copy();
 	// move the expression that this refers to here and bind it
 	auto select_entry = move(node.select_list[entry]);
-	SQLType group_type;
+	LogicalType group_type;
 	auto binding = Bind(select_entry, &group_type, false);
 	// now replace the original expression in the select list with a reference to this group
 	group_alias_map[to_string(entry)] = bind_index;

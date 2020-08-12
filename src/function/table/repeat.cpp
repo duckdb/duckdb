@@ -13,9 +13,9 @@ struct RepeatFunctionData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 	// the repeat function returns the type of the first argument
-	return_types.push_back(inputs[0].GetSQLType());
+	return_types.push_back(inputs[0].GetLogicalType());
 	names.push_back(inputs[0].ToString());
 	return make_unique<RepeatFunctionData>(inputs[1].GetValue<int64_t>());
 }
@@ -29,7 +29,7 @@ static void repeat_function(ClientContext &context, vector<Value> &input, DataCh
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("repeat", {SQLType::ANY, SQLType::BIGINT}, repeat_bind, repeat_function, nullptr);
+	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, repeat_bind, repeat_function, nullptr);
 	set.AddFunction(repeat);
 }
 

@@ -18,7 +18,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 	if (root->defresult) {
 		def_res = TransformExpression(reinterpret_cast<PGNode *>(root->defresult));
 	} else {
-		def_res = make_unique<ConstantExpression>(SQLType::SQLNULL, Value());
+		def_res = make_unique<ConstantExpression>(LogicalType::SQLNULL, Value());
 	}
 	// def_res will be the else part of the innermost case expression
 

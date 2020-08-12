@@ -21,7 +21,7 @@ public:
 	//! The set of columns bound to this base table reference
 	vector<string> bound_columns;
 	//! The types of the values list
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! The index in the bind context
 	idx_t bind_index;
 	//! The index of the cte

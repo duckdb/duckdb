@@ -80,7 +80,7 @@ struct StringAggFunction {
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
 	string_agg.AddFunction(AggregateFunction(
-	    {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::VARCHAR, AggregateFunction::StateSize<string_agg_state_t>,
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<string_agg_state_t>,
 	    AggregateFunction::StateInitialize<string_agg_state_t, StringAggFunction>,
 	    AggregateFunction::BinaryScatterUpdate<string_agg_state_t, string_t, string_t, StringAggFunction>, nullptr,
 	    AggregateFunction::StateFinalize<string_agg_state_t, string_t, StringAggFunction>,

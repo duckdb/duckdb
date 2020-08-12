@@ -13,16 +13,16 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	}
 	// get the type to cast to
 	auto type_name = root->typeName;
-	SQLType target_type = TransformTypeName(type_name);
+	LogicalType target_type = TransformTypeName(type_name);
 
 	// check for a constant BLOB value, then return ConstantExpression with BLOB
-	if (target_type == SQLType::BLOB && root->arg->type == T_PGAConst) {
+	if (target_type == LogicalType::BLOB && root->arg->type == T_PGAConst) {
 		PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
 		if (c->val.type == T_PGString) {
-			return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(c->val.val.str)));
+			return make_unique<ConstantExpression>(LogicalType::BLOB, Value::BLOB(string(c->val.val.str)));
 		}
 	}
-	if (target_type == SQLType::INTERVAL && root->arg->type == T_PGAConst) {
+	if (target_type == LogicalType::INTERVAL && root->arg->type == T_PGAConst) {
 		// handle post-fix notation of INTERVAL
 		if (root->typeName->typmods && root->typeName->typmods->length > 0) {
 			PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
@@ -49,33 +49,33 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 			unique_ptr<ParsedExpression> expr;
 			if (mask & DAY_MASK && mask & HOUR_MASK) {
 				// DAY TO HOUR
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24) + " hours"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount * 24) + " hours"));
 			} else if (mask & DAY_MASK && mask & MINUTE_MASK) {
 				// DAY TO MINUTE
 				expr =
-				    make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24 * 60) + " minutes"));
+				    make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount * 24 * 60) + " minutes"));
 			} else if (mask & DAY_MASK && mask & SECOND_MASK) {
 				// DAY TO SECOND
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR,
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR,
 				                                       Value(to_string(amount * 24 * 60 * 60) + " seconds"));
 			} else if (mask & HOUR_MASK) {
 				// HOUR
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " hours"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " hours"));
 			} else if (mask & YEAR_MASK) {
 				// YEAR
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " years"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " years"));
 			} else if (mask & MONTH_MASK) {
 				// MONTH
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " months"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " months"));
 			} else if (mask & DAY_MASK) {
 				// DAY
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " days"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " days"));
 			} else if (mask & MINUTE_MASK) {
 				// MINUTE
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " minutes"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " minutes"));
 			} else if (mask & SECOND_MASK) {
 				// SECOND
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " seconds"));
+				expr = make_unique<ConstantExpression>(LogicalType::VARCHAR, Value(to_string(amount) + " seconds"));
 			} else {
 				throw ParserException("Unsupported interval post-fix");
 			}

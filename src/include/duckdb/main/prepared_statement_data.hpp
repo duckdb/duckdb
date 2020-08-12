@@ -19,7 +19,7 @@ class PhysicalOperator;
 
 struct PreparedValueEntry {
 	unique_ptr<Value> value;
-	SQLType target_type;
+	LogicalType target_type;
 };
 
 class PreparedStatementData {
@@ -40,7 +40,7 @@ public:
 	//! The (internal) result types of the statement
 	vector<TypeId> types;
 	//! The result SQL types of the transaction
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 
 	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
 	bool read_only;
@@ -52,7 +52,7 @@ public:
 	//! Bind a set of values to the prepared statement data
 	void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter
-	SQLType GetType(idx_t param_index);
+	LogicalType GetType(idx_t param_index);
 };
 
 } // namespace duckdb
