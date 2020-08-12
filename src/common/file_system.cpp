@@ -324,7 +324,7 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 // Returns the last Win32 error, in string format. Returns an empty string if there is no error.
 std::string GetLastErrorAsString() {
 	// Get the error message, if any.
-	DWORD errorMessageID = ::GetLastError();
+	DWORD errorMessageID = GetLastError();
 	if (errorMessageID == 0)
 		return std::string(); // No error message has been recorded
 
