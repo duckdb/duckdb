@@ -6,7 +6,7 @@
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> bindings,
@@ -148,3 +148,5 @@ unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundReferenceExpres
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
+
+} // namespace duckdb

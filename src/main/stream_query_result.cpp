@@ -3,7 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<SQLType> sql_types,
@@ -58,3 +58,5 @@ void StreamQueryResult::Close() {
 	}
 	context.Cleanup();
 }
+
+} // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
@@ -21,3 +21,5 @@ string LogicalComparisonJoin::ParamsToString() const {
 
 	return result;
 }
+
+} // namespace duckdb

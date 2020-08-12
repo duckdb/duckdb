@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void ViewCatalogEntry::Initialize(CreateViewInfo *info) {
@@ -52,3 +52,5 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 	}
 	return info;
 }
+
+} // namespace duckdb

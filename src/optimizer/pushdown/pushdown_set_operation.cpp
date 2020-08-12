@@ -5,7 +5,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -60,3 +60,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return op;
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferedSerializer::BufferedSerializer(idx_t maximum_size)
@@ -28,3 +28,5 @@ void BufferedSerializer::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	memcpy(blob.data.get() + blob.size, buffer, write_size);
 	blob.size += write_size;
 }
+
+} // namespace duckdb

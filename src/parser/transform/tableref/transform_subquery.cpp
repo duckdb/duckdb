@@ -1,7 +1,7 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root) {
@@ -19,3 +19,5 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(PGRangeSubselect *root
 	}
 	return move(result);
 }
+
+} // namespace duckdb

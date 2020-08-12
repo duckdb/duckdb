@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SequenceCatalogEntry::SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info)
@@ -42,3 +42,5 @@ unique_ptr<CreateSequenceInfo> SequenceCatalogEntry::Deserialize(Deserializer &s
 	info->cycle = source.Read<bool>();
 	return info;
 }
+
+} // namespace duckdb

@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_delete.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
@@ -22,3 +22,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op
 	del->children.push_back(move(plan));
 	return move(del);
 }
+
+} // namespace duckdb

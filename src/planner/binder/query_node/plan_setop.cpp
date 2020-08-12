@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<SQLType> &source_types,
@@ -95,3 +95,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 
 	return VisitQueryNode(node, move(root));
 }
+
+} // namespace duckdb

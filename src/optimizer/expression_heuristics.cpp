@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/expression/list.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOperator> op) {
@@ -73,7 +73,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
 		if (expr.target_type == SQLType::VARCHAR || expr.source_type == SQLType::VARCHAR ||
-            expr.target_type == SQLType::BLOB || expr.source_type == SQLType::BLOB) {
+		    expr.target_type == SQLType::BLOB || expr.source_type == SQLType::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;
@@ -197,3 +197,5 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	// return a very high value if nothing matches
 	return 1000;
 }
+
+} // namespace duckdb

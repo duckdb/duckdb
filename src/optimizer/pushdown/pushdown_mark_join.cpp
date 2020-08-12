@@ -2,7 +2,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -70,3 +70,5 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
 	return FinishPushdown(move(op));
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 DependencyManager::DependencyManager(Catalog &catalog) : catalog(catalog) {
@@ -138,3 +138,5 @@ void DependencyManager::ClearDependencies(CatalogSet &set) {
 		}
 	}
 }
+
+} // namespace duckdb

@@ -7,7 +7,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
@@ -96,3 +96,5 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
 }
+
+} // namespace duckdb

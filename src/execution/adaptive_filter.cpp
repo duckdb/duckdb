@@ -1,10 +1,10 @@
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include <vector>
 
-using namespace duckdb;
 using namespace std;
+
+namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(Expression &expr)
     : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
@@ -87,3 +87,5 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 		}
 	}
 }
+
+} // namespace duckdb

@@ -3,7 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/limits.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
@@ -54,3 +54,5 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(PGValue val) {
 unique_ptr<ParsedExpression> Transformer::TransformConstant(PGAConst *c) {
 	return TransformValue(c->val);
 }
+
+} // namespace duckdb

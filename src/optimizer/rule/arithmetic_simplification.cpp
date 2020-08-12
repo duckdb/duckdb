@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -64,3 +64,4 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	}
 	return nullptr;
 }
+} // namespace duckdb

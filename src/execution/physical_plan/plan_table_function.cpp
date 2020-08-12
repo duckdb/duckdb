@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_table_function.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTableFunction &op) {
@@ -14,3 +14,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalTableFunct
 	tfd->column_ids = op.column_ids;
 	return make_unique<PhysicalTableFunction>(op.types, op.function, move(op.bind_data), move(op.parameters));
 }
+
+} // namespace duckdb

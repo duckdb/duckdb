@@ -1,7 +1,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct InitialNestedLoopJoin {
@@ -97,8 +97,8 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 		return NLTYPE::template Operation<int64_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                               current_match_count);
 	case TypeId::INT128:
-		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                               current_match_count);
+		return NLTYPE::template Operation<hugeint_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                 rvector, current_match_count);
 	case TypeId::FLOAT:
 		return NLTYPE::template Operation<float, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                             current_match_count);
@@ -106,8 +106,8 @@ static idx_t nested_loop_join_inner_operator(Vector &left, Vector &right, idx_t 
 		return NLTYPE::template Operation<double, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
 		                                              current_match_count);
 	case TypeId::INTERVAL:
-		return NLTYPE::template Operation<interval_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector, rvector,
-		                                              current_match_count);
+		return NLTYPE::template Operation<interval_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
+		                                                  rvector, current_match_count);
 	case TypeId::VARCHAR:
 		return NLTYPE::template Operation<string_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                rvector, current_match_count);
@@ -173,3 +173,5 @@ idx_t NestedLoopJoinInner::Perform(idx_t &lpos, idx_t &rpos, DataChunk &left_con
 	}
 	return match_count;
 }
+
+} // namespace duckdb

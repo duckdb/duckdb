@@ -2,7 +2,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_chunk_get.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalChunkGet &op) {
@@ -15,3 +15,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalChunkGet &
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return move(chunk_scan);
 }
+
+} // namespace duckdb

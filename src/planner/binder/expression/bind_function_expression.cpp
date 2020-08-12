@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth) {
@@ -87,3 +87,5 @@ string ExpressionBinder::UnsupportedAggregateMessage() {
 string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
+
+} // namespace duckdb

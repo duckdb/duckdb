@@ -4,7 +4,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Expression::Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type)
@@ -63,3 +63,5 @@ hash_t Expression::Hash() const {
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
 }
+
+} // namespace duckdb

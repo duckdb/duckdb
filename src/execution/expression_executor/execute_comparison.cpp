@@ -4,7 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundComparisonExpression &expr,
@@ -105,3 +105,5 @@ idx_t ExpressionExecutor::Select(BoundComparisonExpression &expr, ExpressionStat
 		throw NotImplementedException("Unknown comparison type!");
 	}
 }
+
+} // namespace duckdb

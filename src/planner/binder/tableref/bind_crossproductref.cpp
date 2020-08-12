@@ -2,7 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_crossproductref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
@@ -11,3 +11,5 @@ unique_ptr<BoundTableRef> Binder::Bind(CrossProductRef &ref) {
 	result->right = Bind(*ref.right);
 	return move(result);
 }
+
+} // namespace duckdb

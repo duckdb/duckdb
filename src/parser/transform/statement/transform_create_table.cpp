@@ -4,7 +4,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 string Transformer::TransformCollation(PGCollateClause *collate) {
@@ -95,3 +95,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

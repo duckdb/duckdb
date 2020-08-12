@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void AlterInfo::Serialize(Serializer &serializer) {
@@ -135,3 +135,4 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(Deserializer &source, string s
 	auto new_default = source.ReadOptional<ParsedExpression>();
 	return make_unique<SetDefaultInfo>(schema, table, move(column_name), move(new_default));
 }
+} // namespace duckdb

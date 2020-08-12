@@ -13,7 +13,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Planner::Planner(ClientContext &context) : binder(context), context(context) {
@@ -185,3 +185,5 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 // 	assert(Expression::Equals(copy.get(), &expr));
 // 	copies.push_back(move(copy));
 // }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T, class OP>
@@ -90,3 +90,5 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ChunkCollection &right, bool f
 		}
 	}
 }
+
+} // namespace duckdb

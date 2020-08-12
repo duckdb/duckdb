@@ -4,7 +4,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
@@ -67,3 +67,5 @@ unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type
 	source.ReadList<ParsedExpression>(expression->children);
 	return move(expression);
 }
+
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 
 Node::Node(ART &art, NodeType type, size_t compressedPrefixSize) : prefix_length(0), count(0), type(type) {
 	this->prefix = unique_ptr<uint8_t[]>(new uint8_t[compressedPrefixSize]);
@@ -74,3 +74,5 @@ void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
 		break;
 	}
 }
+
+} // namespace duckdb

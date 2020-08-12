@@ -2,8 +2,10 @@
 
 #include "duckdb/catalog/catalog.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CatalogEntry::~CatalogEntry() {
 }
+
+} // namespace duckdb

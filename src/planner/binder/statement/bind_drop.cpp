@@ -5,7 +5,7 @@
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
@@ -45,3 +45,5 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.types = {SQLType::BOOLEAN};
 	return result;
 }
+
+} // namespace duckdb

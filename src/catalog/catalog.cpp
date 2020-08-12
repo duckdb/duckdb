@@ -21,7 +21,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Catalog::Catalog(StorageManager &storage)
@@ -252,3 +252,5 @@ end:
 		throw ParserException("Expected schema.entry or entry: too many entries found");
 	}
 }
+
+} // namespace duckdb

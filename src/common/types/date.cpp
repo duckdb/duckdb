@@ -9,11 +9,13 @@
 #include <cctype>
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
-string_t Date::MonthNamesAbbreviated[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-string_t Date::MonthNames[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+string_t Date::MonthNamesAbbreviated[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+string_t Date::MonthNames[] = {"January", "February", "March",     "April",   "May",      "June",
+                               "July",    "August",   "September", "October", "November", "December"};
 string_t Date::DayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 string_t Date::DayNamesAbbreviated[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 
@@ -161,10 +163,8 @@ bool Date::TryConvertDate(const char *buf, idx_t &pos, date_t &result, bool stri
 	}
 
 	// check for an optional trailing " (BC)""
-	if (std::isspace(buf[pos]) && buf[pos + 1] == '(' &&
-	                              buf[pos + 2] == 'B' &&
-								  buf[pos + 3] == 'C' &&
-								  buf[pos + 4] == ')') {
+	if (std::isspace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' && buf[pos + 3] == 'C' &&
+	    buf[pos + 4] == ')') {
 		year = -year;
 		pos += 5;
 	}
@@ -363,3 +363,5 @@ date_t Date::GetMondayOfCurrentWeek(date_t date) {
 
 	return (Date::FromDate(year, month, day));
 }
+
+} // namespace duckdb

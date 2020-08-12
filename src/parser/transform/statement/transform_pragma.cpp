@@ -2,7 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
@@ -46,3 +46,5 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

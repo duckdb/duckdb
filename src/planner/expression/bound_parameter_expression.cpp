@@ -1,7 +1,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/types/hash.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
@@ -45,3 +45,5 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	result->return_type = return_type;
 	return move(result);
 }
+
+} // namespace duckdb

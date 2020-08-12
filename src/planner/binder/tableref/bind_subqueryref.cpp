@@ -2,7 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
@@ -15,3 +15,5 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref) {
 	MoveCorrelatedExpressions(*result->binder);
 	return move(result);
 }
+
+} // namespace duckdb

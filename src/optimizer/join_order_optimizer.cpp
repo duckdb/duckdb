@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using JoinNode = JoinOrderOptimizer::JoinNode;
@@ -763,3 +763,5 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now perform the actual reordering
 	return RewritePlan(move(plan), final_plan->second.get());
 }
+
+} // namespace duckdb

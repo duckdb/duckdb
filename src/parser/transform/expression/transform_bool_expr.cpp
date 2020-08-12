@@ -2,7 +2,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(PGBoolExpr *root) {
@@ -47,3 +47,5 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(PGBoolExpr *root) {
 	}
 	return result;
 }
+
+} // namespace duckdb

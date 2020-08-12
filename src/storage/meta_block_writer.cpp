@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 MetaBlockWriter::MetaBlockWriter(BlockManager &manager) : manager(manager) {
@@ -45,3 +45,5 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	memcpy(block->buffer + offset, buffer, write_size);
 	offset += write_size;
 }
+
+} // namespace duckdb

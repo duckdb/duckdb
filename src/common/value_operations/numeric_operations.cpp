@@ -4,7 +4,7 @@
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class OP, bool IGNORE_NULL> static Value templated_binary_operation(const Value &left, const Value &right) {
@@ -161,3 +161,5 @@ Value ValueOperations::Divide(const Value &left, const Value &right) {
 // Value ValueOperations::Max(const Value &left, const Value &right) {
 // 	return templated_binary_operation<duckdb::Max, true>(left, right);
 // }
+
+} // namespace duckdb

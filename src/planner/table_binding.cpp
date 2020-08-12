@@ -10,7 +10,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TableBinding::TableBinding(const string &alias, TableCatalogEntry &table, LogicalGet &get, idx_t index)
@@ -113,3 +113,5 @@ void GenericBinding::GenerateAllColumnExpressions(BindContext &context,
 		select_list.push_back(make_unique<ColumnRefExpression>(column_name, alias));
 	}
 }
+
+} // namespace duckdb

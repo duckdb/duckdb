@@ -5,7 +5,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/uncompressed_segment.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LocalTableStorage::LocalTableStorage(DataTable &table) : max_row(0) {
@@ -395,3 +395,5 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 	}
 	throw NotImplementedException("FIXME: ALTER TYPE with transaction local data not currently supported");
 }
+
+} // namespace duckdb

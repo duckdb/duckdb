@@ -4,7 +4,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TransactionContext::~TransactionContext() {
@@ -42,3 +42,5 @@ void TransactionContext::Rollback() {
 	current_transaction = nullptr;
 	transaction_manager.RollbackTransaction(transaction);
 }
+
+} // namespace duckdb

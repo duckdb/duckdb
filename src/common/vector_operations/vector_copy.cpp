@@ -10,7 +10,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 template <class T>
@@ -197,3 +197,5 @@ void VectorOperations::Copy(Vector &source, Vector &target, idx_t source_count, 
 		break;
 	}
 }
+
+} // namespace duckdb

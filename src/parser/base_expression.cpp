@@ -2,7 +2,7 @@
 
 #include "duckdb/common/printer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void BaseExpression::Print() {
@@ -18,3 +18,5 @@ bool BaseExpression::Equals(const BaseExpression *other) const {
 	}
 	return true;
 }
+
+} // namespace duckdb

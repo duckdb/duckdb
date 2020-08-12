@@ -9,7 +9,7 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct ComparisonExecutor {
@@ -84,3 +84,5 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
 	ComparisonExecutor::Execute<duckdb::LessThan>(left, right, result, count);
 }
+
+} // namespace duckdb

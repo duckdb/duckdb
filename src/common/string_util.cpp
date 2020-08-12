@@ -8,7 +8,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool StringUtil::Contains(const string &haystack, const string &needle) {
@@ -191,3 +191,5 @@ string StringUtil::Replace(string source, const string &from, const string &to) 
 	}
 	return source;
 }
+
+} // namespace duckdb

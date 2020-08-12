@@ -8,7 +8,7 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
@@ -36,3 +36,5 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 }
+
+} // namespace duckdb

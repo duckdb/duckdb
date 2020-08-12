@@ -3,7 +3,7 @@
 
 #include "duckdb/planner/operator/logical_index_scan.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalIndexScan &op) {
@@ -26,3 +26,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalIndexScan 
 	plan = move(node);
 	return plan;
 }
+
+} // namespace duckdb

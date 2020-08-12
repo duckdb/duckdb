@@ -2,7 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
@@ -10,3 +10,5 @@ SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
 	// transform it to the SQL type
 	return TransformStringToSQLType(name);
 }
+
+} // namespace duckdb

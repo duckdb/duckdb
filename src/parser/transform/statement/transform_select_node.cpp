@@ -6,7 +6,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
@@ -124,3 +124,5 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	}
 	return node;
 }
+
+} // namespace duckdb

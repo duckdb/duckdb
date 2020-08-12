@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
@@ -68,7 +68,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 				// format specifier: interpret this option
 				auto *format_val = (PGValue *)(def_elem->arg);
 				if (!format_val || format_val->type != T_PGString) {
-					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'csv_auto'");
+					throw ParserException(
+					    "Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'csv_auto'");
 				}
 				info.format = StringUtil::Lower(format_val->val.str);
 				continue;
@@ -102,3 +103,5 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

@@ -3,7 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 hash_t ValueOperations::Hash(const Value &op) {
@@ -35,3 +35,5 @@ hash_t ValueOperations::Hash(const Value &op) {
 		throw NotImplementedException("Unimplemented type for value hash");
 	}
 }
+
+} // namespace duckdb

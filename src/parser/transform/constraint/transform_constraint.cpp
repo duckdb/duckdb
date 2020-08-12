@@ -3,7 +3,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell) {
@@ -53,3 +53,5 @@ unique_ptr<Constraint> Transformer::TransformConstraint(PGListCell *cell, Column
 		throw NotImplementedException("Constraint not implemented!");
 	}
 }
+
+} // namespace duckdb

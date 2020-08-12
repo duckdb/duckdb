@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root) {
@@ -38,3 +38,5 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 	}
 	return root;
 }
+
+} // namespace duckdb

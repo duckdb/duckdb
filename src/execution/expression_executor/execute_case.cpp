@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
@@ -159,3 +159,5 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		                              TypeIdToString(result.type).c_str());
 	}
 }
+
+} // namespace duckdb

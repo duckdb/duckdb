@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ExpressionExecutor::ExpressionExecutor() {
@@ -237,3 +237,5 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);
 	}
 }
+
+} // namespace duckdb

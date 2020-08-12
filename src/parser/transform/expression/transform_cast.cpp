@@ -4,7 +4,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
@@ -15,10 +15,10 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	auto type_name = root->typeName;
 	SQLType target_type = TransformTypeName(type_name);
 
-	//check for a constant BLOB value, then return ConstantExpression with BLOB
-	if(target_type == SQLType::BLOB && root->arg->type == T_PGAConst) {
+	// check for a constant BLOB value, then return ConstantExpression with BLOB
+	if (target_type == SQLType::BLOB && root->arg->type == T_PGAConst) {
 		PGAConst *c = reinterpret_cast<PGAConst *>(root->arg);
-		if(c->val.type == T_PGString) {
+		if (c->val.type == T_PGString) {
 			return make_unique<ConstantExpression>(SQLType::BLOB, Value::BLOB(string(c->val.val.str)));
 		}
 	}
@@ -33,7 +33,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 				throw ParserException("Interval post-fix requires a number!");
 			}
 
-			int mask = ((PGAConst*)root->typeName->typmods->head->data.ptr_value)->val.val.ival;
+			int mask = ((PGAConst *)root->typeName->typmods->head->data.ptr_value)->val.val.ival;
 			// these seemingly random constants are from datetime.hpp
 			// they are copied here to avoid having to include this header
 			// the bitshift is from the function INTERVAL_MASK in the parser
@@ -52,10 +52,12 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24) + " hours"));
 			} else if (mask & DAY_MASK && mask & MINUTE_MASK) {
 				// DAY TO MINUTE
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24 * 60) + " minutes"));
+				expr =
+				    make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24 * 60) + " minutes"));
 			} else if (mask & DAY_MASK && mask & SECOND_MASK) {
 				// DAY TO SECOND
-				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount * 24 * 60 * 60) + " seconds"));
+				expr = make_unique<ConstantExpression>(SQLType::VARCHAR,
+				                                       Value(to_string(amount * 24 * 60 * 60) + " seconds"));
 			} else if (mask & HOUR_MASK) {
 				// HOUR
 				expr = make_unique<ConstantExpression>(SQLType::VARCHAR, Value(to_string(amount) + " hours"));
@@ -87,3 +89,5 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	// now create a cast operation
 	return make_unique<CastExpression>(target_type, move(expression));
 }
+
+} // namespace duckdb
