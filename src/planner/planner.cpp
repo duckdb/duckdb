@@ -45,7 +45,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
-		if (expr->return_type == TypeId::INVALID) {
+		if (expr->return_type == PhysicalType::INVALID) {
 			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 		}
 		auto value = make_unique<Value>(expr->return_type);

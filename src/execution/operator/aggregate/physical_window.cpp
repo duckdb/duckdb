@@ -25,7 +25,7 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<PhysicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
     : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 }
@@ -68,7 +68,7 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		return;
 	}
 
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	ExpressionExecutor executor;
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
@@ -97,7 +97,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
-	vector<TypeId> sort_types;
+	vector<PhysicalType> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
@@ -483,7 +483,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			return;
 		}
 
-		vector<TypeId> window_types;
+		vector<PhysicalType> window_types;
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);
 		}

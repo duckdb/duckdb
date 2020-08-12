@@ -77,7 +77,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<unique_ptr<Expression>> bound_expressions;
 				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
-					TypeId column_type = GetInternalType(columns[key].type);
+					PhysicalType column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
 
 					unbound_expressions.push_back(
@@ -392,19 +392,19 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	return columns[entry->second];
 }
 
-vector<TypeId> TableCatalogEntry::GetTypes() {
-	vector<TypeId> types;
+vector<PhysicalType> TableCatalogEntry::GetTypes() {
+	vector<PhysicalType> types;
 	for (auto &it : columns) {
 		types.push_back(GetInternalType(it.type));
 	}
 	return types;
 }
 
-vector<TypeId> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<TypeId> result;
+vector<PhysicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
+	vector<PhysicalType> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(TypeId::INT64);
+			result.push_back(PhysicalType::INT64);
 		} else {
 			result.push_back(GetInternalType(columns[index].type));
 		}

@@ -263,7 +263,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 	options.escape = "\"";
 
 	// set up the intermediate result chunk
-	vector<TypeId> internal_types;
+	vector<PhysicalType> internal_types;
 	for (auto &type : sql_types) {
 		internal_types.push_back(GetInternalType(type));
 	}

@@ -24,22 +24,22 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	Value(TypeId type = TypeId::INT32) : type(type), is_null(true) {
+	Value(PhysicalType type = PhysicalType::INT32) : type(type), is_null(true) {
 	}
 	//! Create a BIGINT value
-	Value(int32_t val) : type(TypeId::INT32), is_null(false) {
+	Value(int32_t val) : type(PhysicalType::INT32), is_null(false) {
 		value_.integer = val;
 	}
 	//! Create a BIGINT value
-	Value(int64_t val) : type(TypeId::INT64), is_null(false) {
+	Value(int64_t val) : type(PhysicalType::INT64), is_null(false) {
 		value_.bigint = val;
 	}
 	//! Create a FLOAT value
-	Value(float val) : type(TypeId::FLOAT), is_null(false) {
+	Value(float val) : type(PhysicalType::FLOAT), is_null(false) {
 		value_.float_ = val;
 	}
 	//! Create a DOUBLE value
-	Value(double val) : type(TypeId::DOUBLE), is_null(false) {
+	Value(double val) : type(PhysicalType::DOUBLE), is_null(false) {
 		value_.double_ = val;
 	}
 	//! Create a VARCHAR value
@@ -50,11 +50,11 @@ public:
 	Value(string val);
 
 	//! Create the lowest possible value of a given type (numeric only)
-	static Value MinimumValue(TypeId type);
+	static Value MinimumValue(PhysicalType type);
 	//! Create the highest possible value of a given type (numeric only)
-	static Value MaximumValue(TypeId type);
+	static Value MaximumValue(PhysicalType type);
 	//! Create a Numeric value of the specified type with the specified value
-	static Value Numeric(TypeId id, int64_t value);
+	static Value Numeric(PhysicalType id, int64_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
@@ -118,14 +118,14 @@ public:
 	string ToString(LogicalType type) const;
 
 	//! Cast this value to another type
-	Value CastAs(TypeId target_type, bool strict = false) const;
+	Value CastAs(PhysicalType target_type, bool strict = false) const;
 	//! Cast this value to another type
 	Value CastAs(LogicalType source_type, LogicalType target_type, bool strict = false);
 	//! Tries to cast value to another type, throws exception if its not possible
 	bool TryCastAs(LogicalType source_type, LogicalType target_type, bool strict = false);
 
 	//! The type of the value
-	TypeId type;
+	PhysicalType type;
 	//! Whether or not the value is NULL
 	bool is_null;
 

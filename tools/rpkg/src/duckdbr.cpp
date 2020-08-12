@@ -344,7 +344,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		case RType::FACTOR: {
 			auto int_val = INTEGER_POINTER(valsexp)[0];
 			auto levels = GET_LEVELS(valsexp);
-			val.type = TypeId::VARCHAR;
+			val.type = PhysicalType::VARCHAR;
 			val.is_null = RIntegerType::IsNull(int_val);
 			if (!val.is_null) {
 				auto str_val = STRING_ELT(levels, int_val - 1);

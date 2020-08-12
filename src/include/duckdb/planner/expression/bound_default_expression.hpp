@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BoundDefaultExpression : public Expression {
 public:
-	BoundDefaultExpression(TypeId type = TypeId::INVALID, LogicalType sql_type = LogicalType())
+	BoundDefaultExpression(PhysicalType type = PhysicalType::INVALID, LogicalType sql_type = LogicalType())
 	    : Expression(ExpressionType::VALUE_DEFAULT, ExpressionClass::BOUND_DEFAULT, type), sql_type(sql_type) {
 	}
 

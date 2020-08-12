@@ -20,16 +20,16 @@ static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vect
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
 		result->start = Value::BIGINT(0);
-		result->end = inputs[0].CastAs(TypeId::INT64);
+		result->end = inputs[0].CastAs(PhysicalType::INT64);
 	} else {
 		// two arguments: first two arguments are start and end
-		result->start = inputs[0].CastAs(TypeId::INT64);
-		result->end = inputs[1].CastAs(TypeId::INT64);
+		result->start = inputs[0].CastAs(PhysicalType::INT64);
+		result->end = inputs[1].CastAs(PhysicalType::INT64);
 	}
 	if (inputs.size() < 3) {
 		result->increment = Value::BIGINT(1);
 	} else {
-		result->increment = inputs[2].CastAs(TypeId::INT64);
+		result->increment = inputs[2].CastAs(PhysicalType::INT64);
 	}
 	if (result->increment == 0) {
 		throw BinderException("interval cannot be 0!");

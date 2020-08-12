@@ -64,7 +64,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 	assert((GetTypeId<TYPE>()) == result.type);
 
 	switch(GetTypeId<TYPE>()) {
-		case TypeId::VARCHAR: {
+		case PhysicalType::VARCHAR: {
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<string_t>(result);
 			auto ldata = FlatVector::GetData<string_t>(input.data[0]);
@@ -106,7 +106,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 	assert((GetTypeId<TYPE>()) == result.type);
 
 	switch(GetTypeId<TYPE>()) {
-		case TypeId::VARCHAR: {
+		case PhysicalType::VARCHAR: {
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<string_t>(result);
 			auto ldata = FlatVector::GetData<string_t>(input.data[1]);
@@ -149,7 +149,7 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 	assert((GetTypeId<TYPE>()) == result.type);
 
 	switch(GetTypeId<TYPE>()) {
-		case TypeId::VARCHAR: {
+		case PhysicalType::VARCHAR: {
 			result.vector_type = VectorType::FLAT_VECTOR;
 			auto result_data = FlatVector::GetData<string_t>(result);
 			auto ldata = FlatVector::GetData<string_t>(input.data[2]);

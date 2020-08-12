@@ -178,7 +178,7 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 	parse_chunk.Destroy();
 
 	// initialize the parse_chunk with a set of VARCHAR types
-	vector<TypeId> varchar_types(num_cols, TypeId::VARCHAR);
+	vector<PhysicalType> varchar_types(num_cols, PhysicalType::VARCHAR);
 	parse_chunk.Initialize(varchar_types);
 }
 

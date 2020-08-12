@@ -11,7 +11,7 @@ using namespace std;
 namespace duckdb {
 
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
-    : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
+    : UncompressedSegment(manager, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
@@ -414,7 +414,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type == TypeId::VARCHAR);
+	assert(data.type == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {

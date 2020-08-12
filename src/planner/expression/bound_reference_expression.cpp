@@ -6,11 +6,11 @@
 namespace duckdb {
 using namespace std;
 
-BoundReferenceExpression::BoundReferenceExpression(string alias, TypeId type, idx_t index)
+BoundReferenceExpression::BoundReferenceExpression(string alias, PhysicalType type, idx_t index)
     : Expression(ExpressionType::BOUND_REF, ExpressionClass::BOUND_REF, type), index(index) {
 	this->alias = alias;
 }
-BoundReferenceExpression::BoundReferenceExpression(TypeId type, idx_t index)
+BoundReferenceExpression::BoundReferenceExpression(PhysicalType type, idx_t index)
     : BoundReferenceExpression(string(), type, index) {
 }
 

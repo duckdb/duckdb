@@ -12,7 +12,7 @@ struct FunctionState : public ExpressionState {
 		}
 	}
 
-	vector<TypeId> child_types;
+	vector<PhysicalType> child_types;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,

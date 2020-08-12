@@ -5,7 +5,7 @@ namespace duckdb {
 using namespace std;
 
 BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
-    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, TypeId::INVALID),
+    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, PhysicalType::INVALID),
       sql_type(LogicalType(LogicalTypeId::UNKNOWN)), parameter_nr(parameter_nr), value(nullptr) {
 }
 

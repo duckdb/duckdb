@@ -75,7 +75,7 @@ template <class T, class TARGET> static void assign_json_loop(Vector &v, idx_t c
 
 void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 	assert(res);
-	Vector v2(TypeId::VARCHAR);
+	Vector v2(PhysicalType::VARCHAR);
 	for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 		Vector *v = &chunk->data[col_idx];
 		switch (res->sql_types[col_idx].id) {
@@ -94,28 +94,28 @@ void serialize_chunk(QueryResult *res, DataChunk *chunk, json &j) {
 		v->Normalify(chunk->size());
 		assert(v);
 		switch (v->type) {
-		case TypeId::BOOL:
+		case PhysicalType::BOOL:
 			assign_json_loop<bool, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::INT8:
+		case PhysicalType::INT8:
 			assign_json_loop<int8_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			assign_json_loop<int16_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			assign_json_loop<int32_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			assign_json_loop<int64_t, int64_t>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			assign_json_loop<float, double>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			assign_json_loop<double, double>(*v, col_idx, chunk->size(), j);
 			break;
-		case TypeId::VARCHAR: {
+		case PhysicalType::VARCHAR: {
 			auto data_ptr = FlatVector::GetData<string_t>(*v);
 			auto &nullmask = FlatVector::Nullmask(*v);
 			for (idx_t i = 0; i < chunk->size(); i++) {

@@ -85,10 +85,10 @@ static bool ParseBoolean(vector<Value> &set) {
 	if (set.size() > 1) {
 		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
 	}
-	if (set[0].type == TypeId::FLOAT || set[0].type == TypeId::DOUBLE) {
+	if (set[0].type == PhysicalType::FLOAT || set[0].type == PhysicalType::DOUBLE) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
-	return set[0].CastAs(TypeId::BOOL).value_.boolean;
+	return set[0].CastAs(PhysicalType::BOOL).value_.boolean;
 }
 
 static string ParseString(vector<Value> &set) {
@@ -96,7 +96,7 @@ static string ParseString(vector<Value> &set) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a string value");
 	}
-	if (set[0].type != TypeId::VARCHAR) {
+	if (set[0].type != PhysicalType::VARCHAR) {
 		throw BinderException("Expected a string argument!");
 	}
 	return set[0].str_value;
@@ -169,7 +169,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	if (set.size() == 0) {
 		throw BinderException("Expected a column list or * as parameter");
 	}
-	if (set.size() == 1 && set[0].type == TypeId::VARCHAR && set[0].str_value == "*") {
+	if (set.size() == 1 && set[0].type == PhysicalType::VARCHAR && set[0].str_value == "*") {
 		// *, force_not_null on all columns
 		result.resize(names.size(), true);
 	} else {
@@ -420,8 +420,8 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 	auto local_data = make_unique<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
-	vector<TypeId> types;
-	types.resize(csv_data.names.size(), TypeId::VARCHAR);
+	vector<PhysicalType> types;
+	types.resize(csv_data.names.size(), PhysicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(types);
 	return move(local_data);

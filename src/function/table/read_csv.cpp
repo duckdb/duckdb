@@ -65,7 +65,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			options.auto_detect = false;
 			for (auto &val : kv.second.struct_value) {
 				names.push_back(val.first);
-				if (val.second.type != TypeId::VARCHAR) {
+				if (val.second.type != PhysicalType::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
 				return_types.push_back(TransformStringToLogicalType(val.second.str_value.c_str()));

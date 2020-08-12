@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalCreateSequence : public PhysicalOperator {
 public:
 	PhysicalCreateSequence(unique_ptr<CreateSequenceInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_SEQUENCE, {PhysicalType::BOOL}), info(move(info)) {
 	}
 
 	unique_ptr<CreateSequenceInfo> info;

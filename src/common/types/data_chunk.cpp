@@ -16,14 +16,14 @@ namespace duckdb {
 DataChunk::DataChunk() : count(0) {
 }
 
-void DataChunk::InitializeEmpty(vector<TypeId> &types) {
+void DataChunk::InitializeEmpty(vector<PhysicalType> &types) {
 	assert(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
-void DataChunk::Initialize(vector<TypeId> &types) {
+void DataChunk::Initialize(vector<PhysicalType> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -91,8 +91,8 @@ void DataChunk::Normalify() {
 	}
 }
 
-vector<TypeId> DataChunk::GetTypes() {
-	vector<TypeId> types;
+vector<PhysicalType> DataChunk::GetTypes() {
+	vector<PhysicalType> types;
 	for (idx_t i = 0; i < column_count(); i++) {
 		types.push_back(data[i].type);
 	}
@@ -125,9 +125,9 @@ void DataChunk::Deserialize(Deserializer &source) {
 	auto rows = source.Read<sel_t>();
 	idx_t column_count = source.Read<idx_t>();
 
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	for (idx_t i = 0; i < column_count; i++) {
-		types.push_back((TypeId)source.Read<int>());
+		types.push_back((PhysicalType)source.Read<int>());
 	}
 	Initialize(types);
 	// now load the column data
@@ -170,7 +170,7 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 }
 
 void DataChunk::Hash(Vector &result) {
-	assert(result.type == TypeId::HASH);
+	assert(result.type == PhysicalType::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < column_count(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());

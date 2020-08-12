@@ -14,7 +14,7 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<TypeId> btypes,
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<PhysicalType> btypes,
                              JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
@@ -151,38 +151,38 @@ static void initialize_outer_join(idx_t count, data_ptr_t key_locations[]) {
 	}
 }
 
-void JoinHashTable::SerializeVectorData(VectorData &vdata, TypeId type, const SelectionVector &sel, idx_t count,
+void JoinHashTable::SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t count,
                                         data_ptr_t key_locations[]) {
 	switch (type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_serialize_vdata<int8_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_serialize_vdata<int16_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_serialize_vdata<int32_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_serialize_vdata<int64_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		templated_serialize_vdata<hugeint_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_serialize_vdata<float>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_serialize_vdata<double>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		templated_serialize_vdata<hash_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		templated_serialize_vdata<interval_t>(vdata, sel, count, key_locations);
 		break;
-	case TypeId::VARCHAR: {
+	case PhysicalType::VARCHAR: {
 		StringHeap local_heap;
 		auto source = (string_t *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
@@ -342,7 +342,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Vector hash_values(TypeId::HASH);
+	Vector hash_values(PhysicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
@@ -363,7 +363,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	assert(hashes.type == TypeId::HASH);
+	assert(hashes.type == PhysicalType::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
@@ -397,7 +397,7 @@ void JoinHashTable::Finalize() {
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
-	Vector hashes(TypeId::HASH);
+	Vector hashes(PhysicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
@@ -446,7 +446,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 
 	// hash all the keys
-	Vector hashes(TypeId::HASH);
+	Vector hashes(PhysicalType::HASH);
 	Hash(keys, *current_sel, ss->count, hashes);
 
 	// now initialize the pointers of the scan structure based on the hashes
@@ -468,7 +468,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht) : sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
-	pointers.Initialize(TypeId::POINTER);
+	pointers.Initialize(PhysicalType::POINTER);
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -534,36 +534,36 @@ static idx_t TemplatedGather(VectorData &vdata, Vector &pointers, const Selectio
 }
 
 template <bool NO_MATCH_SEL, class OP>
-static idx_t GatherSwitch(VectorData &data, TypeId type, Vector &pointers, const SelectionVector &current_sel,
+static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers, const SelectionVector &current_sel,
                           idx_t count, idx_t offset, SelectionVector *match_sel, SelectionVector *no_match_sel,
                           idx_t &no_match_count) {
 	switch (type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return TemplatedGather<NO_MATCH_SEL, int8_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return TemplatedGather<NO_MATCH_SEL, int16_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return TemplatedGather<NO_MATCH_SEL, int32_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return TemplatedGather<NO_MATCH_SEL, int64_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                  no_match_sel, no_match_count);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                no_match_sel, no_match_count);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return TemplatedGather<NO_MATCH_SEL, double, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                 no_match_sel, no_match_count);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                   no_match_sel, no_match_count);
 	default:
@@ -692,32 +692,32 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
                                const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
 	switch (result.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		TemplatedGatherResult<int16_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		TemplatedGatherResult<int32_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		TemplatedGatherResult<int64_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		TemplatedGatherResult<hugeint_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		TemplatedGatherResult<float>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		TemplatedGatherResult<double>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		TemplatedGatherResult<interval_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		TemplatedGatherResult<string_t>(result, ptrs, result_vector, sel_vector, count, offset);
 		break;
 	default:
@@ -879,7 +879,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
 	assert(result.column_count() == input.column_count() + 1);
-	assert(result.data.back().type == TypeId::BOOL);
+	assert(result.data.back().type == PhysicalType::BOOL);
 	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);
 

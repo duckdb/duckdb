@@ -24,7 +24,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 
 	// fold based on the constant condition
-	auto condition = constant_value.CastAs(TypeId::BOOL);
+	auto condition = constant_value.CastAs(PhysicalType::BOOL);
 	if (condition.is_null || !condition.value_.boolean) {
 		return move(root->result_if_false);
 	} else {

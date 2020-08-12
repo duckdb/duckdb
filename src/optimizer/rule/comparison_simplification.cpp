@@ -28,7 +28,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	if (constant_value.is_null) {
 		// comparison with constant NULL, return NULL
-		return make_unique<BoundConstantExpression>(Value(TypeId::BOOL));
+		return make_unique<BoundConstantExpression>(Value(PhysicalType::BOOL));
 	}
 	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST &&
 	    constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT) {

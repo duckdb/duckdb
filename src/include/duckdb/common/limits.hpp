@@ -61,6 +61,6 @@ template<> struct NumericLimits<double> {
 
 //! Returns the minimal type that guarantees an integer value from not
 //! overflowing
-TypeId MinimalType(int64_t value);
+PhysicalType MinimalType(int64_t value);
 
 } // namespace duckdb

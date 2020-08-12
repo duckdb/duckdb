@@ -91,7 +91,7 @@ void TableDataWriter::WriteTableData(Transaction &transaction) {
 
 void TableDataWriter::CreateSegment(idx_t col_idx) {
 	auto type_id = GetInternalType(table.columns[col_idx].type);
-	if (type_id == TypeId::VARCHAR) {
+	if (type_id == PhysicalType::VARCHAR) {
 		auto string_segment = make_unique<StringSegment>(manager.buffer_manager, 0);
 		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(manager);
 		segments[col_idx] = move(string_segment);
@@ -140,7 +140,7 @@ void TableDataWriter::FlushSegment(Transaction &transaction, idx_t col_idx) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	idx_t type_size = stats[col_idx]->type == TypeId::VARCHAR ? 8 : stats[col_idx]->type_size;
+	idx_t type_size = stats[col_idx]->type == PhysicalType::VARCHAR ? 8 : stats[col_idx]->type_size;
 	memcpy(&data_pointer.min_stats, stats[col_idx]->minimum.get(), type_size);
 	memcpy(&data_pointer.max_stats, stats[col_idx]->maximum.get(), type_size);
 	data_pointers[col_idx].push_back(move(data_pointer));

@@ -117,14 +117,14 @@ static unique_ptr<FunctionData> regexp_matches_get_bind_function(BoundFunctionEx
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[2]);
-		if (!options_str.is_null && options_str.type == TypeId::VARCHAR) {
+		if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
 			ParseRegexOptions(options_str.str_value, options);
 		}
 	}
 
 	if (expr.children[1]->IsScalar()) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
-		if (!pattern_str.is_null && pattern_str.type == TypeId::VARCHAR) {
+		if (!pattern_str.is_null && pattern_str.type == PhysicalType::VARCHAR) {
 			auto re = make_unique<RE2>(pattern_str.str_value, options);
 			if (!re->ok()) {
 				throw Exception(re->error());
@@ -174,7 +174,7 @@ static unique_ptr<FunctionData> regexp_replace_bind_function(BoundFunctionExpres
 			throw InvalidInputException("Regex options field must be a constant");
 		}
 		Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[3]);
-		if (!options_str.is_null && options_str.type == TypeId::VARCHAR) {
+		if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
 			ParseRegexOptions(options_str.str_value, data->options, &data->global_replace);
 		}
 	}

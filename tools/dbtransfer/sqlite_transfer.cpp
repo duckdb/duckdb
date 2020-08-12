@@ -131,7 +131,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<LogicalType> result_types, sqlite3 
 	}
 	// figure out the types of the columns
 	// construct the types of the result
-	vector<TypeId> typeids;
+	vector<PhysicalType> typeids;
 	for (auto &tp : result_types) {
 		typeids.push_back(GetInternalType(tp));
 	}

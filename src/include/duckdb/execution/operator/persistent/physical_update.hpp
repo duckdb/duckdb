@@ -16,7 +16,7 @@ class DataTable;
 //! Physically update data in a table
 class PhysicalUpdate : public PhysicalSink {
 public:
-	PhysicalUpdate(vector<TypeId> types, TableCatalogEntry &tableref, DataTable &table, vector<column_t> columns,
+	PhysicalUpdate(vector<PhysicalType> types, TableCatalogEntry &tableref, DataTable &table, vector<column_t> columns,
 	               vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> bound_defaults)
 	    : PhysicalSink(PhysicalOperatorType::UPDATE, move(types)), tableref(tableref), table(table), columns(columns),
 	      expressions(move(expressions)), bound_defaults(move(bound_defaults)) {

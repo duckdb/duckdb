@@ -60,7 +60,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			if (aggr.expressions.size() == 0 && aggr.groups.size() == 0) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false));
+				    make_unique<BoundAggregateExpression>(PhysicalType::INT64, CountStarFun::GetFunction(), false));
 			}
 		}
 

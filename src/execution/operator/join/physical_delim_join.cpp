@@ -18,7 +18,7 @@ public:
 	unique_ptr<PhysicalOperatorState> join_state;
 };
 
-PhysicalDelimJoin::PhysicalDelimJoin(vector<TypeId> types, unique_ptr<PhysicalOperator> original_join,
+PhysicalDelimJoin::PhysicalDelimJoin(vector<PhysicalType> types, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans)
     : PhysicalSink(PhysicalOperatorType::DELIM_JOIN, move(types)), join(move(original_join)) {
 	assert(delim_scans.size() > 0);

@@ -20,7 +20,7 @@ static string_t left_scalar_function(Vector &result, const string_t str, int64_t
 }
 
 static void left_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 2 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT64);
+	assert(args.column_count() == 2 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::INT64);
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 	idx_t current_len = 0;
@@ -50,7 +50,7 @@ static string_t right_scalar_function(Vector &result, const string_t str, int64_
 }
 
 static void right_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 2 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT64);
+	assert(args.column_count() == 2 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::INT64);
 	auto &str_vec = args.data[0];
 	auto &pos_vec = args.data[1];
 	idx_t current_len = 0;

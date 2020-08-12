@@ -15,7 +15,7 @@
 #include <stdexcept>
 
 namespace duckdb {
-enum class TypeId : uint8_t;
+enum class PhysicalType : uint8_t;
 
 inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
                                      const char *fname, int linenr) {
@@ -184,24 +184,24 @@ public:
 
 class CastException : public Exception {
 public:
-	CastException(const TypeId origType, const TypeId newType);
+	CastException(const PhysicalType origType, const PhysicalType newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
-	InvalidTypeException(TypeId type, string msg);
+	InvalidTypeException(PhysicalType type, string msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
-	TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg);
+	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg);
 };
 
 class ValueOutOfRangeException : public Exception {
 public:
-	ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType);
-	ValueOutOfRangeException(const TypeId varType, const idx_t length);
+	ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
+	ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
 };
 
 } // namespace duckdb

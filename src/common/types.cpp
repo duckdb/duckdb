@@ -49,128 +49,128 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::VARCHAR, LogicalType::BLOB, LogicalType::INTERVAL, LogicalType::HUGEINT};
 // TODO add LIST/STRUCT here
 
-const TypeId ROW_TYPE = TypeId::INT64;
+const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
-string TypeIdToString(TypeId type) {
+string TypeIdToString(PhysicalType type) {
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return "BOOL";
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return "INT8";
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return "INT16";
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return "INT32";
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return "INT64";
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return "INT128";
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return "HASH";
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return "POINTER";
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return "FLOAT";
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return "DOUBLE";
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return "VARCHAR";
-	case TypeId::VARBINARY:
+	case PhysicalType::VARBINARY:
 		return "VARBINARY";
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return "INTERVAL";
-	case TypeId::STRUCT:
+	case PhysicalType::STRUCT:
 		return "STRUCT<?>";
-	case TypeId::LIST:
+	case PhysicalType::LIST:
 		return "LIST<?>";
 	default:
-		throw ConversionException("Invalid TypeId %d", type);
+		throw ConversionException("Invalid PhysicalType %d", type);
 	}
 }
 
-idx_t GetTypeIdSize(TypeId type) {
+idx_t GetTypeIdSize(PhysicalType type) {
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return sizeof(bool);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return sizeof(int8_t);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return sizeof(int16_t);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return sizeof(int32_t);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return sizeof(int64_t);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return sizeof(hugeint_t);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return sizeof(float);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return sizeof(double);
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return sizeof(hash_t);
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return sizeof(uintptr_t);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return sizeof(string_t);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
-	case TypeId::STRUCT:
+	case PhysicalType::STRUCT:
 		return 0; // no own payload
-	case TypeId::LIST:
+	case PhysicalType::LIST:
 		return 16; // offset + len
-	case TypeId::VARBINARY:
+	case PhysicalType::VARBINARY:
 		return sizeof(blob_t);
 	default:
-		throw ConversionException("Invalid TypeId %d", type);
+		throw ConversionException("Invalid PhysicalType %d", type);
 	}
 }
 
-LogicalType LogicalTypeFromInternalType(TypeId type) {
+LogicalType LogicalTypeFromInternalType(PhysicalType type) {
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return LogicalType(LogicalTypeId::BOOLEAN);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return LogicalType::TINYINT;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return LogicalType::SMALLINT;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return LogicalType::INTEGER;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return LogicalType::BIGINT;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return LogicalType::HUGEINT;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return LogicalType::FLOAT;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return LogicalType::DOUBLE;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return LogicalType::INTERVAL;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return LogicalType::VARCHAR;
-	case TypeId::VARBINARY:
+	case PhysicalType::VARBINARY:
 		return LogicalType(LogicalTypeId::VARBINARY);
-	case TypeId::STRUCT:
+	case PhysicalType::STRUCT:
 		return LogicalType(LogicalTypeId::STRUCT); // TODO we do not know the child types here
-	case TypeId::LIST:
+	case PhysicalType::LIST:
 		return LogicalType(LogicalTypeId::LIST);
 	default:
-		throw ConversionException("Invalid TypeId %d", type);
+		throw ConversionException("Invalid PhysicalType %d", type);
 	}
 }
 
-bool TypeIsConstantSize(TypeId type) {
-	return (type >= TypeId::BOOL && type <= TypeId::DOUBLE) ||
-	       (type >= TypeId::FIXED_SIZE_BINARY && type <= TypeId::DECIMAL) || type == TypeId::HASH ||
-	       type == TypeId::POINTER || type == TypeId::INTERVAL || type == TypeId::INT128;
+bool TypeIsConstantSize(PhysicalType type) {
+	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
+	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::DECIMAL) || type == PhysicalType::HASH ||
+	       type == PhysicalType::POINTER || type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
 }
-bool TypeIsIntegral(TypeId type) {
-	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::HASH || type == TypeId::POINTER || type == TypeId::INT128;
+bool TypeIsIntegral(PhysicalType type) {
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::HASH || type == PhysicalType::POINTER || type == PhysicalType::INT128;
 }
-bool TypeIsNumeric(TypeId type) {
-	return (type >= TypeId::UINT8 && type <= TypeId::DOUBLE)|| type == TypeId::INT128;
+bool TypeIsNumeric(PhysicalType type) {
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE)|| type == PhysicalType::INT128;
 }
-bool TypeIsInteger(TypeId type) {
-	return (type >= TypeId::UINT8 && type <= TypeId::INT64) || type == TypeId::INT128;
+bool TypeIsInteger(PhysicalType type) {
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
 void LogicalType::Serialize(Serializer &serializer) {
@@ -337,21 +337,21 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-int NumericTypeOrder(TypeId type) {
+int NumericTypeOrder(PhysicalType type) {
 	switch (type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return 1;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return 2;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return 3;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return 4;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return 5;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return 6;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return 7;
 	default:
 		throw NotImplementedException("Not a numeric type");
@@ -437,45 +437,45 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	return true;
 }
 
-TypeId GetInternalType(LogicalType type) {
+PhysicalType GetInternalType(LogicalType type) {
 	switch (type.id) {
 	case LogicalTypeId::BOOLEAN:
-		return TypeId::BOOL;
+		return PhysicalType::BOOL;
 	case LogicalTypeId::TINYINT:
-		return TypeId::INT8;
+		return PhysicalType::INT8;
 	case LogicalTypeId::SMALLINT:
-		return TypeId::INT16;
+		return PhysicalType::INT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::INTEGER:
-		return TypeId::INT32;
+		return PhysicalType::INT32;
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIMESTAMP:
-		return TypeId::INT64;
+		return PhysicalType::INT64;
 	case LogicalTypeId::HUGEINT:
-		return TypeId::INT128;
+		return PhysicalType::INT128;
 	case LogicalTypeId::FLOAT:
-		return TypeId::FLOAT;
+		return PhysicalType::FLOAT;
 	case LogicalTypeId::DOUBLE:
-		return TypeId::DOUBLE;
+		return PhysicalType::DOUBLE;
 	case LogicalTypeId::DECIMAL:
 		// FIXME: for now
-		return TypeId::DOUBLE;
+		return PhysicalType::DOUBLE;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
-		return TypeId::VARCHAR;
+		return PhysicalType::VARCHAR;
 	case LogicalTypeId::VARBINARY:
-		return TypeId::VARBINARY;
+		return PhysicalType::VARBINARY;
 	case LogicalTypeId::INTERVAL:
-		return TypeId::INTERVAL;
+		return PhysicalType::INTERVAL;
 	case LogicalTypeId::STRUCT:
-		return TypeId::STRUCT;
+		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
-		return TypeId::LIST;
+		return PhysicalType::LIST;
 	case LogicalTypeId::ANY:
-		return TypeId::INVALID;
+		return PhysicalType::INVALID;
 	default:
 		throw ConversionException("Invalid LogicalType %s", LogicalTypeToString(type).c_str());
 	}

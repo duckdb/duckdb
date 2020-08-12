@@ -19,7 +19,7 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 		throw CatalogException(
 		    StringUtil::Format("Table \"%s.%s\" could not be found", schema_name.c_str(), table_name.c_str()));
 	} else {
-		vector<TypeId> types;
+		vector<PhysicalType> types;
 		for (auto &column : description->columns) {
 			types.push_back(GetInternalType(column.type));
 		}
@@ -74,25 +74,25 @@ template <class T> void Appender::AppendValueInternal(T input) {
 	}
 	auto &col = chunk.data[column];
 	switch (col.type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		AppendValueInternal<T, int8_t>(col, input);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		AppendValueInternal<T, int16_t>(col, input);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		AppendValueInternal<T, int32_t>(col, input);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		AppendValueInternal<T, int64_t>(col, input);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		AppendValueInternal<T, double>(col, input);
 		break;
 	default:

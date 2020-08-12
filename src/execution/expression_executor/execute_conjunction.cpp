@@ -30,13 +30,13 @@ void ExpressionExecutor::Execute(BoundConjunctionExpression &expr, ExpressionSta
                                  idx_t count, Vector &result) {
 	// execute the children
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(TypeId::BOOL);
+		Vector current_result(PhysicalType::BOOL);
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
 			result.Reference(current_result);
 		} else {
-			Vector intermediate(TypeId::BOOL);
+			Vector intermediate(PhysicalType::BOOL);
 			// AND/OR together
 			switch (expr.type) {
 			case ExpressionType::CONJUNCTION_AND:

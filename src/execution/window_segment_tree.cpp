@@ -8,8 +8,8 @@
 namespace duckdb {
 using namespace std;
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, TypeId result_type, ChunkCollection *input)
-    : aggregate(aggregate), state(aggregate.state_size()), statep(TypeId::POINTER), result_type(result_type),
+WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, PhysicalType result_type, ChunkCollection *input)
+    : aggregate(aggregate), state(aggregate.state_size()), statep(PhysicalType::POINTER), result_type(result_type),
       input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
@@ -80,7 +80,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		Vector v(TypeId::POINTER);
+		Vector v(PhysicalType::POINTER);
 		auto pdata = FlatVector::GetData<data_ptr_t>(v);
 		for (idx_t i = 0; i < inputs.size(); i++) {
 			pdata[i] = begin_ptr + i * state.size();

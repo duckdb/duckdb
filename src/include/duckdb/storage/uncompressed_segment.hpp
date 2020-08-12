@@ -24,13 +24,13 @@ struct UpdateInfo;
 //! An uncompressed segment represents an uncompressed segment of a column residing in a block
 class UncompressedSegment {
 public:
-	UncompressedSegment(BufferManager &manager, TypeId type, idx_t row_start);
+	UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start);
 	virtual ~UncompressedSegment();
 
 	//! The buffer manager
 	BufferManager &manager;
 	//! Type of the uncompressed segment
-	TypeId type;
+	PhysicalType type;
 	//! The block id that this segment relates to
 	block_id_t block_id;
 	//! The size of a vector of this type

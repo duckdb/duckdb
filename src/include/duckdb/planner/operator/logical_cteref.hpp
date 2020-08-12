@@ -16,7 +16,7 @@ namespace duckdb {
 //! LogicalChunkGet represents a scan operation from a ChunkCollection
 class LogicalCTERef : public LogicalOperator {
 public:
-	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<TypeId> types, vector<string> colnames)
+	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<PhysicalType> types, vector<string> colnames)
 	    : LogicalOperator(LogicalOperatorType::CTE_REF), table_index(table_index), cte_index(cte_index) {
 		assert(types.size() > 0);
 		chunk_types = types;
@@ -29,7 +29,7 @@ public:
 	//! CTE index
 	idx_t cte_index;
 	//! The types of the chunk
-	vector<TypeId> chunk_types;
+	vector<PhysicalType> chunk_types;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

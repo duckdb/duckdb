@@ -38,7 +38,7 @@ public:
 	//! The result names of the transaction
 	vector<string> names;
 	//! The (internal) result types of the statement
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	//! The result SQL types of the transaction
 	vector<LogicalType> sql_types;
 

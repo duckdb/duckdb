@@ -18,7 +18,7 @@ class PhysicalHashAggregate;
 //! PhysicalChunkCollectionScan in the RHS.
 class PhysicalDelimJoin : public PhysicalSink {
 public:
-	PhysicalDelimJoin(vector<TypeId> types, unique_ptr<PhysicalOperator> original_join,
+	PhysicalDelimJoin(vector<PhysicalType> types, unique_ptr<PhysicalOperator> original_join,
 	                  vector<PhysicalOperator *> delim_scans);
 
 	unique_ptr<PhysicalOperator> join;

@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BoundCastExpression : public Expression {
 public:
-	BoundCastExpression(TypeId target, unique_ptr<Expression> child, LogicalType source_type, LogicalType target_type);
+	BoundCastExpression(PhysicalType target, unique_ptr<Expression> child, LogicalType source_type, LogicalType target_type);
 
 	//! The child type
 	unique_ptr<Expression> child;

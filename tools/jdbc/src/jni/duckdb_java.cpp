@@ -260,31 +260,31 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		jobjectArray varlen_data = nullptr;
 
 		switch (vec.type) {
-		case TypeId::BOOL:
+		case PhysicalType::BOOL:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 			break;
-		case TypeId::INT8:
+		case PhysicalType::INT8:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::Nullmask(vec)[row_idx]) {

@@ -7,13 +7,13 @@
 namespace duckdb {
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function, bool is_operator)
+BoundFunctionExpression::BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
       function(bound_function), arguments(bound_function.arguments), sql_return_type(bound_function.return_type),
       is_operator(is_operator) {
 }
 
-BoundFunctionExpression::BoundFunctionExpression(TypeId return_type, ScalarFunction bound_function,
+BoundFunctionExpression::BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function,
                                                  vector<LogicalType> arguments, LogicalType sql_return_type, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
       function(bound_function), arguments(move(arguments)), sql_return_type(move(sql_return_type)),

@@ -20,7 +20,7 @@ public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type);
 
-	vector<TypeId> join_key_types;
+	vector<PhysicalType> join_key_types;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

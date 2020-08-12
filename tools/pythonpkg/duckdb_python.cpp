@@ -351,7 +351,7 @@ struct DuckDBPyResult {
 				break;
 
 			case LogicalTypeId::TIMESTAMP: {
-				if (result->types[col_idx] != TypeId::INT64) {
+				if (result->types[col_idx] != PhysicalType::INT64) {
 					throw runtime_error("expected int64 for timestamp");
 				}
 				auto timestamp = val.GetValue<int64_t>();
@@ -364,7 +364,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				if (result->types[col_idx] != TypeId::INT32) {
+				if (result->types[col_idx] != PhysicalType::INT32) {
 					throw runtime_error("expected int32 for time");
 				}
 				int32_t hour, min, sec, msec;
@@ -374,7 +374,7 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::DATE: {
-				if (result->types[col_idx] != TypeId::INT32) {
+				if (result->types[col_idx] != PhysicalType::INT32) {
 					throw runtime_error("expected int32 for date");
 				}
 				auto date = val.GetValue<int32_t>();

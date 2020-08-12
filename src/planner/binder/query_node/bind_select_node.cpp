@@ -246,7 +246,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// bind the groups
 			LogicalType group_type;
 			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
-			assert(bound_expr->return_type != TypeId::INVALID);
+			assert(bound_expr->return_type != PhysicalType::INVALID);
 			info.group_types.push_back(group_type);
 			// push a potential collation, if necessary
 			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), group_type.collation, true);

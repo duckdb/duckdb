@@ -21,38 +21,38 @@ private:
 
 public:
 	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		assert(left.type == right.type && result.type == TypeId::BOOL);
+		assert(left.type == right.type && result.type == PhysicalType::BOOL);
 		// the inplace loops take the result as the last parameter
 		switch (left.type) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
 			TemplatedExecute<int8_t, OP>(left, right, result, count);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			TemplatedExecute<int16_t, OP>(left, right, result, count);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			TemplatedExecute<int32_t, OP>(left, right, result, count);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			TemplatedExecute<int64_t, OP>(left, right, result, count);
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;
-		case TypeId::POINTER:
+		case PhysicalType::POINTER:
 			TemplatedExecute<uintptr_t, OP>(left, right, result, count);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			TemplatedExecute<float, OP>(left, right, result, count);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			TemplatedExecute<double, OP>(left, right, result, count);
 			break;
-		case TypeId::INTERVAL:
+		case PhysicalType::INTERVAL:
 			TemplatedExecute<interval_t, OP>(left, right, result, count);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			TemplatedExecute<string_t, OP, true>(left, right, result, count);
 			break;
 		default:

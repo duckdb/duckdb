@@ -18,7 +18,7 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalTopN : public PhysicalSink {
 public:
-	PhysicalTopN(vector<TypeId> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
+	PhysicalTopN(vector<PhysicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset)
 	    : PhysicalSink(PhysicalOperatorType::TOP_N, move(types)), orders(move(orders)), limit(limit), offset(offset) {
 	}
 

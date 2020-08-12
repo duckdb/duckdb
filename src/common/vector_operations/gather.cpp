@@ -29,39 +29,39 @@ template <class T> static void templated_gather_loop(Vector &source, Vector &des
 
 void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 	assert(source.vector_type == VectorType::FLAT_VECTOR);
-	assert(source.type == TypeId::POINTER); // "Cannot gather from non-pointer type!"
+	assert(source.type == PhysicalType::POINTER); // "Cannot gather from non-pointer type!"
 
 	dest.vector_type = VectorType::FLAT_VECTOR;
 	switch (dest.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_gather_loop<int8_t>(source, dest, count);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_gather_loop<int16_t>(source, dest, count);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_gather_loop<int32_t>(source, dest, count);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_gather_loop<int64_t>(source, dest, count);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		templated_gather_loop<hugeint_t>(source, dest, count);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_gather_loop<float>(source, dest, count);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_gather_loop<double>(source, dest, count);
 		break;
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		templated_gather_loop<uintptr_t>(source, dest, count);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		templated_gather_loop<interval_t>(source, dest, count);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		templated_gather_loop<string_t>(source, dest, count);
 		break;
 	default:

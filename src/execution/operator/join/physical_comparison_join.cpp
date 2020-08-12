@@ -45,7 +45,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		assert(join_type == JoinType::MARK);
 		assert(result.column_count() == input.column_count() + 1);
 		auto &result_vector = result.data.back();
-		assert(result_vector.type == TypeId::BOOL);
+		assert(result_vector.type == PhysicalType::BOOL);
 		// for every data vector, we just reference the child chunk
 		result.SetCardinality(input);
 		for (idx_t i = 0; i < input.column_count(); i++) {

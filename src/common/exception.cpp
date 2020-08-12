@@ -94,12 +94,12 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-CastException::CastException(const TypeId origType, const TypeId newType)
+CastException::CastException(const PhysicalType origType, const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const TypeId origType, const TypeId newType)
+ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
                                                std::to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
@@ -107,14 +107,14 @@ ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const Ty
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const TypeId origType, const TypeId newType)
+ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + std::to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const TypeId varType, const idx_t length)
+ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType varType, const idx_t length)
     : Exception(ExceptionType::OUT_OF_RANGE, "The value is too long to fit into type " + TypeIdToString(varType) + "(" +
                                                  std::to_string(length) + ")"){};
 
@@ -122,11 +122,11 @@ ConversionException::ConversionException(string msg, ...) : Exception(ExceptionT
 	FORMAT_CONSTRUCTOR(msg);
 }
 
-InvalidTypeException::InvalidTypeException(TypeId type, string msg)
+InvalidTypeException::InvalidTypeException(PhysicalType type, string msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
 
-TypeMismatchException::TypeMismatchException(const TypeId type_1, const TypeId type_2, string msg)
+TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
 }

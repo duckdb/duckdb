@@ -38,7 +38,7 @@ static void list_update(Vector inputs[], idx_t input_count, Vector &state_vector
 
 	DataChunk insert_chunk;
 
-	vector<TypeId> chunk_types;
+	vector<PhysicalType> chunk_types;
 	chunk_types.push_back(input.type);
 	insert_chunk.Initialize(chunk_types);
 	insert_chunk.SetCardinality(1);
@@ -61,7 +61,7 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 	state_vector.Orrify(count, sdata);
 	auto states = (list_agg_state_t **)sdata.data;
 
-	result.Initialize(TypeId::LIST);
+	result.Initialize(PhysicalType::LIST);
 	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 
 	size_t total_len = 0;

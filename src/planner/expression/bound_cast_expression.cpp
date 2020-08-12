@@ -5,7 +5,7 @@
 namespace duckdb {
 using namespace std;
 
-BoundCastExpression::BoundCastExpression(TypeId target, unique_ptr<Expression> child, LogicalType source_type,
+BoundCastExpression::BoundCastExpression(PhysicalType target, unique_ptr<Expression> child, LogicalType source_type,
                                          LogicalType target_type)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, target), child(move(child)),
       source_type(source_type), target_type(target_type) {

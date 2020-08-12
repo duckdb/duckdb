@@ -16,7 +16,7 @@ namespace duckdb {
 using namespace std;
 using namespace chrono;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<TypeId> types_,
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<PhysicalType> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
       persistent_manager(make_shared<VersionManager>(*info)), transient_manager(make_shared<VersionManager>(*info)),
@@ -144,7 +144,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
 
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			types.push_back(ROW_TYPE);
@@ -362,42 +362,42 @@ bool DataTable::CheckZonemap(TableScanState &state, unordered_map<idx_t, vector<
 					return true;
 				}
 				switch (state.column_scans[predicate_constant.column_index].current->type) {
-				case TypeId::INT8: {
+				case PhysicalType::INT8: {
 					int8_t constant = predicate_constant.constant.value_.tinyint;
 					readSegment = checkZonemap<int8_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT16: {
+				case PhysicalType::INT16: {
 					int16_t constant = predicate_constant.constant.value_.smallint;
 					readSegment = checkZonemap<int16_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT32: {
+				case PhysicalType::INT32: {
 					int32_t constant = predicate_constant.constant.value_.integer;
 					readSegment = checkZonemap<int32_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT64: {
+				case PhysicalType::INT64: {
 					int64_t constant = predicate_constant.constant.value_.bigint;
 					readSegment = checkZonemap<int64_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::INT128: {
+				case PhysicalType::INT128: {
 					auto constant = predicate_constant.constant.value_.hugeint;
 					readSegment = checkZonemap<hugeint_t>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::FLOAT: {
+				case PhysicalType::FLOAT: {
 					float constant = predicate_constant.constant.value_.float_;
 					readSegment = checkZonemap<float>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::DOUBLE: {
+				case PhysicalType::DOUBLE: {
 					double constant = predicate_constant.constant.value_.double_;
 					readSegment = checkZonemap<double>(state, predicate_constant, constant);
 					break;
 				}
-				case TypeId::VARCHAR: {
+				case PhysicalType::VARCHAR: {
 					//! we can only compare the first 7 bytes
 					size_t value_size = predicate_constant.constant.str_value.size() > 7
 					                        ? 7
@@ -491,7 +491,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (table_filters.find(i) == table_filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[i].type == TypeId::INT64);
+					assert(result.data[i].type == PhysicalType::INT64);
 					result.data[i].vector_type = VectorType::FLAT_VECTOR;
 					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
@@ -570,7 +570,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type == TypeId::INT64);
+			assert(result.data[col_idx].type == PhysicalType::INT64);
 			result.data[col_idx].vector_type = VectorType::FLAT_VECTOR;
 			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
@@ -626,7 +626,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(TypeId::INT32);
+	Vector result(PhysicalType::INT32);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
@@ -852,7 +852,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<TypeId> &types, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<PhysicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
@@ -1016,7 +1016,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>>
 	result.Initialize(index->types);
 
 	DataChunk intermediate;
-	vector<TypeId> intermediate_types;
+	vector<PhysicalType> intermediate_types;
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {

@@ -157,7 +157,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>);
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>);
-template class std::vector<TypeId>;
+template class std::vector<PhysicalType>;
 template class std::vector<Value>;
 template class std::vector<int>;
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Rule>>);

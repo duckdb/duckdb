@@ -72,7 +72,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = state->hash_table->correlated_mark_join_info;
 
-			vector<TypeId> payload_types = {TypeId::INT64, TypeId::INT64}; // COUNT types
+			vector<PhysicalType> payload_types = {PhysicalType::INT64, PhysicalType::INT64}; // COUNT types
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {

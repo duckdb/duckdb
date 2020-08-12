@@ -4,7 +4,7 @@
 namespace duckdb {
 using namespace std;
 
-BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, TypeId return_type)
+BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, PhysicalType return_type)
     : Expression(type, ExpressionClass::BOUND_OPERATOR, return_type) {
 }
 

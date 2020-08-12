@@ -8,7 +8,7 @@
 using namespace std;
 namespace duckdb {
 
-PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
+PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<PhysicalType> types, vector<unique_ptr<Expression>> expressions,
                                                  bool all_combinable)
     : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types)), aggregates(move(expressions)),
       all_combinable(all_combinable) {
@@ -71,7 +71,7 @@ public:
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
 	SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
-		vector<TypeId> payload_types;
+		vector<PhysicalType> payload_types;
 		for (auto &aggregate : aggregates) {
 			assert(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -83,7 +83,7 @@ public:
 				}
 			} else {
 				// COUNT(*)
-				payload_types.push_back(TypeId::INT64);
+				payload_types.push_back(PhysicalType::INT64);
 			}
 		}
 		payload_chunk.Initialize(payload_types);

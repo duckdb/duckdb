@@ -16,7 +16,7 @@ namespace duckdb {
 //! The PhysicalChunkCollectionScan scans a Chunk Collection
 class PhysicalChunkScan : public PhysicalOperator {
 public:
-	PhysicalChunkScan(vector<TypeId> types, PhysicalOperatorType op_type)
+	PhysicalChunkScan(vector<PhysicalType> types, PhysicalOperatorType op_type)
 	    : PhysicalOperator(op_type, types), collection(nullptr) {
 	}
 

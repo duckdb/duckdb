@@ -8,7 +8,7 @@ using namespace std;
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 	auto index = ref.bind_index;
 
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	for (auto &expr : ref.types) {
 		types.push_back(GetInternalType(expr.id));
 	}

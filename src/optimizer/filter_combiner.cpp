@@ -169,7 +169,7 @@ FilterCombiner::GenerateTableScanFilters(std::function<void(unique_ptr<Expressio
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
 			    (TypeIsNumeric(constant_value.second[0].constant.type) ||
-			     constant_value.second[0].constant.type == TypeId::VARCHAR)) {
+			     constant_value.second[0].constant.type == PhysicalType::VARCHAR)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -297,7 +297,7 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	}
 	if (expr->IsFoldable()) {
 		// scalar condition, evaluate it
-		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(TypeId::BOOL);
+		auto result = ExpressionExecutor::EvaluateScalar(*expr).CastAs(PhysicalType::BOOL);
 		// check if the filter passes
 		if (result.is_null || !result.value_.boolean) {
 			// the filter does not pass the scalar test, create an empty result

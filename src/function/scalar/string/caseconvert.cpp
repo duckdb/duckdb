@@ -56,7 +56,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 }
 
 template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
-	assert(input.type == TypeId::VARCHAR);
+	assert(input.type == PhysicalType::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
 		auto input_data = input.GetData();

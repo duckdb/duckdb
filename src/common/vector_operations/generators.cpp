@@ -29,22 +29,22 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
 	switch (result.type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, start, increment);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_generate_sequence<int16_t>(result, count, start, increment);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_generate_sequence<int32_t>(result, count, start, increment);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_generate_sequence<int64_t>(result, count, start, increment);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_generate_sequence<float>(result, count, start, increment);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_generate_sequence<double>(result, count, start, increment);
 		break;
 	default:
@@ -74,22 +74,22 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
 	switch (result.type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_generate_sequence<int16_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_generate_sequence<int32_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_generate_sequence<int64_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_generate_sequence<float>(result, count, sel, start, increment);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_generate_sequence<double>(result, count, sel, start, increment);
 		break;
 	default:

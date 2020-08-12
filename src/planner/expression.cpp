@@ -7,7 +7,7 @@
 namespace duckdb {
 using namespace std;
 
-Expression::Expression(ExpressionType type, ExpressionClass expression_class, TypeId return_type)
+Expression::Expression(ExpressionType type, ExpressionClass expression_class, PhysicalType return_type)
     : BaseExpression(type, expression_class), return_type(return_type) {
 }
 

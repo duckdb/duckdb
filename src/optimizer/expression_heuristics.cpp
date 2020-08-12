@@ -131,14 +131,14 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, Expres
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(TypeId &return_type, idx_t multiplier) {
+idx_t ExpressionHeuristics::ExpressionCost(PhysicalType &return_type, idx_t multiplier) {
 	// TODO: ajust values according to benchmark results
 	switch (return_type) {
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return 5 * multiplier;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return 2 * multiplier;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return 2 * multiplier;
 	default:
 		return 1 * multiplier;

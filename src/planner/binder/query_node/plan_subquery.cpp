@@ -29,7 +29,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(limit);
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
-		auto count_star = make_unique<BoundAggregateExpression>(TypeId::INT64, CountStarFun::GetFunction(), false);
+		auto count_star = make_unique<BoundAggregateExpression>(PhysicalType::INT64, CountStarFun::GetFunction(), false);
 		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
@@ -61,7 +61,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::BOOL, ColumnBinding(projection_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), PhysicalType::BOOL, ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
 		// uncorrelated scalar, we want to return the first entry

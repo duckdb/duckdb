@@ -93,7 +93,7 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		auto &entry = data.entries[i];
 
 		// return values:
-		// "type", TypeId::VARCHAR
+		// "type", PhysicalType::VARCHAR
 		const char *type_str;
 		switch (entry->type) {
 		case CatalogType::TABLE:
@@ -112,13 +112,13 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 			type_str = "unknown";
 		}
 		output.SetValue(0, index, Value(type_str));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->name));
-		// "tbl_name", TypeId::VARCHAR
+		// "tbl_name", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(entry->name));
-		// "rootpage", TypeId::INT32
+		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, index, Value::INTEGER(0));
-		// "sql", TypeId::VARCHAR
+		// "sql", PhysicalType::VARCHAR
 		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;

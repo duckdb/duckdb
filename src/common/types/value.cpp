@@ -27,7 +27,7 @@ using namespace std;
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
-Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
+Value::Value(string val) : type(PhysicalType::VARCHAR), is_null(false) {
 	sql_type = LogicalType::VARCHAR;
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
@@ -42,34 +42,34 @@ Value::Value(string val) : type(TypeId::VARCHAR), is_null(false) {
 	}
 }
 
-Value Value::MinimumValue(TypeId type) {
+Value Value::MinimumValue(PhysicalType type) {
 	Value result;
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		result.value_.boolean = false;
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		result.value_.tinyint = NumericLimits<int8_t>::Minimum();
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		result.value_.smallint = NumericLimits<int16_t>::Minimum();
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		result.value_.integer = NumericLimits<int32_t>::Minimum();
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		result.value_.bigint = NumericLimits<int64_t>::Minimum();
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		result.value_.hugeint.lower = 0;
 		result.value_.hugeint.upper = NumericLimits<int64_t>::Minimum();
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		result.value_.float_ = NumericLimits<float>::Minimum();
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		result.value_.double_ = NumericLimits<double>::Minimum();
 		break;
 	default:
@@ -78,33 +78,33 @@ Value Value::MinimumValue(TypeId type) {
 	return result;
 }
 
-Value Value::MaximumValue(TypeId type) {
+Value Value::MaximumValue(PhysicalType type) {
 	Value result;
 	result.type = type;
 	result.is_null = false;
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		result.value_.boolean = true;
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		result.value_.tinyint = NumericLimits<int8_t>::Maximum();
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		result.value_.smallint = NumericLimits<int16_t>::Maximum();
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		result.value_.integer = NumericLimits<int32_t>::Maximum();
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		result.value_.bigint = NumericLimits<int64_t>::Maximum();
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		result.value_.hugeint = NumericLimits<hugeint_t>::Maximum();
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		result.value_.float_ = NumericLimits<float>::Maximum();
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		result.value_.double_ = NumericLimits<double>::Maximum();
 		break;
 	default:
@@ -114,42 +114,42 @@ Value Value::MaximumValue(TypeId type) {
 }
 
 Value Value::BOOLEAN(int8_t value) {
-	Value result(TypeId::BOOL);
+	Value result(PhysicalType::BOOL);
 	result.value_.boolean = value ? true : false;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TINYINT(int8_t value) {
-	Value result(TypeId::INT8);
+	Value result(PhysicalType::INT8);
 	result.value_.tinyint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::SMALLINT(int16_t value) {
-	Value result(TypeId::INT16);
+	Value result(PhysicalType::INT16);
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::INTEGER(int32_t value) {
-	Value result(TypeId::INT32);
+	Value result(PhysicalType::INT32);
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BIGINT(int64_t value) {
-	Value result(TypeId::INT64);
+	Value result(PhysicalType::INT64);
 	result.value_.bigint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::HUGEINT(hugeint_t value) {
-	Value result(TypeId::INT128);
+	Value result(PhysicalType::INT128);
 	result.value_.hugeint = value;
 	result.is_null = false;
 	return result;
@@ -167,7 +167,7 @@ Value Value::FLOAT(float value) {
 	if (!Value::FloatIsValid(value)) {
 		throw OutOfRangeException("Invalid float value %f", value);
 	}
-	Value result(TypeId::FLOAT);
+	Value result(PhysicalType::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
 	return result;
@@ -177,21 +177,21 @@ Value Value::DOUBLE(double value) {
 	if (!Value::DoubleIsValid(value)) {
 		throw OutOfRangeException("Invalid double value %f", value);
 	}
-	Value result(TypeId::DOUBLE);
+	Value result(PhysicalType::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::HASH(hash_t value) {
-	Value result(TypeId::HASH);
+	Value result(PhysicalType::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::POINTER(uintptr_t value) {
-	Value result(TypeId::POINTER);
+	Value result(PhysicalType::POINTER);
 	result.value_.pointer = value;
 	result.is_null = false;
 	return result;
@@ -234,21 +234,21 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 }
 
 Value Value::STRUCT(child_list_t<Value> values) {
-	Value result(TypeId::STRUCT);
+	Value result(PhysicalType::STRUCT);
 	result.struct_value = move(values);
 	result.is_null = false;
 	return result;
 }
 
 Value Value::LIST(vector<Value> values) {
-	Value result(TypeId::LIST);
+	Value result(PhysicalType::LIST);
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BLOB(string data, bool must_cast) {
-	Value result(TypeId::VARCHAR);
+	Value result(PhysicalType::VARCHAR);
 	result.sql_type = LogicalType::BLOB;
 	result.is_null = false;
 	// hex string identifier: "\\x", must be double '\'
@@ -269,7 +269,7 @@ Value Value::BLOB(string data, bool must_cast) {
 }
 
 Value Value::INTERVAL(int32_t months, int32_t days, int64_t msecs) {
-	Value result(TypeId::INTERVAL);
+	Value result(PhysicalType::INTERVAL);
 	result.is_null = false;
 	result.value_.interval.months = months;
 	result.value_.interval.days = days;
@@ -335,23 +335,23 @@ template <class T> T Value::GetValueInternal() {
 		return NullValue<T>();
 	}
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return Cast::Operation<bool, T>(value_.boolean);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return Cast::Operation<int8_t, T>(value_.tinyint);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return Cast::Operation<int16_t, T>(value_.smallint);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return Cast::Operation<int32_t, T>(value_.integer);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return Cast::Operation<int64_t, T>(value_.bigint);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return Cast::Operation<float, T>(value_.float_);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return Cast::Operation<double, T>(value_.double_);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
 	default:
 		throw NotImplementedException("Unimplemented type for GetValue()");
@@ -383,30 +383,30 @@ template <> double Value::GetValue() {
 	return GetValueInternal<double>();
 }
 
-Value Value::Numeric(TypeId type, int64_t value) {
+Value Value::Numeric(PhysicalType type, int64_t value) {
 	Value val(type);
 	val.is_null = false;
 	switch (type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		assert(value <= NumericLimits<int8_t>::Maximum());
 		return Value::TINYINT((int8_t)value);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		assert(value <= NumericLimits<int16_t>::Maximum());
 		return Value::SMALLINT((int16_t)value);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		assert(value <= NumericLimits<int32_t>::Maximum());
 		return Value::INTEGER((int32_t)value);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return Value::BIGINT(value);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return Value::HUGEINT(value);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return Value((float)value);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return Value((double)value);
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return Value::HASH(value);
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return Value::POINTER(value);
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
@@ -483,9 +483,9 @@ string Value::ToString(LogicalType sql_type) const {
 
 string Value::ToString() const {
 	switch (type) {
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return to_string(value_.pointer);
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return to_string(value_.hash);
 	default:
 		return ToString(LogicalTypeFromInternalType(type));
@@ -578,7 +578,7 @@ Value Value::CastAs(LogicalType source_type, LogicalType target_type, bool stric
 	return result.GetValue(0);
 }
 
-Value Value::CastAs(TypeId target_type, bool strict) const {
+Value Value::CastAs(PhysicalType target_type, bool strict) const {
 	if (target_type == type) {
 		return Copy(); // in case of types that have no LogicalType equivalent such as POINTER
 	}
@@ -602,41 +602,41 @@ bool Value::TryCastAs(LogicalType source_type, LogicalType target_type, bool str
 }
 
 void Value::Serialize(Serializer &serializer) {
-	serializer.Write<TypeId>(type);
+	serializer.Write<PhysicalType>(type);
 	serializer.Write<bool>(is_null);
 	if (!is_null) {
 		switch (type) {
-		case TypeId::BOOL:
+		case PhysicalType::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
 			break;
-		case TypeId::INT8:
+		case PhysicalType::INT8:
 			serializer.Write<int8_t>(value_.tinyint);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			serializer.Write<int16_t>(value_.smallint);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			serializer.Write<int32_t>(value_.integer);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			serializer.Write<int64_t>(value_.bigint);
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			serializer.Write<hugeint_t>(value_.hugeint);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			serializer.Write<double>(value_.float_);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			serializer.Write<double>(value_.double_);
 			break;
-		case TypeId::POINTER:
+		case PhysicalType::POINTER:
 			serializer.Write<uintptr_t>(value_.pointer);
 			break;
-		case TypeId::INTERVAL:
+		case PhysicalType::INTERVAL:
 			serializer.Write<interval_t>(value_.interval);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			serializer.WriteString(str_value);
 			break;
 		default:
@@ -646,7 +646,7 @@ void Value::Serialize(Serializer &serializer) {
 }
 
 Value Value::Deserialize(Deserializer &source) {
-	auto type = source.Read<TypeId>();
+	auto type = source.Read<PhysicalType>();
 	auto is_null = source.Read<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
@@ -654,37 +654,37 @@ Value Value::Deserialize(Deserializer &source) {
 	}
 	new_value.is_null = false;
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		new_value.value_.tinyint = source.Read<int8_t>();
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		new_value.value_.smallint = source.Read<int16_t>();
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		new_value.value_.integer = source.Read<int32_t>();
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		new_value.value_.bigint = source.Read<int64_t>();
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		new_value.value_.hugeint = source.Read<hugeint_t>();
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		new_value.value_.float_ = source.Read<float>();
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		new_value.value_.double_ = source.Read<double>();
 		break;
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		new_value.value_.pointer = source.Read<uint64_t>();
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		new_value.value_.interval = source.Read<interval_t>();
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		new_value.str_value = source.Read<string>();
 		break;
 	default:
@@ -703,20 +703,20 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 		return true;
 	}
 	switch (value.type) {
-	case TypeId::FLOAT: {
-		auto other = result_value.CastAs(TypeId::FLOAT);
+	case PhysicalType::FLOAT: {
+		auto other = result_value.CastAs(PhysicalType::FLOAT);
 		float ldecimal = value.value_.float_;
 		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
-	case TypeId::DOUBLE: {
-		auto other = result_value.CastAs(TypeId::DOUBLE);
+	case PhysicalType::DOUBLE: {
+		auto other = result_value.CastAs(PhysicalType::DOUBLE);
 		double ldecimal = value.value_.double_;
 		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
-	case TypeId::VARCHAR: {
-		auto other = result_value.CastAs(TypeId::VARCHAR);
+	case PhysicalType::VARCHAR: {
+		auto other = result_value.CastAs(PhysicalType::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we

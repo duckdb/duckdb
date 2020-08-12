@@ -79,8 +79,8 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::INT32 &&
-	       args.data[2].type == TypeId::INT32);
+	assert(args.column_count() == 3 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::INT32 &&
+	       args.data[2].type == PhysicalType::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	auto &length_vector = args.data[2];

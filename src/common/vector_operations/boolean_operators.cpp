@@ -15,7 +15,7 @@ using namespace std;
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
-	assert(left.type == TypeId::BOOL && right.type == TypeId::BOOL && result.type == TypeId::BOOL);
+	assert(left.type == PhysicalType::BOOL && right.type == PhysicalType::BOOL && result.type == PhysicalType::BOOL);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
@@ -167,7 +167,7 @@ struct NotOperator {
 };
 
 void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
-	assert(input.type == TypeId::BOOL && result.type == TypeId::BOOL);
+	assert(input.type == PhysicalType::BOOL && result.type == PhysicalType::BOOL);
 	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
 }
 

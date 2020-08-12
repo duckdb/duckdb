@@ -47,19 +47,19 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
 	assert(expr.arguments[0].id == LogicalTypeId::STRUCT);
-	assert(expr.children[0]->return_type == TypeId::STRUCT);
+	assert(expr.children[0]->return_type == PhysicalType::STRUCT);
 	if (expr.arguments[0].child_type.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = expr.children[1];
 
-	if (expr.arguments[1].id != LogicalTypeId::VARCHAR || key_child->return_type != TypeId::VARCHAR ||
+	if (expr.arguments[1].id != LogicalTypeId::VARCHAR || key_child->return_type != PhysicalType::VARCHAR ||
 	    !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
-	assert(key_val.type == TypeId::VARCHAR);
+	assert(key_val.type == PhysicalType::VARCHAR);
 	if (key_val.is_null || key_val.str_value.length() < 1) {
 		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
 	}

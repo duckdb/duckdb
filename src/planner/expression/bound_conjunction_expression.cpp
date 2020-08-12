@@ -5,12 +5,12 @@ namespace duckdb {
 using namespace std;
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOL) {
+    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, PhysicalType::BOOL) {
 }
 
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, TypeId::BOOL) {
+    : Expression(type, ExpressionClass::BOUND_CONJUNCTION, PhysicalType::BOOL) {
 	children.push_back(move(left));
 	children.push_back(move(right));
 }

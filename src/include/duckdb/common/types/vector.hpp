@@ -37,7 +37,7 @@ class ChunkCollection;
 
 struct SelCache;
 
-//!  Vector of values of a specified TypeId.
+//!  Vector of values of a specified PhysicalType.
 class Vector {
 	friend struct ConstantVector;
 	friend struct DictionaryVector;
@@ -54,16 +54,16 @@ public:
 	//! Create a vector of size one holding the passed on value
 	Vector(Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	Vector(TypeId type);
+	Vector(PhysicalType type);
 	//! Create a non-owning vector that references the specified data
-	Vector(TypeId type, data_ptr_t dataptr);
+	Vector(PhysicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
-	Vector(TypeId type, bool create_data, bool zero_data);
+	Vector(PhysicalType type, bool create_data, bool zero_data);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -73,7 +73,7 @@ public:
 	//! constant, if it is compressed)
 	VectorType vector_type;
 	//! The type of the elements stored in the vector (e.g. integer, float)
-	TypeId type;
+	PhysicalType type;
 
 public:
 	//! Create a vector that references the specified value.
@@ -92,7 +92,7 @@ public:
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	void Initialize(TypeId new_type = TypeId::INVALID, bool zero_data = false);
+	void Initialize(PhysicalType new_type = PhysicalType::INVALID, bool zero_data = false);
 
 	//! Converts this Vector to a printable string representation
 	string ToString(idx_t count) const;
@@ -265,9 +265,9 @@ class StandaloneVector : public Vector {
 public:
 	StandaloneVector() : Vector() {
 	}
-	StandaloneVector(TypeId type) : Vector(type) {
+	StandaloneVector(PhysicalType type) : Vector(type) {
 	}
-	StandaloneVector(TypeId type, data_ptr_t dataptr) : Vector(type, dataptr) {
+	StandaloneVector(PhysicalType type, data_ptr_t dataptr) : Vector(type, dataptr) {
 	}
 
 public:

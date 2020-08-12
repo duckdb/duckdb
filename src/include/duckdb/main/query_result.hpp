@@ -23,7 +23,7 @@ public:
 	//! Creates an successful empty query result
 	QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> sql_types, vector<TypeId> types,
+	QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> sql_types, vector<PhysicalType> types,
 	            vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	QueryResult(QueryResultType type, string error);
@@ -37,7 +37,7 @@ public:
 	//! The SQL types of the result
 	vector<LogicalType> sql_types;
 	//! The types of the result
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	//! The names of the result
 	vector<string> names;
 	//! Whether or not execution was successful

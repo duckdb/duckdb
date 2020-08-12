@@ -10,51 +10,51 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
 	if (left.type != right.type) {
-		TypeId left_cast = TypeId::INVALID, right_cast = TypeId::INVALID;
+		PhysicalType left_cast = PhysicalType::INVALID, right_cast = PhysicalType::INVALID;
 		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
 			if (NumericTypeOrder(left.type) < NumericTypeOrder(right.type)) {
 				left_cast = right.type;
 			} else {
 				right_cast = left.type;
 			}
-		} else if (left.type == TypeId::BOOL) {
-			right_cast = TypeId::BOOL;
-		} else if (right.type == TypeId::BOOL) {
-			left_cast = TypeId::BOOL;
+		} else if (left.type == PhysicalType::BOOL) {
+			right_cast = PhysicalType::BOOL;
+		} else if (right.type == PhysicalType::BOOL) {
+			left_cast = PhysicalType::BOOL;
 		}
-		if (left_cast != TypeId::INVALID) {
+		if (left_cast != PhysicalType::INVALID) {
 			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
-		} else if (right_cast != TypeId::INVALID) {
+		} else if (right_cast != PhysicalType::INVALID) {
 			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
 		return false;
 	}
 	switch (left.type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return OP::Operation(left.value_.boolean, right.value_.boolean);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return OP::Operation(left.value_.tinyint, right.value_.tinyint);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return OP::Operation(left.value_.smallint, right.value_.smallint);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return OP::Operation(left.value_.integer, right.value_.integer);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return OP::Operation(left.value_.bigint, right.value_.bigint);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return OP::Operation(left.value_.pointer, right.value_.pointer);
-	case TypeId::HASH:
+	case PhysicalType::HASH:
 		return OP::Operation(left.value_.hash, right.value_.hash);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return OP::Operation(left.value_.float_, right.value_.float_);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return OP::Operation(left.value_.double_, right.value_.double_);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return OP::Operation(left.value_.interval, right.value_.interval);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return OP::Operation(left.str_value, right.str_value);
-	case TypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		for (idx_t i = 0; i < left.struct_value.size(); i++) {
 			if (i >= right.struct_value.size() || left.struct_value[i].first != right.struct_value[i].first ||
 			    left.struct_value[i].second != left.struct_value[i].second) {
@@ -63,7 +63,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		}
 		return true;
 	}
-	case TypeId::LIST: {
+	case PhysicalType::LIST: {
 		return left.list_value == right.list_value;
 	}
 	default:

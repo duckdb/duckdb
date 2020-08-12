@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PhysicalProjection : public PhysicalOperator {
 public:
-	PhysicalProjection(vector<TypeId> types, vector<unique_ptr<Expression>> select_list)
+	PhysicalProjection(vector<PhysicalType> types, vector<unique_ptr<Expression>> select_list)
 	    : PhysicalOperator(PhysicalOperatorType::PROJECTION, move(types)), select_list(move(select_list)) {
 	}
 

@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalVacuum : public PhysicalOperator {
 public:
 	PhysicalVacuum(unique_ptr<VacuumInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::VACUUM, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::VACUUM, {PhysicalType::BOOL}), info(move(info)) {
 	}
 
 	unique_ptr<VacuumInfo> info;

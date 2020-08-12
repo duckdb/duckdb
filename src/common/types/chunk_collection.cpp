@@ -52,7 +52,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			if (new_types[i] != types[i]) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
-			if (types[i] == TypeId::LIST) {
+			if (types[i] == PhysicalType::LIST) {
 				for (auto &chunk :
 				     chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
@@ -131,24 +131,24 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 	}
 
 	switch (left_vec.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return templated_compare_value<int16_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return templated_compare_value<int32_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return templated_compare_value<int64_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return templated_compare_value<hugeint_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return templated_compare_value<float>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return templated_compare_value<double>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return templated_compare_value<string_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		return templated_compare_value<interval_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
 	default:
 		throw NotImplementedException("Type for comparison");
@@ -365,37 +365,37 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
 		switch (types[col_idx]) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INTERVAL:
+		case PhysicalType::INTERVAL:
 			templated_set_values<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 
-		case TypeId::LIST:
-		case TypeId::STRUCT: {
+		case PhysicalType::LIST:
+		case PhysicalType::STRUCT: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 				idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
@@ -530,34 +530,34 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
 		switch (types[col_idx]) {
-		case TypeId::BOOL:
-		case TypeId::INT8:
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			templated_set_values<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			templated_set_values<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			templated_set_values<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			templated_set_values<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			templated_set_values<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			templated_set_values<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			templated_set_values<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
 			break;
 			// TODO this is ugly and sloooow!
-		case TypeId::STRUCT:
-		case TypeId::LIST: {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST: {
 			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
 				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
 				idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;

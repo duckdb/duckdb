@@ -549,7 +549,7 @@ static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
 	StrfTimeFormat format;
-	if (!options_str.is_null && options_str.type == TypeId::VARCHAR) {
+	if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
 		string error = StrTimeFormat::ParseFormatSpecifier(options_str.str_value, format);
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", options_str.str_value.c_str(), error.c_str());
@@ -946,7 +946,7 @@ static unique_ptr<FunctionData> strptime_bind_function(BoundFunctionExpression &
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
 	StrpTimeFormat format;
-	if (!options_str.is_null && options_str.type == TypeId::VARCHAR) {
+	if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
 		format.format_specifier = options_str.str_value;
 		string error = StrTimeFormat::ParseFormatSpecifier(options_str.str_value, format);
 		if (!error.empty()) {

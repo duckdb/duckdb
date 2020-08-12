@@ -65,42 +65,42 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
 			switch (col.type) {
-			case TypeId::BOOL: {
+			case PhysicalType::BOOL: {
 				auto arg_data = FlatVector::GetData<bool>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::INT8: {
+			case PhysicalType::INT8: {
 				auto arg_data = FlatVector::GetData<int8_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::INT16: {
+			case PhysicalType::INT16: {
 				auto arg_data = FlatVector::GetData<int8_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::INT32: {
+			case PhysicalType::INT32: {
 				auto arg_data = FlatVector::GetData<int32_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::INT64: {
+			case PhysicalType::INT64: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::FLOAT: {
+			case PhysicalType::FLOAT: {
 				auto arg_data = FlatVector::GetData<float>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::DOUBLE: {
+			case PhysicalType::DOUBLE: {
 				auto arg_data = FlatVector::GetData<double>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case TypeId::VARCHAR: {
+			case PhysicalType::VARCHAR: {
 				auto arg_data = FlatVector::GetData<string_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx].GetData()));
 				break;

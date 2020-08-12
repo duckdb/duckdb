@@ -163,7 +163,7 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 		return 0;
 	}
 	assert(true_sel || false_sel);
-	assert(expr.return_type == TypeId::BOOL);
+	assert(expr.return_type == PhysicalType::BOOL);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);
@@ -223,7 +223,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(TypeId::BOOL, (data_ptr_t)intermediate_bools);
+	Vector intermediate(PhysicalType::BOOL, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
 	VectorData idata;

@@ -4,7 +4,7 @@
 namespace duckdb {
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, TypeId return_type,
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, PhysicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate)
     : Expression(type, ExpressionClass::BOUND_WINDOW, return_type), aggregate(move(aggregate)) {
 }

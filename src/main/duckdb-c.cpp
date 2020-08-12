@@ -112,7 +112,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			return DuckDBError;
 		}
 		// memset data to 0 for VARCHAR columns for safe deletion later
-		if (result->types[i] == TypeId::VARCHAR) {
+		if (result->types[i] == PhysicalType::VARCHAR) {
 			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);
 		}
 	}
@@ -587,7 +587,7 @@ bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return false;
 	} else {
-		return val.CastAs(TypeId::BOOL).value_.boolean;
+		return val.CastAs(PhysicalType::BOOL).value_.boolean;
 	}
 }
 
@@ -596,7 +596,7 @@ int8_t duckdb_value_int8(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT8).value_.tinyint;
+		return val.CastAs(PhysicalType::INT8).value_.tinyint;
 	}
 }
 
@@ -605,7 +605,7 @@ int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT16).value_.smallint;
+		return val.CastAs(PhysicalType::INT16).value_.smallint;
 	}
 }
 
@@ -614,7 +614,7 @@ int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT32).value_.integer;
+		return val.CastAs(PhysicalType::INT32).value_.integer;
 	}
 }
 
@@ -623,7 +623,7 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT64).value_.bigint;
+		return val.CastAs(PhysicalType::INT64).value_.bigint;
 	}
 }
 
@@ -632,7 +632,7 @@ float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(TypeId::FLOAT).value_.float_;
+		return val.CastAs(PhysicalType::FLOAT).value_.float_;
 	}
 }
 
@@ -641,7 +641,7 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(TypeId::DOUBLE).value_.double_;
+		return val.CastAs(PhysicalType::DOUBLE).value_.double_;
 	}
 }
 

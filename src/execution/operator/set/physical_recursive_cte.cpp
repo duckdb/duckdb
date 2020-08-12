@@ -23,7 +23,7 @@ public:
 	bool intermediate_empty = true;
 };
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<TypeId> types, bool union_all, unique_ptr<PhysicalOperator> top,
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<PhysicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
                                            unique_ptr<PhysicalOperator> bottom)
     : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, move(types)), union_all(union_all) {
 	children.push_back(move(top));
@@ -98,7 +98,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_) {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_);
 
-	Vector dummy_addresses(TypeId::POINTER);
+	Vector dummy_addresses(PhysicalType::POINTER);
 
 	// Use the HT to eliminate duplicate rows
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
@@ -114,7 +114,7 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	auto state = make_unique<PhysicalRecursiveCTEState>();
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
-	state->ht = make_unique<SuperLargeHashTable>(1024, types, vector<TypeId>(), vector<BoundAggregateExpression *>());
+	state->ht = make_unique<SuperLargeHashTable>(1024, types, vector<PhysicalType>(), vector<BoundAggregateExpression *>());
 	return (move(state));
 }
 

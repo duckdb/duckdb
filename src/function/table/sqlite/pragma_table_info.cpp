@@ -56,21 +56,21 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
 		// return values:
-		// "cid", TypeId::INT32
+		// "cid", PhysicalType::INT32
 		assert(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
 
 		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(column.name));
-		// "type", TypeId::VARCHAR
+		// "type", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(LogicalTypeToString(column.type)));
-		// "notnull", TypeId::BOOL
+		// "notnull", PhysicalType::BOOL
 		// FIXME: look at constraints
 		output.SetValue(3, index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::VARCHAR
+		// "dflt_value", PhysicalType::VARCHAR
 		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
 		output.SetValue(4, index, def_value);
-		// "pk", TypeId::BOOL
+		// "pk", PhysicalType::BOOL
 		// FIXME: look at constraints
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
@@ -92,18 +92,18 @@ static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEnt
 		auto type = view->types[index];
 		auto &name = view->aliases[index];
 		// return values:
-		// "cid", TypeId::INT32
+		// "cid", PhysicalType::INT32
 
 		output.SetValue(0, index, Value::INTEGER((int32_t)index));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(name));
-		// "type", TypeId::VARCHAR
+		// "type", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(LogicalTypeToString(type)));
-		// "notnull", TypeId::BOOL
+		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(false));
-		// "dflt_value", TypeId::VARCHAR
+		// "dflt_value", PhysicalType::VARCHAR
 		output.SetValue(4, index, Value());
-		// "pk", TypeId::BOOL
+		// "pk", PhysicalType::BOOL
 		output.SetValue(5, index, Value::BOOLEAN(false));
 	}
 	data.offset = next;

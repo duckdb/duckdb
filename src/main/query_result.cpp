@@ -9,7 +9,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
 }
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> sql_types,
-                         vector<TypeId> types, vector<string> names)
+                         vector<PhysicalType> types, vector<string> names)
     : type(type), statement_type(statement_type), sql_types(sql_types), types(types), names(names), success(true) {
 	assert(types.size() == names.size());
 }

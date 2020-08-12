@@ -222,22 +222,22 @@ static void update_chunk(Vector &data, Vector &updates, Vector &row_ids, idx_t c
 	assert(row_ids.type == ROW_TYPE);
 
 	switch (data.type) {
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		update_data<int8_t>(data, updates, row_ids, count, base_index);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		update_data<int16_t>(data, updates, row_ids, count, base_index);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		update_data<int32_t>(data, updates, row_ids, count, base_index);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		update_data<int64_t>(data, updates, row_ids, count, base_index);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		update_data<float>(data, updates, row_ids, count, base_index);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		update_data<double>(data, updates, row_ids, count, base_index);
 		break;
 	default:

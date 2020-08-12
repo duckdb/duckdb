@@ -18,8 +18,8 @@ namespace duckdb {
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
 class BoundColumnRefExpression : public Expression {
 public:
-	BoundColumnRefExpression(TypeId type, ColumnBinding binding, idx_t depth = 0);
-	BoundColumnRefExpression(string alias, TypeId type, ColumnBinding binding, idx_t depth = 0);
+	BoundColumnRefExpression(PhysicalType type, ColumnBinding binding, idx_t depth = 0);
+	BoundColumnRefExpression(string alias, PhysicalType type, ColumnBinding binding, idx_t depth = 0);
 
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;

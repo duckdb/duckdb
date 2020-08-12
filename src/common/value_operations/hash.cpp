@@ -11,25 +11,25 @@ hash_t ValueOperations::Hash(const Value &op) {
 		return 0;
 	}
 	switch (op.type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return duckdb::Hash(op.value_.boolean);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return duckdb::Hash(op.value_.tinyint);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return duckdb::Hash(op.value_.smallint);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return duckdb::Hash(op.value_.integer);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return duckdb::Hash(op.value_.bigint);
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		return duckdb::Hash(op.value_.hugeint);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return duckdb::Hash(op.value_.float_);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return duckdb::Hash(op.value_.double_);
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		return duckdb::Hash(op.value_.pointer);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return duckdb::Hash(op.str_value.c_str());
 	default:
 		throw NotImplementedException("Unimplemented type for value hash");

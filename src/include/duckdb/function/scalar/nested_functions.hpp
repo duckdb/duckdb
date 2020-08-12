@@ -35,9 +35,9 @@ struct ListValueFun {
 struct StructExtractBindData : public FunctionData {
 	string key;
 	idx_t index;
-	TypeId type;
+	PhysicalType type;
 
-	StructExtractBindData(string key, idx_t index, TypeId type) : key(key), index(index), type(type) {
+	StructExtractBindData(string key, idx_t index, PhysicalType type) : key(key), index(index), type(type) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {

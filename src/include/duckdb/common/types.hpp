@@ -102,7 +102,7 @@ struct list_entry_t {
 //===--------------------------------------------------------------------===//
 
 // taken from arrow's type.h
-enum class TypeId : uint8_t {
+enum class PhysicalType : uint8_t {
 	/// A NULL type having no physical storage
 	NA = 0,
 
@@ -321,57 +321,57 @@ LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);
 
 //! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
-int NumericTypeOrder(TypeId type);
+int NumericTypeOrder(PhysicalType type);
 
 //! Gets the internal type associated with the given SQL type
-TypeId GetInternalType(LogicalType type);
-//! Returns the "simplest" SQL type corresponding to the given type id (e.g. TypeId::INT32 -> LogicalTypeId::INTEGER)
-LogicalType LogicalTypeFromInternalType(TypeId type);
+PhysicalType GetInternalType(LogicalType type);
+//! Returns the "simplest" SQL type corresponding to the given type id (e.g. PhysicalType::INT32 -> LogicalTypeId::INTEGER)
+LogicalType LogicalTypeFromInternalType(PhysicalType type);
 
-//! Returns the TypeId for the given type
-template <class T> TypeId GetTypeId() {
+//! Returns the PhysicalType for the given type
+template <class T> PhysicalType GetTypeId() {
 	if (std::is_same<T, bool>()) {
-		return TypeId::BOOL;
+		return PhysicalType::BOOL;
 	} else if (std::is_same<T, int8_t>()) {
-		return TypeId::INT8;
+		return PhysicalType::INT8;
 	} else if (std::is_same<T, int16_t>()) {
-		return TypeId::INT16;
+		return PhysicalType::INT16;
 	} else if (std::is_same<T, int32_t>()) {
-		return TypeId::INT32;
+		return PhysicalType::INT32;
 	} else if (std::is_same<T, int64_t>()) {
-		return TypeId::INT64;
+		return PhysicalType::INT64;
 	} else if (std::is_same<T, hugeint_t>()) {
-		return TypeId::INT128;
+		return PhysicalType::INT128;
 	} else if (std::is_same<T, uint64_t>()) {
-		return TypeId::HASH;
+		return PhysicalType::HASH;
 	} else if (std::is_same<T, uintptr_t>()) {
-		return TypeId::POINTER;
+		return PhysicalType::POINTER;
 	} else if (std::is_same<T, float>()) {
-		return TypeId::FLOAT;
+		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {
-		return TypeId::DOUBLE;
+		return PhysicalType::DOUBLE;
 	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {
-		return TypeId::VARCHAR;
+		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
-		return TypeId::INTERVAL;
+		return PhysicalType::INTERVAL;
 	} else {
-		return TypeId::INVALID;
+		return PhysicalType::INVALID;
 	}
 }
 
 template <class T> bool IsValidType() {
-	return GetTypeId<T>() != TypeId::INVALID;
+	return GetTypeId<T>() != PhysicalType::INVALID;
 }
 
-//! The TypeId used by the row identifiers column
-extern const TypeId ROW_TYPE;
+//! The PhysicalType used by the row identifiers column
+extern const PhysicalType ROW_TYPE;
 
-string TypeIdToString(TypeId type);
-idx_t GetTypeIdSize(TypeId type);
-bool TypeIsConstantSize(TypeId type);
-bool TypeIsIntegral(TypeId type);
-bool TypeIsNumeric(TypeId type);
-bool TypeIsInteger(TypeId type);
+string TypeIdToString(PhysicalType type);
+idx_t GetTypeIdSize(PhysicalType type);
+bool TypeIsConstantSize(PhysicalType type);
+bool TypeIsIntegral(PhysicalType type);
+bool TypeIsNumeric(PhysicalType type);
+bool TypeIsInteger(PhysicalType type);
 
 template <class T> bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());

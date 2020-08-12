@@ -17,7 +17,7 @@ namespace duckdb {
 
 class BoundSubqueryExpression : public Expression {
 public:
-	BoundSubqueryExpression(TypeId return_type);
+	BoundSubqueryExpression(PhysicalType return_type);
 
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;

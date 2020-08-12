@@ -45,7 +45,7 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		if (equality_only && collation_entry->not_required_for_equality) {
 			continue;
 		}
-		auto function = make_unique<BoundFunctionExpression>(TypeId::VARCHAR, collation_entry->function);
+		auto function = make_unique<BoundFunctionExpression>(PhysicalType::VARCHAR, collation_entry->function);
 		function->children.push_back(move(source));
 		if (collation_entry->function.bind) {
 			function->bind_info = collation_entry->function.bind(*function, context);

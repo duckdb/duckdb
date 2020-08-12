@@ -10,7 +10,7 @@
 namespace duckdb {
 using namespace std;
 
-UncompressedSegment::UncompressedSegment(BufferManager &manager, TypeId type, idx_t row_start)
+UncompressedSegment::UncompressedSegment(BufferManager &manager, PhysicalType type, idx_t row_start)
     : manager(manager), type(type), block_id(INVALID_BLOCK), max_vector_count(0), tuple_count(0), row_start(row_start),
       versions(nullptr) {
 }
@@ -213,7 +213,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
 	switch (result.type) {
-	case TypeId::INT8: {
+	case PhysicalType::INT8: {
 		auto result_flat = FlatVector::GetData<int8_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.tinyint);
 		auto predicate = FlatVector::GetData<int8_t>(predicate_vector);
@@ -221,7 +221,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		                            nullmask);
 		break;
 	}
-	case TypeId::INT16: {
+	case PhysicalType::INT16: {
 		auto result_flat = FlatVector::GetData<int16_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.smallint);
 		auto predicate = FlatVector::GetData<int16_t>(predicate_vector);
@@ -229,7 +229,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		                             nullmask);
 		break;
 	}
-	case TypeId::INT32: {
+	case PhysicalType::INT32: {
 		auto result_flat = FlatVector::GetData<int32_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.integer);
 		auto predicate = FlatVector::GetData<int32_t>(predicate_vector);
@@ -237,7 +237,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		                             nullmask);
 		break;
 	}
-	case TypeId::INT64: {
+	case PhysicalType::INT64: {
 		auto result_flat = FlatVector::GetData<int64_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.bigint);
 		auto predicate = FlatVector::GetData<int64_t>(predicate_vector);
@@ -245,14 +245,14 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		                             nullmask);
 		break;
 	}
-	case TypeId::FLOAT: {
+	case PhysicalType::FLOAT: {
 		auto result_flat = FlatVector::GetData<float>(result);
 		auto predicate_vector = Vector(filter.constant.value_.float_);
 		auto predicate = FlatVector::GetData<float>(predicate_vector);
 		filterSelectionType<float>(result_flat, predicate, sel, approved_tuple_count, filter.comparison_type, nullmask);
 		break;
 	}
-	case TypeId::DOUBLE: {
+	case PhysicalType::DOUBLE: {
 		auto result_flat = FlatVector::GetData<double>(result);
 		auto predicate_vector = Vector(filter.constant.value_.double_);
 		auto predicate = FlatVector::GetData<double>(predicate_vector);
@@ -260,7 +260,7 @@ void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, 
 		                            nullmask);
 		break;
 	}
-	case TypeId::VARCHAR: {
+	case PhysicalType::VARCHAR: {
 		auto result_flat = FlatVector::GetData<string_t>(result);
 		auto predicate_vector = Vector(filter.constant.str_value);
 		auto predicate = FlatVector::GetData<string_t>(predicate_vector);

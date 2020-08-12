@@ -24,7 +24,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = {TypeId::VARCHAR, TypeId::VARCHAR};
+		types = {PhysicalType::VARCHAR, PhysicalType::VARCHAR};
 	}
 };
 } // namespace duckdb

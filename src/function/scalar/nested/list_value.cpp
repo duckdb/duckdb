@@ -13,13 +13,13 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
-	assert(result.type == TypeId::LIST);
+	assert(result.type == PhysicalType::LIST);
 	auto list_child = make_unique<ChunkCollection>();
 	ListVector::SetEntry(result, move(list_child));
 
 	auto &cc = ListVector::GetEntry(result);
 	DataChunk append_vals;
-	vector<TypeId> types;
+	vector<PhysicalType> types;
 	if (args.column_count() > 0) {
 		types.push_back(args.GetTypes()[0]);
 		append_vals.Initialize(types);
