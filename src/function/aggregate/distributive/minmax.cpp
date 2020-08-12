@@ -16,7 +16,7 @@ template <class T> struct min_max_state_t {
 };
 
 template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<int8_t>, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::TINYINT:
@@ -191,10 +191,10 @@ struct MaxOperationString : public StringMinMaxBase {
 
 template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	for (auto type : LogicalType::ALL_TYPES) {
-		if (type.id == LogicalTypeId::VARCHAR || type.id == LogicalTypeId::BLOB) {
+		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
-			    	type.id, type.id));
+			    	type.id(), type.id()));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

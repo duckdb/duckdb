@@ -126,7 +126,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 		}
 		// then write the data
-		switch (result->sql_types[col].id) {
+		switch (result->sql_types[col].id()) {
 		case LogicalTypeId::BOOLEAN:
 			WriteData<bool>(out, result->collection, col);
 			break;
@@ -414,7 +414,7 @@ void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
 }
 
 duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
-	switch (sql_type.id) {
+	switch (sql_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
 	case LogicalTypeId::TINYINT:

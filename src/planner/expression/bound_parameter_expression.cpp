@@ -34,7 +34,7 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_) const {
 hash_t BoundParameterExpression::Hash() const {
 	hash_t result = Expression::Hash();
 	result = CombineHash(duckdb::Hash(parameter_nr), result);
-	result = CombineHash(duckdb::Hash((int)sql_type.id), result);
+	result = CombineHash(duckdb::Hash((int)sql_type.id()), result);
 	return result;
 }
 

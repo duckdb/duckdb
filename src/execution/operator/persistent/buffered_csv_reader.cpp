@@ -260,9 +260,9 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 	try {
-		if (options.has_date_format && sql_type.id == LogicalTypeId::DATE) {
+		if (options.has_date_format && sql_type.id() == LogicalTypeId::DATE) {
 			options.date_format.ParseDate(value.str_value);
-		} else if (options.has_timestamp_format && sql_type.id == LogicalTypeId::TIMESTAMP) {
+		} else if (options.has_timestamp_format && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 			options.timestamp_format.ParseTimestamp(value.str_value);
 		} else {
 			value.CastAs(LogicalType::VARCHAR, sql_type, true);
@@ -557,7 +557,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 				} else {
 					throw ParserException(
 						"Error while sniffing data type for column '%s': Requested column type %s, detected type %s",
-						col_names[col].c_str(), LogicalTypeToString(r_type).c_str(), LogicalTypeToString(d_type).c_str());
+						col_names[col].c_str(), r_type.ToString().c_str(), d_type.ToString().c_str());
 				}
 			}
 		}
@@ -1096,7 +1096,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
-		if (sql_types[col_idx].id == LogicalTypeId::VARCHAR) {
+		if (sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// target type is varchar: no need to convert
 			// just test that all strings are valid utf-8 strings
 			auto parse_data = FlatVector::GetData<string_t>(parse_chunk.data[col_idx]);
@@ -1120,12 +1120,12 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				}
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
-		} else if (options.has_date_format && sql_types[col_idx].id == LogicalTypeId::DATE) {
+		} else if (options.has_date_format && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
 				return options.date_format.ParseDate(input);
 			});
-		} else if (options.has_timestamp_format && sql_types[col_idx].id == LogicalTypeId::TIMESTAMP) {
+		} else if (options.has_timestamp_format && sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, timestamp_t, true>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
 				return options.timestamp_format.ParseTimestamp(input);

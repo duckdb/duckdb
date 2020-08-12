@@ -372,7 +372,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 		return SQLITE_NULL;
 	}
 	auto column_type = pStmt->result->sql_types[iCol];
-	switch (column_type.id) {
+	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:

@@ -302,7 +302,7 @@ private:
 	}
 
 	template <typename T> static bool TypesMatch(LogicalType sql_type) {
-		switch(sql_type.id) {
+		switch(sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return std::is_same<T, bool>();
 		case LogicalTypeId::TINYINT:

@@ -10,7 +10,7 @@ using namespace std;
 namespace duckdb {
 
 template <class OP> static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return AggregateFunction::UnaryAggregate<uint8_t, int8_t, int8_t, OP>(type, type);
 	case LogicalTypeId::SMALLINT:

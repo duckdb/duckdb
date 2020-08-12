@@ -256,20 +256,43 @@ enum class LogicalTypeId : uint8_t {
 };
 
 struct LogicalType {
-	LogicalTypeId id;
-	uint16_t width;
-	uint8_t scale;
-	string collation;
+	LogicalType()
+		: id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
+	}
+	LogicalType(LogicalTypeId id)
+		: id_(id), width_(0), scale_(0), collation_(string()) {
+	}
+	LogicalType(LogicalTypeId id, string collation)
+		: id_(id), width_(0), scale_(0), collation_(move(collation)) {
+	}
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale)
+		: id_(id), width_(width), scale_(scale), collation_(string()) {
+	}
+	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types)
+		: id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
+	}
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types)
+		: id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
+	}
 
-	// TODO serialize this
-	child_list_t<LogicalType> child_type;
-
-	LogicalType(LogicalTypeId id = LogicalTypeId::INVALID, uint16_t width = 0, uint8_t scale = 0, string collation = string())
-		: id(id), width(width), scale(scale), collation(move(collation)) {
+	LogicalTypeId id() const {
+		return id_;
+	}
+	uint8_t width() const {
+		return width_;
+	}
+	uint8_t scale() const {
+		return scale_;
+	}
+	const string& collation() const {
+		return collation_;
+	}
+	const child_list_t<LogicalType> &child_types() const {
+		return child_types_;
 	}
 
 	bool operator==(const LogicalType &rhs) const {
-		return id == rhs.id && width == rhs.width && scale == rhs.scale;
+		return id_ == rhs.id_ && width_ == rhs.width_ && scale_ == rhs.scale_;
 	}
 	bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
@@ -280,10 +303,17 @@ struct LogicalType {
 	//! Deserializes a blob back into an LogicalType
 	static LogicalType Deserialize(Deserializer &source);
 
+	string ToString() const;
 	bool IsIntegral() const;
 	bool IsNumeric() const;
 	bool IsMoreGenericThan(LogicalType &other) const;
+private:
+	LogicalTypeId id_;
+	uint8_t width_;
+	uint8_t scale_;
+	string collation_;
 
+	child_list_t<LogicalType> child_types_;
 public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;
@@ -315,7 +345,6 @@ public:
 };
 
 string LogicalTypeIdToString(LogicalTypeId type);
-string LogicalTypeToString(LogicalType type);
 
 LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);

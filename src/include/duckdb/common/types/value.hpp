@@ -130,7 +130,7 @@ public:
 	bool is_null;
 
 	LogicalType GetLogicalType() const {
-		return sql_type.id == LogicalTypeId::INVALID ? LogicalTypeFromInternalType(type) : sql_type;
+		return sql_type.id() == LogicalTypeId::INVALID ? LogicalTypeFromInternalType(type) : sql_type;
 	}
 	void SetLogicalType(LogicalType sql_type) {
 		this->sql_type = sql_type;

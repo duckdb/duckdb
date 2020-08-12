@@ -24,12 +24,12 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, Logic
 		return LogicalType::BIGINT;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
-		assert(child_type.id != LogicalTypeId::INVALID); // "Window function needs an expression"
+		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
 	default:
 		assert(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
-		assert(child_type.id != LogicalTypeId::INVALID); // "Window function needs an expression"
+		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	}
 }

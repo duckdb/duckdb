@@ -17,8 +17,8 @@ template <class SRC, class OP> static void string_cast(Vector &source, Vector &r
 }
 
 static NotImplementedException UnimplementedCast(LogicalType source_type, LogicalType target_type) {
-	return NotImplementedException("Unimplemented type for cast (%s -> %s)", LogicalTypeToString(source_type).c_str(),
-	                               LogicalTypeToString(target_type).c_str());
+	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString().c_str(),
+	                               target_type.ToString().c_str());
 }
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
@@ -38,7 +38,7 @@ static void null_cast(Vector &source, Vector &result, LogicalType source_type, L
 template <class SRC>
 static void numeric_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type, idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		assert(result.type == PhysicalType::BOOL);
 		UnaryExecutor::Execute<SRC, bool, duckdb::Cast, true>(source, result, count);
@@ -93,7 +93,7 @@ template <class OP>
 static void string_cast_numeric_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type,
                                        idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		assert(result.type == PhysicalType::BOOL);
 		UnaryExecutor::Execute<string_t, bool, OP, true>(source, result, count);
@@ -140,7 +140,7 @@ static void string_cast_numeric_switch(Vector &source, Vector &result, LogicalTy
 static void string_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type, idx_t count,
                                bool strict = false) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::DATE:
 		assert(result.type == PhysicalType::INT32);
 		if (strict) {
@@ -177,7 +177,7 @@ static void string_cast_switch(Vector &source, Vector &result, LogicalType sourc
 
 static void date_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type, idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		// date to varchar
 		string_cast<date_t, duckdb::CastFromDate>(source, result, count);
@@ -194,7 +194,7 @@ static void date_cast_switch(Vector &source, Vector &result, LogicalType source_
 
 static void time_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type, idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
 		string_cast<dtime_t, duckdb::CastFromTime>(source, result, count);
@@ -208,7 +208,7 @@ static void time_cast_switch(Vector &source, Vector &result, LogicalType source_
 static void timestamp_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type,
                                   idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		// timestamp to varchar
 		string_cast<timestamp_t, duckdb::CastFromTimestamp>(source, result, count);
@@ -230,7 +230,7 @@ static void timestamp_cast_switch(Vector &source, Vector &result, LogicalType so
 static void interval_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type,
                                  idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
 		string_cast<interval_t, duckdb::StringCast>(source, result, count);
@@ -243,7 +243,7 @@ static void interval_cast_switch(Vector &source, Vector &result, LogicalType sou
 
 static void blob_cast_switch(Vector &source, Vector &result, LogicalType source_type, LogicalType target_type, idx_t count) {
 	// now switch on the result type
-	switch (target_type.id) {
+	switch (target_type.id()) {
 	case LogicalTypeId::VARCHAR:
 		// blob to varchar
 		string_cast<string_t, duckdb::CastFromBlob>(source, result, count);
@@ -258,7 +258,7 @@ void VectorOperations::Cast(Vector &source, Vector &result, LogicalType source_t
                             bool strict) {
 	assert(source_type != target_type);
 	// first switch on source type
-	switch (source_type.id) {
+	switch (source_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		assert(source.type == PhysicalType::BOOL);
 		numeric_cast_switch<bool>(source, result, source_type, target_type, count);

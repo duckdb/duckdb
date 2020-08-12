@@ -418,7 +418,7 @@ string Value::ToString(LogicalType sql_type) const {
 	if (is_null) {
 		return "NULL";
 	}
-	switch (sql_type.id) {
+	switch (sql_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
 	case LogicalTypeId::TINYINT:
@@ -477,7 +477,7 @@ string Value::ToString(LogicalType sql_type) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing: %s", LogicalTypeToString(sql_type).c_str());
+		throw NotImplementedException("Unimplemented type for printing: %s", sql_type.ToString().c_str());
 	}
 }
 

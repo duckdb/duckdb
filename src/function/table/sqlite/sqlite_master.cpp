@@ -32,7 +32,7 @@ string GenerateQuery(CatalogEntry *entry) {
 
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
-			ss << column.name << " " << LogicalTypeToString(column.type);
+			ss << column.name << " " << column.type.ToString();
 			if (i + 1 < table->columns.size()) {
 				ss << ", ";
 			}

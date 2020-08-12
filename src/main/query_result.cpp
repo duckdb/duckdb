@@ -68,7 +68,7 @@ string QueryResult::HeaderToString() {
 	}
 	result += "\n";
 	for (auto &type : sql_types) {
-		result += LogicalTypeToString(type) + "\t";
+		result += type.ToString() + "\t";
 	}
 	result += "\n";
 	return result;

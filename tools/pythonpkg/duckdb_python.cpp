@@ -201,7 +201,7 @@ struct PandasScanFunction : public TableFunction {
 		for (idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			auto numpy_col = py::array(get_fun(df_names[col_idx]).attr("to_numpy")());
 
-			switch (data.sql_types[col_idx].id) {
+			switch (data.sql_types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				scan_pandas_column<bool>(numpy_col, this_count, data.position, output.data[col_idx]);
 				break;
@@ -272,7 +272,7 @@ struct PandasScanFunction : public TableFunction {
 				break;
 			}
 			default:
-				throw runtime_error("Unsupported type " + LogicalTypeToString(data.sql_types[col_idx]));
+				throw runtime_error("Unsupported type " + data.sql_types[col_idx].ToString());
 			}
 		}
 		data.position += this_count;
@@ -319,7 +319,7 @@ struct DuckDBPyResult {
 				continue;
 			}
 			auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-			switch (result->sql_types[col_idx].id) {
+			switch (result->sql_types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				res[col_idx] = val.GetValue<bool>();
 				break;
@@ -384,7 +384,7 @@ struct DuckDBPyResult {
 			}
 
 			default:
-				throw runtime_error("unsupported type: " + LogicalTypeToString(result->sql_types[col_idx]));
+				throw runtime_error("unsupported type: " + result->sql_types[col_idx].ToString());
 			}
 		}
 		chunk_offset++;
@@ -422,7 +422,7 @@ struct DuckDBPyResult {
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
 			// convert the actual payload
 			py::array col_res;
-			switch (mres->sql_types[col_idx].id) {
+			switch (mres->sql_types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool", mres->collection, col_idx);
 				break;
@@ -464,7 +464,7 @@ struct DuckDBPyResult {
 				    "object", mres->collection, col_idx);
 				break;
 			default:
-				throw runtime_error("unsupported type " + LogicalTypeToString(mres->sql_types[col_idx]));
+				throw runtime_error("unsupported type " + mres->sql_types[col_idx].ToString());
 			}
 
 			// convert the nullmask
@@ -971,7 +971,7 @@ struct DuckDBPyRelation {
 		} else if (key_s == "types" || key_s == "dtypes") {
 			py::list res;
 			for (auto &col : rel->Columns()) {
-				res.append(LogicalTypeToString(col.type));
+				res.append(col.type.ToString());
 			}
 			return move(res);
 		}

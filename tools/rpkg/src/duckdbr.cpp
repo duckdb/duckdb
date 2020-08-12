@@ -242,7 +242,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	for (auto &stype : stmtholder->stmt->types) {
 		string rtype = "";
-		switch (stype.id) {
+		switch (stype.id()) {
 		case LogicalTypeId::BOOLEAN:
 			rtype = "logical";
 			break;
@@ -272,7 +272,7 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 		}
 		default:
 			UNPROTECT(1); // retlist
-			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", LogicalTypeToString(stype).c_str());
+			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
@@ -404,7 +404,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 
 		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 			SEXP varvalue = NULL;
-			switch (result->sql_types[col_idx].id) {
+			switch (result->sql_types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				varvalue = PROTECT(NEW_LOGICAL(nrows));
 				break;
@@ -429,7 +429,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 			default:
 				UNPROTECT(1); // retlist
 				Rf_error("duckdb_execute_R: Unknown column type for execute: %s/%s",
-				         LogicalTypeToString(result->sql_types[col_idx]).c_str(),
+				         result->sql_types[col_idx].ToString().c_str(),
 				         TypeIdToString(result->types[col_idx]).c_str());
 			}
 			if (!varvalue) {
@@ -453,7 +453,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 			assert(chunk->column_count() == LENGTH(retlist));
 			for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
-				switch (result->sql_types[col_idx].id) {
+				switch (result->sql_types[col_idx].id()) {
 				case LogicalTypeId::BOOLEAN:
 					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest),
 					                              dest_offset, NA_LOGICAL);

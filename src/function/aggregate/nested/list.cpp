@@ -88,8 +88,10 @@ static void list_finalize(Vector &state_vector, Vector &result, idx_t count) {
 
 unique_ptr<FunctionData> list_bind(BoundAggregateExpression &expr, ClientContext &context, LogicalType &return_type) {
 	assert(expr.children.size() == 1);
-	return_type = LogicalType::LIST;
-	return_type.child_type.push_back(make_pair("", expr.arguments[0]));
+	child_list_t<LogicalType> children;
+	children.push_back(make_pair("", expr.arguments[0]));
+
+	return_type = LogicalType(LogicalTypeId::LIST, move(children));
 	return make_unique<ListBindData>(); // TODO atm this is not used anywhere but it might not be required after all
 	                                    // except for sanity checking
 }

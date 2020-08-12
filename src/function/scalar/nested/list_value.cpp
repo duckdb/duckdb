@@ -45,18 +45,18 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	LogicalType stype(LogicalTypeId::LIST);
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
 
+	child_list_t<LogicalType> child_types;
 	if (expr.children.size() > 0) {
-		stype.child_type.push_back(make_pair("", expr.arguments[0]));
+		child_types.push_back(make_pair("", expr.arguments[0]));
 	}
 
 	// this is more for completeness reasons
-	expr.sql_return_type = stype;
-	return make_unique<VariableReturnBindData>(stype);
+	expr.sql_return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
+	return make_unique<VariableReturnBindData>(expr.sql_return_type);
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {

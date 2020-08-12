@@ -65,7 +65,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 					rc = sqlite3_bind_null(stmt, bind_index);
 				} else {
 					// bind based on the type
-					switch (types[j].id) {
+					switch (types[j].id()) {
 					case LogicalTypeId::BOOLEAN:
 					case LogicalTypeId::TINYINT:
 					case LogicalTypeId::SMALLINT:
@@ -151,7 +151,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<LogicalType> result_types, sqlite3 
 			} else {
 				auto dataptr = FlatVector::GetData(result_chunk.data[i]);
 				// normal value, convert type
-				switch (result_types[i].id) {
+				switch (result_types[i].id()) {
 				case LogicalTypeId::BOOLEAN:
 					((int8_t *)dataptr)[result_idx] = sqlite3_column_int(stmt, i) == 0 ? 0 : 1;
 					break;

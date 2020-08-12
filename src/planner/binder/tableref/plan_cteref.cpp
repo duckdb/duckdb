@@ -10,7 +10,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 
 	vector<PhysicalType> types;
 	for (auto &expr : ref.types) {
-		types.push_back(GetInternalType(expr.id));
+		types.push_back(GetInternalType(expr.id()));
 	}
 
 	return make_unique<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns);

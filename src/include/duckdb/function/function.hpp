@@ -92,7 +92,7 @@ public:
 	}
 
 	bool HasVarArgs() {
-		return varargs.id != LogicalTypeId::INVALID;
+		return varargs.id() != LogicalTypeId::INVALID;
 	}
 };
 

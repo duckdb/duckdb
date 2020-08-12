@@ -46,15 +46,17 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	// the binder should fix this for us.
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
-	assert(expr.arguments[0].id == LogicalTypeId::STRUCT);
+	assert(expr.arguments[0].id() == LogicalTypeId::STRUCT);
 	assert(expr.children[0]->return_type == PhysicalType::STRUCT);
-	if (expr.arguments[0].child_type.size() < 1) {
+
+	auto &struct_children = expr.arguments[0].child_types();
+	if (struct_children.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = expr.children[1];
 
-	if (expr.arguments[1].id != LogicalTypeId::VARCHAR || key_child->return_type != PhysicalType::VARCHAR ||
+	if (expr.arguments[1].id() != LogicalTypeId::VARCHAR || key_child->return_type != PhysicalType::VARCHAR ||
 	    !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
@@ -69,8 +71,8 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	idx_t key_index = 0;
 	bool found_key = false;
 
-	for (size_t i = 0; i < expr.arguments[0].child_type.size(); i++) {
-		auto &child = expr.arguments[0].child_type[i];
+	for (size_t i = 0; i < struct_children.size(); i++) {
+		auto &child = struct_children[i];
 		if (child.first == key) {
 			found_key = true;
 			key_index = i;

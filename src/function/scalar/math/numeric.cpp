@@ -13,7 +13,7 @@ namespace duckdb {
 
 template <class TR, class OP> static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::UnaryFunction<int8_t, TR, OP>;
 		break;
@@ -154,9 +154,9 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// ceil on integral type is a nop
 			func = ScalarFunction::NopFunction;
-		} else if (type.id == LogicalTypeId::FLOAT) {
+		} else if (type.id() == LogicalTypeId::FLOAT) {
 			func = ScalarFunction::UnaryFunction<float, float, CeilOperator>;
-		} else if (type.id == LogicalTypeId::DOUBLE) {
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
 			func = ScalarFunction::UnaryFunction<double, double, CeilOperator>;
 		} else {
 			throw NotImplementedException("Unimplemented numeric type for function \"ceil\"");
@@ -184,9 +184,9 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// floor on integral type is a nop
 			func = ScalarFunction::NopFunction;
-		} else if (type.id == LogicalTypeId::FLOAT) {
+		} else if (type.id() == LogicalTypeId::FLOAT) {
 			func = ScalarFunction::UnaryFunction<float, float, FloorOperator>;
-		} else if (type.id == LogicalTypeId::DOUBLE) {
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
 			func = ScalarFunction::UnaryFunction<double, double, FloorOperator>;
 		} else {
 			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
@@ -220,9 +220,9 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 		if (type.IsIntegral()) {
 			// round on integral type is a nop
 			func = ScalarFunction::NopFunction;
-		} else if (type.id == LogicalTypeId::FLOAT) {
+		} else if (type.id() == LogicalTypeId::FLOAT) {
 			func = ScalarFunction::BinaryFunction<float, int32_t, float, RoundOperator>;
-		} else if (type.id == LogicalTypeId::DOUBLE) {
+		} else if (type.id() == LogicalTypeId::DOUBLE) {
 			func = ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperator>;
 		} else {
 			throw NotImplementedException("Unimplemented numeric type for function \"round\"");

@@ -222,7 +222,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		env->SetObjectArrayElement(name_array, col_idx, env->NewStringUTF(stmt_ref->stmt->names[col_idx].c_str()));
 		env->SetObjectArrayElement(type_array, col_idx,
-		                           env->NewStringUTF(LogicalTypeToString(stmt_ref->stmt->types[col_idx]).c_str()));
+		                           env->NewStringUTF(stmt_ref->stmt->types[col_idx].ToString().c_str()));
 	}
 
 	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array);

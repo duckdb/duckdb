@@ -63,7 +63,7 @@ static void pragma_table_info_table(PragmaTableFunctionData &data, TableCatalogE
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(column.name));
 		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(LogicalTypeToString(column.type)));
+		output.SetValue(2, index, Value(column.type.ToString()));
 		// "notnull", PhysicalType::BOOL
 		// FIXME: look at constraints
 		output.SetValue(3, index, Value::BOOLEAN(false));
@@ -98,7 +98,7 @@ static void pragma_table_info_view(PragmaTableFunctionData &data, ViewCatalogEnt
 		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(name));
 		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(LogicalTypeToString(type)));
+		output.SetValue(2, index, Value(type.ToString()));
 		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(false));
 		// "dflt_value", PhysicalType::VARCHAR

@@ -19,7 +19,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 
 	//Creating the tables
 	for(LogicalType sql_type: sql_templated_types) {
-		col_type = LogicalTypeIdToString(sql_type.id);
+		col_type = LogicalTypeIdToString(sql_type.id());
 		table_name = StringUtil::Lower(col_type);
 
 		con.Query("CREATE TABLE " + table_name + " (a " + col_type +
@@ -29,9 +29,9 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 
 	//Create the UDF functions into the catalog
 	for(LogicalType sql_type: sql_templated_types) {
-		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
+		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 
-		switch(sql_type.id) {
+		switch(sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 		{
 			con.CreateVectorizedFunction<bool, bool>(func_name + "_1", &udf_unary_function<bool>);
@@ -90,7 +90,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	SECTION("Testing Vectorized UDF functions") {
 		//Inserting values
 		for(LogicalType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
 			if(sql_type == LogicalType::BOOLEAN) {
@@ -104,7 +104,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 
 		//Running the UDF functions and checking the results
 		for(LogicalType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 			if(sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
@@ -142,7 +142,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 		Connection con_test(db);
 		con_test.EnableQueryVerification();
 		for(LogicalType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 
 			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
@@ -155,7 +155,7 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 
 	SECTION("Cheking NULLs with Vectorized UDF functions") {
 		for(LogicalType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id));
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 
 			//Deleting old values

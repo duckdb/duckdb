@@ -29,20 +29,20 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 }
 
 bool BoundCastExpression::CastIsInvertible(LogicalType source_type, LogicalType target_type) {
-	if (source_type.id == LogicalTypeId::BOOLEAN || target_type.id == LogicalTypeId::BOOLEAN) {
+	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
 		return false;
 	}
-	if (source_type.id == LogicalTypeId::FLOAT || target_type.id == LogicalTypeId::FLOAT) {
+	if (source_type.id() == LogicalTypeId::FLOAT || target_type.id() == LogicalTypeId::FLOAT) {
 		return false;
 	}
-	if (source_type.id == LogicalTypeId::DOUBLE || target_type.id == LogicalTypeId::DOUBLE) {
+	if (source_type.id() == LogicalTypeId::DOUBLE || target_type.id() == LogicalTypeId::DOUBLE) {
 		return false;
 	}
-	if (source_type.id == LogicalTypeId::VARCHAR) {
-		return target_type.id == LogicalTypeId::DATE || target_type.id == LogicalTypeId::TIMESTAMP;
+	if (source_type.id() == LogicalTypeId::VARCHAR) {
+		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIMESTAMP;
 	}
-	if (target_type.id == LogicalTypeId::VARCHAR) {
-		return source_type.id == LogicalTypeId::DATE || source_type.id == LogicalTypeId::TIMESTAMP;
+	if (target_type.id() == LogicalTypeId::VARCHAR) {
+		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIMESTAMP;
 	}
 	return true;
 }

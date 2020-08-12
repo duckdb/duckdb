@@ -104,7 +104,7 @@ template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalTy
 }
 
 AggregateFunction FirstFun::GetFunction(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<int8_t>(type);
 	case LogicalTypeId::TINYINT:

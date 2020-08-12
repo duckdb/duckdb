@@ -14,7 +14,7 @@ namespace duckdb {
 
 template <class OP> static scalar_function_t GetScalarBinaryFunction(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
 		break;
@@ -352,7 +352,7 @@ static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &st
 }
 
 template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		return BinaryScalarFunctionIgnoreZero<int8_t, int8_t, int8_t, OP>;
 	case LogicalTypeId::SMALLINT:

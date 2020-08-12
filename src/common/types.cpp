@@ -174,18 +174,30 @@ bool TypeIsInteger(PhysicalType type) {
 }
 
 void LogicalType::Serialize(Serializer &serializer) {
-	serializer.Write(id);
-	serializer.Write(width);
-	serializer.Write(scale);
-	serializer.WriteString(collation);
+	serializer.Write<LogicalTypeId>(id_);
+	serializer.Write<uint8_t>(width_);
+	serializer.Write<uint8_t>(scale_);
+	serializer.WriteString(collation_);
+	serializer.Write<uint16_t>(child_types_.size());
+	for(auto &entry : child_types_) {
+		serializer.WriteString(entry.first);
+		entry.second.Serialize(serializer);
+	}
 }
 
 LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto id = source.Read<LogicalTypeId>();
-	auto width = source.Read<uint16_t>();
+	auto width = source.Read<uint8_t>();
 	auto scale = source.Read<uint8_t>();
 	auto collation = source.Read<string>();
-	return LogicalType(id, width, scale, collation);
+	child_list_t<LogicalType> children;
+	auto child_count = source.Read<uint16_t>();
+	for(uint16_t i = 0; i < child_count; i++) {
+		string name = source.Read<string>();
+		LogicalType child_type = LogicalType::Deserialize(source);
+		children.push_back(make_pair(move(name), move(child_type)));
+	}
+	return LogicalType(id, width, scale, collation, move(children));
 }
 
 string LogicalTypeIdToString(LogicalTypeId id) {
@@ -240,14 +252,13 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	return "UNDEFINED";
 }
 
-string LogicalTypeToString(LogicalType type) {
-	// FIXME: display width/scale
-	switch (type.id) {
+string LogicalType::ToString() const {
+	switch (id_) {
 	case LogicalTypeId::STRUCT: {
 		string ret = "STRUCT<";
-		for (size_t i = 0; i < type.child_type.size(); i++) {
-			ret += type.child_type[i].first + ": " + LogicalTypeToString(type.child_type[i].second);
-			if (i < type.child_type.size() - 1) {
+		for (size_t i = 0; i < child_types_.size(); i++) {
+			ret += child_types_[i].first + ": " + child_types_[i].second.ToString();
+			if (i < child_types_.size() - 1) {
 				ret += ", ";
 			}
 		}
@@ -255,16 +266,16 @@ string LogicalTypeToString(LogicalType type) {
 		return ret;
 	}
 	case LogicalTypeId::LIST: {
-		if (type.child_type.size() == 0) {
+		if (child_types_.size() == 0) {
 			return "LIST<?>";
 		}
-		if (type.child_type.size() != 1) {
+		if (child_types_.size() != 1) {
 			throw Exception("List needs a single child element");
 		}
-		return "LIST<" + LogicalTypeToString(type.child_type[0].second) + ">";
+		return "LIST<" + child_types_[0].second.ToString() + ">";
 	}
 	default:
-		return LogicalTypeIdToString(type.id);
+		return LogicalTypeIdToString(id_);
 	}
 }
 
@@ -309,7 +320,7 @@ LogicalType TransformStringToLogicalType(string str) {
 }
 
 bool LogicalType::IsIntegral() const {
-	switch (id) {
+	switch (id_) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -322,7 +333,7 @@ bool LogicalType::IsIntegral() const {
 }
 
 bool LogicalType::IsNumeric() const {
-	switch (id) {
+	switch (id_) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -359,19 +370,19 @@ int NumericTypeOrder(PhysicalType type) {
 }
 
 bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
-	if (other.id == id) {
+	if (other.id() == id_) {
 		return false;
 	}
 
-	if (other.id == LogicalTypeId::SQLNULL) {
+	if (other.id() == LogicalTypeId::SQLNULL) {
 		return true;
 	}
 
 	// all integer types can cast from INTEGER
 	// this is because INTEGER is the smallest type considered by the automatic csv sniffer
-	switch (id) {
+	switch (id_) {
 	case LogicalTypeId::SMALLINT:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -380,7 +391,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 			return false;
 		}
 	case LogicalTypeId::INTEGER:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -389,7 +400,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 			return false;
 		}
 	case LogicalTypeId::BIGINT:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -398,7 +409,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 			return false;
 		}
 	case LogicalTypeId::HUGEINT:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -408,7 +419,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 			return false;
 		}
 	case LogicalTypeId::DOUBLE:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -421,7 +432,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	case LogicalTypeId::DATE:
 		return false;
 	case LogicalTypeId::TIMESTAMP:
-		switch (other.id) {
+		switch (other.id()) {
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::DATE:
 			return true;
@@ -438,7 +449,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 }
 
 PhysicalType GetInternalType(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return PhysicalType::BOOL;
 	case LogicalTypeId::TINYINT:
@@ -477,16 +488,16 @@ PhysicalType GetInternalType(LogicalType type) {
 	case LogicalTypeId::ANY:
 		return PhysicalType::INVALID;
 	default:
-		throw ConversionException("Invalid LogicalType %s", LogicalTypeToString(type).c_str());
+		throw ConversionException("Invalid LogicalType %s", type.ToString().c_str());
 	}
 }
 
 LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
-	if (left.id < right.id) {
+	if (left.id() < right.id()) {
 		return right;
-	} else if (right.id < left.id) {
+	} else if (right.id() < left.id()) {
 		return left;
-	} else if (left.width > right.width || left.collation > right.collation) {
+	} else if (left.width() > right.width() || left.collation() > right.collation()) {
 		return left;
 	} else {
 		return right;

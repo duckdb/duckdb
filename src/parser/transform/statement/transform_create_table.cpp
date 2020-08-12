@@ -34,10 +34,19 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(PGCollateClause *
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(PGColumnDef *cdef) {
+	string colname;
+	if (cdef->colname) {
+		colname = cdef->colname;
+	}
 	LogicalType target_type = TransformTypeName(cdef->typeName);
-	target_type.collation = TransformCollation(cdef->collClause);
+	if (cdef->collClause) {
+		if (target_type.id() != LogicalTypeId::VARCHAR) {
+			throw ParserException("Only VARCHAR columns can have collations!");
+		}
+		target_type = LogicalType(LogicalTypeId::VARCHAR, TransformCollation(cdef->collClause));
+	}
 
-	return ColumnDefinition(cdef->colname, target_type);
+	return ColumnDefinition(colname, target_type);
 }
 
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(PGNode *node) {

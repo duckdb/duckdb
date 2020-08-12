@@ -103,13 +103,13 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 string Function::CallToString(string name, vector<LogicalType> arguments) {
 	string result = name + "(";
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
-	                           [](const LogicalType &argument) { return LogicalTypeToString(argument); });
+	                           [](const LogicalType &argument) { return argument.ToString(); });
 	return result + ")";
 }
 
 string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
 	string result = CallToString(name, arguments);
-	result += " -> " + LogicalTypeToString(return_type);
+	result += " -> " + return_type.ToString();
 	return result;
 }
 
@@ -231,7 +231,7 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
-		if (target_type.id != LogicalTypeId::ANY && types[i] != target_type) {
+		if (target_type.id() != LogicalTypeId::ANY && types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), types[i], target_type);
 			types[i] = target_type;

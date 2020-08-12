@@ -589,7 +589,7 @@ private:
 
 			col_data.dict.resize(dict_byte_size);
 
-			switch (data.sql_types[col_idx].id) {
+			switch (data.sql_types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 			case LogicalTypeId::INTEGER:
 			case LogicalTypeId::BIGINT:
@@ -657,7 +657,7 @@ private:
 				col_data.string_collection->Verify();
 			} break;
 			default:
-				throw runtime_error(LogicalTypeToString(data.sql_types[col_idx]));
+				throw runtime_error(data.sql_types[col_idx].ToString());
 			}
 			// important, move to next page which should be a data page
 			return false;
@@ -830,7 +830,7 @@ private:
 
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
-					switch (data.sql_types[file_col_idx].id) {
+					switch (data.sql_types[file_col_idx].id()) {
 					case LogicalTypeId::BOOLEAN:
 						_fill_from_dict<bool>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
@@ -878,14 +878,14 @@ private:
 						}
 					} break;
 					default:
-						throw runtime_error(LogicalTypeToString(data.sql_types[file_col_idx]));
+						throw runtime_error(data.sql_types[file_col_idx].ToString());
 					}
 
 					break;
 				}
 				case Encoding::PLAIN:
 					assert(col_data.payload.ptr);
-					switch (data.sql_types[file_col_idx].id) {
+					switch (data.sql_types[file_col_idx].id()) {
 					case LogicalTypeId::BOOLEAN: {
 						// bit packed this
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
@@ -946,7 +946,7 @@ private:
 						break;
 					}
 					default:
-						throw runtime_error(LogicalTypeToString(data.sql_types[file_col_idx]));
+						throw runtime_error(data.sql_types[file_col_idx].ToString());
 					}
 
 					break;
@@ -987,7 +987,7 @@ private:
 };
 
 static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
-	switch (duckdb_type.id) {
+	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Type::BOOLEAN;
 	case LogicalTypeId::TINYINT:
@@ -1007,7 +1007,7 @@ static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
 	case LogicalTypeId::TIMESTAMP:
 		return Type::INT96;
 	default:
-		throw NotImplementedException(LogicalTypeToString(duckdb_type));
+		throw NotImplementedException(duckdb_type.ToString());
 	}
 }
 
@@ -1119,7 +1119,7 @@ public:
 				auto &nullmask = FlatVector::Nullmask(input_column);
 
 				// write actual payload data
-				switch (sql_types[i].id) {
+				switch (sql_types[i].id()) {
 				case LogicalTypeId::BOOLEAN: {
 					auto *ptr = FlatVector::GetData<bool>(input_column);
 					uint8_t byte = 0;
@@ -1182,7 +1182,7 @@ public:
 				}
 					// TODO date blob etc.
 				default:
-					throw NotImplementedException(LogicalTypeToString((sql_types[i])));
+					throw NotImplementedException((sql_types[i].ToString()));
 				}
 			}
 

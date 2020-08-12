@@ -63,7 +63,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 			throw BinderException("typeof function expects a single argument");
 		}
 		// typeof function: returns the type of the child expression
-		string type = LogicalTypeToString(arguments[0]);
+		string type = arguments[0].ToString();
 		return BindResult(make_unique<BoundConstantExpression>(Value(type)), LogicalType::VARCHAR);
 	}
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);

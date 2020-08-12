@@ -280,7 +280,7 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 	if (value.is_null) {
 		return "NULL";
 	} else {
-		switch (sql_type.id) {
+		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN:
 			return value.value_.boolean ? "1" : "0";
 		default: {
@@ -425,7 +425,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			print_line_sep();
 			print_sql(zScript);
 			print_line_sep();
-			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << LogicalTypeToString(sql_type) << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << sql_type.ToString() << termcolor::reset << std::endl;
 			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
 			print_line_sep();
 			return false;
@@ -614,7 +614,7 @@ void Query::Execute() {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
-			std::cerr << LogicalTypeToString(result->sql_types[c]);
+			std::cerr << result->sql_types[c].ToString();
 		}
 		std::cerr << std::endl;
 		print_line_sep();

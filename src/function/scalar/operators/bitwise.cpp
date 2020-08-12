@@ -6,7 +6,7 @@ using namespace std;
 
 template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::UnaryFunction<int8_t, int8_t, OP>;
 		break;
@@ -30,7 +30,7 @@ template <class OP> static scalar_function_t GetScalarIntegerUnaryFunction(Logic
 
 template <class OP> static scalar_function_t GetScalarIntegerBinaryFunction(LogicalType type) {
 	scalar_function_t function;
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		function = &ScalarFunction::BinaryFunction<int8_t, int8_t, int8_t, OP>;
 		break;

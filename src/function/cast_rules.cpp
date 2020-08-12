@@ -6,7 +6,7 @@ using namespace std;
 
 //! The target type determines the preferred implicit casts
 static int64_t TargetTypeCost(LogicalType type) {
-	switch (type.id) {
+	switch (type.id()) {
 	case LogicalTypeId::INTEGER:
 		return 103;
 	case LogicalTypeId::BIGINT:
@@ -25,7 +25,7 @@ static int64_t TargetTypeCost(LogicalType type) {
 }
 
 static int64_t ImplicitCastTinyint(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
@@ -40,7 +40,7 @@ static int64_t ImplicitCastTinyint(LogicalType to) {
 }
 
 static int64_t ImplicitCastSmallint(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::FLOAT:
@@ -54,7 +54,7 @@ static int64_t ImplicitCastSmallint(LogicalType to) {
 }
 
 static int64_t ImplicitCastInteger(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -67,7 +67,7 @@ static int64_t ImplicitCastInteger(LogicalType to) {
 }
 
 static int64_t ImplicitCastBigint(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -79,7 +79,7 @@ static int64_t ImplicitCastBigint(LogicalType to) {
 }
 
 static int64_t ImplicitCastFloat(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 		return TargetTypeCost(to);
@@ -89,7 +89,7 @@ static int64_t ImplicitCastFloat(LogicalType to) {
 }
 
 static int64_t ImplicitCastDouble(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::DECIMAL:
 		return TargetTypeCost(to);
 	default:
@@ -98,7 +98,7 @@ static int64_t ImplicitCastDouble(LogicalType to) {
 }
 
 static int64_t ImplicitCastHugeint(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 		return TargetTypeCost(to);
@@ -108,7 +108,7 @@ static int64_t ImplicitCastHugeint(LogicalType to) {
 }
 
 static int64_t ImplicitCastDate(LogicalType to) {
-	switch (to.id) {
+	switch (to.id()) {
 	case LogicalTypeId::TIMESTAMP:
 		return TargetTypeCost(to);
 	default:
@@ -117,23 +117,23 @@ static int64_t ImplicitCastDate(LogicalType to) {
 }
 
 int64_t CastRules::ImplicitCast(LogicalType from, LogicalType to) {
-	if (to.id == LogicalTypeId::ANY) {
+	if (to.id() == LogicalTypeId::ANY) {
 		// anything can be cast to ANY type for no cost
 		return 0;
 	}
-	if (from.id == LogicalTypeId::SQLNULL || from.id == LogicalTypeId::UNKNOWN) {
+	if (from.id() == LogicalTypeId::SQLNULL || from.id() == LogicalTypeId::UNKNOWN) {
 		// NULL expression or parameter expression can be cast to anything
 		return TargetTypeCost(to);
 	}
-	if (from.id == LogicalTypeId::BLOB && to.id == LogicalTypeId::VARCHAR) {
+	if (from.id() == LogicalTypeId::BLOB && to.id() == LogicalTypeId::VARCHAR) {
 		// Implicit cast not allowed from BLOB to VARCHAR
 		return -1;
 	}
-	if (to.id == LogicalTypeId::VARCHAR) {
+	if (to.id() == LogicalTypeId::VARCHAR) {
 		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
 	}
-	switch (from.id) {
+	switch (from.id()) {
 	case LogicalTypeId::TINYINT:
 		return ImplicitCastTinyint(to);
 	case LogicalTypeId::SMALLINT:

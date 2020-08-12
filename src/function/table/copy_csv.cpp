@@ -459,7 +459,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
-		if (csv_data.sql_types[col_idx].id == LogicalTypeId::VARCHAR || csv_data.sql_types[col_idx].id == LogicalTypeId::BLOB) {
+		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR || csv_data.sql_types[col_idx].id() == LogicalTypeId::BLOB) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
 		} else {

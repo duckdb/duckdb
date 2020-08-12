@@ -36,7 +36,7 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 	// parameters
 	child_list_t<Value> column_names;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		column_names.push_back(make_pair(columns[i].name, Value(LogicalTypeToString(columns[i].type))));
+		column_names.push_back(make_pair(columns[i].name, Value(columns[i].type.ToString())));
 	}
 	auto colnames = make_unique<ConstantExpression>(LogicalType::STRUCT, Value::STRUCT(move(column_names)));
 	children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
