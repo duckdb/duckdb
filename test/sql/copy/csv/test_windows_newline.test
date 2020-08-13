@@ -22,7 +22,7 @@ DELETE FROM test;
 
 # now do the same with a multi-byte quote that is not actually used
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv' QUOTE 'BLABLABLA';
+COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
 ----
 20000
 

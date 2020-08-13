@@ -15,7 +15,7 @@ using namespace duckdb;
 
 static duckdb_type ConvertCPPTypeToC(LogicalType type);
 static idx_t GetCTypeSize(duckdb_type type);
-
+namespace duckdb {
 struct DatabaseData {
 	DatabaseData() : database(nullptr) {
 	}
@@ -27,7 +27,7 @@ struct DatabaseData {
 
 	DuckDB *database;
 };
-
+} // namespace duckdb
 duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	auto wrapper = new DatabaseData();
 	try {
@@ -308,7 +308,7 @@ void duckdb_destroy_result(duckdb_result *result) {
 	}
 	memset(result, 0, sizeof(duckdb_result));
 }
-
+namespace duckdb {
 struct PreparedStatementWrapper {
 	PreparedStatementWrapper() : statement(nullptr) {
 	}
@@ -317,7 +317,7 @@ struct PreparedStatementWrapper {
 	unique_ptr<PreparedStatement> statement;
 	vector<Value> values;
 };
-
+} // namespace duckdb
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
 	if (!connection || !query) {

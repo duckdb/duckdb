@@ -5,6 +5,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCreateSeqStmt *>(node);

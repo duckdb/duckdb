@@ -38,6 +38,7 @@
 
 #include "nodes/nodes.hpp"
 
+namespace duckdb_libpgquery {
 
 typedef struct PGListCell ListCell;
 
@@ -335,3 +336,4 @@ PGList *list_copy_tail(const PGList *list, int nskip);
 int	length(PGList *list);
 #endif							/* ENABLE_LIST_COMPAT */
 
+}

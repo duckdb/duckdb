@@ -438,24 +438,24 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	switch (id_) {
 	case LogicalTypeId::SMALLINT:
 		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
 	case LogicalTypeId::INTEGER:
 		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
 	case LogicalTypeId::BIGINT:
 		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -465,6 +465,7 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		}
 	case LogicalTypeId::HUGEINT:
 		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -473,12 +474,26 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 		default:
 			return false;
 		}
-	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::FLOAT:
 		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	case LogicalTypeId::DOUBLE:
+		switch (other.id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::FLOAT:
 			return true;
 		default:
 			return false;

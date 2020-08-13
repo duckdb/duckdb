@@ -15,6 +15,8 @@
 
 #include "re2/re2.h"
 
+#include <cctype>
+
 namespace duckdb {
 
 idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {

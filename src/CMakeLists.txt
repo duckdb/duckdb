@@ -55,7 +55,6 @@ else()
   set(DUCKDB_LINK_LIBS
       fmt
       pg_query
-      hyperloglog
       re2
       miniz
       utf8proc

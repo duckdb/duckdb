@@ -8,6 +8,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(PGSelectStmt *stmt) {
 	unique_ptr<QueryNode> node;

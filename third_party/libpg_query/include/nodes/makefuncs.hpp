@@ -15,43 +15,27 @@
 
 #include "nodes/parsenodes.hpp"
 
-PGAExpr *makeAExpr(PGAExpr_Kind kind, PGList *name,
-	   PGNode *lexpr, PGNode *rexpr, int location);
+namespace duckdb_libpgquery {
 
-PGAExpr *makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
-			 PGNode *lexpr, PGNode *rexpr, int location);
+PGAExpr *makeAExpr(PGAExpr_Kind kind, PGList *name, PGNode *lexpr, PGNode *rexpr, int location);
 
-PGVar *makeVar(PGIndex varno,
-		PGAttrNumber varattno,
-		PGOid vartype,
-		int32_t vartypmod,
-		PGOid varcollid,
-		PGIndex varlevelsup);
+PGAExpr *makeSimpleAExpr(PGAExpr_Kind kind, const char *name, PGNode *lexpr, PGNode *rexpr, int location);
 
-PGVar *makeVarFromTargetEntry(PGIndex varno,
-				   PGTargetEntry *tle);
+PGVar *makeVar(PGIndex varno, PGAttrNumber varattno, PGOid vartype, int32_t vartypmod, PGOid varcollid,
+               PGIndex varlevelsup);
 
-PGVar *makeWholeRowVar(PGRangeTblEntry *rte,
-			PGIndex varno,
-			PGIndex varlevelsup,
-			bool allowScalar);
+PGVar *makeVarFromTargetEntry(PGIndex varno, PGTargetEntry *tle);
 
-PGTargetEntry *makeTargetEntry(PGExpr *expr,
-				PGAttrNumber resno,
-				char *resname,
-				bool resjunk);
+PGVar *makeWholeRowVar(PGRangeTblEntry *rte, PGIndex varno, PGIndex varlevelsup, bool allowScalar);
+
+PGTargetEntry *makeTargetEntry(PGExpr *expr, PGAttrNumber resno, char *resname, bool resjunk);
 
 PGTargetEntry *flatCopyTargetEntry(PGTargetEntry *src_tle);
 
 PGFromExpr *makeFromExpr(PGList *fromlist, PGNode *quals);
 
-PGConst *makeConst(PGOid consttype,
-		  int32_t consttypmod,
-		  PGOid constcollid,
-		  int constlen,
-		  PGDatum constvalue,
-		  bool constisnull,
-		  bool constbyval);
+PGConst *makeConst(PGOid consttype, int32_t consttypmod, PGOid constcollid, int constlen, PGDatum constvalue,
+                   bool constisnull, bool constbyval);
 
 PGConst *makeNullConst(PGOid consttype, int32_t consttypmod, PGOid constcollid);
 
@@ -61,8 +45,7 @@ PGExpr *makeBoolExpr(PGBoolExprType boolop, PGList *args, int location);
 
 PGAlias *makeAlias(const char *aliasname, PGList *colnames);
 
-PGRelabelType *makeRelabelType(PGExpr *arg, PGOid rtype, int32_t rtypmod,
-			PGOid rcollid, PGCoercionForm rformat);
+PGRelabelType *makeRelabelType(PGExpr *arg, PGOid rtype, int32_t rtypmod, PGOid rcollid, PGCoercionForm rformat);
 
 PGRangeVar *makeRangeVar(char *schemaname, char *relname, int location);
 
@@ -70,16 +53,17 @@ PGTypeName *makeTypeName(char *typnam);
 PGTypeName *makeTypeNameFromNameList(PGList *names);
 PGTypeName *makeTypeNameFromOid(PGOid typeOid, int32_t typmod);
 
-PGColumnDef *makeColumnDef(const char *colname,
-		  PGOid typeOid, int32_t typmod, PGOid collOid);
+PGColumnDef *makeColumnDef(const char *colname, PGOid typeOid, int32_t typmod, PGOid collOid);
 
-PGFuncExpr *makeFuncExpr(PGOid funcid, PGOid rettype, PGList *args,
-		 PGOid funccollid, PGOid inputcollid, PGCoercionForm fformat);
+PGFuncExpr *makeFuncExpr(PGOid funcid, PGOid rettype, PGList *args, PGOid funccollid, PGOid inputcollid,
+                         PGCoercionForm fformat);
 
 PGFuncCall *makeFuncCall(PGList *name, PGList *args, int location);
 
 PGDefElem *makeDefElem(const char *name, PGNode *arg, int location);
-PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg,
-				PGDefElemAction defaction, int location);
+PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg, PGDefElemAction defaction,
+                               int location);
 
 PGGroupingSet *makeGroupingSet(GroupingSetKind kind, PGList *content, int location);
+
+}

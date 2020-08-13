@@ -667,3 +667,4 @@ parser_init(base_yy_extra_type *yyext)
 {
 	yyext->parsetree = NIL;		/* in case grammar forgets to set it */
 }
+} // namespace duckdb_libpgquery
