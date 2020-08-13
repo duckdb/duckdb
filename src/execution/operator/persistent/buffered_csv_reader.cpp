@@ -1163,7 +1163,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				UnaryExecutor::Execute<string_t, date_t, true>(
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format.ParseDate(input); });
-			} catch (Exception e) {
+			} catch (const Exception &e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
@@ -1173,7 +1173,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				UnaryExecutor::Execute<string_t, timestamp_t, true>(
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
-			} catch (Exception e) {
+			} catch (const Exception &e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
@@ -1182,7 +1182,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				// target type is not varchar: perform a cast
 				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
 				                       sql_types[col_idx], parse_chunk.size());
-			} catch (Exception e) {
+			} catch (const Exception &e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
