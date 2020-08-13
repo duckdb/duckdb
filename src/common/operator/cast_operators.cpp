@@ -989,7 +989,7 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 		result = output;
 	} else {
 		// raw string
-		result = StringVector::AddBlob(vector, input);
+		result = StringVector::AddStringOrBlob(vector, input);
 	}
 	return result;
 }

@@ -114,7 +114,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (!tmask[target_idx]) {
-				tdata[target_idx] = StringVector::AddBlob(target, ldata[source_idx]);
+				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
 			}
 		}
 		break;

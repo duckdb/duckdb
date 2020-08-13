@@ -1048,7 +1048,7 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
-			parse_data[row_entry] = StringVector::AddBlob(v, string_t(new_val));
+			parse_data[row_entry] = StringVector::AddStringOrBlob(v, string_t(new_val));
 		} else {
 			parse_data[row_entry] = string_t(str_val, length);
 		}

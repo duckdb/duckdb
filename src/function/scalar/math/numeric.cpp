@@ -337,10 +337,9 @@ void Log2Fun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // pi
 //===--------------------------------------------------------------------===//
-Value pi_value = Value::DOUBLE(PI);
-
 static void pi_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 0);
+	Value pi_value = Value::DOUBLE(PI);
 	result.Reference(pi_value);
 }
 

@@ -379,6 +379,8 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(value);
 	case LogicalTypeId::FLOAT:
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
@@ -388,7 +390,7 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	default:
-		throw InvalidTypeException(type.InternalType(), "Numeric requires numeric type");
+		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
 
 }
@@ -562,6 +564,7 @@ Value Value::CastAs(LogicalType target_type, bool strict) const {
 bool Value::TryCastAs(LogicalType target_type, bool strict) {
 	try {
 		Value new_value = CastAs(target_type, strict);
+		type_ = target_type;
 		is_null = new_value.is_null;
 		value_ = new_value.value_;
 		str_value = new_value.str_value;

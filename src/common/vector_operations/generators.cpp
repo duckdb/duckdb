@@ -25,7 +25,7 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 }
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	if (result.type.IsNumeric()) {
+	if (!result.type.IsNumeric()) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
 	switch (result.type.InternalType()) {

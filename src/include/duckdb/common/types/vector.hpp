@@ -236,8 +236,9 @@ struct StringVector {
 	static string_t AddString(Vector &vector, string_t data);
 	//! Add a string to the string heap of the vector (auxiliary data)
 	static string_t AddString(Vector &vector, const string &data);
-	//! Add a blob to the string heap of the vector (auxiliary data)
-	static string_t AddBlob(Vector &vector, string_t data);
+	//! Add a string or a blob to the string heap of the vector (auxiliary data)
+	//! This function is the same as ::AddString, except the added data does not need to be valid UTF8
+	static string_t AddStringOrBlob(Vector &vector, string_t data);
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	static string_t EmptyString(Vector &vector, idx_t len);

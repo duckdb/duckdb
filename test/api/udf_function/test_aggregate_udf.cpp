@@ -66,7 +66,7 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		con.Query("INSERT INTO times VALUES ('01:00:00'), ('01:00:00'), ('01:00:00'), ('01:00:00'), ('01:00:00')");
 		result = con.Query("SELECT udf_avg_time_args(t) FROM times");
 
-		REQUIRE(CHECK_COLUMN(result, 0, {Time::FromString("01:00:00")}));
+		REQUIRE(CHECK_COLUMN(result, 0, {"01:00:00"}));
 
 		// using DOUBLEs and a binary UDF
 		con.CreateAggregateFunction<UDFCovarPopOperation, udf_covar_state_t, double, double, double>("udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);

@@ -155,7 +155,7 @@ struct StringMinMaxBase : public MinMaxBase {
 		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {
-			target[idx] = StringVector::AddString(result, state->value);
+			target[idx] = StringVector::AddStringOrBlob(result, state->value);
 		}
 	}
 

@@ -155,42 +155,45 @@ void Vector::SetValue(idx_t index, Value val) {
 	if (val.is_null) {
 		return;
 	}
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		((bool *)data)[index] = val.value_.boolean;
 		break;
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		((int8_t *)data)[index] = val.value_.tinyint;
 		break;
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		((int16_t *)data)[index] = val.value_.smallint;
 		break;
-	case PhysicalType::INT32:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::INTEGER:
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
-	case PhysicalType::INT64:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::BIGINT:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		((float *)data)[index] = val.value_.float_;
 		break;
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		((double *)data)[index] = val.value_.double_;
 		break;
-	case PhysicalType::POINTER:
+	case LogicalTypeId::POINTER:
 		((uintptr_t *)data)[index] = val.value_.pointer;
 		break;
-	case PhysicalType::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		((interval_t *)data)[index] = val.value_.interval;
 		break;
-	case PhysicalType::VARCHAR: {
-		((string_t *)data)[index] = StringVector::AddBlob(*this, val.str_value);
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, val.str_value);
 		break;
-	}
-	case PhysicalType::STRUCT: {
+	case LogicalTypeId::STRUCT: {
 		if (!auxiliary || StructVector::GetEntries(*this).size() == 0) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
 				auto &struct_child = val.struct_value[i];
@@ -212,7 +215,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		}
 	} break;
 
-	case PhysicalType::LIST: {
+	case LogicalTypeId::LIST: {
 		if (!auxiliary) {
 			auto cc = make_unique<ChunkCollection>();
 			ListVector::SetEntry(*this, move(cc));
@@ -616,7 +619,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 			if (IsNullValue<const char *>((const char *)str.c_str())) {
 				nullmask[i] = true;
 			} else {
-				strings[i] = StringVector::AddString(*this, str);
+				strings[i] = StringVector::AddStringOrBlob(*this, str);
 			}
 		}
 	}
@@ -772,8 +775,8 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 	return string_buffer.AddString(data);
 }
 
-string_t StringVector::AddBlob(Vector &vector, string_t data) {
-	assert(vector.type.id() == LogicalTypeId::BLOB);
+string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
+	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -787,7 +790,7 @@ string_t StringVector::AddBlob(Vector &vector, string_t data) {
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
-	assert(vector.type.id() == LogicalTypeId::VARCHAR);
+	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}

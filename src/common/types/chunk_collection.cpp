@@ -53,16 +53,16 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
 			if (types[i].InternalType() == PhysicalType::LIST) {
-				for (auto &chunk :
-				     chunks) { // need to check all the chunks because they can have only-null list entries
+				for (auto &chunk : chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
 					auto &new_vec = new_chunk.data[i];
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
 						auto &chunk_types = ListVector::GetEntry(chunk_vec).types;
 						auto &new_types = ListVector::GetEntry(new_vec).types;
+						assert(new_types.size() <= 1);
+						assert(chunk_types.size() <= 1);
 						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
-							throw TypeMismatchException(chunk_types[0], new_types[i],
-							                            "Type mismatch when combining lists");
+							throw TypeMismatchException(chunk_types[0], new_types[0], "Type mismatch when combining lists");
 						}
 					}
 				}

@@ -49,7 +49,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 
 			string_size = collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())), (uint8_t*) buffer.get(), buffer_size);
 		}
-		return StringVector::AddBlob(result, string_t(buffer.get(), buffer_size));
+		return StringVector::AddStringOrBlob(result, string_t(buffer.get(), buffer_size));
 	});
 }
 
@@ -65,7 +65,7 @@ static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, 
 }
 
 static ScalarFunction get_icu_function(string collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, icu_collate_function, false, icu_collate_bind);
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::BLOB, icu_collate_function, false, icu_collate_bind);
 }
 
 void ICUExtension::Load(DuckDB &db) {

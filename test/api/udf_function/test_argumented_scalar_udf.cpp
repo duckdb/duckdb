@@ -320,7 +320,7 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, false, false}));
 
-			} else if(sql_type == LogicalType::VARCHAR || sql_type == LogicalType::BLOB) {
+			} else if(sql_type == LogicalType::VARCHAR) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"a", "a", "a"}));
 
@@ -329,33 +329,42 @@ TEST_CASE("UDF functions with arguments", "[udf_function]") {
 
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"c", "c", "c"}));
+			} else if(sql_type == LogicalType::BLOB) {
+				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
+				REQUIRE(CHECK_COLUMN(result, 0, {"\\x61", "\\x61", "\\x61"}));
+
+				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
+				REQUIRE(CHECK_COLUMN(result, 0, {"\\x62", "\\x62", "\\x62"}));
+
+				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
+				REQUIRE(CHECK_COLUMN(result, 0, {"\\x63", "\\x63", "\\x63"}));
 			} else if(sql_type == LogicalType::DATE) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Date::FromString("2008-01-01"), Date::FromString("2008-01-01"), Date::FromString("2008-01-01")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2008-01-01", "2008-01-01", "2008-01-01"}));
 
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Date::FromString("2009-01-01"), Date::FromString("2009-01-01"), Date::FromString("2009-01-01")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2009-01-01", "2009-01-01", "2009-01-01"}));
 
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Date::FromString("2010-01-01"), Date::FromString("2010-01-01"), Date::FromString("2010-01-01")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2010-01-01", "2010-01-01", "2010-01-01"}));
 			} else if(sql_type == LogicalType::TIME) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Time::FromString("01:00:00"), Time::FromString("04:00:00"), Time::FromString("07:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"01:00:00", "04:00:00", "07:00:00"}));
 
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Time::FromString("02:00:00"), Time::FromString("05:00:00"), Time::FromString("08:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"02:00:00", "05:00:00", "08:00:00"}));
 
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Time::FromString("03:00:00"), Time::FromString("06:00:00"), Time::FromString("09:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"03:00:00", "06:00:00", "09:00:00"}));
 			} else if(sql_type == LogicalType::TIMESTAMP) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Timestamp::FromString("2008-01-01 00:00:00"), Timestamp::FromString("2008-01-01 00:00:00"), Timestamp::FromString("2008-01-01 00:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2008-01-01 00:00:00", "2008-01-01 00:00:00", "2008-01-01 00:00:00"}));
 
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Timestamp::FromString("2009-01-01 00:00:00"), Timestamp::FromString("2009-01-01 00:00:00"), Timestamp::FromString("2009-01-01 00:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2009-01-01 00:00:00", "2009-01-01 00:00:00", "2009-01-01 00:00:00"}));
 
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
-				REQUIRE(CHECK_COLUMN(result, 0, {Timestamp::FromString("2010-01-01 00:00:00"), Timestamp::FromString("2010-01-01 00:00:00"), Timestamp::FromString("2010-01-01 00:00:00")}));
+				REQUIRE(CHECK_COLUMN(result, 0, {"2010-01-01 00:00:00", "2010-01-01 00:00:00", "2010-01-01 00:00:00"}));
 			}
 		}
 	}

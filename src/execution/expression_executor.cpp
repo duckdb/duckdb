@@ -80,7 +80,9 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 	executor.ExecuteExpression(result);
 
 	assert(result.vector_type == VectorType::CONSTANT_VECTOR);
-	return result.GetValue(0);
+	auto result_value = result.GetValue(0);
+	assert(result_value.type() == expr.return_type);
+	return result_value;
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
