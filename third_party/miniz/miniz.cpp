@@ -621,7 +621,7 @@ const char *mz_error(int err)
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  *
- ***********************************************************************
+ ***********************************************************************/
 
 /* ------------------- Low-level Compression (independent from all decompression API's) */
 
