@@ -53,7 +53,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
 			if (types[i].InternalType() == PhysicalType::LIST) {
-				for (auto &chunk : chunks) { // need to check all the chunks because they can have only-null list entries
+				for (auto &chunk :
+				     chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
 					auto &new_vec = new_chunk.data[i];
 					if (ListVector::HasEntry(chunk_vec) && ListVector::HasEntry(new_vec)) {
@@ -62,7 +63,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 						assert(new_types.size() <= 1);
 						assert(chunk_types.size() <= 1);
 						if (chunk_types.size() > 0 && new_types.size() > 0 && chunk_types != new_types) {
-							throw TypeMismatchException(chunk_types[0], new_types[0], "Type mismatch when combining lists");
+							throw TypeMismatchException(chunk_types[0], new_types[0],
+							                            "Type mismatch when combining lists");
 						}
 					}
 				}
@@ -76,7 +78,8 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
 			new_chunk.Normalify();
-			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial decompression
+			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial
+			// decompression
 			idx_t old_count = new_chunk.size();
 			new_chunk.SetCardinality(added_data);
 
@@ -208,7 +211,8 @@ static int64_t _quicksort_initial(ChunkCollection *sort_by, vector<OrderType> &d
 }
 
 struct QuicksortInfo {
-	QuicksortInfo(int64_t left_, int64_t right_) : left(left_), right(right_) {}
+	QuicksortInfo(int64_t left_, int64_t right_) : left(left_), right(right_) {
+	}
 
 	int64_t left;
 	int64_t right;
@@ -251,17 +255,17 @@ static void _quicksort_inplace(ChunkCollection *sort_by, vector<OrderType> &desc
 	std::swap(result[middle], result[left]);
 	bool all_equal = true;
 	while (i <= j) {
-		if (result )
-		while (i <= j) {
-			int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
-			if (cmp < 0) {
-				all_equal = false;
-			} else if (cmp > 0) {
-				all_equal = false;
-				break;
+		if (result)
+			while (i <= j) {
+				int cmp = compare_tuple(sort_by, desc, null_order, result[i], pivot);
+				if (cmp < 0) {
+					all_equal = false;
+				} else if (cmp > 0) {
+					all_equal = false;
+					break;
+				}
+				i++;
 			}
-			i++;
-		}
 
 		while (i <= j && compare_tuple(sort_by, desc, null_order, result[j], pivot) > 0) {
 			j--;
@@ -294,7 +298,7 @@ void ChunkCollection::Sort(vector<OrderType> &desc, vector<OrderByNullType> &nul
 	QuicksortStack stack;
 	stack.Enqueue(0, part);
 	stack.Enqueue(part + 1, count - 1);
-	while(!stack.IsEmpty()) {
+	while (!stack.IsEmpty()) {
 		auto element = stack.Pop();
 		_quicksort_inplace(this, desc, null_order, result, element, stack);
 	}
@@ -581,4 +585,4 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 	return start_offset + remaining_data;
 }
 
-}
+} // namespace duckdb

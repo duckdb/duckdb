@@ -53,9 +53,8 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {
 			if (old_entry->type != entry_type) {
-				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s",
-				                       entry_name, CatalogTypeToString(old_entry->type),
-									   CatalogTypeToString(entry_type));
+				throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", entry_name,
+				                       CatalogTypeToString(old_entry->type), CatalogTypeToString(entry_type));
 			}
 			(void)set.DropEntry(transaction, entry_name, false);
 		}
@@ -64,8 +63,7 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 	if (!set.CreateEntry(transaction, entry_name, move(entry), dependencies)) {
 		// entry already exists!
 		if (on_conflict == OnCreateConflict::ERROR) {
-			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type),
-			                       entry_name);
+			throw CatalogException("%s with name \"%s\" already exists!", CatalogTypeToString(entry_type), entry_name);
 		} else {
 			return nullptr;
 		}
@@ -137,15 +135,13 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 	auto existing_entry = set.GetEntry(transaction, info->name);
 	if (!existing_entry) {
 		if (!info->if_exists) {
-			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type),
-			                       info->name);
+			throw CatalogException("%s with name \"%s\" does not exist!", CatalogTypeToString(info->type), info->name);
 		}
 		return;
 	}
 	if (existing_entry->type != info->type) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
-		                       CatalogTypeToString(existing_entry->type),
-		                       CatalogTypeToString(info->type));
+		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
 	if (!set.DropEntry(transaction, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");

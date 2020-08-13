@@ -9,8 +9,8 @@ ColumnSegment::ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, 
       stats(type, type_size) {
 }
 
-ColumnSegment::ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count, data_t stats_min[],
-                             data_t stats_max[])
+ColumnSegment::ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
+                             data_t stats_min[], data_t stats_max[])
     : SegmentBase(start, count), type(type), type_size(GetTypeIdSize(type)), segment_type(segment_type),
       stats(type, type_size, stats_min, stats_max) {
 }

@@ -39,7 +39,8 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 		column_names.push_back(make_pair(columns[i].name, Value(columns[i].type.ToString())));
 	}
 	auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
-	children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
+	children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+	                                                     make_unique<ColumnRefExpression>("columns"), move(colnames)));
 	table_ref->function = make_unique<FunctionExpression>("read_csv", children);
 	return move(table_ref);
 }

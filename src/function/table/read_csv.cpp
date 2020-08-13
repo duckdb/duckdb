@@ -16,7 +16,8 @@ struct ReadCSVFunctionData : public TableFunctionData {
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {
@@ -31,7 +32,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	options.delimiter = ",";
 	options.quote = "\"";
 
-	for(auto &kv : named_parameters) {
+	for (auto &kv : named_parameters) {
 		if (kv.first == "sep") {
 			options.auto_detect = false;
 			options.delimiter = kv.second.str_value;
@@ -91,7 +92,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	return move(result);
 }
 
-static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
+                                                   unordered_map<string, Value> &named_parameters,
                                                    vector<LogicalType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {

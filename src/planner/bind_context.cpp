@@ -25,8 +25,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 			if (!result.empty()) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name, result, column_name, kv.first,
-				                      column_name);
+				                      column_name, result, column_name, kv.first, column_name);
 			}
 			result = kv.first;
 		}

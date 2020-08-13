@@ -83,7 +83,8 @@ public:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
-	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length arguments
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
+	//! arguments
 	LogicalType varargs;
 
 public:
@@ -99,7 +100,7 @@ public:
 class BaseScalarFunction : public SimpleFunction {
 public:
 	BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
-	               LogicalType varargs = LogicalType::INVALID)
+	                   LogicalType varargs = LogicalType::INVALID)
 	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
 	      has_side_effects(has_side_effects) {
 	}

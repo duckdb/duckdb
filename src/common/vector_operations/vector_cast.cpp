@@ -35,8 +35,7 @@ static void null_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class SRC>
-static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
+template <class SRC> static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -80,8 +79,7 @@ static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class OP>
-static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
+template <class OP> static void string_cast_numeric_switch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.type.id()) {
 	case LogicalTypeId::BOOLEAN:

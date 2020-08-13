@@ -152,9 +152,9 @@ static void templated_select_operation(SelectionVector &sel, Vector &result, Phy
 }
 
 template <class OPL, class OPR>
-static void templated_select_operation_between(SelectionVector &sel, Vector &result, PhysicalType type, unsigned char *source,
-                                               nullmask_t *source_mask, Value &constantLeft, Value &constantRight,
-                                               idx_t &approved_tuple_count) {
+static void templated_select_operation_between(SelectionVector &sel, Vector &result, PhysicalType type,
+                                               unsigned char *source, nullmask_t *source_mask, Value &constantLeft,
+                                               Value &constantRight, idx_t &approved_tuple_count) {
 	// the inplace loops take the result as the last parameter
 	switch (type) {
 	case PhysicalType::INT8: {
@@ -179,7 +179,7 @@ static void templated_select_operation_between(SelectionVector &sel, Vector &res
 	}
 	case PhysicalType::INT128: {
 		Select<hugeint_t, OPL, OPR>(sel, result, source, source_mask, constantLeft.value_.hugeint,
-		                          constantRight.value_.hugeint, approved_tuple_count);
+		                            constantRight.value_.hugeint, approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
@@ -359,7 +359,7 @@ void NumericSegment::FilterFetchBaseData(ColumnScanState &state, Vector &result,
 	}
 	case PhysicalType::INT128: {
 		templated_assignment<hugeint_t>(sel, source_data, result_data, *source_nullmask, result_nullmask,
-		                              approved_tuple_count);
+		                                approved_tuple_count);
 		break;
 	}
 	case PhysicalType::FLOAT: {
@@ -816,4 +816,4 @@ static NumericSegment::rollback_update_function_t GetRollbackUpdateFunction(Phys
 	}
 }
 
-}
+} // namespace duckdb

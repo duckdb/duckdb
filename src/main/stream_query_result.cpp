@@ -6,9 +6,9 @@
 namespace duckdb {
 using namespace std;
 
-StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), names), is_open(true),
-      context(context) {
+StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> types,
+                                     vector<string> names)
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), names), is_open(true), context(context) {
 }
 
 StreamQueryResult::~StreamQueryResult() {

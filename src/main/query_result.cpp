@@ -8,7 +8,8 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type)
     : type(type), statement_type(statement_type), success(true) {
 }
 
-QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types, vector<string> names)
+QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
+                         vector<string> names)
     : type(type), statement_type(statement_type), types(move(types)), names(move(names)), success(true) {
 	assert(types.size() == names.size());
 }

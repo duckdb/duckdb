@@ -24,7 +24,6 @@ typedef bitset<STANDARD_VECTOR_SIZE> nullmask_t;
 //! Zero NULL mask: filled with the value 0 [READ ONLY]
 extern nullmask_t ZERO_MASK;
 
-
 struct VectorData {
 	const SelectionVector *sel;
 	data_ptr_t data;

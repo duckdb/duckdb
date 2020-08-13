@@ -32,8 +32,8 @@ string AlterBinder::UnsupportedAggregateMessage() {
 
 BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 	if (!colref.table_name.empty() && colref.table_name != table) {
-		throw BinderException("Cannot reference table %s from within alter statement for table %s!",
-		                      colref.table_name, table);
+		throw BinderException("Cannot reference table %s from within alter statement for table %s!", colref.table_name,
+		                      table);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
@@ -41,8 +41,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, bound_columns.size() - 1));
 		}
 	}
-	throw BinderException("Table does not contain column %s referenced in alter statement!",
-	                      colref.column_name);
+	throw BinderException("Table does not contain column %s referenced in alter statement!", colref.column_name);
 }
 
 } // namespace duckdb

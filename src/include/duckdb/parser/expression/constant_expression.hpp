@@ -19,6 +19,7 @@ public:
 
 	//! The constant value referenced
 	Value value;
+
 public:
 	string ToString() const override;
 

@@ -16,8 +16,7 @@ ValueRelation::ValueRelation(ClientContext &context, vector<vector<Value>> value
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			expressions.push_back(
-			    make_unique<ConstantExpression>(list[col_idx]));
+			expressions.push_back(make_unique<ConstantExpression>(list[col_idx]));
 		}
 		this->expressions.push_back(move(expressions));
 	}

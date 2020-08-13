@@ -14,8 +14,9 @@ struct RangeFunctionData : public TableFunctionData {
 	idx_t current_idx;
 };
 
-static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> range_function_bind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionData>();
 	if (inputs.size() < 2) {
 		// single argument: only the end is specified
@@ -49,7 +50,7 @@ static void range_function(ClientContext &context, vector<Value> &input, DataChu
 	auto &data = ((RangeFunctionData &)*dataptr);
 	auto increment = data.increment.value_.bigint;
 	auto end = data.end.value_.bigint;
-	int64_t current_value = data.start.value_.bigint + (int64_t) increment * data.current_idx;
+	int64_t current_value = data.start.value_.bigint + (int64_t)increment * data.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
 	idx_t remaining = min<int64_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
@@ -66,7 +67,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	// two arguments range: (start, end) - implicit increment = 1
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
 	// three arguments range: (start, end, increment)
-	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, range_function_bind, range_function));
+	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
+	                                range_function_bind, range_function));
 	set.AddFunction(range);
 }
 

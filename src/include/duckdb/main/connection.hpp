@@ -36,6 +36,7 @@ public:
 	DuckDB &db;
 	unique_ptr<ClientContext> context;
 	warning_callback warning_cb;
+
 public:
 	//! Returns query profiling information for the current query
 	string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
@@ -116,39 +117,40 @@ public:
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 
-	template<typename TR, typename... Args>
+	template <typename TR, typename... Args>
 	void CreateVectorizedFunction(string name, scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, varargs);
 	}
 
-	void CreateVectorizedFunction(string name, vector<LogicalType> args, LogicalType ret_type, scalar_function_t udf_func,
-	                              LogicalType varargs = LogicalType::INVALID) {
+	void CreateVectorizedFunction(string name, vector<LogicalType> args, LogicalType ret_type,
+	                              scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction(name, args, ret_type, udf_func, *context, varargs);
 	}
 
 	//------------------------------------- Aggreate Functions ----------------------------------------//
 
-	template<typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateAggregateFunction(string name) {
+	template <typename UDF_OP, typename STATE, typename TR, typename TA> void CreateAggregateFunction(string name) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	void CreateAggregateFunction(string name) {
 		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	void CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA) {
-		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
+		AggregateFunction function =
+		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	void CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
-		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+		AggregateFunction function =
+		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 

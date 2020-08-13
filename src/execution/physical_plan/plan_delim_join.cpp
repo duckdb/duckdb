@@ -59,4 +59,4 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	return move(delim_join);
 }
 
-}
+} // namespace duckdb

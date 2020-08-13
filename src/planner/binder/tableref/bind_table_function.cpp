@@ -63,8 +63,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	for (auto &kv : named_parameters) {
 		auto entry = table_function.named_parameters.find(kv.first);
 		if (entry == table_function.named_parameters.end()) {
-			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first,
-			                      table_function.name);
+			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first, table_function.name);
 		}
 		kv.second = kv.second.CastAs(entry->second);
 	}

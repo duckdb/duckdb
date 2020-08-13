@@ -28,9 +28,9 @@ static bool contains_strstr(const string_t &str, const string_t &pattern) {
 }
 
 ScalarFunction ContainsFun::GetFunction() {
-	return ScalarFunction("contains",                           // name of the function
+	return ScalarFunction("contains",                                   // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                     // return type
+	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, ContainsOperator, true>);
 }
 

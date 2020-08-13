@@ -64,7 +64,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	aggregate->children = move(children);
 	aggregate->arguments = arguments;
 
-
 	if (bound_function.bind) {
 		aggregate->bind_info = bound_function.bind(*aggregate, context, return_type);
 	}
@@ -83,9 +82,9 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_unique<BoundColumnRefExpression>(
-	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
-	    return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
+	auto colref =
+	    make_unique<BoundColumnRefExpression>(aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
+	                                          return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref));
 }

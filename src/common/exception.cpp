@@ -19,32 +19,32 @@ const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
 }
 
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value) {
 	return ExceptionFormatValue(TypeIdToString(value));
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value) {
 	return ExceptionFormatValue(value.ToString());
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value) {
 	return ExceptionFormatValue(double(value));
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value) {
 	return ExceptionFormatValue(double(value));
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value) {
 	return ExceptionFormatValue(string(value));
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value) {
 	return ExceptionFormatValue(string(value));
 }
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value) {
 	return ExceptionFormatValue(string(value));
 }
 
 string Exception::ConstructMessageRecursive(string msg, vector<ExceptionFormatValue> &values) {
 	std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
-	for(auto &val : values) {
-		switch(val.type) {
+	for (auto &val : values) {
+		switch (val.type) {
 		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE:
 			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.dbl_val));
 			break;
@@ -56,7 +56,8 @@ string Exception::ConstructMessageRecursive(string msg, vector<ExceptionFormatVa
 			break;
 		}
 	}
-	return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(format_args.data(), static_cast<int>(format_args.size())));
+	return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(
+	                                     format_args.data(), static_cast<int>(format_args.size())));
 }
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
@@ -132,13 +133,11 @@ CastException::CastException(const PhysicalType origType, const PhysicalType new
 }
 
 CastException::CastException(const LogicalType origType, const LogicalType newType)
-    : Exception(ExceptionType::CONVERSION,
-                "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
-
+    : Exception(ExceptionType::CONVERSION, "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
 }
 
-
-ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType)
+ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType,
+                                                   const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
                                                std::to_string((intmax_t)value) +
                                                " can't be cast because the value is out of range "
@@ -146,7 +145,8 @@ ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const Ph
                                                TypeIdToString(newType)) {
 }
 
-ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType)
+ValueOutOfRangeException::ValueOutOfRangeException(const double value, const PhysicalType origType,
+                                                   const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " + std::to_string(value) +
                                                " can't be cast because the value is out of range "
                                                "for the destination type " +
@@ -165,8 +165,7 @@ InvalidTypeException::InvalidTypeException(PhysicalType type, string msg)
 }
 
 InvalidTypeException::InvalidTypeException(LogicalType type, string msg)
-    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg)  {
-
+    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg) {
 }
 
 TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg)
@@ -174,9 +173,9 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
 }
 
-TypeMismatchException::TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg) :
-	Exception(ExceptionType::MISMATCH_TYPE, "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
-
+TypeMismatchException::TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg)
+    : Exception(ExceptionType::MISMATCH_TYPE,
+                "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
 }
 
 TransactionException::TransactionException(string msg) : Exception(ExceptionType::TRANSACTION, msg) {

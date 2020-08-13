@@ -107,13 +107,12 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
-		types = { LogicalType::BOOLEAN };
+		types = {LogicalType::BOOLEAN};
 		plan = move(prepare);
 		break;
 	}
 	default:
-		throw NotImplementedException("Cannot plan statement of type %s!",
-		                              StatementTypeToString(statement->type));
+		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}
 }
 

@@ -26,8 +26,8 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 			return input;
 		}
 		// non-ascii, perform collation
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *) input_data);
-		auto result_str = StringVector::AddString(result, (const char*) stripped);
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input_data);
+		auto result_str = StringVector::AddString(result, (const char *)stripped);
 		free(stripped);
 		return result_str;
 	});

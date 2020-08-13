@@ -86,7 +86,8 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 		// conflict: attempting to alter this object but the dependent object still exists
 		// no cascade and there are objects that depend on this object: throw error
 		throw CatalogException("Cannot alter entry \"%s\" because there are entries that "
-		                       "depend on it.", old_obj->name);
+		                       "depend on it.",
+		                       old_obj->name);
 	}
 	// add the new object to the dependents_map of each object that it depents on
 	auto &old_dependencies = dependencies_map[old_obj];

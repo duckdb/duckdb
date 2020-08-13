@@ -61,7 +61,7 @@ struct IntegerSumOperation : public BaseSumOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, INPUT_TYPE *input, nullmask_t &nullmask, idx_t idx) {
 		state->isset = true;
-		AddValue(state, (uint64_t) input[idx], input[idx] >= 0);
+		AddValue(state, (uint64_t)input[idx], input[idx] >= 0);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -73,7 +73,7 @@ struct IntegerSumOperation : public BaseSumOperation {
 		// this is still a pretty high number (18014398509481984) so most positive numbers will fit
 		if (*input >= 0 && ((uint64_t)*input) < (NumericLimits<uint64_t>::Maximum() / STANDARD_VECTOR_SIZE)) {
 			// if it does just multiply it and add the value
-			uint64_t value = ((uint64_t) *input) * count;
+			uint64_t value = ((uint64_t)*input) * count;
 			AddValue(state, value, 1);
 		} else {
 			// if it doesn't fit we have two choices
@@ -83,8 +83,8 @@ struct IntegerSumOperation : public BaseSumOperation {
 			// hence we switch here: with a low count we do the loop
 			// with a high count we do the hugeint multiplication
 			if (count < 8) {
-				for(idx_t i = 0; i < count; i++) {
-					AddValue(state, (uint64_t) *input, *input >= 0);
+				for (idx_t i = 0; i < count; i++) {
+					AddValue(state, (uint64_t)*input, *input >= 0);
 				}
 			} else {
 				hugeint_t addition = hugeint_t(*input) * count;
@@ -137,13 +137,13 @@ struct NumericSumOperation : public BaseSumOperation {
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// integer sums to bigint
-	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(LogicalType::INTEGER,
-	                                                                                              LogicalType::HUGEINT));
-	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(LogicalType::BIGINT,
-	                                                                                              LogicalType::HUGEINT));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int32_t, hugeint_t, IntegerSumOperation>(
+	    LogicalType::INTEGER, LogicalType::HUGEINT));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<sum_state_t, int64_t, hugeint_t, IntegerSumOperation>(
+	    LogicalType::BIGINT, LogicalType::HUGEINT));
 	// float sums to float
-	sum.AddFunction(
-	    AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(LogicalType::DOUBLE, LogicalType::DOUBLE));
+	sum.AddFunction(AggregateFunction::UnaryAggregate<numeric_sum_state_t, double, double, NumericSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	// for now disable combine on all FP sums (FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf)
 	sum.functions[2].combine = nullptr;

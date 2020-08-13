@@ -109,8 +109,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 						if (column.default_value) {
 							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
 						} else {
-							expr_list.values[list_idx][col_idx] =
-							    make_unique<ConstantExpression>(Value(column.type));
+							expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
 						}
 					}
 				}

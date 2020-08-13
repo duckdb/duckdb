@@ -70,4 +70,4 @@ idx_t MergeJoinSimple::Perform(MergeInfo &l, MergeInfo &r, ExpressionType compar
 	return perform_merge_join<MergeJoinSimple, ScalarMergeInfo, ChunkMergeInfo>(left, right, comparison_type);
 }
 
-}
+} // namespace duckdb

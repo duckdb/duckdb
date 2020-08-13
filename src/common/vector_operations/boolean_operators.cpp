@@ -15,8 +15,7 @@ using namespace std;
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP> static void templated_boolean_nullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
-	assert(left.type.id() == LogicalTypeId::BOOLEAN &&
-	       right.type.id() == LogicalTypeId::BOOLEAN &&
+	assert(left.type.id() == LogicalTypeId::BOOLEAN && right.type.id() == LogicalTypeId::BOOLEAN &&
 	       result.type.id() == LogicalTypeId::BOOLEAN);
 
 	if (left.vector_type == VectorType::CONSTANT_VECTOR && right.vector_type == VectorType::CONSTANT_VECTOR) {

@@ -104,8 +104,8 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY, struct_extract_fun, false,
-	                   struct_extract_bind);
+	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
+	                   struct_extract_fun, false, struct_extract_bind);
 	set.AddFunction(fun);
 }
 

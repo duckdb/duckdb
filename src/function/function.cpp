@@ -250,9 +250,11 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	                                          move(children), is_operator);
 }
 
-unique_ptr<BoundFunctionExpression>
-ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func, vector<LogicalType> &arguments,
-                                   vector<unique_ptr<Expression>> children, bool is_operator) {
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
+                                                                       ScalarFunctionCatalogEntry &func,
+                                                                       vector<LogicalType> &arguments,
+                                                                       vector<unique_ptr<Expression>> children,
+                                                                       bool is_operator) {
 	// bind the function
 	idx_t best_function = Function::BindFunction(func.name, func.functions, arguments);
 	// found a matching function!
@@ -270,4 +272,4 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 	return result;
 }
 
-}
+} // namespace duckdb

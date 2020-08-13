@@ -47,27 +47,27 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
-struct BufferedCSVReaderOptions  {
+struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
-    //! Whether or not to automatically detect dialect and datatypes
-    bool auto_detect;
-    //! Delimiter to separate columns within each line
-    string delimiter;
-    //! Quote used for columns that contain reserved characters, e.g., delimiter
-    string quote;
-    //! Escape character to escape quote character
-    string escape;
-    //! Whether or not the file has a header line
-    bool header = false;
-    //! How many leading rows to skip
-    idx_t skip_rows = 0;
-    //! Expected number of columns
-    idx_t num_cols = 0;
-    //! Specifies the string that represents a null value
-    string null_str;
-    //! True, if column with that index must skip null check
-    vector<bool> force_not_null;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect;
+	//! Delimiter to separate columns within each line
+	string delimiter;
+	//! Quote used for columns that contain reserved characters, e.g., delimiter
+	string quote;
+	//! Escape character to escape quote character
+	string escape;
+	//! Whether or not the file has a header line
+	bool header = false;
+	//! How many leading rows to skip
+	idx_t skip_rows = 0;
+	//! Expected number of columns
+	idx_t num_cols = 0;
+	//! Specifies the string that represents a null value
+	string null_str;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
 	//! The date format to use (if any is specified)
 	StrpTimeFormat date_format;
 	//! Whether or not a date format is specified
@@ -94,8 +94,10 @@ class BufferedCSVReader {
 	ParserMode mode;
 
 public:
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<LogicalType> requested_types = vector<LogicalType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types, unique_ptr<std::istream> source);
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	                  vector<LogicalType> requested_types = vector<LogicalType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
+	                  unique_ptr<std::istream> source);
 
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;

@@ -45,7 +45,8 @@ unique_ptr<Expression> ExpressionBinder::PushCollation(ClientContext &context, u
 		if (equality_only && collation_entry->not_required_for_equality) {
 			continue;
 		}
-		auto function = make_unique<BoundFunctionExpression>(collation_entry->function.return_type, collation_entry->function);
+		auto function =
+		    make_unique<BoundFunctionExpression>(collation_entry->function.return_type, collation_entry->function);
 		function->children.push_back(move(source));
 		if (collation_entry->function.bind) {
 			function->bind_info = collation_entry->function.bind(*function, context);
@@ -95,8 +96,8 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 		// handle collation
 		left.expr =
 		    PushCollation(context, move(left.expr), input_type.collation(), expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr =
-		    PushCollation(context, move(right.expr), input_type.collation(), expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr = PushCollation(context, move(right.expr), input_type.collation(),
+		                           expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)));

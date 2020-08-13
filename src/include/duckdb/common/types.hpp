@@ -32,13 +32,14 @@ struct hugeint_t {
 public:
 	uint64_t lower;
 	int64_t upper;
+
 public:
 	hugeint_t() = default;
 	hugeint_t(int64_t value);
-	hugeint_t(const hugeint_t & rhs) = default;
-	hugeint_t(hugeint_t && rhs) = default;
-	hugeint_t & operator=(const hugeint_t & rhs) = default;
-	hugeint_t & operator=(hugeint_t && rhs) = default;
+	hugeint_t(const hugeint_t &rhs) = default;
+	hugeint_t(hugeint_t &&rhs) = default;
+	hugeint_t &operator=(const hugeint_t &rhs) = default;
+	hugeint_t &operator=(hugeint_t &&rhs) = default;
 
 	string ToString();
 
@@ -51,32 +52,32 @@ public:
 	bool operator>=(const hugeint_t &rhs) const;
 
 	// arithmetic operators
-	hugeint_t operator+(const hugeint_t & rhs) const;
-	hugeint_t operator-(const hugeint_t & rhs) const;
-	hugeint_t operator*(const hugeint_t & rhs) const;
-	hugeint_t operator/(const hugeint_t & rhs) const;
-	hugeint_t operator%(const hugeint_t & rhs) const;
+	hugeint_t operator+(const hugeint_t &rhs) const;
+	hugeint_t operator-(const hugeint_t &rhs) const;
+	hugeint_t operator*(const hugeint_t &rhs) const;
+	hugeint_t operator/(const hugeint_t &rhs) const;
+	hugeint_t operator%(const hugeint_t &rhs) const;
 	hugeint_t operator-() const;
 
 	// bitwise operators
-	hugeint_t operator>>(const hugeint_t & rhs) const;
-	hugeint_t operator<<(const hugeint_t & rhs) const;
-	hugeint_t operator&(const hugeint_t & rhs) const;
-	hugeint_t operator|(const hugeint_t & rhs) const;
-	hugeint_t operator^(const hugeint_t & rhs) const;
+	hugeint_t operator>>(const hugeint_t &rhs) const;
+	hugeint_t operator<<(const hugeint_t &rhs) const;
+	hugeint_t operator&(const hugeint_t &rhs) const;
+	hugeint_t operator|(const hugeint_t &rhs) const;
+	hugeint_t operator^(const hugeint_t &rhs) const;
 	hugeint_t operator~() const;
 
 	// in-place operators
-	hugeint_t & operator+=(const hugeint_t & rhs);
-	hugeint_t & operator-=(const hugeint_t & rhs);
-	hugeint_t & operator*=(const hugeint_t & rhs);
-	hugeint_t & operator/=(const hugeint_t & rhs);
-	hugeint_t & operator%=(const hugeint_t & rhs);
-	hugeint_t & operator>>=(const hugeint_t & rhs);
-	hugeint_t & operator<<=(const hugeint_t & rhs);
-	hugeint_t & operator&=(const hugeint_t & rhs);
-	hugeint_t & operator|=(const hugeint_t & rhs);
-	hugeint_t & operator^=(const hugeint_t & rhs);
+	hugeint_t &operator+=(const hugeint_t &rhs);
+	hugeint_t &operator-=(const hugeint_t &rhs);
+	hugeint_t &operator*=(const hugeint_t &rhs);
+	hugeint_t &operator/=(const hugeint_t &rhs);
+	hugeint_t &operator%=(const hugeint_t &rhs);
+	hugeint_t &operator>>=(const hugeint_t &rhs);
+	hugeint_t &operator<<=(const hugeint_t &rhs);
+	hugeint_t &operator&=(const hugeint_t &rhs);
+	hugeint_t &operator|=(const hugeint_t &rhs);
+	hugeint_t &operator^=(const hugeint_t &rhs);
 };
 
 struct string_t;
@@ -263,7 +264,8 @@ struct LogicalType {
 	LogicalType(LogicalTypeId id, string collation);
 	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
 	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
-	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types);
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation,
+	            child_list_t<LogicalType> child_types);
 
 	LogicalTypeId id() const {
 		return id_;
@@ -274,7 +276,7 @@ struct LogicalType {
 	uint8_t scale() const {
 		return scale_;
 	}
-	const string& collation() const {
+	const string &collation() const {
 		return collation_;
 	}
 	const child_list_t<LogicalType> &child_types() const {
@@ -302,8 +304,10 @@ struct LogicalType {
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
 
-	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
+	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be
+	//! used to guarantee a cast doesn't fail
 	int NumericTypeOrder() const;
+
 private:
 	LogicalTypeId id_;
 	uint8_t width_;
@@ -312,8 +316,10 @@ private:
 
 	child_list_t<LogicalType> child_types_;
 	PhysicalType physical_type_;
+
 private:
 	PhysicalType GetInternalType();
+
 public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;

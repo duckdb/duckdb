@@ -81,11 +81,11 @@ static void replace_function(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 void ReplaceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("replace",         // name of the function
+	set.AddFunction(ScalarFunction("replace",             // name of the function
 	                               {LogicalType::VARCHAR, // argument list
 	                                LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                               LogicalType::VARCHAR,   // return type
-	                               replace_function)); // pointer to function implementation
+	                               LogicalType::VARCHAR, // return type
+	                               replace_function));   // pointer to function implementation
 }
 
 } // namespace duckdb

@@ -64,19 +64,15 @@ using namespace std;
 
 #define DEFAULT_HASH_THRESHOLD 0
 
-enum class ExtensionLoadResult : uint8_t {
-	LOADED_EXTENSION = 0,
-	EXTENSION_UNKNOWN = 1,
-	NOT_LOADED = 2
-};
+enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
 struct SQLLogicTestRunner {
 public:
 	void ExecuteFile(string script);
 	ExtensionLoadResult LoadExtension(string extension);
 	void LoadDatabase(string dbpath);
-public:
 
+public:
 	string dbpath;
 	unique_ptr<DuckDB> db;
 	unique_ptr<Connection> con;
@@ -260,12 +256,12 @@ unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
-		for(idx_t r = 0; r < values.size(); r++) {
+		for (idx_t r = 0; r < values.size(); r++) {
 			fprintf(stderr, "%s\n", values[r].c_str());
 		}
 	} else {
 		idx_t c = 0;
-		for(idx_t r = 0; r < values.size(); r++) {
+		for (idx_t r = 0; r < values.size(); r++) {
 			if (c != 0) {
 				fprintf(stderr, "\t");
 			}
@@ -300,8 +296,8 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 
 // standard result conversion: one line per value
 static int duckdbConvertResult(MaterializedQueryResult &result,
-                       vector<string> &pazResult, /* RETURN:  Array of result values */
-                       int &pnResult      /* RETURN:  Number of result values */
+                               vector<string> &pazResult, /* RETURN:  Array of result values */
+                               int &pnResult              /* RETURN:  Number of result values */
 ) {
 	size_t r, c;
 	idx_t row_count = result.collection.count;
@@ -320,7 +316,7 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 }
 
 static void print_line_sep() {
-	string line_sep = string(80,'=');
+	string line_sep = string(80, '=');
 	std::cerr << termcolor::color<128, 128, 128> << line_sep << termcolor::reset << std::endl;
 }
 
@@ -330,12 +326,14 @@ static void print_header(string header) {
 
 static void print_sql(string sql) {
 	std::cerr << termcolor::bold << "SQL Query" << termcolor::reset << std::endl;
-	vector<string> keywords = {"SELECT", "FROM", "LIMIT", "WHERE", "HAVING", "GROUP BY", "JOIN", "INNER", "CREATE TABLE", "INSERT INTO", "ORDER BY", "VALUES", "ALTER TABLE", "INTEGER", "VARCHAR"};
+	vector<string> keywords = {"SELECT",   "FROM",   "LIMIT",       "WHERE",        "HAVING",
+	                           "GROUP BY", "JOIN",   "INNER",       "CREATE TABLE", "INSERT INTO",
+	                           "ORDER BY", "VALUES", "ALTER TABLE", "INTEGER",      "VARCHAR"};
 	// this is super inefficient, but I don't care for now
-	while(true) {
+	while (true) {
 		size_t next_keyword_pos = string::npos;
 		string next_keyword;
-		for(auto &keyword : keywords) {
+		for (auto &keyword : keywords) {
 			size_t next_occurrence = sql.find(keyword);
 			if (next_occurrence < next_keyword_pos) {
 				next_keyword = keyword;
@@ -363,7 +361,8 @@ static void print_error_header(const char *description, string file_name, int nl
 	std::cerr << termcolor::bold << "(" << file_name << ":" << nline << ")!" << termcolor::reset << std::endl;
 }
 
-static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count, bool row_wise) {
+static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count,
+                               bool row_wise) {
 	print_header("Expected result:");
 	print_line_sep();
 	print_expected_result(values, expected_column_count, row_wise);
@@ -376,7 +375,7 @@ static void print_result_error(MaterializedQueryResult &result, vector<string> &
 static bool result_is_hash(string result) {
 	idx_t pos = 0;
 	// first parse the rows
-	while(result[pos] >= '0' && result[pos] <= '9') {
+	while (result[pos] >= '0' && result[pos] <= '9') {
 		pos++;
 	}
 	if (pos == 0) {
@@ -392,13 +391,15 @@ static bool result_is_hash(string result) {
 	}
 	pos += constant_str.size();
 	// now parse the hash
-	while((result[pos] >= '0' && result[pos] <= '9') || (result[pos] >= 'a' && result[pos] <= 'z')) {
+	while ((result[pos] >= '0' && result[pos] <= '9') || (result[pos] >= 'a' && result[pos] <= 'z')) {
 		pos++;
 	}
 	return pos == result.size();
 }
 
-bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile, int query_line, string zScript, int current_row, int current_column, vector<string> &values, int expected_column_count, bool row_wise) {
+bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile,
+                    int query_line, string zScript, int current_row, int current_column, vector<string> &values,
+                    int expected_column_count, bool row_wise) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -406,7 +407,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		bool want_match =  StringUtil::StartsWith(rvalue_str, "<REGEX>:");
+		bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 		string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
 		RE2::Options options;
 		options.set_dot_nl(true);
@@ -414,7 +415,8 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		if (!re.ok()) {
 			print_error_header("Test error!", zScriptFile, query_line);
 			print_line_sep();
-			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error()
+			          << termcolor::reset << std::endl;
 			print_line_sep();
 			return false;
 		}
@@ -441,12 +443,14 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 				rvalue = Value(rvalue_str).CastAs(sql_type);
 			}
 			error = !Value::ValuesAreEqual(lvalue, rvalue);
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			print_error_header("Test error!", zScriptFile, query_line);
 			print_line_sep();
 			print_sql(zScript);
 			print_line_sep();
-			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value " << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << sql_type.ToString() << termcolor::reset << std::endl;
+			std::cerr << termcolor::red << termcolor::bold << "Cannot convert value "
+			          << (converted_lvalue ? rvalue_str : lvalue_str) << " to type " << sql_type.ToString()
+			          << termcolor::reset << std::endl;
 			std::cerr << termcolor::red << termcolor::bold << ex.what() << termcolor::reset << std::endl;
 			print_line_sep();
 			return false;
@@ -460,8 +464,10 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		print_line_sep();
 		print_sql(zScript);
 		print_line_sep();
-		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column " << current_column << std::endl << termcolor::reset;
-		std::cerr << lvalue_str << " <> " <<  rvalue_str << std::endl;
+		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row << ", column "
+		          << current_column << std::endl
+		          << termcolor::reset;
+		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		print_line_sep();
 		print_result_error(result, values, expected_column_count, row_wise);
 		return false;
@@ -469,7 +475,8 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	return true;
 }
 
-static Connection* GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map, string con_name) {
+static Connection *GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map,
+                                 string con_name) {
 	auto entry = named_connection_map.find(con_name);
 	if (entry == named_connection_map.end()) {
 		// not found: create a new connection
@@ -482,12 +489,14 @@ static Connection* GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Co
 }
 
 static void query_break(int line) {
-	(void) line;
+	(void)line;
 }
 
 struct Command {
-	Command(SQLLogicTestRunner &runner) : runner(runner) {}
-	virtual ~Command(){}
+	Command(SQLLogicTestRunner &runner) : runner(runner) {
+	}
+	virtual ~Command() {
+	}
 
 	SQLLogicTestRunner &runner;
 	string connection_name;
@@ -517,21 +526,19 @@ struct Command {
 };
 
 struct Statement : public Command {
-	Statement(SQLLogicTestRunner &runner) : Command(runner) {}
+	Statement(SQLLogicTestRunner &runner) : Command(runner) {
+	}
 
 	bool expect_ok;
 
 	void Execute() override;
 };
 
-enum class SortStyle : uint8_t {
-	NO_SORT,
-	ROW_SORT,
-	VALUE_SORT
-};
+enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
 
 struct Query : public Command {
-	Query(SQLLogicTestRunner &runner) : Command(runner) {}
+	Query(SQLLogicTestRunner &runner) : Command(runner) {
+	}
 
 	idx_t expected_column_count = 0;
 	SortStyle sort_style = SortStyle::NO_SORT;
@@ -540,11 +547,12 @@ struct Query : public Command {
 	string query_label;
 
 	void Execute() override;
-	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) ;
+	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise);
 };
 
 struct RestartCommand : public Command {
-	RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {}
+	RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
+	}
 
 	void Execute() override;
 };
@@ -574,7 +582,8 @@ void Statement::Execute() {
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		print_error_header(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", file_name, query_line);
+		print_error_header(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!", file_name,
+		                   query_line);
 		print_line_sep();
 		print_sql(sql_query);
 		print_line_sep();
@@ -588,7 +597,8 @@ void Statement::Execute() {
 
 void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise) {
 	print_error_header("Wrong column count in query!", file_name, query_line);
-	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << result.column_count() << termcolor::reset << " columns" << std::endl;
+	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
+	          << termcolor::bold << result.column_count() << termcolor::reset << " columns" << std::endl;
 	print_line_sep();
 	print_sql(sql_query);
 	print_line_sep();
@@ -623,7 +633,7 @@ void Query::Execute() {
 	duckdbConvertResult(*result, azResult, nResult);
 	if (runner.output_result_mode) {
 		// names
-		for(idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t c = 0; c < result->column_count(); c++) {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
@@ -631,7 +641,7 @@ void Query::Execute() {
 		}
 		std::cerr << std::endl;
 		// types
-		for(idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t c = 0; c < result->column_count(); c++) {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
@@ -639,8 +649,8 @@ void Query::Execute() {
 		}
 		std::cerr << std::endl;
 		print_line_sep();
-		for(idx_t r = 0; r < result->collection.count; r++) {
-			for(idx_t c = 0; c < result->column_count(); c++) {
+		for (idx_t r = 0; r < result->collection.count; r++) {
+			for (idx_t c = 0; c < result->column_count(); c++) {
 				if (c != 0) {
 					std::cerr << "\t";
 				}
@@ -660,18 +670,17 @@ void Query::Execute() {
 		int nRow = nResult / nColumn;
 		vector<vector<string>> rows;
 		rows.reserve(nRow);
-		for(int r = 0; r < nRow; r++) {
+		for (int r = 0; r < nRow; r++) {
 			vector<string> row;
 			row.reserve(nColumn);
-			for(int c = 0; c < nColumn; c++) {
+			for (int c = 0; c < nColumn; c++) {
 				row.push_back(move(azResult[r * nColumn + c]));
 			}
 			rows.push_back(move(row));
 		}
 		// sort the individual rows
-		std::sort(rows.begin(), rows.end(),
-				[](const vector<string>& a, const vector<string>& b) {
-			for(size_t c = 0; c < a.size(); c++) {
+		std::sort(rows.begin(), rows.end(), [](const vector<string> &a, const vector<string> &b) {
+			for (size_t c = 0; c < a.size(); c++) {
 				if (a[c] != b[c]) {
 					return a[c] < b[c];
 				}
@@ -679,8 +688,8 @@ void Query::Execute() {
 			return false;
 		});
 		// now reconstruct the values from the rows
-		for(int r = 0; r < nRow; r++) {
-			for(int c = 0; c < nColumn; c++) {
+		for (int r = 0; r < nRow; r++) {
+			for (int c = 0; c < nColumn; c++) {
 				azResult[r * nColumn + c] = move(rows[r][c]);
 			}
 		}
@@ -688,7 +697,7 @@ void Query::Execute() {
 		/* Sort all values independently */
 		std::sort(azResult.begin(), azResult.end());
 	}
-	char zHash[100];                            /* Storage space for hash results */
+	char zHash[100]; /* Storage space for hash results */
 	int compare_hash = query_has_label || (runner.hashThreshold > 0 && nResult > runner.hashThreshold);
 	// check if the current line (the first line of the result) is a hash value
 	if (values.size() == 1 && result_is_hash(values[0])) {
@@ -713,10 +722,10 @@ void Query::Execute() {
 		}
 	}
 	/* Compare subsequent lines of the script against the
-		*results
-		** from the query.  Report an error if any differences are
-		*found.
-		*/
+	 *results
+	 ** from the query.  Report an error if any differences are
+	 *found.
+	 */
 	if (!compare_hash) {
 		// check if the row/column count matches
 		int original_expected_columns = expected_column_count;
@@ -735,7 +744,7 @@ void Query::Execute() {
 			// however, this can also be because the query returned an incorrect # of rows
 			// we make a guess: if everything contains tabs, we still treat the input as row wise
 			bool all_tabs = true;
-			for(auto &val : values) {
+			for (auto &val : values) {
 				if (val.find('\t') == string::npos) {
 					all_tabs = false;
 					break;
@@ -753,7 +762,8 @@ void Query::Execute() {
 			}
 			print_error_header("Error in test!", file_name, query_line);
 			print_line_sep();
-			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int) expected_column_count, (int) values.size());
+			fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
+			        (int)values.size());
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL();
 		}
@@ -762,7 +772,8 @@ void Query::Execute() {
 				ColumnCountMismatch(*result, original_expected_columns, row_wise);
 			}
 			print_error_header("Wrong row count in query!", file_name, query_line);
-			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got " << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
+			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
+			          << termcolor::bold << result->collection.count << termcolor::reset << " rows" << std::endl;
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
@@ -772,7 +783,7 @@ void Query::Execute() {
 
 		if (row_wise) {
 			int current_row = 0;
-			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
+			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
 				// split based on tab character
 				auto splits = StringUtil::Split(values[i], "\t");
 				if (splits.size() != expected_column_count) {
@@ -780,16 +791,22 @@ void Query::Execute() {
 						ColumnCountMismatch(*result, original_expected_columns, row_wise);
 					}
 					print_line_sep();
-					print_error_header("Error in test! Column count mismatch after splitting on tab!", file_name, query_line);
-					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset << " columns" << std::endl;
-					std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
+					print_error_header("Error in test! Column count mismatch after splitting on tab!", file_name,
+					                   query_line);
+					std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset
+					          << " columns, but got " << termcolor::bold << splits.size() << termcolor::reset
+					          << " columns" << std::endl;
+					std::cerr << "Does the result contain tab values? In that case, place every value on a single row."
+					          << std::endl;
 					print_line_sep();
 					print_sql(sql_query);
 					print_line_sep();
 					FAIL();
 				}
-				for(idx_t c = 0; c < splits.size(); c++) {
-					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name, query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
+				for (idx_t c = 0; c < splits.size(); c++) {
+					bool success =
+					    compare_values(*result, azResult[current_row * expected_column_count + c], splits[c], file_name,
+					                   query_line, sql_query, current_row, c, values, expected_column_count, row_wise);
 					if (!success) {
 						FAIL();
 					}
@@ -800,8 +817,10 @@ void Query::Execute() {
 			}
 		} else {
 			int current_row = 0, current_column = 0;
-			for (int i = 0; i < nResult && i < (int) values.size(); i++) {
-				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column], values[i], file_name, query_line, sql_query, current_row, current_column, values, expected_column_count, row_wise);
+			for (int i = 0; i < nResult && i < (int)values.size(); i++) {
+				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
+				                              values[i], file_name, query_line, sql_query, current_row, current_column,
+				                              values, expected_column_count, row_wise);
 				if (!success) {
 					FAIL();
 				}
@@ -809,7 +828,7 @@ void Query::Execute() {
 				REQUIRE(success);
 
 				current_column++;
-				if (current_column == (int) expected_column_count) {
+				if (current_column == (int)expected_column_count) {
 					current_row++;
 					current_column = 0;
 				}
@@ -818,12 +837,17 @@ void Query::Execute() {
 		if (column_count_mismatch) {
 			print_line_sep();
 			print_error_header("Wrong column count in query!", file_name, query_line);
-			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset << " columns" << std::endl;
+			std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset
+			          << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset
+			          << " columns" << std::endl;
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
-			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result." << std::endl;
-			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query " << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset << std::endl;
+			std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset
+			          << " the query result." << std::endl;
+			std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
+			          << string(result->column_count(), 'I') << termcolor::reset << termcolor::bold << "\""
+			          << termcolor::reset << std::endl;
 			print_line_sep();
 			FAIL();
 		}
@@ -841,7 +865,8 @@ void Query::Execute() {
 			}
 		} else {
 			if (values.size() <= 0) {
-				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name, query_line);
+				print_error_header("Error in test: attempting to compare hash but no hash found!", file_name,
+				                   query_line);
 				FAIL();
 			}
 			hash_compare_error = strcmp(values[0].c_str(), zHash) != 0;
@@ -901,24 +926,24 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	con = make_unique<Connection>(*db);
 
 	// load any previously loaded extensions again
-	for(auto &extension : extensions) {
+	for (auto &extension : extensions) {
 		LoadExtension(extension);
 	}
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
-	int haltOnError = 0;                        /* Stop on first error if true */
+	int haltOnError = 0; /* Stop on first error if true */
 	const char *zDbEngine = "DuckDB";
-	const char *zScriptFile = 0;                /* Input script filename */
+	const char *zScriptFile = 0; /* Input script filename */
 	unique_ptr<char[]> zScriptStorage;
-	char *zScript;                              /* Content of the script */
-	long nScript;                               /* Size of the script in bytes */
-	long nGot;                                  /* Number of bytes read */
-	int nErr = 0;                               /* Number of errors */
-	int nSkipped = 0;                           /* Number of SQL statements skipped */
-	Script sScript;                             /* Script parsing status */
-	FILE *in;                                   /* For reading script */
-	int bHt = 0;                                /* True if -ht command-line option */
+	char *zScript;    /* Content of the script */
+	long nScript;     /* Size of the script in bytes */
+	long nGot;        /* Number of bytes read */
+	int nErr = 0;     /* Number of errors */
+	int nSkipped = 0; /* Number of SQL statements skipped */
+	Script sScript;   /* Script parsing status */
+	FILE *in;         /* For reading script */
+	int bHt = 0;      /* True if -ht command-line option */
 	bool in_loop = false;
 	string loop_iterator_name;
 	int loop_start;
@@ -935,7 +960,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	// initialize an in-memory database
 	db = make_unique<DuckDB>();
 	con = make_unique<Connection>(*db);
-
 
 	/*
 	** Read the entire script file contents into memory
@@ -1124,7 +1148,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				nextLine(&sScript);
 			}
 			// read the expected result: keep reading until we encounter a blank line
-			while(sScript.zLine[0]) {
+			while (sScript.zLine[0]) {
 				command->values.push_back(sScript.zLine);
 				if (!nextLine(&sScript)) {
 					break;
@@ -1193,7 +1217,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			in_loop = true;
 			if (strlen(sScript.azToken[1]) == 0 || strlen(sScript.azToken[2]) == 0 || strlen(sScript.azToken[3]) == 0) {
-				fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n", zScriptFile, sScript.startLine);
+				fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
+				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
 			// parse the loop parameters
@@ -1212,8 +1237,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			for(int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
-				for(auto &statement : loop_statements) {
+			for (int loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+				for (auto &statement : loop_statements) {
 					statement->Execute(loop_iterator_name, loop_idx);
 				}
 			}
@@ -1232,7 +1257,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				auto result = LoadExtension(param);
 				if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine,
+					        sScript.azToken[1]);
 					FAIL();
 				} else if (result == ExtensionLoadResult::NOT_LOADED) {
 					// extension known but not build: skip this test
@@ -1246,7 +1272,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			dbpath = StringUtil::Replace(string(sScript.azToken[1]), "__TEST_DIR__", TestDirectoryPath());
 			if (dbpath.empty() || dbpath == ":memory:") {
-				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n", zScriptFile, sScript.startLine);
+				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
+				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
 			// delete the target database file, if it exists
@@ -1258,7 +1285,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			LoadDatabase(dbpath);
 		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
 			if (dbpath.empty()) {
-				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n", zScriptFile, sScript.startLine);
+				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n",
+				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
 			// restart the current database
@@ -1313,7 +1341,7 @@ static string ParseGroupFromPath(string file) {
 	}
 	// move backwards to the last slash
 	int group_begin = -1, group_end = -1;
-	for(idx_t i = file.size(); i > 0; i--) {
+	for (idx_t i = file.size(); i > 0; i--) {
 		if (file[i - 1] == '/' || file[i - 1] == '\\') {
 			if (group_end == -1) {
 				group_end = i - 1;

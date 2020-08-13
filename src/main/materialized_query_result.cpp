@@ -7,7 +7,8 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types, vector<string> names)
+MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
+                                                 vector<string> names)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), names) {
 }
 

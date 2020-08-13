@@ -26,6 +26,7 @@ public:
 
 	unique_ptr<Expression> expr;
 	unique_ptr<ParsedExpression> parsed_expr;
+
 public:
 	string ToString() const override {
 		return expr->ToString();

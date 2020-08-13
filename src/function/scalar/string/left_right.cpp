@@ -31,7 +31,8 @@ static void left_function(DataChunk &args, ExpressionState &state, Vector &resul
 }
 
 void LeftFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("left", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, left_function));
+	set.AddFunction(
+	    ScalarFunction("left", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, left_function));
 }
 
 static string_t right_scalar_function(Vector &result, const string_t str, int64_t pos, unique_ptr<char[]> &output,
@@ -60,7 +61,8 @@ static void right_function(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 void RightFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("right", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, right_function));
+	set.AddFunction(
+	    ScalarFunction("right", {LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, right_function));
 }
 
 } // namespace duckdb

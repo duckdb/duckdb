@@ -7,7 +7,8 @@
 namespace duckdb {
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function, bool is_operator)
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+                                                 bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
       function(bound_function), arguments(bound_function.arguments), is_operator(is_operator) {
 }

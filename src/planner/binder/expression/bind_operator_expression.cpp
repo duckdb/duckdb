@@ -21,8 +21,7 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 	}
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
-		children[i]->expr =
-		    BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
+		children[i]->expr = BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return LogicalType(LogicalTypeId::BOOLEAN);

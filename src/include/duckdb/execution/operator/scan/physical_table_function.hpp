@@ -19,8 +19,8 @@ class PhysicalTableFunction : public PhysicalOperator {
 public:
 	PhysicalTableFunction(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                      vector<Value> parameters)
-	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, move(types)), function(move(function)), bind_data(move(bind_data)),
-	      parameters(move(parameters)) {
+	    : PhysicalOperator(PhysicalOperatorType::TABLE_FUNCTION, move(types)), function(move(function)),
+	      bind_data(move(bind_data)), parameters(move(parameters)) {
 	}
 
 	//! Function to call

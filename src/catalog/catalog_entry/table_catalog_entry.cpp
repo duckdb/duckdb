@@ -30,7 +30,7 @@ namespace duckdb {
 
 void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &name_map) {
 	unordered_map<string, column_t> extra_lowercase_names;
-	for(auto &entry : name_map) {
+	for (auto &entry : name_map) {
 		auto lcase = StringUtil::Lower(entry.first);
 		// check the lowercase name map if there already exists a lowercase version
 		if (extra_lowercase_names.find(lcase) == extra_lowercase_names.end()) {
@@ -42,7 +42,7 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 		}
 	}
 	// for any new lowercase names, add them to the original name map
-	for(auto &entry : extra_lowercase_names) {
+	for (auto &entry : extra_lowercase_names) {
 		if (entry.second != INVALID_INDEX) {
 			name_map[entry.first] = entry.second;
 		}
@@ -271,7 +271,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 		case ConstraintType::UNIQUE: {
 			auto copy = constraint->Copy();
-			auto &unique = (UniqueConstraint &) *copy;
+			auto &unique = (UniqueConstraint &)*copy;
 			if (unique.index != INVALID_INDEX) {
 				if (unique.index == removed_index) {
 					throw CatalogException(
@@ -309,8 +309,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table,
-		                      info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -336,8 +335,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table,
-		                      info.column_name);
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -466,4 +464,4 @@ void TableCatalogEntry::SetAsRoot() {
 	storage->SetAsRoot();
 }
 
-}
+} // namespace duckdb

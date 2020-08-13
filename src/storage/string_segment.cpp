@@ -137,29 +137,29 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-	    bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-        auto less = isFirstGreater?tableFilter[1]:tableFilter[0];
-        auto greater = isFirstGreater?tableFilter[0]:tableFilter[1];
+		bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                      tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		auto less = isFirstGreater ? tableFilter[1] : tableFilter[0];
+		auto greater = isFirstGreater ? tableFilter[0] : tableFilter[1];
 		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                             greater.constant.str_value, less.constant.str_value,
+				                                             approved_tuple_count, base_nullmask, vector_index);
 			} else {
-				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThanEquals>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThanEquals, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value, less.constant.str_value,
+				    approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}
@@ -877,4 +877,4 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	CleanupUpdate(info);
 }
 
-}
+} // namespace duckdb

@@ -37,14 +37,14 @@ using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
 
-using parquet::format::Type;
+using parquet::format::CompressionCodec;
+using parquet::format::Encoding;
 using parquet::format::FieldRepetitionType;
 using parquet::format::FileMetaData;
-using parquet::format::Encoding;
 using parquet::format::PageHeader;
-using parquet::format::CompressionCodec;
 using parquet::format::PageType;
 using parquet::format::RowGroup;
+using parquet::format::Type;
 
 struct Int96 {
 	uint32_t value[3];
@@ -336,7 +336,8 @@ public:
 	}
 
 private:
-	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs,
+	                                                  unordered_map<string, Value> &named_parameters,
 	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 
 		auto file_name = inputs[0].GetValue<string>();
@@ -1261,8 +1262,9 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	// initialize the file writer
-	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
-	                                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	global_state->writer =
+	    make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
+	                                    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
 	global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;

@@ -37,8 +37,7 @@ template <class OP> static AggregateFunction GetUnaryAggregate(LogicalType type)
 	case LogicalTypeId::DOUBLE:
 		return AggregateFunction::UnaryAggregate<min_max_state_t<double>, double, double, OP>(type, type);
 	case LogicalTypeId::INTERVAL:
-		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type,
-		                                                                                                     type);
+		return AggregateFunction::UnaryAggregate<min_max_state_t<interval_t>, interval_t, interval_t, OP>(type, type);
 	default:
 		throw NotImplementedException("Unimplemented type for min/max aggregate");
 	}
@@ -194,7 +193,7 @@ template <class OP, class OP_STRING> static void AddMinMaxOperator(AggregateFunc
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<min_max_state_t<string_t>, string_t, string_t, OP_STRING>(
-			    	type.id(), type.id()));
+			        type.id(), type.id()));
 		} else {
 			set.AddFunction(GetUnaryAggregate<OP>(type));
 		}

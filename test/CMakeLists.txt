@@ -13,10 +13,10 @@ add_subdirectory(sql)
 add_subdirectory(sqlite)
 
 if(NOT WIN32 AND NOT SUN)
-  if (${BUILD_SQLSMITH})
+  if(${BUILD_SQLSMITH})
     add_subdirectory(sqlsmith)
   endif()
-  if (${BUILD_TPCE})
+  if(${BUILD_TPCE})
     add_subdirectory(tpce)
   endif()
   add_subdirectory(persistence)
@@ -34,9 +34,8 @@ if(NOT WIN32 AND NOT SUN)
                         dbgen
                         dsdgen
                         test_helpers
-                        sqlite_transfer
-                        )
-  if (${BUILD_TPCE})
+                        sqlite_transfer)
+  if(${BUILD_TPCE})
     target_link_libraries(unittest tpce)
   endif()
 else()
@@ -44,9 +43,9 @@ else()
 endif()
 
 if(${BUILD_PARQUET_EXTENSION})
-    target_link_libraries(unittest parquet_extension)
+  target_link_libraries(unittest parquet_extension)
 endif()
 
 if(${BUILD_ICU_EXTENSION})
-    target_link_libraries(unittest icu_extension)
+  target_link_libraries(unittest icu_extension)
 endif()

@@ -16,8 +16,7 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
+		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	} else {
 		vector<LogicalType> types;
 		for (auto &column : description->columns) {

@@ -97,8 +97,7 @@ void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Schema not specified");
 	}
 	if (info->name == DEFAULT_SCHEMA || info->name == TEMP_SCHEMA) {
-		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system",
-		                       info->name);
+		throw CatalogException("Cannot drop schema \"%s\" because it is required by the database system", info->name);
 	}
 
 	if (!schemas->DropEntry(context.ActiveTransaction(), info->name, info->cascade)) {

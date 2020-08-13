@@ -17,8 +17,10 @@ class BufferedCSVReader;
 //! Parse a file from disk using a specified copy function and return the set of chunks retrieved from the file
 class PhysicalCopyFromFile : public PhysicalOperator {
 public:
-	PhysicalCopyFromFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> info, vector<LogicalType> sql_types)
-	    : PhysicalOperator(PhysicalOperatorType::COPY_FROM_FILE, move(types)), function(function), info(move(info)), sql_types(move(sql_types)) {
+	PhysicalCopyFromFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> info,
+	                     vector<LogicalType> sql_types)
+	    : PhysicalOperator(PhysicalOperatorType::COPY_FROM_FILE, move(types)), function(function), info(move(info)),
+	      sql_types(move(sql_types)) {
 	}
 
 	//! The copy function to use to read the file

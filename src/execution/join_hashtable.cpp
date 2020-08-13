@@ -14,8 +14,8 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<LogicalType> btypes,
-                             JoinType type)
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
+                             vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
@@ -553,7 +553,7 @@ static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
 		                                                  no_match_sel, no_match_count);
 	case PhysicalType::INT128:
 		return TemplatedGather<NO_MATCH_SEL, hugeint_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                  no_match_sel, no_match_count);
+		                                                    no_match_sel, no_match_count);
 	case PhysicalType::FLOAT:
 		return TemplatedGather<NO_MATCH_SEL, float, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                no_match_sel, no_match_count);
@@ -562,7 +562,7 @@ static idx_t GatherSwitch(VectorData &data, PhysicalType type, Vector &pointers,
 		                                                 no_match_sel, no_match_count);
 	case PhysicalType::INTERVAL:
 		return TemplatedGather<NO_MATCH_SEL, interval_t, OP>(data, pointers, current_sel, count, offset, match_sel,
-		                                                 no_match_sel, no_match_count);
+		                                                     no_match_sel, no_match_count);
 	case PhysicalType::VARCHAR:
 		return TemplatedGather<NO_MATCH_SEL, string_t, OP>(data, pointers, current_sel, count, offset, match_sel,
 		                                                   no_match_sel, no_match_count);
@@ -596,9 +596,9 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 			                                                          no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(
-			    key_data[i], internal_type, this->pointers, *current_sel, remaining_count, offset, match_sel,
-			    no_match_sel, no_match_count);
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(key_data[i], internal_type, this->pointers,
+			                                                                *current_sel, remaining_count, offset,
+			                                                                match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			remaining_count =

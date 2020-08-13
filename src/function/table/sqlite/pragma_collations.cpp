@@ -19,7 +19,8 @@ struct PragmaCollateData : public TableFunctionData {
 	idx_t offset;
 };
 
-static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+static unique_ptr<FunctionData> pragma_collate_bind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("collname");
 	return_types.push_back(LogicalType::VARCHAR);

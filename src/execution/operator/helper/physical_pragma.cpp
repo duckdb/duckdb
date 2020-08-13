@@ -49,7 +49,8 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		client.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
-		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type().id() != LogicalTypeId::VARCHAR) {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT ||
+		    pragma.parameters[0].type().id() != LogicalTypeId::VARCHAR) {
 			throw ParserException(
 			    "Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
 		}
@@ -106,8 +107,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		} else if (new_order == "descending" || new_order == "desc") {
 			config.default_order_type = OrderType::DESCENDING;
 		} else {
-			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING",
-			                      new_order);
+			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING", new_order);
 		}
 	} else if (keyword == "threads" || keyword == "worker_threads") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
@@ -130,21 +130,23 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			throw ParserException("Force parallelism must be a statement (PRAGMA force_parallelism)");
 		}
 		context.client.force_parallelism = true;
-	}  else if (keyword == "disable_force_parallelism") {
+	} else if (keyword == "disable_force_parallelism") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
 			throw ParserException("Disable force parallelism must be a statement (PRAGMA disable_force_parallelism)");
 		}
 		context.client.force_parallelism = false;
 	} else if (keyword == "log_query_path") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
-			throw ParserException("Log query path must be an assignment (PRAGMA log_query_path='/path/to/file') (or empty to disable)");
+			throw ParserException(
+			    "Log query path must be an assignment (PRAGMA log_query_path='/path/to/file') (or empty to disable)");
 		}
 		auto str_val = pragma.parameters[0].ToString();
 		if (str_val.empty()) {
 			// empty path: clean up query writer
 			context.client.log_query_writer = nullptr;
 		} else {
-			context.client.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context.client), str_val);
+			context.client.log_query_writer =
+			    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context.client), str_val);
 		}
 	} else if (keyword == "explain_output") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {

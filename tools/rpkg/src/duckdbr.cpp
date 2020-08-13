@@ -305,11 +305,11 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		return R_NilValue;
 	}
 
-	if (TYPEOF(paramsexp) != VECSXP || (idx_t) LENGTH(paramsexp) != stmtholder->stmt->n_param) {
+	if (TYPEOF(paramsexp) != VECSXP || (idx_t)LENGTH(paramsexp) != stmtholder->stmt->n_param) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
-	for (idx_t param_idx = 0; param_idx < (idx_t) LENGTH(paramsexp); param_idx++) {
+	for (idx_t param_idx = 0; param_idx < (idx_t)LENGTH(paramsexp); param_idx++) {
 		Value val;
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (LENGTH(valsexp) != 1) {
@@ -610,9 +610,11 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function, nullptr){};
+	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function,
+	                    nullptr){};
 
-	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
+	                                                    unordered_map<string, Value> &named_parameters,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		// TODO have a better way to pass this pointer
 		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
@@ -620,7 +622,7 @@ struct DataFrameScanFunction : public TableFunction {
 		auto df_names = GET_NAMES(df);
 		vector<RType> rtypes;
 
-		for (idx_t col_idx = 0; col_idx < (idx_t) LENGTH(df); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < (idx_t)LENGTH(df); col_idx++) {
 			names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
 			SEXP coldata = VECTOR_ELT(df, col_idx);
 			rtypes.push_back(detect_rtype(coldata));

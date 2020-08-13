@@ -61,7 +61,6 @@ public:
 	static Value Numeric(LogicalType type, int64_t value);
 	static Value Numeric(LogicalType type, hugeint_t value);
 
-
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);
 	//! Create a tinyint Value from a specified value
@@ -174,6 +173,7 @@ public:
 private:
 	//! The logical of the value
 	LogicalType type_;
+
 public:
 	//! Whether or not the value is NULL
 	bool is_null;

@@ -5,15 +5,13 @@ using namespace std;
 
 namespace duckdb {
 
-template<class OP>
-struct LeastOperator {
-	template<class T>
-	static T Operation(T left, T right) {
+template <class OP> struct LeastOperator {
+	template <class T> static T Operation(T left, T right) {
 		return OP::Operation(left, right) ? left : right;
 	}
 };
 
-template<class T, class OP, bool IS_STRING = false>
+template <class T, class OP, bool IS_STRING = false>
 static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (args.column_count() == 1) {
 		// single input: nop
@@ -39,8 +37,10 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 		}
 	}
 
-	// we start off performing a binary operation between the first two inputs, where we store the lowest (or highest) directly in the result
-	BinaryExecutor::ExecuteGeneric<T, T, T, BinarySingleArgumentOperatorWrapper, LeastOperator<OP>, bool, IS_STRING>(args.data[0], args.data[1], result, args.size(), false);
+	// we start off performing a binary operation between the first two inputs, where we store the lowest (or highest)
+	// directly in the result
+	BinaryExecutor::ExecuteGeneric<T, T, T, BinarySingleArgumentOperatorWrapper, LeastOperator<OP>, bool, IS_STRING>(
+	    args.data[0], args.data[1], result, args.size(), false);
 
 	// now we loop over the other columns and compare it to the stored result
 	auto result_data = FlatVector::GetData<T>(result);
@@ -49,7 +49,7 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 	idx_t rcount = 0;
 	// create a selection vector from the nullmask
 	rsel.Initialize();
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		if (!result_nullmask[i]) {
 			rsel.set_index(rcount++, i);
 		}
@@ -62,7 +62,7 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 		if (vdata.nullmask->any()) {
 			// potential new null entries: have to check the null mask
 			idx_t new_count = 0;
-			for(idx_t i = 0; i < rcount; i++) {
+			for (idx_t i = 0; i < rcount; i++) {
 				auto rindex = rsel.get_index(i);
 				auto vindex = vdata.sel->get_index(rindex);
 				if ((*vdata.nullmask)[vindex]) {
@@ -80,7 +80,7 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 			rcount = new_count;
 		} else {
 			// no new null entries: only need to perform the operation
-			for(idx_t i = 0; i < rcount; i++) {
+			for (idx_t i = 0; i < rcount; i++) {
 				auto rindex = rsel.get_index(i);
 				auto vindex = vdata.sel->get_index(rindex);
 
@@ -94,15 +94,22 @@ static void least_greatest_impl(DataChunk &args, ExpressionState &state, Vector 
 	result.vector_type = result_type;
 }
 
-template<class OP>
-static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
+template <class OP> static void register_least_greatest(BuiltinFunctions &set, string fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
-	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, least_greatest_impl<date_t, OP>, false, nullptr, nullptr, LogicalType::DATE));
-	fun_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP, least_greatest_impl<timestamp_t, OP>, false, nullptr, nullptr, LogicalType::TIMESTAMP));
-	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, least_greatest_impl<int64_t, OP>, false, nullptr, nullptr, LogicalType::BIGINT));
-	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT, least_greatest_impl<hugeint_t, OP>, false, nullptr, nullptr, LogicalType::HUGEINT));
-	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, least_greatest_impl<double, OP>, false, nullptr, nullptr, LogicalType::DOUBLE));
-	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, least_greatest_impl<string_t, OP, true>, false, nullptr, nullptr, LogicalType::VARCHAR));
+	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, least_greatest_impl<date_t, OP>, false,
+	                                   nullptr, nullptr, LogicalType::DATE));
+	fun_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
+	                                   least_greatest_impl<timestamp_t, OP>, false, nullptr, nullptr,
+	                                   LogicalType::TIMESTAMP));
+	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, least_greatest_impl<int64_t, OP>,
+	                                   false, nullptr, nullptr, LogicalType::BIGINT));
+	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT, least_greatest_impl<hugeint_t, OP>,
+	                                   false, nullptr, nullptr, LogicalType::HUGEINT));
+	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, least_greatest_impl<double, OP>,
+	                                   false, nullptr, nullptr, LogicalType::DOUBLE));
+	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                   least_greatest_impl<string_t, OP, true>, false, nullptr, nullptr,
+	                                   LogicalType::VARCHAR));
 	set.AddFunction(fun_set);
 }
 
@@ -114,4 +121,4 @@ void GreatestFun::RegisterFunction(BuiltinFunctions &set) {
 	register_least_greatest<duckdb::GreaterThan>(set, "greatest");
 }
 
-}
+} // namespace duckdb

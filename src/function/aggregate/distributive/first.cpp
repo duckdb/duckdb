@@ -129,7 +129,7 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	case LogicalTypeId::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t>(type);
 	case LogicalTypeId::VARCHAR:
-    case LogicalTypeId::BLOB:
+	case LogicalTypeId::BLOB:
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 		                                                   FirstFunctionString>(type, type);
 	default:

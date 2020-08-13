@@ -58,9 +58,9 @@ static bool prefix(const string_t &str, const string_t &pattern) {
 }
 
 ScalarFunction PrefixFun::GetFunction() {
-	return ScalarFunction("prefix",                             // name of the function
+	return ScalarFunction("prefix",                                     // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                     // return type
+	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator, true>);
 }
 

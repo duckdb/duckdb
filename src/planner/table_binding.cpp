@@ -24,8 +24,8 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = table.name_map.find(colref.column_name);
 	if (entry == table.name_map.end()) {
-		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
-		                                     colref.table_name, colref.column_name));
+		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name,
+		                                     colref.column_name));
 	}
 	auto col_index = entry->second;
 	// fetch the type of the column
@@ -98,8 +98,7 @@ BindResult GenericBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
 	LogicalType sql_type = types[column_entry->second];
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
 void GenericBinding::GenerateAllColumnExpressions(BindContext &context,

@@ -80,7 +80,8 @@ template <> inline bool IsNullValue(string_t value) {
 }
 
 template <> inline bool IsNullValue(interval_t value) {
-	return value.days == NullValue<int32_t>() && value.months == NullValue<int32_t>() && value.msecs == NullValue<int64_t>();
+	return value.days == NullValue<int32_t>() && value.months == NullValue<int32_t>() &&
+	       value.msecs == NullValue<int64_t>();
 }
 
 template <> inline bool IsNullValue(char *value) {

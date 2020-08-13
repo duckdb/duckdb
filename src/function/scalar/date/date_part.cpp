@@ -25,7 +25,8 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 		return DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		return DatePartSpecifier::MICROSECONDS;
-	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" || specifier == "msecs") {
+	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
+	           specifier == "msecs") {
 		return DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
 		return DatePartSpecifier::SECOND;
@@ -286,8 +287,8 @@ template <class OP> static void AddDatePartOperator(BuiltinFunctions &set, strin
 	ScalarFunctionSet operator_set(name);
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<date_t, int64_t, OP>));
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+	                                        ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>));
 	set.AddFunction(operator_set);
 }
 

@@ -7,8 +7,8 @@ namespace duckdb {
 using namespace std;
 
 BoundAggregateExpression::BoundAggregateExpression(LogicalType return_type, AggregateFunction function, bool distinct)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, move(return_type)), function(function),
-      distinct(distinct) {
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, move(return_type)),
+      function(function), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {

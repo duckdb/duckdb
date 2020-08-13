@@ -12,33 +12,32 @@ using namespace std;
 
 namespace duckdb {
 
-LogicalType::LogicalType()
-	: id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
+LogicalType::LogicalType() : id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
-LogicalType::LogicalType(LogicalTypeId id)
-	: id_(id), width_(0), scale_(0), collation_(string()) {
+LogicalType::LogicalType(LogicalTypeId id) : id_(id), width_(0), scale_(0), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
 LogicalType::LogicalType(LogicalTypeId id, string collation)
-	: id_(id), width_(0), scale_(0), collation_(move(collation)) {
+    : id_(id), width_(0), scale_(0), collation_(move(collation)) {
 	physical_type_ = GetInternalType();
 }
 LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale)
-	: id_(id), width_(width), scale_(scale), collation_(string()) {
+    : id_(id), width_(width), scale_(scale), collation_(string()) {
 	physical_type_ = GetInternalType();
 }
 LogicalType::LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types)
-	: id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
+    : id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
 	physical_type_ = GetInternalType();
 }
-LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types)
-	: id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
+LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation,
+                         child_list_t<LogicalType> child_types)
+    : id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
 	physical_type_ = GetInternalType();
 }
 
 hash_t LogicalType::Hash() const {
-	return duckdb::Hash<uint8_t>((uint8_t) id_);
+	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
 
 PhysicalType LogicalType::GetInternalType() {
@@ -119,16 +118,17 @@ const LogicalType LogicalType::LIST = LogicalType(LogicalTypeId::LIST);
 
 const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
-const vector<LogicalType> LogicalType::NUMERIC = {
-    LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::HUGEINT,
-    LogicalType::FLOAT,   LogicalType::DOUBLE };
+const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+                                                  LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
+                                                  LogicalType::DOUBLE};
 
-const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT, LogicalType::HUGEINT};
+const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
+                                                   LogicalType::BIGINT, LogicalType::HUGEINT};
 
 const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BOOLEAN, LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER, LogicalType::BIGINT,
-    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,
-    LogicalType::VARCHAR, LogicalType::BLOB, LogicalType::INTERVAL, LogicalType::HUGEINT};
+    LogicalType::DATE,    LogicalType::TIMESTAMP, LogicalType::DOUBLE,   LogicalType::FLOAT,   LogicalType::VARCHAR,
+    LogicalType::BLOB,    LogicalType::INTERVAL,  LogicalType::HUGEINT};
 // TODO add LIST/STRUCT here
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
@@ -214,10 +214,11 @@ bool TypeIsConstantSize(PhysicalType type) {
 	       type == PhysicalType::POINTER || type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::HASH || type == PhysicalType::POINTER || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::HASH ||
+	       type == PhysicalType::POINTER || type == PhysicalType::INT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE)|| type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128;
 }
 bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
@@ -229,7 +230,7 @@ void LogicalType::Serialize(Serializer &serializer) {
 	serializer.Write<uint8_t>(scale_);
 	serializer.WriteString(collation_);
 	serializer.Write<uint16_t>(child_types_.size());
-	for(auto &entry : child_types_) {
+	for (auto &entry : child_types_) {
 		serializer.WriteString(entry.first);
 		entry.second.Serialize(serializer);
 	}
@@ -242,7 +243,7 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto collation = source.Read<string>();
 	child_list_t<LogicalType> children;
 	auto child_count = source.Read<uint16_t>();
-	for(uint16_t i = 0; i < child_count; i++) {
+	for (uint16_t i = 0; i < child_count; i++) {
 		string name = source.Read<string>();
 		LogicalType child_type = LogicalType::Deserialize(source);
 		children.push_back(make_pair(move(name), move(child_type)));
@@ -368,7 +369,7 @@ LogicalType TransformStringToLogicalType(string str) {
 		return LogicalType::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalType::HUGEINT;
-	}  else {
+	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
 }

@@ -103,8 +103,7 @@ template <> date_t AddOperator::Operation(interval_t left, date_t right) {
 }
 
 struct AddTimeOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		int64_t diff = right.msecs - ((right.msecs / Interval::MSECS_PER_DAY) * Interval::MSECS_PER_DAY);
 		left += diff;
 		if (left >= Interval::MSECS_PER_DAY) {
@@ -144,23 +143,28 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
 	                                     GetScalarBinaryFunction<AddOperator>(LogicalType::INTEGER)));
 	// we can add intervals together
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                                     ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>));
 	// we can add intervals to dates/times/timestamps
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTERVAL}, LogicalType::DATE,
 	                                     ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DATE}, LogicalType::DATE,
 	                                     ScalarFunction::BinaryFunction<interval_t, date_t, date_t, AddOperator>));
 
-	functions.AddFunction(ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
-	                                     ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME}, LogicalType::TIME,
-	                                     ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
+	                   ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME}, LogicalType::TIME,
+	                   ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>));
 
-	functions.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
-	                                     ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                     ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
+	                   ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
+	                   ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : LogicalType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
@@ -203,8 +207,7 @@ template <> date_t SubtractOperator::Operation(date_t left, interval_t right) {
 }
 
 struct SubtractTimeOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right) {
+	template <class TA, class TB, class TR> static inline TR Operation(TA left, TB right) {
 		right.msecs = -right.msecs;
 		return AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(left, right);
 	}
@@ -233,18 +236,22 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
 	                                     GetScalarBinaryFunction<SubtractOperator>(LogicalType::INTEGER)));
 	// we can subtract timestamps from each other
-	functions.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,
-	                                     ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>));
 	// we can subtract intervals from each other
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-										ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>));
 	// we can subtract intervals from dates/times/timestamps, but not the other way around
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTERVAL}, LogicalType::DATE,
-										ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
-										ScalarFunction::BinaryFunction<time_t, interval_t, time_t, SubtractTimeOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
-										ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>));
+	                                     ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIME, LogicalType::INTERVAL}, LogicalType::TIME,
+	                   ScalarFunction::BinaryFunction<time_t, interval_t, time_t, SubtractTimeOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::INTERVAL}, LogicalType::TIMESTAMP,
+	                   ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>));
 
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : LogicalType::NUMERIC) {
@@ -289,10 +296,12 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-										ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
-	functions.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-										ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
 	set.AddFunction(functions);
 }
 
@@ -348,7 +357,7 @@ struct BinaryZeroIsNullHugeintWrapper {
 template <class TA, class TB, class TC, class OP>
 static void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<TA, TB, TC, OP, true, BinaryZeroIsNullWrapper>(input.data[0], input.data[1], result,
-	                                                                    input.size());
+	                                                                       input.size());
 }
 
 template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(LogicalType type) {
@@ -378,7 +387,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
 	}
-	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL, BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
+	functions.AddFunction(
+	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
+	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
 	set.AddFunction(functions);
 }

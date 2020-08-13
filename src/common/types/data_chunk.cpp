@@ -191,4 +191,4 @@ void DataChunk::Print() {
 	Printer::Print(ToString());
 }
 
-}
+} // namespace duckdb

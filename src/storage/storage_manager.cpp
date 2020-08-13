@@ -100,8 +100,7 @@ void StorageManager::LoadDatabase() {
 	// first check if the database exists
 	if (!fs.FileExists(path)) {
 		if (read_only) {
-			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist",
-			                       path);
+			throw CatalogException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 		}
 		// check if the WAL exists
 		if (fs.FileExists(wal_path)) {

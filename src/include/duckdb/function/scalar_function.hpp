@@ -67,15 +67,15 @@ private:
 	bool CompareScalarFunctionT(const scalar_function_t other) const {
 		typedef void(funcTypeT)(DataChunk &, ExpressionState &, Vector &);
 
-		funcTypeT **func_ptr  = (funcTypeT**) function.template target<funcTypeT*>();
-		funcTypeT **other_ptr = (funcTypeT**) other.template target<funcTypeT*>();
+		funcTypeT **func_ptr = (funcTypeT **)function.template target<funcTypeT *>();
+		funcTypeT **other_ptr = (funcTypeT **)other.template target<funcTypeT *>();
 
-		//Case the functions were created from lambdas the target will return a nullptr
-		if(func_ptr == nullptr || other_ptr == nullptr) {
-			//scalar_function_t (std::functions) from lambdas cannot be compared
+		// Case the functions were created from lambdas the target will return a nullptr
+		if (func_ptr == nullptr || other_ptr == nullptr) {
+			// scalar_function_t (std::functions) from lambdas cannot be compared
 			return false;
 		}
-	    return ((size_t)*func_ptr == (size_t)*other_ptr);
+		return ((size_t)*func_ptr == (size_t)*other_ptr);
 	}
 
 public:

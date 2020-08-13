@@ -392,7 +392,6 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
-
 }
 
 Value Value::Numeric(LogicalType type, hugeint_t value) {

@@ -39,9 +39,9 @@ struct InstrOperator {
 };
 
 void InstrFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("instr",                              // name of the function
+	set.AddFunction(ScalarFunction("instr",                                      // name of the function
 	                               {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                               LogicalType::BIGINT,                      // return type
+	                               LogicalType::BIGINT,                          // return type
 	                               ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator, true>));
 }
 

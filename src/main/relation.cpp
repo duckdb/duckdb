@@ -203,7 +203,7 @@ void Relation::Insert(string schema_name, string table_name) {
 	insert->Execute();
 }
 
-void Relation::Insert(vector<vector<Value>> values){
+void Relation::Insert(vector<vector<Value>> values) {
 	vector<string> column_names;
 	auto rel = make_shared<ValueRelation>(context, move(values), move(column_names), "values");
 	rel->Insert(GetAlias());

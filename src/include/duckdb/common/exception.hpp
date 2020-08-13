@@ -70,7 +70,7 @@ enum class ExceptionType {
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32    // Input or arguments error
+	INVALID_INPUT = 32 // Input or arguments error
 };
 
 enum class ExceptionFormatValueType : uint8_t {
@@ -80,12 +80,13 @@ enum class ExceptionFormatValueType : uint8_t {
 };
 
 struct ExceptionFormatValue {
-	ExceptionFormatValue(double dbl_val) :
-		type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {}
-	ExceptionFormatValue(int64_t int_val) :
-		type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {}
-	ExceptionFormatValue(string str_val) :
-		type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val) {}
+	ExceptionFormatValue(double dbl_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {
+	}
+	ExceptionFormatValue(int64_t int_val)
+	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
+	}
+	ExceptionFormatValue(string str_val) : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(str_val) {
+	}
 
 	ExceptionFormatValueType type;
 
@@ -93,20 +94,18 @@ struct ExceptionFormatValue {
 	int64_t int_val;
 	string str_val;
 
-	template<class T>
-	static ExceptionFormatValue CreateFormatValue(T value) {
+	template <class T> static ExceptionFormatValue CreateFormatValue(T value) {
 		return int64_t(value);
 	}
 };
 
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
-template<> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
-
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
+template <> ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 
 class Exception : public std::exception {
 public:
@@ -120,8 +119,7 @@ public:
 
 	string ExceptionTypeToString(ExceptionType type);
 
-	template <typename... Args>
-	static string ConstructMessage(string msg, Args... params) {
+	template <typename... Args> static string ConstructMessage(string msg, Args... params) {
 		vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
@@ -133,6 +131,7 @@ public:
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
+
 private:
 	string exception_message_;
 };
@@ -153,8 +152,7 @@ public:
 	CatalogException(string msg);
 
 	template <typename... Args>
-	CatalogException(string msg, Args... params) :
-		CatalogException(ConstructMessage(msg, params...)) {
+	CatalogException(string msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -163,8 +161,7 @@ public:
 	ParserException(string msg);
 
 	template <typename... Args>
-	ParserException(string msg, Args... params) :
-		ParserException(ConstructMessage(msg, params...)) {
+	ParserException(string msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -173,8 +170,7 @@ public:
 	BinderException(string msg);
 
 	template <typename... Args>
-	BinderException(string msg, Args... params) :
-		BinderException(ConstructMessage(msg, params...)) {
+	BinderException(string msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -183,8 +179,7 @@ public:
 	ConversionException(string msg);
 
 	template <typename... Args>
-	ConversionException(string msg, Args... params) :
-		ConversionException(ConstructMessage(msg, params...)) {
+	ConversionException(string msg, Args... params) : ConversionException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -193,8 +188,7 @@ public:
 	TransactionException(string msg);
 
 	template <typename... Args>
-	TransactionException(string msg, Args... params) :
-		TransactionException(ConstructMessage(msg, params...)) {
+	TransactionException(string msg, Args... params) : TransactionException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -203,8 +197,7 @@ public:
 	NotImplementedException(string msg);
 
 	template <typename... Args>
-	NotImplementedException(string msg, Args... params) :
-		NotImplementedException(ConstructMessage(msg, params...)) {
+	NotImplementedException(string msg, Args... params) : NotImplementedException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -213,8 +206,7 @@ public:
 	OutOfRangeException(string msg);
 
 	template <typename... Args>
-	OutOfRangeException(string msg, Args... params) :
-		OutOfRangeException(ConstructMessage(msg, params...)) {
+	OutOfRangeException(string msg, Args... params) : OutOfRangeException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -223,8 +215,7 @@ public:
 	SyntaxException(string msg);
 
 	template <typename... Args>
-	SyntaxException(string msg, Args... params) :
-		SyntaxException(ConstructMessage(msg, params...)) {
+	SyntaxException(string msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -233,8 +224,7 @@ public:
 	ConstraintException(string msg);
 
 	template <typename... Args>
-	ConstraintException(string msg, Args... params) :
-		ConstraintException(ConstructMessage(msg, params...)) {
+	ConstraintException(string msg, Args... params) : ConstraintException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -243,8 +233,7 @@ public:
 	IOException(string msg);
 
 	template <typename... Args>
-	IOException(string msg, Args... params) :
-		IOException(ConstructMessage(msg, params...)) {
+	IOException(string msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -253,8 +242,7 @@ public:
 	SerializationException(string msg);
 
 	template <typename... Args>
-	SerializationException(string msg, Args... params) :
-		SerializationException(ConstructMessage(msg, params...)) {
+	SerializationException(string msg, Args... params) : SerializationException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -263,8 +251,7 @@ public:
 	SequenceException(string msg);
 
 	template <typename... Args>
-	SequenceException(string msg, Args... params) :
-		SequenceException(ConstructMessage(msg, params...)) {
+	SequenceException(string msg, Args... params) : SequenceException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -278,8 +265,7 @@ public:
 	FatalException(string msg);
 
 	template <typename... Args>
-	FatalException(string msg, Args... params) :
-		FatalException(ConstructMessage(msg, params...)) {
+	FatalException(string msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -288,8 +274,7 @@ public:
 	InternalException(string msg);
 
 	template <typename... Args>
-	InternalException(string msg, Args... params) :
-		InternalException(ConstructMessage(msg, params...)) {
+	InternalException(string msg, Args... params) : InternalException(ConstructMessage(msg, params...)) {
 	}
 };
 
@@ -298,8 +283,7 @@ public:
 	InvalidInputException(string msg);
 
 	template <typename... Args>
-	InvalidInputException(string msg, Args... params) :
-		InvalidInputException(ConstructMessage(msg, params...)) {
+	InvalidInputException(string msg, Args... params) : InvalidInputException(ConstructMessage(msg, params...)) {
 	}
 };
 

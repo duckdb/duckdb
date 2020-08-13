@@ -76,7 +76,8 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				auto aggr = make_unique<BoundAggregateExpression>(aggregate_functions[i].return_type, aggregate_functions[i], false);
+				auto aggr = make_unique<BoundAggregateExpression>(aggregate_functions[i].return_type,
+				                                                  aggregate_functions[i], false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));
 				payload_types.push_back(aggregate_functions[i].return_type);

@@ -99,7 +99,8 @@ void LikeFun::RegisterFunction(BuiltinFunctions &set) {
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"like_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                                LogicalType::BOOLEAN, like_escape_function<LikeEscapeOperator>));
-	set.AddFunction({"not_like_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                                    LogicalType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
+	set.AddFunction({"not_like_escape"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
 }
 } // namespace duckdb

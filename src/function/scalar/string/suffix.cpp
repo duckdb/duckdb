@@ -35,9 +35,9 @@ static bool suffix(const string_t &str, const string_t &suffix) {
 }
 
 ScalarFunction SuffixFun::GetFunction() {
-	return ScalarFunction("suffix",                             // name of the function
+	return ScalarFunction("suffix",                                     // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
-	                      LogicalType::BOOLEAN,                     // return type
+	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, SuffixOperator, true>);
 }
 

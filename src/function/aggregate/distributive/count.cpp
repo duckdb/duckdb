@@ -50,8 +50,8 @@ AggregateFunction CountFun::GetFunction() {
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(LogicalType(LogicalTypeId::ANY),
-	                                                                                       LogicalType::BIGINT);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(
+	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 }
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {

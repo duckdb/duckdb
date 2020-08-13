@@ -114,7 +114,8 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	auto state = make_unique<PhysicalRecursiveCTEState>();
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
-	state->ht = make_unique<SuperLargeHashTable>(1024, types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
+	state->ht =
+	    make_unique<SuperLargeHashTable>(1024, types, vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	return (move(state));
 }
 

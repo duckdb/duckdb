@@ -248,14 +248,14 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat);
 
-    ScalarFunctionSet concat_op("||");
-    concat_op.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_operator));
-    concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, concat_operator));
-    set.AddFunction(concat_op);
+	ScalarFunctionSet concat_op("||");
+	concat_op.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_operator));
+	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, concat_operator));
+	set.AddFunction(concat_op);
 
-
-	ScalarFunction concat_ws =
-	    ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, concat_ws_function);
+	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                          LogicalType::VARCHAR, concat_ws_function);
 	concat_ws.varargs = LogicalType::VARCHAR;
 	set.AddFunction(concat_ws);
 }

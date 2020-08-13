@@ -251,7 +251,7 @@ void Vector::SetValue(idx_t index, Value val) {
 }
 
 Value Vector::GetValue(idx_t index) const {
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		index = 0;
 		break;
@@ -682,7 +682,8 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		child.Verify(new_sel, count);
 		return;
 	}
-	if (TypeIsConstantSize(type.InternalType()) && (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
+	if (TypeIsConstantSize(type.InternalType()) &&
+	    (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
 		assert(!auxiliary);
 	}
 	if (type.InternalType() == PhysicalType::DOUBLE) {

@@ -38,11 +38,14 @@ template <class OP> static Value templated_binary_operation(const Value &left, c
 	}
 	if (result_type.IsIntegral()) {
 		// integer addition
-		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(left.GetValue<hugeint_t>(), right.GetValue<hugeint_t>()));
+		return Value::Numeric(result_type, OP::template Operation<hugeint_t, hugeint_t, hugeint_t>(
+		                                       left.GetValue<hugeint_t>(), right.GetValue<hugeint_t>()));
 	} else if (result_type.InternalType() == PhysicalType::FLOAT) {
-		return Value::FLOAT(OP::template Operation<float, float, float>(left.GetValue<float>(), right.GetValue<float>()));
+		return Value::FLOAT(
+		    OP::template Operation<float, float, float>(left.GetValue<float>(), right.GetValue<float>()));
 	} else if (result_type.InternalType() == PhysicalType::DOUBLE) {
-		return Value::DOUBLE(OP::template Operation<double, double, double>(left.GetValue<double>(), right.GetValue<double>()));
+		return Value::DOUBLE(
+		    OP::template Operation<double, double, double>(left.GetValue<double>(), right.GetValue<double>()));
 	} else {
 		throw NotImplementedException("Unimplemented type for value binary op");
 	}

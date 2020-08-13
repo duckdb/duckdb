@@ -25,8 +25,7 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (values[i].type() != it->second->type()) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
-			    values[i].type().ToString().c_str(),
-			    it->second->type().ToString().c_str());
+			    values[i].type().ToString().c_str(), it->second->type().ToString().c_str());
 		}
 		auto &target = it->second;
 		*target = values[i];

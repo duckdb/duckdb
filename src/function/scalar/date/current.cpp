@@ -39,7 +39,8 @@ void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"now", "current_timestamp"}, ScalarFunction({}, LogicalType::TIMESTAMP, current_timestamp_function));
+	set.AddFunction({"now", "current_timestamp"},
+	                ScalarFunction({}, LogicalType::TIMESTAMP, current_timestamp_function));
 }
 
 } // namespace duckdb

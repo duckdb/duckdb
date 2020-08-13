@@ -411,8 +411,7 @@ void FileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	auto rc = SetFilePointerEx(hFile, loc, NULL, FILE_BEGIN);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
-		                  error);
+		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path, error);
 	}
 }
 

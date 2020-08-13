@@ -50,7 +50,8 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
 	//! Fetch the vector at index "vector_index" from the uncompressed segment, storing it in the result vector
-	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result, bool get_lock= true);
+	void Scan(Transaction &transaction, ColumnScanState &state, idx_t vector_index, Vector &result,
+	          bool get_lock = true);
 	//! Scan the next vector from the column and apply a selection vector to filter the data
 	void FilterScan(Transaction &transaction, ColumnScanState &state, Vector &result, SelectionVector &sel,
 	                idx_t &approved_tuple_count);

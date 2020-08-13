@@ -10,16 +10,16 @@ namespace duckdb {
 struct FMTPrintf {
 	template <class ctx>
 	static string OP(const char *format_str, std::vector<duckdb_fmt::basic_format_arg<ctx>> &format_args) {
-		return duckdb_fmt::vsprintf(format_str,
-		                     duckdb_fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
+		return duckdb_fmt::vsprintf(
+		    format_str, duckdb_fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
 struct FMTFormat {
 	template <class ctx>
 	static string OP(const char *format_str, std::vector<duckdb_fmt::basic_format_arg<ctx>> &format_args) {
-		return duckdb_fmt::vformat(format_str,
-		                    duckdb_fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
+		return duckdb_fmt::vformat(
+		    format_str, duckdb_fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
@@ -117,14 +117,14 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 
 void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
-	ScalarFunction printf_fun =
-	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR, printf_function<FMTPrintf, duckdb_fmt::printf_context>);
+	ScalarFunction printf_fun = ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                           printf_function<FMTPrintf, duckdb_fmt::printf_context>);
 	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
-	ScalarFunction format_fun =
-	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR, printf_function<FMTFormat, duckdb_fmt::format_context>);
+	ScalarFunction format_fun = ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                           printf_function<FMTFormat, duckdb_fmt::format_context>);
 	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }

@@ -23,15 +23,15 @@ static void age_function(DataChunk &input, ExpressionState &state, Vector &resul
 	assert(input.column_count() == 2);
 
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t, true>(
-	    input.data[0], input.data[1], result, input.size(), [&](timestamp_t input1, timestamp_t input2) {
-		    return Interval::GetDifference(input1, input2);
-	    });
+	    input.data[0], input.data[1], result, input.size(),
+	    [&](timestamp_t input1, timestamp_t input2) { return Interval::GetDifference(input1, input2); });
 }
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet age("age");
 	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function_standard));
-	age.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function));
+	age.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL, age_function));
 	set.AddFunction(age);
 }
 
