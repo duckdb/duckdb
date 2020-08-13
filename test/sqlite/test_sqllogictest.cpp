@@ -23,6 +23,8 @@
 **
 ** This main driver for the sqllogictest program.
 */
+#include "re2/re2.h"
+
 #include "catch.hpp"
 #include "sqllogictest.hpp"
 #include "termcolor.hpp"
@@ -39,7 +41,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "re2/re2.h"
 
 #ifdef BUILD_ICU_EXTENSION
 #include "icu-extension.hpp"
