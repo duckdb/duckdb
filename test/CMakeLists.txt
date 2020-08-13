@@ -10,7 +10,6 @@ add_subdirectory(appender)
 add_subdirectory(common)
 add_subdirectory(helpers)
 add_subdirectory(sql)
-add_subdirectory(planner)
 add_subdirectory(sqlite)
 
 if(NOT WIN32 AND NOT SUN)
