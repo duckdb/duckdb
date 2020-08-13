@@ -43,6 +43,12 @@ void TestDeleteFile(string path) {
 	}
 }
 
+void TestChangeDirectory(string path) {
+	// set the base path for the tests
+	FileSystem fs;
+	fs.SetWorkingDirectory(path);
+}
+
 void DeleteDatabase(string path) {
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");

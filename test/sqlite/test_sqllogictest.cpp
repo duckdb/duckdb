@@ -1375,6 +1375,7 @@ struct AutoRegTests {
 		    "evidence/slt_lang_droptrigger.test"               // "
 		};
 		FileSystem fs;
+		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
 			if (endsWith(path, ".test")) {
 				for (auto excl : excludes) {

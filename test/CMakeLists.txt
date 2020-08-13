@@ -24,6 +24,8 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(nested)
 endif()
 
+add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
+
 add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
 
 if(NOT WIN32 AND NOT SUN)

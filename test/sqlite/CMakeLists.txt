@@ -9,6 +9,8 @@ add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
 include_directories(../../extension/parquet/include)
 endif()
 
+add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
+
 add_library_unity(test_sqlite
                   OBJECT
                   md5.cpp

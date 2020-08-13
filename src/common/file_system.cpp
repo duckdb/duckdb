@@ -308,6 +308,12 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
+void FileSystem::SetWorkingDirectory(string path) {
+	if (chdir(path.c_str()) != 0) {
+		throw IOException("Could not change working directory!");
+	}
+}
+
 #else
 
 #include <string>
@@ -565,6 +571,12 @@ void FileSystem::FileSync(FileHandle &handle) {
 void FileSystem::MoveFile(const string &source, const string &target) {
 	if (!MoveFileA(source.c_str(), target.c_str())) {
 		throw IOException("Could not move file");
+	}
+}
+
+void FileSystem::SetWorkingDirectory(string path) {
+	if (!SetCurrentDirectory(path.c_str())) {
+		throw IOException("Could not change working directory!");
 	}
 }
 #endif
