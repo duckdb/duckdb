@@ -319,7 +319,7 @@ struct DuckDBPyResult {
 				continue;
 			}
 			auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-			switch (result->sql_types[col_idx].id()) {
+			switch (result->types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				res[col_idx] = val.GetValue<bool>();
 				break;
@@ -384,7 +384,7 @@ struct DuckDBPyResult {
 			}
 
 			default:
-				throw runtime_error("unsupported type: " + result->sql_types[col_idx].ToString());
+				throw runtime_error("unsupported type: " + result->types[col_idx].ToString());
 			}
 		}
 		chunk_offset++;
@@ -422,7 +422,7 @@ struct DuckDBPyResult {
 		for (idx_t col_idx = 0; col_idx < mres->types.size(); col_idx++) {
 			// convert the actual payload
 			py::array col_res;
-			switch (mres->sql_types[col_idx].id()) {
+			switch (mres->types[col_idx].id()) {
 			case LogicalTypeId::BOOLEAN:
 				col_res = duckdb_py_convert::fetch_column_regular<bool>("bool", mres->collection, col_idx);
 				break;
@@ -464,7 +464,7 @@ struct DuckDBPyResult {
 				    "object", mres->collection, col_idx);
 				break;
 			default:
-				throw runtime_error("unsupported type " + mres->sql_types[col_idx].ToString());
+				throw runtime_error("unsupported type " + mres->types[col_idx].ToString());
 			}
 
 			// convert the nullmask

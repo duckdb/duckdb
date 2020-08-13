@@ -96,7 +96,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 			if (splits.size() <= 1 || splits[1].size() == 0) {
 				throw std::runtime_error("result must be followed by a column count (e.g. result III)");
 			}
-			for(int i = 0; i < splits[1].size(); i++) {
+			for(idx_t i = 0; i < splits[1].size(); i++) {
 				if (splits[1][i] != 'i') {
 					throw std::runtime_error("result must be followed by a column count (e.g. result III)");
 				}
@@ -106,7 +106,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 			while (std::getline(infile, line)) {
 				linenr++;
 				auto result_splits = StringUtil::Split(line, "\t");
-				if (result_splits.size() != result_column_count) {
+				if ((int64_t) result_splits.size() != result_column_count) {
 					throw std::runtime_error("error on line " + to_string(linenr) + ", expected " + to_string(result_column_count) + " values but got " + to_string(result_splits.size()));
 				}
 				result_values.push_back(move(result_splits));
@@ -146,7 +146,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		return string();
 	}
 	// compare the column count
-	if (state.result->column_count() != result_column_count) {
+	if ((int64_t) state.result->column_count() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld", (int64_t) result_column_count, (int64_t) state.result->column_count());
 	}
 	// compare row count
