@@ -37,7 +37,7 @@ struct BaseCSVData : public FunctionData {
 	//! Specifies the string that represents a null value
 	string null_str;
 	//! Whether or not the options are specified; if not we default to auto detect
-	bool is_auto_detect = true;
+	bool is_auto_detect = false;
 
 	void Finalize();
 };
@@ -267,14 +267,12 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &
 				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
 			} else if (bind_data->sample_size < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1",
-				                      STANDARD_VECTOR_SIZE);
+				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
 		} else if (loption == "num_samples") {
 			bind_data->num_samples = ParseInteger(set);
 			if (bind_data->num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1",
-				                      STANDARD_VECTOR_SIZE);
+				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
 			}
 		} else if (loption == "force_not_null") {
 			bind_data->force_not_null = ParseColumnList(set, expected_names);

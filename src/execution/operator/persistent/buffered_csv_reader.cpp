@@ -544,14 +544,17 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}*/
 
 	// information for header detection
-	bool first_row_consistent = true;
-	bool first_row_nulls = true;
+	bool first_row_consistent = false;
+	bool first_row_nulls = false;
 
 	// parse first row again with knowledge from the rest of the file to check
 	// whether first row is consistent with the others or not.
 	JumpToBeginning(options.skip_rows, false);
 	ParseCSV(ParserMode::SNIFFING_DATATYPES);
-	if (parse_chunk.size() > 0) {
+	if (parse_chunk.size() > 1) {
+		first_row_consistent = true;
+		first_row_nulls = true;
+
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
 			auto dummy_val = parse_chunk.GetValue(col, 0);
 			// try cast as SQLNULL

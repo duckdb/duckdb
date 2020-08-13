@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/auto/test_sample_size.test
+# name: test/sql/copy/csv/auto/test_optional_params.test
 # description: Test optional parameters for read csv
 # group: [auto]
 
@@ -6,11 +6,11 @@ require vector_size 512
 
 # CSV file with very sparse column
 statement error
-CREATE TABLE test AS SELECT * FROM read_csv ('test/sql/copy/csv/data/auto/issue_811.csv');
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv');
 
 # CSV file with very sparse column and sample size 500
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = 500);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = 500);
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -27,7 +27,7 @@ drop table test;
 
 # CSV file with very sparse column and number of samples 50
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv ('test/sql/copy/csv/data/auto/issue_811.csv', NUM_SAMPLES = 50);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', NUM_SAMPLES = 50);
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -44,7 +44,7 @@ drop table test;
 
 # CSV file with very sparse column with sample size 200 and number of samples 20
 statement ok
-CREATE TABLE test AS SELECT * FROM read_csv ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = 200, NUM_SAMPLES = 20);
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/issue_811.csv', SAMPLE_SIZE = 200, NUM_SAMPLES = 20);
 
 query IRTT
 SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is not NULL ;
@@ -65,4 +65,4 @@ CREATE TABLE test (TestInteger integer, TestDouble double, TestDate varchar, Tes
 
 # CSV file with very sparse column, automatically aligns column types, small sample size
 statement ok
-COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_SIZE 1);
+COPY test FROM 'test/sql/copy/csv/data/auto/issue_811.csv' (SAMPLE_SIZE 2, AUTO_DETECT TRUE);

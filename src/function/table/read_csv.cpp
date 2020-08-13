@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 
 	BufferedCSVReaderOptions options;
 	options.file_path = inputs[0].str_value;
-	options.auto_detect = true;
+	options.auto_detect = false;
 	options.header = false;
 	options.delimiter = ",";
 	options.quote = "\"";
@@ -56,14 +56,12 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
 			} else if (options.sample_size < 1) {
-				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1",
-				                      STANDARD_VECTOR_SIZE);
+				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "num_samples") {
+		} else if (kv.first == "num_sample_locations") {
 			options.num_samples = kv.second.CastAs(TypeId::INT64).value_.bigint;
 			if (options.num_samples < 1) {
-				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1",
-				                      STANDARD_VECTOR_SIZE);
+				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
 			}
 		} else if (kv.first == "dateformat") {
 			options.has_date_format = true;

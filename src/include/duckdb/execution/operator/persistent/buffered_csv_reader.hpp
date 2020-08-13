@@ -39,7 +39,7 @@ struct TextSearchShiftArray {
 	TextSearchShiftArray(string search_term);
 
 	inline bool Match(uint8_t &position, uint8_t byte_value) {
-		if (position + 1 > length) {
+		if (position >= length) {
 			return false;
 		}
 		position = shifts[position * 255 + byte_value];
