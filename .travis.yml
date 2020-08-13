@@ -419,7 +419,7 @@ matrix:
 
     - os: linux
       name: Python 3.6 Package
-      #if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       dist: bionic
       language: python
@@ -462,7 +462,7 @@ matrix:
 
     - os: linux
       name: Python 3.7 Package
-      #if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$) AND ((type = push AND branch = master) OR type = pull_request OR tag =~ /^v\d+\.\d+\.\d+$/)
 
       dist: bionic
       language: python
@@ -491,7 +491,7 @@ matrix:
 
     - os: linux
       name: Python 3.8 Package
-      #if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
+      if: (branch !~ ^r/.*$ AND head_branch !~ ^r/.*$)
 
       dist: bionic
       language: python
@@ -542,6 +542,7 @@ matrix:
           if [[ $TRAVIS_TAG ]] || ([ $TRAVIS_BRANCH = master ] && [ $TRAVIS_PULL_REQUEST = false ]) ; then
             python -m twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
           fi
+
 
     - os: osx
       name: Python Package
