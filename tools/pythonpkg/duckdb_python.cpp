@@ -351,9 +351,8 @@ struct DuckDBPyResult {
 				break;
 
 			case LogicalTypeId::TIMESTAMP: {
-				if (result->types[col_idx] != PhysicalType::INT64) {
-					throw runtime_error("expected int64 for timestamp");
-				}
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT64);
+
 				auto timestamp = val.GetValue<int64_t>();
 				auto date = Timestamp::GetDate(timestamp);
 				res[col_idx] = PyDateTime_FromDateAndTime(
@@ -364,9 +363,8 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::TIME: {
-				if (result->types[col_idx] != PhysicalType::INT32) {
-					throw runtime_error("expected int32 for time");
-				}
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+
 				int32_t hour, min, sec, msec;
 				auto time = val.GetValue<int32_t>();
 				duckdb::Time::Convert(time, hour, min, sec, msec);
@@ -374,9 +372,8 @@ struct DuckDBPyResult {
 				break;
 			}
 			case LogicalTypeId::DATE: {
-				if (result->types[col_idx] != PhysicalType::INT32) {
-					throw runtime_error("expected int32 for date");
-				}
+				assert(result->types[col_idx].InternalType() == PhysicalType::INT32);
+
 				auto date = val.GetValue<int32_t>();
 				res[col_idx] = PyDate_FromDate(duckdb::Date::ExtractYear(date), duckdb::Date::ExtractMonth(date),
 				                               duckdb::Date::ExtractDay(date));
