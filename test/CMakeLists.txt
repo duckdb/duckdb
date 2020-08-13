@@ -11,7 +11,6 @@ add_subdirectory(common)
 add_subdirectory(helpers)
 add_subdirectory(sql)
 add_subdirectory(planner)
-add_subdirectory(optimizer)
 add_subdirectory(sqlite)
 
 if(NOT WIN32 AND NOT SUN)

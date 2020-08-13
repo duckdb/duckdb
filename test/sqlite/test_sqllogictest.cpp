@@ -39,6 +39,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "re2/re2.h"
 
 #ifdef BUILD_ICU_EXTENSION
 #include "icu-extension.hpp"
@@ -402,6 +403,24 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	// simple first test: compare string value directly
 	if (lvalue_str == rvalue_str) {
 		return true;
+	}
+	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
+		bool want_match =  StringUtil::StartsWith(rvalue_str, "<REGEX>:");
+		string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
+		RE2::Options options;
+		options.set_dot_nl(true);
+		RE2 re(regex_str, options);
+		if (!re.ok()) {
+			print_error_header("Test error!", zScriptFile, query_line);
+			print_line_sep();
+			std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset << std::endl;
+			print_line_sep();
+			return false;
+		}
+		bool regex_matches = RE2::FullMatch(lvalue_str, re);
+		if (regex_matches == want_match) {
+			return true;
+		}
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify

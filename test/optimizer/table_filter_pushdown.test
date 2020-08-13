@@ -1,0 +1,116 @@
+# name: test/optimizer/table_filter_pushdown.test
+# description: Test Table Filter Push Down
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers(i integer, j integer, k integer)
+
+statement ok
+PRAGMA explain_output='optimized';
+
+# complex filter cannot be entirely pushed down
+query II
+EXPLAIN SELECT k FROM integers where i+j > 10 and j = 5 and i = k+1
+----
+logical_opt	<REGEX>:.*FILTER.*
+
+# simple filter is pushed down: no filter remaining
+query II
+EXPLAIN SELECT k FROM integers where j=5
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# multiple filters pushed down
+query II
+EXPLAIN SELECT k FROM integers where j = 5 and i = 10
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# test different data types
+statement ok
+CREATE TABLE tablinho_numbers(i1 TINYINT, j1 TINYINT, k1 TINYINT, i2 SMALLINT, j2 SMALLINT, k2 SMALLINT, i3 INTEGER, j3 INTEGER, k3 INTEGER, i4 BIGINT, j4 BIGINT, k4 BIGINT, i5 FLOAT, j5 FLOAT, k5 FLOAT, i6 DOUBLE, j6 DOUBLE, k6 DOUBLE)
+
+loop i 1 7
+
+# simple filters are pushed down
+query II
+EXPLAIN SELECT k${i} FROM tablinho_numbers where j${i} = 1
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT k${i} FROM tablinho_numbers where j${i} > 1
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT k${i} FROM tablinho_numbers where j${i} >= 1
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT k${i} FROM tablinho_numbers where j${i} < 1
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT k${i} FROM tablinho_numbers where j${i} <= 1
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+endloop
+
+# pushdown string
+statement ok
+CREATE TABLE tablinho(i varchar)
+
+# simple filters are pushed down
+query II
+EXPLAIN SELECT i FROM tablinho where i = 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i > 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i >= 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i < 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i <= 'bla'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# more complex filters cannot be pushed down
+query II
+EXPLAIN SELECT i FROM tablinho where i like 'bla%'
+----
+logical_opt	<REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i like '%bla'
+----
+logical_opt	<REGEX>:.*FILTER.*
+
+query II
+EXPLAIN SELECT i FROM tablinho where i like '_bla'
+----
+logical_opt	<REGEX>:.*FILTER.*
+
+# test Q6 pushdown
+statement ok
+CREATE TABLE LINEITEM(L_ORDERKEY INTEGER NOT NULL, L_PARTKEY INTEGER NOT NULL,L_SUPPKEY INTEGER 	 NOT NULL, L_LINENUMBER INTEGER NOT NULL,L_QUANTITY DECIMAL(15,2) NOT NULL,L_EXTENDEDPRICE 	 DECIMAL(15,2) NOT NULL, L_DISCOUNT DECIMAL(15,2) NOT NULL, L_TAX DECIMAL(15,2) NOT 	 NULL,L_RETURNFLAG CHAR(1) NOT NULL, L_LINESTATUS CHAR(1) NOT NULL, L_SHIPDATE DATE NOT NULL, 	 L_COMMITDATE DATE NOT NULL,L_RECEIPTDATE DATE NOT NULL, L_SHIPINSTRUCT CHAR(25) NOT NULL, 	 L_SHIPMODE CHAR(10) NOT NULL, L_COMMENT VARCHAR(44) NOT NULL)
+
+query II
+explain select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= '1994-01-01' and l_shipdate < '1995-01-01'  and l_discount between 0.05 and 0.07 and l_quantity < 24
+----
+logical_opt	<!REGEX>:.*FILTER.*
