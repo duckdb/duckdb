@@ -15,8 +15,8 @@
 namespace duckdb {
 using namespace std;
 
-SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<PhysicalType> group_types,
-                                         vector<PhysicalType> payload_types, vector<BoundAggregateExpression *> bindings,
+SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
+                                         vector<LogicalType> payload_types, vector<BoundAggregateExpression *> bindings,
                                          bool parallel)
     : SuperLargeHashTable(initial_capacity, move(group_types), move(payload_types),
                           AggregateObject::CreateAggregateObjects(move(bindings)), parallel) {
@@ -32,8 +32,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 	return aggregates;
 }
 
-SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<PhysicalType> group_types,
-                                         vector<PhysicalType> payload_types, vector<AggregateObject> aggregate_objects,
+SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types,
+                                         vector<LogicalType> payload_types, vector<AggregateObject> aggregate_objects,
                                          bool parallel)
     : aggregates(move(aggregate_objects)), group_types(group_types), payload_types(payload_types), group_width(0),
       payload_width(0), capacity(0), entries(0), data(nullptr), parallel(parallel) {
@@ -43,7 +43,7 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<Physical
 	// [GROUPS] is the groups
 	// [PAYLOAD] is the payload (i.e. the aggregate states)
 	for (idx_t i = 0; i < group_types.size(); i++) {
-		group_width += GetTypeIdSize(group_types[i]);
+		group_width += GetTypeIdSize(group_types[i].InternalType());
 	}
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		payload_width += aggregates[i].payload_size;
@@ -67,8 +67,8 @@ SuperLargeHashTable::SuperLargeHashTable(idx_t initial_capacity, vector<Physical
 		auto &aggr = aggregates[i];
 		if (aggr.distinct) {
 			// group types plus aggr return type
-			vector<PhysicalType> distinct_group_types(group_types);
-			vector<PhysicalType> distinct_payload_types;
+			vector<LogicalType> distinct_group_types(group_types);
+			vector<LogicalType> distinct_payload_types;
 			vector<BoundAggregateExpression *> distinct_aggregates;
 			distinct_group_types.push_back(payload_types[payload_idx]);
 			distinct_hashes[i] = make_unique<SuperLargeHashTable>(initial_capacity, distinct_group_types,
@@ -120,7 +120,7 @@ void SuperLargeHashTable::Destroy() {
 	// there are aggregates with destructors: loop over the hash table
 	// and call the destructor method for each of the aggregates
 	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
-	Vector state_vector(PhysicalType::POINTER, (data_ptr_t)data_pointers);
+	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
 	idx_t count = 0;
 	for (data_ptr_t ptr = data, end = data + capacity * tuple_size; ptr < end; ptr += tuple_size) {
 		if (*ptr == FULL_CELL) {
@@ -153,7 +153,7 @@ void SuperLargeHashTable::Resize(idx_t size) {
 		DataChunk groups;
 		groups.Initialize(group_types);
 
-		Vector addresses(PhysicalType::POINTER);
+		Vector addresses(LogicalType::POINTER);
 		auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 		data_ptr_t ptr = data;
@@ -184,11 +184,11 @@ void SuperLargeHashTable::Resize(idx_t size) {
 
 			groups.Verify();
 			assert(groups.size() == found_entries);
-			Vector new_addresses(PhysicalType::POINTER);
+			Vector new_addresses(LogicalType::POINTER);
 			new_table->FindOrCreateGroups(groups, new_addresses);
 
 			// NB: both address vectors already point to the payload start
-			assert(addresses.type == new_addresses.type && addresses.type == PhysicalType::POINTER);
+			assert(addresses.type == new_addresses.type && addresses.type == LogicalType::POINTER);
 
 			auto new_address_data = FlatVector::GetData<data_ptr_t>(new_addresses);
 			for (idx_t i = 0; i < found_entries; i++) {
@@ -221,7 +221,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		return;
 	}
 
-	Vector addresses(PhysicalType::POINTER);
+	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(groups, addresses);
 
 	// now every cell has an entry
@@ -236,7 +236,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 		auto input_count = max((idx_t)1, (idx_t)aggr.child_count);
 		if (aggr.distinct) {
 			// construct chunk for secondary hash table probing
-			vector<PhysicalType> probe_types(group_types);
+			vector<LogicalType> probe_types(group_types);
 			for (idx_t i = 0; i < aggr.child_count; i++) {
 				probe_types.push_back(payload_types[payload_idx]);
 			}
@@ -251,7 +251,7 @@ void SuperLargeHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 			probe_chunk.SetCardinality(groups);
 			probe_chunk.Verify();
 
-			Vector dummy_addresses(PhysicalType::POINTER);
+			Vector dummy_addresses(LogicalType::POINTER);
 			SelectionVector new_groups(STANDARD_VECTOR_SIZE);
 			// this is the actual meat, find out which groups plus payload
 			// value have not been seen yet
@@ -294,12 +294,11 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 	}
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	Vector addresses(PhysicalType::POINTER);
+	Vector addresses(LogicalType::POINTER);
 	FindOrCreateGroups(groups, addresses);
 	// now fetch the aggregates
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		assert(result.column_count() > aggr_idx);
-		assert(payload_types[aggr_idx] == PhysicalType::INT64);
 
 		VectorOperations::Gather::Set(addresses, result.data[aggr_idx], groups.size());
 	}
@@ -307,7 +306,7 @@ void SuperLargeHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) 
 
 void SuperLargeHashTable::HashGroups(DataChunk &groups, Vector &addresses) {
 	// create a set of hashes for the groups
-	Vector hashes(PhysicalType::HASH);
+	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
 
 	// now compute the entry in the table based on the hash using a modulo
@@ -354,9 +353,9 @@ void SuperLargeHashTable::ScatterGroups(DataChunk &groups, unique_ptr<VectorData
 		auto &data = groups.data[grp_idx];
 		auto &gdata = group_data[grp_idx];
 
-		auto type_size = GetTypeIdSize(data.type);
+		auto type_size = GetTypeIdSize(data.type.InternalType());
 
-		switch (data.type) {
+		switch (data.type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			templated_scatter<int8_t>(gdata, addresses, sel, count, type_size);
@@ -460,8 +459,8 @@ static idx_t CompareGroups(DataChunk &groups, unique_ptr<VectorData[]> &group_da
 	for (idx_t group_idx = 0; group_idx < groups.column_count(); group_idx++) {
 		auto &data = groups.data[group_idx];
 		auto &gdata = group_data[group_idx];
-		auto type_size = GetTypeIdSize(data.type);
-		switch (data.type) {
+		auto type_size = GetTypeIdSize(data.type.InternalType());
+		switch (data.type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			templated_compare_groups<int8_t>(gdata, addresses, sel, count, type_size, no_match, no_match_count);
@@ -507,7 +506,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 
 	// we need to be able to fit at least one vector of data
 	assert(capacity - entries > STANDARD_VECTOR_SIZE);
-	assert(addresses.type == PhysicalType::POINTER);
+	assert(addresses.type == LogicalType::POINTER);
 
 	// hash the groups to get the addresses
 	HashGroups(groups, addresses);
@@ -516,7 +515,7 @@ idx_t SuperLargeHashTable::FindOrCreateGroups(DataChunk &groups, Vector &address
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	data_ptr_t group_pointers[STANDARD_VECTOR_SIZE];
-	Vector pointers(PhysicalType::POINTER, (data_ptr_t)group_pointers);
+	Vector pointers(LogicalType::POINTER, (data_ptr_t)group_pointers);
 
 	// set up the selection vectors
 	SelectionVector v1(STANDARD_VECTOR_SIZE);
@@ -598,7 +597,7 @@ idx_t SuperLargeHashTable::Scan(idx_t &scan_position, DataChunk &groups, DataChu
 		return 0;
 	}
 
-	Vector addresses(PhysicalType::POINTER);
+	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// scan the table for full cells starting from the scan position

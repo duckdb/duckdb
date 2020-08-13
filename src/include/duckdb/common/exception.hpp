@@ -16,6 +16,7 @@
 
 namespace duckdb {
 enum class PhysicalType : uint8_t;
+struct LogicalType;
 
 inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
                                      const char *fname, int linenr) {
@@ -185,16 +186,19 @@ public:
 class CastException : public Exception {
 public:
 	CastException(const PhysicalType origType, const PhysicalType newType);
+	CastException(const LogicalType origType, const LogicalType newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
 	InvalidTypeException(PhysicalType type, string msg);
+	InvalidTypeException(LogicalType type, string msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
 	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg);
+	TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg);
 };
 
 class ValueOutOfRangeException : public Exception {

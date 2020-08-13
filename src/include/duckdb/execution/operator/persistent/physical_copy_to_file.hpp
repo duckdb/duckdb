@@ -17,7 +17,7 @@ namespace duckdb {
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalSink {
 public:
-	PhysicalCopyToFile(vector<PhysicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data)
+	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data)
 	    : PhysicalSink(PhysicalOperatorType::COPY_TO_FILE, move(types)), function(function),
 	      bind_data(move(bind_data)) {
 	}

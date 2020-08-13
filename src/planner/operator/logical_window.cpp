@@ -14,7 +14,7 @@ vector<ColumnBinding> LogicalWindow::GetColumnBindings() {
 void LogicalWindow::ResolveTypes() {
 	types.insert(types.end(), children[0]->types.begin(), children[0]->types.end());
 	for (auto &expr : expressions) {
-		types.push_back(expr->return_type.InternalType());
+		types.push_back(expr->return_type);
 	}
 }
 

@@ -24,7 +24,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(PhysicalType::BOOL);
+		types.push_back(LogicalType::BOOLEAN);
 	}
 };
 } // namespace duckdb

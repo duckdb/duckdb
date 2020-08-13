@@ -64,7 +64,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
 	// first generate a ChunkCollection from the set of expressions
-	vector<PhysicalType> types = {in_type.InternalType()};
+	vector<LogicalType> types = { in_type };
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(types);

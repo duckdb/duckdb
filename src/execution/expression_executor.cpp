@@ -67,7 +67,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	assert(expr_idx < expressions.size());
-	assert(result.type == expressions[expr_idx]->return_type.InternalType());
+	assert(result.type == expressions[expr_idx]->return_type);
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -84,7 +84,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	assert(expr.return_type.InternalType() == vector.type);
+	assert(expr.return_type == vector.type);
 	vector.Verify(count);
 }
 
@@ -223,7 +223,7 @@ idx_t ExpressionExecutor::DefaultSelect(Expression &expr, ExpressionState *state
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(PhysicalType::BOOL, (data_ptr_t)intermediate_bools);
+	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
 	VectorData idata;

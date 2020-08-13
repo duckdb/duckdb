@@ -11,7 +11,7 @@ namespace duckdb {
 using namespace std;
 
 template <bool INVERSE> void is_null_loop(Vector &input, Vector &result, idx_t count) {
-	assert(result.type == PhysicalType::BOOL);
+	assert(result.type == LogicalType::BOOLEAN);
 
 	if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 		result.vector_type = VectorType::CONSTANT_VECTOR;

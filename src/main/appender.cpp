@@ -19,9 +19,9 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 		throw CatalogException(
 		    StringUtil::Format("Table \"%s.%s\" could not be found", schema_name.c_str(), table_name.c_str()));
 	} else {
-		vector<PhysicalType> types;
+		vector<LogicalType> types;
 		for (auto &column : description->columns) {
-			types.push_back(column.type.InternalType());
+			types.push_back(column.type);
 		}
 		chunk.Initialize(types);
 		con.context->RegisterAppender(this);
@@ -73,7 +73,7 @@ template <class T> void Appender::AppendValueInternal(T input) {
 		InvalidateException("Too many appends for chunk!");
 	}
 	auto &col = chunk.data[column];
-	switch (col.type) {
+	switch (col.type.InternalType()) {
 	case PhysicalType::BOOL:
 		AppendValueInternal<T, bool>(col, input);
 		break;

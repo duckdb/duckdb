@@ -391,21 +391,21 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	return columns[entry->second];
 }
 
-vector<PhysicalType> TableCatalogEntry::GetTypes() {
-	vector<PhysicalType> types;
+vector<LogicalType> TableCatalogEntry::GetTypes() {
+	vector<LogicalType> types;
 	for (auto &it : columns) {
-		types.push_back(it.type.InternalType());
+		types.push_back(it.type);
 	}
 	return types;
 }
 
-vector<PhysicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<PhysicalType> result;
+vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
+	vector<LogicalType> result;
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(PhysicalType::INT64);
+			result.push_back(LOGICAL_ROW_TYPE);
 		} else {
-			result.push_back(columns[index].type.InternalType());
+			result.push_back(columns[index].type);
 		}
 	}
 	return result;

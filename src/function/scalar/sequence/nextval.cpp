@@ -62,7 +62,6 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 static void nextval_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
-	assert(args.column_count() == 1 && args.data[0].type == PhysicalType::VARCHAR);
 	auto &input = args.data[0];
 
 	auto &transaction = Transaction::GetTransaction(info.context);

@@ -310,7 +310,7 @@ static int duckdbConvertResult(MaterializedQueryResult &result,
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
 			auto value = result.GetValue(c, r);
-			auto converted_value = sqllogictest_convert_value(value, result.sql_types[c]);
+			auto converted_value = sqllogictest_convert_value(value, result.types[c]);
 			pazResult[r * column_count + c] = converted_value;
 		}
 	}
@@ -424,7 +424,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 	}
 	// some times require more checking (specifically floating point numbers because of inaccuracies)
 	// if not equivalent we need to cast to the SQL type to verify
-	auto sql_type = result.sql_types[current_column];
+	auto sql_type = result.types[current_column];
 	if (sql_type.IsNumeric()) {
 		bool converted_lvalue = false;
 		try {
@@ -634,7 +634,7 @@ void Query::Execute() {
 			if (c != 0) {
 				std::cerr << "\t";
 			}
-			std::cerr << result->sql_types[c].ToString();
+			std::cerr << result->types[c].ToString();
 		}
 		std::cerr << std::endl;
 		print_line_sep();

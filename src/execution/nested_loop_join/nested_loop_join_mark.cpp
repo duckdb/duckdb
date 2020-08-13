@@ -36,7 +36,7 @@ static void mark_join_templated(Vector &left, Vector &right, idx_t lcount, idx_t
 
 template <class OP>
 static void mark_join_operator(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
-	switch (left.type) {
+	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return mark_join_templated<int8_t, OP>(left, right, lcount, rcount, found_match);

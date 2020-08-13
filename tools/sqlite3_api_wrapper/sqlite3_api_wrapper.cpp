@@ -371,7 +371,7 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
 		return SQLITE_NULL;
 	}
-	auto column_type = pStmt->result->sql_types[iCol];
+	auto column_type = pStmt->result->types[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
@@ -407,7 +407,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 	if (!pStmt || !pStmt->result || !pStmt->current_chunk) {
 		return false;
 	}
-	if (iCol < 0 || iCol >= (int)pStmt->result->sql_types.size()) {
+	if (iCol < 0 || iCol >= (int)pStmt->result->types.size()) {
 		return false;
 	}
 	if (FlatVector::IsNull(pStmt->current_chunk->data[iCol], pStmt->current_row)) {
@@ -455,7 +455,7 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	try {
 		if (!pStmt->current_text) {
 			pStmt->current_text =
-			    unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->sql_types.size()]);
+			    unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->types.size()]);
 		}
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {

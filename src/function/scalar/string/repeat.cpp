@@ -28,7 +28,6 @@ static string_t repeat_scalar_function(const string_t& str, const int64_t cnt, v
 }
 
 static void repeat_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 2 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::INT64);
 	auto &str_vector = args.data[0];
 	auto &cnt_vector = args.data[1];
 

@@ -99,6 +99,13 @@ CastException::CastException(const PhysicalType origType, const PhysicalType new
                 "Type " + TypeIdToString(origType) + " can't be cast as " + TypeIdToString(newType)) {
 }
 
+CastException::CastException(const LogicalType origType, const LogicalType newType)
+    : Exception(ExceptionType::CONVERSION,
+                "Type " + origType.ToString() + " can't be cast as " + newType.ToString()) {
+
+}
+
+
 ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(origType) + " with value " +
                                                std::to_string((intmax_t)value) +
@@ -126,9 +133,19 @@ InvalidTypeException::InvalidTypeException(PhysicalType type, string msg)
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + TypeIdToString(type) + "]: " + msg) {
 }
 
+InvalidTypeException::InvalidTypeException(LogicalType type, string msg)
+    : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg)  {
+
+}
+
 TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, string msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
+}
+
+TypeMismatchException::TypeMismatchException(const LogicalType type_1, const LogicalType type_2, string msg) :
+	Exception(ExceptionType::MISMATCH_TYPE, "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
+
 }
 
 TransactionException::TransactionException(string msg, ...) : Exception(ExceptionType::TRANSACTION, msg) {

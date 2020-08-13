@@ -35,7 +35,7 @@ void LogicalJoin::ResolveTypes() {
 	}
 	if (join_type == JoinType::MARK) {
 		// for MARK join we project the left hand side, plus a BOOLEAN column indicating the MARK
-		types.push_back(PhysicalType::BOOL);
+		types.push_back(LogicalType::BOOLEAN);
 		return;
 	}
 	// for any other join we project both sides

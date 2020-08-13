@@ -14,8 +14,8 @@ public:
 	ExpressionExecutor executor;
 };
 
-PhysicalFilter::PhysicalFilter(vector<PhysicalType> types, vector<unique_ptr<Expression>> select_list)
-    : PhysicalOperator(PhysicalOperatorType::FILTER, types) {
+PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list)
+    : PhysicalOperator(PhysicalOperatorType::FILTER, move(types)) {
 	assert(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions

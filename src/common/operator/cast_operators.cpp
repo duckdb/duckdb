@@ -513,7 +513,7 @@ template <> double StrictCast::Operation(string_t input) {
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
 template <class T> string CastToStandardString(T input) {
-	Vector v(PhysicalType::VARCHAR);
+	Vector v(LogicalType::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
 

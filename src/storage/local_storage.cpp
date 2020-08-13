@@ -141,7 +141,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		idx_t base_id = MAX_ROW_ID + storage->collection.count;
 
 		// first generate the vector of row identifiers
-		Vector row_ids(ROW_TYPE);
+		Vector row_ids(LOGICAL_ROW_TYPE);
 		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
 
 		// now append the entries to the indices
@@ -219,9 +219,9 @@ static void update_data(Vector &data_vector, Vector &update_vector, Vector &row_
 
 static void update_chunk(Vector &data, Vector &updates, Vector &row_ids, idx_t count, idx_t base_index) {
 	assert(data.type == updates.type);
-	assert(row_ids.type == ROW_TYPE);
+	assert(row_ids.type == LOGICAL_ROW_TYPE);
 
-	switch (data.type) {
+	switch (data.type.InternalType()) {
 	case PhysicalType::INT8:
 		update_data<int8_t>(data, updates, row_ids, count, base_index);
 		break;
@@ -362,7 +362,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	auto new_storage = move(entry->second);
 
 	// now add the new column filled with the default value to all chunks
-	auto new_column_type = new_column.type.InternalType();
+	auto new_column_type = new_column.type;
 	ExpressionExecutor executor;
 	DataChunk dummy_chunk;
 	if (default_value) {

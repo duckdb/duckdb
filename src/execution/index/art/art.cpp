@@ -11,7 +11,7 @@ using namespace std;
 ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	tree = nullptr;
-	expression_result.Initialize(types);
+	expression_result.Initialize(logical_types);
 	int n = 1;
 	//! little endian if true
 	if (*(char *)&n == 1) {
@@ -114,7 +114,7 @@ static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>>
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
 	// generate keys for the first input column
-	switch (input.data[0].type) {
+	switch (input.data[0].type.InternalType()) {
 	case PhysicalType::BOOL:
 		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
 		break;
@@ -144,7 +144,7 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 	for (idx_t i = 1; i < input.column_count(); i++) {
 		// for each of the remaining columns, concatenate
-		switch (input.data[i].type) {
+		switch (input.data[i].type.InternalType()) {
 		case PhysicalType::BOOL:
 			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
 			break;
@@ -176,8 +176,8 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == ROW_TYPE);
-	assert(types[0] == input.data[0].type);
+	assert(row_ids.type.InternalType() == ROW_TYPE);
+	assert(logical_types[0] == input.data[0].type);
 
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
@@ -787,7 +787,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 	}
 
 	// create a vector pointing to the current set of row ids
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table

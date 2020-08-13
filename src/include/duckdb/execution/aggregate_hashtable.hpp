@@ -43,9 +43,9 @@ struct AggregateObject {
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(idx_t initial_capacity, vector<PhysicalType> group_types, vector<PhysicalType> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
 	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
-	SuperLargeHashTable(idx_t initial_capacity, vector<PhysicalType> group_types, vector<PhysicalType> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
 	                    vector<AggregateObject> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
@@ -79,9 +79,9 @@ private:
 	//! The aggregates to be computed
 	vector<AggregateObject> aggregates;
 	//! The types of the group columns stored in the hashtable
-	vector<PhysicalType> group_types;
+	vector<LogicalType> group_types;
 	//! The types of the payload columns stored in the hashtable
-	vector<PhysicalType> payload_types;
+	vector<LogicalType> payload_types;
 	//! The size of the groups in bytes
 	idx_t group_width;
 	//! The size of the payload (aggregations) in bytes

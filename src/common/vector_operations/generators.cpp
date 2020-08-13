@@ -11,7 +11,7 @@ namespace duckdb {
 using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	assert(TypeIsNumeric(result.type));
+	assert(result.type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
@@ -25,10 +25,10 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 }
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	if (!TypeIsNumeric(result.type)) {
+	if (result.type.IsNumeric()) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, start, increment);
 		break;
@@ -55,7 +55,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 template <class T>
 void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                  int64_t increment) {
-	assert(TypeIsNumeric(result.type));
+	assert(result.type.IsNumeric());
 	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
@@ -70,10 +70,10 @@ void templated_generate_sequence(Vector &result, idx_t count, const SelectionVec
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                         int64_t increment) {
-	if (!TypeIsNumeric(result.type)) {
+	if (!result.type.IsNumeric()) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, sel, start, increment);
 		break;

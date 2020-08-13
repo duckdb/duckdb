@@ -67,8 +67,6 @@ static string_t replace_scalar_function(const string_t &haystack, const string_t
 }
 
 static void replace_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::VARCHAR &&
-	       args.data[2].type == PhysicalType::VARCHAR);
 	auto &haystack_vector = args.data[0];
 	auto &needle_vector = args.data[1];
 	auto &thread_vector = args.data[2];

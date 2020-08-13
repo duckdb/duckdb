@@ -34,7 +34,7 @@ struct ExclusiveBetweenOperator {
 template <class OP>
 static idx_t between_loop_type_switch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel,
                                       idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-	switch (input.type) {
+	switch (input.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return TernaryExecutor::Select<int8_t, int8_t, int8_t, OP>(input, lower, upper, sel, count, true_sel,
@@ -76,13 +76,13 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundBetweenExpr
 void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
-	Vector input(expr.input->return_type.InternalType()), lower(expr.lower->return_type.InternalType()), upper(expr.upper->return_type.InternalType());
+	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
 	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);
 
-	Vector intermediate1(PhysicalType::BOOL);
-	Vector intermediate2(PhysicalType::BOOL);
+	Vector intermediate1(LogicalType::BOOLEAN);
+	Vector intermediate2(LogicalType::BOOLEAN);
 
 	if (expr.upper_inclusive && expr.lower_inclusive) {
 		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
@@ -103,7 +103,7 @@ void ExpressionExecutor::Execute(BoundBetweenExpression &expr, ExpressionState *
 idx_t ExpressionExecutor::Select(BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
-	Vector input(expr.input->return_type.InternalType()), lower(expr.lower->return_type.InternalType()), upper(expr.upper->return_type.InternalType());
+	Vector input(expr.input->return_type), lower(expr.lower->return_type), upper(expr.upper->return_type);
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
 	Execute(*expr.upper, state->child_states[2].get(), sel, count, upper);

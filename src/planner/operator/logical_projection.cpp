@@ -13,7 +13,7 @@ vector<ColumnBinding> LogicalProjection::GetColumnBindings() {
 
 void LogicalProjection::ResolveTypes() {
 	for (auto &expr : expressions) {
-		types.push_back(expr->return_type.InternalType());
+		types.push_back(expr->return_type);
 	}
 }
 

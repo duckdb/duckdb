@@ -82,7 +82,9 @@ public:
 	static Value DATE(date_t date);
 	//! Create a date Value from a specified date
 	static Value DATE(int32_t year, int32_t month, int32_t day);
-	//! Create a time Value from a specified date
+	//! Create a time Value from a specified time
+	static Value TIME(dtime_t time);
+	//! Create a time Value from a specified time
 	static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec);
 	//! Create a timestamp Value from a specified date/time combination
 	static Value TIMESTAMP(date_t date, dtime_t time);

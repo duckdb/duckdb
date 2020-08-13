@@ -24,16 +24,16 @@ UncompressedSegment::~UncompressedSegment() {
 
 void UncompressedSegment::Verify(Transaction &transaction) {
 #ifdef DEBUG
-	ColumnScanState state;
-	InitializeScan(state);
+	// ColumnScanState state;
+	// InitializeScan(state);
 
-	Vector result(this->type);
-	for (idx_t i = 0; i < this->tuple_count; i += STANDARD_VECTOR_SIZE) {
-		idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
-		idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
-		Scan(transaction, state, vector_idx, result);
-		result.Verify(count);
-	}
+	// Vector result(this->type);
+	// for (idx_t i = 0; i < this->tuple_count; i += STANDARD_VECTOR_SIZE) {
+	// 	idx_t vector_idx = i / STANDARD_VECTOR_SIZE;
+	// 	idx_t count = std::min((idx_t)STANDARD_VECTOR_SIZE, tuple_count - i);
+	// 	Scan(transaction, state, vector_idx, result);
+	// 	result.Verify(count);
+	// }
 #endif
 }
 
@@ -212,7 +212,7 @@ static void filterSelectionType(T *vec, T *predicate, SelectionVector &sel, idx_
 void UncompressedSegment::filterSelection(SelectionVector &sel, Vector &result, TableFilter filter,
                                           idx_t &approved_tuple_count, nullmask_t &nullmask) {
 	// the inplace loops take the result as the last parameter
-	switch (result.type) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::INT8: {
 		auto result_flat = FlatVector::GetData<int8_t>(result);
 		auto predicate_vector = Vector(filter.constant.value_.tinyint);

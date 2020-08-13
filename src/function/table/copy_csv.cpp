@@ -420,8 +420,8 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 	auto local_data = make_unique<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
-	vector<PhysicalType> types;
-	types.resize(csv_data.names.size(), PhysicalType::VARCHAR);
+	vector<LogicalType> types;
+	types.resize(csv_data.names.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(types);
 	return move(local_data);
@@ -464,8 +464,7 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
 		} else {
 			// non varchar column, perform the cast
-			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], csv_data.sql_types[col_idx],
-									LogicalType::VARCHAR, input.size());
+			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 

@@ -18,7 +18,6 @@ static bool is_ascii(const char *input, idx_t n) {
 
 static void strip_accents_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	assert(args.data[0].type == PhysicalType::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetData();

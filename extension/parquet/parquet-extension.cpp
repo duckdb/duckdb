@@ -614,7 +614,7 @@ private:
 
 				// we hand-roll a chunk collection to avoid copying strings
 				auto append_chunk = make_unique<DataChunk>();
-				vector<PhysicalType> types = {PhysicalType::VARCHAR};
+				vector<LogicalType> types = {LogicalType::VARCHAR};
 				col_data.string_collection->types = types;
 				append_chunk->Initialize(types);
 

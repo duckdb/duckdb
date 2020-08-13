@@ -27,7 +27,7 @@ public:
 
 	DataTableInfo &table_info;
 	//! The type of the column
-	PhysicalType type;
+	LogicalType type;
 	//! The buffer manager
 	BufferManager &manager;
 	//! The column index of the column

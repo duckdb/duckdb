@@ -7,7 +7,7 @@ using namespace std;
 namespace duckdb {
 
 template <class MJ, class L_ARG, class R_ARG> static idx_t merge_join(L_ARG &l, R_ARG &r) {
-	switch (l.type) {
+	switch (l.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return MJ::template Operation<int8_t>(l, r);

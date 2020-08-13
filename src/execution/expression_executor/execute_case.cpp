@@ -87,7 +87,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
           SelectionVector &fside, idx_t fcount) {
 	assert(res_true.type == res_false.type && res_true.type == result.type);
 
-	switch (result.type) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		case_loop<int8_t>(res_true, res_false, result, tside, tcount, fside, fcount);
@@ -156,7 +156,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for case expression: %s",
-		                              TypeIdToString(result.type).c_str());
+		                              result.type.ToString().c_str());
 	}
 }
 

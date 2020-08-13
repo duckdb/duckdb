@@ -16,7 +16,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinct(unique_ptr<Ph
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, expressions;
 	for (idx_t i = 0; i < types.size(); i++) {
-		groups.push_back(make_unique<BoundReferenceExpression>(LogicalTypeFromInternalType(types[i]), i));
+		groups.push_back(make_unique<BoundReferenceExpression>(types[i], i));
 	}
 
 	auto groupby =
@@ -39,7 +39,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	// we need to create one aggregate per column in the select_list
 	for (idx_t i = 0; i < types.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
-		auto logical_type = LogicalTypeFromInternalType(types[i]);
+		auto logical_type = types[i];
 		auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
 		auto first_aggregate = make_unique<BoundAggregateExpression>(
 		    logical_type, FirstFun::GetFunction(logical_type), false);

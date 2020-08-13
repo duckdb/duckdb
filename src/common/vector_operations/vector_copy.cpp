@@ -78,7 +78,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	// now copy over the data
-	switch (source.type) {
+	switch (source.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedCopy<int8_t>(source, sel, target, source_offset, target_offset, copy_count);
@@ -144,7 +144,7 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		break;
 	}
 	case PhysicalType::LIST: {
-		assert(target.type == PhysicalType::LIST);
+		assert(target.type.InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
 			// if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {

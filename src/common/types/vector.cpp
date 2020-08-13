@@ -16,22 +16,18 @@ using namespace std;
 
 namespace duckdb {
 
-Vector::Vector(PhysicalType type, bool create_data, bool zero_data)
+Vector::Vector(LogicalType type, bool create_data, bool zero_data)
     : vector_type(VectorType::FLAT_VECTOR), type(type), data(nullptr) {
 	if (create_data) {
 		Initialize(type, zero_data);
 	}
 }
 
-Vector::Vector(PhysicalType type) : Vector(type, true, false) {
+Vector::Vector(LogicalType type) : Vector(type, true, false) {
 }
 
-Vector::Vector(LogicalType type) : Vector(type.InternalType()) {
-
-}
-
-Vector::Vector(PhysicalType type, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
-	if (dataptr && type == PhysicalType::INVALID) {
+Vector::Vector(LogicalType type, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
+	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
@@ -40,7 +36,7 @@ Vector::Vector(Value value) : vector_type(VectorType::CONSTANT_VECTOR) {
 	Reference(value);
 }
 
-Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(PhysicalType::INVALID), data(nullptr) {
+Vector::Vector() : vector_type(VectorType::FLAT_VECTOR), type(LogicalTypeId::INVALID), data(nullptr) {
 }
 
 Vector::Vector(Vector &&other) noexcept
@@ -50,8 +46,8 @@ Vector::Vector(Vector &&other) noexcept
 
 void Vector::Reference(const Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
-	type = value.type().InternalType();
-	buffer = VectorBuffer::CreateConstantVector(type);
+	type = value.type();
+	buffer = VectorBuffer::CreateConstantVector(type.InternalType());
 	auxiliary.reset();
 	data = buffer->GetData();
 	SetValue(0, value);
@@ -76,7 +72,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 	// create a reference to the other vector
 	Reference(other);
 	if (offset > 0) {
-		data = data + GetTypeIdSize(type) * offset;
+		data = data + GetTypeIdSize(type.InternalType()) * offset;
 		nullmask <<= offset;
 	}
 }
@@ -126,19 +122,19 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(PhysicalType new_type, bool zero_data) {
-	if (new_type != PhysicalType::INVALID) {
+void Vector::Initialize(LogicalType new_type, bool zero_data) {
+	if (new_type.id() != LogicalTypeId::INVALID) {
 		type = new_type;
 	}
 	vector_type = VectorType::FLAT_VECTOR;
 	buffer.reset();
 	auxiliary.reset();
 	nullmask.reset();
-	if (GetTypeIdSize(type) > 0) {
-		buffer = VectorBuffer::CreateStandardVector(type);
+	if (GetTypeIdSize(type.InternalType()) > 0) {
+		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+			memset(data, 0, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
 		}
 	}
 }
@@ -150,8 +146,8 @@ void Vector::SetValue(idx_t index, Value val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), move(val));
 	}
-	if (val.type().InternalType() != type) {
-		SetValue(index, val.CastAs(LogicalTypeFromInternalType(type)));
+	if (val.type() != type) {
+		SetValue(index, val.CastAs(type));
 		return;
 	}
 
@@ -159,7 +155,7 @@ void Vector::SetValue(idx_t index, Value val) {
 	if (val.is_null) {
 		return;
 	}
-	switch (type) {
+	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		((bool *)data)[index] = val.value_.boolean;
 		break;
@@ -198,7 +194,7 @@ void Vector::SetValue(idx_t index, Value val) {
 		if (!auxiliary || StructVector::GetEntries(*this).size() == 0) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
 				auto &struct_child = val.struct_value[i];
-				auto cv = make_unique<Vector>(struct_child.second.type().InternalType());
+				auto cv = make_unique<Vector>(struct_child.second.type());
 				cv->vector_type = vector_type;
 				StructVector::AddEntry(*this, struct_child.first, move(cv));
 			}
@@ -231,8 +227,8 @@ void Vector::SetValue(idx_t index, Value val) {
 
 				DataChunk child_append_chunk;
 				child_append_chunk.SetCardinality(this_append_len);
-				vector<PhysicalType> types;
-				types.push_back(val.list_value[0].type().InternalType());
+				vector<LogicalType> types;
+				types.push_back(val.list_value[0].type());
 				child_append_chunk.Initialize(types);
 				for (idx_t i = 0; i < this_append_len; i++) {
 					child_append_chunk.data[0].SetValue(i, val.list_value[i + append_idx]);
@@ -267,44 +263,54 @@ Value Vector::GetValue(idx_t index) const {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
-		return Value::Numeric(LogicalTypeFromInternalType(type), start + increment * index);
+		return Value::Numeric(type, start + increment * index);
 	}
 	default:
 		throw NotImplementedException("Unimplemented vector type for Vector::GetValue");
 	}
 
 	if (nullmask[index]) {
-		return Value(LogicalTypeFromInternalType(type));
+		return Value(type);
 	}
-	switch (type) {
-	case PhysicalType::BOOL:
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(((bool *)data)[index]);
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		return Value::TINYINT(((int8_t *)data)[index]);
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(((int16_t *)data)[index]);
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		return Value::INTEGER(((int32_t *)data)[index]);
-	case PhysicalType::INT64:
+	case LogicalTypeId::DATE:
+		return Value::DATE(((date_t *)data)[index]);
+	case LogicalTypeId::TIME:
+		return Value::TIME(((dtime_t *)data)[index]);
+	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[index]);
-	case PhysicalType::INT128:
+	case LogicalTypeId::TIMESTAMP:
+		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
+	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
-	case PhysicalType::HASH:
+	case LogicalTypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
-	case PhysicalType::POINTER:
+	case LogicalTypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[index]);
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(((float *)data)[index]);
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Value::DOUBLE(((double *)data)[index]);
-	case PhysicalType::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return Value::INTERVAL(((interval_t *)data)[index]);
-	case PhysicalType::VARCHAR: {
+	case LogicalTypeId::VARCHAR: {
+		auto str = ((string_t *)data)[index];
+		return Value(str.GetString());
+	}
+	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
 		return Value::BLOB(str.GetString(), false);
 	}
-	case PhysicalType::STRUCT: {
-		Value ret(LogicalType::STRUCT);
+	case LogicalTypeId::STRUCT: {
+		Value ret(type);
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		for (auto &struct_child : StructVector::GetEntries(*this)) {
@@ -312,8 +318,8 @@ Value Vector::GetValue(idx_t index) const {
 		}
 		return ret;
 	}
-	case PhysicalType::LIST: {
-		Value ret(LogicalType::LIST);
+	case LogicalTypeId::LIST: {
+		Value ret(type);
 		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_cc = ListVector::GetEntry(*this);
@@ -343,7 +349,7 @@ string VectorTypeToString(VectorType type) {
 }
 
 string Vector::ToString(idx_t count) const {
-	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": " + to_string(count) + " = [ ";
+	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": " + to_string(count) + " = [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 	case VectorType::DICTIONARY_VECTOR:
@@ -375,7 +381,7 @@ void Vector::Print(idx_t count) {
 }
 
 string Vector::ToString() const {
-	string retval = VectorTypeToString(vector_type) + " " + TypeIdToString(type) + ": (UNKNOWN COUNT) [ ";
+	string retval = VectorTypeToString(vector_type) + " " + type.ToString() + ": (UNKNOWN COUNT) [ ";
 	switch (vector_type) {
 	case VectorType::FLAT_VECTOR:
 	case VectorType::DICTIONARY_VECTOR:
@@ -425,7 +431,7 @@ void Vector::Normalify(idx_t count) {
 		// allocate a new buffer for the vector
 		auto old_buffer = move(buffer);
 		auto old_data = data;
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
 		if (nullmask[0]) {
 			// constant NULL, set nullmask
@@ -433,7 +439,7 @@ void Vector::Normalify(idx_t count) {
 			return;
 		}
 		// non-null constant: have to repeat the constant
-		switch (type) {
+		switch (type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			flatten_constant_vector_loop<int8_t>(data, old_data, count);
@@ -488,7 +494,7 @@ void Vector::Normalify(idx_t count) {
 		SequenceVector::GetSequence(*this, start, increment);
 
 		vector_type = VectorType::FLAT_VECTOR;
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
 		VectorOperations::GenerateSequence(*this, count, start, increment);
 		break;
@@ -508,7 +514,7 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 		SequenceVector::GetSequence(*this, start, increment);
 
 		vector_type = VectorType::FLAT_VECTOR;
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type.InternalType());
 		data = buffer->GetData();
 		VectorOperations::GenerateSequence(*this, count, sel, start, increment);
 		break;
@@ -565,9 +571,9 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 }
 
 void Vector::Serialize(idx_t count, Serializer &serializer) {
-	if (TypeIsConstantSize(type)) {
+	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
-		idx_t write_size = GetTypeIdSize(type) * count;
+		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
 		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteData(ptr.get(), write_size);
@@ -575,7 +581,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 		VectorData vdata;
 		Orrify(count, vdata);
 
-		switch (type) {
+		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = (string_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
@@ -592,9 +598,9 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 }
 
 void Vector::Deserialize(idx_t count, Deserializer &source) {
-	if (TypeIsConstantSize(type)) {
+	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: read fixed amount of data from
-		auto column_size = GetTypeIdSize(type) * count;
+		auto column_size = GetTypeIdSize(type.InternalType()) * count;
 		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
 		source.ReadData(ptr.get(), column_size);
 
@@ -621,7 +627,7 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
 	}
-	if (type == PhysicalType::VARCHAR) {
+	if (type.InternalType() == PhysicalType::VARCHAR) {
 		// we just touch all the strings and let the sanitizer figure out if any
 		// of them are deallocated/corrupt
 		switch (vector_type) {
@@ -673,10 +679,10 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		child.Verify(new_sel, count);
 		return;
 	}
-	if (TypeIsConstantSize(type) && (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
+	if (TypeIsConstantSize(type.InternalType()) && (vector_type == VectorType::CONSTANT_VECTOR || vector_type == VectorType::FLAT_VECTOR)) {
 		assert(!auxiliary);
 	}
-	if (type == PhysicalType::DOUBLE) {
+	if (type.InternalType() == PhysicalType::DOUBLE) {
 		// verify that there are no INF or NAN values
 		switch (vector_type) {
 		case VectorType::CONSTANT_VECTOR: {
@@ -701,7 +707,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (type == PhysicalType::STRUCT) {
+	if (type.InternalType() == PhysicalType::STRUCT) {
 		if (vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR) {
 			auto &children = StructVector::GetEntries(*this);
 			assert(children.size() > 0);
@@ -711,7 +717,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (type == PhysicalType::LIST) {
+	if (type.InternalType() == PhysicalType::LIST) {
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			if (!ConstantVector::IsNull(*this)) {
 				ListVector::GetEntry(*this).Verify();
@@ -753,7 +759,7 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 }
 
 string_t StringVector::AddString(Vector &vector, string_t data) {
-	assert(vector.type == PhysicalType::VARCHAR);
+	assert(vector.type.id() == LogicalTypeId::VARCHAR);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -767,7 +773,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 }
 
 string_t StringVector::AddBlob(Vector &vector, string_t data) {
-	assert(vector.type == PhysicalType::VARCHAR);
+	assert(vector.type.id() == LogicalTypeId::BLOB);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
@@ -781,7 +787,7 @@ string_t StringVector::AddBlob(Vector &vector, string_t data) {
 }
 
 string_t StringVector::EmptyString(Vector &vector, idx_t len) {
-	assert(vector.type == PhysicalType::VARCHAR);
+	assert(vector.type.id() == LogicalTypeId::VARCHAR);
 	if (len < string_t::INLINE_LENGTH) {
 		return string_t(len);
 	}
@@ -794,8 +800,8 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 }
 
 void StringVector::AddHeapReference(Vector &vector, Vector &other) {
-	assert(vector.type == PhysicalType::VARCHAR);
-	assert(other.type == PhysicalType::VARCHAR);
+	assert(vector.type.InternalType() == PhysicalType::VARCHAR);
+	assert(other.type.InternalType() == PhysicalType::VARCHAR);
 
 	if (other.vector_type == VectorType::DICTIONARY_VECTOR) {
 		StringVector::AddHeapReference(vector, DictionaryVector::Child(other));
@@ -814,14 +820,14 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 }
 
 bool StructVector::HasEntries(const Vector &vector) {
-	assert(vector.type == PhysicalType::STRUCT);
+	assert(vector.type.id() == LogicalTypeId::STRUCT);
 	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	assert(vector.auxiliary == nullptr || vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
 	return vector.auxiliary != nullptr;
 }
 
 child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
-	assert(vector.type == PhysicalType::STRUCT);
+	assert(vector.type.id() == LogicalTypeId::STRUCT);
 	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	assert(vector.auxiliary);
 	assert(vector.auxiliary->type == VectorBufferType::STRUCT_BUFFER);
@@ -830,7 +836,7 @@ child_list_t<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 
 void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entry) {
 	// TODO asser that an entry with this name does not already exist
-	assert(vector.type == PhysicalType::STRUCT);
+	assert(vector.type.id() == LogicalTypeId::STRUCT);
 	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStructBuffer>();
@@ -841,7 +847,7 @@ void StructVector::AddEntry(Vector &vector, string name, unique_ptr<Vector> entr
 }
 
 bool ListVector::HasEntry(const Vector &vector) {
-	assert(vector.type == PhysicalType::LIST);
+	assert(vector.type.id() == LogicalTypeId::LIST);
 	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::HasEntry(child);
@@ -851,7 +857,7 @@ bool ListVector::HasEntry(const Vector &vector) {
 }
 
 ChunkCollection &ListVector::GetEntry(const Vector &vector) {
-	assert(vector.type == PhysicalType::LIST);
+	assert(vector.type.id() == LogicalTypeId::LIST);
 	if (vector.vector_type == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
 		return ListVector::GetEntry(child);
@@ -863,7 +869,7 @@ ChunkCollection &ListVector::GetEntry(const Vector &vector) {
 }
 
 void ListVector::SetEntry(Vector &vector, unique_ptr<ChunkCollection> cc) {
-	assert(vector.type == PhysicalType::LIST);
+	assert(vector.type.id() == LogicalTypeId::LIST);
 	assert(vector.vector_type == VectorType::FLAT_VECTOR || vector.vector_type == VectorType::CONSTANT_VECTOR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorListBuffer>();

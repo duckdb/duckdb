@@ -13,13 +13,13 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
-	assert(result.type == PhysicalType::LIST);
+	assert(result.type.id() == LogicalTypeId::LIST);
 	auto list_child = make_unique<ChunkCollection>();
 	ListVector::SetEntry(result, move(list_child));
 
 	auto &cc = ListVector::GetEntry(result);
 	DataChunk append_vals;
-	vector<PhysicalType> types;
+	vector<LogicalType> types;
 	if (args.column_count() > 0) {
 		types.push_back(args.GetTypes()[0]);
 		append_vals.Initialize(types);
@@ -36,7 +36,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = cc.count;
 		for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
-			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(LogicalTypeFromInternalType(types[0]))); // FIXME evil pattern
+			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(types[0])); // FIXME evil pattern
 			cc.Append(append_vals);
 		}
 		result_data[i].length = args.column_count();

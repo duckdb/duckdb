@@ -414,7 +414,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type == PhysicalType::VARCHAR);
+	assert(data.type.InternalType() == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {

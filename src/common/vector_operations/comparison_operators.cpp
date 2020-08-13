@@ -21,9 +21,9 @@ private:
 
 public:
 	template <class OP> static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		assert(left.type == right.type && result.type == PhysicalType::BOOL);
+		assert(left.type == right.type && result.type == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
-		switch (left.type) {
+		switch (left.type.InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedExecute<int8_t, OP>(left, right, result, count);

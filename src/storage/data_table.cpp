@@ -16,7 +16,7 @@ namespace duckdb {
 using namespace std;
 using namespace chrono;
 
-DataTable::DataTable(StorageManager &storage, string schema, string table, vector<PhysicalType> types_,
+DataTable::DataTable(StorageManager &storage, string schema, string table, vector<LogicalType> types_,
                      unique_ptr<vector<unique_ptr<PersistentSegment>>[]> data)
     : info(make_shared<DataTableInfo>(schema, table)), types(types_), storage(storage),
       persistent_manager(make_shared<VersionManager>(*info)), transient_manager(make_shared<VersionManager>(*info)),
@@ -49,7 +49,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
-	auto new_column_type = new_column.type.InternalType();
+	auto new_column_type = new_column.type;
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
@@ -130,12 +130,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		}
 	}
 	// change the type in this DataTable
-	auto new_type = target_type.InternalType();
-	types[changed_idx] = new_type;
+	types[changed_idx] = target_type;
 
 	// construct a new column data for this type
 	auto column_data = make_shared<ColumnData>(*storage.buffer_manager, *info);
-	column_data->type = new_type;
+	column_data->type = target_type;
 	column_data->column_idx = changed_idx;
 
 	ColumnAppendState append_state;
@@ -144,10 +143,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
 
-	vector<PhysicalType> types;
+	vector<LogicalType> types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
-			types.push_back(ROW_TYPE);
+			types.push_back(LOGICAL_ROW_TYPE);
 		} else {
 			types.push_back(parent.types[bound_columns[i]]);
 		}
@@ -159,7 +158,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	ExpressionExecutor executor;
 	executor.AddExpression(cast_expr);
 
-	Vector append_vector(new_type);
+	Vector append_vector(target_type);
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
@@ -460,7 +459,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			auto column = column_ids[i];
 			if (column == COLUMN_IDENTIFIER_ROW_ID) {
 				// scan row id
-				assert(result.data[i].type == ROW_TYPE);
+				assert(result.data[i].type.InternalType() == ROW_TYPE);
 				result.data[i].Sequence(base_row + current_row, 1);
 			} else {
 				columns[column]->Scan(transaction, state.column_scans[i], result.data[i]);
@@ -491,7 +490,7 @@ bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, Table
 			if (table_filters.find(i) == table_filters.end()) {
 				auto column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
-					assert(result.data[i].type == PhysicalType::INT64);
+					assert(result.data[i].type.InternalType() == PhysicalType::INT64);
 					result.data[i].vector_type = VectorType::FLAT_VECTOR;
 					auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 					for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
@@ -570,7 +569,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 		auto column = column_ids[col_idx];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// row id column: fill in the row ids
-			assert(result.data[col_idx].type == PhysicalType::INT64);
+			assert(result.data[col_idx].type.InternalType() == PhysicalType::INT64);
 			result.data[col_idx].vector_type = VectorType::FLAT_VECTOR;
 			auto data = FlatVector::GetData<row_t>(result.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
@@ -587,7 +586,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, vector<column
 }
 
 idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, idx_t fetch_count, row_t result_rows[]) {
-	assert(row_identifiers.type == ROW_TYPE);
+	assert(row_identifiers.type.InternalType() == ROW_TYPE);
 
 	// obtain a read lock on the version managers
 	auto l1 = persistent_manager->lock.GetSharedLock();
@@ -626,7 +625,7 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
-	Vector result(PhysicalType::INT32);
+	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
@@ -757,7 +756,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return true;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(ROW_TYPE);
+	Vector row_identifiers(LOGICAL_ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	idx_t failed_index = INVALID_INDEX;
@@ -785,7 +784,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row
 		return;
 	}
 	// first generate the vector of row identifiers
-	Vector row_identifiers(ROW_TYPE);
+	Vector row_identifiers(LOGICAL_ROW_TYPE);
 	VectorOperations::GenerateSequence(row_identifiers, chunk.size(), row_start, 1);
 
 	// now remove the entries from the indices
@@ -826,7 +825,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 // Delete
 //===--------------------------------------------------------------------===//
 void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_identifiers, idx_t count) {
-	assert(row_identifiers.type == ROW_TYPE);
+	assert(row_identifiers.type.InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return;
 	}
@@ -852,7 +851,7 @@ void DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector 
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-static void CreateMockChunk(vector<PhysicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
+static void CreateMockChunk(vector<LogicalType> &types, vector<column_t> &column_ids, DataChunk &chunk,
                             DataChunk &mock_chunk) {
 	// construct a mock DataChunk
 	mock_chunk.InitializeEmpty(types);
@@ -929,7 +928,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, vector<column_t> &column_ids,
                        DataChunk &updates) {
-	assert(row_ids.type == ROW_TYPE);
+	assert(row_ids.type.InternalType() == ROW_TYPE);
 
 	updates.Verify();
 	if (updates.size() == 0) {
@@ -998,7 +997,7 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 		auto column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			// scan row id
-			assert(result.data[i].type == ROW_TYPE);
+			assert(result.data[i].type.InternalType() == ROW_TYPE);
 			result.data[i].Sequence(base_row + current_row, 1);
 		} else {
 			// scan actual base column
@@ -1013,16 +1012,16 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, const vector<column
 
 void DataTable::AddIndex(unique_ptr<Index> index, vector<unique_ptr<Expression>> &expressions) {
 	DataChunk result;
-	result.Initialize(index->types);
+	result.Initialize(index->logical_types);
 
 	DataChunk intermediate;
-	vector<PhysicalType> intermediate_types;
+	vector<LogicalType> intermediate_types;
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {
 		intermediate_types.push_back(types[id]);
 	}
-	intermediate_types.push_back(ROW_TYPE);
+	intermediate_types.push_back(LOGICAL_ROW_TYPE);
 	intermediate.Initialize(intermediate_types);
 
 	// initialize an index scan

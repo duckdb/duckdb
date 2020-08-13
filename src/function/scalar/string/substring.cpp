@@ -79,17 +79,15 @@ string_t SubstringFun::substring_scalar_function(Vector &result, string_t input,
 }
 
 static void substring_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::INT32 &&
-	       args.data[2].type == PhysicalType::INT32);
 	auto &input_vector = args.data[0];
 	auto &offset_vector = args.data[1];
 	auto &length_vector = args.data[2];
 
 	idx_t current_len = 0;
 	unique_ptr<char[]> output;
-	TernaryExecutor::Execute<string_t, int, int, string_t>(
+	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
 	    input_vector, offset_vector, length_vector, result, args.size(),
-	    [&](string_t input_string, int offset, int length) {
+	    [&](string_t input_string, int32_t offset, int32_t length) {
 		    return SubstringFun::substring_scalar_function(result, input_string, offset, length, output, current_len);
 	    });
 }

@@ -30,7 +30,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(PhysicalType::INT64);
+		types.push_back(LogicalType::BIGINT);
 	}
 };
 } // namespace duckdb

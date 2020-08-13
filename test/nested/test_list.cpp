@@ -35,7 +35,7 @@ TEST_CASE("Test packing and unpacking lineitem into lists", "[nested][.]") {
 	result = con.Query(tpch::get_query(1));
 	// construct the expected values from the regular query
 	vector<vector<Value>> expected_values;
-	for (idx_t col_idx = 0; col_idx < result->sql_types.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
 		vector<Value> column_list;
 		for (idx_t row_idx = 0; row_idx < result->collection.count; row_idx++) {
 			column_list.push_back(result->GetValue(col_idx, row_idx));

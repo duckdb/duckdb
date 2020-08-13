@@ -7,6 +7,19 @@ using namespace std;
 
 namespace duckdb {
 
+struct StructExtractBindData : public FunctionData {
+	string key;
+	idx_t index;
+	LogicalType type;
+
+	StructExtractBindData(string key, idx_t index, LogicalType type) : key(key), index(index), type(type) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<StructExtractBindData>(key, index, type);
+	}
+};
+
 static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
@@ -86,7 +99,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 
 	expr.return_type = return_type;
 	expr.children.pop_back();
-	return make_unique<StructExtractBindData>(key, key_index, return_type.InternalType());
+	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {

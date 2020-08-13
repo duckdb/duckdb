@@ -120,7 +120,7 @@ private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 public:
-	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<PhysicalType> build_types,
+	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<LogicalType> build_types,
 	              JoinType type);
 	~JoinHashTable();
 
@@ -143,11 +143,11 @@ public:
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
-	vector<PhysicalType> equality_types;
+	vector<LogicalType> equality_types;
 	//! The types of the keys
-	vector<PhysicalType> condition_types;
+	vector<LogicalType> condition_types;
 	//! The types of all conditions
-	vector<PhysicalType> build_types;
+	vector<LogicalType> build_types;
 	//! The comparison predicates
 	vector<ExpressionType> predicates;
 	//! Size of condition keys
@@ -177,7 +177,7 @@ public:
 		std::mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening ANY()/ALL()
 		//! expressions
-		vector<PhysicalType> correlated_types;
+		vector<LogicalType> correlated_types;
 		//! The aggregate expression nodes used by the HT
 		vector<unique_ptr<Expression>> correlated_aggregates;
 		//! The HT that holds the group counts for every correlated column

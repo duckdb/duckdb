@@ -29,10 +29,10 @@ template <class T> static void templated_gather_loop(Vector &source, Vector &des
 
 void VectorOperations::Gather::Set(Vector &source, Vector &dest, idx_t count) {
 	assert(source.vector_type == VectorType::FLAT_VECTOR);
-	assert(source.type == PhysicalType::POINTER); // "Cannot gather from non-pointer type!"
+	assert(source.type.id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
 	dest.vector_type = VectorType::FLAT_VECTOR;
-	switch (dest.type) {
+	switch (dest.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		templated_gather_loop<int8_t>(source, dest, count);

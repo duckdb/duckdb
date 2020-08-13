@@ -41,7 +41,7 @@ public:
 
 	void Reset();
 
-	vector<PhysicalType> GetTypes();
+	vector<LogicalType> GetTypes();
 
 	unique_ptr<DataChunk> FetchChunk();
 

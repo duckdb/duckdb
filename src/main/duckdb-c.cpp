@@ -102,7 +102,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
 	for (idx_t i = 0; i < out->column_count; i++) {
-		out->columns[i].type = ConvertCPPTypeToC(result->sql_types[i]);
+		out->columns[i].type = ConvertCPPTypeToC(result->types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
@@ -111,7 +111,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			return DuckDBError;
 		}
 		// memset data to 0 for VARCHAR columns for safe deletion later
-		if (result->types[i] == PhysicalType::VARCHAR) {
+		if (result->types[i].InternalType() == PhysicalType::VARCHAR) {
 			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);
 		}
 	}
@@ -125,7 +125,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 		}
 		// then write the data
-		switch (result->sql_types[col].id()) {
+		switch (result->types[col].id()) {
 		case LogicalTypeId::BOOLEAN:
 			WriteData<bool>(out, result->collection, col);
 			break;

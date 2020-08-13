@@ -40,8 +40,10 @@ public:
 	unordered_set<column_t> column_id_set;
 	//! Unbound expressions used by the index
 	vector<unique_ptr<Expression>> unbound_expressions;
-	//! The types of the expressions
+	//! The physical types stored in the index
 	vector<PhysicalType> types;
+	//! The logical types of the expressions
+	vector<LogicalType> logical_types;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids

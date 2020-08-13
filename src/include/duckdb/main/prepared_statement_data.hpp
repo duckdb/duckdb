@@ -17,11 +17,6 @@ namespace duckdb {
 class CatalogEntry;
 class PhysicalOperator;
 
-struct PreparedValueEntry {
-	unique_ptr<Value> value;
-	LogicalType target_type;
-};
-
 class PreparedStatementData {
 public:
 	PreparedStatementData(StatementType type);
@@ -31,16 +26,14 @@ public:
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
-	unordered_map<idx_t, PreparedValueEntry> value_map;
+	unordered_map<idx_t, unique_ptr<Value>> value_map;
 	//! Any internal catalog dependencies of the prepared statement
 	unordered_set<CatalogEntry *> dependencies;
 
 	//! The result names of the transaction
 	vector<string> names;
-	//! The (internal) result types of the statement
-	vector<PhysicalType> types;
-	//! The result SQL types of the transaction
-	vector<LogicalType> sql_types;
+	//! The result types of the transaction
+	vector<LogicalType> types;
 
 	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
 	bool read_only;

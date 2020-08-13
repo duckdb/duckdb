@@ -25,9 +25,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<PhysicalType> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
@@ -68,10 +68,10 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		return;
 	}
 
-	vector<PhysicalType> types;
+	vector<LogicalType> types;
 	ExpressionExecutor executor;
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
-		types.push_back(exprs[expr_idx]->return_type.InternalType());
+		types.push_back(exprs[expr_idx]->return_type);
 		executor.AddExpression(*exprs[expr_idx]);
 	}
 
@@ -97,7 +97,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
-	vector<PhysicalType> sort_types;
+	vector<LogicalType> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
@@ -105,7 +105,7 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
 		auto &pexpr = wexpr->partitions[prt_idx];
-		sort_types.push_back(pexpr->return_type.InternalType());
+		sort_types.push_back(pexpr->return_type);
 		orders.push_back(OrderType::ASCENDING);
 		null_order_types.push_back(OrderByNullType::NULLS_FIRST);
 		executor.AddExpression(*pexpr);
@@ -113,7 +113,7 @@ static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollectio
 
 	for (idx_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
 		auto &oexpr = wexpr->orders[ord_idx].expression;
-		sort_types.push_back(oexpr->return_type.InternalType());
+		sort_types.push_back(oexpr->return_type);
 		orders.push_back(wexpr->orders[ord_idx].type);
 		null_order_types.push_back(wexpr->orders[ord_idx].null_order);
 		executor.AddExpression(*oexpr);
@@ -324,7 +324,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
 	if (wexpr->aggregate) {
-		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->return_type.InternalType(), &payload_collection);
+		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->return_type, &payload_collection);
 	}
 
 	WindowBoundariesState bounds;
@@ -483,9 +483,9 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			return;
 		}
 
-		vector<PhysicalType> window_types;
+		vector<LogicalType> window_types;
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-			window_types.push_back(select_list[expr_idx]->return_type.InternalType());
+			window_types.push_back(select_list[expr_idx]->return_type);
 		}
 
 		for (idx_t i = 0; i < big_data.chunks.size(); i++) {

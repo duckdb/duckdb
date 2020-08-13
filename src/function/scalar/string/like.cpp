@@ -81,8 +81,6 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 
 // This can be moved to the scalar_function class
 template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == PhysicalType::VARCHAR && args.data[1].type == PhysicalType::VARCHAR &&
-	       args.data[2].type == PhysicalType::VARCHAR);
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];

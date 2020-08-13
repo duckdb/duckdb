@@ -52,7 +52,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 			if (new_types[i] != types[i]) {
 				throw TypeMismatchException(new_types[i], types[i], "Type mismatch when combining rows");
 			}
-			if (types[i] == PhysicalType::LIST) {
+			if (types[i].InternalType() == PhysicalType::LIST) {
 				for (auto &chunk :
 				     chunks) { // need to check all the chunks because they can have only-null list entries
 					auto &chunk_vec = chunk->data[i];
@@ -130,7 +130,7 @@ static int32_t compare_value(Vector &left_vec, Vector &right_vec, idx_t vector_i
 		return null_order == OrderByNullType::NULLS_FIRST ? -1 : 1;
 	}
 
-	switch (left_vec.type) {
+	switch (left_vec.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return templated_compare_value<int8_t>(left_vec, right_vec, vector_idx_left, vector_idx_right);
@@ -364,7 +364,7 @@ void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], i
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		switch (types[col_idx]) {
+		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
@@ -529,7 +529,7 @@ idx_t ChunkCollection::MaterializeHeapChunk(DataChunk &target, idx_t order[], id
 
 	target.SetCardinality(remaining_data);
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
-		switch (types[col_idx]) {
+		switch (types[col_idx].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			templated_set_values<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);

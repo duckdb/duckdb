@@ -6,9 +6,8 @@
 namespace duckdb {
 using namespace std;
 
-StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> sql_types,
-                                     vector<PhysicalType> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, sql_types, types, names), is_open(true),
+StreamQueryResult::StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> types, vector<string> names)
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), names), is_open(true),
       context(context) {
 }
 
@@ -42,7 +41,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, sql_types, types, names);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, types, names);
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {

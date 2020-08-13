@@ -22,7 +22,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 			all_const = false;
 		}
 		// same holds for this
-		assert(args.data[i].type == info.stype.child_types()[i].second.InternalType());
+		assert(args.data[i].type == info.stype.child_types()[i].second);
 		auto new_child = make_unique<Vector>();
 		new_child->Reference(args.data[i]);
 		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));

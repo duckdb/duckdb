@@ -97,7 +97,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
-		vector<PhysicalType> delete_types = {ROW_TYPE};
+		vector<LogicalType> delete_types = {LOGICAL_ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
@@ -114,7 +114,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	SwitchTable(&info->column_data->table_info, UndoFlags::UPDATE_TUPLE);
 
 	update_chunk = make_unique<DataChunk>();
-	vector<PhysicalType> update_types = {info->column_data->type, ROW_TYPE};
+	vector<LogicalType> update_types = {info->column_data->type, LOGICAL_ROW_TYPE};
 	update_chunk->Initialize(update_types);
 
 	// fetch the updated values from the base table

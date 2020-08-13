@@ -64,7 +64,7 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-			switch (col.type) {
+			switch (col.type.InternalType()) {
 			case PhysicalType::BOOL: {
 				auto arg_data = FlatVector::GetData<bool>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));

@@ -18,7 +18,7 @@ static void concat_function(DataChunk &args, ExpressionState &state, Vector &res
 	vector<idx_t> result_lengths(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
 		auto &input = args.data[col_idx];
-		assert(input.type == PhysicalType::VARCHAR);
+		assert(input.type.id() == LogicalTypeId::VARCHAR);
 		if (input.vector_type == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
 				// constant null, skip

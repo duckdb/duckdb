@@ -410,7 +410,7 @@ void NumericSegment::FetchRow(ColumnFetchState &state, Transaction &transaction,
 // Append
 //===--------------------------------------------------------------------===//
 idx_t NumericSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type == type);
+	assert(data.type.InternalType() == type);
 	auto handle = manager.Pin(block_id);
 
 	idx_t initial_count = tuple_count;

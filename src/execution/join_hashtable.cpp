@@ -14,14 +14,14 @@ namespace duckdb {
 
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<PhysicalType> btypes,
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<LogicalType> btypes,
                              JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), equality_size(0), condition_size(0), build_size(0),
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
-		auto type = condition.left->return_type.InternalType();
-		auto type_size = GetTypeIdSize(type);
+		auto type = condition.left->return_type;
+		auto type_size = GetTypeIdSize(type.InternalType());
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
@@ -42,7 +42,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	assert(equality_types.size() > 0);
 
 	for (idx_t i = 0; i < build_types.size(); i++) {
-		build_size += GetTypeIdSize(build_types[i]);
+		build_size += GetTypeIdSize(build_types[i].InternalType());
 	}
 	tuple_size = condition_size + build_size;
 	pointer_offset = tuple_size;
@@ -213,7 +213,7 @@ void JoinHashTable::SerializeVector(Vector &v, idx_t vcount, const SelectionVect
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	SerializeVectorData(vdata, v.type, sel, count, key_locations);
+	SerializeVectorData(vdata, v.type.InternalType(), sel, count, key_locations);
 }
 
 idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
@@ -342,12 +342,12 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
-	Vector hash_values(PhysicalType::HASH);
+	Vector hash_values(LogicalType::HASH);
 	Hash(keys, *current_sel, added_count, hash_values);
 
 	// serialize the keys to the key locations
 	for (idx_t i = 0; i < keys.column_count(); i++) {
-		SerializeVectorData(key_data[i], keys.data[i].type, *current_sel, added_count, key_locations);
+		SerializeVectorData(key_data[i], keys.data[i].type.InternalType(), *current_sel, added_count, key_locations);
 	}
 	// now serialize the payload
 	if (build_types.size() > 0) {
@@ -363,7 +363,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	assert(hashes.type == PhysicalType::HASH);
+	assert(hashes.type.id() == LogicalTypeId::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
@@ -397,7 +397,7 @@ void JoinHashTable::Finalize() {
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
 	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
 
-	Vector hashes(PhysicalType::HASH);
+	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
@@ -446,7 +446,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 
 	// hash all the keys
-	Vector hashes(PhysicalType::HASH);
+	Vector hashes(LogicalType::HASH);
 	Hash(keys, *current_sel, ss->count, hashes);
 
 	// now initialize the pointers of the scan structure based on the hashes
@@ -468,7 +468,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht) : sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
-	pointers.Initialize(PhysicalType::POINTER);
+	pointers.Initialize(LogicalType::POINTER);
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
@@ -578,34 +578,35 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 	idx_t offset = 0;
 	idx_t no_match_count = 0;
 	for (idx_t i = 0; i < ht.predicates.size(); i++) {
+		auto internal_type = keys.data[i].type.InternalType();
 		switch (ht.predicates[i]) {
 		case ExpressionType::COMPARE_EQUAL:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, Equals>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                       remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, NotEquals>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                          remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], keys.data[i].type, this->pointers,
+			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThan>(key_data[i], internal_type, this->pointers,
 			                                                          *current_sel, remaining_count, offset, match_sel,
 			                                                          no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			remaining_count = GatherSwitch<NO_MATCH_SEL, GreaterThanEquals>(
-			    key_data[i], keys.data[i].type, this->pointers, *current_sel, remaining_count, offset, match_sel,
+			    key_data[i], internal_type, this->pointers, *current_sel, remaining_count, offset, match_sel,
 			    no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
 			remaining_count =
-			    GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], keys.data[i].type, this->pointers, *current_sel,
+			    GatherSwitch<NO_MATCH_SEL, LessThan>(key_data[i], internal_type, this->pointers, *current_sel,
 			                                         remaining_count, offset, match_sel, no_match_sel, no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], keys.data[i].type, this->pointers,
+			remaining_count = GatherSwitch<NO_MATCH_SEL, LessThanEquals>(key_data[i], internal_type, this->pointers,
 			                                                             *current_sel, remaining_count, offset,
 			                                                             match_sel, no_match_sel, no_match_count);
 			break;
@@ -616,7 +617,7 @@ idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector *match_s
 			break;
 		}
 		current_sel = match_sel;
-		offset += GetTypeIdSize(keys.data[i].type);
+		offset += GetTypeIdSize(internal_type);
 	}
 	return remaining_count;
 }
@@ -691,7 +692,7 @@ static void TemplatedGatherResult(Vector &result, uintptr_t *pointers, const Sel
 static void GatherResultVector(Vector &result, const SelectionVector &result_vector, uintptr_t *ptrs,
                                const SelectionVector &sel_vector, idx_t count, idx_t &offset) {
 	result.vector_type = VectorType::FLAT_VECTOR;
-	switch (result.type) {
+	switch (result.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedGatherResult<int8_t>(result, ptrs, result_vector, sel_vector, count, offset);
@@ -723,7 +724,7 @@ static void GatherResultVector(Vector &result, const SelectionVector &result_vec
 	default:
 		throw NotImplementedException("Unimplemented type for ScanStructure::GatherResult");
 	}
-	offset += GetTypeIdSize(result.type);
+	offset += GetTypeIdSize(result.type.InternalType());
 }
 
 void ScanStructure::GatherResult(Vector &result, const SelectionVector &result_vector,
@@ -879,7 +880,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &result) {
 	assert(result.column_count() == input.column_count() + 1);
-	assert(result.data.back().type == PhysicalType::BOOL);
+	assert(result.data.back().type == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	assert(ht.count > 0);
 
@@ -923,7 +924,6 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			last_key.Orrify(keys.size(), kdata);
 			for (idx_t i = 0; i < input.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
-				;
 				nullmask[i] = (*kdata.nullmask)[kidx];
 			}
 			break;

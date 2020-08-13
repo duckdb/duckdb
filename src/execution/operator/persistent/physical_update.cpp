@@ -24,13 +24,13 @@ public:
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(vector<unique_ptr<Expression>> &expressions, vector<PhysicalType> &table_types,
+	UpdateLocalState(vector<unique_ptr<Expression>> &expressions, vector<LogicalType> &table_types,
 	                 vector<unique_ptr<Expression>> &bound_defaults)
 	    : default_executor(bound_defaults) {
 		// initialize the update chunk
-		vector<PhysicalType> update_types;
+		vector<LogicalType> update_types;
 		for (auto &expr : expressions) {
-			update_types.push_back(expr->return_type.InternalType());
+			update_types.push_back(expr->return_type);
 		}
 		update_chunk.Initialize(update_types);
 		// initialize the mock chunk

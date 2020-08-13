@@ -52,7 +52,7 @@ template <class OP>
 static idx_t templated_select_operation(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
-	switch (left.type) {
+	switch (left.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return BinaryExecutor::Select<int8_t, int8_t, OP>(left, right, sel, count, true_sel, false_sel);

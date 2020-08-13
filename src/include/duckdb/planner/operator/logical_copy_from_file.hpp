@@ -35,7 +35,7 @@ public:
 protected:
 	void ResolveTypes() override {
 		for (auto &type : sql_types) {
-			types.push_back(type.InternalType());
+			types.push_back(type);
 		}
 	}
 };

@@ -27,11 +27,11 @@ public:
 
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
-	vector<PhysicalType> condition_types;
+	vector<LogicalType> condition_types;
 	//! The types of all conditions
-	vector<PhysicalType> build_types;
+	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
-	vector<PhysicalType> delim_types;
+	vector<LogicalType> delim_types;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

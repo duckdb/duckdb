@@ -209,7 +209,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP> static void Combine(Vector &source, Vector &target, idx_t count) {
-		assert(source.type == PhysicalType::POINTER && target.type == PhysicalType::POINTER);
+		assert(source.type.id() == LogicalTypeId::POINTER && target.type.id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 

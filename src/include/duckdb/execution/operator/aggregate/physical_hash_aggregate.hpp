@@ -18,9 +18,9 @@ namespace duckdb {
 //! a hash table to perform the grouping
 class PhysicalHashAggregate : public PhysicalSink {
 public:
-	PhysicalHashAggregate(vector<PhysicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
-	PhysicalHashAggregate(vector<PhysicalType> types, vector<unique_ptr<Expression>> expressions,
+	PhysicalHashAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
@@ -34,11 +34,11 @@ public:
 	bool all_combinable;
 
 	//! The group types
-	vector<PhysicalType> group_types;
+	vector<LogicalType> group_types;
 	//! The payload types
-	vector<PhysicalType> payload_types;
+	vector<LogicalType> payload_types;
 	//! The aggregate return types
-	vector<PhysicalType> aggregate_types;
+	vector<LogicalType> aggregate_types;
 
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;

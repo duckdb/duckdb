@@ -55,7 +55,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 			return false;
 		}
 
-		auto &types = result->sql_types;
+		auto &types = result->types;
 		for (size_t k = 0; k < result->collection.count; k++) {
 			int rc = SQLITE_ERROR;
 			for (size_t j = 0; j < types.size(); j++) {
@@ -129,17 +129,11 @@ unique_ptr<QueryResult> QueryDatabase(vector<LogicalType> result_types, sqlite3 
 	for (int i = 0; i < col_count; i++) {
 		names.push_back(sqlite3_column_name(stmt, i));
 	}
-	// figure out the types of the columns
-	// construct the types of the result
-	vector<PhysicalType> typeids;
-	for (auto &tp : result_types) {
-		typeids.push_back(tp.InternalType());
-	}
 
 	// construct the result
-	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT, result_types, typeids, std::move(names));
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT, result_types, std::move(names));
 	DataChunk result_chunk;
-	result_chunk.Initialize(typeids);
+	result_chunk.Initialize(result_types);
 	int rc = SQLITE_ERROR;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && interrupt == 0) {
 		// get the value for each of the columns

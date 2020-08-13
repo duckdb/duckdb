@@ -51,7 +51,7 @@ public:
 */
 class PhysicalOperator {
 public:
-	PhysicalOperator(PhysicalOperatorType type, vector<PhysicalType> types) : type(type), types(types) {
+	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types) : type(type), types(types) {
 	}
 	virtual ~PhysicalOperator() {
 	}
@@ -61,14 +61,14 @@ public:
 	//! The set of children of the operator
 	vector<unique_ptr<PhysicalOperator>> children;
 	//! The types returned by this physical operator
-	vector<PhysicalType> types;
+	vector<LogicalType> types;
 
 public:
 	string ToString(idx_t depth = 0) const;
 	void Print();
 
 	//! Return a vector of the types that will be returned by this operator
-	vector<PhysicalType> &GetTypes() {
+	vector<LogicalType> &GetTypes() {
 		return types;
 	}
 	//! Initialize a given chunk to the types that will be returned by this

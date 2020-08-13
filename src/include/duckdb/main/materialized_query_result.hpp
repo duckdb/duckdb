@@ -18,8 +18,7 @@ public:
 	//! Creates an empty successful query result
 	MaterializedQueryResult(StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	MaterializedQueryResult(StatementType statement_type, vector<LogicalType> sql_types, vector<PhysicalType> types,
-	                        vector<string> names);
+	MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	MaterializedQueryResult(string error);
 

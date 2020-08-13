@@ -208,39 +208,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	}
 }
 
-LogicalType LogicalTypeFromInternalType(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
-		return LogicalType(LogicalTypeId::BOOLEAN);
-	case PhysicalType::INT8:
-		return LogicalType::TINYINT;
-	case PhysicalType::INT16:
-		return LogicalType::SMALLINT;
-	case PhysicalType::INT32:
-		return LogicalType::INTEGER;
-	case PhysicalType::INT64:
-		return LogicalType::BIGINT;
-	case PhysicalType::INT128:
-		return LogicalType::HUGEINT;
-	case PhysicalType::FLOAT:
-		return LogicalType::FLOAT;
-	case PhysicalType::DOUBLE:
-		return LogicalType::DOUBLE;
-	case PhysicalType::INTERVAL:
-		return LogicalType::INTERVAL;
-	case PhysicalType::VARCHAR:
-		return LogicalType::VARCHAR;
-	case PhysicalType::VARBINARY:
-		return LogicalType(LogicalTypeId::VARBINARY);
-	case PhysicalType::STRUCT:
-		return LogicalType(LogicalTypeId::STRUCT); // TODO we do not know the child types here
-	case PhysicalType::LIST:
-		return LogicalType(LogicalTypeId::LIST);
-	default:
-		throw ConversionException("Invalid PhysicalType %d", type);
-	}
-}
-
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
 	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::DECIMAL) || type == PhysicalType::HASH ||
@@ -435,7 +402,7 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-int LogicalType::NumericTypeOrder() {
+int LogicalType::NumericTypeOrder() const {
 	switch (InternalType()) {
 	case PhysicalType::INT8:
 		return 1;

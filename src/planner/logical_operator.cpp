@@ -40,11 +40,11 @@ vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, i
 	return result;
 }
 
-vector<PhysicalType> LogicalOperator::MapTypes(vector<PhysicalType> types, vector<idx_t> projection_map) {
+vector<LogicalType> LogicalOperator::MapTypes(vector<LogicalType> types, vector<idx_t> projection_map) {
 	if (projection_map.size() == 0) {
 		return types;
 	} else {
-		vector<PhysicalType> result_types;
+		vector<LogicalType> result_types;
 		for (auto index : projection_map) {
 			result_types.push_back(types[index]);
 		}

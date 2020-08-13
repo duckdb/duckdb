@@ -243,7 +243,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	                                                   env->FindClass("org/duckdb/DuckDBVector"), nullptr);
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->column_count(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
-		auto type_str = env->NewStringUTF(TypeIdToString(vec.type).c_str());
+		auto type_str = env->NewStringUTF(vec.type.ToString().c_str());
 		// construct nullmask
 		auto null_array = env->NewBooleanArray(row_count);
 		jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
@@ -259,7 +259,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		jobject constlen_data = nullptr;
 		jobjectArray varlen_data = nullptr;
 
-		switch (vec.type) {
+		switch (vec.type.InternalType()) {
 		case PhysicalType::BOOL:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 			break;
@@ -296,7 +296,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		default:
 			jclass Exception = env->FindClass("java/sql/SQLException");
-			env->ThrowNew(Exception, ("Unsupported result column type " + TypeIdToString(vec.type)).c_str());
+			env->ThrowNew(Exception, ("Unsupported result column type " + vec.type.ToString()).c_str());
 		}
 
 		jfieldID constlen_data_field = env->GetFieldID(vec_class, "constlen_data", "Ljava/nio/ByteBuffer;");

@@ -16,7 +16,7 @@ using namespace std;
 //===--------------------------------------------------------------------===//
 
 void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
-	assert(input.type == PhysicalType::POINTER);
+	assert(input.type.InternalType() == PhysicalType::POINTER);
 	switch (input.vector_type) {
 	case VectorType::CONSTANT_VECTOR: {
 		assert(!ConstantVector::IsNull(input));

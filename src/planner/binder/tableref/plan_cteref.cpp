@@ -8,9 +8,9 @@ using namespace std;
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 	auto index = ref.bind_index;
 
-	vector<PhysicalType> types;
+	vector<LogicalType> types;
 	for (auto &type : ref.types) {
-		types.push_back(type.InternalType());
+		types.push_back(type);
 	}
 
 	return make_unique<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns);

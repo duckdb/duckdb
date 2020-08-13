@@ -54,9 +54,9 @@ public:
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name);
 	//! Returns a list of types of the table
-	vector<PhysicalType> GetTypes();
+	vector<LogicalType> GetTypes();
 	//! Returns a list of types of the specified columns of the table
-	vector<PhysicalType> GetTypes(const vector<column_t> &column_ids);
+	vector<LogicalType> GetTypes(const vector<column_t> &column_ids);
 
 	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
 	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);

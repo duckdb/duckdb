@@ -18,7 +18,7 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalOrder : public PhysicalSink {
 public:
-	PhysicalOrder(vector<PhysicalType> types, vector<BoundOrderByNode> orders)
+	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders)
 	    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types)), orders(move(orders)) {
 	}
 

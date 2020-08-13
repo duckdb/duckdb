@@ -19,7 +19,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 		// COMPARE NOT EQUAL not supported with merge join
 		assert(cond.comparison != ExpressionType::COMPARE_NOTEQUAL);
 		assert(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type.InternalType());
+		join_key_types.push_back(cond.left->return_type);
 	}
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -31,10 +31,10 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 class MergeJoinLocalState : public LocalSinkState {
 public:
 	MergeJoinLocalState(vector<JoinCondition> &conditions) {
-		vector<PhysicalType> condition_types;
+		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
-			condition_types.push_back(cond.right->return_type.InternalType());
+			condition_types.push_back(cond.right->return_type);
 		}
 		join_keys.Initialize(condition_types);
 	}
@@ -131,10 +131,10 @@ public:
 	PhysicalPiecewiseMergeJoinState(PhysicalOperator *left, vector<JoinCondition> &conditions)
 	    : PhysicalOperatorState(left), fetch_next_left(true), left_position(0), right_position(0),
 	      right_chunk_index(0) {
-		vector<PhysicalType> condition_types;
+		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type.InternalType());
+			condition_types.push_back(cond.left->return_type);
 		}
 		join_keys.Initialize(condition_types);
 	}
@@ -420,7 +420,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 
 	order.count = not_null_count;
 	order.order.Initialize(STANDARD_VECTOR_SIZE);
-	switch (vector.type) {
+	switch (vector.type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		templated_quicksort<int8_t>(vdata, not_null, not_null_count, order.order);

@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalPragma : public PhysicalOperator {
 public:
 	PhysicalPragma(unique_ptr<PragmaInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::PRAGMA, {PhysicalType::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::PRAGMA, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 
 	unique_ptr<PragmaInfo> info;

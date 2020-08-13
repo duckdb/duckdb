@@ -178,15 +178,17 @@ Value Value::DATE(date_t date) {
 }
 
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
-	auto val = Value::INTEGER(Date::FromDate(year, month, day));
-	val.type_ = LogicalType::DATE;
+	return Value::DATE(Date::FromDate(year, month, day));
+}
+
+Value Value::TIME(dtime_t time) {
+	auto val = Value::INTEGER(time);
+	val.type_ = LogicalType::TIME;
 	return val;
 }
 
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
-	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
-	val.type_ = LogicalType::TIME;
-	return val;
+	return Value::TIME(Time::FromTime(hour, min, sec, msec));
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
@@ -552,8 +554,8 @@ Value Value::CastAs(LogicalType target_type, bool strict) const {
 	}
 	Vector input, result;
 	input.Reference(*this);
-	result.Initialize(target_type.InternalType());
-	VectorOperations::Cast(input, result, type_, target_type, 1, strict);
+	result.Initialize(target_type);
+	VectorOperations::Cast(input, result, 1, strict);
 	return result.GetValue(0);
 }
 

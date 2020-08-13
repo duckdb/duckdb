@@ -303,7 +303,7 @@ struct LogicalType {
 	hash_t Hash() const;
 
 	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
-	int NumericTypeOrder();
+	int NumericTypeOrder() const;
 private:
 	LogicalTypeId id_;
 	uint8_t width_;
@@ -350,9 +350,6 @@ string LogicalTypeIdToString(LogicalTypeId type);
 
 LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);
-
-//! Returns the "simplest" SQL type corresponding to the given type id (e.g. PhysicalType::INT32 -> LogicalTypeId::INTEGER)
-LogicalType LogicalTypeFromInternalType(PhysicalType type);
 
 //! Returns the PhysicalType for the given type
 template <class T> PhysicalType GetTypeId() {

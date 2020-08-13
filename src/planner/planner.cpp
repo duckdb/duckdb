@@ -33,7 +33,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->read_only = binder.read_only;
 	this->requires_valid_transaction = binder.requires_valid_transaction;
 	this->names = bound_statement.names;
-	this->sql_types = bound_statement.types;
+	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
 
 	// now create a logical query plan from the query
@@ -54,10 +54,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		if (value_map.find(expr->parameter_nr) != value_map.end()) {
 			throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
 		}
-		PreparedValueEntry entry;
-		entry.value = move(value);
-		entry.target_type = expr->return_type;
-		value_map[expr->parameter_nr] = move(entry);
+		value_map[expr->parameter_nr] = move(value);
 	}
 }
 
@@ -100,7 +97,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		// now create the logical prepare
 		auto prepared_data = make_unique<PreparedStatementData>(statement_type);
 		prepared_data->names = names;
-		prepared_data->sql_types = sql_types;
+		prepared_data->types = types;
 		prepared_data->value_map = move(value_map);
 		prepared_data->read_only = this->read_only;
 		prepared_data->requires_valid_transaction = this->requires_valid_transaction;
@@ -110,7 +107,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
-		sql_types = { LogicalType::BOOLEAN };
+		types = { LogicalType::BOOLEAN };
 		plan = move(prepare);
 		break;
 	}

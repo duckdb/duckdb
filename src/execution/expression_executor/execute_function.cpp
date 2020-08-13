@@ -8,11 +8,11 @@ struct FunctionState : public ExpressionState {
 	FunctionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 		auto &func = (BoundFunctionExpression &)expr;
 		for (auto &child : func.children) {
-			child_types.push_back(child->return_type.InternalType());
+			child_types.push_back(child->return_type);
 		}
 	}
 
-	vector<PhysicalType> child_types;
+	vector<LogicalType> child_types;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
@@ -32,7 +32,7 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 	if (state->child_types.size() > 0) {
 		arguments.Initialize(state->child_types);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			assert(state->child_types[i] == expr.children[i]->return_type.InternalType());
+			assert(state->child_types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 #ifdef DEBUG
 			if (expr.arguments[i].id() == LogicalTypeId::VARCHAR) {
@@ -44,8 +44,8 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 	}
 	expr.function.function(arguments, *state, result);
 
-	if (result.type != expr.return_type.InternalType()) {
-		throw TypeMismatchException(expr.return_type.InternalType(), result.type,
+	if (result.type != expr.return_type) {
+		throw TypeMismatchException(expr.return_type, result.type,
 		                            "expected function to return the former "
 		                            "but the function returned the latter");
 	}

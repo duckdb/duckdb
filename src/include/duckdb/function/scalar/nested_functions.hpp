@@ -32,19 +32,6 @@ struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct StructExtractBindData : public FunctionData {
-	string key;
-	idx_t index;
-	PhysicalType type;
-
-	StructExtractBindData(string key, idx_t index, PhysicalType type) : key(key), index(index), type(type) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StructExtractBindData>(key, index, type);
-	}
-};
-
 struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
