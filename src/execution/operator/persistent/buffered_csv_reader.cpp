@@ -1163,7 +1163,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				UnaryExecutor::Execute<string_t, date_t, true>(
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format.ParseDate(input); });
-			} catch (InvalidInputException e) {
+			} catch (Exception e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
@@ -1173,7 +1173,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				UnaryExecutor::Execute<string_t, timestamp_t, true>(
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
-			} catch (InvalidInputException e) {
+			} catch (Exception e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
