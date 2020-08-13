@@ -9,6 +9,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	if (op == "=" || op == "==") {

@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<PragmaStatement> Transformer::TransformPragma(PGNode *node) {
 	auto stmt = reinterpret_cast<PGPragmaStmt *>(node);

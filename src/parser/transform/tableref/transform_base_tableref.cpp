@@ -3,6 +3,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformRangeVar(PGRangeVar *root) {
 	auto result = make_unique<BaseTableRef>();

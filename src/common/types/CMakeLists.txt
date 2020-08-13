@@ -5,7 +5,6 @@ add_library_unity(duckdb_common_types
                   date.cpp
                   hash.cpp
                   hugeint.cpp
-                  hyperloglog.cpp
                   interval.cpp
                   numeric_helper.cpp
                   null_value.cpp

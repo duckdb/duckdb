@@ -115,7 +115,6 @@
 
 
 
-
 /* Defines to completely disable specific portions of miniz.c:
    If all macros here are defined the only functionality remaining will be CRC-32, adler-32, tinfl, and tdefl. */
 
@@ -125,13 +124,13 @@
 /* If MINIZ_NO_TIME is specified then the ZIP archive functions will not be able to get the current time, or */
 /* get/set file times, and the C run-time funcs that get/set times won't be called. */
 /* The current downside is the times written to your archives will be from 1979. */
-/*#define MINIZ_NO_TIME */
+#define MINIZ_NO_TIME
 
 /* Define MINIZ_NO_ARCHIVE_APIS to disable all ZIP archive API's. */
 #define MINIZ_NO_ARCHIVE_APIS
 
 /* Define MINIZ_NO_ARCHIVE_WRITING_APIS to disable all writing related ZIP archive API's. */
-/*#define MINIZ_NO_ARCHIVE_WRITING_APIS */
+#define MINIZ_NO_ARCHIVE_WRITING_APIS
 
 /* Define MINIZ_NO_ZLIB_APIS to remove all ZLIB-style compression/decompression API's. */
 /*#define MINIZ_NO_ZLIB_APIS */
@@ -151,6 +150,8 @@
 #endif
 
 #include <stddef.h>
+
+
 
 #if !defined(MINIZ_NO_TIME) && !defined(MINIZ_NO_ARCHIVE_APIS)
 #include <time.h>
@@ -184,9 +185,7 @@
 #define MINIZ_HAS_64BIT_REGISTERS 0
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+namespace duckdb_miniz {
 
 /* ------------------- zlib-style API Definitions. */
 
@@ -205,14 +204,7 @@ mz_ulong mz_adler32(mz_ulong adler, const unsigned char *ptr, size_t buf_len);
 mz_ulong mz_crc32(mz_ulong crc, const unsigned char *ptr, size_t buf_len);
 
 /* Compression strategies. */
-enum
-{
-    MZ_DEFAULT_STRATEGY = 0,
-    MZ_FILTERED = 1,
-    MZ_HUFFMAN_ONLY = 2,
-    MZ_RLE = 3,
-    MZ_FIXED = 4
-};
+enum { MZ_DEFAULT_STRATEGY = 0, MZ_FILTERED = 1, MZ_HUFFMAN_ONLY = 2, MZ_RLE = 3, MZ_FIXED = 4 };
 
 /* Method */
 #define MZ_DEFLATED 8
@@ -224,14 +216,13 @@ typedef void (*mz_free_func)(void *opaque, void *address);
 typedef void *(*mz_realloc_func)(void *opaque, void *address, size_t items, size_t size);
 
 /* Compression levels: 0-9 are the standard zlib-style levels, 10 is best possible compression (not zlib compatible, and may be very slow), MZ_DEFAULT_COMPRESSION=MZ_DEFAULT_LEVEL. */
-enum
-{
-    MZ_NO_COMPRESSION = 0,
-    MZ_BEST_SPEED = 1,
-    MZ_BEST_COMPRESSION = 9,
-    MZ_UBER_COMPRESSION = 10,
-    MZ_DEFAULT_LEVEL = 6,
-    MZ_DEFAULT_COMPRESSION = -1
+enum {
+	MZ_NO_COMPRESSION = 0,
+	MZ_BEST_SPEED = 1,
+	MZ_BEST_COMPRESSION = 9,
+	MZ_UBER_COMPRESSION = 10,
+	MZ_DEFAULT_LEVEL = 6,
+	MZ_DEFAULT_COMPRESSION = -1
 };
 
 #define MZ_VERSION "10.0.3"
@@ -244,29 +235,20 @@ enum
 #ifndef MINIZ_NO_ZLIB_APIS
 
 /* Flush values. For typical usage you only need MZ_NO_FLUSH and MZ_FINISH. The other values are for advanced use (refer to the zlib docs). */
-enum
-{
-    MZ_NO_FLUSH = 0,
-    MZ_PARTIAL_FLUSH = 1,
-    MZ_SYNC_FLUSH = 2,
-    MZ_FULL_FLUSH = 3,
-    MZ_FINISH = 4,
-    MZ_BLOCK = 5
-};
+enum { MZ_NO_FLUSH = 0, MZ_PARTIAL_FLUSH = 1, MZ_SYNC_FLUSH = 2, MZ_FULL_FLUSH = 3, MZ_FINISH = 4, MZ_BLOCK = 5 };
 
 /* Return status codes. MZ_PARAM_ERROR is non-standard. */
-enum
-{
-    MZ_OK = 0,
-    MZ_STREAM_END = 1,
-    MZ_NEED_DICT = 2,
-    MZ_ERRNO = -1,
-    MZ_STREAM_ERROR = -2,
-    MZ_DATA_ERROR = -3,
-    MZ_MEM_ERROR = -4,
-    MZ_BUF_ERROR = -5,
-    MZ_VERSION_ERROR = -6,
-    MZ_PARAM_ERROR = -10000
+enum {
+	MZ_OK = 0,
+	MZ_STREAM_END = 1,
+	MZ_NEED_DICT = 2,
+	MZ_ERRNO = -1,
+	MZ_STREAM_ERROR = -2,
+	MZ_DATA_ERROR = -3,
+	MZ_MEM_ERROR = -4,
+	MZ_BUF_ERROR = -5,
+	MZ_VERSION_ERROR = -6,
+	MZ_PARAM_ERROR = -10000
 };
 
 /* Window bits */
@@ -275,26 +257,25 @@ enum
 struct mz_internal_state;
 
 /* Compression/decompression stream struct. */
-typedef struct mz_stream_s
-{
-    const unsigned char *next_in; /* pointer to next byte to read */
-    unsigned int avail_in;        /* number of bytes available at next_in */
-    mz_ulong total_in;            /* total number of bytes consumed so far */
+typedef struct mz_stream_s {
+	const unsigned char *next_in; /* pointer to next byte to read */
+	unsigned int avail_in;        /* number of bytes available at next_in */
+	mz_ulong total_in;            /* total number of bytes consumed so far */
 
-    unsigned char *next_out; /* pointer to next byte to write */
-    unsigned int avail_out;  /* number of bytes that can be written to next_out */
-    mz_ulong total_out;      /* total number of bytes produced so far */
+	unsigned char *next_out; /* pointer to next byte to write */
+	unsigned int avail_out;  /* number of bytes that can be written to next_out */
+	mz_ulong total_out;      /* total number of bytes produced so far */
 
-    char *msg;                       /* error msg (unused) */
-    struct mz_internal_state *state; /* internal state, allocated by zalloc/zfree */
+	char *msg;                       /* error msg (unused) */
+	struct mz_internal_state *state; /* internal state, allocated by zalloc/zfree */
 
-    mz_alloc_func zalloc; /* optional heap allocation function (defaults to malloc) */
-    mz_free_func zfree;   /* optional heap free function (defaults to free) */
-    void *opaque;         /* heap alloc function user pointer */
+	mz_alloc_func zalloc; /* optional heap allocation function (defaults to malloc) */
+	mz_free_func zfree;   /* optional heap free function (defaults to free) */
+	void *opaque;         /* heap alloc function user pointer */
 
-    int data_type;     /* data_type (unused) */
-    mz_ulong adler;    /* adler32 of the source or uncompressed data */
-    mz_ulong reserved; /* not used */
+	int data_type;     /* data_type (unused) */
+	mz_ulong adler;    /* adler32 of the source or uncompressed data */
+	mz_ulong reserved; /* not used */
 } mz_stream;
 
 typedef mz_stream *mz_streamp;
@@ -306,7 +287,8 @@ const char *mz_version(void);
 /* Parameters: */
 /*  pStream must point to an initialized mz_stream struct. */
 /*  level must be between [MZ_NO_COMPRESSION, MZ_BEST_COMPRESSION]. */
-/*  level 1 enables a specially optimized compression function that's been optimized purely for performance, not ratio. */
+/*  level 1 enables a specially optimized compression function that's been optimized purely for performance, not ratio.
+ */
 /*  (This special func. is currently only enabled when MINIZ_USE_UNALIGNED_LOADS_AND_STORES and MINIZ_LITTLE_ENDIAN are defined.) */
 /* Return values: */
 /*  MZ_OK on success. */
@@ -325,7 +307,8 @@ int mz_deflateInit2(mz_streamp pStream, int level, int method, int window_bits, 
 /* Quickly resets a compressor without having to reallocate anything. Same as calling mz_deflateEnd() followed by mz_deflateInit()/mz_deflateInit2(). */
 int mz_deflateReset(mz_streamp pStream);
 
-/* mz_deflate() compresses the input to output, consuming as much of the input and producing as much output as possible. */
+/* mz_deflate() compresses the input to output, consuming as much of the input and producing as much output as possible.
+ */
 /* Parameters: */
 /*   pStream is the stream to read from and write to. You must initialize/update the next_in, avail_in, next_out, and avail_out members. */
 /*   flush may be MZ_NO_FLUSH, MZ_PARTIAL_FLUSH/MZ_SYNC_FLUSH, MZ_FULL_FLUSH, or MZ_FINISH. */
@@ -349,7 +332,8 @@ mz_ulong mz_deflateBound(mz_streamp pStream, mz_ulong source_len);
 /* Single-call compression functions mz_compress() and mz_compress2(): */
 /* Returns MZ_OK on success, or one of the error codes from mz_deflate() on failure. */
 int mz_compress(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char *pSource, mz_ulong source_len);
-int mz_compress2(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char *pSource, mz_ulong source_len, int level);
+int mz_compress2(unsigned char *pDest, mz_ulong *pDest_len, const unsigned char *pSource, mz_ulong source_len,
+                 int level);
 
 /* mz_compressBound() returns a (very) conservative upper bound on the amount of data that could be generated by calling mz_compress(). */
 mz_ulong mz_compressBound(mz_ulong source_len);
@@ -464,14 +448,15 @@ typedef void *const voidpc;
 
 #endif /* MINIZ_NO_ZLIB_APIS */
 
-#ifdef __cplusplus
 }
-#endif
+
 #pragma once
 #include <assert.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+namespace duckdb_miniz {
 
 /* ------------------- Types and macros */
 typedef unsigned char mz_uint8;
@@ -544,10 +529,6 @@ typedef struct mz_dummy_time_t_tag
 #define MZ_FORCEINLINE inline
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 extern void *miniz_def_alloc_func(void *opaque, size_t items, size_t size);
 extern void miniz_def_free_func(void *opaque, void *address);
 extern void *miniz_def_realloc_func(void *opaque, void *address, size_t items, size_t size);
@@ -555,15 +536,10 @@ extern void *miniz_def_realloc_func(void *opaque, void *address, size_t items, s
 #define MZ_UINT16_MAX (0xFFFFU)
 #define MZ_UINT32_MAX (0xFFFFFFFFU)
 
-#ifdef __cplusplus
-}
-#endif
+
 #pragma once
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 /* ------------------- Low-level Compression API Definitions */
 
 /* Set TDEFL_LESS_MEMORY to 1 to use less memory (compression will be slightly slower, and raw/dynamic blocks will be output more frequently). */
@@ -743,16 +719,12 @@ mz_uint tdefl_create_comp_flags_from_zip_params(int level, int window_bits, int 
 tdefl_compressor *tdefl_compressor_alloc();
 void tdefl_compressor_free(tdefl_compressor *pComp);
 
-#ifdef __cplusplus
-}
-#endif
+
 #pragma once
 
 /* ------------------- Low-level Decompression API Definitions */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 /* Decompression flags used by tinfl_decompress(). */
 /* TINFL_FLAG_PARSE_ZLIB_HEADER: If set, the input has a valid zlib header and ends with an adler32 checksum (it's a valid zlib stream). Otherwise, the input is a raw deflate stream. */
 /* TINFL_FLAG_HAS_MORE_INPUT: If set, there are more input bytes available beyond the end of the supplied input buffer. If clear, the input buffer contains all remaining input. */
@@ -886,9 +858,7 @@ struct tinfl_decompressor_tag
     mz_uint8 m_raw_header[4], m_len_codes[TINFL_MAX_HUFF_SYMBOLS_0 + TINFL_MAX_HUFF_SYMBOLS_1 + 137];
 };
 
-#ifdef __cplusplus
-}
-#endif
+
 
 #pragma once
 
@@ -897,9 +867,6 @@ struct tinfl_decompressor_tag
 
 #ifndef MINIZ_NO_ARCHIVE_APIS
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 enum
 {
@@ -1314,8 +1281,8 @@ void *mz_zip_extract_archive_file_to_heap_v2(const char *pZip_filename, const ch
 
 #endif /* #ifndef MINIZ_NO_ARCHIVE_WRITING_APIS */
 
-#ifdef __cplusplus
-}
-#endif
+
 
 #endif /* MINIZ_NO_ARCHIVE_APIS */
+
+} // namespace duckdb_miniz

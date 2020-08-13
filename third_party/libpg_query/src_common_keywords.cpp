@@ -28,6 +28,7 @@
 
 #include "parser/kwlist.hpp"
 
+namespace duckdb_libpgquery {
 
 /*
  * ScanKeywordLookup - see if a given word is a keyword
@@ -44,14 +45,9 @@
  * keywords are to be matched in this way even though non-keyword identifiers
  * receive a different case-normalization mapping.
  */
-const PGScanKeyword *
-ScanKeywordLookup(const char *text,
-				  const PGScanKeyword *keywords,
-				  int num_keywords)
-{
-	int			len,
-				i;
-	char		word[NAMEDATALEN];
+const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords) {
+	int len, i;
+	char word[NAMEDATALEN];
 	const PGScanKeyword *low;
 	const PGScanKeyword *high;
 
@@ -64,9 +60,8 @@ ScanKeywordLookup(const char *text,
 	 * Apply an ASCII-only downcasing.  We must not use tolower() since it may
 	 * produce the wrong translation in some locales (eg, Turkish).
 	 */
-	for (i = 0; i < len; i++)
-	{
-		char		ch = text[i];
+	for (i = 0; i < len; i++) {
+		char ch = text[i];
 
 		if (ch >= 'A' && ch <= 'Z')
 			ch += 'a' - 'A';
@@ -79,10 +74,9 @@ ScanKeywordLookup(const char *text,
 	 */
 	low = keywords;
 	high = keywords + (num_keywords - 1);
-	while (low <= high)
-	{
+	while (low <= high) {
 		const PGScanKeyword *middle;
-		int			difference;
+		int difference;
 
 		middle = low + (high - low) / 2;
 		difference = strcmp(middle->name, word);
@@ -95,4 +89,5 @@ ScanKeywordLookup(const char *text,
 	}
 
 	return NULL;
+}
 }

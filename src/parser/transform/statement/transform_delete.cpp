@@ -3,6 +3,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<DeleteStatement> Transformer::TransformDelete(PGNode *node) {
 	auto stmt = reinterpret_cast<PGDeleteStmt *>(node);

@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformSubquery(PGSubLink *root) {
 	if (!root) {

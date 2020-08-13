@@ -6,6 +6,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<ParsedExpression> Transformer::TransformTypeCast(PGTypeCast *root) {
 	if (!root) {

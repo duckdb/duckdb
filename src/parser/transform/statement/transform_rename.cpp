@@ -3,6 +3,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<AlterTableStatement> Transformer::TransformRename(PGNode *node) {
 	auto stmt = reinterpret_cast<PGRenameStmt *>(node);
