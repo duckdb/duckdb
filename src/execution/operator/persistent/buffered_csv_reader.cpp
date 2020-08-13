@@ -1164,7 +1164,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format.ParseDate(input); });
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		} else if (options.has_timestamp_format && sql_types[col_idx].id == SQLTypeId::TIMESTAMP) {
@@ -1174,7 +1174,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		} else {
@@ -1183,7 +1183,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
 				                       sql_types[col_idx], parse_chunk.size());
 			} catch (const Exception &e) {
-				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				throw ParserException("Error between line %llu and %llu: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
 			}
 		}
