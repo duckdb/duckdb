@@ -102,17 +102,18 @@ void BufferedCSVReader::PrepareComplexParser() {
 }
 
 void BufferedCSVReader::ConfigureSampling() {
-	if (options.sample_size) {
-		if (options.sample_size > STANDARD_VECTOR_SIZE) {
-			throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
-			                      options.sample_size, STANDARD_VECTOR_SIZE);
-		}
-		SAMPLE_CHUNK_SIZE = options.sample_size;
+	if (options.sample_size > STANDARD_VECTOR_SIZE) {
+		throw ParserException("Chunk size (%d) cannot be bigger than STANDARD_VECTOR_SIZE (%d)",
+			                    options.sample_size, STANDARD_VECTOR_SIZE);
+	} else if (options.sample_size < 1) {
+		throw ParserException("Chunk size cannot be smaller than 1.");
 	}
+	SAMPLE_CHUNK_SIZE = options.sample_size;
 
-	if (options.num_samples) {
-		MAX_SAMPLE_CHUNKS = options.num_samples;
+	if (options.num_samples < 0) {
+		throw ParserException("Number of sample chunks cannot be smaller than 0.");
 	}
+	MAX_SAMPLE_CHUNKS = options.num_samples;
 }
 
 unique_ptr<istream> BufferedCSVReader::OpenCSV(ClientContext &context, BufferedCSVReaderOptions options) {
@@ -544,7 +545,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}*/
 
 	// information for header detection
-	bool first_row_consistent = false;
+	bool first_row_consistent = true;
 	bool first_row_nulls = false;
 
 	// parse first row again with knowledge from the rest of the file to check
@@ -552,7 +553,6 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	JumpToBeginning(options.skip_rows, false);
 	ParseCSV(ParserMode::SNIFFING_DATATYPES);
 	if (parse_chunk.size() > 1) {
-		first_row_consistent = true;
 		first_row_nulls = true;
 
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {

@@ -35,7 +35,7 @@ SELECT * FROM dates
 
 # dateformat should also work with auto format
 statement ok
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%m/%d/%Y')
+INSERT INTO dates SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%m/%d/%Y')
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -45,7 +45,7 @@ SELECT * FROM dates ORDER BY 1
 
 # we can also do this for timestamps
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y')
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y')
 
 query I
 SELECT * FROM timestamps

@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 			} else if (options.sample_size < 1) {
 				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 			}
-		} else if (kv.first == "num_sample_locations") {
+		} else if (kv.first == "num_samples") {
 			options.num_samples = kv.second.CastAs(TypeId::INT64).value_.bigint;
 			if (options.num_samples < 1) {
 				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
