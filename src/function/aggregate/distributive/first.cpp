@@ -112,8 +112,11 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 	case LogicalTypeId::SMALLINT:
 		return GetFirstAggregateTemplated<int16_t>(type);
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
 		return GetFirstAggregateTemplated<int32_t>(type);
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<int64_t>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetFirstAggregateTemplated<hugeint_t>(type);
@@ -123,10 +126,6 @@ AggregateFunction FirstFun::GetFunction(LogicalType type) {
 		return GetFirstAggregateTemplated<double>(type);
 	case LogicalTypeId::DECIMAL:
 		return GetFirstAggregateTemplated<double>(type);
-	case LogicalTypeId::DATE:
-		return GetFirstAggregateTemplated<date_t>(type);
-	case LogicalTypeId::TIMESTAMP:
-		return GetFirstAggregateTemplated<timestamp_t>(type);
 	case LogicalTypeId::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t>(type);
 	case LogicalTypeId::VARCHAR:
