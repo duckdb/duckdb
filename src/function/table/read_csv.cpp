@@ -16,7 +16,8 @@ struct ReadCSVFunctionData : public TableFunctionData {
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
                                               vector<SQLType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {
@@ -31,7 +32,7 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	options.delimiter = ",";
 	options.quote = "\"";
 
-	for(auto &kv : named_parameters) {
+	for (auto &kv : named_parameters) {
 		if (kv.first == "auto_detect") {
 			options.auto_detect = kv.second.value_.boolean;
 		} else if (kv.first == "sep" || kv.first == "delim") {
@@ -55,9 +56,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
 				    STANDARD_VECTOR_SIZE);
 			} else if (options.sample_size < 1) {
-				throw BinderException(
-				    "Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1",
-				    STANDARD_VECTOR_SIZE);
+				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1",
+				                      STANDARD_VECTOR_SIZE);
 			}
 		} else if (kv.first == "num_samples") {
 			options.num_samples = kv.second.CastAs(TypeId::INT64).value_.bigint;
@@ -109,8 +109,8 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 }
 
 static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
-                                              unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<SQLType> &return_types, vector<string> &names) {
 	named_parameters["auto_detect"] = Value::BOOLEAN(true);
 	return read_csv_bind(context, inputs, named_parameters, return_types, names);
 }
@@ -136,7 +136,8 @@ static void add_named_parameters(TableFunction &table_function) {
 }
 
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction read_csv_function = TableFunction("read_csv", {SQLType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
+	TableFunction read_csv_function =
+	    TableFunction("read_csv", {SQLType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
 	add_named_parameters(read_csv_function);
 	set.AddFunction(read_csv_function);
 

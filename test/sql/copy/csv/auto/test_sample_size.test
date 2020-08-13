@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/auto/test_optional_params.test
+# name: test/sql/copy/csv/auto/test_sample_size.test
 # description: Test optional parameters for read csv
 # group: [auto]
 

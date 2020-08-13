@@ -50,35 +50,35 @@ struct TextSearchShiftArray {
 	unique_ptr<uint8_t[]> shifts;
 };
 
-struct BufferedCSVReaderOptions  {
+struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
-    //! Whether or not to automatically detect dialect and datatypes
-    bool auto_detect = true;
+	//! Whether or not to automatically detect dialect and datatypes
+	bool auto_detect = true;
 	//! Whether or not a delimiter was defined by the user
 	bool has_delimiter = false;
-    //! Delimiter to separate columns within each line
-    string delimiter;
+	//! Delimiter to separate columns within each line
+	string delimiter;
 	//! Whether or not a quote sign was defined by the user
 	bool has_quote = false;
-    //! Quote used for columns that contain reserved characters, e.g., delimiter
-    string quote;
+	//! Quote used for columns that contain reserved characters, e.g., delimiter
+	string quote;
 	//! Whether or not an escape character was defined by the user
 	bool has_escape = false;
-    //! Escape character to escape quote character
-    string escape;
+	//! Escape character to escape quote character
+	string escape;
 	//! Whether or not a header information was given by the user
 	bool has_header = false;
-    //! Whether or not the file has a header line
-    bool header = false;
-    //! How many leading rows to skip
-    idx_t skip_rows = 0;
-    //! Expected number of columns
-    idx_t num_cols = 0;
-    //! Specifies the string that represents a null value
-    string null_str;
-    //! True, if column with that index must skip null check
-    vector<bool> force_not_null;
+	//! Whether or not the file has a header line
+	bool header = false;
+	//! How many leading rows to skip
+	idx_t skip_rows = 0;
+	//! Expected number of columns
+	idx_t num_cols = 0;
+	//! Specifies the string that represents a null value
+	string null_str;
+	//! True, if column with that index must skip null check
+	vector<bool> force_not_null;
 	//! Size of sample chunk used for dialect and type detection
 	idx_t sample_size = DEFAULT_SAMPLE_CHUNK_SIZE;
 	//! Number of sample chunks used for type detection
@@ -117,8 +117,10 @@ class BufferedCSVReader {
 	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
 
 public:
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options, vector<SQLType> requested_types = vector<SQLType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types, unique_ptr<std::istream> source);
+	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	                  vector<SQLType> requested_types = vector<SQLType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types,
+	                  unique_ptr<std::istream> source);
 
 	BufferedCSVReaderOptions options;
 	vector<SQLType> sql_types;
@@ -187,7 +189,7 @@ private:
 	void ConfigureSampling();
 	//! Prepare candidate sets for auto detection based on user input
 	void PrepareCandidateSets();
-	
+
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes

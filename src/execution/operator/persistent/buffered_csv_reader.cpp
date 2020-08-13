@@ -36,7 +36,7 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	return std::to_string(linenr+1) + estimated;
+	return std::to_string(linenr + 1) + estimated;
 }
 
 TextSearchShiftArray::TextSearchShiftArray() {
@@ -92,7 +92,7 @@ void BufferedCSVReader::Initialize(vector<SQLType> requested_types) {
 
 	PrepareComplexParser();
 	InitParseChunk(sql_types.size());
-	SkipHeader(options.skip_rows,options.header);
+	SkipHeader(options.skip_rows, options.header);
 }
 
 void BufferedCSVReader::PrepareComplexParser() {
@@ -296,8 +296,9 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, SQLTy
 		Vector dummy_result(GetInternalType(sql_type));
 		if (options.has_date_format && sql_type == SQLTypeId::DATE) {
 			// use the date format to cast the chunk
-			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk_col, dummy_result, size,
-			    [&](string_t input) { return options.date_format.ParseDate(input); });
+			UnaryExecutor::Execute<string_t, date_t, true>(parse_chunk_col, dummy_result, size, [&](string_t input) {
+				return options.date_format.ParseDate(input);
+			});
 		} else if (options.has_timestamp_format && sql_type == SQLTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			UnaryExecutor::Execute<string_t, timestamp_t, true>(
@@ -328,7 +329,7 @@ void BufferedCSVReader::PrepareCandidateSets() {
 		}
 		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape};
 	}
-} 
+}
 
 vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	ConfigureSampling();
@@ -428,11 +429,10 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}
 
 	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<SQLType> type_candidates = {
-	    SQLType::VARCHAR, SQLType::TIMESTAMP,
-	    SQLType::DATE,    SQLType::TIME,
-	    SQLType::DOUBLE, /* SQLType::FLOAT,*/ SQLType::BIGINT,
-	    SQLType::INTEGER, /*SQLType::SMALLINT, SQLType::TINYINT,*/ SQLType::BOOLEAN};
+	vector<SQLType> type_candidates = {SQLType::VARCHAR, SQLType::TIMESTAMP,
+	                                   SQLType::DATE,    SQLType::TIME,
+	                                   SQLType::DOUBLE,  /* SQLType::FLOAT,*/ SQLType::BIGINT,
+	                                   SQLType::INTEGER, /*SQLType::SMALLINT, SQLType::TINYINT,*/ SQLType::BOOLEAN};
 
 	// check which info candiate leads to minimum amount of non-varchar columns...
 	BufferedCSVReaderOptions best_options;
@@ -448,7 +448,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 		InitParseChunk(sql_types.size());
 
 		// detect types in first chunk
-		JumpToBeginning(options.skip_rows,false);
+		JumpToBeginning(options.skip_rows, false);
 		ParseCSV(ParserMode::SNIFFING_DATATYPES);
 		for (idx_t row = 0; row < parse_chunk.size(); row++) {
 			for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
@@ -519,9 +519,9 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 				vector<SQLType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
-					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)){
+					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 						break;
-					} else{
+					} else {
 						col_type_candidates.pop_back();
 					}
 				}
@@ -569,8 +569,7 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}
 
 	// update parser info, and read, generate & set col_names based on previous findings
-	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || 
-	    (options.has_header && options.header)) {
+	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
 		vector<string> t_col_names;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
@@ -1146,7 +1145,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					switch (utf_type) {
 					case UnicodeType::INVALID:
 						throw ParserException("Error between line %d and %d: file is not valid UTF8",
-						                      linenr-parse_chunk.size(), linenr);
+						                      linenr - parse_chunk.size(), linenr);
 					case UnicodeType::ASCII:
 						break;
 					case UnicodeType::UNICODE: {
@@ -1166,15 +1165,15 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
 				    [&](string_t input) { return options.date_format.ParseDate(input); });
 			} catch (InvalidInputException e) {
-				throw ParserException("Error between line %d and %d: %s",
-				                      linenr - parse_chunk.size(), linenr, e.what());
+				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
+				                      e.what());
 			}
 		} else if (options.has_timestamp_format && sql_types[col_idx].id == SQLTypeId::TIMESTAMP) {
 			try {
 				// use the date format to cast the chunk
 				UnaryExecutor::Execute<string_t, timestamp_t, true>(
-					parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-					[&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
+				    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
+				    [&](string_t input) { return options.timestamp_format.ParseTimestamp(input); });
 			} catch (InvalidInputException e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
@@ -1183,7 +1182,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			try {
 				// target type is not varchar: perform a cast
 				VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], SQLType::VARCHAR,
-									   sql_types[col_idx], parse_chunk.size());
+				                       sql_types[col_idx], parse_chunk.size());
 			} catch (Exception e) {
 				throw ParserException("Error between line %d and %d: %s", linenr - parse_chunk.size(), linenr,
 				                      e.what());
@@ -1192,4 +1191,4 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	}
 	parse_chunk.Reset();
 }
-}
+} // namespace duckdb
