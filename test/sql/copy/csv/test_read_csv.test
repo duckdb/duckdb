@@ -7,7 +7,7 @@ statement ok
 CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);
 
 query I
-INSERT INTO abac_tbl SELECT * FROM read_csv('test/sql/copy/csv/data/abac/abac.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR', c := 'VARCHAR'), sep='ABAC')
+INSERT INTO abac_tbl SELECT * FROM read_csv('test/sql/copy/csv/data/abac/abac.csv', columns=STRUCT_PACK(a := 'VARCHAR', b := 'VARCHAR', c := 'VARCHAR'), sep='ABAC', auto_detect='false')
 ----
 1
 
@@ -35,7 +35,7 @@ SELECT * FROM dates
 
 # dateformat should also work with auto format
 statement ok
-INSERT INTO dates SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%m/%d/%Y')
+INSERT INTO dates SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', dateformat='%m/%d/%Y')
 
 query I
 SELECT * FROM dates ORDER BY 1
@@ -45,7 +45,7 @@ SELECT * FROM dates ORDER BY 1
 
 # we can also do this for timestamps
 statement ok
-CREATE TABLE timestamps AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y')
+CREATE TABLE timestamps AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/dateformat.csv', timestampformat='%m/%d/%Y')
 
 query I
 SELECT * FROM timestamps

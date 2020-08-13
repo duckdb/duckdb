@@ -372,24 +372,24 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 	switch (id) {
 	case SQLTypeId::SMALLINT:
 		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
 		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
 	case SQLTypeId::INTEGER:
 		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
 			return true;
 		default:
 			return false;
 		}
 	case SQLTypeId::BIGINT:
 		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
@@ -399,6 +399,7 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		}
 	case SQLTypeId::HUGEINT:
 		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
@@ -407,12 +408,26 @@ bool SQLType::IsMoreGenericThan(SQLType &other) const {
 		default:
 			return false;
 		}
-	case SQLTypeId::DOUBLE:
+	case SQLTypeId::FLOAT:
 		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
 		case SQLTypeId::TINYINT:
 		case SQLTypeId::SMALLINT:
 		case SQLTypeId::INTEGER:
 		case SQLTypeId::BIGINT:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	case SQLTypeId::DOUBLE:
+		switch (other.id) {
+		case SQLTypeId::BOOLEAN:
+		case SQLTypeId::TINYINT:
+		case SQLTypeId::SMALLINT:
+		case SQLTypeId::INTEGER:
+		case SQLTypeId::BIGINT:
+		case SQLTypeId::FLOAT:
 			return true;
 		default:
 			return false;
