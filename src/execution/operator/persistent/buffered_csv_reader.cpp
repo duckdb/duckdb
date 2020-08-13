@@ -569,8 +569,8 @@ vector<SQLType> BufferedCSVReader::SniffCSV(vector<SQLType> requested_types) {
 	}
 
 	// update parser info, and read, generate & set col_names based on previous findings
-	if ((!first_row_consistent || first_row_nulls ||
-	    (options.has_header && options.header)) && !(options.has_header && !options.header)) {
+	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || 
+	    (options.has_header && options.header)) {
 		options.header = true;
 		vector<string> t_col_names;
 		for (idx_t col = 0; col < parse_chunk.column_count(); col++) {
