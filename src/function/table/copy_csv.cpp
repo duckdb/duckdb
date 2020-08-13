@@ -85,10 +85,10 @@ static bool ParseBoolean(vector<Value> &set) {
 	if (set.size() > 1) {
 		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
 	}
-	if (set[0].type == PhysicalType::FLOAT || set[0].type == PhysicalType::DOUBLE) {
+	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
-	return set[0].CastAs(PhysicalType::BOOL).value_.boolean;
+	return set[0].CastAs(LogicalType::BOOLEAN).value_.boolean;
 }
 
 static string ParseString(vector<Value> &set) {
@@ -96,10 +96,10 @@ static string ParseString(vector<Value> &set) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a string value");
 	}
-	if (set[0].type != PhysicalType::VARCHAR) {
+	if (set[0].type().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("Expected a string argument!");
 	}
-	return set[0].str_value;
+	return set[0].GetValue<string>();
 }
 
 //===--------------------------------------------------------------------===//
@@ -169,7 +169,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	if (set.size() == 0) {
 		throw BinderException("Expected a column list or * as parameter");
 	}
-	if (set.size() == 1 && set[0].type == PhysicalType::VARCHAR && set[0].str_value == "*") {
+	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
 		// *, force_not_null on all columns
 		result.resize(names.size(), true);
 	} else {

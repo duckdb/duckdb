@@ -48,9 +48,9 @@ Vector::Vector(Vector &&other) noexcept
       buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
-void Vector::Reference(Value &value) {
+void Vector::Reference(const Value &value) {
 	vector_type = VectorType::CONSTANT_VECTOR;
-	type = value.type;
+	type = value.type().InternalType();
 	buffer = VectorBuffer::CreateConstantVector(type);
 	auxiliary.reset();
 	data = buffer->GetData();
@@ -150,52 +150,55 @@ void Vector::SetValue(idx_t index, Value val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), move(val));
 	}
-	Value newVal = val.CastAs(type);
+	if (val.type().InternalType() != type) {
+		SetValue(index, val.CastAs(LogicalTypeFromInternalType(type)));
+		return;
+	}
 
-	nullmask[index] = newVal.is_null;
-	if (newVal.is_null) {
+	nullmask[index] = val.is_null;
+	if (val.is_null) {
 		return;
 	}
 	switch (type) {
 	case PhysicalType::BOOL:
-		((bool *)data)[index] = newVal.value_.boolean;
+		((bool *)data)[index] = val.value_.boolean;
 		break;
 	case PhysicalType::INT8:
-		((int8_t *)data)[index] = newVal.value_.tinyint;
+		((int8_t *)data)[index] = val.value_.tinyint;
 		break;
 	case PhysicalType::INT16:
-		((int16_t *)data)[index] = newVal.value_.smallint;
+		((int16_t *)data)[index] = val.value_.smallint;
 		break;
 	case PhysicalType::INT32:
-		((int32_t *)data)[index] = newVal.value_.integer;
+		((int32_t *)data)[index] = val.value_.integer;
 		break;
 	case PhysicalType::INT64:
-		((int64_t *)data)[index] = newVal.value_.bigint;
+		((int64_t *)data)[index] = val.value_.bigint;
 		break;
 	case PhysicalType::INT128:
-		((hugeint_t *)data)[index] = newVal.value_.hugeint;
+		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
 	case PhysicalType::FLOAT:
-		((float *)data)[index] = newVal.value_.float_;
+		((float *)data)[index] = val.value_.float_;
 		break;
 	case PhysicalType::DOUBLE:
-		((double *)data)[index] = newVal.value_.double_;
+		((double *)data)[index] = val.value_.double_;
 		break;
 	case PhysicalType::POINTER:
-		((uintptr_t *)data)[index] = newVal.value_.pointer;
+		((uintptr_t *)data)[index] = val.value_.pointer;
 		break;
 	case PhysicalType::INTERVAL:
-		((interval_t *)data)[index] = newVal.value_.interval;
+		((interval_t *)data)[index] = val.value_.interval;
 		break;
 	case PhysicalType::VARCHAR: {
-		((string_t *)data)[index] = StringVector::AddBlob(*this, newVal.str_value);
+		((string_t *)data)[index] = StringVector::AddBlob(*this, val.str_value);
 		break;
 	}
 	case PhysicalType::STRUCT: {
 		if (!auxiliary || StructVector::GetEntries(*this).size() == 0) {
 			for (size_t i = 0; i < val.struct_value.size(); i++) {
 				auto &struct_child = val.struct_value[i];
-				auto cv = make_unique<Vector>(struct_child.second.type);
+				auto cv = make_unique<Vector>(struct_child.second.type().InternalType());
 				cv->vector_type = vector_type;
 				StructVector::AddEntry(*this, struct_child.first, move(cv));
 			}
@@ -229,7 +232,7 @@ void Vector::SetValue(idx_t index, Value val) {
 				DataChunk child_append_chunk;
 				child_append_chunk.SetCardinality(this_append_len);
 				vector<PhysicalType> types;
-				types.push_back(val.list_value[0].type);
+				types.push_back(val.list_value[0].type().InternalType());
 				child_append_chunk.Initialize(types);
 				for (idx_t i = 0; i < this_append_len; i++) {
 					child_append_chunk.data[0].SetValue(i, val.list_value[i + append_idx]);
@@ -264,14 +267,14 @@ Value Vector::GetValue(idx_t index) const {
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
-		return Value::Numeric(type, start + increment * index);
+		return Value::Numeric(LogicalTypeFromInternalType(type), start + increment * index);
 	}
 	default:
 		throw NotImplementedException("Unimplemented vector type for Vector::GetValue");
 	}
 
 	if (nullmask[index]) {
-		return Value(type);
+		return Value(LogicalTypeFromInternalType(type));
 	}
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -298,11 +301,10 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTERVAL(((interval_t *)data)[index]);
 	case PhysicalType::VARCHAR: {
 		auto str = ((string_t *)data)[index];
-		// avoiding implicit cast and double conversion
 		return Value::BLOB(str.GetString(), false);
 	}
 	case PhysicalType::STRUCT: {
-		Value ret(PhysicalType::STRUCT);
+		Value ret(LogicalType::STRUCT);
 		ret.is_null = false;
 		// we can derive the value schema from the vector schema
 		for (auto &struct_child : StructVector::GetEntries(*this)) {
@@ -311,7 +313,7 @@ Value Vector::GetValue(idx_t index) const {
 		return ret;
 	}
 	case PhysicalType::LIST: {
-		Value ret(PhysicalType::LIST);
+		Value ret(LogicalType::LIST);
 		ret.is_null = false;
 		auto offlen = ((list_entry_t *)data)[index];
 		auto &child_cc = ListVector::GetEntry(*this);

@@ -549,10 +549,11 @@ static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
 	StrfTimeFormat format;
-	if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
-		string error = StrTimeFormat::ParseFormatSpecifier(options_str.str_value, format);
+	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
+		auto format_string = options_str.GetValue<string>();
+		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", options_str.str_value.c_str(), error.c_str());
+			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string.c_str(), error.c_str());
 		}
 	}
 	return make_unique<StrfTimeBindData>(format);
@@ -946,11 +947,12 @@ static unique_ptr<FunctionData> strptime_bind_function(BoundFunctionExpression &
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*expr.children[1]);
 	StrpTimeFormat format;
-	if (!options_str.is_null && options_str.type == PhysicalType::VARCHAR) {
-		format.format_specifier = options_str.str_value;
-		string error = StrTimeFormat::ParseFormatSpecifier(options_str.str_value, format);
+	if (!options_str.is_null && options_str.type().id() == LogicalTypeId::VARCHAR) {
+		string format_string = options_str.ToString();
+		format.format_specifier = format_string;
+		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", options_str.str_value.c_str(), error.c_str());
+			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string.c_str(), error.c_str());
 		}
 	}
 	return make_unique<StrpTimeBindData>(format);

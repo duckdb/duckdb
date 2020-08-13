@@ -352,7 +352,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		auto res = Value();
+		Value res;
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {

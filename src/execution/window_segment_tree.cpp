@@ -129,7 +129,7 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 
 	// No arguments, so just count
 	if (inputs.column_count() == 0) {
-		return Value::Numeric(result_type, end - begin);
+		return Value::Numeric(LogicalTypeFromInternalType(result_type), end - begin);
 	}
 
 	AggregateInit();

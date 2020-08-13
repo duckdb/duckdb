@@ -36,10 +36,10 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
 	if (prefix_value.is_null) {
-		return make_unique<BoundConstantExpression>(Value(PhysicalType::BOOL));
+		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	assert(prefix_value.type == prefix_expr->return_type.InternalType());
+	assert(prefix_value.type() == prefix_expr->return_type);
 	string needle_string = string(((string_t)prefix_value.str_value).GetData());
 
 	/* PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN
@@ -49,7 +49,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 		if_->children.push_back(bindings[1]->Copy());
 		auto case_ =
 		    make_unique<BoundCaseExpression>(move(if_), make_unique<BoundConstantExpression>(Value::BOOLEAN(true)),
-		                                     make_unique<BoundConstantExpression>(Value(PhysicalType::BOOL)));
+		                                     make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN)));
 		return move(case_);
 	}
 

@@ -78,7 +78,7 @@ public:
 
 public:
 	//! Create a vector that references the specified value.
-	void Reference(Value &value);
+	void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
 	void Reference(Vector &other);
 

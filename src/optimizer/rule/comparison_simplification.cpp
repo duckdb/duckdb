@@ -28,7 +28,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	if (constant_value.is_null) {
 		// comparison with constant NULL, return NULL
-		return make_unique<BoundConstantExpression>(Value(PhysicalType::BOOL));
+		return make_unique<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 	if (column_ref_expr->expression_class == ExpressionClass::BOUND_CAST &&
 	    constant_expr->expression_class == ExpressionClass::BOUND_CONSTANT) {
@@ -39,8 +39,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			return nullptr;
 		}
 		auto bound_const_expr = (BoundConstantExpression *)constant_expr;
-		auto new_constant =
-		    bound_const_expr->value.TryCastAs(cast_expression->return_type.id(), target_type.id());
+		auto new_constant = bound_const_expr->value.TryCastAs(target_type);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);
 			constant_expr->return_type = target_type;

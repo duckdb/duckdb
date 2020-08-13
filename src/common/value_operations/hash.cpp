@@ -10,7 +10,7 @@ hash_t ValueOperations::Hash(const Value &op) {
 	if (op.is_null) {
 		return 0;
 	}
-	switch (op.type) {
+	switch (op.type().InternalType()) {
 	case PhysicalType::BOOL:
 		return duckdb::Hash(op.value_.boolean);
 	case PhysicalType::INT8:

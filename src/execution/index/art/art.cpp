@@ -399,7 +399,7 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 // Point Query
 //===--------------------------------------------------------------------===//
 static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
-	assert(type == value.type);
+	assert(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
 		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
@@ -730,7 +730,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 	// scan the index
 	if (!state->checked) {
 		vector<row_t> result_ids;
-		assert(state->values[0].type == types[0]);
+		assert(state->values[0].type().InternalType() == types[0]);
 
 		if (state->values[1].is_null) {
 			lock_guard<mutex> l(lock);
@@ -757,7 +757,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 		} else {
 			lock_guard<mutex> l(lock);
 			// two predicates
-			assert(state->values[1].type == types[0]);
+			assert(state->values[1].type().InternalType() == types[0]);
 			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 			SearchCloseRange(result_ids, state, left_inclusive, right_inclusive);

@@ -250,6 +250,8 @@ enum class LogicalTypeId : uint8_t {
 	INTERVAL = 25,
 
 	HUGEINT = 50,
+	POINTER = 51,
+	HASH = 52,
 
 	STRUCT = 100,
 	LIST = 101
@@ -299,6 +301,9 @@ struct LogicalType {
 	bool IsNumeric() const;
 	bool IsMoreGenericThan(LogicalType &other) const;
 	hash_t Hash() const;
+
+	//! Returns the "order" of a numeric type; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
+	int NumericTypeOrder();
 private:
 	LogicalTypeId id_;
 	uint8_t width_;
@@ -329,6 +334,8 @@ public:
 	static const LogicalType BLOB;
 	static const LogicalType INTERVAL;
 	static const LogicalType HUGEINT;
+	static const LogicalType HASH;
+	static const LogicalType POINTER;
 	static const LogicalType INVALID;
 
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -343,9 +350,6 @@ string LogicalTypeIdToString(LogicalTypeId type);
 
 LogicalType MaxLogicalType(LogicalType left, LogicalType right);
 LogicalType TransformStringToLogicalType(string str);
-
-//! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
-int NumericTypeOrder(PhysicalType type);
 
 //! Returns the "simplest" SQL type corresponding to the given type id (e.g. PhysicalType::INT32 -> LogicalTypeId::INTEGER)
 LogicalType LogicalTypeFromInternalType(PhysicalType type);

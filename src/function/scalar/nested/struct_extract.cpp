@@ -61,7 +61,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
-	assert(key_val.type == PhysicalType::VARCHAR);
+	assert(key_val.type().id() == LogicalTypeId::VARCHAR);
 	if (key_val.is_null || key_val.str_value.length() < 1) {
 		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
 	}

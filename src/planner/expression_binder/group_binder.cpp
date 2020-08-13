@@ -66,7 +66,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 
 BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	// constant as root expression
-	if (!TypeIsIntegral(constant.value.type)) {
+	if (!constant.value.type().IsIntegral()) {
 		// non-integral expression, we just leave the constant here.
 		return ExpressionBinder::BindExpression(constant, 0);
 	}

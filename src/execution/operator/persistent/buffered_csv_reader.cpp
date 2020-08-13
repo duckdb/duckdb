@@ -265,7 +265,7 @@ bool BufferedCSVReader::TryCastValue(Value value, LogicalType sql_type) {
 		} else if (options.has_timestamp_format && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 			options.timestamp_format.ParseTimestamp(value.str_value);
 		} else {
-			value.CastAs(LogicalType::VARCHAR, sql_type, true);
+			value.CastAs(sql_type, true);
 		}
 		return true;
 	} catch (const Exception &e) {
@@ -489,7 +489,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 			auto dummy_val = parse_chunk.GetValue(col, 0);
 			// try cast as SQLNULL
 			try {
-				dummy_val.CastAs(LogicalType::VARCHAR, LogicalType::SQLNULL, true);
+				dummy_val.CastAs(LogicalType::SQLNULL, true);
 			} catch (const Exception &e) {
 				first_row_nulls = false;
 			}

@@ -9,27 +9,29 @@ using namespace std;
 // Comparison Operations
 //===--------------------------------------------------------------------===//
 template <class OP> static bool templated_boolean_operation(const Value &left, const Value &right) {
-	if (left.type != right.type) {
-		PhysicalType left_cast = PhysicalType::INVALID, right_cast = PhysicalType::INVALID;
-		if (TypeIsNumeric(left.type) && TypeIsNumeric(right.type)) {
-			if (NumericTypeOrder(left.type) < NumericTypeOrder(right.type)) {
-				left_cast = right.type;
+	auto left_type = left.type(), right_type = right.type();
+	if (left_type != right_type) {
+		LogicalType left_cast = LogicalType::INVALID, right_cast = LogicalType::INVALID;
+
+		if (left_type.IsNumeric() && right_type.IsNumeric()) {
+			if (left_type.NumericTypeOrder() < right_type.NumericTypeOrder()) {
+				left_cast = right.type();
 			} else {
-				right_cast = left.type;
+				right_cast = left.type();
 			}
-		} else if (left.type == PhysicalType::BOOL) {
-			right_cast = PhysicalType::BOOL;
-		} else if (right.type == PhysicalType::BOOL) {
-			left_cast = PhysicalType::BOOL;
+		} else if (left_type.id() == LogicalTypeId::BOOLEAN) {
+			right_cast = LogicalType::BOOLEAN;
+		} else if (right_type.id() == LogicalTypeId::BOOLEAN) {
+			left_cast = LogicalType::BOOLEAN;
 		}
-		if (left_cast != PhysicalType::INVALID) {
+		if (left_cast.id() != LogicalTypeId::INVALID) {
 			return templated_boolean_operation<OP>(left.CastAs(left_cast), right);
-		} else if (right_cast != PhysicalType::INVALID) {
+		} else if (right_cast.id() != LogicalTypeId::INVALID) {
 			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
 		return false;
 	}
-	switch (left.type) {
+	switch (left_type.InternalType()) {
 	case PhysicalType::BOOL:
 		return OP::Operation(left.value_.boolean, right.value_.boolean);
 	case PhysicalType::INT8:

@@ -6,7 +6,6 @@ namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ConstantExpression &expr, idx_t depth) {
-	expr.value.SetLogicalType(expr.sql_type);
 	return BindResult(make_unique<BoundConstantExpression>(expr.value));
 }
 

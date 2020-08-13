@@ -38,7 +38,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
 		auto &constant = (ConstantExpression &)*expr;
 		// ORDER BY a constant
-		if (!TypeIsIntegral(constant.value.type)) {
+		if (!constant.value.type().IsIntegral()) {
 			// non-integral expression, we just leave the constant here.
 			// ORDER BY <constant> has no effect
 			// CONTROVERSIAL: maybe we should throw an error

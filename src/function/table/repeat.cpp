@@ -15,7 +15,7 @@ struct RepeatFunctionData : public TableFunctionData {
 static unique_ptr<FunctionData> repeat_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	// the repeat function returns the type of the first argument
-	return_types.push_back(inputs[0].GetLogicalType());
+	return_types.push_back(inputs[0].type());
 	names.push_back(inputs[0].ToString());
 	return make_unique<RepeatFunctionData>(inputs[1].GetValue<int64_t>());
 }

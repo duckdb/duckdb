@@ -78,6 +78,10 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
+	case LogicalTypeId::HASH:
+		return PhysicalType::HASH;
+	case LogicalTypeId::POINTER:
+		return PhysicalType::POINTER;
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -100,6 +104,8 @@ const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
 const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
 const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
+const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
+const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
 
 const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
 const LogicalType LogicalType::VARBINARY = LogicalType(LogicalTypeId::VARBINARY);
@@ -321,6 +327,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "STRUCT<?>";
 	case LogicalTypeId::LIST:
 		return "LIST<?>";
+	case LogicalTypeId::HASH:
+		return "HASH";
+	case LogicalTypeId::POINTER:
+		return "POINTER";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:
@@ -425,8 +435,8 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
-int NumericTypeOrder(PhysicalType type) {
-	switch (type) {
+int LogicalType::NumericTypeOrder() {
+	switch (InternalType()) {
 	case PhysicalType::INT8:
 		return 1;
 	case PhysicalType::INT16:

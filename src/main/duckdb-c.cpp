@@ -13,7 +13,6 @@
 
 using namespace duckdb;
 
-static LogicalType ConvertCTypeToCPP(duckdb_type type);
 static duckdb_type ConvertCPPTypeToC(LogicalType type);
 static idx_t GetCTypeSize(duckdb_type type);
 
@@ -447,39 +446,6 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 	}
 }
 
-LogicalType ConvertCTypeToCPP(duckdb_type type) {
-	switch (type) {
-	case DUCKDB_TYPE_BOOLEAN:
-		return LogicalType(LogicalTypeId::BOOLEAN);
-	case DUCKDB_TYPE_TINYINT:
-		return LogicalType::TINYINT;
-	case DUCKDB_TYPE_SMALLINT:
-		return LogicalType::SMALLINT;
-	case DUCKDB_TYPE_INTEGER:
-		return LogicalType::INTEGER;
-	case DUCKDB_TYPE_BIGINT:
-		return LogicalType::BIGINT;
-	case DUCKDB_TYPE_HUGEINT:
-		return LogicalType::HUGEINT;
-	case DUCKDB_TYPE_FLOAT:
-		return LogicalType::FLOAT;
-	case DUCKDB_TYPE_DOUBLE:
-		return LogicalType::DOUBLE;
-	case DUCKDB_TYPE_TIMESTAMP:
-		return LogicalType::TIMESTAMP;
-	case DUCKDB_TYPE_DATE:
-		return LogicalType::DATE;
-	case DUCKDB_TYPE_TIME:
-		return LogicalType::TIME;
-	case DUCKDB_TYPE_VARCHAR:
-		return LogicalType::VARCHAR;
-	case DUCKDB_TYPE_INTERVAL:
-		return LogicalType::INTERVAL;
-	default:
-		return LogicalType(LogicalTypeId::INVALID);
-	}
-}
-
 idx_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
 	case DUCKDB_TYPE_BOOLEAN:
@@ -587,7 +553,7 @@ bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return false;
 	} else {
-		return val.CastAs(PhysicalType::BOOL).value_.boolean;
+		return val.GetValue<bool>();
 	}
 }
 
@@ -596,7 +562,7 @@ int8_t duckdb_value_int8(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(PhysicalType::INT8).value_.tinyint;
+		return val.GetValue<int8_t>();
 	}
 }
 
@@ -605,7 +571,7 @@ int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(PhysicalType::INT16).value_.smallint;
+		return val.GetValue<int16_t>();
 	}
 }
 
@@ -614,7 +580,7 @@ int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(PhysicalType::INT32).value_.integer;
+		return val.GetValue<int32_t>();
 	}
 }
 
@@ -623,7 +589,7 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(PhysicalType::INT64).value_.bigint;
+		return val.GetValue<int64_t>();
 	}
 }
 
@@ -632,7 +598,7 @@ float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(PhysicalType::FLOAT).value_.float_;
+		return val.GetValue<float>();
 	}
 }
 
@@ -641,11 +607,11 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(PhysicalType::DOUBLE).value_.double_;
+		return val.GetValue<double>();
 	}
 }
 
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
-	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
+	return strdup(val.ToString().c_str());
 }

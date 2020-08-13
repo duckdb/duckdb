@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> nextval_bind(BoundFunctionExpression &expr, Clie
 		// evaluate the constant and perform the catalog lookup already
 		Value seqname = ExpressionExecutor::EvaluateScalar(*expr.children[0]);
 		if (!seqname.is_null) {
-			assert(seqname.type == PhysicalType::VARCHAR);
+			assert(seqname.type().id() == LogicalTypeId::VARCHAR);
 			Catalog::ParseRangeVar(seqname.str_value, schema, seq);
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, schema, seq);
 		}

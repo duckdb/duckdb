@@ -27,8 +27,7 @@ using namespace std;
 Value::Value(string_t val) : Value(string(val.GetData(), val.GetSize())) {
 }
 
-Value::Value(string val) : type(PhysicalType::VARCHAR), is_null(false) {
-	sql_type = LogicalType::VARCHAR;
+Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
 	auto utf_type = Utf8Proc::Analyze(val);
 	switch (utf_type) {
 	case UnicodeType::INVALID:
@@ -43,113 +42,88 @@ Value::Value(string val) : type(PhysicalType::VARCHAR), is_null(false) {
 }
 
 Value Value::MinimumValue(PhysicalType type) {
-	Value result;
-	result.type = type;
-	result.is_null = false;
 	switch (type) {
 	case PhysicalType::BOOL:
-		result.value_.boolean = false;
-		break;
+		return Value::BOOLEAN(false);
 	case PhysicalType::INT8:
-		result.value_.tinyint = NumericLimits<int8_t>::Minimum();
-		break;
+		return Value::TINYINT(NumericLimits<int8_t>::Minimum());
 	case PhysicalType::INT16:
-		result.value_.smallint = NumericLimits<int16_t>::Minimum();
-		break;
+		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
 	case PhysicalType::INT32:
-		result.value_.integer = NumericLimits<int32_t>::Minimum();
-		break;
+		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
 	case PhysicalType::INT64:
-		result.value_.bigint = NumericLimits<int64_t>::Minimum();
-		break;
+		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case PhysicalType::INT128:
-		result.value_.hugeint.lower = 0;
-		result.value_.hugeint.upper = NumericLimits<int64_t>::Minimum();
-		break;
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case PhysicalType::FLOAT:
-		result.value_.float_ = NumericLimits<float>::Minimum();
-		break;
+		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case PhysicalType::DOUBLE:
-		result.value_.double_ = NumericLimits<double>::Minimum();
-		break;
+		return Value::DOUBLE(NumericLimits<double>::Minimum());
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
-	return result;
 }
 
 Value Value::MaximumValue(PhysicalType type) {
-	Value result;
-	result.type = type;
-	result.is_null = false;
 	switch (type) {
 	case PhysicalType::BOOL:
-		result.value_.boolean = true;
-		break;
+		return Value::BOOLEAN(true);
 	case PhysicalType::INT8:
-		result.value_.tinyint = NumericLimits<int8_t>::Maximum();
-		break;
+		return Value::TINYINT(NumericLimits<int8_t>::Maximum());
 	case PhysicalType::INT16:
-		result.value_.smallint = NumericLimits<int16_t>::Maximum();
-		break;
+		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
 	case PhysicalType::INT32:
-		result.value_.integer = NumericLimits<int32_t>::Maximum();
-		break;
+		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
 	case PhysicalType::INT64:
-		result.value_.bigint = NumericLimits<int64_t>::Maximum();
-		break;
+		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case PhysicalType::INT128:
-		result.value_.hugeint = NumericLimits<hugeint_t>::Maximum();
-		break;
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case PhysicalType::FLOAT:
-		result.value_.float_ = NumericLimits<float>::Maximum();
-		break;
+		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case PhysicalType::DOUBLE:
-		result.value_.double_ = NumericLimits<double>::Maximum();
-		break;
+		return Value::DOUBLE(NumericLimits<double>::Maximum());
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
-	return result;
 }
 
 Value Value::BOOLEAN(int8_t value) {
-	Value result(PhysicalType::BOOL);
+	Value result(LogicalType::BOOLEAN);
 	result.value_.boolean = value ? true : false;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::TINYINT(int8_t value) {
-	Value result(PhysicalType::INT8);
+	Value result(LogicalType::TINYINT);
 	result.value_.tinyint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::SMALLINT(int16_t value) {
-	Value result(PhysicalType::INT16);
+	Value result(LogicalType::SMALLINT);
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::INTEGER(int32_t value) {
-	Value result(PhysicalType::INT32);
+	Value result(LogicalType::INTEGER);
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BIGINT(int64_t value) {
-	Value result(PhysicalType::INT64);
+	Value result(LogicalType::BIGINT);
 	result.value_.bigint = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::HUGEINT(hugeint_t value) {
-	Value result(PhysicalType::INT128);
+	Value result(LogicalType::HUGEINT);
 	result.value_.hugeint = value;
 	result.is_null = false;
 	return result;
@@ -167,7 +141,7 @@ Value Value::FLOAT(float value) {
 	if (!Value::FloatIsValid(value)) {
 		throw OutOfRangeException("Invalid float value %f", value);
 	}
-	Value result(PhysicalType::FLOAT);
+	Value result(LogicalType::FLOAT);
 	result.value_.float_ = value;
 	result.is_null = false;
 	return result;
@@ -177,21 +151,21 @@ Value Value::DOUBLE(double value) {
 	if (!Value::DoubleIsValid(value)) {
 		throw OutOfRangeException("Invalid double value %f", value);
 	}
-	Value result(PhysicalType::DOUBLE);
+	Value result(LogicalType::DOUBLE);
 	result.value_.double_ = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::HASH(hash_t value) {
-	Value result(PhysicalType::HASH);
+	Value result(LogicalType::HASH);
 	result.value_.hash = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::POINTER(uintptr_t value) {
-	Value result(PhysicalType::POINTER);
+	Value result(LogicalType::POINTER);
 	result.value_.pointer = value;
 	result.is_null = false;
 	return result;
@@ -199,57 +173,58 @@ Value Value::POINTER(uintptr_t value) {
 
 Value Value::DATE(date_t date) {
 	auto val = Value::INTEGER(date);
-	val.sql_type = LogicalType::DATE;
+	val.type_ = LogicalType::DATE;
 	return val;
 }
 
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	auto val = Value::INTEGER(Date::FromDate(year, month, day));
-	val.sql_type = LogicalType::DATE;
+	val.type_ = LogicalType::DATE;
 	return val;
 }
 
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	auto val = Value::INTEGER(Time::FromTime(hour, min, sec, msec));
-	val.sql_type = LogicalType::TIME;
+	val.type_ = LogicalType::TIME;
 	return val;
 }
 
 Value Value::TIMESTAMP(timestamp_t timestamp) {
 	auto val = Value::BIGINT(timestamp);
-	val.sql_type = LogicalType::TIMESTAMP;
+	val.type_ = LogicalType::TIMESTAMP;
 	return val;
 }
 
 Value Value::TIMESTAMP(date_t date, dtime_t time) {
 	auto val = Value::BIGINT(Timestamp::FromDatetime(date, time));
-	val.sql_type = LogicalType::TIMESTAMP;
+	val.type_ = LogicalType::TIMESTAMP;
 	return val;
 }
 
 Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec, int32_t msec) {
 	auto val = Value::TIMESTAMP(Date::FromDate(year, month, day), Time::FromTime(hour, min, sec, msec));
-	val.sql_type = LogicalType::TIMESTAMP;
+	val.type_ = LogicalType::TIMESTAMP;
 	return val;
 }
 
 Value Value::STRUCT(child_list_t<Value> values) {
-	Value result(PhysicalType::STRUCT);
+	Value result;
+	result.type_ = LogicalType(LogicalTypeId::STRUCT);
 	result.struct_value = move(values);
 	result.is_null = false;
 	return result;
 }
 
 Value Value::LIST(vector<Value> values) {
-	Value result(PhysicalType::LIST);
+	Value result;
+	result.type_ = LogicalType(LogicalTypeId::LIST);
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;
 }
 
 Value Value::BLOB(string data, bool must_cast) {
-	Value result(PhysicalType::VARCHAR);
-	result.sql_type = LogicalType::BLOB;
+	Value result(LogicalType::BLOB);
 	result.is_null = false;
 	// hex string identifier: "\\x", must be double '\'
 	// single '\x' is a special char for hex chars in C++,
@@ -269,7 +244,7 @@ Value Value::BLOB(string data, bool must_cast) {
 }
 
 Value Value::INTERVAL(int32_t months, int32_t days, int64_t msecs) {
-	Value result(PhysicalType::INTERVAL);
+	Value result(LogicalType::INTERVAL);
 	result.is_null = false;
 	result.value_.interval.months = months;
 	result.value_.interval.days = days;
@@ -304,6 +279,10 @@ template <> Value Value::CreateValue(int64_t value) {
 	return Value::BIGINT(value);
 }
 
+template <> Value Value::CreateValue(hugeint_t value) {
+	return Value::HUGEINT(value);
+}
+
 template <> Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
@@ -330,11 +309,11 @@ template <> Value Value::CreateValue(Value value) {
 //===--------------------------------------------------------------------===//
 // GetValue
 //===--------------------------------------------------------------------===//
-template <class T> T Value::GetValueInternal() {
+template <class T> T Value::GetValueInternal() const {
 	if (is_null) {
 		return NullValue<T>();
 	}
-	switch (type) {
+	switch (type_.InternalType()) {
 	case PhysicalType::BOOL:
 		return Cast::Operation<bool, T>(value_.boolean);
 	case PhysicalType::INT8:
@@ -358,65 +337,34 @@ template <class T> T Value::GetValueInternal() {
 	}
 }
 
-template <> bool Value::GetValue() {
+template <> bool Value::GetValue() const {
 	return GetValueInternal<int8_t>();
 }
-template <> int8_t Value::GetValue() {
+template <> int8_t Value::GetValue() const {
 	return GetValueInternal<int8_t>();
 }
-template <> int16_t Value::GetValue() {
+template <> int16_t Value::GetValue() const {
 	return GetValueInternal<int16_t>();
 }
-template <> int32_t Value::GetValue() {
+template <> int32_t Value::GetValue() const {
 	return GetValueInternal<int32_t>();
 }
-template <> int64_t Value::GetValue() {
+template <> int64_t Value::GetValue() const {
 	return GetValueInternal<int64_t>();
 }
-template <> string Value::GetValue() {
-	return GetValueInternal<string>();
+template <> hugeint_t Value::GetValue() const {
+	return GetValueInternal<hugeint_t>();
 }
-template <> float Value::GetValue() {
+template <> string Value::GetValue() const {
+	return ToString();
+}
+template <> float Value::GetValue() const {
 	return GetValueInternal<float>();
 }
-template <> double Value::GetValue() {
+template <> double Value::GetValue() const {
 	return GetValueInternal<double>();
 }
-
-Value Value::Numeric(PhysicalType type, int64_t value) {
-	Value val(type);
-	val.is_null = false;
-	switch (type) {
-	case PhysicalType::INT8:
-		assert(value <= NumericLimits<int8_t>::Maximum());
-		return Value::TINYINT((int8_t)value);
-	case PhysicalType::INT16:
-		assert(value <= NumericLimits<int16_t>::Maximum());
-		return Value::SMALLINT((int16_t)value);
-	case PhysicalType::INT32:
-		assert(value <= NumericLimits<int32_t>::Maximum());
-		return Value::INTEGER((int32_t)value);
-	case PhysicalType::INT64:
-		return Value::BIGINT(value);
-	case PhysicalType::INT128:
-		return Value::HUGEINT(value);
-	case PhysicalType::FLOAT:
-		return Value((float)value);
-	case PhysicalType::DOUBLE:
-		return Value((double)value);
-	case PhysicalType::HASH:
-		return Value::HASH(value);
-	case PhysicalType::POINTER:
-		return Value::POINTER(value);
-	default:
-		throw InvalidTypeException(type, "Numeric requires numeric type");
-	}
-	return val;
-}
-
 Value Value::Numeric(LogicalType type, int64_t value) {
-	Value val(type);
-	val.is_null = false;
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
 		assert(value <= NumericLimits<int8_t>::Maximum());
@@ -429,22 +377,34 @@ Value Value::Numeric(LogicalType type, int64_t value) {
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(value);
 	case LogicalTypeId::FLOAT:
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
 		return Value((double)value);
+	case LogicalTypeId::HASH:
+		return Value::HASH(value);
+	case LogicalTypeId::POINTER:
+		return Value::POINTER(value);
 	default:
 		throw InvalidTypeException(type.InternalType(), "Numeric requires numeric type");
 	}
+
 }
 
-string Value::ToString(LogicalType sql_type) const {
+Value Value::Numeric(LogicalType type, hugeint_t value) {
+	switch (type.id()) {
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(value);
+	default:
+		return Value::Numeric(type, Hugeint::Cast<int64_t>(value));
+	}
+}
+
+string Value::ToString() const {
 	if (is_null) {
 		return "NULL";
 	}
-	switch (sql_type.id()) {
+	switch (type_.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return value_.boolean ? "True" : "False";
 	case LogicalTypeId::TINYINT:
@@ -478,6 +438,10 @@ string Value::ToString(LogicalType sql_type) const {
 		string result(hex_str.GetData());
 		return result;
 	}
+	case LogicalTypeId::POINTER:
+		return to_string(value_.pointer);
+	case LogicalTypeId::HASH:
+		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "<";
 		for (size_t i = 0; i < struct_value.size(); i++) {
@@ -503,18 +467,7 @@ string Value::ToString(LogicalType sql_type) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing: %s", sql_type.ToString().c_str());
-	}
-}
-
-string Value::ToString() const {
-	switch (type) {
-	case PhysicalType::POINTER:
-		return to_string(value_.pointer);
-	case PhysicalType::HASH:
-		return to_string(value_.hash);
-	default:
-		return ToString(LogicalTypeFromInternalType(type));
+		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString().c_str());
 	}
 }
 
@@ -570,68 +523,59 @@ bool Value::operator>=(const Value &rhs) const {
 }
 
 bool Value::operator==(const int64_t &rhs) const {
-	return *this == Value::Numeric(type, rhs);
+	return *this == Value::Numeric(type_, rhs);
 }
 
 bool Value::operator!=(const int64_t &rhs) const {
-	return *this != Value::Numeric(type, rhs);
+	return *this != Value::Numeric(type_, rhs);
 }
 
 bool Value::operator<(const int64_t &rhs) const {
-	return *this < Value::Numeric(type, rhs);
+	return *this < Value::Numeric(type_, rhs);
 }
 
 bool Value::operator>(const int64_t &rhs) const {
-	return *this > Value::Numeric(type, rhs);
+	return *this > Value::Numeric(type_, rhs);
 }
 
 bool Value::operator<=(const int64_t &rhs) const {
-	return *this <= Value::Numeric(type, rhs);
+	return *this <= Value::Numeric(type_, rhs);
 }
 
 bool Value::operator>=(const int64_t &rhs) const {
-	return *this >= Value::Numeric(type, rhs);
+	return *this >= Value::Numeric(type_, rhs);
 }
 
-Value Value::CastAs(LogicalType source_type, LogicalType target_type, bool strict) {
-	if (source_type == target_type) {
+Value Value::CastAs(LogicalType target_type, bool strict) const {
+	if (type_ == target_type) {
 		return Copy();
 	}
 	Vector input, result;
 	input.Reference(*this);
 	result.Initialize(target_type.InternalType());
-	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
+	VectorOperations::Cast(input, result, type_, target_type, 1, strict);
 	return result.GetValue(0);
 }
 
-Value Value::CastAs(PhysicalType target_type, bool strict) const {
-	if (target_type == type) {
-		return Copy(); // in case of types that have no LogicalType equivalent such as POINTER
-	}
-	return Copy().CastAs(LogicalTypeFromInternalType(type), LogicalTypeFromInternalType(target_type), strict);
-}
-
-bool Value::TryCastAs(LogicalType source_type, LogicalType target_type, bool strict) {
-	Value new_value;
+bool Value::TryCastAs(LogicalType target_type, bool strict) {
 	try {
-		new_value = CastAs(source_type, target_type, strict);
+		Value new_value = CastAs(target_type, strict);
+		is_null = new_value.is_null;
+		value_ = new_value.value_;
+		str_value = new_value.str_value;
+		struct_value = new_value.struct_value;
+		list_value = new_value.list_value;
+		return true;
 	} catch (Exception &) {
 		return false;
 	}
-	type = new_value.type;
-	is_null = new_value.is_null;
-	value_ = new_value.value_;
-	str_value = new_value.str_value;
-	struct_value = new_value.struct_value;
-	list_value = new_value.list_value;
-	return true;
 }
 
 void Value::Serialize(Serializer &serializer) {
-	serializer.Write<PhysicalType>(type);
+	type_.Serialize(serializer);
 	serializer.Write<bool>(is_null);
 	if (!is_null) {
-		switch (type) {
+		switch (type_.InternalType()) {
 		case PhysicalType::BOOL:
 			serializer.Write<int8_t>(value_.boolean);
 			break;
@@ -672,14 +616,14 @@ void Value::Serialize(Serializer &serializer) {
 }
 
 Value Value::Deserialize(Deserializer &source) {
-	auto type = source.Read<PhysicalType>();
+	auto type_ = LogicalType::Deserialize(source);
 	auto is_null = source.Read<bool>();
-	Value new_value = Value(type);
+	Value new_value = Value(type_);
 	if (is_null) {
 		return new_value;
 	}
 	new_value.is_null = false;
-	switch (type) {
+	switch (type_.InternalType()) {
 	case PhysicalType::BOOL:
 		new_value.value_.boolean = source.Read<int8_t>();
 		break;
@@ -728,21 +672,21 @@ bool Value::ValuesAreEqual(Value result_value, Value value) {
 		// NULL = NULL in checking code
 		return true;
 	}
-	switch (value.type) {
-	case PhysicalType::FLOAT: {
-		auto other = result_value.CastAs(PhysicalType::FLOAT);
+	switch (value.type_.id()) {
+	case LogicalTypeId::FLOAT: {
+		auto other = result_value.CastAs(LogicalType::FLOAT);
 		float ldecimal = value.value_.float_;
 		float rdecimal = other.value_.float_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
-	case PhysicalType::DOUBLE: {
-		auto other = result_value.CastAs(PhysicalType::DOUBLE);
+	case LogicalTypeId::DOUBLE: {
+		auto other = result_value.CastAs(LogicalType::DOUBLE);
 		double ldecimal = value.value_.double_;
 		double rdecimal = other.value_.double_;
 		return ApproxEqual(ldecimal, rdecimal);
 	}
-	case PhysicalType::VARCHAR: {
-		auto other = result_value.CastAs(PhysicalType::VARCHAR);
+	case LogicalTypeId::VARCHAR: {
+		auto other = result_value.CastAs(LogicalType::VARCHAR);
 		// some results might contain padding spaces, e.g. when rendering
 		// VARCHAR(10) and the string only has 6 characters, they will be padded
 		// with spaces to 10 in the rendering. We don't do that here yet as we

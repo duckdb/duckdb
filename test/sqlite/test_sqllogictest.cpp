@@ -286,7 +286,7 @@ static string sqllogictest_convert_value(Value value, LogicalType sql_type) {
 		case LogicalTypeId::BOOLEAN:
 			return value.value_.boolean ? "1" : "0";
 		default: {
-			string str = value.ToString(sql_type);
+			string str = value.ToString();
 			if (str.empty()) {
 				return "(empty)";
 			} else {
@@ -431,13 +431,13 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 			if (lvalue_str == "NULL") {
 				lvalue = Value(sql_type);
 			} else {
-				lvalue = Value(lvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
+				lvalue = Value(lvalue_str).CastAs(sql_type);
 			}
 			converted_lvalue = true;
 			if (rvalue_str == "NULL") {
 				rvalue = Value(sql_type);
 			} else {
-				rvalue = Value(rvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
+				rvalue = Value(rvalue_str).CastAs(sql_type);
 			}
 			error = !Value::ValuesAreEqual(lvalue, rvalue);
 		} catch(std::exception &ex) {

@@ -30,7 +30,7 @@ string MaterializedQueryResult::ToString() {
 		for (idx_t j = 0; j < collection.count; j++) {
 			for (idx_t i = 0; i < collection.column_count(); i++) {
 				auto val = collection.GetValue(i, j);
-				result += val.is_null ? "NULL" : val.ToString(sql_types[i]);
+				result += val.is_null ? "NULL" : val.ToString();
 				result += "\t";
 			}
 			result += "\n";

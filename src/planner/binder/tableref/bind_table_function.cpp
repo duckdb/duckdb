@@ -40,7 +40,6 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		auto constant = ExpressionExecutor::EvaluateScalar(*expr);
-		constant.SetLogicalType(sql_type);
 		if (parameter_name.empty()) {
 			// unnamed parameter
 			if (named_parameters.size() > 0) {
@@ -67,7 +66,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 			throw BinderException("Invalid named parameter \"%s\" for function %s", kv.first.c_str(),
 			                      table_function.name.c_str());
 		}
-		kv.second = kv.second.CastAs(kv.second.GetLogicalType(), entry->second);
+		kv.second = kv.second.CastAs(entry->second);
 	}
 
 	// cast the parameters to the type of the function
@@ -76,7 +75,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		if (table_function.arguments[i] == LogicalType::ANY) {
 			result->parameters.push_back(move(parameters[i]));
 		} else {
-			result->parameters.push_back(parameters[i].CastAs(arguments[i], table_function.arguments[i]));
+			result->parameters.push_back(parameters[i].CastAs(table_function.arguments[i]));
 		}
 	}
 

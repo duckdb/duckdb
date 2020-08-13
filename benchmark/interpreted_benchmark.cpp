@@ -158,7 +158,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		for(int64_t c = 0; c < result_column_count; c++) {
 			auto value = state.result->collection.GetValue(c, r);
 			Value verify_val(result_values[r][c]);
-			verify_val = verify_val.CastAs(LogicalType::VARCHAR, state.result->sql_types[c]);
+			verify_val = verify_val.CastAs(state.result->sql_types[c]);
 			if (!Value::ValuesAreEqual(value, verify_val)) {
 				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r, c, verify_val.ToString().c_str(), value.ToString().c_str());
 			}

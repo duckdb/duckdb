@@ -416,7 +416,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 	try {
 		val = pStmt->current_chunk->data[iCol]
 		          .GetValue(pStmt->current_row)
-		          .CastAs(pStmt->result->sql_types[iCol], target_type);
+		          .CastAs(target_type);
 	} catch (...) {
 		return false;
 	}
@@ -425,7 +425,7 @@ static bool sqlite3_column_has_value(sqlite3_stmt *pStmt, int iCol, LogicalType 
 
 double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::DOUBLE, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::DOUBLE, val)) {
 		return 0;
 	}
 	return val.value_.double_;
@@ -433,7 +433,7 @@ double sqlite3_column_double(sqlite3_stmt *stmt, int iCol) {
 
 int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::INTEGER, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::INTEGER, val)) {
 		return 0;
 	}
 	return val.value_.integer;
@@ -441,7 +441,7 @@ int sqlite3_column_int(sqlite3_stmt *stmt, int iCol) {
 
 sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(stmt, iCol, LogicalTypeId::BIGINT, val)) {
+	if (!sqlite3_column_has_value(stmt, iCol, LogicalType::BIGINT, val)) {
 		return 0;
 	}
 	return val.value_.bigint;
@@ -449,7 +449,7 @@ sqlite3_int64 sqlite3_column_int64(sqlite3_stmt *stmt, int iCol) {
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	Value val;
-	if (!sqlite3_column_has_value(pStmt, iCol, LogicalTypeId::VARCHAR, val)) {
+	if (!sqlite3_column_has_value(pStmt, iCol, LogicalType::VARCHAR, val)) {
 		return nullptr;
 	}
 	try {

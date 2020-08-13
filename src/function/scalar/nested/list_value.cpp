@@ -36,7 +36,7 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = cc.count;
 		for (idx_t col_idx = 0; col_idx < args.column_count(); col_idx++) {
-			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(types[0])); // FIXME evil pattern
+			append_vals.SetValue(0, 0, args.GetValue(col_idx, i).CastAs(LogicalTypeFromInternalType(types[0]))); // FIXME evil pattern
 			cc.Append(append_vals);
 		}
 		result_data[i].length = args.column_count();

@@ -49,7 +49,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		client.profiler.automatic_print_format = ProfilerPrintFormat::NONE;
 	} else if (keyword == "profiling_output" || keyword == "profile_output") {
 		// set file location of where to save profiling output
-		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type != PhysicalType::VARCHAR) {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT || pragma.parameters[0].type().id() != LogicalTypeId::VARCHAR) {
 			throw ParserException(
 			    "Profiling output must be an assignment (e.g. PRAGMA profile_output='/tmp/test.json')");
 		}
@@ -58,7 +58,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Memory limit must be an assignment (e.g. PRAGMA memory_limit='1GB')");
 		}
-		if (pragma.parameters[0].type == PhysicalType::VARCHAR) {
+		if (pragma.parameters[0].type().id() == LogicalTypeId::VARCHAR) {
 			idx_t new_limit = ParseMemoryLimit(pragma.parameters[0].str_value);
 			// set the new limit in the buffer manager
 			client.db.storage->buffer_manager->SetLimit(new_limit);
@@ -76,7 +76,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
 			throw ParserException("Collation must be an assignment (e.g. PRAGMA default_collation=NOCASE)");
 		}
-		auto collation_param = StringUtil::Lower(pragma.parameters[0].CastAs(PhysicalType::VARCHAR).str_value);
+		auto collation_param = StringUtil::Lower(pragma.parameters[0].ToString());
 		// bind the collation to verify that it exists
 		ExpressionBinder::PushCollation(client, nullptr, collation_param);
 		auto &config = DBConfig::GetConfig(client);

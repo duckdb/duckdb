@@ -48,7 +48,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		if (expr->return_type.id() == LogicalTypeId::INVALID) {
 			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 		}
-		auto value = make_unique<Value>(expr->return_type.InternalType());
+		auto value = make_unique<Value>(expr->return_type);
 		expr->value = value.get();
 		// check if the parameter number has been used before
 		if (value_map.find(expr->parameter_nr) != value_map.end()) {
@@ -110,7 +110,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
-		sql_types = {LogicalType(LogicalTypeId::BOOLEAN)};
+		sql_types = { LogicalType::BOOLEAN };
 		plan = move(prepare);
 		break;
 	}

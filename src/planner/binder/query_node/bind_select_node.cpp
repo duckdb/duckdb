@@ -23,7 +23,7 @@ static int64_t BindConstant(Binder &binder, ClientContext &context, string claus
 	ConstantBinder constant_binder(binder, context, clause);
 	auto bound_expr = constant_binder.Bind(expr);
 	Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
-	if (!TypeIsNumeric(value.type)) {
+	if (!value.type().IsNumeric()) {
 		throw BinderException("LIMIT clause can only contain numeric constants!");
 	}
 	int64_t limit_value = value.GetValue<int64_t>();
