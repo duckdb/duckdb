@@ -116,6 +116,43 @@ public:
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 	}
 
+	//----------------------------- Non-parallalel aggregate ------------------------------//
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateNonParallelAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+		if(!TypesMatch<TR>(ret_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+					"The return argument don't match!");
+		}
+
+		if(!TypesMatch<TA>(input_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_type),
+					"The input argument don't match!");
+		}
+
+		return CreateNonParallelUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type);
+	}
+	
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateNonParallelAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+		if(!TypesMatch<TR>(ret_type)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+					"The return argument don't match!");
+		}
+
+		if(!TypesMatch<TA>(input_typeA)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_typeA),
+					"The first input argument don't match!");
+		}
+
+		if(!TypesMatch<TB>(input_typeB)) {
+			throw duckdb::TypeMismatchException(GetTypeId<TB>(), GetInternalType(input_typeB),
+					"The second input argument don't match!");
+		}
+
+		return CreateNonParallelBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
+	}
+
 	static void RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, SQLType varargs = SQLType::INVALID);
 
 private:
@@ -340,6 +377,7 @@ private:
 		SQLType input_type = GetArgumentType<TA>();
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type);
 	}
+
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateUnaryAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
 		AggregateFunction aggr_function = AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
@@ -360,6 +398,35 @@ private:
 		AggregateFunction aggr_function = AggregateFunction::BinaryAggregate<STATE, TR, TA, TB, UDF_OP>(input_typeA, input_typeB,
 																									   ret_type);
 		aggr_function.name = name;
+		return aggr_function;
+	}
+
+	//----------------------------- Non-parallalel aggregate ------------------------------//
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA>
+	static AggregateFunction CreateNonParallelUnaryAggregateFunction(string name, SQLType ret_type, SQLType input_type) {
+		// non-parallalel aggregate
+		AggregateFunction aggr_function = AggregateFunction(name, {input_type}, ret_type,
+															AggregateFunction::StateSize<STATE>,
+															AggregateFunction::StateInitialize<STATE, UDF_OP>,
+															AggregateFunction::UnaryScatterUpdate<STATE, TA, UDF_OP>,
+															nullptr,
+															AggregateFunction::StateFinalize<STATE, TR, UDF_OP>,
+															AggregateFunction::UnaryUpdate<STATE, TA, UDF_OP>);
+		return aggr_function;
+	}
+
+	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
+	static AggregateFunction CreateNonParallelBinaryAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
+		AggregateFunction aggr_function = AggregateFunction(name, {input_typeA, input_typeB}, ret_type,
+															AggregateFunction::StateSize<STATE>,
+															AggregateFunction::StateInitialize<STATE, UDF_OP>,
+															AggregateFunction::BinaryScatterUpdate<STATE, TA, TB, UDF_OP>,
+															nullptr,
+															AggregateFunction::StateFinalize<STATE, TR, UDF_OP>,
+															AggregateFunction::BinaryUpdate<STATE, TA, TB, UDF_OP>,
+															nullptr,
+															AggregateFunction::StateDestroy<STATE, UDF_OP>);
 		return aggr_function;
 	}
 
