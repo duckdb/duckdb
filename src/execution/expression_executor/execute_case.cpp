@@ -156,7 +156,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for case expression: %s",
-		                              result.type.ToString().c_str());
+		                              result.type.ToString());
 	}
 }
 

@@ -46,11 +46,11 @@ static int64_t next_sequence_value(Transaction &transaction, SequenceCatalogEntr
 		result = seq->counter;
 		seq->counter += seq->increment;
 		if (result < seq->min_value) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name,
 			                        seq->min_value);
 		}
 		if (result > seq->max_value) {
-			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name.c_str(),
+			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name,
 			                        seq->max_value);
 		}
 	}

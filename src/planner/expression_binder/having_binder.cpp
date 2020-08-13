@@ -25,7 +25,7 @@ BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 	case ExpressionClass::COLUMN_REF:
 		return BindResult(
 		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
-		                       expr.ToString().c_str()));
+		                       expr.ToString()));
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}

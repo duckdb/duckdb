@@ -163,7 +163,7 @@ template <> float Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
@@ -173,7 +173,7 @@ template <class T> static T try_cast_string(string_t input) {
 template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }

@@ -17,8 +17,8 @@ template <class SRC, class OP> static void string_cast(Vector &source, Vector &r
 }
 
 static NotImplementedException UnimplementedCast(LogicalType source_type, LogicalType target_type) {
-	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString().c_str(),
-	                               target_type.ToString().c_str());
+	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
+	                               target_type.ToString());
 }
 
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown

@@ -52,7 +52,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 		// quarter of the year (1-4)
 		return DatePartSpecifier::QUARTER;
 	} else {
-		throw ConversionException("extract specifier \"%s\" not recognized", specifier.c_str());
+		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
 }
 

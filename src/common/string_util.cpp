@@ -118,45 +118,6 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
-// http://stackoverflow.com/a/8098080
-string StringUtil::Format(const string fmt_str, ...) {
-	// Reserve two times as much as the length of the fmt_str
-	int final_n, n = ((int)fmt_str.size()) * 2;
-	string str;
-	unique_ptr<char[]> formatted;
-	va_list ap;
-
-	while (1) {
-		// Wrap the plain char array into the unique_ptr
-		formatted.reset(new char[n + 1]);
-		strcpy(&formatted[0], fmt_str.c_str());
-		va_start(ap, fmt_str);
-		final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
-		va_end(ap);
-		if (final_n < 0 || final_n >= n)
-			n += abs(final_n - n + 1);
-		else
-			break;
-	}
-	return string(formatted.get());
-}
-
-string StringUtil::VFormat(const string fmt_str, va_list args) {
-	va_list args_copy;
-
-	unique_ptr<char[]> formatted;
-	// make a copy of the args as we can only use it once
-	va_copy(args_copy, args);
-
-	// first get the amount of characters we need
-	const auto n = vsnprintf(nullptr, 0, fmt_str.c_str(), args) + 1;
-
-	// now allocate the string and do the actual printing
-	formatted.reset(new char[n]);
-	(void)vsnprintf(&formatted[0], n, fmt_str.c_str(), args_copy);
-	return string(formatted.get());
-}
-
 vector<string> StringUtil::Split(const string &input, const string &split) {
 	vector<string> splits;
 

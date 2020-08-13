@@ -553,7 +553,7 @@ static unique_ptr<FunctionData> strftime_bind_function(BoundFunctionExpression &
 		auto format_string = options_str.GetValue<string>();
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string.c_str(), error.c_str());
+			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
 	return make_unique<StrfTimeBindData>(format);
@@ -952,7 +952,7 @@ static unique_ptr<FunctionData> strptime_bind_function(BoundFunctionExpression &
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
-			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string.c_str(), error.c_str());
+			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
 	return make_unique<StrpTimeBindData>(format);
@@ -972,9 +972,9 @@ date_t StrpTimeFormat::ParseDate(string_t input) {
 	if (!Parse(input, result_data, error_message, error_position)) {
 		throw InvalidInputException("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
 			input.GetData(),
-			format_specifier.c_str(),
-			FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position).c_str(),
-			error_message.c_str());
+			format_specifier,
+			FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position),
+			error_message);
 	}
 	return Date::FromDate(result_data[0], result_data[1], result_data[2]);
 }
@@ -986,9 +986,9 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	if (!Parse(input, result_data, error_message, error_position)) {
 		throw InvalidInputException("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
 			input.GetData(),
-			format_specifier.c_str(),
-			FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position).c_str(),
-			error_message.c_str());
+			format_specifier,
+			FormatStrpTimeError(string(input.GetData(), input.GetSize()), error_position),
+			error_message);
 	}
 	date_t date = Date::FromDate(result_data[0], result_data[1], result_data[2]);
 	dtime_t time = Time::FromTime(result_data[3], result_data[4], result_data[5], result_data[6]);

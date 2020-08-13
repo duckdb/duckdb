@@ -471,7 +471,7 @@ string Value::ToString() const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString().c_str());
+		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
 	}
 }
 

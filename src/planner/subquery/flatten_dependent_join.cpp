@@ -310,7 +310,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default:
 		throw NotImplementedException("Logical operator type \"%s\" for dependent join",
-		                              LogicalOperatorToString(plan->type).c_str());
+		                              LogicalOperatorToString(plan->type));
 	}
 }
 

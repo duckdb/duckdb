@@ -61,7 +61,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 				assert(val->type == T_PGInteger);
 				info->cycle = val->val.ival > 0;
 			} else {
-				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name.c_str());
+				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);
 			}
 		}
 	}

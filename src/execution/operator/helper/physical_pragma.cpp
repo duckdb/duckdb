@@ -32,7 +32,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				client.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
 			} else {
 				throw ParserException("Unrecognized print format %s, supported formats: [json, query_tree]",
-				                      assignment.c_str());
+				                      assignment);
 			}
 		} else if (pragma.pragma_type == PragmaType::NOTHING) {
 			client.profiler.automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
@@ -93,7 +93,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			config.default_null_order = OrderByNullType::NULLS_LAST;
 		} else {
 			throw ParserException("Unrecognized null order '%s', expected either NULLS FIRST or NULLS LAST",
-			                      new_null_order.c_str());
+			                      new_null_order);
 		}
 	} else if (keyword == "order" || keyword == "default_order") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
@@ -107,7 +107,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			config.default_order_type = OrderType::DESCENDING;
 		} else {
 			throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING",
-			                      new_order.c_str());
+			                      new_order);
 		}
 	} else if (keyword == "threads" || keyword == "worker_threads") {
 		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
@@ -159,7 +159,7 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			throw ParserException("Expected PRAGMA explain_output={optimized, all}");
 		}
 	} else {
-		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
+		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword);
 	}
 }
 
@@ -207,7 +207,7 @@ idx_t ParseMemoryLimit(string arg) {
 	} else if (unit == "terabyte" || unit == "terabytes" || unit == "tb" || unit == "t") {
 		multiplier = 1000LL * 1000LL * 1000LL * 1000LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit.c_str());
+		throw ParserException("Unknown unit for memory_limit: %s (expected: b, mb, gb or tb)", unit);
 	}
 	return (idx_t)multiplier * limit;
 }

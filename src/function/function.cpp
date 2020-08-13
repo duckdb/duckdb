@@ -200,7 +200,7 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		}
 		throw BinderException("Could not choose a best candidate function for the function call \"%s\". In order to "
 		                      "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str.c_str(), candidate_str.c_str());
+		                      call_str, candidate_str);
 	}
 	if (best_function == INVALID_INDEX) {
 		// no matching function was found, throw an error
@@ -211,7 +211,7 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		}
 		throw BinderException("No function matches the given name and argument types '%s'. You might need to add "
 		                      "explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str.c_str(), candidate_str.c_str());
+		                      call_str, candidate_str);
 	}
 	return best_function;
 }

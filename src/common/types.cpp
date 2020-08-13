@@ -87,7 +87,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UNKNOWN:
 		return PhysicalType::INVALID;
 	default:
-		throw ConversionException("Invalid LogicalType %s", ToString().c_str());
+		throw ConversionException("Invalid LogicalType %s", ToString());
 	}
 }
 
@@ -369,7 +369,7 @@ LogicalType TransformStringToLogicalType(string str) {
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalType::HUGEINT;
 	}  else {
-		throw NotImplementedException("DataType %s not supported yet...\n", str.c_str());
+		throw NotImplementedException("DataType %s not supported yet...\n", str);
 	}
 }
 

@@ -202,7 +202,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	}
 	if (db.config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-		                                   StatementTypeToString(statement.statement_type).c_str()));
+		                                   StatementTypeToString(statement.statement_type)));
 	}
 
 	// bind the bound values before execution
@@ -258,7 +258,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 
 		// first parse the query
 		Parser parser;
-		parser.ParseQuery(query.c_str());
+		parser.ParseQuery(query);
 		if (parser.statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}

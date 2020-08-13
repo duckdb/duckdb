@@ -460,7 +460,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		default:
-			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
+			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
 
 		output.SetValue(output_idx, row_idx, res);

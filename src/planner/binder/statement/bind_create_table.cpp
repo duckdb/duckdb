@@ -18,7 +18,7 @@ static void CreateColumnMap(BoundCreateTableInfo &info) {
 	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
 		auto &col = base.columns[oid];
 		if (info.name_map.find(col.name) != info.name_map.end()) {
-			throw CatalogException("Column with name %s already exists!", col.name.c_str());
+			throw CatalogException("Column with name %s already exists!", col.name);
 		}
 
 		info.name_map[col.name] = oid;
@@ -68,12 +68,12 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				for (auto &keyname : unique.columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {
-						throw ParserException("column \"%s\" named in key does not exist", keyname.c_str());
+						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
 					if (find(keys.begin(), keys.end(), entry->second) != keys.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
-						                      keyname.c_str());
+						                      keyname);
 					}
 					keys.insert(entry->second);
 				}
@@ -82,7 +82,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.is_primary_key) {
 				// we can only have one primary key per table
 				if (has_primary_key) {
-					throw ParserException("table \"%s\" has more than one primary key", base.table.c_str());
+					throw ParserException("table \"%s\" has more than one primary key", base.table);
 				}
 				has_primary_key = true;
 				primary_keys = keys;

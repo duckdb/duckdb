@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector.hpp"
-#include <stdarg.h> // for va_list
 
 namespace duckdb {
 /**
@@ -73,8 +73,10 @@ public:
 	static string Lower(const string &str);
 
 	//! Format a string using printf semantics
-	static string Format(const string fmt_str, ...);
-	static string VFormat(const string fmt_str, va_list ap);
+	template <typename... Args>
+	static string Format(const string fmt_str, Args... params) {
+		return Exception::ConstructMessage(fmt_str, params...);
+	}
 
 	//! Split the input string into a vector of strings based on the split string
 	static vector<string> Split(const string &input, const string &split);

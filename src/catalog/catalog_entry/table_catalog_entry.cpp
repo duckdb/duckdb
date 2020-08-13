@@ -159,7 +159,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 	}
 	if (!found) {
-		throw CatalogException("Table does not have a column with name \"%s\"", info.name.c_str());
+		throw CatalogException("Table does not have a column with name \"%s\"", info.name);
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -224,7 +224,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	}
 	if (removed_index == INVALID_INDEX) {
 		if (!info.if_exists) {
-			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column.c_str());
+			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column);
 		}
 		return nullptr;
 	}
@@ -259,7 +259,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 					// CHECK constraint that concerns mult
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a CHECK constraint that depends on it",
-					    info.removed_column.c_str());
+					    info.removed_column);
 				} else {
 					// CHECK constraint that ONLY concerns this column, strip the constraint
 				}
@@ -276,7 +276,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 				if (unique.index == removed_index) {
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
-					    info.removed_column.c_str());
+					    info.removed_column);
 				} else if (unique.index > removed_index) {
 					unique.index--;
 				}
@@ -309,8 +309,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		create_info->columns.push_back(move(copy));
 	}
 	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
-		                      info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table,
+		                      info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -336,8 +336,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		create_info->columns.push_back(move(copy));
 	}
 	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table.c_str(),
-		                      info.column_name.c_str());
+		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.table,
+		                      info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -386,7 +386,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	auto entry = name_map.find(name);
 	if (entry == name_map.end() || entry->second == COLUMN_IDENTIFIER_ROW_ID) {
-		throw CatalogException("Column with name %s does not exist!", name.c_str());
+		throw CatalogException("Column with name %s does not exist!", name);
 	}
 	return columns[entry->second];
 }

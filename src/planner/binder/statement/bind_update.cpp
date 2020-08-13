@@ -126,11 +126,11 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		auto &colname = stmt.columns[i];
 		auto &expr = stmt.expressions[i];
 		if (!table->ColumnExists(colname)) {
-			throw BinderException("Referenced update column %s not found in table!", colname.c_str());
+			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
 		auto &column = table->GetColumn(colname);
 		if (std::find(update->columns.begin(), update->columns.end(), column.oid) != update->columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname.c_str());
+			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 		update->columns.push_back(column.oid);
 

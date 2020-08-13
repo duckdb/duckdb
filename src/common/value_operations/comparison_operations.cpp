@@ -29,7 +29,7 @@ template <class OP> static bool templated_boolean_operation(const Value &left, c
 		} else if (right_cast.id() != LogicalTypeId::INVALID) {
 			return templated_boolean_operation<OP>(left, right.CastAs(right_cast));
 		}
-		// throw NotImplementedException("Unimplemented type for Value comparison: %s - %s", left.type().ToString().c_str(), right.type().ToString().c_str());
+		// throw NotImplementedException("Unimplemented type for Value comparison: %s - %s", left.type().ToString(), right.type().ToString());
 		return false;
 	}
 	switch (left_type.InternalType()) {

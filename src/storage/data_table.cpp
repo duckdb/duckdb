@@ -619,7 +619,7 @@ idx_t DataTable::FetchRows(Transaction &transaction, Vector &row_identifiers, id
 //===--------------------------------------------------------------------===//
 static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, string &col_name) {
 	if (VectorOperations::HasNull(vector, count)) {
-		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name.c_str(), col_name.c_str());
+		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 	}
 }
 
@@ -629,9 +629,9 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (Exception &ex) {
-		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name.c_str(), ex.what());
+		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
 	} catch (...) {
-		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name.c_str());
+		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	}
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
@@ -640,7 +640,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!(*vdata.nullmask)[idx] && dataptr[idx] == 0) {
-			throw ConstraintException("CHECK constraint failed: %s", table.name.c_str());
+			throw ConstraintException("CHECK constraint failed: %s", table.name);
 		}
 	}
 }

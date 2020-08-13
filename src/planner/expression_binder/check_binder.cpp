@@ -32,7 +32,7 @@ string CheckBinder::UnsupportedAggregateMessage() {
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (!colref.table_name.empty() && colref.table_name != table) {
 		throw BinderException("Cannot reference table %s from within check constraint for table %s!",
-		                      colref.table_name.c_str(), table.c_str());
+		                      colref.table_name, table);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
@@ -41,7 +41,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in check constraint!",
-	                      colref.column_name.c_str());
+	                      colref.column_name);
 }
 
 } // namespace duckdb

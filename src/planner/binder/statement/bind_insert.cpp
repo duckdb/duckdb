@@ -47,7 +47,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			column_name_map[stmt.columns[i]] = i;
 			auto entry = table->name_map.find(stmt.columns[i]);
 			if (entry == table->name_map.end()) {
-				throw BinderException("Column %s not found in table %s", stmt.columns[i].c_str(), table->name.c_str());
+				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
 			if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");

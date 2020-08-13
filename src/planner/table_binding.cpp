@@ -25,7 +25,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = table.name_map.find(colref.column_name);
 	if (entry == table.name_map.end()) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
-		                                     colref.table_name.c_str(), colref.column_name.c_str()));
+		                                     colref.table_name, colref.column_name));
 	}
 	auto col_index = entry->second;
 	// fetch the type of the column
@@ -76,7 +76,7 @@ GenericBinding::GenericBinding(const string &alias, vector<LogicalType> coltypes
 		auto &name = names[i];
 		assert(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
+			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
 		name_map[name] = i;
 	}

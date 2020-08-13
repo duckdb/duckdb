@@ -89,7 +89,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// no extra list specified: we cannot push an extra ORDER BY clause
 		throw BinderException("Could not ORDER BY column \"%s\": add the expression/function to every SELECT, or move "
 		                      "the UNION into a FROM clause.",
-		                      expr->ToString().c_str());
+		                      expr->ToString());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
 	auto result = CreateProjectionReference(*expr, extra_list->size());

@@ -113,7 +113,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 	default:
 		throw NotImplementedException("Cannot plan statement of type %s!",
-		                              StatementTypeToString(statement->type).c_str());
+		                              StatementTypeToString(statement->type));
 	}
 }
 
