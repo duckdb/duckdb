@@ -309,7 +309,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
-	for (idx_t param_idx = 0; param_idx < LENGTH(paramsexp); param_idx++) {
+	for (idx_t param_idx = 0; param_idx < (idx_t) LENGTH(paramsexp); param_idx++) {
 		Value val;
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (LENGTH(valsexp) != 1) {
@@ -345,7 +345,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 			auto int_val = INTEGER_POINTER(valsexp)[0];
 			auto levels = GET_LEVELS(valsexp);
 			bool is_null = RIntegerType::IsNull(int_val);
-			if (!val.is_null) {
+			if (!is_null) {
 				auto str_val = STRING_ELT(levels, int_val - 1);
 				val = Value(CHAR(str_val));
 			} else {
