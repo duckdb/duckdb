@@ -109,10 +109,6 @@ void BufferedCSVReader::ConfigureSampling() {
 		throw ParserException("Chunk size cannot be smaller than 1.");
 	}
 	SAMPLE_CHUNK_SIZE = options.sample_size;
-
-	if (options.num_samples < 0) {
-		throw ParserException("Number of sample chunks cannot be smaller than 0.");
-	}
 	MAX_SAMPLE_CHUNKS = options.num_samples;
 }
 
