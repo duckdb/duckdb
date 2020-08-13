@@ -51,7 +51,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			for (auto &exp : select_list) {
 				assert(exp->type == ExpressionType::BOUND_UNNEST);
 				auto bue = (BoundUnnestExpression *)exp.get();
-				list_data_types.push_back(bue->child->return_type);
+				list_data_types.push_back(bue->child->return_type.InternalType());
 				executor.AddExpression(*bue->child.get());
 			}
 			state->list_data.Destroy();

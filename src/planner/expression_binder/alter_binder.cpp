@@ -38,9 +38,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
 			bound_columns.push_back(i);
-			return BindResult(
-			    make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), bound_columns.size() - 1),
-			    columns[i].type);
+			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, bound_columns.size() - 1));
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in alter statement!",

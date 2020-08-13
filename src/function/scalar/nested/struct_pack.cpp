@@ -22,7 +22,7 @@ static void struct_pack_fun(DataChunk &args, ExpressionState &state, Vector &res
 			all_const = false;
 		}
 		// same holds for this
-		assert(args.data[i].type == GetInternalType(info.stype.child_types()[i].second));
+		assert(args.data[i].type == info.stype.child_types()[i].second.InternalType());
 		auto new_child = make_unique<Vector>();
 		new_child->Reference(args.data[i]);
 		StructVector::AddEntry(result, info.stype.child_types()[i].first, move(new_child));
@@ -55,8 +55,8 @@ static unique_ptr<FunctionData> struct_pack_bind(BoundFunctionExpression &expr, 
 	}
 
 	// this is more for completeness reasons
-	expr.sql_return_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
-	return make_unique<VariableReturnBindData>(expr.sql_return_type);
+	expr.return_type = LogicalType(LogicalTypeId::STRUCT, move(struct_children));
+	return make_unique<VariableReturnBindData>(expr.return_type);
 }
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {

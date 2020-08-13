@@ -47,7 +47,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
 	assert(expr.arguments[0].id() == LogicalTypeId::STRUCT);
-	assert(expr.children[0]->return_type == PhysicalType::STRUCT);
+	assert(expr.children[0]->return_type.id() == LogicalTypeId::STRUCT);
 
 	auto &struct_children = expr.arguments[0].child_types();
 	if (struct_children.size() < 1) {
@@ -56,7 +56,7 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 
 	auto &key_child = expr.children[1];
 
-	if (expr.arguments[1].id() != LogicalTypeId::VARCHAR || key_child->return_type != PhysicalType::VARCHAR ||
+	if (expr.arguments[1].id() != LogicalTypeId::VARCHAR || key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
@@ -84,10 +84,9 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 		throw Exception("Could not find key in struct");
 	}
 
-	expr.return_type = GetInternalType(return_type);
-	expr.sql_return_type = return_type;
+	expr.return_type = return_type;
 	expr.children.pop_back();
-	return make_unique<StructExtractBindData>(key, key_index, GetInternalType(return_type));
+	return make_unique<StructExtractBindData>(key, key_index, return_type.InternalType());
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {

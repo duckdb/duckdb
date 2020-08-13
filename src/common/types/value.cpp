@@ -414,6 +414,32 @@ Value Value::Numeric(PhysicalType type, int64_t value) {
 	return val;
 }
 
+Value Value::Numeric(LogicalType type, int64_t value) {
+	Value val(type);
+	val.is_null = false;
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		assert(value <= NumericLimits<int8_t>::Maximum());
+		return Value::TINYINT((int8_t)value);
+	case LogicalTypeId::SMALLINT:
+		assert(value <= NumericLimits<int16_t>::Maximum());
+		return Value::SMALLINT((int16_t)value);
+	case LogicalTypeId::INTEGER:
+		assert(value <= NumericLimits<int32_t>::Maximum());
+		return Value::INTEGER((int32_t)value);
+	case LogicalTypeId::BIGINT:
+		return Value::BIGINT(value);
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(value);
+	case LogicalTypeId::FLOAT:
+		return Value((float)value);
+	case LogicalTypeId::DOUBLE:
+		return Value((double)value);
+	default:
+		throw InvalidTypeException(type.InternalType(), "Numeric requires numeric type");
+	}
+}
+
 string Value::ToString(LogicalType sql_type) const {
 	if (is_null) {
 		return "NULL";
@@ -573,7 +599,7 @@ Value Value::CastAs(LogicalType source_type, LogicalType target_type, bool stric
 	}
 	Vector input, result;
 	input.Reference(*this);
-	result.Initialize(GetInternalType(target_type));
+	result.Initialize(target_type.InternalType());
 	VectorOperations::Cast(input, result, source_type, target_type, 1, strict);
 	return result.GetValue(0);
 }

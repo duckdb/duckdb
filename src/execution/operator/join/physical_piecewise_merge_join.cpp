@@ -19,7 +19,7 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, uniq
 		// COMPARE NOT EQUAL not supported with merge join
 		assert(cond.comparison != ExpressionType::COMPARE_NOTEQUAL);
 		assert(cond.left->return_type == cond.right->return_type);
-		join_key_types.push_back(cond.left->return_type);
+		join_key_types.push_back(cond.left->return_type.InternalType());
 	}
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -34,7 +34,7 @@ public:
 		vector<PhysicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
-			condition_types.push_back(cond.right->return_type);
+			condition_types.push_back(cond.right->return_type.InternalType());
 		}
 		join_keys.Initialize(condition_types);
 	}
@@ -134,7 +134,7 @@ public:
 		vector<PhysicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+			condition_types.push_back(cond.left->return_type.InternalType());
 		}
 		join_keys.Initialize(condition_types);
 	}

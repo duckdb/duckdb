@@ -45,10 +45,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
-		if (expr->return_type == PhysicalType::INVALID) {
+		if (expr->return_type.id() == LogicalTypeId::INVALID) {
 			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 		}
-		auto value = make_unique<Value>(expr->return_type);
+		auto value = make_unique<Value>(expr->return_type.InternalType());
 		expr->value = value.get();
 		// check if the parameter number has been used before
 		if (value_map.find(expr->parameter_nr) != value_map.end()) {
@@ -56,7 +56,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		}
 		PreparedValueEntry entry;
 		entry.value = move(value);
-		entry.target_type = expr->sql_type;
+		entry.target_type = expr->return_type;
 		value_map[expr->parameter_nr] = move(entry);
 	}
 }

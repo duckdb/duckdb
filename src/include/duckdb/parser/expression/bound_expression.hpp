@@ -19,15 +19,13 @@ namespace duckdb {
 //! when dealing with subqueries.
 class BoundExpression : public ParsedExpression {
 public:
-	BoundExpression(unique_ptr<Expression> expr, unique_ptr<ParsedExpression> parsed_expr, LogicalType sql_type)
+	BoundExpression(unique_ptr<Expression> expr, unique_ptr<ParsedExpression> parsed_expr)
 	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)),
-	      parsed_expr(move(parsed_expr)), sql_type(sql_type) {
+	      parsed_expr(move(parsed_expr)) {
 	}
 
 	unique_ptr<Expression> expr;
 	unique_ptr<ParsedExpression> parsed_expr;
-	LogicalType sql_type;
-
 public:
 	string ToString() const override {
 		return expr->ToString();

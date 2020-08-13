@@ -1,0 +1,27 @@
+# name: test/optimizer/conjunction_simplification.test
+# description: Conjunction simplification test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X BOOLEAN);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+# X AND TRUE => X
+query I nosort conjnorm1
+EXPLAIN SELECT X AND TRUE FROM test
+----
+
+query I nosort conjnorm1
+EXPLAIN SELECT X FROM test
+----
+
+# X OR FALSE => X
+query I nosort conjnorm1
+EXPLAIN SELECT X OR FALSE FROM test
+----
+
+query I nosort conjnorm1
+EXPLAIN SELECT X FROM test
+----

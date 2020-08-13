@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BoundOperatorExpression : public Expression {
 public:
-	BoundOperatorExpression(ExpressionType type, PhysicalType return_type);
+	BoundOperatorExpression(ExpressionType type, LogicalType return_type);
 
 	vector<unique_ptr<Expression>> children;
 

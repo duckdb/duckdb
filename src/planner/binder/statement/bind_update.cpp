@@ -43,12 +43,11 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
-			auto col_type = GetInternalType(column.type);
 			// first add
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    col_type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(
-			    make_unique<BoundColumnRefExpression>(col_type, ColumnBinding(get.table_index, get.column_ids.size())));
+			    make_unique<BoundColumnRefExpression>(column.type, ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id);
 			update.columns.push_back(check_column_id);
 		}
@@ -137,7 +136,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
 			update->expressions.push_back(
-			    make_unique<BoundDefaultExpression>(GetInternalType(column.type), column.type));
+			    make_unique<BoundDefaultExpression>(column.type));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.type;
@@ -158,7 +157,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	// finally add the row id column to the projection list
 	proj->expressions.push_back(
-	    make_unique<BoundColumnRefExpression>(ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
+	    make_unique<BoundColumnRefExpression>(LOGICAL_ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result

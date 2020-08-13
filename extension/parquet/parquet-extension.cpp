@@ -585,7 +585,7 @@ private:
 			}
 
 			col_data.dict_size = page_hdr.dictionary_page_header.num_values;
-			auto dict_byte_size = col_data.dict_size * GetTypeIdSize(GetInternalType(data.sql_types[col_idx]));
+			auto dict_byte_size = col_data.dict_size * GetTypeIdSize(data.sql_types[col_idx].InternalType());
 
 			col_data.dict.resize(dict_byte_size);
 

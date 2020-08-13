@@ -1,0 +1,60 @@
+# name: test/optimizer/constant_folding.test
+# description: Constant folding test
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X BOOLEAN);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+
+query I nosort cfold1
+EXPLAIN SELECT 1+1
+----
+
+query I nosort cfold1
+EXPLAIN SELECT 2
+----
+
+query I nosort cfold2
+EXPLAIN SELECT (1+1+1)*2
+----
+
+query I nosort cfold2
+EXPLAIN SELECT 6
+----
+
+query I nosort cfold3
+EXPLAIN SELECT CASE WHEN 1 IN (1, 2, 3, 4) THEN 3 ELSE 5 END
+----
+
+query I nosort cfold3
+EXPLAIN SELECT 3
+----
+
+query I nosort cfold4
+EXPLAIN SELECT CASE WHEN 1 IN (1+1, 2, 3, 4) THEN 3 ELSE 5 END
+----
+
+query I nosort cfold4
+EXPLAIN SELECT 5
+----
+
+query I nosort cfold5
+EXPLAIN SELECT 1 IN (1+1, 2, 3, 4, NULL)
+----
+
+query I nosort cfold5
+EXPLAIN SELECT NULL
+----
+
+query I nosort cfold6
+EXPLAIN SELECT CASE WHEN 1 IN (1+1, 2, 3, 4, NULL, 1) THEN (3+4) ELSE 2+2+2 END
+----
+
+query I nosort cfold6
+EXPLAIN SELECT 7
+----
+
+

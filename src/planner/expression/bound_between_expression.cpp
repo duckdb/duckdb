@@ -5,7 +5,7 @@ using namespace std;
 
 BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower,
                                                unique_ptr<Expression> upper, bool lower_inclusive, bool upper_inclusive)
-    : Expression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BOUND_BETWEEN, PhysicalType::BOOL), input(move(input)),
+    : Expression(ExpressionType::COMPARE_BETWEEN, ExpressionClass::BOUND_BETWEEN, LogicalType::BOOLEAN), input(move(input)),
       lower(move(lower)), upper(move(upper)), lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
 }
 

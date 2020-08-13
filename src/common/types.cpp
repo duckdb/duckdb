@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
 #include <cmath>
@@ -10,6 +11,81 @@
 using namespace std;
 
 namespace duckdb {
+
+LogicalType::LogicalType()
+	: id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
+	physical_type_ = GetInternalType();
+}
+LogicalType::LogicalType(LogicalTypeId id)
+	: id_(id), width_(0), scale_(0), collation_(string()) {
+	physical_type_ = GetInternalType();
+}
+LogicalType::LogicalType(LogicalTypeId id, string collation)
+	: id_(id), width_(0), scale_(0), collation_(move(collation)) {
+	physical_type_ = GetInternalType();
+}
+LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale)
+	: id_(id), width_(width), scale_(scale), collation_(string()) {
+	physical_type_ = GetInternalType();
+}
+LogicalType::LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types)
+	: id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
+	physical_type_ = GetInternalType();
+}
+LogicalType::LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types)
+	: id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
+	physical_type_ = GetInternalType();
+}
+
+hash_t LogicalType::Hash() const {
+	return duckdb::Hash<uint8_t>((uint8_t) id_);
+}
+
+PhysicalType LogicalType::GetInternalType() {
+	switch (id_) {
+	case LogicalTypeId::BOOLEAN:
+		return PhysicalType::BOOL;
+	case LogicalTypeId::TINYINT:
+		return PhysicalType::INT8;
+	case LogicalTypeId::SMALLINT:
+		return PhysicalType::INT16;
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::INTEGER:
+		return PhysicalType::INT32;
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
+		return PhysicalType::INT64;
+	case LogicalTypeId::HUGEINT:
+		return PhysicalType::INT128;
+	case LogicalTypeId::FLOAT:
+		return PhysicalType::FLOAT;
+	case LogicalTypeId::DOUBLE:
+		return PhysicalType::DOUBLE;
+	case LogicalTypeId::DECIMAL:
+		// FIXME: for now
+		return PhysicalType::DOUBLE;
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::CHAR:
+	case LogicalTypeId::BLOB:
+		return PhysicalType::VARCHAR;
+	case LogicalTypeId::VARBINARY:
+		return PhysicalType::VARBINARY;
+	case LogicalTypeId::INTERVAL:
+		return PhysicalType::INTERVAL;
+	case LogicalTypeId::STRUCT:
+		return PhysicalType::STRUCT;
+	case LogicalTypeId::LIST:
+		return PhysicalType::LIST;
+	case LogicalTypeId::ANY:
+	case LogicalTypeId::INVALID:
+	case LogicalTypeId::UNKNOWN:
+		return PhysicalType::INVALID;
+	default:
+		throw ConversionException("Invalid LogicalType %s", ToString().c_str());
+	}
+}
 
 const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
 const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
@@ -49,6 +125,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::VARCHAR, LogicalType::BLOB, LogicalType::INTERVAL, LogicalType::HUGEINT};
 // TODO add LIST/STRUCT here
 
+const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
 string TypeIdToString(PhysicalType type) {
@@ -446,50 +523,6 @@ bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
 	}
 
 	return true;
-}
-
-PhysicalType GetInternalType(LogicalType type) {
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return PhysicalType::BOOL;
-	case LogicalTypeId::TINYINT:
-		return PhysicalType::INT8;
-	case LogicalTypeId::SMALLINT:
-		return PhysicalType::INT16;
-	case LogicalTypeId::SQLNULL:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::INTEGER:
-		return PhysicalType::INT32;
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIMESTAMP:
-		return PhysicalType::INT64;
-	case LogicalTypeId::HUGEINT:
-		return PhysicalType::INT128;
-	case LogicalTypeId::FLOAT:
-		return PhysicalType::FLOAT;
-	case LogicalTypeId::DOUBLE:
-		return PhysicalType::DOUBLE;
-	case LogicalTypeId::DECIMAL:
-		// FIXME: for now
-		return PhysicalType::DOUBLE;
-	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::CHAR:
-	case LogicalTypeId::BLOB:
-		return PhysicalType::VARCHAR;
-	case LogicalTypeId::VARBINARY:
-		return PhysicalType::VARBINARY;
-	case LogicalTypeId::INTERVAL:
-		return PhysicalType::INTERVAL;
-	case LogicalTypeId::STRUCT:
-		return PhysicalType::STRUCT;
-	case LogicalTypeId::LIST:
-		return PhysicalType::LIST;
-	case LogicalTypeId::ANY:
-		return PhysicalType::INVALID;
-	default:
-		throw ConversionException("Invalid LogicalType %s", type.ToString().c_str());
-	}
 }
 
 LogicalType MaxLogicalType(LogicalType left, LogicalType right) {

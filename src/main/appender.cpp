@@ -21,7 +21,7 @@ Appender::Appender(Connection &con, string schema_name, string table_name) : con
 	} else {
 		vector<PhysicalType> types;
 		for (auto &column : description->columns) {
-			types.push_back(GetInternalType(column.type));
+			types.push_back(column.type.InternalType());
 		}
 		chunk.Initialize(types);
 		con.context->RegisterAppender(this);

@@ -37,8 +37,7 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_name == columns[i].name) {
 			bound_columns.insert(i);
-			return BindResult(make_unique<BoundReferenceExpression>(GetInternalType(columns[i].type), i),
-			                  columns[i].type);
+			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, i));
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in check constraint!",

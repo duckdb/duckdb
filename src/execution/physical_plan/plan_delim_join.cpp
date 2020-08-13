@@ -43,7 +43,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
 		assert(delim_expr->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = (BoundReferenceExpression &)*delim_expr;
-		delim_types.push_back(bound_ref.return_type);
+		delim_types.push_back(bound_ref.return_type.InternalType());
 		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
 	if (op.join_type == JoinType::MARK) {

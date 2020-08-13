@@ -67,7 +67,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	assert(expr_idx < expressions.size());
-	assert(result.type == expressions[expr_idx]->return_type);
+	assert(result.type == expressions[expr_idx]->return_type.InternalType());
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -84,7 +84,7 @@ Value ExpressionExecutor::EvaluateScalar(Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(Expression &expr, Vector &vector, idx_t count) {
-	assert(expr.return_type == vector.type);
+	assert(expr.return_type.InternalType() == vector.type);
 	vector.Verify(count);
 }
 
@@ -163,7 +163,7 @@ idx_t ExpressionExecutor::Select(Expression &expr, ExpressionState *state, const
 		return 0;
 	}
 	assert(true_sel || false_sel);
-	assert(expr.return_type == PhysicalType::BOOL);
+	assert(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);

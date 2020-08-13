@@ -161,7 +161,7 @@ TEST_CASE("UDF functions with template", "[udf_function]") {
 		}
 	}
 
-	SECTION("Cheking NULLs with UDF functions") {
+	SECTION("Checking NULLs with UDF functions") {
 		for(LogicalType sql_type: sql_templated_types) {
 			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;

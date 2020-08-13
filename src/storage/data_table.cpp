@@ -49,7 +49,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
-	auto new_column_type = GetInternalType(new_column.type);
+	auto new_column_type = new_column.type.InternalType();
 	idx_t new_column_idx = columns.size();
 
 	types.push_back(new_column_type);
@@ -130,7 +130,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		}
 	}
 	// change the type in this DataTable
-	auto new_type = GetInternalType(target_type);
+	auto new_type = target_type.InternalType();
 	types[changed_idx] = new_type;
 
 	// construct a new column data for this type

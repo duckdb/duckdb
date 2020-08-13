@@ -7,17 +7,15 @@
 namespace duckdb {
 using namespace std;
 
-BoundFunctionExpression::BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), arguments(bound_function.arguments), sql_return_type(bound_function.return_type),
-      is_operator(is_operator) {
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function, bool is_operator)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
+      function(bound_function), arguments(bound_function.arguments), is_operator(is_operator) {
 }
 
-BoundFunctionExpression::BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function,
-                                                 vector<LogicalType> arguments, LogicalType sql_return_type, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, return_type),
-      function(bound_function), arguments(move(arguments)), sql_return_type(move(sql_return_type)),
-      is_operator(is_operator) {
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+                                                 vector<LogicalType> arguments, bool is_operator)
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, move(return_type)),
+      function(bound_function), arguments(move(arguments)), is_operator(is_operator) {
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
@@ -58,7 +56,7 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Copy() {
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, arguments, sql_return_type, is_operator);
+	auto copy = make_unique<BoundFunctionExpression>(return_type, function, arguments, is_operator);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}

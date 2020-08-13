@@ -22,11 +22,11 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (it == value_map.end()) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
-		if (values[i].type != GetInternalType(it->second.target_type)) {
+		if (values[i].type != it->second.target_type.InternalType()) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
 			    TypeIdToString(values[i].type).c_str(),
-			    TypeIdToString(GetInternalType(it->second.target_type)).c_str());
+			    TypeIdToString(it->second.target_type.InternalType()).c_str());
 		}
 		auto &target = it->second;
 		*target.value = values[i];

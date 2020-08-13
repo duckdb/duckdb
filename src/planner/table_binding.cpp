@@ -55,8 +55,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth), col_type);
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,
@@ -100,7 +99,7 @@ BindResult GenericBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	binding.column_index = column_entry->second;
 	LogicalType sql_type = types[column_entry->second];
 	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
+	    make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
 void GenericBinding::GenerateAllColumnExpressions(BindContext &context,

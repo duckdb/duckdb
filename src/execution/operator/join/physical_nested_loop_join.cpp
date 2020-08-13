@@ -115,7 +115,7 @@ public:
 		vector<PhysicalType> condition_types;
 		for (auto &cond : conditions) {
 			rhs_executor.AddExpression(*cond.right);
-			condition_types.push_back(cond.right->return_type);
+			condition_types.push_back(cond.right->return_type.InternalType());
 		}
 		right_condition.Initialize(condition_types);
 	}
@@ -193,7 +193,7 @@ public:
 		vector<PhysicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
-			condition_types.push_back(cond.left->return_type);
+			condition_types.push_back(cond.left->return_type.InternalType());
 		}
 		left_condition.Initialize(condition_types);
 	}

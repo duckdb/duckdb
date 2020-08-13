@@ -27,7 +27,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<PhysicalType> types, vector<
 		is_implicit_aggr = false;
 	}
 	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
+		group_types.push_back(expr->return_type.InternalType());
 	}
 	all_combinable = true;
 	for (auto &expr : expressions) {
@@ -36,10 +36,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(vector<PhysicalType> types, vector<
 		auto &aggr = (BoundAggregateExpression &)*expr;
 		bindings.push_back(&aggr);
 
-		aggregate_types.push_back(aggr.return_type);
+		aggregate_types.push_back(aggr.return_type.InternalType());
 		if (aggr.children.size()) {
 			for (idx_t i = 0; i < aggr.children.size(); ++i) {
-				payload_types.push_back(aggr.children[i]->return_type);
+				payload_types.push_back(aggr.children[i]->return_type.InternalType());
 			}
 		} else {
 			// COUNT(*)

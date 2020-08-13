@@ -77,12 +77,11 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 				vector<unique_ptr<Expression>> bound_expressions;
 				idx_t key_nr = 0;
 				for (auto &key : unique.keys) {
-					PhysicalType column_type = GetInternalType(columns[key].type);
 					assert(key < columns.size());
 
 					unbound_expressions.push_back(
-					    make_unique<BoundColumnRefExpression>(column_type, ColumnBinding(0, column_ids.size())));
-					bound_expressions.push_back(make_unique<BoundReferenceExpression>(column_type, key_nr++));
+					    make_unique<BoundColumnRefExpression>(columns[key].type, ColumnBinding(0, column_ids.size())));
+					bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
 					column_ids.push_back(key);
 				}
 				// create an adaptive radix tree around the expressions
@@ -395,7 +394,7 @@ ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 vector<PhysicalType> TableCatalogEntry::GetTypes() {
 	vector<PhysicalType> types;
 	for (auto &it : columns) {
-		types.push_back(GetInternalType(it.type));
+		types.push_back(it.type.InternalType());
 	}
 	return types;
 }
@@ -406,7 +405,7 @@ vector<PhysicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
 			result.push_back(PhysicalType::INT64);
 		} else {
-			result.push_back(GetInternalType(columns[index].type));
+			result.push_back(columns[index].type.InternalType());
 		}
 	}
 	return result;

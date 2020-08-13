@@ -19,7 +19,7 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
-		delim_types.push_back(col.type);
+		delim_types.push_back(col.type.InternalType());
 	}
 }
 

@@ -254,6 +254,7 @@ static void tokenizeLine(Script *p) {
 
 //! The map converting the labels to the hash values
 unordered_map<string, string> hash_label_map;
+unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
 	if (row_wise) {
@@ -409,13 +410,13 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		bool converted_lvalue = false;
 		try {
 			if (lvalue_str == "NULL") {
-				lvalue = Value(GetInternalType(sql_type));
+				lvalue = Value(sql_type);
 			} else {
 				lvalue = Value(lvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
 			}
 			converted_lvalue = true;
 			if (rvalue_str == "NULL") {
-				rvalue = Value(GetInternalType(sql_type));
+				rvalue = Value(sql_type);
 			} else {
 				rvalue = Value(rvalue_str).CastAs(LogicalType::VARCHAR, sql_type);
 			}
@@ -814,6 +815,7 @@ void Query::Execute() {
 			if (entry == hash_label_map.end()) {
 				// not computed yet: add it tot he map
 				hash_label_map[query_label] = string(zHash);
+				result_label_map[query_label] = move(result);
 			} else {
 				hash_compare_error = strcmp(entry->second.c_str(), zHash) != 0;
 			}
@@ -829,6 +831,9 @@ void Query::Execute() {
 			print_line_sep();
 			print_sql(sql_query);
 			print_line_sep();
+			print_header("Expected result:");
+			print_line_sep();
+			result_label_map[query_label]->Print();
 			print_header("Actual result:");
 			print_line_sep();
 			result->Print();

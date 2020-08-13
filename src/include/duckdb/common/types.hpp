@@ -256,24 +256,12 @@ enum class LogicalTypeId : uint8_t {
 };
 
 struct LogicalType {
-	LogicalType()
-		: id_(LogicalTypeId::INVALID), width_(0), scale_(0), collation_(string()) {
-	}
-	LogicalType(LogicalTypeId id)
-		: id_(id), width_(0), scale_(0), collation_(string()) {
-	}
-	LogicalType(LogicalTypeId id, string collation)
-		: id_(id), width_(0), scale_(0), collation_(move(collation)) {
-	}
-	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale)
-		: id_(id), width_(width), scale_(scale), collation_(string()) {
-	}
-	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types)
-		: id_(id), width_(0), scale_(0), collation_(string()), child_types_(move(child_types)) {
-	}
-	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types)
-		: id_(id), width_(width), scale_(scale), collation_(move(collation)), child_types_(move(child_types)) {
-	}
+	LogicalType();
+	LogicalType(LogicalTypeId id);
+	LogicalType(LogicalTypeId id, string collation);
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale);
+	LogicalType(LogicalTypeId id, child_list_t<LogicalType> child_types);
+	LogicalType(LogicalTypeId id, uint8_t width, uint8_t scale, string collation, child_list_t<LogicalType> child_types);
 
 	LogicalTypeId id() const {
 		return id_;
@@ -289,6 +277,9 @@ struct LogicalType {
 	}
 	const child_list_t<LogicalType> &child_types() const {
 		return child_types_;
+	}
+	PhysicalType InternalType() const {
+		return physical_type_;
 	}
 
 	bool operator==(const LogicalType &rhs) const {
@@ -307,6 +298,7 @@ struct LogicalType {
 	bool IsIntegral() const;
 	bool IsNumeric() const;
 	bool IsMoreGenericThan(LogicalType &other) const;
+	hash_t Hash() const;
 private:
 	LogicalTypeId id_;
 	uint8_t width_;
@@ -314,6 +306,9 @@ private:
 	string collation_;
 
 	child_list_t<LogicalType> child_types_;
+	PhysicalType physical_type_;
+private:
+	PhysicalType GetInternalType();
 public:
 	static const LogicalType SQLNULL;
 	static const LogicalType BOOLEAN;
@@ -352,8 +347,6 @@ LogicalType TransformStringToLogicalType(string str);
 //! Returns the "order" of numeric types; for auto-casting numeric types the type of the highest order should be used to guarantee a cast doesn't fail
 int NumericTypeOrder(PhysicalType type);
 
-//! Gets the internal type associated with the given SQL type
-PhysicalType GetInternalType(LogicalType type);
 //! Returns the "simplest" SQL type corresponding to the given type id (e.g. PhysicalType::INT32 -> LogicalTypeId::INTEGER)
 LogicalType LogicalTypeFromInternalType(PhysicalType type);
 
@@ -393,6 +386,7 @@ template <class T> bool IsValidType() {
 }
 
 //! The PhysicalType used by the row identifiers column
+extern const LogicalType LOGICAL_ROW_TYPE;
 extern const PhysicalType ROW_TYPE;
 
 string TypeIdToString(PhysicalType type);

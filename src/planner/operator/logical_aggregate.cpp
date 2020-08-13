@@ -11,11 +11,11 @@ LogicalAggregate::LogicalAggregate(idx_t group_index, idx_t aggregate_index, vec
 
 void LogicalAggregate::ResolveTypes() {
 	for (auto &expr : groups) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->return_type.InternalType());
 	}
 	// get the chunk types from the projection list
 	for (auto &expr : expressions) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->return_type.InternalType());
 	}
 }
 

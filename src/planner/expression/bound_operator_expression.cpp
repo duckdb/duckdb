@@ -4,8 +4,8 @@
 namespace duckdb {
 using namespace std;
 
-BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, PhysicalType return_type)
-    : Expression(type, ExpressionClass::BOUND_OPERATOR, return_type) {
+BoundOperatorExpression::BoundOperatorExpression(ExpressionType type, LogicalType return_type)
+    : Expression(type, ExpressionClass::BOUND_OPERATOR, move(return_type)) {
 }
 
 string BoundOperatorExpression::ToString() const {

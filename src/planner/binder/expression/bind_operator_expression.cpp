@@ -9,21 +9,20 @@ using namespace std;
 static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// NOT expression, cast child to BOOLEAN
 	assert(children.size() == 1);
-	children[0]->expr =
-	    BoundCastExpression::AddCastToType(move(children[0]->expr), children[0]->sql_type, LogicalType(LogicalTypeId::BOOLEAN));
+	children[0]->expr = BoundCastExpression::AddCastToType(move(children[0]->expr), LogicalType::BOOLEAN);
 	return LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	// get the maximum type from the children
-	LogicalType max_type = children[0]->sql_type;
+	LogicalType max_type = children[0]->expr->return_type;
 	for (idx_t i = 1; i < children.size(); i++) {
-		max_type = MaxLogicalType(max_type, children[i]->sql_type);
+		max_type = MaxLogicalType(max_type, children[i]->expr->return_type);
 	}
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
 		children[i]->expr =
-		    BoundCastExpression::AddCastToType(move(children[i]->expr), children[i]->sql_type, max_type);
+		    BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
 	}
 	// (NOT) IN always returns a boolean
 	return LogicalType(LogicalTypeId::BOOLEAN);
@@ -34,7 +33,7 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
-		return LogicalType(LogicalTypeId::BOOLEAN);
+		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
 		return ResolveInType(op, children);
@@ -62,11 +61,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// now resolve the types
 	LogicalType result_type = ResolveOperatorType(op, children);
 
-	auto result = make_unique<BoundOperatorExpression>(op.type, GetInternalType(result_type));
+	auto result = make_unique<BoundOperatorExpression>(op.type, result_type);
 	for (auto &child : children) {
 		result->children.push_back(move(child->expr));
 	}
-	return BindResult(move(result), result_type);
+	return BindResult(move(result));
 }
 
 } // namespace duckdb

@@ -30,7 +30,7 @@ public:
 		// initialize the update chunk
 		vector<PhysicalType> update_types;
 		for (auto &expr : expressions) {
-			update_types.push_back(expr->return_type);
+			update_types.push_back(expr->return_type.InternalType());
 		}
 		update_chunk.Initialize(update_types);
 		// initialize the mock chunk

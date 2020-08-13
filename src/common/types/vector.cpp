@@ -26,6 +26,10 @@ Vector::Vector(PhysicalType type, bool create_data, bool zero_data)
 Vector::Vector(PhysicalType type) : Vector(type, true, false) {
 }
 
+Vector::Vector(LogicalType type) : Vector(type.InternalType()) {
+
+}
+
 Vector::Vector(PhysicalType type, data_ptr_t dataptr) : vector_type(VectorType::FLAT_VECTOR), type(type), data(dataptr) {
 	if (dataptr && type == PhysicalType::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");

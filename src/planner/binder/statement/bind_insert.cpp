@@ -110,7 +110,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 							expr_list.values[list_idx][col_idx] = column.default_value->Copy();
 						} else {
 							expr_list.values[list_idx][col_idx] =
-							    make_unique<ConstantExpression>(column.type, Value(GetInternalType(column.type)));
+							    make_unique<ConstantExpression>(column.type, Value(column.type));
 						}
 					}
 				}

@@ -69,11 +69,11 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
 	idx_t cast_cost = 0;
-	if (expr.target_type != expr.source_type) {
+	if (expr.return_type != expr.source_type()) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
-		if (expr.target_type == LogicalType::VARCHAR || expr.source_type == LogicalType::VARCHAR ||
-		    expr.target_type == LogicalType::BLOB || expr.source_type == LogicalType::BLOB) {
+		if (expr.return_type.id() == LogicalTypeId::VARCHAR || expr.source_type().id() == LogicalTypeId::VARCHAR ||
+		    expr.return_type.id() == LogicalTypeId::BLOB || expr.source_type().id() == LogicalTypeId::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;
@@ -131,7 +131,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, Expres
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(PhysicalType &return_type, idx_t multiplier) {
+idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multiplier) {
 	// TODO: ajust values according to benchmark results
 	switch (return_type) {
 	case PhysicalType::VARCHAR:
@@ -177,19 +177,19 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		auto &col_expr = (BoundColumnRefExpression &)expr;
-		return ExpressionCost(col_expr.return_type, 8);
+		return ExpressionCost(col_expr.return_type.InternalType(), 8);
 	}
 	case ExpressionClass::BOUND_CONSTANT: {
 		auto &const_expr = (BoundConstantExpression &)expr;
-		return ExpressionCost(const_expr.return_type, 1);
+		return ExpressionCost(const_expr.return_type.InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_PARAMETER: {
 		auto &const_expr = (BoundConstantExpression &)expr;
-		return ExpressionCost(const_expr.return_type, 1);
+		return ExpressionCost(const_expr.return_type.InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_REF: {
 		auto &col_expr = (BoundColumnRefExpression &)expr;
-		return ExpressionCost(col_expr.return_type, 8);
+		return ExpressionCost(col_expr.return_type.InternalType(), 8);
 	}
 	default: { break; }
 	}

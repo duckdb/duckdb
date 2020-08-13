@@ -45,8 +45,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = (BoundExpression &)*aggr.children[i];
-		types.push_back(child.sql_type);
-		arguments.push_back(child.sql_type);
+		types.push_back(child.expr->return_type);
+		arguments.push_back(child.expr->return_type);
 		children.push_back(move(child.expr));
 	}
 
@@ -57,13 +57,13 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children, types);
 
+	auto return_type = bound_function.return_type;
+
 	// create the aggregate
-	auto aggregate = make_unique<BoundAggregateExpression>(GetInternalType(bound_function.return_type), bound_function,
-	                                                       aggr.distinct);
+	auto aggregate = make_unique<BoundAggregateExpression>(return_type, bound_function, aggr.distinct);
 	aggregate->children = move(children);
 	aggregate->arguments = arguments;
 
-	auto return_type = bound_function.return_type;
 
 	if (bound_function.bind) {
 		aggregate->bind_info = bound_function.bind(*aggregate, context, return_type);
@@ -85,8 +85,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// now create a column reference referring to the aggregate
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
-	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
+	    return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	return BindResult(move(colref), return_type);
+	return BindResult(move(colref));
 }
 } // namespace duckdb

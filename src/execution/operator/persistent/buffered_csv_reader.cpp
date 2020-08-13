@@ -465,7 +465,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(vector<LogicalType> requested_ty
 					const auto &sql_type = col_type_candidates.back();
 					// try vector-cast from string to sql_type
 					parse_chunk.data[col];
-					Vector dummy_result(GetInternalType(sql_type));
+					Vector dummy_result(sql_type.InternalType());
 					VectorOperations::Cast(parse_chunk.data[col], dummy_result, LogicalType::VARCHAR, sql_type,
 										   parse_chunk.size(), true);
 					break;

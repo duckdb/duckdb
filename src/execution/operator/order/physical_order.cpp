@@ -58,7 +58,7 @@ void PhysicalOrder::Finalize(ClientContext &context, unique_ptr<GlobalOperatorSt
 	vector<OrderByNullType> null_order_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
 		auto &expr = orders[i].expression;
-		sort_types.push_back(expr->return_type);
+		sort_types.push_back(expr->return_type.InternalType());
 		order_types.push_back(orders[i].type);
 		null_order_types.push_back(orders[i].null_order);
 		executor.AddExpression(*expr);

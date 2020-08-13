@@ -65,7 +65,7 @@ static unique_ptr<FunctionData> icu_collate_bind(BoundFunctionExpression &expr, 
 }
 
 static ScalarFunction get_icu_function(string collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::BIGINT, icu_collate_function, false, icu_collate_bind);
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, icu_collate_function, false, icu_collate_bind);
 }
 
 void ICUExtension::Load(DuckDB &db) {

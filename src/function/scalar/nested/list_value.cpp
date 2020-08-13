@@ -55,8 +55,8 @@ static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, C
 	}
 
 	// this is more for completeness reasons
-	expr.sql_return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
-	return make_unique<VariableReturnBindData>(expr.sql_return_type);
+	expr.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
+	return make_unique<VariableReturnBindData>(expr.return_type);
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {

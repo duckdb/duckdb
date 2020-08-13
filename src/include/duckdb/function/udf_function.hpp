@@ -35,7 +35,7 @@ public:
 	template<typename TR, typename... Args>
 	static scalar_function_t CreateScalarFunction(string name, vector<LogicalType> args, LogicalType ret_type, TR (*udf_func)(Args...)) {
 		if(!TypesMatch<TR>(ret_type)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), ret_type.InternalType(),
 					"Return type doesn't match with the first template type.");
 		}
 
@@ -84,12 +84,12 @@ public:
 	template<typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_type) {
 		if(!TypesMatch<TR>(ret_type)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), ret_type.InternalType(),
 					"The return argument don't match!");
 		}
 
 		if(!TypesMatch<TA>(input_type)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_type),
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), input_type.InternalType(),
 					"The input argument don't match!");
 		}
 
@@ -99,17 +99,17 @@ public:
 	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	static AggregateFunction CreateAggregateFunction(string name, LogicalType ret_type, LogicalType input_typeA, LogicalType input_typeB) {
 		if(!TypesMatch<TR>(ret_type)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TR>(), GetInternalType(ret_type),
+			throw duckdb::TypeMismatchException(GetTypeId<TR>(), ret_type.InternalType(),
 					"The return argument don't match!");
 		}
 
 		if(!TypesMatch<TA>(input_typeA)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(input_typeA),
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), input_typeA.InternalType(),
 					"The first input argument don't match!");
 		}
 
 		if(!TypesMatch<TB>(input_typeB)) {
-			throw duckdb::TypeMismatchException(GetTypeId<TB>(), GetInternalType(input_typeB),
+			throw duckdb::TypeMismatchException(GetTypeId<TB>(), input_typeB.InternalType(),
 					"The second input argument don't match!");
 		}
 
@@ -223,7 +223,7 @@ private:
 			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 1!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), args[0].InternalType(),
 					"The first arguments don't match!");
 		}
 
@@ -248,11 +248,11 @@ private:
 			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 2!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), args[0].InternalType(),
 					"The first arguments don't match!");
 		}
 		if(!TypesMatch<TB>(args[1])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TB>(), GetInternalType(args[1]),
+			throw duckdb::TypeMismatchException(GetTypeId<TB>(), args[1].InternalType(),
 					"The second arguments don't match!");
 		}
 
@@ -278,15 +278,15 @@ private:
 			throw duckdb::InvalidInputException("The number of LogicalType arguments (\"args\") should be 3!");
 		}
 		if(!TypesMatch<TA>(args[0])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TA>(), GetInternalType(args[0]),
+			throw duckdb::TypeMismatchException(GetTypeId<TA>(), args[0].InternalType(),
 					"The first arguments don't match!");
 		}
 		if(!TypesMatch<TB>(args[1])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TB>(), GetInternalType(args[1]),
+			throw duckdb::TypeMismatchException(GetTypeId<TB>(), args[1].InternalType(),
 					"The second arguments don't match!");
 		}
 		if(!TypesMatch<TC>(args[2])) {
-			throw duckdb::TypeMismatchException(GetTypeId<TC>(), GetInternalType(args[2]),
+			throw duckdb::TypeMismatchException(GetTypeId<TC>(), args[2].InternalType(),
 					"The second arguments don't match!");
 		}
 
@@ -328,7 +328,7 @@ private:
 		case LogicalTypeId::VARBINARY:
 			return std::is_same<T, blob_t>();
 		default:
-			throw InvalidTypeException(GetInternalType(sql_type), "Type does not supported!");
+			throw InvalidTypeException(sql_type.InternalType(), "Type does not supported!");
 		}
 	}
 

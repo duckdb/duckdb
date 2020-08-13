@@ -123,17 +123,16 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	unique_ptr<Expression> result = move(bound_expr->expr);
 	if (target_type.id() != LogicalTypeId::INVALID) {
 		// the binder has a specific target type: add a cast to that type
-		result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, target_type);
+		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else {
-		if (bound_expr->sql_type.id() == LogicalTypeId::SQLNULL) {
+		if (result->return_type.id() == LogicalTypeId::SQLNULL) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			bound_expr->sql_type = LogicalType::INTEGER;
-			result = BoundCastExpression::AddCastToType(move(result), bound_expr->sql_type, bound_expr->sql_type);
+			result = BoundCastExpression::AddCastToType(move(result), LogicalType::INTEGER);
 		}
 	}
 	if (result_type) {
-		*result_type = bound_expr->sql_type;
+		*result_type = result->return_type;
 	}
 	return result;
 }
@@ -152,7 +151,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	} else {
 		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr), result.sql_type);
+		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr));
 		auto be = (BoundExpression *)expr->get();
 		assert(be);
 		be->alias = alias;

@@ -5,7 +5,7 @@ using namespace std;
 
 BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left,
                                                      unique_ptr<Expression> right)
-    : Expression(type, ExpressionClass::BOUND_COMPARISON, PhysicalType::BOOL), left(move(left)), right(move(right)) {
+    : Expression(type, ExpressionClass::BOUND_COMPARISON, LogicalType::BOOLEAN), left(move(left)), right(move(right)) {
 }
 
 string BoundComparisonExpression::ToString() const {

@@ -19,7 +19,7 @@ void LogicalTableFunction::ResolveTypes() {
 			types.push_back(PhysicalType::INT64);
 			continue;
 		}
-		types.push_back(GetInternalType(return_types[col_idx]));
+		types.push_back(return_types[col_idx].InternalType());
 	}
 }
 

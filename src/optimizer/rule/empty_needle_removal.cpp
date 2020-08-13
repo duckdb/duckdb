@@ -31,7 +31,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	if (!prefix_expr->IsFoldable()) {
 		return nullptr;
 	}
-	assert(root->return_type == PhysicalType::BOOL);
+	assert(root->return_type.id() == LogicalTypeId::BOOLEAN);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(*prefix_expr);
 
@@ -39,13 +39,13 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 		return make_unique<BoundConstantExpression>(Value(PhysicalType::BOOL));
 	}
 
-	assert(prefix_value.type == prefix_expr->return_type);
+	assert(prefix_value.type == prefix_expr->return_type.InternalType());
 	string needle_string = string(((string_t)prefix_value.str_value).GetData());
 
 	/* PREFIX('xyz', '') is TRUE, PREFIX(NULL, '') is NULL, so rewrite PREFIX(x, '') to (CASE WHEN x IS NOT NULL THEN
 	 * TRUE ELSE NULL END) */
 	if (needle_string.empty()) {
-		auto if_ = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, PhysicalType::BOOL);
+		auto if_ = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
 		if_->children.push_back(bindings[1]->Copy());
 		auto case_ =
 		    make_unique<BoundCaseExpression>(move(if_), make_unique<BoundConstantExpression>(Value::BOOLEAN(true)),

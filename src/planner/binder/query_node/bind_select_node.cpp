@@ -124,7 +124,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				// DISTINCT without a target: push references to the standard select list
 				for (idx_t i = 0; i < sql_types.size(); i++) {
 					distinct.target_distincts.push_back(make_unique<BoundColumnRefExpression>(
-					    GetInternalType(sql_types[i]), ColumnBinding(projection_index, i)));
+					    sql_types[i], ColumnBinding(projection_index, i)));
 				}
 			} else {
 				// DISTINCT with target list: set types
@@ -136,7 +136,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 						throw BinderException("Ambiguous name in DISTINCT ON!");
 					}
 					assert(bound_colref.binding.column_index < sql_types.size());
-					bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+					bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				}
 			}
 			for (idx_t i = 0; i < distinct.target_distincts.size(); i++) {
@@ -160,7 +160,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				}
 				assert(bound_colref.binding.column_index < sql_types.size());
 				auto sql_type = sql_types[bound_colref.binding.column_index];
-				bound_colref.return_type = GetInternalType(sql_types[bound_colref.binding.column_index]);
+				bound_colref.return_type = sql_types[bound_colref.binding.column_index];
 				if (sql_type.id() == LogicalTypeId::VARCHAR) {
 					order.orders[i].expression =
 					    ExpressionBinder::PushCollation(context, move(order.orders[i].expression), sql_type.collation());
@@ -246,8 +246,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// bind the groups
 			LogicalType group_type;
 			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
-			assert(bound_expr->return_type != PhysicalType::INVALID);
-			info.group_types.push_back(group_type);
+			assert(bound_expr->return_type.id() != LogicalTypeId::INVALID);
+
 			// push a potential collation, if necessary
 			bound_expr = ExpressionBinder::PushCollation(context, move(bound_expr), group_type.collation(), true);
 			result->groups.push_back(move(bound_expr));

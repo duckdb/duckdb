@@ -26,7 +26,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto constant_expr = (BoundConstantExpression *)bindings[1];
 	assert(root->children.size() == 2);
 	if (constant_expr->value.is_null) {
-		return make_unique<BoundConstantExpression>(Value(root->return_type));
+		return make_unique<BoundConstantExpression>(Value(root->return_type.InternalType()));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
@@ -35,7 +35,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-	assert(constant_value.type == constant_expr->return_type);
+	assert(constant_value.type == constant_expr->return_type.InternalType());
 	string patt_str = string(((string_t)constant_value.str_value).GetData());
 
 	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");

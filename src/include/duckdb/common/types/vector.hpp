@@ -55,6 +55,7 @@ public:
 	Vector(Value value);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
 	Vector(PhysicalType type);
+	Vector(LogicalType type);
 	//! Create a non-owning vector that references the specified data
 	Vector(PhysicalType type, data_ptr_t dataptr);
 	//! Create an owning vector that holds at most STANDARD_VECTOR_SIZE entries.

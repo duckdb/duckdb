@@ -4,9 +4,9 @@
 namespace duckdb {
 using namespace std;
 
-BoundWindowExpression::BoundWindowExpression(ExpressionType type, PhysicalType return_type,
+BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, return_type), aggregate(move(aggregate)) {
+    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)) {
 }
 
 string BoundWindowExpression::ToString() const {

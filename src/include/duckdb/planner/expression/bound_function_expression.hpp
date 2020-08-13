@@ -17,8 +17,8 @@ class ScalarFunctionCatalogEntry;
 //! Represents a function call that has been bound to a base function
 class BoundFunctionExpression : public Expression {
 public:
-	BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function, bool is_operator = false);
-	BoundFunctionExpression(PhysicalType return_type, ScalarFunction bound_function, vector<LogicalType> arguments, LogicalType sql_return_type, bool is_operator = false);
+	BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function, bool is_operator = false);
+	BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function, vector<LogicalType> arguments, bool is_operator = false);
 
 	// The bound function expression
 	ScalarFunction function;
@@ -26,8 +26,6 @@ public:
 	vector<unique_ptr<Expression>> children;
 	//! Argument types of the function. This is separate from the actual function in case of e.g. varargs functions, where the function definition only contains "varargs", this will contain the number of arguments for this invocation.
 	vector<LogicalType> arguments;
-	//! The SQL return type; separate from the actual function because certain functions change output depending on input types, e.g. LIST_VALUE returns a LIST(INPUT_TYPE) as return type
-	LogicalType sql_return_type;
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! The bound function data (if any)

@@ -7,7 +7,7 @@ namespace duckdb {
 using namespace std;
 
 BoundConstantExpression::BoundConstantExpression(Value value)
-    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.type), value(value) {
+    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.GetLogicalType()), value(value) {
 }
 
 string BoundConstantExpression::ToString() const {

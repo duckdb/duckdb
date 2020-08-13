@@ -31,7 +31,7 @@ struct BoundCreateTableInfo;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
-	PhysicalType type;
+	LogicalType type;
 	string name;
 	idx_t depth;
 

@@ -133,7 +133,7 @@ unique_ptr<QueryResult> QueryDatabase(vector<LogicalType> result_types, sqlite3 
 	// construct the types of the result
 	vector<PhysicalType> typeids;
 	for (auto &tp : result_types) {
-		typeids.push_back(GetInternalType(tp));
+		typeids.push_back(tp.InternalType());
 	}
 
 	// construct the result

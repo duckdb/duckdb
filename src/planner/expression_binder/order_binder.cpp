@@ -22,7 +22,7 @@ OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, Selec
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), PhysicalType::INVALID,
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
 

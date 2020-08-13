@@ -30,8 +30,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		for (idx_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
-			cond.right = make_unique<BoundReferenceExpression>(types[i], i);
+			cond.left = make_unique<BoundReferenceExpression>(LogicalTypeFromInternalType(types[i]), i);
+			cond.right = make_unique<BoundReferenceExpression>(LogicalTypeFromInternalType(types[i]), i);
 			cond.null_values_are_equal = true;
 			conditions.push_back(move(cond));
 		}

@@ -24,7 +24,9 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	Value(PhysicalType type = PhysicalType::INT32) : type(type), is_null(true) {
+	explicit Value(PhysicalType type = PhysicalType::INT32) : type(type), is_null(true) {
+	}
+	explicit Value(LogicalType type) : Value(type.InternalType()) {
 	}
 	//! Create a BIGINT value
 	Value(int32_t val) : type(PhysicalType::INT32), is_null(false) {
@@ -55,6 +57,7 @@ public:
 	static Value MaximumValue(PhysicalType type);
 	//! Create a Numeric value of the specified type with the specified value
 	static Value Numeric(PhysicalType id, int64_t value);
+	static Value Numeric(LogicalType type, int64_t value);
 
 	//! Create a tinyint Value from a specified value
 	static Value BOOLEAN(int8_t value);

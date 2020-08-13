@@ -20,7 +20,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
       entry_size(0), tuple_size(0), join_type(type), finalized(false), has_null(false), count(0) {
 	for (auto &condition : conditions) {
 		assert(condition.left->return_type == condition.right->return_type);
-		auto type = condition.left->return_type;
+		auto type = condition.left->return_type.InternalType();
 		auto type_size = GetTypeIdSize(type);
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
 			// all equality conditions should be at the front

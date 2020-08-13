@@ -78,7 +78,7 @@ public:
 			// initialize the payload chunk
 			if (aggr.children.size()) {
 				for (idx_t i = 0; i < aggr.children.size(); ++i) {
-					payload_types.push_back(aggr.children[i]->return_type);
+					payload_types.push_back(aggr.children[i]->return_type.InternalType());
 					child_executor.AddExpression(*aggr.children[i]);
 				}
 			} else {

@@ -146,6 +146,18 @@ void PhysicalPragma::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		} else {
 			context.client.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context.client), str_val);
 		}
+	} else if (keyword == "explain_output") {
+		if (pragma.pragma_type != PragmaType::ASSIGNMENT) {
+			throw ParserException("Explain output must be an assignment (e.g. PRAGMA explain_output='optimized')");
+		}
+		string val = pragma.parameters[0].ToString();
+		if (val == "optimized") {
+			context.client.explain_output_optimized_only = true;
+		} else if (val == "all") {
+			context.client.explain_output_optimized_only = true;
+		} else {
+			throw ParserException("Expected PRAGMA explain_output={optimized, all}");
+		}
 	} else {
 		throw ParserException("Unrecognized PRAGMA keyword: %s", keyword.c_str());
 	}

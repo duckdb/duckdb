@@ -27,7 +27,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(vector<BoundAggr
 	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size();
 		aggregates.push_back(AggregateObject(binding->function, binding->children.size(), payload_size,
-		                                     binding->distinct, binding->return_type));
+		                                     binding->distinct, binding->return_type.InternalType()));
 	}
 	return aggregates;
 }

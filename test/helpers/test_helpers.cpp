@@ -265,7 +265,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 	// set up the intermediate result chunk
 	vector<PhysicalType> internal_types;
 	for (auto &type : sql_types) {
-		internal_types.push_back(GetInternalType(type));
+		internal_types.push_back(type.InternalType());
 	}
 	DataChunk parsed_result;
 	parsed_result.Initialize(internal_types);

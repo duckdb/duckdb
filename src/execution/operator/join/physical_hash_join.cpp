@@ -20,7 +20,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 	assert(left_projection_map.size() == 0);
 	for (auto &condition : conditions) {
-		condition_types.push_back(condition.left->return_type);
+		condition_types.push_back(condition.left->return_type.InternalType());
 	}
 
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
@@ -72,13 +72,14 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
 			auto &info = state->hash_table->correlated_mark_join_info;
 
-			vector<PhysicalType> payload_types = {PhysicalType::INT64, PhysicalType::INT64}; // COUNT types
+			vector<PhysicalType> payload_types;
 			vector<AggregateFunction> aggregate_functions = {CountStarFun::GetFunction(), CountFun::GetFunction()};
 			vector<BoundAggregateExpression *> correlated_aggregates;
 			for (idx_t i = 0; i < aggregate_functions.size(); ++i) {
-				auto aggr = make_unique<BoundAggregateExpression>(payload_types[i], aggregate_functions[i], false);
+				auto aggr = make_unique<BoundAggregateExpression>(aggregate_functions[i].return_type, aggregate_functions[i], false);
 				correlated_aggregates.push_back(&*aggr);
 				info.correlated_aggregates.push_back(move(aggr));
+				payload_types.push_back(aggregate_functions[i].return_type.InternalType());
 			}
 			info.correlated_counts =
 			    make_unique<SuperLargeHashTable>(1024, delim_types, payload_types, correlated_aggregates);
