@@ -305,7 +305,7 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		return R_NilValue;
 	}
 
-	if (TYPEOF(paramsexp) != VECSXP || LENGTH(paramsexp) != stmtholder->stmt->n_param) {
+	if (TYPEOF(paramsexp) != VECSXP || (idx_t) LENGTH(paramsexp) != stmtholder->stmt->n_param) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
@@ -344,11 +344,12 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		case RType::FACTOR: {
 			auto int_val = INTEGER_POINTER(valsexp)[0];
 			auto levels = GET_LEVELS(valsexp);
-			val.type = PhysicalType::VARCHAR;
-			val.is_null = RIntegerType::IsNull(int_val);
+			bool is_null = RIntegerType::IsNull(int_val);
 			if (!val.is_null) {
 				auto str_val = STRING_ELT(levels, int_val - 1);
-				val.str_value = string(CHAR(str_val));
+				val = Value(CHAR(str_val));
+			} else {
+				val = Value(LogicalType::VARCHAR);
 			}
 			break;
 		}
@@ -569,7 +570,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				}
 				default:
 					Rf_error("duckdb_execute_R: Unknown column type for convert: %s",
-					         TypeIdToString(chunk->GetTypes()[col_idx]).c_str());
+					         chunk->GetTypes()[col_idx].ToString().c_str());
 					break;
 				}
 			}
@@ -619,7 +620,7 @@ struct DataFrameScanFunction : public TableFunction {
 		auto df_names = GET_NAMES(df);
 		vector<RType> rtypes;
 
-		for (idx_t col_idx = 0; col_idx < LENGTH(df); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < (idx_t) LENGTH(df); col_idx++) {
 			names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
 			SEXP coldata = VECTOR_ELT(df, col_idx);
 			rtypes.push_back(detect_rtype(coldata));
