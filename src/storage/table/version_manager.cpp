@@ -2,7 +2,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 idx_t VersionManager::GetSelVector(Transaction &transaction, idx_t index, SelectionVector &sel_vector,
@@ -162,3 +162,5 @@ void VersionManager::RevertAppend(row_t row_start, row_t row_end) {
 		info.erase(chunk_start);
 	}
 }
+
+} // namespace duckdb

@@ -6,7 +6,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
@@ -84,3 +84,5 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	}
 	return move(result);
 }
+
+} // namespace duckdb

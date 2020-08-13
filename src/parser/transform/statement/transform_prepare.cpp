@@ -3,7 +3,7 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PrepareStatement> Transformer::TransformPrepare(PGNode *node) {
@@ -47,3 +47,5 @@ unique_ptr<DropStatement> Transformer::TransformDeallocate(PGNode *node) {
 	result->info->name = string(stmt->name);
 	return result;
 }
+
+} // namespace duckdb

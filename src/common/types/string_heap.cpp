@@ -7,7 +7,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 #define MINIMUM_HEAP_SIZE 4096
@@ -67,3 +67,5 @@ void StringHeap::MergeHeap(StringHeap &other) {
 	}
 	other.tail = nullptr;
 }
+
+} // namespace duckdb

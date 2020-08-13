@@ -5,8 +5,8 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
-using namespace duckdb;
 using namespace std;
+namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions,
                                                  bool all_combinable)
@@ -17,6 +17,7 @@ PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<TypeId> types, vector<un
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+
 struct AggregateState {
 	AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
@@ -179,3 +180,5 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 	}
 	state->finished = true;
 }
+
+} // namespace duckdb

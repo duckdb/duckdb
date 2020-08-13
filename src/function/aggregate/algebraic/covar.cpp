@@ -6,7 +6,7 @@
 
 #include <cmath>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct covar_state_t {
@@ -105,3 +105,5 @@ void CovarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	        SQLType::DOUBLE, SQLType::DOUBLE, SQLType::DOUBLE));
 	set.AddFunction(covar_samp);
 }
+
+} // namespace duckdb

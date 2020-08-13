@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
@@ -55,3 +55,5 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(PGCaseExpr *root) {
 
 	return move(exp_root);
 }
+
+} // namespace duckdb

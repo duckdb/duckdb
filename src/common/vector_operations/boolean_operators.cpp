@@ -8,7 +8,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //===--------------------------------------------------------------------===//
@@ -170,3 +170,5 @@ void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
 	assert(input.type == TypeId::BOOL && result.type == TypeId::BOOL);
 	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
 }
+
+} // namespace duckdb

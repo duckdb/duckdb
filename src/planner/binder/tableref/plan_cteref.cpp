@@ -2,7 +2,7 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
@@ -15,3 +15,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 
 	return make_unique<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns);
 }
+
+} // namespace duckdb

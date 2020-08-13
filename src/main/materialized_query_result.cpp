@@ -1,6 +1,6 @@
 #include "duckdb/main/materialized_query_result.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
@@ -53,3 +53,5 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 	collection.chunks.erase(collection.chunks.begin() + 0);
 	return chunk;
 }
+
+} // namespace duckdb

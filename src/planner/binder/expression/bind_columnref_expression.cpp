@@ -4,7 +4,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t depth) {
@@ -25,3 +25,5 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	}
 	return result;
 }
+
+} // namespace duckdb

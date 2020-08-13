@@ -12,7 +12,7 @@
 
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
@@ -95,3 +95,5 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 	}
 	return nullptr;
 }
+
+} // namespace duckdb

@@ -8,7 +8,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CleanupState::CleanupState() : current_table(nullptr), count(0) {
@@ -87,3 +87,5 @@ void CleanupState::Flush() {
 
 	count = 0;
 }
+
+} // namespace duckdb

@@ -1,7 +1,7 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 void BuiltinFunctions::RegisterMathFunctions() {
@@ -29,3 +29,5 @@ void BuiltinFunctions::RegisterMathFunctions() {
 
 	Register<BitCountFun>();
 }
+
+} // namespace duckdb

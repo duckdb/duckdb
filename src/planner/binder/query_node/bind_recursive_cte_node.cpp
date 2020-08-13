@@ -6,7 +6,7 @@
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
@@ -68,3 +68,5 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	return move(result);
 }
+
+} // namespace duckdb

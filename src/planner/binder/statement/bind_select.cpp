@@ -2,7 +2,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(SelectStatement &stmt) {
@@ -13,3 +13,5 @@ BoundStatement Binder::Bind(SelectStatement &stmt) {
 	// now visit the root node of the select statement
 	return Bind(*stmt.node);
 }
+
+} // namespace duckdb

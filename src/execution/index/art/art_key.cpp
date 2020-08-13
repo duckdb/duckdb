@@ -5,7 +5,7 @@
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 
 //! these are optimized and assume a particular byte order
 #define BSWAP16(x) ((uint16_t)((((uint16_t)(x)&0xff00) >> 8) | (((uint16_t)(x)&0x00ff) << 8)))
@@ -181,3 +181,4 @@ bool Key::operator==(const Key &k) const {
 	}
 	return true;
 }
+} // namespace duckdb

@@ -2,7 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<SelectStatement> Transformer::TransformSelect(PGNode *node) {
@@ -17,3 +17,5 @@ unique_ptr<SelectStatement> Transformer::TransformSelect(PGNode *node) {
 	result->node = TransformSelectNode(stmt);
 	return result;
 }
+
+} // namespace duckdb

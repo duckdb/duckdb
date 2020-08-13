@@ -5,10 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-using namespace duckdb;
-using namespace std;
-
 namespace duckdb {
+using namespace std;
 
 class DependencyExtractor : public LogicalOperatorVisitor {
 public:
@@ -27,7 +25,6 @@ protected:
 private:
 	unordered_set<CatalogEntry *> &dependencies;
 };
-} // namespace duckdb
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	// first resolve column references
@@ -136,3 +133,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}
 }
+
+} // namespace duckdb

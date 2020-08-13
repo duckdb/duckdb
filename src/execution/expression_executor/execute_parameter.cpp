@@ -2,7 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundParameterExpression &expr,
@@ -16,3 +16,5 @@ void ExpressionExecutor::Execute(BoundParameterExpression &expr, ExpressionState
 	assert(expr.value->type == expr.return_type);
 	result.Reference(*expr.value);
 }
+
+} // namespace duckdb

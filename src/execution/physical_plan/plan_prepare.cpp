@@ -3,7 +3,7 @@
 #include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/execution/operator/helper/physical_prepare.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
@@ -17,3 +17,5 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &o
 
 	return make_unique<PhysicalPrepare>(op.name, move(op.prepared));
 }
+
+} // namespace duckdb

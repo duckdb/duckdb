@@ -2,7 +2,7 @@
 
 #include "duckdb/common/serializer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 bool TableFunctionRef::Equals(const TableRef *other_) const {
@@ -34,3 +34,5 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	return move(copy);
 }
+
+} // namespace duckdb

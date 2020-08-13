@@ -6,14 +6,16 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 WriteAheadLog::WriteAheadLog(DuckDB &database) : initialized(false), database(database) {
 }
 
 void WriteAheadLog::Initialize(string &path) {
-	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileFlags::FILE_FLAGS_APPEND);
+	writer = make_unique<BufferedFileWriter>(database.GetFileSystem(), path.c_str(),
+	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+	                                             FileFlags::FILE_FLAGS_APPEND);
 	initialized = true;
 }
 
@@ -148,3 +150,5 @@ void WriteAheadLog::Flush() {
 	// flushes all changes made to the WAL to disk
 	writer->Sync();
 }
+
+} // namespace duckdb

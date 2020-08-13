@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 class PhysicalCrossProductOperatorState : public PhysicalOperatorState {
@@ -89,3 +89,5 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
 	return make_unique<PhysicalCrossProductOperatorState>(children[0].get(), children[1].get());
 }
+
+} // namespace duckdb

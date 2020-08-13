@@ -54,6 +54,9 @@
 
 #define VLOG(x) if((x)>0){}else LOG_INFO.stream()
 
+namespace duckdb_re2 {
+
+
 class LogMessage {
  public:
   LogMessage(const char* file, int line)
@@ -103,6 +106,7 @@ class LogMessageFatal : public LogMessage {
   LogMessageFatal(const LogMessageFatal&) = delete;
   LogMessageFatal& operator=(const LogMessageFatal&) = delete;
 };
+} // namespace
 
 #ifdef _MSC_VER
 //#pragma warning(pop)

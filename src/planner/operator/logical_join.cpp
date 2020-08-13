@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 LogicalJoin::LogicalJoin(JoinType join_type, LogicalOperatorType logical_type)
@@ -58,3 +58,5 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
 }
+
+} // namespace duckdb

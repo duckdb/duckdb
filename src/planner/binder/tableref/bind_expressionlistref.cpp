@@ -3,7 +3,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
@@ -44,3 +44,5 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 	bind_context.AddGenericBinding(result->bind_index, expr.alias, result->names, result->types);
 	return move(result);
 }
+
+} // namespace duckdb

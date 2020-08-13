@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
@@ -44,3 +44,5 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	throw BinderException("Table does not contain column %s referenced in check constraint!",
 	                      colref.column_name.c_str());
 }
+
+} // namespace duckdb

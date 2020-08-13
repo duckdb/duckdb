@@ -10,7 +10,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
@@ -102,3 +102,5 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 
 	return result;
 }
+
+} // namespace duckdb

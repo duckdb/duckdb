@@ -3,7 +3,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
@@ -81,3 +81,5 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(PGNode *node) {
 	result->info = move(info);
 	return result;
 }
+
+} // namespace duckdb

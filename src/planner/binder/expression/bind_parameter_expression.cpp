@@ -3,7 +3,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t depth) {
@@ -12,3 +12,5 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	binder.parameters->push_back(bound_parameter.get());
 	return BindResult(move(bound_parameter), sql_type);
 }
+
+} // namespace duckdb

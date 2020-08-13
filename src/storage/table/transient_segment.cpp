@@ -6,7 +6,7 @@
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 TransientSegment::TransientSegment(BufferManager &manager, TypeId type, idx_t start)
@@ -68,3 +68,5 @@ void TransientSegment::RevertAppend(idx_t start_row) {
 	data->tuple_count = start_row - this->start;
 	this->count = start_row - this->start;
 }
+
+} // namespace duckdb

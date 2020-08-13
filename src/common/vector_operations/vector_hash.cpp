@@ -7,7 +7,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/null_value.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 struct HashOp {
@@ -216,3 +216,5 @@ void VectorOperations::CombineHash(Vector &hashes, Vector &input, idx_t count) {
 void VectorOperations::CombineHash(Vector &hashes, Vector &input, const SelectionVector &rsel, idx_t count) {
 	combine_hash_type_switch<true>(hashes, input, &rsel, count);
 }
+
+} // namespace duckdb

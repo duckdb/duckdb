@@ -1,7 +1,7 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PreparedStatementData::PreparedStatementData(StatementType type)
@@ -40,3 +40,5 @@ SQLType PreparedStatementData::GetType(idx_t param_idx) {
 	}
 	return it->second.target_type;
 }
+
+} // namespace duckdb

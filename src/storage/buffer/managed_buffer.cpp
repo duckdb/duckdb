@@ -1,7 +1,7 @@
 #include "duckdb/storage/buffer/managed_buffer.hpp"
 #include "duckdb/common/exception.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 ManagedBuffer::ManagedBuffer(BufferManager &manager, idx_t size, bool can_destroy, block_id_t id)
@@ -9,3 +9,5 @@ ManagedBuffer::ManagedBuffer(BufferManager &manager, idx_t size, bool can_destro
 	assert(id >= MAXIMUM_BLOCK);
 	assert(size >= Storage::BLOCK_ALLOC_SIZE);
 }
+
+} // namespace duckdb

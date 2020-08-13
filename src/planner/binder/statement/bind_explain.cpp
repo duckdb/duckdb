@@ -2,7 +2,7 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundStatement Binder::Bind(ExplainStatement &stmt) {
@@ -20,3 +20,5 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	result.types = {SQLType::VARCHAR, SQLType::VARCHAR};
 	return result;
 }
+
+} // namespace duckdb

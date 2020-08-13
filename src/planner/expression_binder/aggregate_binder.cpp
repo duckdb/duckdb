@@ -2,7 +2,7 @@
 
 #include "duckdb/planner/binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 AggregateBinder::AggregateBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context, true) {
@@ -20,3 +20,4 @@ BindResult AggregateBinder::BindExpression(ParsedExpression &expr, idx_t depth, 
 string AggregateBinder::UnsupportedAggregateMessage() {
 	return "aggregate function calls cannot be nested";
 }
+} // namespace duckdb

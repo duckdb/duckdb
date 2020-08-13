@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 //===--------------------------------------------------------------------===//
@@ -34,3 +34,5 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 	}
 	}
 }
+
+} // namespace duckdb

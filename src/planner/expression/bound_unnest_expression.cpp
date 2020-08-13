@@ -3,7 +3,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BoundUnnestExpression::BoundUnnestExpression(SQLType sql_return_type)
@@ -40,3 +40,5 @@ unique_ptr<Expression> BoundUnnestExpression::Copy() {
 	copy->child = child->Copy();
 	return move(copy);
 }
+
+} // namespace duckdb

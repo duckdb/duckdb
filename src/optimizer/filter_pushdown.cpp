@@ -4,7 +4,7 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 using Filter = FilterPushdown::Filter;
@@ -121,3 +121,5 @@ void FilterPushdown::Filter::ExtractBindings() {
 	bindings.clear();
 	LogicalJoin::GetExpressionBindings(*filter, bindings);
 }
+
+} // namespace duckdb

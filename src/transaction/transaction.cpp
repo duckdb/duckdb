@@ -12,7 +12,7 @@
 
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Transaction &Transaction::GetTransaction(ClientContext &context) {
@@ -94,3 +94,5 @@ string Transaction::Commit(WriteAheadLog *log, transaction_t commit_id) noexcept
 		return ex.what();
 	}
 }
+
+} // namespace duckdb

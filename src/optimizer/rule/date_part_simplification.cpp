@@ -8,7 +8,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/function/function.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -96,3 +96,5 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	return ScalarFunction::BindScalarFunction(rewriter.context, DEFAULT_SCHEMA, new_function_name, arguments,
 	                                          move(children), false);
 }
+
+} // namespace duckdb

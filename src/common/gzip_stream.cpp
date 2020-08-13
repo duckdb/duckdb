@@ -9,7 +9,7 @@
 #include "duckdb/common/limits.hpp"
 
 using namespace std;
-using namespace duckdb;
+namespace duckdb {
 
 /*
 
@@ -207,3 +207,5 @@ GzipStreamBuf::~GzipStreamBuf() {
 	}
 	delete zstrm_p;
 }
+
+} // namespace duckdb

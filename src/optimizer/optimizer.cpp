@@ -15,7 +15,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
@@ -104,3 +104,5 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	return plan;
 }
+
+} // namespace duckdb

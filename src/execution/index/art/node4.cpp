@@ -2,7 +2,7 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 
 Node4::Node4(ART &art, size_t compressionLength) : Node(art, NodeType::N4, compressionLength) {
 	memset(key, 0, sizeof(key));
@@ -118,3 +118,5 @@ void Node4::erase(ART &art, unique_ptr<Node> &node, int pos) {
 		node = move(n->child[0]);
 	}
 }
+
+} // namespace duckdb

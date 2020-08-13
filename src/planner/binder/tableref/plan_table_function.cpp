@@ -2,7 +2,7 @@
 #include "duckdb/planner/operator/logical_table_function.hpp"
 #include "duckdb/planner/tableref/bound_table_function.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableFunction &ref) {
@@ -14,3 +14,5 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableFunction &ref) {
 	}
 	return move(logical_fun);
 }
+
+} // namespace duckdb

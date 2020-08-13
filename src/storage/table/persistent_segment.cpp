@@ -9,7 +9,7 @@
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 PersistentSegment::PersistentSegment(BufferManager &manager, block_id_t id, idx_t offset, TypeId type, idx_t start,
@@ -67,3 +67,5 @@ void PersistentSegment::Update(ColumnData &column_data, Transaction &transaction
 	}
 	data->Update(column_data, stats, transaction, updates, ids, count, this->start);
 }
+
+} // namespace duckdb

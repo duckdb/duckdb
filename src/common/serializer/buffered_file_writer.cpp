@@ -3,7 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include <cstring>
 
-using namespace duckdb;
+namespace duckdb {
 using namespace std;
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, string path, uint8_t open_flags)
@@ -16,9 +16,8 @@ int64_t BufferedFileWriter::GetFileSize() {
 }
 
 idx_t BufferedFileWriter::GetTotalWritten() {
-    return total_written + offset;
+	return total_written + offset;
 }
-
 
 void BufferedFileWriter::WriteData(const_data_ptr_t buffer, uint64_t write_size) {
 	// first copy anything we can from the buffer
@@ -55,3 +54,5 @@ void BufferedFileWriter::Truncate(int64_t size) {
 	// reset anything written in the buffer
 	offset = 0;
 }
+
+} // namespace duckdb
