@@ -177,6 +177,20 @@ void Vector::SetValue(idx_t index, Value val) {
 	case LogicalTypeId::HUGEINT:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
+	case LogicalTypeId::DECIMAL:
+		assert(type.width() == val.type().width() && type.scale() == val.type().scale());
+		if (type.width() <= Decimal::MAX_WIDTH_INT16) {
+			((int16_t *)data)[index] = val.value_.smallint;
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT32) {
+			((int32_t *)data)[index] = val.value_.integer;
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT64) {
+			((int64_t *)data)[index] = val.value_.bigint;
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT128) {
+			((hugeint_t *)data)[index] = val.value_.hugeint;
+		} else {
+			throw NotImplementedException("Widths bigger than 38 are not supported");
+		}
+		break;
 	case LogicalTypeId::FLOAT:
 		((float *)data)[index] = val.value_.float_;
 		break;
@@ -294,6 +308,18 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
+	case LogicalTypeId::DECIMAL:
+		if (type.width() <= Decimal::MAX_WIDTH_INT16) {
+			return Value::DECIMAL(((int16_t *)data)[index], type.width(), type.scale());
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT32) {
+			return Value::DECIMAL(((int32_t *)data)[index], type.width(), type.scale());
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT64) {
+			return Value::DECIMAL(((int64_t *)data)[index], type.width(), type.scale());
+		} else if (type.width() <= Decimal::MAX_WIDTH_INT128) {
+			return Value::DECIMAL(((hugeint_t *)data)[index], type.width(), type.scale());
+		} else {
+			throw NotImplementedException("Widths bigger than 38 are not supported");
+		}
 	case LogicalTypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:

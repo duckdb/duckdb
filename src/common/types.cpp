@@ -65,8 +65,17 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::DOUBLE:
 		return PhysicalType::DOUBLE;
 	case LogicalTypeId::DECIMAL:
-		// FIXME: for now
-		return PhysicalType::DOUBLE;
+		if (width_ <= Decimal::MAX_WIDTH_INT16) {
+			return PhysicalType::INT16;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT32) {
+			return PhysicalType::INT32;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT64) {
+			return PhysicalType::INT64;
+		} else if (width_ <= Decimal::MAX_WIDTH_INT128) {
+			return PhysicalType::INT128;
+		} else {
+			throw NotImplementedException("Widths bigger than 38 are not supported");
+		}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
 	case LogicalTypeId::BLOB:
@@ -335,7 +344,7 @@ string LogicalType::ToString() const {
 		if (width_ == 0) {
 			return "DECIMAL(?,?)";
 		}
-		return StringUtil::Format("DECIMAL(%d, %d)", width_, scale_);
+		return StringUtil::Format("DECIMAL(%d,%d)", width_, scale_);
 	}
 	default:
 		return LogicalTypeIdToString(id_);
@@ -533,10 +542,22 @@ LogicalType MaxLogicalType(LogicalType left, LogicalType right) {
 		return right;
 	} else if (right.id() < left.id()) {
 		return left;
-	} else if (left.width() > right.width() || left.collation() > right.collation()) {
-		return left;
 	} else {
-		return right;
+		if (left.id() == LogicalTypeId::VARCHAR) {
+			// varchar: use type that has collation (if any)
+			if (right.collation().empty()) {
+				return left;
+			} else {
+				return right;
+			}
+		} else if (left.id() == LogicalTypeId::DECIMAL) {
+			// use max width/scale of the two types
+			return LogicalType(LogicalTypeId::DECIMAL, max<uint8_t>(left.width(), right.width()), max<uint8_t>(left.scale(), right.scale()));
+		} else {
+			// types are equal but no extra specifier: just return the type
+			// FIXME: LIST and STRUCT?
+			return left;
+		}
 	}
 }
 

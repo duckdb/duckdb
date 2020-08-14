@@ -37,7 +37,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression->return_type)) {
 			return nullptr;
 		}
-		auto new_constant = constant_value.TryCastAs(cast_expression->return_type);
+		auto new_constant = constant_value.TryCastAs(target_type);
 		if (new_constant) {
 			auto child_expression = move(cast_expression->child);
 			auto new_constant_expr = make_unique<BoundConstantExpression>(constant_value);

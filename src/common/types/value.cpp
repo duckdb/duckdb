@@ -138,6 +138,41 @@ bool Value::DoubleIsValid(double value) {
 	return !(std::isnan(value) || std::isinf(value));
 }
 
+Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
+	assert(width <= Decimal::MAX_WIDTH_INT16);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.smallint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
+	assert(width >= Decimal::MAX_WIDTH_INT16 &&
+	       width <= Decimal::MAX_WIDTH_INT32);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.integer = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
+	assert(width >= Decimal::MAX_WIDTH_INT32 &&
+	       width <= Decimal::MAX_WIDTH_INT64);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.bigint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
+	assert(width >= Decimal::MAX_WIDTH_INT64 &&
+	       width <= Decimal::MAX_WIDTH_INT128);
+	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::FLOAT(float value) {
 	if (!Value::FloatIsValid(value)) {
 		throw OutOfRangeException("Invalid float value %f", value);

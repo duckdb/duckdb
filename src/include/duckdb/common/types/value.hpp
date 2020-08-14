@@ -95,6 +95,11 @@ public:
 	static Value INTERVAL(int32_t months, int32_t days, int64_t msecs);
 	static Value INTERVAL(interval_t interval);
 
+	// Decimal values
+	static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(int64_t value, uint8_t width, uint8_t scale);
+	static Value DECIMAL(hugeint_t value, uint8_t width, uint8_t scale);
 	//! Create a float Value from a specified value
 	static Value FLOAT(float value);
 	//! Create a double Value from a specified value
