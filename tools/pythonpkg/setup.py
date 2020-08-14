@@ -16,7 +16,7 @@ from setuptools.command.sdist import sdist
 # make sure we are in the right directory
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-toolchain_args = ['-std=c++11']
+toolchain_args = ['-std=c++11', '-g0']
 if 'DUCKDEBUG' in os.environ:
     toolchain_args = ['-std=c++11', '-Wall', '-O0', '-g']
 
