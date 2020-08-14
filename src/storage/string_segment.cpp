@@ -11,7 +11,7 @@ using namespace std;
 namespace duckdb {
 
 StringSegment::StringSegment(BufferManager &manager, idx_t row_start, block_id_t block)
-    : UncompressedSegment(manager, TypeId::VARCHAR, row_start) {
+    : UncompressedSegment(manager, PhysicalType::VARCHAR, row_start) {
 	this->max_vector_count = 0;
 	this->dictionary_offset = 0;
 	// the vector_size is given in the size of the dictionary offsets
@@ -137,29 +137,29 @@ void StringSegment::Select(ColumnScanState &state, Vector &result, SelectionVect
 			throw NotImplementedException("Unknown comparison type for filter pushed down to table!");
 		}
 	} else {
-	    bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		       tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-        auto less = isFirstGreater?tableFilter[1]:tableFilter[0];
-        auto greater = isFirstGreater?tableFilter[0]:tableFilter[1];
+		bool isFirstGreater = tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
+		                      tableFilter[0].comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		auto less = isFirstGreater ? tableFilter[1] : tableFilter[0];
+		auto greater = isFirstGreater ? tableFilter[0] : tableFilter[1];
 		if (greater.comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThan, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                             greater.constant.str_value, less.constant.str_value,
+				                                             approved_tuple_count, base_nullmask, vector_index);
 			} else {
-				Select_String_Between<GreaterThan, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThan, LessThanEquals>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			}
 		} else {
 			if (less.comparison_type == ExpressionType::COMPARE_LESSTHAN) {
-				Select_String_Between<GreaterThanEquals, LessThan>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				Select_String_Between<GreaterThanEquals, LessThan>(state.handles, result, baseptr, base_data, sel,
+				                                                   greater.constant.str_value, less.constant.str_value,
+				                                                   approved_tuple_count, base_nullmask, vector_index);
 			} else {
 				Select_String_Between<GreaterThanEquals, LessThanEquals>(
-				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value,
-				    less.constant.str_value, approved_tuple_count, base_nullmask, vector_index);
+				    state.handles, result, baseptr, base_data, sel, greater.constant.str_value, less.constant.str_value,
+				    approved_tuple_count, base_nullmask, vector_index);
 			}
 		}
 	}
@@ -414,7 +414,7 @@ void StringSegment::FetchRow(ColumnFetchState &state, Transaction &transaction, 
 // Append
 //===--------------------------------------------------------------------===//
 idx_t StringSegment::Append(SegmentStatistics &stats, Vector &data, idx_t offset, idx_t count) {
-	assert(data.type == TypeId::VARCHAR);
+	assert(data.type.InternalType() == PhysicalType::VARCHAR);
 	auto handle = manager.Pin(block_id);
 	idx_t initial_count = tuple_count;
 	while (count > 0) {
@@ -877,4 +877,4 @@ void StringSegment::RollbackUpdate(UpdateInfo *info) {
 	CleanupUpdate(info);
 }
 
-}
+} // namespace duckdb

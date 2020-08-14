@@ -54,7 +54,7 @@ struct AverageFunction {
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
 	avg.AddFunction(AggregateFunction::UnaryAggregate<avg_state_t<double>, double, double, AverageFunction>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 }
 } // namespace duckdb

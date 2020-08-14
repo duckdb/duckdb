@@ -32,14 +32,15 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 	table_ref->alias = alias;
 	vector<unique_ptr<ParsedExpression>> children;
 	// CSV file
-	children.push_back(make_unique<ConstantExpression>(SQLType::VARCHAR, Value(csv_file)));
+	children.push_back(make_unique<ConstantExpression>(Value(csv_file)));
 	// parameters
 	child_list_t<Value> column_names;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		column_names.push_back(make_pair(columns[i].name, Value(SQLTypeToString(columns[i].type))));
+		column_names.push_back(make_pair(columns[i].name, Value(columns[i].type.ToString())));
 	}
-	auto colnames = make_unique<ConstantExpression>(SQLType::STRUCT, Value::STRUCT(move(column_names)));
-	children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_unique<ColumnRefExpression>("columns"), move(colnames)));
+	auto colnames = make_unique<ConstantExpression>(Value::STRUCT(move(column_names)));
+	children.push_back(make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL,
+	                                                     make_unique<ColumnRefExpression>("columns"), move(colnames)));
 	table_ref->function = make_unique<FunctionExpression>("read_csv", children);
 	return move(table_ref);
 }

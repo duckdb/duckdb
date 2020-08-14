@@ -222,7 +222,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		env->SetObjectArrayElement(name_array, col_idx, env->NewStringUTF(stmt_ref->stmt->names[col_idx].c_str()));
 		env->SetObjectArrayElement(type_array, col_idx,
-		                           env->NewStringUTF(SQLTypeToString(stmt_ref->stmt->types[col_idx]).c_str()));
+		                           env->NewStringUTF(stmt_ref->stmt->types[col_idx].ToString().c_str()));
 	}
 
 	return env->NewObject(meta, meta_construct, stmt_ref->stmt->n_param, column_count, name_array, type_array);
@@ -243,7 +243,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	                                                   env->FindClass("org/duckdb/DuckDBVector"), nullptr);
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->column_count(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
-		auto type_str = env->NewStringUTF(TypeIdToString(vec.type).c_str());
+		auto type_str = env->NewStringUTF(vec.type.ToString().c_str());
 		// construct nullmask
 		auto null_array = env->NewBooleanArray(row_count);
 		jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
@@ -259,32 +259,32 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		jobject constlen_data = nullptr;
 		jobjectArray varlen_data = nullptr;
 
-		switch (vec.type) {
-		case TypeId::BOOL:
+		switch (vec.type.InternalType()) {
+		case PhysicalType::BOOL:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 			break;
-		case TypeId::INT8:
+		case PhysicalType::INT8:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
 			break;
-		case TypeId::INT128:
+		case PhysicalType::INT128:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/lang/String"), nullptr);
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::Nullmask(vec)[row_idx]) {
@@ -296,7 +296,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		default:
 			jclass Exception = env->FindClass("java/sql/SQLException");
-			env->ThrowNew(Exception, ("Unsupported result column type " + TypeIdToString(vec.type)).c_str());
+			env->ThrowNew(Exception, ("Unsupported result column type " + vec.type.ToString()).c_str());
 		}
 
 		jfieldID constlen_data_field = env->GetFieldID(vec_class, "constlen_data", "Ljava/nio/ByteBuffer;");

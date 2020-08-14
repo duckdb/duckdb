@@ -11,7 +11,7 @@ using namespace std;
 ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
     : Index(IndexType::ART, column_ids, move(unbound_expressions)), is_unique(is_unique) {
 	tree = nullptr;
-	expression_result.Initialize(types);
+	expression_result.Initialize(logical_types);
 	int n = 1;
 	//! little endian if true
 	if (*(char *)&n == 1) {
@@ -20,14 +20,14 @@ ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_exp
 		is_little_endian = false;
 	}
 	switch (types[0]) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
-	case TypeId::INT16:
-	case TypeId::INT32:
-	case TypeId::INT64:
-	case TypeId::FLOAT:
-	case TypeId::DOUBLE:
-	case TypeId::VARCHAR:
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::VARCHAR:
 		break;
 	default:
 		throw InvalidTypeException(types[0], "Invalid type for index");
@@ -114,29 +114,29 @@ static void concatenate_keys(Vector &input, idx_t count, vector<unique_ptr<Key>>
 void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	keys.reserve(STANDARD_VECTOR_SIZE);
 	// generate keys for the first input column
-	switch (input.data[0].type) {
-	case TypeId::BOOL:
+	switch (input.data[0].type.InternalType()) {
+	case PhysicalType::BOOL:
 		generate_keys<bool>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		generate_keys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		generate_keys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		generate_keys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		generate_keys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		generate_keys<float>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		generate_keys<double>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		generate_keys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
 	default:
@@ -144,29 +144,29 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	}
 	for (idx_t i = 1; i < input.column_count(); i++) {
 		// for each of the remaining columns, concatenate
-		switch (input.data[i].type) {
-		case TypeId::BOOL:
+		switch (input.data[i].type.InternalType()) {
+		case PhysicalType::BOOL:
 			concatenate_keys<bool>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::INT8:
+		case PhysicalType::INT8:
 			concatenate_keys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::INT16:
+		case PhysicalType::INT16:
 			concatenate_keys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::INT32:
+		case PhysicalType::INT32:
 			concatenate_keys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::INT64:
+		case PhysicalType::INT64:
 			concatenate_keys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::FLOAT:
+		case PhysicalType::FLOAT:
 			concatenate_keys<float>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::DOUBLE:
+		case PhysicalType::DOUBLE:
 			concatenate_keys<double>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		case TypeId::VARCHAR:
+		case PhysicalType::VARCHAR:
 			concatenate_keys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		default:
@@ -176,8 +176,8 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 }
 
 bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
-	assert(row_ids.type == ROW_TYPE);
-	assert(types[0] == input.data[0].type);
+	assert(row_ids.type.InternalType() == ROW_TYPE);
+	assert(logical_types[0] == input.data[0].type);
 
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
@@ -398,24 +398,24 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 //===--------------------------------------------------------------------===//
 // Point Query
 //===--------------------------------------------------------------------===//
-static unique_ptr<Key> CreateKey(ART &art, TypeId type, Value &value) {
-	assert(type == value.type);
+static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
+	assert(type == value.type().InternalType());
 	switch (type) {
-	case TypeId::BOOL:
+	case PhysicalType::BOOL:
 		return Key::CreateKey<bool>(value.value_.boolean, art.is_little_endian);
-	case TypeId::INT8:
+	case PhysicalType::INT8:
 		return Key::CreateKey<int8_t>(value.value_.tinyint, art.is_little_endian);
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		return Key::CreateKey<int16_t>(value.value_.smallint, art.is_little_endian);
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		return Key::CreateKey<int32_t>(value.value_.integer, art.is_little_endian);
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		return Key::CreateKey<int64_t>(value.value_.bigint, art.is_little_endian);
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		return Key::CreateKey<double>(value.value_.double_, art.is_little_endian);
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
 		                                art.is_little_endian);
 	default:
@@ -730,7 +730,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 	// scan the index
 	if (!state->checked) {
 		vector<row_t> result_ids;
-		assert(state->values[0].type == types[0]);
+		assert(state->values[0].type().InternalType() == types[0]);
 
 		if (state->values[1].is_null) {
 			lock_guard<mutex> l(lock);
@@ -757,7 +757,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 		} else {
 			lock_guard<mutex> l(lock);
 			// two predicates
-			assert(state->values[1].type == types[0]);
+			assert(state->values[1].type().InternalType() == types[0]);
 			bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 			bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 			SearchCloseRange(result_ids, state, left_inclusive, right_inclusive);
@@ -787,7 +787,7 @@ void ART::Scan(Transaction &transaction, DataTable &table, TableIndexScanState &
 	}
 
 	// create a vector pointing to the current set of row ids
-	Vector row_identifiers(ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
+	Vector row_identifiers(LOGICAL_ROW_TYPE, (data_ptr_t)&state->result_ids[state->result_index]);
 	idx_t scan_count = std::min((idx_t)STANDARD_VECTOR_SIZE, (idx_t)state->result_ids.size() - state->result_index);
 
 	// fetch the actual values from the base table

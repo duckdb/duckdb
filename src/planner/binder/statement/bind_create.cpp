@@ -42,7 +42,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
-	result.types = {SQLType::BIGINT};
+	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {

@@ -31,7 +31,7 @@ void TransactionContext::Commit() {
 	current_transaction = nullptr;
 	string error = transaction_manager.CommitTransaction(transaction);
 	if (!error.empty()) {
-		throw TransactionException("Failed to commit: %s", error.c_str());
+		throw TransactionException("Failed to commit: %s", error);
 	}
 }
 

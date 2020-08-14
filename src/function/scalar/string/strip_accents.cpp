@@ -18,7 +18,6 @@ static bool is_ascii(const char *input, idx_t n) {
 
 static void strip_accents_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	assert(args.column_count() == 1);
-	assert(args.data[0].type == TypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetData();
@@ -27,8 +26,8 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 			return input;
 		}
 		// non-ascii, perform collation
-		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *) input_data);
-		auto result_str = StringVector::AddString(result, (const char*) stripped);
+		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input_data);
+		auto result_str = StringVector::AddString(result, (const char *)stripped);
 		free(stripped);
 		return result_str;
 	});
@@ -36,7 +35,7 @@ static void strip_accents_function(DataChunk &args, ExpressionState &state, Vect
 }
 
 ScalarFunction StripAccentsFun::GetFunction() {
-	return ScalarFunction("strip_accents", {SQLType::VARCHAR}, SQLType::VARCHAR, strip_accents_function);
+	return ScalarFunction("strip_accents", {LogicalType::VARCHAR}, LogicalType::VARCHAR, strip_accents_function);
 }
 
 void StripAccentsFun::RegisterFunction(BuiltinFunctions &set) {

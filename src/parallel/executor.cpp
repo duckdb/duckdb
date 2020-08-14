@@ -151,7 +151,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	}
 };
 
-vector<TypeId> Executor::GetTypes() {
+vector<LogicalType> Executor::GetTypes() {
 	assert(physical_plan);
 	return physical_plan->GetTypes();
 }

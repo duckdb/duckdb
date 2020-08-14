@@ -12,74 +12,70 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
-	//The types supported by the templated CreateVectorizedFunction
-	const vector<SQLType> sql_templated_types = {SQLType::BOOLEAN, SQLType::TINYINT, SQLType::SMALLINT,
-												 SQLType::INTEGER, SQLType::BIGINT, SQLType::FLOAT,
-												 SQLType::DOUBLE, SQLType::VARCHAR};
+	// The types supported by the templated CreateVectorizedFunction
+	const vector<LogicalType> sql_templated_types = {LogicalType::BOOLEAN, LogicalType::TINYINT, LogicalType::SMALLINT,
+	                                                 LogicalType::INTEGER, LogicalType::BIGINT,  LogicalType::FLOAT,
+	                                                 LogicalType::DOUBLE,  LogicalType::VARCHAR};
 
-	//Creating the tables
-	for(SQLType sql_type: sql_templated_types) {
-		col_type = SQLTypeIdToString(sql_type.id);
+	// Creating the tables
+	for (LogicalType sql_type : sql_templated_types) {
+		col_type = LogicalTypeIdToString(sql_type.id());
 		table_name = StringUtil::Lower(col_type);
 
-		con.Query("CREATE TABLE " + table_name + " (a " + col_type +
-											     ", b " + col_type +
-												 ", c " + col_type + ")");
+		con.Query("CREATE TABLE " + table_name + " (a " + col_type + ", b " + col_type + ", c " + col_type + ")");
 	}
 
-	//Create the UDF functions into the catalog
-	for(SQLType sql_type: sql_templated_types) {
-		func_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+	// Create the UDF functions into the catalog
+	for (LogicalType sql_type : sql_templated_types) {
+		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 
-		switch(sql_type.id) {
-		case SQLTypeId::BOOLEAN:
-		{
+		switch (sql_type.id()) {
+		case LogicalTypeId::BOOLEAN: {
 			con.CreateVectorizedFunction<bool, bool>(func_name + "_1", &udf_unary_function<bool>);
 			con.CreateVectorizedFunction<bool, bool, bool>(func_name + "_2", &udf_binary_function<bool>);
 			con.CreateVectorizedFunction<bool, bool, bool, bool>(func_name + "_3", &udf_ternary_function<bool>);
 			break;
 		}
-		case SQLTypeId::TINYINT:
-		{
+		case LogicalTypeId::TINYINT: {
 			con.CreateVectorizedFunction<int8_t, int8_t>(func_name + "_1", &udf_unary_function<int8_t>);
 			con.CreateVectorizedFunction<int8_t, int8_t, int8_t>(func_name + "_2", &udf_binary_function<int8_t>);
-			con.CreateVectorizedFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3", &udf_ternary_function<int8_t>);
+			con.CreateVectorizedFunction<int8_t, int8_t, int8_t, int8_t>(func_name + "_3",
+			                                                             &udf_ternary_function<int8_t>);
 			break;
 		}
-		case SQLTypeId::SMALLINT:
-		{
+		case LogicalTypeId::SMALLINT: {
 			con.CreateVectorizedFunction<int16_t, int16_t>(func_name + "_1", &udf_unary_function<int16_t>);
 			con.CreateVectorizedFunction<int16_t, int16_t, int16_t>(func_name + "_2", &udf_binary_function<int16_t>);
-			con.CreateVectorizedFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3", &udf_ternary_function<int16_t>);
+			con.CreateVectorizedFunction<int16_t, int16_t, int16_t, int16_t>(func_name + "_3",
+			                                                                 &udf_ternary_function<int16_t>);
 			break;
 		}
-		case SQLTypeId::INTEGER:
-		{
+		case LogicalTypeId::INTEGER: {
 			con.CreateVectorizedFunction<int, int>(func_name + "_1", &udf_unary_function<int>);
 			con.CreateVectorizedFunction<int, int, int>(func_name + "_2", &udf_binary_function<int>);
 			con.CreateVectorizedFunction<int, int, int, int>(func_name + "_3", &udf_ternary_function<int>);
 			break;
 		}
-		case SQLTypeId::BIGINT:
-		{
+		case LogicalTypeId::BIGINT: {
 			con.CreateVectorizedFunction<int64_t, int64_t>(func_name + "_1", &udf_unary_function<int64_t>);
 			con.CreateVectorizedFunction<int64_t, int64_t, int64_t>(func_name + "_2", &udf_binary_function<int64_t>);
-			con.CreateVectorizedFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3", &udf_ternary_function<int64_t>);
+			con.CreateVectorizedFunction<int64_t, int64_t, int64_t, int64_t>(func_name + "_3",
+			                                                                 &udf_ternary_function<int64_t>);
 			break;
 		}
-		case SQLTypeId::FLOAT:
-		case SQLTypeId::DOUBLE:
-		{
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE: {
 			con.CreateVectorizedFunction<double, double>(func_name + "_1", &udf_unary_function<double>);
 			con.CreateVectorizedFunction<double, double, double>(func_name + "_2", &udf_binary_function<double>);
-			con.CreateVectorizedFunction<double, double, double, double>(func_name + "_3", &udf_ternary_function<double>);
+			con.CreateVectorizedFunction<double, double, double, double>(func_name + "_3",
+			                                                             &udf_ternary_function<double>);
 			break;
 		}
-		case SQLTypeId::VARCHAR:
-		{
+		case LogicalTypeId::VARCHAR: {
 			con.CreateVectorizedFunction<string_t, string_t>(func_name + "_1", &udf_unary_function<char *>);
 			con.CreateVectorizedFunction<string_t, string_t, string_t>(func_name + "_2", &udf_binary_function<char *>);
-			con.CreateVectorizedFunction<string_t, string_t, string_t, string_t>(func_name + "_3", &udf_ternary_function<char *>);
+			con.CreateVectorizedFunction<string_t, string_t, string_t, string_t>(func_name + "_3",
+			                                                                     &udf_ternary_function<char *>);
 			break;
 		}
 		default:
@@ -88,51 +84,51 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	}
 
 	SECTION("Testing Vectorized UDF functions") {
-		//Inserting values
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		// Inserting values
+		for (LogicalType sql_type : sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
-			if(sql_type == SQLType::BOOLEAN) {
+			if (sql_type == LogicalType::BOOLEAN) {
 				con.Query(query + "(true, true, true), (true, true, false), (false, false, false);");
-			} else if(sql_type.IsNumeric()) {
+			} else if (sql_type.IsNumeric()) {
 				con.Query(query + "(1, 10, 101),(2, 20, 102),(3, 30, 103);");
-			} else if(sql_type == SQLType::VARCHAR) {
+			} else if (sql_type == LogicalType::VARCHAR) {
 				con.Query(query + "('a', 'b', 'c'),('a', 'b', 'c'),('a', 'b', 'c');");
 			}
 		}
-		
-		//Running the UDF functions and checking the results
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+
+		// Running the UDF functions and checking the results
+		for (LogicalType sql_type : sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
-			if(sql_type.IsNumeric()) {
+			if (sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {10, 20, 30}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {101, 102, 103}));
-				
-			} else if(sql_type == SQLType::BOOLEAN) {
+
+			} else if (sql_type == LogicalType::BOOLEAN) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, true, false}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {true, false, false}));
-				
-			} else if(sql_type == SQLType::VARCHAR) {
+
+			} else if (sql_type == LogicalType::VARCHAR) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"a", "a", "a"}));
-				
+
 				result = con.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"b", "b", "b"}));
-				
+
 				result = con.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name);
 				REQUIRE(CHECK_COLUMN(result, 0, {"c", "c", "c"}));
 			}
@@ -141,8 +137,8 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	SECTION("Cheking if the Vectorized UDF functions are temporary") {
 		Connection con_test(db);
 		con_test.EnableQueryVerification();
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for (LogicalType sql_type : sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 
 			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
@@ -154,18 +150,18 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	}
 
 	SECTION("Cheking NULLs with Vectorized UDF functions") {
-		for(SQLType sql_type: sql_templated_types) {
-			table_name = StringUtil::Lower(SQLTypeIdToString(sql_type.id));
+		for (LogicalType sql_type : sql_templated_types) {
+			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
 			func_name = table_name;
 
-			//Deleting old values
+			// Deleting old values
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM " + table_name));
 
-			//Inserting NULLs
+			// Inserting NULLs
 			string query = "INSERT INTO " + table_name + " VALUES";
 			con.Query(query + "(NULL, NULL, NULL), (NULL, NULL, NULL), (NULL, NULL, NULL);");
 
-			//Testing NULLs
+			// Testing NULLs
 			result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
 			REQUIRE(CHECK_COLUMN(result, 0, {Value(nullptr), Value(nullptr), Value(nullptr)}));
 
@@ -184,19 +180,21 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {4}));
 
 		// UDF with 5 input ints, return the last one
-		con.CreateVectorizedFunction<int, int, int, int, int, int>("udf_five_ints", &udf_several_constant_input<int, 5>);
+		con.CreateVectorizedFunction<int, int, int, int, int, int>("udf_five_ints",
+		                                                           &udf_several_constant_input<int, 5>);
 		result = con.Query("SELECT udf_five_ints(1, 2, 3, 4, 5)");
 		REQUIRE(CHECK_COLUMN(result, 0, {5}));
 
 		// UDF with 10 input ints, return the last one
-		con.CreateVectorizedFunction<int, int, int, int, int, int, int, int, int, int, int>("udf_ten_ints", &udf_several_constant_input<int, 10>);
+		con.CreateVectorizedFunction<int, int, int, int, int, int, int, int, int, int, int>(
+		    "udf_ten_ints", &udf_several_constant_input<int, 10>);
 		result = con.Query("SELECT udf_ten_ints(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)");
 		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 	}
 
 	SECTION("Cheking Vectorized UDF functions with varargs and constant values") {
 		// Test udf_max with integer
-		con.CreateVectorizedFunction<int, int>("udf_const_max_int", &udf_max_constant<int>, SQLType::INTEGER);
+		con.CreateVectorizedFunction<int, int>("udf_const_max_int", &udf_max_constant<int>, LogicalType::INTEGER);
 		result = con.Query("SELECT udf_const_max_int(1, 2, 3, 4, 999, 5, 6, 7)");
 		REQUIRE(CHECK_COLUMN(result, 0, {999}));
 
@@ -204,7 +202,8 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {10}));
 
 		// Test udf_max with double
-		con.CreateVectorizedFunction<double, double>("udf_const_max_double", &udf_max_constant<double>, SQLType::DOUBLE);
+		con.CreateVectorizedFunction<double, double>("udf_const_max_double", &udf_max_constant<double>,
+		                                             LogicalType::DOUBLE);
 		result = con.Query("SELECT udf_const_max_double(1.0, 2.0, 3.0, 4.0, 999.0, 5.0, 6.0, 7.0)");
 		REQUIRE(CHECK_COLUMN(result, 0, {999.0}));
 
@@ -215,9 +214,10 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 	SECTION("Cheking Vectorized UDF functions with varargs and input columns") {
 		// Test udf_max with integer
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers (a INTEGER, b INTEGER, c INTEGER, d INTEGER)"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), (1000, 2000, 3000, 4000)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), "
+		                          "(1000, 2000, 3000, 4000)"));
 
-		con.CreateVectorizedFunction<int, int>("udf_flat_max_int", &udf_max_flat<int>, SQLType::INTEGER);
+		con.CreateVectorizedFunction<int, int>("udf_flat_max_int", &udf_max_flat<int>, LogicalType::INTEGER);
 		result = con.Query("SELECT udf_flat_max_int(a, b, c, d) FROM integers");
 		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
 
@@ -229,9 +229,10 @@ TEST_CASE("Vectorized UDF functions using templates", "[udf_function]") {
 
 		// Test udf_max with double
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE doubles (a DOUBLE, b DOUBLE, c DOUBLE, d DOUBLE)"));
-		REQUIRE_NO_FAIL(con.Query("INSERT INTO doubles VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), (1000, 2000, 3000, 4000)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO doubles VALUES(1, 2, 3, 4), (10, 20, 30, 40), (100, 200, 300, 400), "
+		                          "(1000, 2000, 3000, 4000)"));
 
-		con.CreateVectorizedFunction<double, double>("udf_flat_max_double", &udf_max_flat<double>, SQLType::DOUBLE);
+		con.CreateVectorizedFunction<double, double>("udf_flat_max_double", &udf_max_flat<double>, LogicalType::DOUBLE);
 		result = con.Query("SELECT udf_flat_max_double(a, b, c, d) FROM doubles");
 		REQUIRE(CHECK_COLUMN(result, 0, {4, 40, 400, 4000}));
 

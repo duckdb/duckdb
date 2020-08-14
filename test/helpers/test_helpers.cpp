@@ -43,6 +43,12 @@ void TestDeleteFile(string path) {
 	}
 }
 
+void TestChangeDirectory(string path) {
+	// set the base path for the tests
+	FileSystem fs;
+	fs.SetWorkingDirectory(path);
+}
+
 void DeleteDatabase(string path) {
 	TestDeleteFile(path);
 	TestDeleteFile(path + ".wal");
@@ -177,7 +183,7 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 		return materialized.error;
 	}
 	string error;
-	if (!compare_result(csv, materialized.collection, materialized.sql_types, header, error)) {
+	if (!compare_result(csv, materialized.collection, materialized.types, header, error)) {
 		return error;
 	}
 	return "";
@@ -196,8 +202,8 @@ string show_diff(DataChunk &left, DataChunk &right) {
 		bool has_differences = false;
 		auto &left_vector = left.data[i];
 		auto &right_vector = right.data[i];
-		string left_column = StringUtil::Format("Result\n------\n%s [", TypeIdToString(left_vector.type).c_str());
-		string right_column = StringUtil::Format("Expect\n------\n%s [", TypeIdToString(right_vector.type).c_str());
+		string left_column = StringUtil::Format("Result\n------\n%s [", left_vector.type.ToString().c_str());
+		string right_column = StringUtil::Format("Expect\n------\n%s [", right_vector.type.ToString().c_str());
 		if (left_vector.type == right_vector.type) {
 			for (size_t j = 0; j < left.size(); j++) {
 				auto left_value = left_vector.GetValue(j);
@@ -250,7 +256,7 @@ bool compare_chunk(DataChunk &left, DataChunk &right) {
 
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql_types, bool has_header,
+bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message) {
 	assert(collection.count == 0 || collection.types.size() == sql_types.size());
 
@@ -263,12 +269,8 @@ bool compare_result(string csv, ChunkCollection &collection, vector<SQLType> sql
 	options.escape = "\"";
 
 	// set up the intermediate result chunk
-	vector<TypeId> internal_types;
-	for (auto &type : sql_types) {
-		internal_types.push_back(GetInternalType(type));
-	}
 	DataChunk parsed_result;
-	parsed_result.Initialize(internal_types);
+	parsed_result.Initialize(sql_types);
 
 	// convert the CSV string into a stringstream
 	auto source = make_unique<istringstream>(csv);

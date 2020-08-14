@@ -1,0 +1,34 @@
+# name: test/optimizer/case_simplification.test
+# description: Test case simplification
+# group: [optimizer]
+
+statement ok
+CREATE TABLE test(X INTEGER);
+
+statement ok
+PRAGMA explain_output='optimized';
+
+query I nosort casenorm1
+EXPLAIN SELECT CASE WHEN 1=1 THEN X+1 ELSE X+2 END FROM test
+----
+
+query I nosort casenorm1
+EXPLAIN SELECT X+1 FROM test
+----
+
+query I nosort casenorm2
+EXPLAIN SELECT CASE WHEN 1=0 THEN X+1 ELSE X+2 END FROM test
+----
+
+query I nosort casenorm2
+EXPLAIN SELECT X+2 FROM test
+----
+
+query I nosort casenorm3
+EXPLAIN SELECT CASE WHEN NULL>3 THEN X+1 ELSE X+2 END FROM test
+----
+
+query I nosort casenorm3
+EXPLAIN SELECT X+2 FROM test
+----
+

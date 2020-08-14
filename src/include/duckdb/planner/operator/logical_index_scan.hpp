@@ -57,7 +57,7 @@ public:
 protected:
 	void ResolveTypes() override {
 		if (column_ids.size() == 0) {
-			types = {TypeId::INT32};
+			types = {LogicalType::INTEGER};
 		} else {
 			types = tableref.GetTypes(column_ids);
 		}

@@ -59,7 +59,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// figure out the types of the recursive CTE result by picking the max of both
 	for (idx_t i = 0; i < result->left->types.size(); i++) {
-		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
+		auto result_type = MaxLogicalType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
 	if (statement.modifiers.size() > 0) {

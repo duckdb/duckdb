@@ -9,12 +9,13 @@ struct PragmaVersionData : public TableFunctionData {
 	bool done;
 };
 
-static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                    vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> pragma_version_bind(ClientContext &context, vector<Value> &inputs,
+                                                    unordered_map<string, Value> &named_parameters,
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("library_version");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 	names.push_back("source_id");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	return make_unique<PragmaVersionData>();
 }

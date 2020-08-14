@@ -23,7 +23,7 @@ public:
 	//! The generated names of the values list
 	vector<string> names;
 	//! The types of the values list
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! The index in the bind context
 	idx_t bind_index;
 };

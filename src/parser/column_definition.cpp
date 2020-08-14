@@ -18,7 +18,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) {
 
 ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_name = source.Read<string>();
-	auto column_type = SQLType::Deserialize(source);
+	auto column_type = LogicalType::Deserialize(source);
 	auto default_value = source.ReadOptional<ParsedExpression>();
 	return ColumnDefinition(column_name, column_type, move(default_value));
 }

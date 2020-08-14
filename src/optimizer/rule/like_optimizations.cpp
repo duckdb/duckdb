@@ -35,7 +35,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-	assert(constant_value.type == constant_expr->return_type);
+	assert(constant_value.type() == constant_expr->return_type);
 	string patt_str = string(((string_t)constant_value.str_value).GetData());
 
 	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");

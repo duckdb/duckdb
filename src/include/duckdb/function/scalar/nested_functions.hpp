@@ -14,9 +14,9 @@
 namespace duckdb {
 
 struct VariableReturnBindData : public FunctionData {
-	SQLType stype;
+	LogicalType stype;
 
-	VariableReturnBindData(SQLType stype) : stype(stype) {
+	VariableReturnBindData(LogicalType stype) : stype(stype) {
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -30,19 +30,6 @@ struct StructPackFun {
 
 struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StructExtractBindData : public FunctionData {
-	string key;
-	idx_t index;
-	TypeId type;
-
-	StructExtractBindData(string key, idx_t index, TypeId type) : key(key), index(index), type(type) {
-	}
-
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StructExtractBindData>(key, index, type);
-	}
 };
 
 struct StructExtractFun {

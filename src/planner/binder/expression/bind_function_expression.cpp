@@ -42,11 +42,11 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	// all children bound successfully
 	// extract the children and types
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
 		auto &child = (BoundExpression &)*function.children[i];
-		arguments.push_back(child.sql_type);
+		arguments.push_back(child.expr->return_type);
 		children.push_back(move(child.expr));
 	}
 	// special binder-only functions
@@ -57,18 +57,17 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		}
 		// alias function: returns the alias of the current expression, or the name of the child
 		string alias = !function.alias.empty() ? function.alias : children[0]->GetName();
-		return BindResult(make_unique<BoundConstantExpression>(Value(alias)), SQLType::VARCHAR);
+		return BindResult(make_unique<BoundConstantExpression>(Value(alias)));
 	} else if (function.function_name == "typeof") {
 		if (arguments.size() != 1) {
 			throw BinderException("typeof function expects a single argument");
 		}
 		// typeof function: returns the type of the child expression
-		string type = SQLTypeToString(arguments[0]);
-		return BindResult(make_unique<BoundConstantExpression>(Value(type)), SQLType::VARCHAR);
+		string type = arguments[0].ToString();
+		return BindResult(make_unique<BoundConstantExpression>(Value(type)));
 	}
 	auto result = ScalarFunction::BindScalarFunction(context, *func, arguments, move(children), function.is_operator);
-	auto sql_return_type = result->sql_return_type;
-	return BindResult(move(result), sql_return_type);
+	return BindResult(move(result));
 }
 
 BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function,

@@ -1,13 +1,14 @@
-
 if(${BUILD_ICU_EXTENSION})
-add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
-include_directories(../../extension/icu/include)
+  add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
+  include_directories(../../extension/icu/include)
 endif()
 
 if(${BUILD_PARQUET_EXTENSION})
-add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
-include_directories(../../extension/parquet/include)
+  add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
+  include_directories(../../extension/parquet/include)
 endif()
+
+add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 
 add_library_unity(test_sqlite
                   OBJECT

@@ -23,8 +23,7 @@ public:
 	//! Creates an successful empty query result
 	QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	QueryResult(QueryResultType type, StatementType statement_type, vector<SQLType> sql_types, vector<TypeId> types,
-	            vector<string> names);
+	QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	QueryResult(QueryResultType type, string error);
 	virtual ~QueryResult() {
@@ -35,9 +34,7 @@ public:
 	//! The type of the statement that created this result
 	StatementType statement_type;
 	//! The SQL types of the result
-	vector<SQLType> sql_types;
-	//! The types of the result
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	//! The names of the result
 	vector<string> names;
 	//! Whether or not execution was successful
@@ -59,7 +56,7 @@ public:
 	bool Equals(QueryResult &other);
 
 	idx_t column_count() {
-		return sql_types.size();
+		return types.size();
 	}
 
 private:

@@ -39,7 +39,7 @@ struct CountFun {
 };
 
 struct FirstFun {
-	static AggregateFunction GetFunction(SQLType type);
+	static AggregateFunction GetFunction(LogicalType type);
 
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -43,12 +43,12 @@ struct BaseCSVData : public FunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<SQLType> sql_types, vector<string> names)
+	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
 	    : BaseCSVData(move(file_path)), sql_types(move(sql_types)), names(move(names)) {
 	}
 
 	//! The SQL types to write
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	//! The column names of the columns to write
 	vector<string> names;
 	//! True, if column with that index must be quoted
@@ -62,12 +62,12 @@ struct WriteCSVData : public BaseCSVData {
 };
 
 struct ReadCSVData : public BaseCSVData {
-	ReadCSVData(string file_path, vector<SQLType> sql_types)
+	ReadCSVData(string file_path, vector<LogicalType> sql_types)
 	    : BaseCSVData(move(file_path)), sql_types(move(sql_types)) {
 	}
 
 	//! The expected SQL types to read
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	//! True, if column with that index must be quoted
 	vector<bool> force_not_null;
 	//! The size of a sample for format/data type detection (csv)
@@ -99,10 +99,10 @@ static bool ParseBoolean(vector<Value> &set) {
 	if (set.size() > 1) {
 		throw BinderException("Expected a single argument as a boolean value (e.g. TRUE or 1)");
 	}
-	if (set[0].type == TypeId::FLOAT || set[0].type == TypeId::DOUBLE) {
+	if (set[0].type() == LogicalType::FLOAT || set[0].type() == LogicalType::DOUBLE) {
 		throw BinderException("Expected a boolean value (e.g. TRUE or 1)");
 	}
-	return set[0].CastAs(TypeId::BOOL).value_.boolean;
+	return set[0].CastAs(LogicalType::BOOLEAN).value_.boolean;
 }
 
 static string ParseString(vector<Value> &set) {
@@ -110,10 +110,10 @@ static string ParseString(vector<Value> &set) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a string value");
 	}
-	if (set[0].type != TypeId::VARCHAR) {
+	if (set[0].type().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("Expected a string argument!");
 	}
-	return set[0].str_value;
+	return set[0].GetValue<string>();
 }
 
 static idx_t ParseInteger(vector<Value> &set) {
@@ -121,10 +121,10 @@ static idx_t ParseInteger(vector<Value> &set) {
 		// no option specified or multiple options specified
 		throw BinderException("Expected a single argument as a integer value");
 	}
-	if (set[0].type == TypeId::FLOAT || set[0].type == TypeId::DOUBLE) {
+	if (set[0].type().id() == LogicalTypeId::FLOAT || set[0].type().id() == LogicalTypeId::DOUBLE) {
 		throw BinderException("Expected a integer argument!");
 	}
-	return set[0].CastAs(TypeId::INT64).value_.bigint;
+	return set[0].GetValue<int64_t>();
 }
 
 //===--------------------------------------------------------------------===//
@@ -193,7 +193,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 	if (set.size() == 0) {
 		throw BinderException("Expected a column list or * as parameter");
 	}
-	if (set.size() == 1 && set[0].type == TypeId::VARCHAR && set[0].str_value == "*") {
+	if (set.size() == 1 && set[0].type().id() == LogicalTypeId::VARCHAR && set[0].GetValue<string>() == "*") {
 		// *, force_not_null on all columns
 		result.resize(names.size(), true);
 	} else {
@@ -220,7 +220,7 @@ static vector<bool> ParseColumnList(vector<Value> &set, vector<string> &names) {
 }
 
 static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                               vector<SQLType> &sql_types) {
+                                               vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
@@ -248,7 +248,7 @@ static unique_ptr<FunctionData> write_csv_bind(ClientContext &context, CopyInfo 
 }
 
 static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                              vector<SQLType> &expected_types) {
+                                              vector<LogicalType> &expected_types) {
 	auto bind_data = make_unique<ReadCSVData>(info.file_path, expected_types);
 
 	// check all the options in the copy info
@@ -450,8 +450,8 @@ static unique_ptr<LocalFunctionData> write_csv_initialize_local(ClientContext &c
 	auto local_data = make_unique<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
-	vector<TypeId> types;
-	types.resize(csv_data.names.size(), TypeId::VARCHAR);
+	vector<LogicalType> types;
+	types.resize(csv_data.names.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(types);
 	return move(local_data);
@@ -489,13 +489,13 @@ static void write_csv_sink(ClientContext &context, FunctionData &bind_data, Glob
 	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.column_count(); col_idx++) {
-		if (csv_data.sql_types[col_idx].id == SQLTypeId::VARCHAR || csv_data.sql_types[col_idx].id == SQLTypeId::BLOB) {
+		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR ||
+		    csv_data.sql_types[col_idx].id() == LogicalTypeId::BLOB) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
 		} else {
 			// non varchar column, perform the cast
-			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], csv_data.sql_types[col_idx],
-			                       SQLType::VARCHAR, input.size());
+			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 

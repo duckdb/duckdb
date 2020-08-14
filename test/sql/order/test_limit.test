@@ -64,3 +64,6 @@ EXECUTE v1
 ----
 Hello World
 
+# can only limit by integers
+statement error
+select 1 limit date '1992-01-01';

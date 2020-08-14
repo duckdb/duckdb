@@ -32,9 +32,6 @@ static void strreverse_unicode(const char *input, idx_t n, char *output) {
 }
 
 static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 1);
-	assert(args.data[0].type == TypeId::VARCHAR);
-
 	UnaryExecutor::Execute<string_t, string_t, true>(args.data[0], result, args.size(), [&](string_t input) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
@@ -50,7 +47,7 @@ static void reverse_chunk_function(DataChunk &args, ExpressionState &state, Vect
 }
 
 void ReverseFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("reverse", {SQLType::VARCHAR}, SQLType::VARCHAR, reverse_chunk_function));
+	set.AddFunction(ScalarFunction("reverse", {LogicalType::VARCHAR}, LogicalType::VARCHAR, reverse_chunk_function));
 }
 
 } // namespace duckdb

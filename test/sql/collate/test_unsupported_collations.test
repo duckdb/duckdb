@@ -6,6 +6,10 @@
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE blabla)
 
+# non-varchar columns cannot have collations
+statement error
+CREATE TABLE collate_test(s INTEGER COLLATE blabla)
+
 # cannot combine these collations
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)

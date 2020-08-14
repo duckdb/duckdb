@@ -9,9 +9,9 @@
 namespace duckdb {
 using namespace std;
 
-TransientSegment::TransientSegment(BufferManager &manager, TypeId type, idx_t start)
+TransientSegment::TransientSegment(BufferManager &manager, PhysicalType type, idx_t start)
     : ColumnSegment(type, ColumnSegmentType::TRANSIENT, start), manager(manager) {
-	if (type == TypeId::VARCHAR) {
+	if (type == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(manager, start);
 	} else {
 		data = make_unique<NumericSegment>(manager, type, start);

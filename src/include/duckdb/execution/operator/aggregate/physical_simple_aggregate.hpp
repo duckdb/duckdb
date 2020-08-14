@@ -16,7 +16,7 @@ namespace duckdb {
 //! without any DISTINCT aggregates
 class PhysicalSimpleAggregate : public PhysicalSink {
 public:
-	PhysicalSimpleAggregate(vector<TypeId> types, vector<unique_ptr<Expression>> expressions, bool all_combinable);
+	PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions, bool all_combinable);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;

@@ -14,7 +14,7 @@
 namespace duckdb {
 class BoundAggregateExpression : public Expression {
 public:
-	BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct);
+	BoundAggregateExpression(LogicalType return_type, AggregateFunction function, bool distinct);
 
 	//! The bound function expression
 	AggregateFunction function;
@@ -23,7 +23,7 @@ public:
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
 	//! Argument types
-	vector<SQLType> arguments;
+	vector<LogicalType> arguments;
 	//! The bound function data (if any)
 	unique_ptr<FunctionData> bind_info;
 

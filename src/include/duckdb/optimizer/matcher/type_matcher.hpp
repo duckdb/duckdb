@@ -18,27 +18,27 @@ public:
 	virtual ~TypeMatcher() {
 	}
 
-	virtual bool Match(TypeId type) = 0;
+	virtual bool Match(PhysicalType type) = 0;
 };
 
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	SpecificTypeMatcher(TypeId type) : type(type) {
+	SpecificTypeMatcher(PhysicalType type) : type(type) {
 	}
 
-	bool Match(TypeId type) override {
+	bool Match(PhysicalType type) override {
 		return type == this->type;
 	}
 
 private:
-	TypeId type;
+	PhysicalType type;
 };
 
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
 public:
-	bool Match(TypeId type) override {
+	bool Match(PhysicalType type) override {
 		return TypeIsNumeric(type);
 	}
 };
@@ -46,7 +46,7 @@ public:
 //! The IntegerTypeMatcher class matches only integer types (INTEGER, SMALLINT, TINYINT, BIGINT)
 class IntegerTypeMatcher : public TypeMatcher {
 public:
-	bool Match(TypeId type) override {
+	bool Match(PhysicalType type) override {
 		return TypeIsInteger(type);
 	}
 };
