@@ -22,6 +22,7 @@ void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
+void TestChangeDirectory(string path);
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();

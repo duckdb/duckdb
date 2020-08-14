@@ -118,12 +118,12 @@ class BufferedCSVReader {
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-	                  vector<SQLType> requested_types = vector<SQLType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, vector<SQLType> requested_types,
+	                  vector<LogicalType> requested_types = vector<LogicalType>());
+	BufferedCSVReader(BufferedCSVReaderOptions options, vector<LogicalType> requested_types,
 	                  unique_ptr<std::istream> source);
 
 	BufferedCSVReaderOptions options;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	vector<string> col_names;
 	unique_ptr<std::istream> source;
 	bool plain_file_source = false;
@@ -160,7 +160,7 @@ public:
 
 private:
 	//! Initialize Parser
-	void Initialize(vector<SQLType> requested_types);
+	void Initialize(vector<LogicalType> requested_types);
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
@@ -168,11 +168,11 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<SQLType> SniffCSV(vector<SQLType> requested_types);
+	vector<LogicalType> SniffCSV(vector<LogicalType> requested_types);
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(Value value, SQLType sql_type);
+	bool TryCastValue(Value value, LogicalType sql_type);
 	//! Try to cast a vector of values to the specified sql type
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, SQLType sql_type);
+	bool TryCastVector(Vector &parse_chunk_col, idx_t size, LogicalType sql_type);
 	//! Skips header rows and skip_rows in the input stream
 	void SkipHeader(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states

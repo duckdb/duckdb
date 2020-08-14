@@ -66,6 +66,7 @@ kwlist.sort(key=lambda x: strip_p(x[0]))
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
 kwtext = """
+namespace duckdb_libpgquery {
 #define PG_KEYWORD(a,b,c) {a,b,c},
 
 const PGScanKeyword ScanKeywords[] = {
@@ -76,6 +77,7 @@ kwtext += """
 };
 
 const int NumScanKeywords = lengthof(ScanKeywords);
+} // namespace duckdb_libpgquery
 """
 
 with open(kwlist_header, 'w+') as f:

@@ -39,13 +39,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreateDistinctOn(unique_ptr<
 	// we need to create one aggregate per column in the select_list
 	for (idx_t i = 0; i < types.size(); ++i) {
 		// first we create an aggregate that returns the FIRST element
-		auto bound = make_unique<BoundReferenceExpression>(types[i], i);
-		auto first_aggregate = make_unique<BoundAggregateExpression>(
-		    types[i], FirstFun::GetFunction(SQLTypeFromInternalType(types[i])), false);
+		auto logical_type = types[i];
+		auto bound = make_unique<BoundReferenceExpression>(logical_type, i);
+		auto first_aggregate =
+		    make_unique<BoundAggregateExpression>(logical_type, FirstFun::GetFunction(logical_type), false);
 		first_aggregate->children.push_back(move(bound));
 		// and push it to the list of aggregates
 		aggregates.push_back(move(first_aggregate));
-		projections.push_back(make_unique<BoundReferenceExpression>(types[i], i));
+		projections.push_back(make_unique<BoundReferenceExpression>(logical_type, i));
 	}
 
 	// we add a physical hash aggregation in the plan to select the distinct groups

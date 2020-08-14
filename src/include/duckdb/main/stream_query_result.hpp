@@ -19,8 +19,8 @@ class StreamQueryResult : public QueryResult {
 public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
-	StreamQueryResult(StatementType statement_type, ClientContext &context, vector<SQLType> sql_types,
-	                  vector<TypeId> types, vector<string> names);
+	StreamQueryResult(StatementType statement_type, ClientContext &context, vector<LogicalType> types,
+	                  vector<string> names);
 	~StreamQueryResult() override;
 
 	//! Fetches a DataChunk from the query result. Returns an empty chunk if the result is empty, or nullptr on error.

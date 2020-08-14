@@ -25,9 +25,9 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalWindow::PhysicalWindow(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
+PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
+    : PhysicalOperator(type, move(types)), select_list(move(select_list)) {
 }
 
 static bool EqualsSubset(vector<Value> &a, vector<Value> &b, idx_t start, idx_t end) {
@@ -68,7 +68,7 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		return;
 	}
 
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	ExpressionExecutor executor;
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
@@ -97,7 +97,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 
 static void SortCollectionForWindow(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &sort_collection) {
-	vector<TypeId> sort_types;
+	vector<LogicalType> sort_types;
 	vector<OrderType> orders;
 	vector<OrderByNullType> null_order_types;
 	ExpressionExecutor executor;
@@ -352,7 +352,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		auto res = Value();
+		Value res;
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
@@ -460,7 +460,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		default:
-			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type).c_str());
+			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
 
 		output.SetValue(output_idx, row_idx, res);
@@ -483,7 +483,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			return;
 		}
 
-		vector<TypeId> window_types;
+		vector<LogicalType> window_types;
 		for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 			window_types.push_back(select_list[expr_idx]->return_type);
 		}

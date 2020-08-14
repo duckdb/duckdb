@@ -30,7 +30,7 @@ public:
 	//! The set of aliases associated with the view
 	vector<string> aliases;
 	//! The returned types of the view
-	vector<SQLType> types;
+	vector<LogicalType> types;
 
 public:
 	//! Serialize the meta information of the ViewCatalogEntry a serializer

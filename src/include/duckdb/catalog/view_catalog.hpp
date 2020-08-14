@@ -29,6 +29,6 @@ public:
 	//! The statement that the view should execute
 	unique_ptr<QueryNode> op;
 	//! Returns a list of types of the view
-	vector<TypeId> GetTypes();
+	vector<PhysicalType> GetTypes();
 };
 } // namespace duckdb

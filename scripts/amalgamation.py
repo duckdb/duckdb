@@ -14,7 +14,6 @@ src_dir = 'src'
 include_dir = os.path.join('src', 'include')
 fmt_dir = os.path.join('third_party', 'fmt')
 fmt_include_dir = os.path.join('third_party', 'fmt', 'include')
-hll_dir = os.path.join('third_party', 'hyperloglog')
 miniz_dir = os.path.join('third_party', 'miniz')
 re2_dir = os.path.join('third_party', 're2')
 pg_query_dir = os.path.join('third_party', 'libpg_query')
@@ -43,9 +42,9 @@ main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
 	os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
 
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, hll_dir, re2_dir, miniz_dir, utf8proc_include_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir]
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, hll_dir, miniz_dir, re2_dir, utf8proc_dir, pg_query_dir]
+compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, utf8proc_dir, pg_query_dir]
 
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-extension.cpp', 'src/amalgamation/parquet-extension.hpp']

@@ -11,7 +11,7 @@ namespace duckdb {
 using namespace std;
 
 template <class T> void templated_generate_sequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	assert(TypeIsNumeric(result.type));
+	assert(result.type.IsNumeric());
 	if (start > NumericLimits<T>::Maximum() || increment > NumericLimits<T>::Maximum()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
@@ -25,26 +25,26 @@ template <class T> void templated_generate_sequence(Vector &result, idx_t count,
 }
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t start, int64_t increment) {
-	if (!TypeIsNumeric(result.type)) {
+	if (!result.type.IsNumeric()) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type) {
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, start, increment);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_generate_sequence<int16_t>(result, count, start, increment);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_generate_sequence<int32_t>(result, count, start, increment);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_generate_sequence<int64_t>(result, count, start, increment);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_generate_sequence<float>(result, count, start, increment);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_generate_sequence<double>(result, count, start, increment);
 		break;
 	default:
@@ -55,7 +55,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 template <class T>
 void templated_generate_sequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                  int64_t increment) {
-	assert(TypeIsNumeric(result.type));
+	assert(result.type.IsNumeric());
 	if (start > numeric_limits<T>::max() || increment > numeric_limits<T>::max()) {
 		throw Exception("Sequence start or increment out of type range");
 	}
@@ -70,26 +70,26 @@ void templated_generate_sequence(Vector &result, idx_t count, const SelectionVec
 
 void VectorOperations::GenerateSequence(Vector &result, idx_t count, const SelectionVector &sel, int64_t start,
                                         int64_t increment) {
-	if (!TypeIsNumeric(result.type)) {
+	if (!result.type.IsNumeric()) {
 		throw InvalidTypeException(result.type, "Can only generate sequences for numeric values!");
 	}
-	switch (result.type) {
-	case TypeId::INT8:
+	switch (result.type.InternalType()) {
+	case PhysicalType::INT8:
 		templated_generate_sequence<int8_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_generate_sequence<int16_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_generate_sequence<int32_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_generate_sequence<int64_t>(result, count, sel, start, increment);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_generate_sequence<float>(result, count, sel, start, increment);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_generate_sequence<double>(result, count, sel, start, increment);
 		break;
 	default:

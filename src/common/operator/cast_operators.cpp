@@ -164,7 +164,7 @@ template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
 		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
-		                          TypeIdToString(GetTypeId<T>()).c_str());
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
@@ -173,7 +173,7 @@ template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
 		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
-		                          TypeIdToString(GetTypeId<T>()).c_str());
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
@@ -511,7 +511,7 @@ template <> double StrictCast::Operation(string_t input) {
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
 template <class T> string CastToStandardString(T input) {
-	Vector v(TypeId::VARCHAR);
+	Vector v(LogicalType::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
 
@@ -988,7 +988,7 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 		result = output;
 	} else {
 		// raw string
-		result = StringVector::AddBlob(vector, input);
+		result = StringVector::AddStringOrBlob(vector, input);
 	}
 	return result;
 }

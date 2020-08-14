@@ -19,7 +19,7 @@ class BoundAggregateExpression;
 
 struct AggregateObject {
 	AggregateObject(AggregateFunction function, idx_t child_count, idx_t payload_size, bool distinct,
-	                TypeId return_type)
+	                PhysicalType return_type)
 	    : function(move(function)), child_count(child_count), payload_size(payload_size), distinct(distinct),
 	      return_type(return_type) {
 	}
@@ -28,7 +28,7 @@ struct AggregateObject {
 	idx_t child_count;
 	idx_t payload_size;
 	bool distinct;
-	TypeId return_type;
+	PhysicalType return_type;
 
 	static vector<AggregateObject> CreateAggregateObjects(vector<BoundAggregateExpression *> bindings);
 };
@@ -43,9 +43,9 @@ struct AggregateObject {
 */
 class SuperLargeHashTable {
 public:
-	SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
 	                    vector<BoundAggregateExpression *> aggregates, bool parallel = false);
-	SuperLargeHashTable(idx_t initial_capacity, vector<TypeId> group_types, vector<TypeId> payload_types,
+	SuperLargeHashTable(idx_t initial_capacity, vector<LogicalType> group_types, vector<LogicalType> payload_types,
 	                    vector<AggregateObject> aggregates, bool parallel = false);
 	~SuperLargeHashTable();
 
@@ -79,9 +79,9 @@ private:
 	//! The aggregates to be computed
 	vector<AggregateObject> aggregates;
 	//! The types of the group columns stored in the hashtable
-	vector<TypeId> group_types;
+	vector<LogicalType> group_types;
 	//! The types of the payload columns stored in the hashtable
-	vector<TypeId> payload_types;
+	vector<LogicalType> payload_types;
 	//! The size of the groups in bytes
 	idx_t group_width;
 	//! The size of the payload (aggregations) in bytes

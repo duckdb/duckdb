@@ -1,0 +1,52 @@
+# name: test/sql/optimizer/plan/table_filter_pushdown_large_strings.test_slow
+# description: Test Table Filter Push Down Scan String
+# group: [plan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings AS select i FROM (VALUES('pedro'), ('peter'), ('mark')) t1(i), range(0, 100000) t2(j) order by j
+
+query I
+SELECT count(i) FROM strings where i = 'pedro'
+----
+100000
+
+query I
+SELECT count(i) FROM strings where i = 'peter'
+----
+100000
+
+query I
+SELECT count(i) FROM strings where i = 'mark'
+----
+100000
+
+query I
+SELECT count(i) FROM strings where i = 'diego'
+----
+0
+
+
+statement ok
+INSERT INTO strings VALUES('po')
+
+statement ok
+INSERT INTO strings VALUES('stefan manegold')
+
+statement ok
+INSERT INTO strings VALUES('tim k')
+
+statement ok
+INSERT INTO strings VALUES('tim k')
+
+statement ok
+update strings set i = 'zorro' where i = 'pedro'
+
+query I
+SELECT count(i) FROM strings where i >= 'tim k'
+----
+100002
+
+

@@ -6,9 +6,8 @@
 namespace duckdb {
 using namespace std;
 
-BoundUnnestExpression::BoundUnnestExpression(SQLType sql_return_type)
-    : Expression(ExpressionType::BOUND_UNNEST, ExpressionClass::BOUND_UNNEST, GetInternalType(sql_return_type)),
-      sql_return_type(sql_return_type) {
+BoundUnnestExpression::BoundUnnestExpression(LogicalType return_type)
+    : Expression(ExpressionType::BOUND_UNNEST, ExpressionClass::BOUND_UNNEST, move(return_type)) {
 }
 
 bool BoundUnnestExpression::IsFoldable() const {
@@ -36,7 +35,7 @@ bool BoundUnnestExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundUnnestExpression::Copy() {
-	auto copy = make_unique<BoundUnnestExpression>(sql_return_type);
+	auto copy = make_unique<BoundUnnestExpression>(return_type);
 	copy->child = child->Copy();
 	return move(copy);
 }

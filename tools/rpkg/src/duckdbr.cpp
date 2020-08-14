@@ -242,37 +242,37 @@ SEXP duckdb_prepare_R(SEXP connsexp, SEXP querysexp) {
 
 	for (auto &stype : stmtholder->stmt->types) {
 		string rtype = "";
-		switch (stype.id) {
-		case SQLTypeId::BOOLEAN:
+		switch (stype.id()) {
+		case LogicalTypeId::BOOLEAN:
 			rtype = "logical";
 			break;
-		case SQLTypeId::TINYINT:
-		case SQLTypeId::SMALLINT:
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
 			rtype = "integer";
 			break;
-		case SQLTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP:
 			rtype = "POSIXct";
 			break;
-		case SQLTypeId::DATE:
+		case LogicalTypeId::DATE:
 			rtype = "Date";
 			break;
-		case SQLTypeId::TIME:
+		case LogicalTypeId::TIME:
 			rtype = "difftime";
 			break;
-		case SQLTypeId::BIGINT:
-		case SQLTypeId::HUGEINT:
-		case SQLTypeId::FLOAT:
-		case SQLTypeId::DOUBLE:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
 			rtype = "numeric";
 			break;
-		case SQLTypeId::VARCHAR: {
+		case LogicalTypeId::VARCHAR: {
 			rtype = "character";
 			break;
 		}
 		default:
 			UNPROTECT(1); // retlist
-			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", SQLTypeToString(stype).c_str());
+			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
 		}
 		rtypes.push_back(rtype);
@@ -305,11 +305,11 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		return R_NilValue;
 	}
 
-	if (TYPEOF(paramsexp) != VECSXP || LENGTH(paramsexp) != stmtholder->stmt->n_param) {
+	if (TYPEOF(paramsexp) != VECSXP || (idx_t)LENGTH(paramsexp) != stmtholder->stmt->n_param) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
-	for (idx_t param_idx = 0; param_idx < LENGTH(paramsexp); param_idx++) {
+	for (idx_t param_idx = 0; param_idx < (idx_t)LENGTH(paramsexp); param_idx++) {
 		Value val;
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (LENGTH(valsexp) != 1) {
@@ -344,11 +344,12 @@ SEXP duckdb_bind_R(SEXP stmtsexp, SEXP paramsexp) {
 		case RType::FACTOR: {
 			auto int_val = INTEGER_POINTER(valsexp)[0];
 			auto levels = GET_LEVELS(valsexp);
-			val.type = TypeId::VARCHAR;
-			val.is_null = RIntegerType::IsNull(int_val);
-			if (!val.is_null) {
+			bool is_null = RIntegerType::IsNull(int_val);
+			if (!is_null) {
 				auto str_val = STRING_ELT(levels, int_val - 1);
-				val.str_value = string(CHAR(str_val));
+				val = Value(CHAR(str_val));
+			} else {
+				val = Value(LogicalType::VARCHAR);
 			}
 			break;
 		}
@@ -404,33 +405,32 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 
 		for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 			SEXP varvalue = NULL;
-			switch (result->sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
+			switch (result->types[col_idx].id()) {
+			case LogicalTypeId::BOOLEAN:
 				varvalue = PROTECT(NEW_LOGICAL(nrows));
 				break;
-			case SQLTypeId::TINYINT:
-			case SQLTypeId::SMALLINT:
-			case SQLTypeId::INTEGER:
+			case LogicalTypeId::TINYINT:
+			case LogicalTypeId::SMALLINT:
+			case LogicalTypeId::INTEGER:
 				varvalue = PROTECT(NEW_INTEGER(nrows));
 				break;
-			case SQLTypeId::BIGINT:
-			case SQLTypeId::HUGEINT:
-			case SQLTypeId::FLOAT:
-			case SQLTypeId::DOUBLE:
-			case SQLTypeId::DECIMAL:
-			case SQLTypeId::TIMESTAMP:
-			case SQLTypeId::DATE:
-			case SQLTypeId::TIME:
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::HUGEINT:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE:
+			case LogicalTypeId::DECIMAL:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::DATE:
+			case LogicalTypeId::TIME:
 				varvalue = PROTECT(NEW_NUMERIC(nrows));
 				break;
-			case SQLTypeId::VARCHAR:
+			case LogicalTypeId::VARCHAR:
 				varvalue = PROTECT(NEW_STRING(nrows));
 				break;
 			default:
 				UNPROTECT(1); // retlist
-				Rf_error("duckdb_execute_R: Unknown column type for execute: %s/%s",
-				         SQLTypeToString(result->sql_types[col_idx]).c_str(),
-				         TypeIdToString(result->types[col_idx]).c_str());
+				Rf_error("duckdb_execute_R: Unknown column type for execute: %s",
+				         result->types[col_idx].ToString().c_str());
 			}
 			if (!varvalue) {
 				UNPROTECT(2); // varvalue, retlist
@@ -453,24 +453,24 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 			assert(chunk->column_count() == LENGTH(retlist));
 			for (size_t col_idx = 0; col_idx < chunk->column_count(); col_idx++) {
 				SEXP dest = VECTOR_ELT(retlist, col_idx);
-				switch (result->sql_types[col_idx].id) {
-				case SQLTypeId::BOOLEAN:
+				switch (result->types[col_idx].id()) {
+				case LogicalTypeId::BOOLEAN:
 					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest),
 					                              dest_offset, NA_LOGICAL);
 					break;
-				case SQLTypeId::TINYINT:
+				case LogicalTypeId::TINYINT:
 					vector_to_r<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
 					                              dest_offset, NA_INTEGER);
 					break;
-				case SQLTypeId::SMALLINT:
+				case LogicalTypeId::SMALLINT:
 					vector_to_r<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
 					                               dest_offset, NA_INTEGER);
 					break;
-				case SQLTypeId::INTEGER:
+				case LogicalTypeId::INTEGER:
 					vector_to_r<int32_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest),
 					                               dest_offset, NA_INTEGER);
 					break;
-				case SQLTypeId::TIMESTAMP: {
+				case LogicalTypeId::TIMESTAMP: {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = FlatVector::GetData<int64_t>(src_vec);
 					auto &nullmask = FlatVector::Nullmask(src_vec);
@@ -489,7 +489,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					UNPROTECT(4);
 					break;
 				}
-				case SQLTypeId::DATE: {
+				case LogicalTypeId::DATE: {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = FlatVector::GetData<int32_t>(src_vec);
 					auto &nullmask = FlatVector::Nullmask(src_vec);
@@ -503,7 +503,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					UNPROTECT(1);
 					break;
 				}
-				case SQLTypeId::TIME: {
+				case LogicalTypeId::TIME: {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = FlatVector::GetData<int32_t>(src_vec);
 					auto &nullmask = FlatVector::Nullmask(src_vec);
@@ -529,11 +529,11 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					UNPROTECT(2);
 					break;
 				}
-				case SQLTypeId::BIGINT:
+				case LogicalTypeId::BIGINT:
 					vector_to_r<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest),
 					                             dest_offset, NA_REAL);
 					break;
-				case SQLTypeId::HUGEINT: {
+				case LogicalTypeId::HUGEINT: {
 					auto &src_vec = chunk->data[col_idx];
 					auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
 					auto &nullmask = FlatVector::Nullmask(src_vec);
@@ -547,16 +547,16 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 					}
 					break;
 				}
-				case SQLTypeId::FLOAT:
+				case LogicalTypeId::FLOAT:
 					vector_to_r<float, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 					                           NA_REAL);
 					break;
 
-				case SQLTypeId::DOUBLE:
+				case LogicalTypeId::DOUBLE:
 					vector_to_r<double, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 					                            NA_REAL);
 					break;
-				case SQLTypeId::VARCHAR: {
+				case LogicalTypeId::VARCHAR: {
 					auto src_ptr = FlatVector::GetData<string_t>(chunk->data[col_idx]);
 					auto &nullmask = FlatVector::Nullmask(chunk->data[col_idx]);
 					for (size_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
@@ -570,7 +570,7 @@ SEXP duckdb_execute_R(SEXP stmtsexp) {
 				}
 				default:
 					Rf_error("duckdb_execute_R: Unknown column type for convert: %s",
-					         TypeIdToString(chunk->GetTypes()[col_idx]).c_str());
+					         chunk->GetTypes()[col_idx].ToString().c_str());
 					break;
 				}
 			}
@@ -610,40 +610,42 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 
 struct DataFrameScanFunction : public TableFunction {
 	DataFrameScanFunction()
-	    : TableFunction("dataframe_scan", {SQLType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function, nullptr){};
+	    : TableFunction("dataframe_scan", {LogicalType::VARCHAR}, dataframe_scan_bind, dataframe_scan_function,
+	                    nullptr){};
 
-	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-	                                                    vector<SQLType> &return_types, vector<string> &names) {
+	static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vector<Value> &inputs,
+	                                                    unordered_map<string, Value> &named_parameters,
+	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		// TODO have a better way to pass this pointer
 		SEXP df((SEXP)std::stoull(inputs[0].GetValue<string>(), nullptr, 16));
 
 		auto df_names = GET_NAMES(df);
 		vector<RType> rtypes;
 
-		for (idx_t col_idx = 0; col_idx < LENGTH(df); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < (idx_t)LENGTH(df); col_idx++) {
 			names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
 			SEXP coldata = VECTOR_ELT(df, col_idx);
 			rtypes.push_back(detect_rtype(coldata));
-			SQLType duckdb_col_type;
+			LogicalType duckdb_col_type;
 			switch (rtypes[col_idx]) {
 			case RType::LOGICAL:
-				duckdb_col_type = SQLType::BOOLEAN;
+				duckdb_col_type = LogicalType::BOOLEAN;
 				break;
 			case RType::INTEGER:
-				duckdb_col_type = SQLType::INTEGER;
+				duckdb_col_type = LogicalType::INTEGER;
 				break;
 			case RType::NUMERIC:
-				duckdb_col_type = SQLType::DOUBLE;
+				duckdb_col_type = LogicalType::DOUBLE;
 				break;
 			case RType::FACTOR:
 			case RType::STRING:
-				duckdb_col_type = SQLType::VARCHAR;
+				duckdb_col_type = LogicalType::VARCHAR;
 				break;
 			case RType::TIMESTAMP:
-				duckdb_col_type = SQLType::TIMESTAMP;
+				duckdb_col_type = LogicalType::TIMESTAMP;
 				break;
 			case RType::DATE:
-				duckdb_col_type = SQLType::DATE;
+				duckdb_col_type = LogicalType::DATE;
 				break;
 			default:
 				Rf_error("Unsupported column type for scan");

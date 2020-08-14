@@ -181,10 +181,10 @@ struct DateTruncOperator {
 void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::TIMESTAMP}, SQLType::TIMESTAMP,
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
 	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, timestamp_t, DateTruncOperator>));
 	date_trunc.AddFunction(
-	    ScalarFunction({SQLType::VARCHAR, SQLType::DATE}, SQLType::TIMESTAMP,
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP,
 	                   ScalarFunction::BinaryFunction<string_t, date_t, timestamp_t, DateTruncOperator>));
 	set.AddFunction(date_trunc);
 	date_trunc.name = "datetrunc";

@@ -15,7 +15,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(AlterTableStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	auto table =
 	    Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.info->schema, stmt.info->table, true);
 	if (table && !table->temporary) {
@@ -29,7 +29,7 @@ BoundStatement Binder::Bind(AlterTableStatement &stmt) {
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::PRAGMA, move(stmt.info));
 	return result;
 }
@@ -40,7 +40,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 
 	BoundStatement result;
 	result.names = {"Success"};
-	result.types = {SQLType::BOOLEAN};
+	result.types = {LogicalType::BOOLEAN};
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::TRANSACTION, move(stmt.info));
 	return result;
 }

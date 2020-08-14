@@ -26,8 +26,7 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, vector<column_t> column_ids,
-	      vector<unique_ptr<Expression>> unbound_expressions);
+	Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
 	virtual ~Index() = default;
 
 	//! Lock used for updating the index
@@ -40,8 +39,10 @@ public:
 	unordered_set<column_t> column_id_set;
 	//! Unbound expressions used by the index
 	vector<unique_ptr<Expression>> unbound_expressions;
-	//! The types of the expressions
-	vector<TypeId> types;
+	//! The physical types stored in the index
+	vector<PhysicalType> types;
+	//! The logical types of the expressions
+	vector<LogicalType> logical_types;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids

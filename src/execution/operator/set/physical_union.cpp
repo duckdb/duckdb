@@ -13,7 +13,8 @@ public:
 	bool top_done = false;
 };
 
-PhysicalUnion::PhysicalUnion(vector<TypeId> types, unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
+                             unique_ptr<PhysicalOperator> bottom)
     : PhysicalOperator(PhysicalOperatorType::UNION, move(types)) {
 	children.push_back(move(top));
 	children.push_back(move(bottom));

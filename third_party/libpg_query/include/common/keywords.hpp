@@ -21,15 +21,13 @@
 #define TYPE_FUNC_NAME_KEYWORD	2
 #define RESERVED_KEYWORD		3
 
+namespace duckdb_libpgquery {
 
-typedef struct PGScanKeyword
-{
-	const char *name;			/* in lower case */
-	int16_t		value;			/* grammar's token code */
-	int16_t		category;		/* see codes above */
+typedef struct PGScanKeyword {
+	const char *name; /* in lower case */
+	int16_t value;    /* grammar's token code */
+	int16_t category; /* see codes above */
 } PGScanKeyword;
 
-
-const PGScanKeyword *ScanKeywordLookup(const char *text,
-				  const PGScanKeyword *keywords,
-				  int num_keywords);
+const PGScanKeyword *ScanKeywordLookup(const char *text, const PGScanKeyword *keywords, int num_keywords);
+}

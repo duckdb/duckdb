@@ -7,7 +7,7 @@
 #include "miniz.hpp"
 
 #include "duckdb/common/limits.hpp"
-
+using namespace duckdb_miniz;
 using namespace std;
 namespace duckdb {
 

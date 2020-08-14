@@ -13,10 +13,9 @@
 
 using namespace duckdb;
 
-static SQLType ConvertCTypeToCPP(duckdb_type type);
-static duckdb_type ConvertCPPTypeToC(SQLType type);
+static duckdb_type ConvertCPPTypeToC(LogicalType type);
 static idx_t GetCTypeSize(duckdb_type type);
-
+namespace duckdb {
 struct DatabaseData {
 	DatabaseData() : database(nullptr) {
 	}
@@ -28,7 +27,7 @@ struct DatabaseData {
 
 	DuckDB *database;
 };
-
+} // namespace duckdb
 duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 	auto wrapper = new DatabaseData();
 	try {
@@ -103,7 +102,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
 	for (idx_t i = 0; i < out->column_count; i++) {
-		out->columns[i].type = ConvertCPPTypeToC(result->sql_types[i]);
+		out->columns[i].type = ConvertCPPTypeToC(result->types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
@@ -112,7 +111,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			return DuckDBError;
 		}
 		// memset data to 0 for VARCHAR columns for safe deletion later
-		if (result->types[i] == TypeId::VARCHAR) {
+		if (result->types[i].InternalType() == PhysicalType::VARCHAR) {
 			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);
 		}
 	}
@@ -126,30 +125,30 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 		}
 		// then write the data
-		switch (result->sql_types[col].id) {
-		case SQLTypeId::BOOLEAN:
+		switch (result->types[col].id()) {
+		case LogicalTypeId::BOOLEAN:
 			WriteData<bool>(out, result->collection, col);
 			break;
-		case SQLTypeId::TINYINT:
+		case LogicalTypeId::TINYINT:
 			WriteData<int8_t>(out, result->collection, col);
 			break;
-		case SQLTypeId::SMALLINT:
+		case LogicalTypeId::SMALLINT:
 			WriteData<int16_t>(out, result->collection, col);
 			break;
-		case SQLTypeId::INTEGER:
+		case LogicalTypeId::INTEGER:
 			WriteData<int32_t>(out, result->collection, col);
 			break;
-		case SQLTypeId::BIGINT:
+		case LogicalTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
 			break;
-		case SQLTypeId::FLOAT:
+		case LogicalTypeId::FLOAT:
 			WriteData<float>(out, result->collection, col);
 			break;
-		case SQLTypeId::DECIMAL:
-		case SQLTypeId::DOUBLE:
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::DOUBLE:
 			WriteData<double>(out, result->collection, col);
 			break;
-		case SQLTypeId::VARCHAR: {
+		case LogicalTypeId::VARCHAR: {
 			idx_t row = 0;
 			auto target = (const char **)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -163,7 +162,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::DATE: {
+		case LogicalTypeId::DATE: {
 			idx_t row = 0;
 			auto target = (duckdb_date *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -181,7 +180,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::TIME: {
+		case LogicalTypeId::TIME: {
 			idx_t row = 0;
 			auto target = (duckdb_time *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -200,7 +199,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::TIMESTAMP: {
+		case LogicalTypeId::TIMESTAMP: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -230,7 +229,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::HUGEINT: {
+		case LogicalTypeId::HUGEINT: {
 			idx_t row = 0;
 			auto target = (duckdb_hugeint *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -245,7 +244,7 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case SQLTypeId::INTERVAL: {
+		case LogicalTypeId::INTERVAL: {
 			idx_t row = 0;
 			auto target = (duckdb_interval *)out->columns[col].data;
 			for (auto &chunk : result->collection.chunks) {
@@ -309,7 +308,7 @@ void duckdb_destroy_result(duckdb_result *result) {
 	}
 	memset(result, 0, sizeof(duckdb_result));
 }
-
+namespace duckdb {
 struct PreparedStatementWrapper {
 	PreparedStatementWrapper() : statement(nullptr) {
 	}
@@ -318,7 +317,7 @@ struct PreparedStatementWrapper {
 	unique_ptr<PreparedStatement> statement;
 	vector<Value> values;
 };
-
+} // namespace duckdb
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
 	if (!connection || !query) {
@@ -413,70 +412,37 @@ void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
 	*prepared_statement = nullptr;
 }
 
-duckdb_type ConvertCPPTypeToC(SQLType sql_type) {
-	switch (sql_type.id) {
-	case SQLTypeId::BOOLEAN:
+duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
+	switch (sql_type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return DUCKDB_TYPE_TINYINT;
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return DUCKDB_TYPE_SMALLINT;
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
 		return DUCKDB_TYPE_INTEGER;
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return DUCKDB_TYPE_HUGEINT;
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
-	case SQLTypeId::DECIMAL:
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP:
 		return DUCKDB_TYPE_TIMESTAMP;
-	case SQLTypeId::DATE:
+	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
-	case SQLTypeId::TIME:
+	case LogicalTypeId::TIME:
 		return DUCKDB_TYPE_TIME;
-	case SQLTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR:
 		return DUCKDB_TYPE_VARCHAR;
-	case SQLTypeId::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	default:
 		return DUCKDB_TYPE_INVALID;
-	}
-}
-
-SQLType ConvertCTypeToCPP(duckdb_type type) {
-	switch (type) {
-	case DUCKDB_TYPE_BOOLEAN:
-		return SQLType(SQLTypeId::BOOLEAN);
-	case DUCKDB_TYPE_TINYINT:
-		return SQLType::TINYINT;
-	case DUCKDB_TYPE_SMALLINT:
-		return SQLType::SMALLINT;
-	case DUCKDB_TYPE_INTEGER:
-		return SQLType::INTEGER;
-	case DUCKDB_TYPE_BIGINT:
-		return SQLType::BIGINT;
-	case DUCKDB_TYPE_HUGEINT:
-		return SQLType::HUGEINT;
-	case DUCKDB_TYPE_FLOAT:
-		return SQLType::FLOAT;
-	case DUCKDB_TYPE_DOUBLE:
-		return SQLType::DOUBLE;
-	case DUCKDB_TYPE_TIMESTAMP:
-		return SQLType::TIMESTAMP;
-	case DUCKDB_TYPE_DATE:
-		return SQLType::DATE;
-	case DUCKDB_TYPE_TIME:
-		return SQLType::TIME;
-	case DUCKDB_TYPE_VARCHAR:
-		return SQLType::VARCHAR;
-	case DUCKDB_TYPE_INTERVAL:
-		return SQLType::INTERVAL;
-	default:
-		return SQLType(SQLTypeId::INVALID);
 	}
 }
 
@@ -587,7 +553,7 @@ bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return false;
 	} else {
-		return val.CastAs(TypeId::BOOL).value_.boolean;
+		return val.GetValue<bool>();
 	}
 }
 
@@ -596,7 +562,7 @@ int8_t duckdb_value_int8(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT8).value_.tinyint;
+		return val.GetValue<int8_t>();
 	}
 }
 
@@ -605,7 +571,7 @@ int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT16).value_.smallint;
+		return val.GetValue<int16_t>();
 	}
 }
 
@@ -614,7 +580,7 @@ int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT32).value_.integer;
+		return val.GetValue<int32_t>();
 	}
 }
 
@@ -623,7 +589,7 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0;
 	} else {
-		return val.CastAs(TypeId::INT64).value_.bigint;
+		return val.GetValue<int64_t>();
 	}
 }
 
@@ -632,7 +598,7 @@ float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(TypeId::FLOAT).value_.float_;
+		return val.GetValue<float>();
 	}
 }
 
@@ -641,11 +607,11 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 	if (val.is_null) {
 		return 0.0;
 	} else {
-		return val.CastAs(TypeId::DOUBLE).value_.double_;
+		return val.GetValue<double>();
 	}
 }
 
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
-	return strdup(val.ToString(ConvertCTypeToCPP(result->columns[col].type)).c_str());
+	return strdup(val.ToString().c_str());
 }

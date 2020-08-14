@@ -32,7 +32,7 @@ string GenerateQuery(CatalogEntry *entry) {
 
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &column = table->columns[i];
-			ss << column.name << " " << SQLTypeToString(column.type);
+			ss << column.name << " " << column.type.ToString();
 			if (i + 1 < table->columns.size()) {
 				ss << ", ";
 			}
@@ -45,22 +45,23 @@ string GenerateQuery(CatalogEntry *entry) {
 	}
 }
 
-static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> sqlite_master_bind(ClientContext &context, vector<Value> &inputs,
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	names.push_back("type");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("tbl_name");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.push_back("rootpage");
-	return_types.push_back(SQLType::INTEGER);
+	return_types.push_back(LogicalType::INTEGER);
 
 	names.push_back("sql");
-	return_types.push_back(SQLType::VARCHAR);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	// initialize the function data structure
 	return make_unique<SQLiteMasterData>();
@@ -93,7 +94,7 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 		auto &entry = data.entries[i];
 
 		// return values:
-		// "type", TypeId::VARCHAR
+		// "type", PhysicalType::VARCHAR
 		const char *type_str;
 		switch (entry->type) {
 		case CatalogType::TABLE:
@@ -112,13 +113,13 @@ void sqlite_master(ClientContext &context, vector<Value> &input, DataChunk &outp
 			type_str = "unknown";
 		}
 		output.SetValue(0, index, Value(type_str));
-		// "name", TypeId::VARCHAR
+		// "name", PhysicalType::VARCHAR
 		output.SetValue(1, index, Value(entry->name));
-		// "tbl_name", TypeId::VARCHAR
+		// "tbl_name", PhysicalType::VARCHAR
 		output.SetValue(2, index, Value(entry->name));
-		// "rootpage", TypeId::INT32
+		// "rootpage", PhysicalType::INT32
 		output.SetValue(3, index, Value::INTEGER(0));
-		// "sql", TypeId::VARCHAR
+		// "sql", PhysicalType::VARCHAR
 		output.SetValue(4, index, Value(GenerateQuery(entry)));
 	}
 	data.offset = next;

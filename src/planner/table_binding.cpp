@@ -24,15 +24,15 @@ bool TableBinding::HasMatchingBinding(const string &column_name) {
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto entry = table.name_map.find(colref.column_name);
 	if (entry == table.name_map.end()) {
-		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"",
-		                                     colref.table_name.c_str(), colref.column_name.c_str()));
+		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name,
+		                                     colref.column_name));
 	}
 	auto col_index = entry->second;
 	// fetch the type of the column
-	SQLType col_type;
+	LogicalType col_type;
 	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 		// row id: BIGINT type
-		col_type = SQLType::BIGINT;
+		col_type = LogicalType::BIGINT;
 	} else {
 		// normal column: fetch type from base column
 		auto &col = table.columns[col_index];
@@ -55,8 +55,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		column_ids.push_back(col_index);
 	}
 	binding.table_index = index;
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(col_type), binding, depth), col_type);
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
 void TableBinding::GenerateAllColumnExpressions(BindContext &context,
@@ -70,14 +69,14 @@ void TableBinding::GenerateAllColumnExpressions(BindContext &context,
 	}
 }
 
-GenericBinding::GenericBinding(const string &alias, vector<SQLType> coltypes, vector<string> colnames, idx_t index)
+GenericBinding::GenericBinding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
     : Binding(BindingType::GENERIC, alias, index), types(move(coltypes)), names(move(colnames)) {
 	assert(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
 		assert(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias.c_str(), name.c_str());
+			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
 		name_map[name] = i;
 	}
@@ -98,9 +97,8 @@ BindResult GenericBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = column_entry->second;
-	SQLType sql_type = types[column_entry->second];
-	return BindResult(
-	    make_unique<BoundColumnRefExpression>(colref.GetName(), GetInternalType(sql_type), binding, depth), sql_type);
+	LogicalType sql_type = types[column_entry->second];
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
 void GenericBinding::GenerateAllColumnExpressions(BindContext &context,

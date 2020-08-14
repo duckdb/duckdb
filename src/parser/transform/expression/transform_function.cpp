@@ -9,6 +9,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 static ExpressionType WindowToExpressionType(string &fun_name) {
 	if (fun_name == "rank") {

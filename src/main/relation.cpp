@@ -203,7 +203,7 @@ void Relation::Insert(string schema_name, string table_name) {
 	insert->Execute();
 }
 
-void Relation::Insert(vector<vector<Value>> values){
+void Relation::Insert(vector<vector<Value>> values) {
 	vector<string> column_names;
 	auto rel = make_shared<ValueRelation>(context, move(values), move(column_names), "values");
 	rel->Insert(GetAlias());
@@ -268,7 +268,7 @@ string Relation::ToString() {
 	str += "---------------------\n";
 	auto &cols = Columns();
 	for (idx_t i = 0; i < cols.size(); i++) {
-		str += "- " + cols[i].name + " (" + SQLTypeToString(cols[i].type) + ")\n";
+		str += "- " + cols[i].name + " (" + cols[i].type.ToString() + ")\n";
 	}
 	return str;
 }

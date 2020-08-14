@@ -12,6 +12,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<CopyStatement> Transformer::TransformCopy(PGNode *node) {
 	auto stmt = reinterpret_cast<PGCopyStmt *>(node);

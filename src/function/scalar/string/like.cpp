@@ -81,8 +81,6 @@ bool like_operator(const char *s, const char *pattern, const char *escape) {
 
 // This can be moved to the scalar_function class
 template <typename Func> static void like_escape_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	assert(args.column_count() == 3 && args.data[0].type == TypeId::VARCHAR && args.data[1].type == TypeId::VARCHAR &&
-	       args.data[2].type == TypeId::VARCHAR);
 	auto &str = args.data[0];
 	auto &pattern = args.data[1];
 	auto &escape = args.data[2];
@@ -92,16 +90,17 @@ template <typename Func> static void like_escape_function(DataChunk &args, Expre
 }
 
 void LikeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	set.AddFunction(ScalarFunction("~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, LikeOperator, true>));
-	set.AddFunction(ScalarFunction("!~~", {SQLType::VARCHAR, SQLType::VARCHAR}, SQLType::BOOLEAN,
+	set.AddFunction(ScalarFunction("!~~", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
 	                               ScalarFunction::BinaryFunction<string_t, string_t, bool, NotLikeOperator, true>));
 }
 
 void LikeEscapeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                                                SQLType::BOOLEAN, like_escape_function<LikeEscapeOperator>));
-	set.AddFunction({"not_like_escape"}, ScalarFunction({SQLType::VARCHAR, SQLType::VARCHAR, SQLType::VARCHAR},
-	                                                    SQLType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
+	set.AddFunction({"like_escape"}, ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                                                LogicalType::BOOLEAN, like_escape_function<LikeEscapeOperator>));
+	set.AddFunction({"not_like_escape"},
+	                ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                               LogicalType::BOOLEAN, like_escape_function<NotLikeEscapeOperator>));
 }
 } // namespace duckdb

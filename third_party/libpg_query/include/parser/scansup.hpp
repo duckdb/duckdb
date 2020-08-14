@@ -14,14 +14,16 @@
 
 #pragma once
 
+namespace duckdb_libpgquery {
+
 char *scanstr(const char *s);
 
-char *downcase_truncate_identifier(const char *ident, int len,
-						 bool warn);
+char *downcase_truncate_identifier(const char *ident, int len, bool warn);
 
-char *downcase_identifier(const char *ident, int len,
-				bool warn, bool truncate);
+char *downcase_identifier(const char *ident, int len, bool warn, bool truncate);
 
 void truncate_identifier(char *ident, int len, bool warn);
 
 bool scanner_isspace(char ch);
+
+}

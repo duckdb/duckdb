@@ -14,7 +14,7 @@ namespace duckdb {
 
 struct BoundStatement {
 	unique_ptr<LogicalOperator> plan;
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	vector<string> names;
 };
 

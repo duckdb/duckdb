@@ -34,7 +34,7 @@ static void epoch_function(DataChunk &input, ExpressionState &state, Vector &res
 
 void EpochFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet epoch("epoch_ms");
-	epoch.AddFunction(ScalarFunction({SQLType::BIGINT}, SQLType::TIMESTAMP, epoch_function));
+	epoch.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, epoch_function));
 	set.AddFunction(epoch);
 }
 

@@ -6,9 +6,9 @@
 namespace duckdb {
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, AggregateFunction function, bool distinct)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type), function(function),
-      distinct(distinct) {
+BoundAggregateExpression::BoundAggregateExpression(LogicalType return_type, AggregateFunction function, bool distinct)
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, move(return_type)),
+      function(function), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {

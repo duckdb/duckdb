@@ -17,7 +17,7 @@ namespace duckdb {
 class PhysicalTransaction : public PhysicalOperator {
 public:
 	PhysicalTransaction(unique_ptr<TransactionInfo> info)
-	    : PhysicalOperator(PhysicalOperatorType::TRANSACTION, {TypeId::BOOL}), info(move(info)) {
+	    : PhysicalOperator(PhysicalOperatorType::TRANSACTION, {LogicalType::BOOLEAN}), info(move(info)) {
 	}
 
 	unique_ptr<TransactionInfo> info;

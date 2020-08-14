@@ -10,7 +10,7 @@ using namespace std;
 
 HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
     : SelectBinder(binder, context, node, info) {
-	target_type = SQLType(SQLTypeId::BOOLEAN);
+	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
 BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, bool root_expression) {
@@ -23,9 +23,8 @@ BindResult HavingBinder::BindExpression(ParsedExpression &expr, idx_t depth, boo
 	case ExpressionClass::WINDOW:
 		return BindResult("HAVING clause cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
-		return BindResult(
-		    StringUtil::Format("column %s must appear in the GROUP BY clause or be used in an aggregate function",
-		                       expr.ToString().c_str()));
+		return BindResult(StringUtil::Format(
+		    "column %s must appear in the GROUP BY clause or be used in an aggregate function", expr.ToString()));
 	default:
 		return ExpressionBinder::BindExpression(expr, depth);
 	}

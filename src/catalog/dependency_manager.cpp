@@ -17,7 +17,7 @@ void DependencyManager::AddObject(Transaction &transaction, CatalogEntry *object
 
 		if (CatalogSet::HasConflict(transaction, *entry->second)) {
 			// transaction conflict with this entry
-			throw TransactionException("Catalog write-write conflict on create with \"%s\"", object->name.c_str());
+			throw TransactionException("Catalog write-write conflict on create with \"%s\"", object->name);
 		}
 	}
 	// add the object to the dependents_map of each object that it depends on
@@ -43,7 +43,7 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 		if (CatalogSet::HasConflict(transaction, *entry->second)) {
 			// current version has been written to by a currently active transaction
 			throw TransactionException("Catalog write-write conflict on drop with \"%s\": conflict with dependency",
-			                           object->name.c_str());
+			                           object->name);
 		}
 		// there is a current version that has been committed
 		if (entry->second->deleted) {
@@ -58,7 +58,7 @@ void DependencyManager::DropObject(Transaction &transaction, CatalogEntry *objec
 			// no cascade and there are objects that depend on this object: throw error
 			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "
 			                       "depend on it. Use DROP...CASCADE to drop all dependents.",
-			                       object->name.c_str());
+			                       object->name);
 		}
 	}
 }
@@ -76,7 +76,7 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 		assert(entry != catalog_set.data.end());
 		if (CatalogSet::HasConflict(transaction, *entry->second)) {
 			// current version has been written to by a currently active transaction
-			throw TransactionException("Catalog write-write conflict on drop with \"%s\"", old_obj->name.c_str());
+			throw TransactionException("Catalog write-write conflict on drop with \"%s\"", old_obj->name);
 		}
 		// there is a current version that has been committed
 		if (entry->second->deleted) {
@@ -87,7 +87,7 @@ void DependencyManager::AlterObject(Transaction &transaction, CatalogEntry *old_
 		// no cascade and there are objects that depend on this object: throw error
 		throw CatalogException("Cannot alter entry \"%s\" because there are entries that "
 		                       "depend on it.",
-		                       old_obj->name.c_str());
+		                       old_obj->name);
 	}
 	// add the new object to the dependents_map of each object that it depents on
 	auto &old_dependencies = dependencies_map[old_obj];

@@ -9,6 +9,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 ExpressionType Transformer::OperatorToExpressionType(string &op) {
 	if (op == "=" || op == "==") {
@@ -103,7 +104,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(PGAExpr *root) {
 		case_expr->check = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, value->Copy(),
 		                                                     TransformExpression(root->rexpr));
 		// if A = B, then constant NULL
-		case_expr->result_if_true = make_unique<ConstantExpression>(SQLType::SQLNULL, Value());
+		case_expr->result_if_true = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
 		// else A
 		case_expr->result_if_false = move(value);
 		return move(case_expr);

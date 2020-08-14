@@ -136,7 +136,7 @@ public:
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
-	ChangeColumnTypeInfo(string schema, string table, string column_name, SQLType target_type,
+	ChangeColumnTypeInfo(string schema, string table, string column_name, LogicalType target_type,
 	                     unique_ptr<ParsedExpression> expression)
 	    : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, schema, table), column_name(move(column_name)),
 	      target_type(move(target_type)), expression(move(expression)) {
@@ -147,7 +147,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	//! The column name to alter
 	string column_name;
 	//! The target type of the column
-	SQLType target_type;
+	LogicalType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
 

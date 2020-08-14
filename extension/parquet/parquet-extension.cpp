@@ -30,13 +30,22 @@
 #endif
 
 using namespace duckdb;
+using namespace duckdb_miniz;
 using namespace std;
 
 using namespace parquet;
-using namespace parquet::format;
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
+
+using parquet::format::CompressionCodec;
+using parquet::format::Encoding;
+using parquet::format::FieldRepetitionType;
+using parquet::format::FileMetaData;
+using parquet::format::PageHeader;
+using parquet::format::PageType;
+using parquet::format::RowGroup;
+using parquet::format::Type;
 
 struct Int96 {
 	uint32_t value[3];
@@ -315,7 +324,7 @@ struct ParquetScanFunctionData : public TableFunctionData {
 	ifstream pfile;
 
 	FileMetaData file_meta_data;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	vector<ParquetScanColumnData> column_data;
 	bool finished;
 };
@@ -323,13 +332,14 @@ struct ParquetScanFunctionData : public TableFunctionData {
 class ParquetScanFunction : public TableFunction {
 public:
 	ParquetScanFunction()
-	    : TableFunction("parquet_scan", {SQLType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
+	    : TableFunction("parquet_scan", {LogicalType::VARCHAR}, parquet_scan_bind, parquet_scan_function, nullptr) {
 		supports_projection = true;
 	}
 
 private:
-	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-	                                                  vector<SQLType> &return_types, vector<string> &names) {
+	static unique_ptr<FunctionData> parquet_scan_bind(ClientContext &context, vector<Value> &inputs,
+	                                                  unordered_map<string, Value> &named_parameters,
+	                                                  vector<LogicalType> &return_types, vector<string> &names) {
 
 		auto file_name = inputs[0].GetValue<string>();
 		auto res = make_unique<ParquetScanFunctionData>();
@@ -397,30 +407,30 @@ private:
 			}
 
 			names.push_back(s_ele.name);
-			SQLType type;
+			LogicalType type;
 			switch (s_ele.type) {
 			case Type::BOOLEAN:
-				type = SQLType::BOOLEAN;
+				type = LogicalType::BOOLEAN;
 				break;
 			case Type::INT32:
-				type = SQLType::INTEGER;
+				type = LogicalType::INTEGER;
 				break;
 			case Type::INT64:
-				type = SQLType::BIGINT;
+				type = LogicalType::BIGINT;
 				break;
 			case Type::INT96: // always a timestamp?
-				type = SQLType::TIMESTAMP;
+				type = LogicalType::TIMESTAMP;
 				break;
 			case Type::FLOAT:
-				type = SQLType::FLOAT;
+				type = LogicalType::FLOAT;
 				break;
 			case Type::DOUBLE:
-				type = SQLType::DOUBLE;
+				type = LogicalType::DOUBLE;
 				break;
 				//			case parquet::format::Type::FIXED_LEN_BYTE_ARRAY: {
 				// TODO some decimals yuck
 			case Type::BYTE_ARRAY:
-				type = SQLType::VARCHAR;
+				type = LogicalType::VARCHAR;
 				break;
 
 			default:
@@ -577,21 +587,21 @@ private:
 			}
 
 			col_data.dict_size = page_hdr.dictionary_page_header.num_values;
-			auto dict_byte_size = col_data.dict_size * GetTypeIdSize(GetInternalType(data.sql_types[col_idx]));
+			auto dict_byte_size = col_data.dict_size * GetTypeIdSize(data.sql_types[col_idx].InternalType());
 
 			col_data.dict.resize(dict_byte_size);
 
-			switch (data.sql_types[col_idx].id) {
-			case SQLTypeId::BOOLEAN:
-			case SQLTypeId::INTEGER:
-			case SQLTypeId::BIGINT:
-			case SQLTypeId::FLOAT:
-			case SQLTypeId::DOUBLE:
+			switch (data.sql_types[col_idx].id()) {
+			case LogicalTypeId::BOOLEAN:
+			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::FLOAT:
+			case LogicalTypeId::DOUBLE:
 				col_data.payload.available(dict_byte_size);
 				// TODO this copy could be avoided if we use different buffers for dicts
 				col_data.payload.copy_to(col_data.dict.ptr, dict_byte_size);
 				break;
-			case SQLTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP:
 				col_data.payload.available(dict_byte_size);
 				// immediately convert timestamps to duckdb format, potentially fewer conversions
 				for (idx_t dict_index = 0; dict_index < col_data.dict_size; dict_index++) {
@@ -600,13 +610,13 @@ private:
 				}
 
 				break;
-			case SQLTypeId::VARCHAR: {
+			case LogicalTypeId::VARCHAR: {
 				// strings we directly fill a string heap that we can use for the vectors later
 				col_data.string_collection = make_unique<ChunkCollection>();
 
 				// we hand-roll a chunk collection to avoid copying strings
 				auto append_chunk = make_unique<DataChunk>();
-				vector<TypeId> types = {TypeId::VARCHAR};
+				vector<LogicalType> types = {LogicalType::VARCHAR};
 				col_data.string_collection->types = types;
 				append_chunk->Initialize(types);
 
@@ -649,7 +659,7 @@ private:
 				col_data.string_collection->Verify();
 			} break;
 			default:
-				throw runtime_error(SQLTypeToString(data.sql_types[col_idx]));
+				throw runtime_error(data.sql_types[col_idx].ToString());
 			}
 			// important, move to next page which should be a data page
 			return false;
@@ -822,27 +832,27 @@ private:
 
 					// TODO ensure we had seen a dict page IN THIS CHUNK before getting here
 
-					switch (data.sql_types[file_col_idx].id) {
-					case SQLTypeId::BOOLEAN:
+					switch (data.sql_types[file_col_idx].id()) {
+					case LogicalTypeId::BOOLEAN:
 						_fill_from_dict<bool>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::INTEGER:
+					case LogicalTypeId::INTEGER:
 						_fill_from_dict<int32_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::BIGINT:
+					case LogicalTypeId::BIGINT:
 						_fill_from_dict<int64_t>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::FLOAT:
+					case LogicalTypeId::FLOAT:
 						_fill_from_dict<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::DOUBLE:
+					case LogicalTypeId::DOUBLE:
 						_fill_from_dict<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::TIMESTAMP:
+					case LogicalTypeId::TIMESTAMP:
 						_fill_from_dict<timestamp_t>(col_data, current_batch_size, output.data[out_col_idx],
 						                             output_offset);
 						break;
-					case SQLTypeId::VARCHAR: {
+					case LogicalTypeId::VARCHAR: {
 						if (!col_data.string_collection) {
 							throw runtime_error("Did not see a dictionary for strings. Corrupt file?");
 						}
@@ -870,15 +880,15 @@ private:
 						}
 					} break;
 					default:
-						throw runtime_error(SQLTypeToString(data.sql_types[file_col_idx]));
+						throw runtime_error(data.sql_types[file_col_idx].ToString());
 					}
 
 					break;
 				}
 				case Encoding::PLAIN:
 					assert(col_data.payload.ptr);
-					switch (data.sql_types[file_col_idx].id) {
-					case SQLTypeId::BOOLEAN: {
+					switch (data.sql_types[file_col_idx].id()) {
+					case LogicalTypeId::BOOLEAN: {
 						// bit packed this
 						auto target_ptr = FlatVector::GetData<bool>(output.data[out_col_idx]);
 						int byte_pos = 0;
@@ -897,21 +907,21 @@ private:
 						}
 						break;
 					}
-					case SQLTypeId::INTEGER:
+					case LogicalTypeId::INTEGER:
 						_fill_from_plain<int32_t>(col_data, current_batch_size, output.data[out_col_idx],
 						                          output_offset);
 						break;
-					case SQLTypeId::BIGINT:
+					case LogicalTypeId::BIGINT:
 						_fill_from_plain<int64_t>(col_data, current_batch_size, output.data[out_col_idx],
 						                          output_offset);
 						break;
-					case SQLTypeId::FLOAT:
+					case LogicalTypeId::FLOAT:
 						_fill_from_plain<float>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::DOUBLE:
+					case LogicalTypeId::DOUBLE:
 						_fill_from_plain<double>(col_data, current_batch_size, output.data[out_col_idx], output_offset);
 						break;
-					case SQLTypeId::TIMESTAMP: {
+					case LogicalTypeId::TIMESTAMP: {
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
 								((timestamp_t *)FlatVector::GetData(output.data[out_col_idx]))[i + output_offset] =
@@ -923,7 +933,7 @@ private:
 
 						break;
 					}
-					case SQLTypeId::VARCHAR: {
+					case LogicalTypeId::VARCHAR: {
 						for (idx_t i = 0; i < current_batch_size; i++) {
 							if (col_data.defined_buf.ptr[i]) {
 								uint32_t str_len = col_data.payload.read<uint32_t>();
@@ -938,7 +948,7 @@ private:
 						break;
 					}
 					default:
-						throw runtime_error(SQLTypeToString(data.sql_types[file_col_idx]));
+						throw runtime_error(data.sql_types[file_col_idx].ToString());
 					}
 
 					break;
@@ -978,28 +988,28 @@ private:
 	Serializer &serializer;
 };
 
-static Type::type duckdb_type_to_parquet_type(SQLType duckdb_type) {
-	switch (duckdb_type.id) {
-	case SQLTypeId::BOOLEAN:
+static Type::type duckdb_type_to_parquet_type(LogicalType duckdb_type) {
+	switch (duckdb_type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return Type::BOOLEAN;
-	case SQLTypeId::TINYINT:
-	case SQLTypeId::SMALLINT:
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
 		return Type::INT32;
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
 		return Type::INT64;
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return Type::FLOAT;
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return Type::DOUBLE;
-	case SQLTypeId::VARCHAR:
-	case SQLTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
-	case SQLTypeId::DATE:
-	case SQLTypeId::TIMESTAMP:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIMESTAMP:
 		return Type::INT96;
 	default:
-		throw NotImplementedException(SQLTypeToString(duckdb_type));
+		throw NotImplementedException(duckdb_type.ToString());
 	}
 }
 
@@ -1038,7 +1048,7 @@ static void _write_plain(Vector &col, idx_t length, nullmask_t &nullmask, Serial
 }
 
 struct ParquetWriteBindData : public FunctionData {
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	string file_name;
 	vector<string> column_names;
 	// TODO compression flag to test the param passing stuff
@@ -1111,8 +1121,8 @@ public:
 				auto &nullmask = FlatVector::Nullmask(input_column);
 
 				// write actual payload data
-				switch (sql_types[i].id) {
-				case SQLTypeId::BOOLEAN: {
+				switch (sql_types[i].id()) {
+				case LogicalTypeId::BOOLEAN: {
 					auto *ptr = FlatVector::GetData<bool>(input_column);
 					uint8_t byte = 0;
 					uint8_t byte_pos = 0;
@@ -1135,25 +1145,25 @@ public:
 					}
 					break;
 				}
-				case SQLTypeId::TINYINT:
+				case LogicalTypeId::TINYINT:
 					_write_plain<int8_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::SMALLINT:
+				case LogicalTypeId::SMALLINT:
 					_write_plain<int16_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::INTEGER:
+				case LogicalTypeId::INTEGER:
 					_write_plain<int32_t, int32_t>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::BIGINT:
+				case LogicalTypeId::BIGINT:
 					_write_plain<int64_t, int64_t>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::FLOAT:
+				case LogicalTypeId::FLOAT:
 					_write_plain<float, float>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::DOUBLE:
+				case LogicalTypeId::DOUBLE:
 					_write_plain<double, double>(input_column, input.size(), nullmask, temp_writer);
 					break;
-				case SQLTypeId::TIMESTAMP: {
+				case LogicalTypeId::TIMESTAMP: {
 					auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
 					for (idx_t r = 0; r < input.size(); r++) {
 						if (!nullmask[r]) {
@@ -1162,7 +1172,7 @@ public:
 					}
 					break;
 				}
-				case SQLTypeId::VARCHAR: {
+				case LogicalTypeId::VARCHAR: {
 					auto *ptr = FlatVector::GetData<string_t>(input_column);
 					for (idx_t r = 0; r < input.size(); r++) {
 						if (!nullmask[r]) {
@@ -1174,7 +1184,7 @@ public:
 				}
 					// TODO date blob etc.
 				default:
-					throw NotImplementedException(SQLTypeToString((sql_types[i])));
+					throw NotImplementedException((sql_types[i].ToString()));
 				}
 			}
 
@@ -1227,7 +1237,7 @@ public:
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<TProtocol> protocol;
 	FileMetaData file_meta_data;
-	vector<SQLType> sql_types;
+	vector<LogicalType> sql_types;
 	std::mutex lock;
 };
 
@@ -1240,7 +1250,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 };
 
 unique_ptr<FunctionData> parquet_write_bind(ClientContext &context, CopyInfo &info, vector<string> &names,
-                                            vector<SQLType> &sql_types) {
+                                            vector<LogicalType> &sql_types) {
 	auto bind_data = make_unique<ParquetWriteBindData>();
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
@@ -1253,8 +1263,9 @@ unique_ptr<GlobalFunctionData> parquet_write_initialize_global(ClientContext &co
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	// initialize the file writer
-	global_state->writer = make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
-	                                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	global_state->writer =
+	    make_unique<BufferedFileWriter>(context.db.GetFileSystem(), parquet_bind.file_name.c_str(),
+	                                    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
 	global_state->writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;

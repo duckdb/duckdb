@@ -24,10 +24,10 @@ struct MergeOrder {
 enum MergeInfoType : uint8_t { SCALAR_MERGE_INFO = 1, CHUNK_MERGE_INFO = 2 };
 
 struct MergeInfo {
-	MergeInfo(MergeInfoType info_type, TypeId type) : info_type(info_type), type(type) {
+	MergeInfo(MergeInfoType info_type, LogicalType type) : info_type(info_type), type(type) {
 	}
 	MergeInfoType info_type;
-	TypeId type;
+	LogicalType type;
 };
 
 struct ScalarMergeInfo : public MergeInfo {
@@ -35,7 +35,7 @@ struct ScalarMergeInfo : public MergeInfo {
 	idx_t &pos;
 	SelectionVector result;
 
-	ScalarMergeInfo(MergeOrder &order, TypeId type, idx_t &pos)
+	ScalarMergeInfo(MergeOrder &order, LogicalType type, idx_t &pos)
 	    : MergeInfo(MergeInfoType::SCALAR_MERGE_INFO, type), order(order), pos(pos), result(STANDARD_VECTOR_SIZE) {
 	}
 };
