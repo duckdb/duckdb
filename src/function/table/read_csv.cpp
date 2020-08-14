@@ -16,8 +16,9 @@ struct ReadCSVFunctionData : public TableFunctionData {
 	unique_ptr<BufferedCSVReader> csv_reader;
 };
 
-static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                              vector<SQLType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Value> &inputs,
+                                              unordered_map<string, Value> &named_parameters,
+                                              vector<LogicalType> &return_types, vector<string> &names) {
 
 	if (!context.db.config.enable_copy) {
 		throw Exception("read_csv is disabled by configuration");
@@ -26,27 +27,42 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 
 	BufferedCSVReaderOptions options;
 	options.file_path = inputs[0].str_value;
-	options.auto_detect = true;
+	options.auto_detect = false;
 	options.header = false;
 	options.delimiter = ",";
 	options.quote = "\"";
 
-	for(auto &kv : named_parameters) {
-		if (kv.first == "sep") {
-			options.auto_detect = false;
+	for (auto &kv : named_parameters) {
+		if (kv.first == "auto_detect") {
+			options.auto_detect = kv.second.value_.boolean;
+		} else if (kv.first == "sep" || kv.first == "delim") {
 			options.delimiter = kv.second.str_value;
+			options.has_delimiter = true;
 		} else if (kv.first == "header") {
-			options.auto_detect = false;
 			options.header = kv.second.value_.boolean;
+			options.has_header = true;
 		} else if (kv.first == "quote") {
-			options.auto_detect = false;
 			options.quote = kv.second.str_value;
+			options.has_quote = true;
 		} else if (kv.first == "escape") {
-			options.auto_detect = false;
 			options.escape = kv.second.str_value;
+			options.has_escape = true;
 		} else if (kv.first == "nullstr") {
-			options.auto_detect = false;
 			options.null_str = kv.second.str_value;
+		} else if (kv.first == "sample_size") {
+			options.sample_size = kv.second.GetValue<int64_t>();
+			if (options.sample_size > STANDARD_VECTOR_SIZE) {
+				throw BinderException(
+				    "Unsupported parameter for SAMPLE_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+				    STANDARD_VECTOR_SIZE);
+			} else if (options.sample_size < 1) {
+				throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+			}
+		} else if (kv.first == "num_samples") {
+			options.num_samples = kv.second.GetValue<int64_t>();
+			if (options.num_samples < 1) {
+				throw BinderException("Unsupported parameter for NUM_SAMPLES: cannot be smaller than 1");
+			}
 		} else if (kv.first == "dateformat") {
 			options.has_date_format = true;
 			options.date_format.format_specifier = kv.second.str_value;
@@ -62,13 +78,12 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
 		} else if (kv.first == "columns") {
-			options.auto_detect = false;
 			for (auto &val : kv.second.struct_value) {
 				names.push_back(val.first);
-				if (val.second.type != TypeId::VARCHAR) {
+				if (val.second.type().id() != LogicalTypeId::VARCHAR) {
 					throw BinderException("read_csv requires a type specification as string");
 				}
-				return_types.push_back(TransformStringToSQLType(val.second.str_value.c_str()));
+				return_types.push_back(TransformStringToLogicalType(val.second.str_value.c_str()));
 			}
 			if (names.size() == 0) {
 				throw BinderException("read_csv requires at least a single column as input!");
@@ -91,24 +106,11 @@ static unique_ptr<FunctionData> read_csv_bind(ClientContext &context, vector<Val
 	return move(result);
 }
 
-static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
-                                                   vector<SQLType> &return_types, vector<string> &names) {
-
-	if (!context.db.config.enable_copy) {
-		throw Exception("read_csv_auto is disabled by configuration");
-	}
-	auto result = make_unique<ReadCSVFunctionData>();
-	BufferedCSVReaderOptions options;
-	options.auto_detect = true;
-	options.file_path = inputs[0].str_value;
-
-	result->csv_reader = make_unique<BufferedCSVReader>(context, move(options));
-
-	// TODO: print detected dialect from result->csv_reader->info
-	return_types.assign(result->csv_reader->sql_types.begin(), result->csv_reader->sql_types.end());
-	names.assign(result->csv_reader->col_names.begin(), result->csv_reader->col_names.end());
-
-	return move(result);
+static unique_ptr<FunctionData> read_csv_auto_bind(ClientContext &context, vector<Value> &inputs,
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
+	named_parameters["auto_detect"] = Value::BOOLEAN(true);
+	return read_csv_bind(context, inputs, named_parameters, return_types, names);
 }
 
 static void read_csv_info(ClientContext &context, vector<Value> &input, DataChunk &output, FunctionData *dataptr) {
@@ -116,23 +118,31 @@ static void read_csv_info(ClientContext &context, vector<Value> &input, DataChun
 	data.csv_reader->ParseCSV(output);
 }
 
+static void add_named_parameters(TableFunction &table_function) {
+	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
+	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
+	table_function.named_parameters["quote"] = LogicalType::VARCHAR;
+	table_function.named_parameters["escape"] = LogicalType::VARCHAR;
+	table_function.named_parameters["nullstr"] = LogicalType::VARCHAR;
+	table_function.named_parameters["columns"] = LogicalType::STRUCT;
+	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
+	table_function.named_parameters["num_samples"] = LogicalType::BIGINT;
+	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
+	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
+}
+
 void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet read_csv("read_csv");
+	TableFunction read_csv_function =
+	    TableFunction("read_csv", {LogicalType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
+	add_named_parameters(read_csv_function);
+	set.AddFunction(read_csv_function);
 
-	TableFunction read_csv_function = TableFunction({SQLType::VARCHAR}, read_csv_bind, read_csv_info, nullptr);
-	read_csv_function.named_parameters["sep"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["quote"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["escape"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["nullstr"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["columns"] = SQLType::STRUCT;
-	read_csv_function.named_parameters["header"] = SQLType::BOOLEAN;
-	read_csv_function.named_parameters["dateformat"] = SQLType::VARCHAR;
-	read_csv_function.named_parameters["timestampformat"] = SQLType::VARCHAR;
-
-	read_csv.AddFunction(move(read_csv_function));
-
-	set.AddFunction(read_csv);
-	set.AddFunction(TableFunction("read_csv_auto", {SQLType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr));
+	TableFunction read_csv_auto_function =
+	    TableFunction("read_csv_auto", {LogicalType::VARCHAR}, read_csv_auto_bind, read_csv_info, nullptr);
+	add_named_parameters(read_csv_auto_function);
+	set.AddFunction(read_csv_auto_function);
 }
 
 void BuiltinFunctions::RegisterReadFunctions() {

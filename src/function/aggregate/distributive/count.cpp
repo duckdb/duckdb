@@ -45,13 +45,13 @@ struct CountFunction : public BaseCountFunction {
 };
 
 AggregateFunction CountFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(SQLType(SQLTypeId::ANY),
-	                                                                                   SQLType::BIGINT);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(LogicalType(LogicalTypeId::ANY),
+	                                                                                   LogicalType::BIGINT);
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(SQLType(SQLTypeId::ANY),
-	                                                                                       SQLType::BIGINT);
+	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountStarFunction>(
+	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 }
 
 void CountFun::RegisterFunction(BuiltinFunctions &set) {

@@ -99,36 +99,35 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 };
 
-template <class T> static AggregateFunction GetFirstAggregateTemplated(SQLType type) {
+template <class T> static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
 }
 
-AggregateFunction FirstFun::GetFunction(SQLType type) {
-	switch (type.id) {
-	case SQLTypeId::BOOLEAN:
+AggregateFunction FirstFun::GetFunction(LogicalType type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 		return GetFirstAggregateTemplated<int8_t>(type);
-	case SQLTypeId::TINYINT:
+	case LogicalTypeId::TINYINT:
 		return GetFirstAggregateTemplated<int8_t>(type);
-	case SQLTypeId::SMALLINT:
+	case LogicalTypeId::SMALLINT:
 		return GetFirstAggregateTemplated<int16_t>(type);
-	case SQLTypeId::INTEGER:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
 		return GetFirstAggregateTemplated<int32_t>(type);
-	case SQLTypeId::BIGINT:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP:
 		return GetFirstAggregateTemplated<int64_t>(type);
-	case SQLTypeId::HUGEINT:
+	case LogicalTypeId::HUGEINT:
 		return GetFirstAggregateTemplated<hugeint_t>(type);
-	case SQLTypeId::FLOAT:
+	case LogicalTypeId::FLOAT:
 		return GetFirstAggregateTemplated<float>(type);
-	case SQLTypeId::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		return GetFirstAggregateTemplated<double>(type);
-	case SQLTypeId::DATE:
-		return GetFirstAggregateTemplated<date_t>(type);
-	case SQLTypeId::TIMESTAMP:
-		return GetFirstAggregateTemplated<timestamp_t>(type);
-	case SQLTypeId::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		return GetFirstAggregateTemplated<interval_t>(type);
-	case SQLTypeId::VARCHAR:
-    case SQLTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 		                                                   FirstFunctionString>(type, type);
 	default:
@@ -138,7 +137,7 @@ AggregateFunction FirstFun::GetFunction(SQLType type) {
 
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
-	for (auto type : SQLType::ALL_TYPES) {
+	for (auto type : LogicalType::ALL_TYPES) {
 		first.AddFunction(FirstFun::GetFunction(type));
 	}
 	set.AddFunction(first);

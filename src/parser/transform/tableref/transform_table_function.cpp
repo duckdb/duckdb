@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformRangeFunction(PGRangeFunction *root) {
 	if (root->lateral) {

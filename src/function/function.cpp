@@ -41,8 +41,8 @@ void BuiltinFunctions::Initialize() {
 
 	// binder functions
 	// FIXME shouldn't be here
-	AddFunction(ScalarFunction("alias", {SQLType::ANY}, SQLType::VARCHAR, nullptr));
-	AddFunction(ScalarFunction("typeof", {SQLType::ANY}, SQLType::VARCHAR, nullptr));
+	AddFunction(ScalarFunction("alias", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
+	AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, nullptr));
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
@@ -100,27 +100,27 @@ void BuiltinFunctions::AddFunction(CopyFunction function) {
 	catalog.CreateCopyFunction(context, &info);
 }
 
-string Function::CallToString(string name, vector<SQLType> arguments) {
+string Function::CallToString(string name, vector<LogicalType> arguments) {
 	string result = name + "(";
 	result += StringUtil::Join(arguments, arguments.size(), ", ",
-	                           [](const SQLType &argument) { return SQLTypeToString(argument); });
+	                           [](const LogicalType &argument) { return argument.ToString(); });
 	return result + ")";
 }
 
-string Function::CallToString(string name, vector<SQLType> arguments, SQLType return_type) {
+string Function::CallToString(string name, vector<LogicalType> arguments, LogicalType return_type) {
 	string result = CallToString(name, arguments);
-	result += " -> " + SQLTypeToString(return_type);
+	result += " -> " + return_type.ToString();
 	return result;
 }
 
-static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<LogicalType> &arguments) {
 	if (arguments.size() < func.arguments.size()) {
 		// not enough arguments to fulfill the non-vararg part of the function
 		return -1;
 	}
 	int64_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		SQLType arg_type = i < func.arguments.size() ? func.arguments[i] : func.varargs;
+		LogicalType arg_type = i < func.arguments.size() ? func.arguments[i] : func.varargs;
 		if (arguments[i] == arg_type) {
 			// arguments match: do nothing
 			continue;
@@ -137,7 +137,7 @@ static int64_t BindVarArgsFunctionCost(SimpleFunction &func, vector<SQLType> &ar
 	return cost;
 }
 
-static int64_t BindFunctionCost(SimpleFunction &func, vector<SQLType> &arguments) {
+static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &arguments) {
 	if (func.HasVarArgs()) {
 		// special case varargs function
 		return BindVarArgsFunctionCost(func, arguments);
@@ -165,7 +165,7 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<SQLType> &arguments
 }
 
 template <class T>
-static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<SQLType> &arguments) {
+static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector<LogicalType> &arguments) {
 	idx_t best_function = INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> conflicting_functions;
@@ -200,7 +200,7 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		}
 		throw BinderException("Could not choose a best candidate function for the function call \"%s\". In order to "
 		                      "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str.c_str(), candidate_str.c_str());
+		                      call_str, candidate_str);
 	}
 	if (best_function == INVALID_INDEX) {
 		// no matching function was found, throw an error
@@ -211,36 +211,36 @@ static idx_t BindFunctionFromArguments(string name, vector<T> &functions, vector
 		}
 		throw BinderException("No function matches the given name and argument types '%s'. You might need to add "
 		                      "explicit type casts.\n\tCandidate functions:\n%s",
-		                      call_str.c_str(), candidate_str.c_str());
+		                      call_str, candidate_str);
 	}
 	return best_function;
 }
 
-idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<SQLType> &arguments) {
+idx_t Function::BindFunction(string name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments) {
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<SQLType> &arguments) {
+idx_t Function::BindFunction(string name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments) {
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<SQLType> &arguments) {
+idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vector<LogicalType> &arguments) {
 	return BindFunctionFromArguments(name, functions, arguments);
 }
 
-void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<SQLType> &types) {
+void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
-		if (target_type.id != SQLTypeId::ANY && types[i] != target_type) {
+		if (target_type.id() != LogicalTypeId::ANY && types[i] != target_type) {
 			// type of child does not match type of function argument: add a cast
-			children[i] = BoundCastExpression::AddCastToType(move(children[i]), types[i], target_type);
+			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 			types[i] = target_type;
 		}
 	}
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, string schema,
-                                                                       string name, vector<SQLType> &arguments,
+                                                                       string name, vector<LogicalType> &arguments,
                                                                        vector<unique_ptr<Expression>> children,
                                                                        bool is_operator) {
 	// bind the function
@@ -250,9 +250,11 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	                                          move(children), is_operator);
 }
 
-unique_ptr<BoundFunctionExpression>
-ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func, vector<SQLType> &arguments,
-                                   vector<unique_ptr<Expression>> children, bool is_operator) {
+unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
+                                                                       ScalarFunctionCatalogEntry &func,
+                                                                       vector<LogicalType> &arguments,
+                                                                       vector<unique_ptr<Expression>> children,
+                                                                       bool is_operator) {
 	// bind the function
 	idx_t best_function = Function::BindFunction(func.name, func.functions, arguments);
 	// found a matching function!
@@ -270,4 +272,4 @@ ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalog
 	return result;
 }
 
-}
+} // namespace duckdb

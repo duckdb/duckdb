@@ -12,24 +12,24 @@ using namespace std;
 
 namespace duckdb {
 
-static SQLType ResolveWindowExpressionType(ExpressionType window_type, SQLType child_type) {
+static LogicalType ResolveWindowExpressionType(ExpressionType window_type, LogicalType child_type) {
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST:
-		return SQLType(SQLTypeId::DOUBLE);
+		return LogicalType(LogicalTypeId::DOUBLE);
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_NTILE:
-		return SQLType::BIGINT;
+		return LogicalType::BIGINT;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
-		assert(child_type.id != SQLTypeId::INVALID); // "Window function needs an expression"
+		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
 	default:
 		assert(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
-		assert(child_type.id != SQLTypeId::INVALID); // "Window function needs an expression"
+		assert(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	}
 }
@@ -73,17 +73,17 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		return BindResult(error);
 	}
 	// successfully bound all children: create bound window function
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
 		assert(child.get());
 		assert(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = (BoundExpression &)*child;
-		types.push_back(bound.sql_type);
-		children.push_back(GetExpression(child));
+		types.push_back(bound.expr->return_type);
+		children.push_back(move(bound.expr));
 	}
 	//  Determine the function type.
-	SQLType sql_type;
+	LogicalType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
 	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
@@ -104,7 +104,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		sql_type = aggregate->return_type;
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
-		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? SQLType() : types[0]);
+		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? LogicalType() : types[0]);
 	}
 	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate));
 	result->children = move(children);
@@ -127,7 +127,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	result->end = window.end;
 
 	// create a BoundColumnRef that references this entry
-	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->sql_type,
+	auto colref = make_unique<BoundColumnRefExpression>(window.GetName(), result->return_type,
 	                                                    ColumnBinding(node.window_index, node.windows.size()), depth);
 	// move the WINDOW expression into the set of bound windows
 	node.windows.push_back(move(result));

@@ -6,14 +6,12 @@
 namespace duckdb {
 using namespace std;
 
-BoundConstantExpression::BoundConstantExpression(SQLType return_type, Value value)
-    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.type, move(return_type)), value(value) {
-	assert(value.type == GetInternalType(sql_type));
-	this->value.SetSQLType(sql_type);
+BoundConstantExpression::BoundConstantExpression(Value value)
+    : Expression(ExpressionType::VALUE_CONSTANT, ExpressionClass::BOUND_CONSTANT, value.type()), value(value) {
 }
 
 string BoundConstantExpression::ToString() const {
-	return value.ToString(sql_type);
+	return value.ToString();
 }
 
 bool BoundConstantExpression::Equals(const BaseExpression *other_) const {
@@ -30,7 +28,7 @@ hash_t BoundConstantExpression::Hash() const {
 }
 
 unique_ptr<Expression> BoundConstantExpression::Copy() {
-	auto copy = make_unique<BoundConstantExpression>(sql_type, value);
+	auto copy = make_unique<BoundConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

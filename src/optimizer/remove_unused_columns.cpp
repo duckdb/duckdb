@@ -61,7 +61,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// removed all expressions from the aggregate: push a COUNT(*)
 				auto count_star_fun = CountStarFun::GetFunction();
 				aggr.expressions.push_back(
-				    make_unique<BoundAggregateExpression>(count_star_fun.return_type, move(count_star_fun), false));
+				    make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false));
 			}
 		}
 
@@ -127,7 +127,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
-				proj.expressions.push_back(make_unique<BoundConstantExpression>(SQLType::INTEGER, Value::INTEGER(42)));
+				proj.expressions.push_back(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
 			}
 		}
 		// then recurse into the children of this projection

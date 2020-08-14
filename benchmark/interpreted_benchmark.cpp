@@ -13,7 +13,7 @@ static string ParseGroupFromPath(string file) {
 	string extension = "";
 	// move backwards to the last slash
 	int group_begin = -1, group_end = -1;
-	for(size_t i = file.size(); i > 0; i--) {
+	for (size_t i = file.size(); i > 0; i--) {
 		if (file[i - 1] == '/' || file[i - 1] == '\\') {
 			if (group_end == -1) {
 				group_end = i - 1;
@@ -39,8 +39,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	}
 };
 
-InterpretedBenchmark::InterpretedBenchmark(string full_path) :
-	Benchmark(true, full_path, ParseGroupFromPath(full_path)), benchmark_path(full_path) {
+InterpretedBenchmark::InterpretedBenchmark(string full_path)
+    : Benchmark(true, full_path, ParseGroupFromPath(full_path)), benchmark_path(full_path) {
 }
 
 void InterpretedBenchmark::LoadBenchmark() {
@@ -96,7 +96,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 			if (splits.size() <= 1 || splits[1].size() == 0) {
 				throw std::runtime_error("result must be followed by a column count (e.g. result III)");
 			}
-			for(int i = 0; i < splits[1].size(); i++) {
+			for (idx_t i = 0; i < splits[1].size(); i++) {
 				if (splits[1][i] != 'i') {
 					throw std::runtime_error("result must be followed by a column count (e.g. result III)");
 				}
@@ -106,14 +106,15 @@ void InterpretedBenchmark::LoadBenchmark() {
 			while (std::getline(infile, line)) {
 				linenr++;
 				auto result_splits = StringUtil::Split(line, "\t");
-				if (result_splits.size() != result_column_count) {
-					throw std::runtime_error("error on line " + to_string(linenr) + ", expected " + to_string(result_column_count) + " values but got " + to_string(result_splits.size()));
+				if ((int64_t)result_splits.size() != result_column_count) {
+					throw std::runtime_error("error on line " + to_string(linenr) + ", expected " +
+					                         to_string(result_column_count) + " values but got " +
+					                         to_string(result_splits.size()));
 				}
 				result_values.push_back(move(result_splits));
 			}
 		}
 	}
-
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
@@ -128,16 +129,15 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize() {
 }
 
 void InterpretedBenchmark::Run(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &) *state_;
+	auto &state = (InterpretedBenchmarkState &)*state_;
 	state.result = state.con.Query(run_query);
 }
 
 void InterpretedBenchmark::Cleanup(BenchmarkState *state) {
-
 }
 
 string InterpretedBenchmark::Verify(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &) *state_;
+	auto &state = (InterpretedBenchmarkState &)*state_;
 	if (!state.result->success) {
 		return state.result->error;
 	}
@@ -146,30 +146,33 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_) {
 		return string();
 	}
 	// compare the column count
-	if (state.result->column_count() != result_column_count) {
-		return StringUtil::Format("Error in result: expected %lld columns but got %lld", (int64_t) result_column_count, (int64_t) state.result->column_count());
+	if ((int64_t)state.result->column_count() != result_column_count) {
+		return StringUtil::Format("Error in result: expected %lld columns but got %lld", (int64_t)result_column_count,
+		                          (int64_t)state.result->column_count());
 	}
 	// compare row count
 	if (state.result->collection.count != result_values.size()) {
-		return StringUtil::Format("Error in result: expected %lld rows but got %lld", (int64_t) state.result->collection.count, (int64_t) result_values.size());
+		return StringUtil::Format("Error in result: expected %lld rows but got %lld",
+		                          (int64_t)state.result->collection.count, (int64_t)result_values.size());
 	}
 	// compare values
-	for(int64_t r = 0; r < (int64_t) result_values.size(); r++) {
-		for(int64_t c = 0; c < result_column_count; c++) {
+	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
+		for (int64_t c = 0; c < result_column_count; c++) {
 			auto value = state.result->collection.GetValue(c, r);
 			Value verify_val(result_values[r][c]);
-			verify_val = verify_val.CastAs(SQLType::VARCHAR, state.result->sql_types[c]);
+			verify_val = verify_val.CastAs(state.result->types[c]);
 			if (!Value::ValuesAreEqual(value, verify_val)) {
-				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r, c, verify_val.ToString().c_str(), value.ToString().c_str());
+				return StringUtil::Format(
+				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r, c,
+				    verify_val.ToString().c_str(), value.ToString().c_str());
 			}
 		}
 	}
 	return string();
 }
 
-
 void InterpretedBenchmark::Interrupt(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &) *state_;
+	auto &state = (InterpretedBenchmarkState &)*state_;
 	state.con.Interrupt();
 }
 
@@ -178,8 +181,8 @@ string InterpretedBenchmark::BenchmarkInfo() {
 }
 
 string InterpretedBenchmark::GetLogOutput(BenchmarkState *state_) {
-	auto &state = (InterpretedBenchmarkState &) *state_;
+	auto &state = (InterpretedBenchmarkState &)*state_;
 	return state.con.context->profiler.ToJSON();
 }
 
-}
+} // namespace duckdb

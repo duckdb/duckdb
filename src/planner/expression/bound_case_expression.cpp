@@ -5,7 +5,7 @@ using namespace std;
 
 BoundCaseExpression::BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
                                          unique_ptr<Expression> res_if_false)
-    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, res_if_true->return_type, res_if_true->sql_type), check(move(check)),
+    : Expression(ExpressionType::CASE_EXPR, ExpressionClass::BOUND_CASE, res_if_true->return_type), check(move(check)),
       result_if_true(move(res_if_true)), result_if_false(move(res_if_false)) {
 }
 

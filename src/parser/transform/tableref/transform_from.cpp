@@ -4,6 +4,7 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
 unique_ptr<TableRef> Transformer::TransformFrom(PGList *root) {
 	if (!root) {

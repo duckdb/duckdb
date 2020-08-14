@@ -32,21 +32,19 @@
 #include "pg_functions.hpp"
 
 
+
 #include "fmgr.hpp"
 #include "nodes/makefuncs.hpp"
 #include "nodes/nodeFuncs.hpp"
-//#include "utils/lsyscache.hpp"
 
+namespace duckdb_libpgquery {
 
 /*
  * makeAExpr -
  *		makes an PGAExpr node
  */
-PGAExpr *
-makeAExpr(PGAExpr_Kind kind, PGList *name,
-		   PGNode *lexpr, PGNode *rexpr, int location)
-{
-	PGAExpr	   *a = makeNode(PGAExpr);
+PGAExpr *makeAExpr(PGAExpr_Kind kind, PGList *name, PGNode *lexpr, PGNode *rexpr, int location) {
+	PGAExpr *a = makeNode(PGAExpr);
 
 	a->kind = kind;
 	a->name = name;
@@ -60,14 +58,11 @@ makeAExpr(PGAExpr_Kind kind, PGList *name,
  * makeSimpleAExpr -
  *		As above, given a simple (unqualified) operator name
  */
-PGAExpr *
-makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
-				 PGNode *lexpr, PGNode *rexpr, int location)
-{
-	PGAExpr	   *a = makeNode(PGAExpr);
+PGAExpr *makeSimpleAExpr(PGAExpr_Kind kind, const char *name, PGNode *lexpr, PGNode *rexpr, int location) {
+	PGAExpr *a = makeNode(PGAExpr);
 
 	a->kind = kind;
-	a->name = list_make1(makeString((char *) name));
+	a->name = list_make1(makeString((char *)name));
 	a->lexpr = lexpr;
 	a->rexpr = rexpr;
 	a->location = location;
@@ -79,13 +74,11 @@ makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
  *	  creates a PGVar node
  */
 
-
 /*
  * makeVarFromTargetEntry -
  *		convenience function to create a same-level PGVar node from a
  *		PGTargetEntry
  */
-
 
 /*
  * makeWholeRowVar -
@@ -104,12 +97,10 @@ makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
  * value that the whole-row notation might otherwise suggest.
  */
 
-
 /*
  * makeTargetEntry -
  *	  creates a PGTargetEntry node
  */
-
 
 /*
  * flatCopyTargetEntry -
@@ -119,18 +110,15 @@ makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
  * a new expression.
  */
 
-
 /*
  * makeFromExpr -
  *	  creates a PGFromExpr node
  */
 
-
 /*
  * makeConst -
  *	  creates a PGConst node
  */
-
 
 /*
  * makeNullConst -
@@ -140,27 +128,23 @@ makeSimpleAExpr(PGAExpr_Kind kind, const char *name,
  * storage properties.
  */
 
-
 /*
  * makeBoolConst -
  *	  creates a PGConst node representing a boolean value (can be NULL too)
  */
 
-
 /*
  * makeBoolExpr -
  *	  creates a PGBoolExpr node
  */
-PGExpr *
-makeBoolExpr(PGBoolExprType boolop, PGList *args, int location)
-{
-	PGBoolExpr   *b = makeNode(PGBoolExpr);
+PGExpr *makeBoolExpr(PGBoolExprType boolop, PGList *args, int location) {
+	PGBoolExpr *b = makeNode(PGBoolExpr);
 
 	b->boolop = boolop;
 	b->args = args;
 	b->location = location;
 
-	return (PGExpr *) b;
+	return (PGExpr *)b;
 }
 
 /*
@@ -169,10 +153,8 @@ makeBoolExpr(PGBoolExprType boolop, PGList *args, int location)
  *
  * NOTE: the given name is copied, but the colnames list (if any) isn't.
  */
-PGAlias *
-makeAlias(const char *aliasname, PGList *colnames)
-{
-	PGAlias	   *a = makeNode(PGAlias);
+PGAlias *makeAlias(const char *aliasname, PGList *colnames) {
+	PGAlias *a = makeNode(PGAlias);
 
 	a->aliasname = pstrdup(aliasname);
 	a->colnames = colnames;
@@ -185,15 +167,12 @@ makeAlias(const char *aliasname, PGList *colnames)
  *	  creates a PGRelabelType node
  */
 
-
 /*
  * makeRangeVar -
  *	  creates a PGRangeVar node (rather oversimplified case)
  */
-PGRangeVar *
-makeRangeVar(char *schemaname, char *relname, int location)
-{
-	PGRangeVar   *r = makeNode(PGRangeVar);
+PGRangeVar *makeRangeVar(char *schemaname, char *relname, int location) {
+	PGRangeVar *r = makeNode(PGRangeVar);
 
 	r->catalogname = NULL;
 	r->schemaname = schemaname;
@@ -212,9 +191,7 @@ makeRangeVar(char *schemaname, char *relname, int location)
  *
  * typmod is defaulted, but can be changed later by caller.
  */
-PGTypeName *
-makeTypeName(char *typnam)
-{
+PGTypeName *makeTypeName(char *typnam) {
 	return makeTypeNameFromNameList(list_make1(makeString(typnam)));
 }
 
@@ -224,10 +201,8 @@ makeTypeName(char *typnam)
  *
  * typmod is defaulted, but can be changed later by caller.
  */
-PGTypeName *
-makeTypeNameFromNameList(PGList *names)
-{
-	PGTypeName   *n = makeNode(PGTypeName);
+PGTypeName *makeTypeNameFromNameList(PGList *names) {
+	PGTypeName *n = makeNode(PGTypeName);
 
 	n->names = names;
 	n->typmods = NIL;
@@ -241,7 +216,6 @@ makeTypeNameFromNameList(PGList *names)
  *	build a PGTypeName node to represent a type already known by OID/typmod.
  */
 
-
 /*
  * makeColumnDef -
  *	build a PGColumnDef node to represent a simple column definition.
@@ -250,14 +224,12 @@ makeTypeNameFromNameList(PGList *names)
  * Other properties are all basic to start with.
  */
 
-
 /*
  * makeFuncExpr -
  *	build an expression tree representing a function call.
  *
  * The argument expressions must have been transformed already.
  */
-
 
 /*
  * makeDefElem -
@@ -266,13 +238,11 @@ makeTypeNameFromNameList(PGList *names)
  * This is sufficient for the "typical" case with an unqualified option name
  * and no special action.
  */
-PGDefElem *
-makeDefElem(const char *name, PGNode *arg, int location)
-{
-	PGDefElem    *res = makeNode(PGDefElem);
+PGDefElem *makeDefElem(const char *name, PGNode *arg, int location) {
+	PGDefElem *res = makeNode(PGDefElem);
 
 	res->defnamespace = NULL;
-	res->defname = (char*) name;
+	res->defname = (char *)name;
 	res->arg = arg;
 	res->defaction = PG_DEFELEM_UNSPEC;
 	res->location = location;
@@ -284,14 +254,12 @@ makeDefElem(const char *name, PGNode *arg, int location)
  * makeDefElemExtended -
  *	build a PGDefElem node with all fields available to be specified
  */
-PGDefElem *
-makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg,
-					PGDefElemAction defaction, int location)
-{
-	PGDefElem    *res = makeNode(PGDefElem);
+PGDefElem *makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg, PGDefElemAction defaction,
+                               int location) {
+	PGDefElem *res = makeNode(PGDefElem);
 
-	res->defnamespace = (char*) nameSpace;
-	res->defname = (char*) name;
+	res->defnamespace = (char *)nameSpace;
+	res->defname = (char *)name;
 	res->arg = arg;
 	res->defaction = defaction;
 	res->location = location;
@@ -305,10 +273,8 @@ makeDefElemExtended(const char *nameSpace, const char *name, PGNode *arg,
  * Initialize a PGFuncCall struct with the information every caller must
  * supply.  Any non-default parameters have to be inserted by the caller.
  */
-PGFuncCall *
-makeFuncCall(PGList *name, PGList *args, int location)
-{
-	PGFuncCall   *n = makeNode(PGFuncCall);
+PGFuncCall *makeFuncCall(PGList *name, PGList *args, int location) {
+	PGFuncCall *n = makeNode(PGFuncCall);
 
 	n->funcname = name;
 	n->args = args;
@@ -327,13 +293,12 @@ makeFuncCall(PGList *name, PGList *args, int location)
  * makeGroupingSet
  *
  */
-PGGroupingSet *
-makeGroupingSet(GroupingSetKind kind, PGList *content, int location)
-{
+PGGroupingSet *makeGroupingSet(GroupingSetKind kind, PGList *content, int location) {
 	PGGroupingSet *n = makeNode(PGGroupingSet);
 
 	n->kind = kind;
 	n->content = content;
 	n->location = location;
 	return n;
+}
 }

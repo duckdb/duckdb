@@ -15,10 +15,9 @@
 #pragma once
 
 #include "nodes/parsenodes.hpp"
+namespace duckdb_libpgquery {
 
-
-typedef enum PGBackslashQuoteType
-{
+typedef enum PGBackslashQuoteType {
 	PG_BACKSLASH_QUOTE_OFF,
 	PG_BACKSLASH_QUOTE_ON,
 	PG_BACKSLASH_QUOTE_SAFE_ENCODING
@@ -31,3 +30,4 @@ PGList *raw_parser(const char *str);
 PGList *SystemFuncName(const char *name);
 PGTypeName *SystemTypeName(const char *name);
 
+}

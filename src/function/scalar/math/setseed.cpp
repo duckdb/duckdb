@@ -47,7 +47,7 @@ unique_ptr<FunctionData> setseed_bind(BoundFunctionExpression &expr, ClientConte
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(
-	    ScalarFunction("setseed", {SQLType::DOUBLE}, SQLType::SQLNULL, setseed_function, true, setseed_bind));
+	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, setseed_function, true, setseed_bind));
 }
 
 } // namespace duckdb

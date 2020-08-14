@@ -55,7 +55,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 			return false;
 		}
 
-		auto &types = result->sql_types;
+		auto &types = result->types;
 		for (size_t k = 0; k < result->collection.count; k++) {
 			int rc = SQLITE_ERROR;
 			for (size_t j = 0; j < types.size(); j++) {
@@ -65,28 +65,28 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 					rc = sqlite3_bind_null(stmt, bind_index);
 				} else {
 					// bind based on the type
-					switch (types[j].id) {
-					case SQLTypeId::BOOLEAN:
-					case SQLTypeId::TINYINT:
-					case SQLTypeId::SMALLINT:
-					case SQLTypeId::INTEGER:
+					switch (types[j].id()) {
+					case LogicalTypeId::BOOLEAN:
+					case LogicalTypeId::TINYINT:
+					case LogicalTypeId::SMALLINT:
+					case LogicalTypeId::INTEGER:
 						rc = sqlite3_bind_int(stmt, bind_index, (int)value.GetValue<int64_t>());
 						break;
-					case SQLTypeId::BIGINT:
+					case LogicalTypeId::BIGINT:
 						rc = sqlite3_bind_int64(stmt, bind_index, (sqlite3_int64)value.GetValue<int64_t>());
 						break;
-					case SQLTypeId::DATE: {
+					case LogicalTypeId::DATE: {
 						auto date_str = value.ToString() + " 00:00:00";
 						rc = sqlite3_bind_text(stmt, bind_index, date_str.c_str(), -1, SQLITE_TRANSIENT);
 						break;
 					}
-					case SQLTypeId::TIMESTAMP:
+					case LogicalTypeId::TIMESTAMP:
 						// TODO
 						throw NotImplementedException("Transferring timestamps is not supported yet");
-					case SQLTypeId::DOUBLE:
+					case LogicalTypeId::DOUBLE:
 						rc = sqlite3_bind_double(stmt, bind_index, value.value_.double_);
 						break;
-					case SQLTypeId::VARCHAR:
+					case LogicalTypeId::VARCHAR:
 						rc = sqlite3_bind_text(stmt, bind_index, value.ToString().c_str(), -1, SQLITE_TRANSIENT);
 						break;
 					default:
@@ -114,7 +114,7 @@ bool TransferDatabase(Connection &con, sqlite3 *sqlite) {
 	return true;
 }
 
-unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sqlite, std::string query,
+unique_ptr<QueryResult> QueryDatabase(vector<LogicalType> result_types, sqlite3 *sqlite, std::string query,
                                       volatile int &interrupt) {
 	if (!sqlite) {
 		return nullptr;
@@ -129,17 +129,11 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 	for (int i = 0; i < col_count; i++) {
 		names.push_back(sqlite3_column_name(stmt, i));
 	}
-	// figure out the types of the columns
-	// construct the types of the result
-	vector<TypeId> typeids;
-	for (auto &tp : result_types) {
-		typeids.push_back(GetInternalType(tp));
-	}
 
 	// construct the result
-	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT, result_types, typeids, std::move(names));
+	auto result = make_unique<MaterializedQueryResult>(StatementType::SELECT_STATEMENT, result_types, std::move(names));
 	DataChunk result_chunk;
-	result_chunk.Initialize(typeids);
+	result_chunk.Initialize(result_types);
 	int rc = SQLITE_ERROR;
 	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW && interrupt == 0) {
 		// get the value for each of the columns
@@ -151,31 +145,31 @@ unique_ptr<QueryResult> QueryDatabase(vector<SQLType> result_types, sqlite3 *sql
 			} else {
 				auto dataptr = FlatVector::GetData(result_chunk.data[i]);
 				// normal value, convert type
-				switch (result_types[i].id) {
-				case SQLTypeId::BOOLEAN:
+				switch (result_types[i].id()) {
+				case LogicalTypeId::BOOLEAN:
 					((int8_t *)dataptr)[result_idx] = sqlite3_column_int(stmt, i) == 0 ? 0 : 1;
 					break;
-				case SQLTypeId::TINYINT:
+				case LogicalTypeId::TINYINT:
 					((int8_t *)dataptr)[result_idx] = (int8_t)sqlite3_column_int(stmt, i);
 					break;
-				case SQLTypeId::SMALLINT:
+				case LogicalTypeId::SMALLINT:
 					((int16_t *)dataptr)[result_idx] = (int16_t)sqlite3_column_int(stmt, i);
 					break;
-				case SQLTypeId::INTEGER:
+				case LogicalTypeId::INTEGER:
 					((int32_t *)dataptr)[result_idx] = (int32_t)sqlite3_column_int(stmt, i);
 					break;
-				case SQLTypeId::BIGINT:
+				case LogicalTypeId::BIGINT:
 					((int64_t *)dataptr)[result_idx] = (int64_t)sqlite3_column_int64(stmt, i);
 					break;
-				case SQLTypeId::DOUBLE:
+				case LogicalTypeId::DOUBLE:
 					((double *)dataptr)[result_idx] = (double)sqlite3_column_double(stmt, i);
 					break;
-				case SQLTypeId::VARCHAR: {
+				case LogicalTypeId::VARCHAR: {
 					Value result((char *)sqlite3_column_text(stmt, i));
 					result_chunk.SetValue(i, result_idx, result);
 					break;
 				}
-				case SQLTypeId::DATE: {
+				case LogicalTypeId::DATE: {
 					auto unix_time = sqlite3_column_int64(stmt, i);
 					((date_t *)dataptr)[result_idx] = Date::EpochToDate(unix_time);
 					break;

@@ -26,7 +26,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto constant_expr = (BoundConstantExpression *)bindings[1];
 	assert(root->children.size() == 2);
 	if (constant_expr->value.is_null) {
-		return make_unique<BoundConstantExpression>(root->sql_type, Value(root->return_type));
+		return make_unique<BoundConstantExpression>(Value(root->return_type));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
@@ -35,7 +35,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-	assert(constant_value.type == constant_expr->return_type);
+	assert(constant_value.type() == constant_expr->return_type);
 	string patt_str = string(((string_t)constant_value.str_value).GetData());
 
 	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");
@@ -69,7 +69,7 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	expr->children[1] = make_unique<BoundConstantExpression>(expr->children[1]->sql_type, Value(pattern));
+	expr->children[1] = make_unique<BoundConstantExpression>(Value(pattern));
 
 	return expr->Copy();
 }

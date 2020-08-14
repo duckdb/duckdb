@@ -56,7 +56,7 @@ template <bool IS_UPPER> static string_t strcase_unicode(Vector &result, const c
 }
 
 template <bool IS_UPPER> static void caseconvert_function(Vector &input, Vector &result, idx_t count) {
-	assert(input.type == TypeId::VARCHAR);
+	assert(input.type.id() == LogicalTypeId::VARCHAR);
 
 	UnaryExecutor::Execute<string_t, string_t, true>(input, result, count, [&](string_t input) {
 		auto input_data = input.GetData();
@@ -76,7 +76,7 @@ static void caseconvert_lower_function(DataChunk &args, ExpressionState &state, 
 }
 
 ScalarFunction LowerFun::GetFunction() {
-	return ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_lower_function);
+	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, caseconvert_lower_function);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
@@ -85,7 +85,7 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"upper", "ucase"},
-	                ScalarFunction({SQLType::VARCHAR}, SQLType::VARCHAR, caseconvert_upper_function));
+	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, caseconvert_upper_function));
 }
 
 } // namespace duckdb

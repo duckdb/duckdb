@@ -14,9 +14,7 @@ namespace duckdb {
 
 class BoundOperatorExpression : public Expression {
 public:
-	BoundOperatorExpression(ExpressionType type, TypeId return_type, SQLType sql_type);
-	BoundOperatorExpression(ExpressionType type, SQLType sql_type) :
-		BoundOperatorExpression(type, GetInternalType(sql_type), move(sql_type)) {}
+	BoundOperatorExpression(ExpressionType type, LogicalType return_type);
 
 	vector<unique_ptr<Expression>> children;
 

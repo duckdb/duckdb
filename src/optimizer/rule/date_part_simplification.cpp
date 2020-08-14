@@ -28,7 +28,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 
 	if (constant.is_null) {
 		// NULL specifier: return constant NULL
-		return make_unique<BoundConstantExpression>(date_part.sql_type, Value(date_part.return_type));
+		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(constant.str_value);
@@ -89,7 +89,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 		return nullptr;
 	}
 	// found a replacement function: bind it
-	vector<SQLType> arguments{date_part.function.arguments[1]};
+	vector<LogicalType> arguments{date_part.function.arguments[1]};
 	vector<unique_ptr<Expression>> children;
 	children.push_back(move(date_part.children[1]));
 

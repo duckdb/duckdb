@@ -22,7 +22,7 @@ OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, Selec
 }
 
 unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &expr, idx_t index) {
-	return make_unique<BoundColumnRefExpression>(expr.GetName(), TypeId::INVALID, SQLType(SQLTypeId::INVALID),
+	return make_unique<BoundColumnRefExpression>(expr.GetName(), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
 }
 
@@ -38,7 +38,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
 		auto &constant = (ConstantExpression &)*expr;
 		// ORDER BY a constant
-		if (!TypeIsIntegral(constant.value.type)) {
+		if (!constant.value.type().IsIntegral()) {
 			// non-integral expression, we just leave the constant here.
 			// ORDER BY <constant> has no effect
 			// CONTROVERSIAL: maybe we should throw an error
@@ -89,7 +89,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// no extra list specified: we cannot push an extra ORDER BY clause
 		throw BinderException("Could not ORDER BY column \"%s\": add the expression/function to every SELECT, or move "
 		                      "the UNION into a FROM clause.",
-		                      expr->ToString().c_str());
+		                      expr->ToString());
 	}
 	// otherwise we need to push the ORDER BY entry into the select list
 	auto result = CreateProjectionReference(*expr, extra_list->size());

@@ -59,7 +59,8 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 }
 
 BindResult SelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
-	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), info.group_types[group_index],
+	auto &group = node.groups[group_index];
+	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
 	                                                        ColumnBinding(node.group_index, group_index), depth));
 }
 

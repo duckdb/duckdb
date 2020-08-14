@@ -16,10 +16,10 @@ vector<ColumnBinding> LogicalTableFunction::GetColumnBindings() {
 void LogicalTableFunction::ResolveTypes() {
 	for (auto col_idx : column_ids) {
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			types.push_back(TypeId::INT64);
+			types.push_back(LOGICAL_ROW_TYPE);
 			continue;
 		}
-		types.push_back(GetInternalType(return_types[col_idx]));
+		types.push_back(return_types[col_idx]);
 	}
 }
 

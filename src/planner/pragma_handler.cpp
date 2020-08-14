@@ -38,7 +38,7 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		auto &select_node = (SelectNode &)*select.node;
 		auto &table_function = (TableFunctionRef &)*select_node.from_table;
 		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
+		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
 		return select_statement;
 	} else if (keyword == "show_tables") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {
@@ -83,7 +83,7 @@ unique_ptr<SQLStatement> PragmaHandler::HandlePragma(PragmaInfo &pragma) {
 		auto &select_node = (SelectNode &)*select.node;
 		auto &table_function = (TableFunctionRef &)*select_node.from_table;
 		auto &function = (FunctionExpression &)*table_function.function;
-		function.children.push_back(make_unique<ConstantExpression>(SQLTypeId::VARCHAR, pragma.parameters[0]));
+		function.children.push_back(make_unique<ConstantExpression>(pragma.parameters[0]));
 		return select_statement;
 	} else if (keyword == "version") {
 		if (pragma.pragma_type != PragmaType::NOTHING) {

@@ -105,7 +105,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 	// figure out the types of the setop result by picking the max of both
 	for (idx_t i = 0; i < result->left->types.size(); i++) {
-		auto result_type = MaxSQLType(result->left->types[i], result->right->types[i]);
+		auto result_type = MaxLogicalType(result->left->types[i], result->right->types[i]);
 		result->types.push_back(result_type);
 	}
 

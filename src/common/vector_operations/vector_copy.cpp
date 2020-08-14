@@ -78,48 +78,48 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 	}
 
 	// now copy over the data
-	switch (source.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	switch (source.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		TemplatedCopy<int8_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		TemplatedCopy<int16_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::POINTER:
+	case PhysicalType::POINTER:
 		TemplatedCopy<uintptr_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		TemplatedCopy<double>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		TemplatedCopy<interval_t>(source, sel, target, source_offset, target_offset, copy_count);
 		break;
-	case TypeId::VARCHAR: {
+	case PhysicalType::VARCHAR: {
 		auto ldata = FlatVector::GetData<string_t>(source);
 		auto tdata = FlatVector::GetData<string_t>(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel.get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (!tmask[target_idx]) {
-				tdata[target_idx] = StringVector::AddBlob(target, ldata[source_idx]);
+				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
 			}
 		}
 		break;
 	}
-	case TypeId::STRUCT: {
+	case PhysicalType::STRUCT: {
 		if (StructVector::HasEntries(target)) {
 			// target already has entries: append to them
 			auto &source_children = StructVector::GetEntries(source);
@@ -143,8 +143,8 @@ void VectorOperations::Copy(Vector &source, Vector &target, const SelectionVecto
 		}
 		break;
 	}
-	case TypeId::LIST: {
-		assert(target.type == TypeId::LIST);
+	case PhysicalType::LIST: {
+		assert(target.type.InternalType() == PhysicalType::LIST);
 		if (ListVector::HasEntry(source)) {
 			// if the source has list offsets, we need to append them to the target
 			if (!ListVector::HasEntry(target)) {

@@ -25,7 +25,7 @@ public:
 };
 
 // this implements a sorted window functions variant
-PhysicalUnnest::PhysicalUnnest(vector<TypeId> types, vector<unique_ptr<Expression>> select_list,
+PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                PhysicalOperatorType type)
     : PhysicalOperator(type, move(types)), select_list(std::move(select_list)) {
 
@@ -47,7 +47,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 
 			// get the list data to unnest
 			ExpressionExecutor executor;
-			vector<TypeId> list_data_types;
+			vector<LogicalType> list_data_types;
 			for (auto &exp : select_list) {
 				assert(exp->type == ExpressionType::BOUND_UNNEST);
 				auto bue = (BoundUnnestExpression *)exp.get();
@@ -70,7 +70,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			for (idx_t col_idx = 0; col_idx < state->list_data.column_count(); col_idx++) {
 				auto &v = state->list_data.data[col_idx];
 
-				assert(v.type == TypeId::LIST);
+				assert(v.type == LogicalType::LIST);
 				// TODO deal with NULL values here!
 				auto list_data = FlatVector::GetData<list_entry_t>(v);
 				auto list_entry = list_data[state->parent_position];

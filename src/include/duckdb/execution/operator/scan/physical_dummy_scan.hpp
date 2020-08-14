@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PhysicalDummyScan : public PhysicalOperator {
 public:
-	PhysicalDummyScan(vector<TypeId> types) : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, types) {
+	PhysicalDummyScan(vector<LogicalType> types) : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, move(types)) {
 	}
 
 public:

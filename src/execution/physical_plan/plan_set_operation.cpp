@@ -28,11 +28,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		vector<JoinCondition> conditions;
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
-			auto sql_type = SQLTypeFromInternalType(types[i]);
 			JoinCondition cond;
 			cond.comparison = ExpressionType::COMPARE_EQUAL;
-			cond.left = make_unique<BoundReferenceExpression>(types[i], sql_type, i);
-			cond.right = make_unique<BoundReferenceExpression>(types[i], sql_type, i);
+			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
+			cond.right = make_unique<BoundReferenceExpression>(types[i], i);
 			cond.null_values_are_equal = true;
 			conditions.push_back(move(cond));
 		}

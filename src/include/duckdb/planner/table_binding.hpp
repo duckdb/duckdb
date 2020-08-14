@@ -59,9 +59,9 @@ public:
 
 //! Represents a generic binding with types and names
 struct GenericBinding : public Binding {
-	GenericBinding(const string &alias, vector<SQLType> types, vector<string> names, idx_t index);
+	GenericBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
 
-	vector<SQLType> types;
+	vector<LogicalType> types;
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names

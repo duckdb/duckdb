@@ -33,9 +33,9 @@ unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Ex
 
 	// use an ExpressionExecutor to execute the expression
 	auto result_value = ExpressionExecutor::EvaluateScalar(*root);
-	assert(result_value.type == root->return_type);
+	assert(result_value.type() == root->return_type);
 	// now get the value from the result vector and insert it back into the plan as a constant expression
-	return make_unique<BoundConstantExpression>(root->sql_type, result_value);
+	return make_unique<BoundConstantExpression>(result_value);
 }
 
 } // namespace duckdb

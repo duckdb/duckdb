@@ -31,13 +31,12 @@ struct BoundCreateTableInfo;
 
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
-	TypeId type;
-	SQLType sql_type;
+	LogicalType type;
 	string name;
 	idx_t depth;
 
 	CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : binding(expr.binding), type(expr.return_type), sql_type(expr.sql_type), name(expr.GetName()), depth(expr.depth) {
+	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -174,7 +173,7 @@ private:
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<SQLType> &sql_types, idx_t projection_index);
+	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
@@ -184,7 +183,8 @@ private:
 	void PlanSubqueries(unique_ptr<Expression> *expr, unique_ptr<LogicalOperator> *root);
 	unique_ptr<Expression> PlanSubquery(BoundSubqueryExpression &expr, unique_ptr<LogicalOperator> &root);
 
-	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<SQLType> &source_types, vector<SQLType> &target_types,
+	unique_ptr<LogicalOperator> CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
+	                                                       vector<LogicalType> &target_types,
 	                                                       unique_ptr<LogicalOperator> op);
 };
 

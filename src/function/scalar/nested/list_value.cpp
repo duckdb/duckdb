@@ -13,13 +13,13 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 	//	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	//	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
 
-	assert(result.type == TypeId::LIST);
+	assert(result.type.id() == LogicalTypeId::LIST);
 	auto list_child = make_unique<ChunkCollection>();
 	ListVector::SetEntry(result, move(list_child));
 
 	auto &cc = ListVector::GetEntry(result);
 	DataChunk append_vals;
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	if (args.column_count() > 0) {
 		types.push_back(args.GetTypes()[0]);
 		append_vals.Initialize(types);
@@ -45,24 +45,24 @@ static void list_value_fun(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static unique_ptr<FunctionData> list_value_bind(BoundFunctionExpression &expr, ClientContext &context) {
-	SQLType stype(SQLTypeId::LIST);
 
 	// collect names and deconflict, construct return type
 	assert(expr.arguments.size() == expr.children.size());
 
+	child_list_t<LogicalType> child_types;
 	if (expr.children.size() > 0) {
-		stype.child_type.push_back(make_pair("", expr.arguments[0]));
+		child_types.push_back(make_pair("", expr.arguments[0]));
 	}
 
 	// this is more for completeness reasons
-	expr.sql_type = stype;
-	return make_unique<VariableReturnBindData>(stype);
+	expr.return_type = LogicalType(LogicalTypeId::LIST, move(child_types));
+	return make_unique<VariableReturnBindData>(expr.return_type);
 }
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, SQLType::LIST, list_value_fun, false, list_value_bind);
-	fun.varargs = SQLType::ANY;
+	ScalarFunction fun("list_value", {}, LogicalType::LIST, list_value_fun, false, list_value_bind);
+	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }
 

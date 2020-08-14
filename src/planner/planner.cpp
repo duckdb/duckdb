@@ -33,7 +33,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->read_only = binder.read_only;
 	this->requires_valid_transaction = binder.requires_valid_transaction;
 	this->names = bound_statement.names;
-	this->sql_types = bound_statement.types;
+	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
 
 	// now create a logical query plan from the query
@@ -45,7 +45,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
-		if (expr->return_type == TypeId::INVALID) {
+		if (expr->return_type.id() == LogicalTypeId::INVALID) {
 			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
 		}
 		auto value = make_unique<Value>(expr->return_type);
@@ -54,10 +54,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		if (value_map.find(expr->parameter_nr) != value_map.end()) {
 			throw BinderException("Duplicate parameter index. Use $1, $2 etc. to differentiate.");
 		}
-		PreparedValueEntry entry;
-		entry.value = move(value);
-		entry.target_type = expr->sql_type;
-		value_map[expr->parameter_nr] = move(entry);
+		value_map[expr->parameter_nr] = move(value);
 	}
 }
 
@@ -100,7 +97,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 		// now create the logical prepare
 		auto prepared_data = make_unique<PreparedStatementData>(statement_type);
 		prepared_data->names = names;
-		prepared_data->sql_types = sql_types;
+		prepared_data->types = types;
 		prepared_data->value_map = move(value_map);
 		prepared_data->read_only = this->read_only;
 		prepared_data->requires_valid_transaction = this->requires_valid_transaction;
@@ -110,13 +107,12 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 		auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 		names = {"Success"};
-		sql_types = {SQLType(SQLTypeId::BOOLEAN)};
+		types = {LogicalType::BOOLEAN};
 		plan = move(prepare);
 		break;
 	}
 	default:
-		throw NotImplementedException("Cannot plan statement of type %s!",
-		                              StatementTypeToString(statement->type).c_str());
+		throw NotImplementedException("Cannot plan statement of type %s!", StatementTypeToString(statement->type));
 	}
 }
 

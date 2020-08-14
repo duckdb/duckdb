@@ -30,8 +30,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// now we push a COUNT(*) aggregate onto the limit, this will be either 0 or 1 (EXISTS or NOT EXISTS)
 		auto count_star_fun = CountStarFun::GetFunction();
-		auto idx_type = count_star_fun.return_type;
-		auto count_star = make_unique<BoundAggregateExpression>(count_star_fun.return_type, move(count_star_fun), false);
+		auto count_star = make_unique<BoundAggregateExpression>(count_star_fun.return_type, count_star_fun, false);
+		auto idx_type = count_star->return_type;
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(move(count_star));
 		auto aggregate_index = binder.GenerateTableIndex();
@@ -42,7 +42,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// now we push a projection with a comparison to 1
 		auto left_child = make_unique<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, 0));
-		auto right_child = make_unique<BoundConstantExpression>(idx_type, Value::Numeric(GetInternalType(idx_type), 1));
+		auto right_child = make_unique<BoundConstantExpression>(Value::Numeric(idx_type, 1));
 		auto comparison =
 		    make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(left_child), move(right_child));
 
@@ -62,7 +62,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), SQLType::BOOLEAN, ColumnBinding(projection_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), LogicalType::BOOLEAN,
+		                                             ColumnBinding(projection_index, 0));
 	}
 	case SubqueryType::SCALAR: {
 		// uncorrelated scalar, we want to return the first entry
@@ -78,10 +79,10 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		plan = move(limit);
 
 		// we push an aggregate that returns the FIRST element
-		auto sql_type = expr.sql_type;
 		vector<unique_ptr<Expression>> expressions;
-		auto bound = make_unique<BoundColumnRefExpression>(sql_type, ColumnBinding(table_idx, 0));
-		auto first_agg = make_unique<BoundAggregateExpression>(sql_type, FirstFun::GetFunction(sql_type), false);
+		auto bound = make_unique<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, 0));
+		auto first_agg =
+		    make_unique<BoundAggregateExpression>(expr.return_type, FirstFun::GetFunction(expr.return_type), false);
 		first_agg->children.push_back(move(bound));
 		expressions.push_back(move(first_agg));
 		auto aggr_index = binder.GenerateTableIndex();
@@ -100,7 +101,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.sql_type, ColumnBinding(aggr_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(aggr_index, 0));
 	}
 	default: {
 		assert(expr.subquery_type == SubqueryType::ANY);
@@ -120,14 +121,13 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		JoinCondition cond;
 		cond.left = move(expr.child);
 		cond.right = BoundCastExpression::AddCastToType(
-		    make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_type,
-		    expr.child_target);
+		    make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
 		cond.comparison = expr.comparison_type;
 		join->conditions.push_back(move(cond));
 		root = move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.sql_type, ColumnBinding(mark_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
 	}
 	}
 }
@@ -138,7 +138,7 @@ static unique_ptr<LogicalDelimJoin> CreateDuplicateEliminatedJoin(vector<Correla
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(
-		    make_unique<BoundColumnRefExpression>(col.sql_type, col.binding));
+		    make_unique<BoundColumnRefExpression>(col.type, col.binding));
 	}
 	return delim_join;
 }
@@ -148,8 +148,8 @@ static void CreateDelimJoinConditions(LogicalDelimJoin &delim_join, vector<Corre
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		JoinCondition cond;
-		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.sql_type, col.binding);
-		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.sql_type, bindings[base_offset + i]);
+		cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, col.binding);
+		cond.right = make_unique<BoundColumnRefExpression>(col.name, col.type, bindings[base_offset + i]);
 		cond.comparison = ExpressionType::COMPARE_EQUAL;
 		cond.null_values_are_equal = true;
 		delim_join.conditions.push_back(move(cond));
@@ -201,7 +201,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(move(dependent_join));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.sql_type,
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
 		                                             plan_columns[flatten.data_offset]);
 	}
 	case SubqueryType::EXISTS: {
@@ -225,7 +225,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(move(dependent_join));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.sql_type, ColumnBinding(mark_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
 	}
 	default: {
 		assert(expr.subquery_type == SubqueryType::ANY);
@@ -255,15 +255,14 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		JoinCondition compare_cond;
 		compare_cond.left = move(expr.child);
 		compare_cond.right = BoundCastExpression::AddCastToType(
-		    make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_type,
-		    expr.child_target);
+		    make_unique<BoundColumnRefExpression>(expr.child_type, plan_columns[0]), expr.child_target);
 		compare_cond.comparison = expr.comparison_type;
 		delim_join->conditions.push_back(move(compare_cond));
 
 		delim_join->AddChild(move(dependent_join));
 		root = move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.sql_type, ColumnBinding(mark_index, 0));
+		return make_unique<BoundColumnRefExpression>(expr.GetName(), expr.return_type, ColumnBinding(mark_index, 0));
 	}
 	}
 }

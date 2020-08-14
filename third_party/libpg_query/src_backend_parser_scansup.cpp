@@ -30,6 +30,7 @@
 #include "parser/scansup.hpp"
 #include "mb/pg_wchar.hpp"
 
+namespace duckdb_libpgquery {
 
 /* ----------------
  *		scanstr
@@ -41,9 +42,6 @@
  * caller!
  * ----------------
  */
-
-
-
 
 /*
  * downcase_truncate_identifier() --- do appropriate downcasing and
@@ -58,23 +56,19 @@
  * support that.  If you want to implement it, you'll need to fix
  * SplitIdentifierString() in utils/adt/varlena.c.
  */
-char *
-downcase_truncate_identifier(const char *ident, int len, bool warn)
-{
+char *downcase_truncate_identifier(const char *ident, int len, bool warn) {
 	return downcase_identifier(ident, len, warn, true);
 }
 
 /*
  * a workhorse for downcase_truncate_identifier
  */
-char *
-downcase_identifier(const char *ident, int len, bool warn, bool truncate)
-{
-	char	   *result;
-	int			i;
-	bool		enc_is_single_byte;
+char *downcase_identifier(const char *ident, int len, bool warn, bool truncate) {
+	char *result;
+	int i;
+	bool enc_is_single_byte;
 
-	result = (char*) palloc(len + 1);
+	result = (char *)palloc(len + 1);
 	enc_is_single_byte = pg_database_encoding_max_length() == 1;
 
 	/*
@@ -86,15 +80,14 @@ downcase_identifier(const char *ident, int len, bool warn, bool truncate)
 	 * the high bit set, as long as they aren't part of a multi-byte
 	 * character, and use an ASCII-only downcasing for 7-bit characters.
 	 */
-	for (i = 0; i < len; i++)
-	{
-		unsigned char ch = (unsigned char) ident[i];
+	for (i = 0; i < len; i++) {
+		unsigned char ch = (unsigned char)ident[i];
 
 		if (ch >= 'A' && ch <= 'Z')
 			ch += 'a' - 'A';
 		else if (enc_is_single_byte && IS_HIGHBIT_SET(ch) && isupper(ch))
 			ch = tolower(ch);
-		result[i] = (char) ch;
+		result[i] = (char)ch;
 	}
 	result[i] = '\0';
 
@@ -103,7 +96,6 @@ downcase_identifier(const char *ident, int len, bool warn, bool truncate)
 
 	return result;
 }
-
 
 /*
  * truncate_identifier() --- truncate an identifier to NAMEDATALEN-1 bytes.
@@ -114,26 +106,20 @@ downcase_identifier(const char *ident, int len, bool warn, bool truncate)
  * We require the caller to pass in the string length since this saves a
  * strlen() call in some common usages.
  */
-void
-truncate_identifier(char *ident, int len, bool warn)
-{
-	if (len >= NAMEDATALEN)
-	{
+void truncate_identifier(char *ident, int len, bool warn) {
+	if (len >= NAMEDATALEN) {
 		len = pg_mbcliplen(ident, len, NAMEDATALEN - 1);
-		if (warn)
-		{
+		if (warn) {
 			/*
 			 * We avoid using %.*s here because it can misbehave if the data
 			 * is not valid in what libc thinks is the prevailing encoding.
 			 */
-			char		buf[NAMEDATALEN];
+			char buf[NAMEDATALEN];
 
 			memcpy(buf, ident, len);
 			buf[len] = '\0';
-			ereport(PGNOTICE,
-					(errcode(ERRCODE_NAME_TOO_LONG),
-					 errmsg("identifier \"%s\" will be truncated to \"%s\"",
-							ident, buf)));
+			ereport(PGNOTICE, (errcode(ERRCODE_NAME_TOO_LONG),
+			                   errmsg("identifier \"%s\" will be truncated to \"%s\"", ident, buf)));
 		}
 		ident[len] = '\0';
 	}
@@ -148,15 +134,10 @@ truncate_identifier(char *ident, int len, bool warn)
  * In principle we might need similar functions for isalnum etc, but for the
  * moment only isspace seems needed.
  */
-bool
-scanner_isspace(char ch)
-{
+bool scanner_isspace(char ch) {
 	/* This must match scan.l's list of {space} characters */
-	if (ch == ' ' ||
-		ch == '\t' ||
-		ch == '\n' ||
-		ch == '\r' ||
-		ch == '\f')
+	if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f')
 		return true;
 	return false;
+}
 }

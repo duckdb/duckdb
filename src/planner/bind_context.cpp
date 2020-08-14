@@ -25,8 +25,7 @@ string BindContext::GetMatchingBinding(const string &column_name) {
 			if (!result.empty()) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
-				                      column_name.c_str(), result.c_str(), column_name.c_str(), kv.first.c_str(),
-				                      column_name.c_str());
+				                      column_name, result, column_name, kv.first, column_name);
 			}
 			result = kv.first;
 		}
@@ -60,13 +59,13 @@ Binding *BindContext::GetCTEBinding(const string &ctename) {
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.table_name.empty()) {
-		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name.c_str()));
+		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name));
 	}
 
 	auto match = bindings.find(colref.table_name);
 	if (match == bindings.end()) {
 		// alias not found in this BindContext
-		return BindResult(StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name.c_str()));
+		return BindResult(StringUtil::Format("Referenced table \"%s\" not found!", colref.table_name));
 	}
 	auto binding = match->second.get();
 	return binding->Bind(colref, depth);
@@ -96,7 +95,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 
 void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 	if (bindings.find(alias) != bindings.end()) {
-		throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
+		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	bindings_list.push_back(make_pair(alias, binding.get()));
 	bindings[alias] = move(binding);
@@ -109,8 +108,8 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, TableCatalogEnt
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	vector<string> names;
 	if (ref.column_name_alias.size() > subquery.names.size()) {
-		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias.c_str(),
-		                      (int64_t)subquery.names.size(), (int64_t)ref.column_name_alias.size());
+		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", alias,
+		                      subquery.names.size(), ref.column_name_alias.size());
 	}
 	// use any provided aliases from the subquery
 	for (idx_t i = 0; i < ref.column_name_alias.size(); i++) {
@@ -123,15 +122,15 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddGenericBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
 	AddBinding(alias, make_unique<GenericBinding>(alias, move(types), move(names), index));
 }
 
-void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<SQLType> types) {
+void BindContext::AddCTEBinding(idx_t index, const string &alias, vector<string> names, vector<LogicalType> types) {
 	auto binding = make_shared<GenericBinding>(alias, move(types), move(names), index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
-		throw BinderException("Duplicate alias \"%s\" in query!", alias.c_str());
+		throw BinderException("Duplicate alias \"%s\" in query!", alias);
 	}
 	cte_bindings[alias] = move(binding);
 	cte_references[alias] = std::make_shared<idx_t>(0);

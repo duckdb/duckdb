@@ -75,7 +75,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
-			return make_unique<BoundReferenceExpression>(expr.alias, expr.sql_type, i);
+			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
 	// could not bind the column reference, this should never happen and indicates a bug in the code
@@ -89,8 +89,8 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	}
 	bound_columns += "]";
 
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias.c_str(),
-	                        (int)expr.binding.table_index, (int)expr.binding.column_index, bound_columns.c_str());
+	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
+	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
 }
 
 } // namespace duckdb

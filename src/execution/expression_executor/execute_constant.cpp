@@ -12,6 +12,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundConstantExp
 
 void ExpressionExecutor::Execute(BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
+	assert(expr.value.type() == expr.return_type);
 	result.Reference(expr.value);
 }
 

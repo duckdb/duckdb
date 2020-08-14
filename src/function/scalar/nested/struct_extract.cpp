@@ -7,6 +7,19 @@ using namespace std;
 
 namespace duckdb {
 
+struct StructExtractBindData : public FunctionData {
+	string key;
+	idx_t index;
+	LogicalType type;
+
+	StructExtractBindData(string key, idx_t index, LogicalType type) : key(key), index(index), type(type) {
+	}
+
+	unique_ptr<FunctionData> Copy() override {
+		return make_unique<StructExtractBindData>(key, index, type);
+	}
+};
+
 static void struct_extract_fun(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StructExtractBindData &)*func_expr.bind_info;
@@ -46,31 +59,33 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 	// the binder should fix this for us.
 	assert(expr.children.size() == 2);
 	assert(expr.arguments.size() == expr.children.size());
-	assert(expr.arguments[0].id == SQLTypeId::STRUCT);
-	assert(expr.children[0]->return_type == TypeId::STRUCT);
-	if (expr.arguments[0].child_type.size() < 1) {
+	assert(expr.arguments[0].id() == LogicalTypeId::STRUCT);
+	assert(expr.children[0]->return_type.id() == LogicalTypeId::STRUCT);
+
+	auto &struct_children = expr.arguments[0].child_types();
+	if (struct_children.size() < 1) {
 		throw Exception("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = expr.children[1];
 
-	if (expr.arguments[1].id != SQLTypeId::VARCHAR || key_child->return_type != TypeId::VARCHAR ||
+	if (expr.arguments[1].id() != LogicalTypeId::VARCHAR || key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    !key_child->IsScalar()) {
 		throw Exception("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
-	assert(key_val.type == TypeId::VARCHAR);
+	assert(key_val.type().id() == LogicalTypeId::VARCHAR);
 	if (key_val.is_null || key_val.str_value.length() < 1) {
 		throw Exception("Key name for struct_extract needs to be neither NULL nor empty");
 	}
 	string key = StringUtil::Lower(key_val.str_value);
 
-	SQLType return_type;
+	LogicalType return_type;
 	idx_t key_index = 0;
 	bool found_key = false;
 
-	for (size_t i = 0; i < expr.arguments[0].child_type.size(); i++) {
-		auto &child = expr.arguments[0].child_type[i];
+	for (size_t i = 0; i < struct_children.size(); i++) {
+		auto &child = struct_children[i];
 		if (child.first == key) {
 			found_key = true;
 			key_index = i;
@@ -82,16 +97,15 @@ static unique_ptr<FunctionData> struct_extract_bind(BoundFunctionExpression &exp
 		throw Exception("Could not find key in struct");
 	}
 
-	expr.return_type = GetInternalType(return_type);
-	expr.sql_type = return_type;
+	expr.return_type = return_type;
 	expr.children.pop_back();
-	return make_unique<StructExtractBindData>(key, key_index, GetInternalType(return_type));
+	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_extract", {SQLType::STRUCT, SQLType::VARCHAR}, SQLType::ANY, struct_extract_fun, false,
-	                   struct_extract_bind);
+	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
+	                   struct_extract_fun, false, struct_extract_bind);
 	set.AddFunction(fun);
 }
 

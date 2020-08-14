@@ -17,9 +17,7 @@ namespace duckdb {
 
 class BoundSubqueryExpression : public Expression {
 public:
-	BoundSubqueryExpression(TypeId return_type, SQLType sql_type);
-	BoundSubqueryExpression(SQLType return_type) :
-		BoundSubqueryExpression(GetInternalType(return_type), move(return_type)) {}
+	BoundSubqueryExpression(LogicalType return_type);
 
 	bool IsCorrelated() {
 		return binder->correlated_columns.size() > 0;
@@ -35,11 +33,11 @@ public:
 	unique_ptr<Expression> child;
 	//! The comparison type of the child expression with the subquery (in case of ANY, ALL operators)
 	ExpressionType comparison_type;
-	//! The SQLType of the subquery result. Only used for ANY expressions.
-	SQLType child_type;
-	//! The target SQLType of the subquery result (i.e. to which type it should be casted, if child_type <>
+	//! The LogicalType of the subquery result. Only used for ANY expressions.
+	LogicalType child_type;
+	//! The target LogicalType of the subquery result (i.e. to which type it should be casted, if child_type <>
 	//! child_target). Only used for ANY expressions.
-	SQLType child_target;
+	LogicalType child_target;
 
 public:
 	bool HasSubquery() const override {

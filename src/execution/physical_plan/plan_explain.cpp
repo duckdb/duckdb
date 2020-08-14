@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 using namespace std;
@@ -13,8 +14,14 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	op.physical_plan = plan->ToString();
 
 	// the output of the explain
-	vector<string> keys = {"logical_plan", "logical_opt", "physical_plan"};
-	vector<string> values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
+	vector<string> keys, values;
+	if (context.explain_output_optimized_only) {
+		keys = {"logical_opt"};
+		values = {logical_plan_opt};
+	} else {
+		keys = {"logical_plan", "logical_opt", "physical_plan"};
+		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
+	}
 	// create a ChunkCollection from the output
 	auto collection = make_unique<ChunkCollection>();
 

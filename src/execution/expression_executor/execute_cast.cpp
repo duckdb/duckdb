@@ -19,12 +19,13 @@ void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *sta
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, sel, count, child);
-	if (expr.source_type == expr.sql_type) {
+	if (expr.child->return_type == expr.return_type) {
 		// NOP cast
 		result.Reference(child);
 	} else {
 		// cast it to the type specified by the cast expression
-		VectorOperations::Cast(child, result, expr.source_type, expr.sql_type, count);
+		assert(result.type == expr.return_type);
+		VectorOperations::Cast(child, result, count);
 	}
 }
 

@@ -44,8 +44,8 @@ public:
 		return data.get();
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(TypeId type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(TypeId type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 
 protected:
 	unique_ptr<data_t[]> data;

@@ -38,7 +38,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	assert(constant_expr->IsFoldable());
-	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(TypeId::BOOL);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr).CastAs(LogicalType::BOOLEAN);
 	if (constant_value.is_null) {
 		// we can't simplify conjunctions with a constant NULL
 		return nullptr;
@@ -46,7 +46,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 	if (conjunction->type == ExpressionType::CONJUNCTION_AND) {
 		if (!constant_value.value_.boolean) {
 			// FALSE in AND, result of expression is false
-			return make_unique<BoundConstantExpression>(SQLType::BOOLEAN, Value::BOOLEAN(false));
+			return make_unique<BoundConstantExpression>(Value::BOOLEAN(false));
 		} else {
 			// TRUE in AND, remove the expression from the set
 			return RemoveExpression(*conjunction, constant_expr);
@@ -58,7 +58,7 @@ unique_ptr<Expression> ConjunctionSimplificationRule::Apply(LogicalOperator &op,
 			return RemoveExpression(*conjunction, constant_expr);
 		} else {
 			// TRUE in OR, result of expression is true
-			return make_unique<BoundConstantExpression>(SQLType::BOOLEAN, Value::BOOLEAN(true));
+			return make_unique<BoundConstantExpression>(Value::BOOLEAN(true));
 		}
 	}
 }

@@ -101,7 +101,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, uni
 	} else {
 		if (arbitrary_expressions.size() == 0) {
 			// all conditions were pushed down, add TRUE predicate
-			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(SQLType::BOOLEAN, Value::BOOLEAN(true)));
+			arbitrary_expressions.push_back(make_unique<BoundConstantExpression>(Value::BOOLEAN(true)));
 		}
 		// if we get here we could not create any JoinConditions
 		// turn this into an arbitrary expression join

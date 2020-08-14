@@ -121,28 +121,28 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 void StdDevSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet stddev_samp("stddev_samp");
 	stddev_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevSampOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev_samp);
 }
 
 void StdDevPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet stddev_pop("stddev_pop");
 	stddev_pop.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, STDDevPopOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(stddev_pop);
 }
 
 void VarPopFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet var_pop("var_pop");
 	var_pop.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, VarPopOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(var_pop);
 }
 
 void VarSampFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet var_samp("var_samp");
 	var_samp.AddFunction(AggregateFunction::UnaryAggregate<stddev_state_t, double, double, VarSampOperation>(
-	    SQLType::DOUBLE, SQLType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(var_samp);
 }
 

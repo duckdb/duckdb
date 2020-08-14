@@ -5,11 +5,13 @@
 
 namespace duckdb {
 using namespace std;
+using namespace duckdb_libpgquery;
 
-SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
+LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 	auto name = (reinterpret_cast<PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
-	SQLType base_type = TransformStringToSQLType(name);
+	LogicalType base_type = TransformStringToLogicalType(name);
+	int8_t width = base_type.width(), scale = base_type.scale();
 	// check any modifiers
 	int modifier_idx = 0;
 	if (type_name->typmods) {
@@ -22,40 +24,40 @@ SQLType Transformer::TransformTypeName(PGTypeName *type_name) {
 				throw ParserException("Negative modifier not supported");
 			}
 			if (modifier_idx == 0) {
-				base_type.width = const_val.val.val.ival;
+				width = const_val.val.val.ival;
 			} else if (modifier_idx == 1) {
-				base_type.scale = const_val.val.val.ival;
+				scale = const_val.val.val.ival;
 			} else {
 				throw ParserException("A maximum of two modifiers is supported");
 			}
 			modifier_idx++;
 		}
 	}
-	switch(base_type.id) {
-	case SQLTypeId::VARCHAR:
+	switch(base_type.id()) {
+	case LogicalTypeId::VARCHAR:
 		if (modifier_idx > 1) {
 			throw ParserException("VARCHAR only supports a single modifier");
 		}
 		break;
-	case SQLTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL:
 		if (modifier_idx == 1) {
 			// only width is provided: set scale to 0
-			base_type.scale = 0;
+			scale = 0;
 		}
-		if (base_type.width > Decimal::MAX_WIDTH_DECIMAL) {
+		if (width > Decimal::MAX_WIDTH_DECIMAL) {
 			throw ParserException("Width bigger than %d is not supported!", (int) Decimal::MAX_WIDTH_DECIMAL);
 		}
-		if (base_type.scale > base_type.width) {
+		if (scale > width) {
 			throw ParserException("Scale cannot be bigger than width");
 		}
 		break;
 	default:
 		if (modifier_idx > 0) {
-			throw ParserException("Type %s does not support any modifiers!", SQLTypeIdToString(base_type.id).c_str());
+			throw ParserException("Type %s does not support any modifiers!", base_type.ToString());
 		}
 	}
 
-	return base_type;
+	return LogicalType(base_type.id(), width, scale);
 }
 
 } // namespace duckdb

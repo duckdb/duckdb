@@ -6,9 +6,9 @@
 namespace duckdb {
 using namespace std;
 
-BoundAggregateExpression::BoundAggregateExpression(TypeId return_type, SQLType sql_type, AggregateFunction function, bool distinct)
-    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, return_type, sql_type), function(function),
-      distinct(distinct) {
+BoundAggregateExpression::BoundAggregateExpression(LogicalType return_type, AggregateFunction function, bool distinct)
+    : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, move(return_type)),
+      function(function), distinct(distinct) {
 }
 
 string BoundAggregateExpression::ToString() const {
@@ -51,7 +51,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_) const {
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
-	auto copy = make_unique<BoundAggregateExpression>(return_type, sql_type, function, distinct);
+	auto copy = make_unique<BoundAggregateExpression>(return_type, function, distinct);
 	for (auto &child : children) {
 		copy->children.push_back(child->Copy());
 	}

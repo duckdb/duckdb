@@ -64,7 +64,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
 	// first generate a ChunkCollection from the set of expressions
-	vector<TypeId> types = {in_type};
+	vector<LogicalType> types = {in_type};
 	auto collection = make_unique<ChunkCollection>();
 	DataChunk chunk;
 	chunk.Initialize(types);
@@ -93,17 +93,17 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	JoinCondition cond;
 	cond.left = move(expr.children[0]);
 
-	cond.right = make_unique<BoundColumnRefExpression>(expr.children[0]->sql_type, ColumnBinding(chunk_index, 0));
+	cond.right = make_unique<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(move(cond));
 	root = move(join);
 
 	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
 	unique_ptr<Expression> result =
-	    make_unique<BoundColumnRefExpression>("IN (...)", SQLType::BOOLEAN, ColumnBinding(chunk_index, 0));
+	    make_unique<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(chunk_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
-		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, SQLType::BOOLEAN);
+		auto invert = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
 		invert->children.push_back(move(result));
 		result = move(invert);
 	}

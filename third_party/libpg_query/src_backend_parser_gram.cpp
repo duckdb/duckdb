@@ -1042,9 +1042,9 @@
 #include "nodes/nodeFuncs.hpp"
 #include "parser/gramparse.hpp"
 #include "parser/parser.hpp"
-#include "parser/parse_expr.hpp"
 #include "utils/datetime.hpp"
 
+namespace duckdb_libpgquery {
 #define DEFAULT_SCHEMA "main"
 
 /*
@@ -22899,4 +22899,4 @@ parser_init(base_yy_extra_type *yyext)
 {
 	yyext->parsetree = NIL;		/* in case grammar forgets to set it */
 }
-
+} // namespace duckdb_libpgquery

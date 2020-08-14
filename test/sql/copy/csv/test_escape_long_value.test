@@ -8,7 +8,7 @@ statement ok
 CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
 
 query I
-COPY long_escaped_value FROM 'test/sql/copy/csv/data/test/long_escaped_value.csv' DELIMITER '🦆';
+COPY long_escaped_value FROM 'test/sql/copy/csv/data/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE);
 ----
 1
 

@@ -164,24 +164,23 @@ template <> float Cast::Operation(double input) {
 template <class T> static T try_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
 
-
-
 template <class T> static T try_strict_cast_string(string_t input) {
 	T result;
 	if (!TryCast::Operation<string_t, T>(input, result, true)) {
-		throw ConversionException("Could not convert string '%s' to %s", input.GetData(), TypeIdToString(GetTypeId<T>()).c_str());
+		throw ConversionException("Could not convert string '%s' to %s", input.GetData(),
+		                          TypeIdToString(GetTypeId<T>()));
 	}
 	return result;
 }
 
 struct IntegerCastOperation {
-	template<class T, bool NEGATIVE>
-	static bool HandleDigit(T &result, uint8_t digit) {
+	template <class T, bool NEGATIVE> static bool HandleDigit(T &result, uint8_t digit) {
 		if (NEGATIVE) {
 			if (result < (NumericLimits<T>::Minimum() + digit) / 10) {
 				return false;
@@ -196,8 +195,7 @@ struct IntegerCastOperation {
 		return true;
 	}
 
-	template<class T>
-	static bool HandleExponent(T &result, int64_t exponent) {
+	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
 		double dbl_res = result * pow(10, exponent);
 		if (dbl_res < NumericLimits<T>::Minimum() || dbl_res > NumericLimits<T>::Maximum()) {
 			return false;
@@ -217,11 +215,11 @@ struct IntegerCastOperation {
 	}
 };
 
-template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP=IntegerCastOperation>
+template <class T, bool NEGATIVE, bool ALLOW_EXPONENT, class OP = IntegerCastOperation>
 static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 	idx_t start_pos = NEGATIVE || *buf == '+' ? 1 : 0;
 	idx_t pos = start_pos;
-	while(pos < len) {
+	while (pos < len) {
 		if (!std::isdigit((unsigned char)buf[pos])) {
 			// not a digit!
 			if (buf[pos] == '.') {
@@ -252,7 +250,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 			}
 			if (std::isspace((unsigned char)buf[pos])) {
 				// skip any trailing spaces
-				while(++pos < len) {
+				while (++pos < len) {
 					if (!std::isspace((unsigned char)buf[pos])) {
 						return false;
 					}
@@ -289,9 +287,10 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	return pos > start_pos;
 }
 
-template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation, bool ZERO_INITIALIZE=true> static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
+template <class T, bool ALLOW_EXPONENT = true, class OP=IntegerCastOperation, bool ZERO_INITIALIZE=true>
+static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while(len > 0 && std::isspace(*buf)) {
+	while (len > 0 && std::isspace(*buf)) {
 		buf++;
 		len--;
 	}
@@ -314,7 +313,7 @@ template <> bool TryCast::Operation(string_t input, bool &result, bool strict) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
-	switch(input_size) {
+	switch (input_size) {
 	case 1: {
 		char c = std::tolower(*input_data);
 		if (c == 't' || (!strict && c == '1')) {
@@ -445,7 +444,7 @@ template <> bool CheckDoubleValidity(double value) {
 
 template <class T> static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
-	while(len > 0 && std::isspace(*buf)) {
+	while (len > 0 && std::isspace(*buf)) {
 		buf++;
 		len--;
 	}
@@ -525,7 +524,7 @@ template <> double StrictCast::Operation(string_t input) {
 // Cast Numeric -> String
 //===--------------------------------------------------------------------===//
 template <class T> string CastToStandardString(T input) {
-	Vector v(TypeId::VARCHAR);
+	Vector v(LogicalType::VARCHAR);
 	return StringCast::Operation(input, v).GetString();
 }
 
@@ -669,7 +668,8 @@ struct HugeintToStringCast {
 			// we want to avoid doing as many divisions as possible
 			// for that reason we start off doing a division by a large power of ten that uint64_t can hold
 			// (100000000000000000) - this is the third largest
-			// the reason we don't use the largest is because that can result in an overflow inside the division function
+			// the reason we don't use the largest is because that can result in an overflow inside the division
+			// function
 			uint64_t remainder;
 			value = Hugeint::DivModPositive(value, 100000000000000000ULL, remainder);
 
@@ -680,7 +680,7 @@ struct HugeintToStringCast {
 
 			int format_length = startptr - ptr;
 			// pad with zero
-			for(int i = format_length; i < 17; i++) {
+			for (int i = format_length; i < 17; i++) {
 				*--ptr = '0';
 			}
 		}
@@ -929,16 +929,17 @@ template <> string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 }
 
 void CastFromBlob::ToHexString(string_t input, string_t &output) {
-	const char hexa_table[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	idx_t input_size = input.GetSize();
 	assert(output.GetSize() == (input_size * 2 + 2));
 	auto input_data = input.GetData();
-	auto hexa_data  = output.GetData();
+	auto hexa_data = output.GetData();
 	// hex identifier
-	hexa_data[0] = '\\'; hexa_data[1] = 'x';
+	hexa_data[0] = '\\';
+	hexa_data[1] = 'x';
 	hexa_data += 2;
-	for(idx_t idx = 0; idx < input_size; ++idx) {
-		hexa_data[idx * 2]     = hexa_table[(input_data[idx] >> 4) & 0x0F];
+	for (idx_t idx = 0; idx < input_size; ++idx) {
+		hexa_data[idx * 2] = hexa_table[(input_data[idx] >> 4) & 0x0F];
 		hexa_data[idx * 2 + 1] = hexa_table[input_data[idx] & 0x0F];
 	}
 	output.Finalize();
@@ -947,7 +948,7 @@ void CastFromBlob::ToHexString(string_t input, string_t &output) {
 void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	idx_t in_size = input.GetSize();
 	// amount of hex chars must be even
-	if((in_size % 2) != 0) {
+	if ((in_size % 2) != 0) {
 		throw OutOfRangeException("Hex string must have an even number of bytes.");
 	}
 
@@ -959,21 +960,20 @@ void CastFromBlob::FromHexToBytes(string_t input, string_t &output) {
 	auto out_data = output.GetData();
 	idx_t out_size = output.GetSize();
 	assert(out_size == (in_size / 2));
-	idx_t out_idx=0;
+	idx_t out_idx = 0;
 
 	idx_t num_hex_per_byte = 2;
 	uint8_t hex[2];
 
-	for(idx_t in_idx = 0; in_idx < in_size; in_idx+=2, ++out_idx) {
-		for(idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
+	for (idx_t in_idx = 0; in_idx < in_size; in_idx += 2, ++out_idx) {
+		for (idx_t hex_idx = 0; hex_idx < num_hex_per_byte; ++hex_idx) {
 			uint8_t int_ch = in_data[in_idx + hex_idx];
-			if(int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
+			if (int_ch >= (uint8_t)'0' && int_ch <= (uint8_t)'9') {
 				// numeric ascii chars: '0' to '9'
 				hex[hex_idx] = int_ch & 0X0F;
-			}
-			else if((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
-					(int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
-					// hex chars: ['A':'F'] or ['a':'f']
+			} else if ((int_ch >= (uint8_t)'A' && int_ch <= (uint8_t)'F') ||
+			           (int_ch >= (uint8_t)'a' && int_ch <= (uint8_t)'f')) {
+				// hex chars: ['A':'F'] or ['a':'f']
 				// transforming char into an integer in the range of 10 to 15
 				hex[hex_idx] = ((int_ch & 0X0F) - 1) + 10;
 			} else {
@@ -995,13 +995,13 @@ template <> string_t CastToBlob::Operation(string_t input, Vector &vector) {
 	auto input_data = input.GetData();
 	string_t result;
 	// Check by a hex string
-	if(input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
+	if (input_size >= 2 && input_data[0] == '\\' && input_data[1] == 'x') {
 		auto output = StringVector::EmptyString(vector, (input_size - 2) / 2);
 		CastFromBlob::FromHexToBytes(input, output);
 		result = output;
 	} else {
 		// raw string
-		result = StringVector::AddBlob(vector, input);
+		result = StringVector::AddStringOrBlob(vector, input);
 	}
 	return result;
 }
@@ -1058,8 +1058,7 @@ struct HugeIntCastData {
 };
 
 struct HugeIntegerCastOperation {
-	template<class T, bool NEGATIVE>
-	static bool HandleDigit(T &result, uint8_t digit) {
+	template <class T, bool NEGATIVE> static bool HandleDigit(T &result, uint8_t digit) {
 		if (NEGATIVE) {
 			if (result.intermediate < (NumericLimits<int64_t>::Minimum() + digit) / 10) {
 				// intermediate is full: need to flush it
@@ -1080,13 +1079,13 @@ struct HugeIntegerCastOperation {
 		return true;
 	}
 
-	template<class T>
-	static bool HandleExponent(T &result, int64_t exponent) {
+	template <class T> static bool HandleExponent(T &result, int64_t exponent) {
 		result.Flush();
 		if (exponent < -38 || exponent > 38) {
 			// out of range for exact exponent: use double and convert
 			double dbl_res = Hugeint::Cast<double>(result.hugeint) * pow(10, exponent);
-			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) || dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
+			if (dbl_res < Hugeint::Cast<double>(NumericLimits<hugeint_t>::Minimum()) ||
+			    dbl_res > Hugeint::Cast<double>(NumericLimits<hugeint_t>::Maximum())) {
 				return false;
 			}
 			result.hugeint = Hugeint::Convert(dbl_res);
@@ -1115,7 +1114,8 @@ struct HugeIntegerCastOperation {
 
 template <> bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data, strict)) {
+	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
+	                                                                     strict)) {
 		return false;
 	}
 	result = data.hugeint;
@@ -1232,8 +1232,7 @@ template <> bool Cast::Operation(hugeint_t input) {
 	return result;
 }
 
-template<class T>
-static T hugeint_cast_to_numeric(hugeint_t input) {
+template <class T> static T hugeint_cast_to_numeric(hugeint_t input) {
 	T result;
 	if (!TryCast::Operation<hugeint_t, T>(input, result)) {
 		throw OutOfRangeException("Failed to cast from hugeint: value is out of range");

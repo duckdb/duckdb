@@ -112,6 +112,9 @@ public:
 	//! Sync a file handle to disk
 	virtual void FileSync(FileHandle &handle);
 
+	//! Sets the working directory
+	virtual void SetWorkingDirectory(string path);
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

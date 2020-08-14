@@ -22,7 +22,7 @@ public:
 	//! The insertion map ([table_index -> index in result, or INVALID_INDEX if not specified])
 	vector<idx_t> column_index_map;
 	//! The expected types for the INSERT statement (obtained from the column types)
-	vector<SQLType> expected_types;
+	vector<LogicalType> expected_types;
 	//! The base table to insert into
 	TableCatalogEntry *table;
 	//! The default statements used by the table
@@ -30,7 +30,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(TypeId::INT64);
+		types.push_back(LogicalType::BIGINT);
 	}
 };
 } // namespace duckdb

@@ -55,34 +55,34 @@ static inline void templated_loop_hash(Vector &input, Vector &result, const Sele
 
 template <bool HAS_RSEL>
 static inline void hash_type_switch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	assert(result.type == TypeId::HASH);
-	switch (input.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	assert(result.type.id() == LogicalTypeId::HASH);
+	switch (input.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_loop_hash<HAS_RSEL, int8_t>(input, result, rsel, count);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_loop_hash<HAS_RSEL, int16_t>(input, result, rsel, count);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_loop_hash<HAS_RSEL, int32_t>(input, result, rsel, count);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_loop_hash<HAS_RSEL, int64_t>(input, result, rsel, count);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		templated_loop_hash<HAS_RSEL, hugeint_t>(input, result, rsel, count);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_loop_hash<HAS_RSEL, float>(input, result, rsel, count);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_loop_hash<HAS_RSEL, double>(input, result, rsel, count);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		templated_loop_hash<HAS_RSEL, interval_t>(input, result, rsel, count);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		templated_loop_hash<HAS_RSEL, string_t>(input, result, rsel, count);
 		break;
 	default:
@@ -174,34 +174,34 @@ void templated_loop_combine_hash(Vector &input, Vector &hashes, const SelectionV
 
 template <bool HAS_RSEL>
 static inline void combine_hash_type_switch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
-	assert(hashes.type == TypeId::HASH);
-	switch (input.type) {
-	case TypeId::BOOL:
-	case TypeId::INT8:
+	assert(hashes.type.id() == LogicalTypeId::HASH);
+	switch (input.type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
 		templated_loop_combine_hash<HAS_RSEL, int8_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::INT16:
+	case PhysicalType::INT16:
 		templated_loop_combine_hash<HAS_RSEL, int16_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::INT32:
+	case PhysicalType::INT32:
 		templated_loop_combine_hash<HAS_RSEL, int32_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::INT64:
+	case PhysicalType::INT64:
 		templated_loop_combine_hash<HAS_RSEL, int64_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::INT128:
+	case PhysicalType::INT128:
 		templated_loop_combine_hash<HAS_RSEL, hugeint_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::FLOAT:
+	case PhysicalType::FLOAT:
 		templated_loop_combine_hash<HAS_RSEL, float>(input, hashes, rsel, count);
 		break;
-	case TypeId::DOUBLE:
+	case PhysicalType::DOUBLE:
 		templated_loop_combine_hash<HAS_RSEL, double>(input, hashes, rsel, count);
 		break;
-	case TypeId::INTERVAL:
+	case PhysicalType::INTERVAL:
 		templated_loop_combine_hash<HAS_RSEL, interval_t>(input, hashes, rsel, count);
 		break;
-	case TypeId::VARCHAR:
+	case PhysicalType::VARCHAR:
 		templated_loop_combine_hash<HAS_RSEL, string_t>(input, hashes, rsel, count);
 		break;
 	default:

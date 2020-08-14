@@ -169,7 +169,7 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	result->read_only = planner.read_only;
 	result->requires_valid_transaction = planner.requires_valid_transaction;
 	result->names = planner.names;
-	result->sql_types = planner.sql_types;
+	result->types = planner.types;
 	result->value_map = move(planner.value_map);
 
 #ifdef DEBUG
@@ -191,7 +191,6 @@ unique_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(const s
 	profiler.EndPhase();
 
 	result->dependencies = move(physical_planner.dependencies);
-	result->types = physical_plan->types;
 	result->plan = move(physical_plan);
 	return result;
 }
@@ -203,7 +202,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	}
 	if (db.config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
-		                                   StatementTypeToString(statement.statement_type).c_str()));
+		                                   StatementTypeToString(statement.statement_type)));
 	}
 
 	// bind the bound values before execution
@@ -215,17 +214,15 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 	executor.Initialize(move(statement.plan));
 
 	auto types = executor.GetTypes();
-	assert(types.size() == statement.sql_types.size());
+	assert(types == statement.types);
 
 	if (create_stream_result) {
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.sql_types, types,
-		                                      statement.names);
+		return make_unique<StreamQueryResult>(statement.statement_type, *this, statement.types, statement.names);
 	}
 	// create a materialized result by continuously fetching
-	auto result =
-	    make_unique<MaterializedQueryResult>(statement.statement_type, statement.sql_types, types, statement.names);
+	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
 	while (true) {
 		auto chunk = FetchInternal();
 		if (chunk->size() == 0) {
@@ -233,7 +230,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(const string &qu
 		}
 #ifdef DEBUG
 		for (idx_t i = 0; i < chunk->column_count(); i++) {
-			if (statement.sql_types[i].id == SQLTypeId::VARCHAR) {
+			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
 				chunk->data[i].UTFVerify(chunk->size());
 			}
 		}
@@ -260,7 +257,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(string query) {
 
 		// first parse the query
 		Parser parser;
-		parser.ParseQuery(query.c_str());
+		parser.ParseQuery(query);
 		if (parser.statements.size() == 0) {
 			throw Exception("No statement to prepare!");
 		}
@@ -303,7 +300,7 @@ unique_ptr<QueryResult> ClientContext::Execute(string name, vector<Value> &value
 	auto execute = make_unique<ExecuteStatement>();
 	execute->name = name;
 	for (auto &val : values) {
-		execute->values.push_back(make_unique<ConstantExpression>(val.GetSQLType(), val));
+		execute->values.push_back(make_unique<ConstantExpression>(val));
 	}
 
 	return RunStatement(query, move(execute), allow_stream_result);
@@ -423,7 +420,7 @@ unique_ptr<QueryResult> ClientContext::Query(string query, bool allow_stream_res
 	lock_guard<mutex> client_guard(context_lock);
 	if (log_query_writer) {
 		// log query path is set: log the query
-		log_query_writer->WriteData((const_data_ptr_t) query.c_str(), query.size());
+		log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
 		log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
 		log_query_writer->Flush();
 	}
@@ -736,7 +733,7 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	if (result->types.size() == expected_columns.size()) {
 		bool mismatch = false;
 		for (idx_t i = 0; i < result->types.size(); i++) {
-			if (result->sql_types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
+			if (result->types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
 				mismatch = true;
 				break;
 			}
@@ -750,12 +747,12 @@ unique_ptr<QueryResult> ClientContext::Execute(shared_ptr<Relation> relation) {
 	string err_str = "Result mismatch in query!\nExpected the following columns: ";
 	for (idx_t i = 0; i < expected_columns.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += expected_columns[i].name + " " + SQLTypeToString(expected_columns[i].type);
+		err_str += expected_columns[i].name + " " + expected_columns[i].type.ToString();
 	}
 	err_str += "]\nBut result contained the following: ";
 	for (idx_t i = 0; i < result->types.size(); i++) {
 		err_str += i == 0 ? "[" : ", ";
-		err_str += result->names[i] + " " + SQLTypeToString(result->sql_types[i]);
+		err_str += result->names[i] + " " + result->types[i].ToString();
 	}
 	err_str += "]";
 	return make_unique<MaterializedQueryResult>(err_str);

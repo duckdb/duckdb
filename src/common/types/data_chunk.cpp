@@ -16,14 +16,14 @@ namespace duckdb {
 DataChunk::DataChunk() : count(0) {
 }
 
-void DataChunk::InitializeEmpty(vector<TypeId> &types) {
+void DataChunk::InitializeEmpty(vector<LogicalType> &types) {
 	assert(types.size() > 0);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
 }
 
-void DataChunk::Initialize(vector<TypeId> &types) {
+void DataChunk::Initialize(vector<LogicalType> &types) {
 	assert(types.size() > 0);
 	InitializeEmpty(types);
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -91,8 +91,8 @@ void DataChunk::Normalify() {
 	}
 }
 
-vector<TypeId> DataChunk::GetTypes() {
-	vector<TypeId> types;
+vector<LogicalType> DataChunk::GetTypes() {
+	vector<LogicalType> types;
 	for (idx_t i = 0; i < column_count(); i++) {
 		types.push_back(data[i].type);
 	}
@@ -113,7 +113,7 @@ void DataChunk::Serialize(Serializer &serializer) {
 	serializer.Write<idx_t>(column_count());
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
 		// write the types
-		serializer.Write<int>((int)data[col_idx].type);
+		data[col_idx].type.Serialize(serializer);
 	}
 	// write the data
 	for (idx_t col_idx = 0; col_idx < column_count(); col_idx++) {
@@ -125,9 +125,9 @@ void DataChunk::Deserialize(Deserializer &source) {
 	auto rows = source.Read<sel_t>();
 	idx_t column_count = source.Read<idx_t>();
 
-	vector<TypeId> types;
+	vector<LogicalType> types;
 	for (idx_t i = 0; i < column_count; i++) {
-		types.push_back((TypeId)source.Read<int>());
+		types.push_back(LogicalType::Deserialize(source));
 	}
 	Initialize(types);
 	// now load the column data
@@ -170,7 +170,7 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 }
 
 void DataChunk::Hash(Vector &result) {
-	assert(result.type == TypeId::HASH);
+	assert(result.type.id() == LogicalTypeId::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < column_count(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());
@@ -191,4 +191,4 @@ void DataChunk::Print() {
 	Printer::Print(ToString());
 }
 
-}
+} // namespace duckdb

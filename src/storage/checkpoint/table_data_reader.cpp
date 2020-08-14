@@ -46,7 +46,7 @@ void TableDataReader::ReadTableData() {
 			column_count += data_pointer.tuple_count;
 			// create a persistent segment
 			auto segment = make_unique<PersistentSegment>(
-			    manager.buffer_manager, data_pointer.block_id, data_pointer.offset, GetInternalType(column.type),
+			    manager.buffer_manager, data_pointer.block_id, data_pointer.offset, column.type.InternalType(),
 			    data_pointer.row_start, data_pointer.tuple_count, data_pointer.min_stats, data_pointer.max_stats);
 			info.data[col].push_back(move(segment));
 		}

@@ -46,7 +46,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 		// e.g. GROUP BY k, k or GROUP BY 1, 1
 		// in this case, we can just replace the grouping with a constant since the second grouping has no effect
 		// (the constant grouping will be optimized out later)
-		return BindResult(make_unique<BoundConstantExpression>(SQLType::INTEGER, Value(42)));
+		return BindResult(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
 	}
 	if (entry >= node.select_list.size()) {
 		throw BinderException("GROUP BY term out of range - should be between 1 and %d", (int)node.select_list.size());
@@ -66,7 +66,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 
 BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	// constant as root expression
-	if (!TypeIsIntegral(constant.value.type)) {
+	if (!constant.value.type().IsIntegral()) {
 		// non-integral expression, we just leave the constant here.
 		return ExpressionBinder::BindExpression(constant, 0);
 	}

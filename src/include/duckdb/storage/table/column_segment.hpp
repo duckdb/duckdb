@@ -27,9 +27,9 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 
 class SegmentStatistics {
 public:
-	SegmentStatistics(TypeId type, idx_t type_size);
-	SegmentStatistics(TypeId type, idx_t type_size, data_t stats_min[], data_t stats_max[]);
-	TypeId type;
+	SegmentStatistics(PhysicalType type, idx_t type_size);
+	SegmentStatistics(PhysicalType type, idx_t type_size, data_t stats_min[], data_t stats_max[]);
+	PhysicalType type;
 	idx_t type_size;
 	//! The minimum value of the segment
 	unique_ptr<data_t[]> minimum;
@@ -49,15 +49,15 @@ public:
 class ColumnSegment : public SegmentBase {
 public:
 	//! Initialize an empty column segment of the specified type
-	ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
+	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count = 0);
 
-	ColumnSegment(TypeId type, ColumnSegmentType segment_type, idx_t start, idx_t count, data_t stats_min[],
+	ColumnSegment(PhysicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count, data_t stats_min[],
 	              data_t stats_max[]);
 
 	virtual ~ColumnSegment() = default;
 
 	//! The type stored in the column
-	TypeId type;
+	PhysicalType type;
 	//! The size of the type
 	idx_t type_size;
 	//! The column segment type (transient or persistent)

@@ -38,13 +38,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 		// just push the normal join
 		return plan;
 	}
-	vector<TypeId> delim_types;
+	vector<LogicalType> delim_types;
 	vector<unique_ptr<Expression>> distinct_groups, distinct_expressions;
 	for (auto &delim_expr : op.duplicate_eliminated_columns) {
 		assert(delim_expr->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = (BoundReferenceExpression &)*delim_expr;
 		delim_types.push_back(bound_ref.return_type);
-		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.sql_type, bound_ref.index));
+		distinct_groups.push_back(make_unique<BoundReferenceExpression>(bound_ref.return_type, bound_ref.index));
 	}
 	if (op.join_type == JoinType::MARK) {
 		assert(plan->type == PhysicalOperatorType::HASH_JOIN);
@@ -59,4 +59,4 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	return move(delim_join);
 }
 
-}
+} // namespace duckdb

@@ -24,6 +24,17 @@ NULL
 NULL
 NULL
 
+query I
+SELECT FIRST(NULL)
+----
+NULL
+
+query III
+SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST('00:00:00' AS TIME) as a, CAST('12:34:56' AS TIME) as b, 2 as id ORDER BY 1
+----
+NULL	NULL	1
+00:00:00	12:34:56	2
+
 # test aggregates on a set of values with scalar inputs
 statement ok
 CREATE TABLE integers(i INTEGER);
