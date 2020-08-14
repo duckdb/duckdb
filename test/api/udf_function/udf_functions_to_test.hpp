@@ -371,6 +371,7 @@ struct UDFCovarPopOperation : public UDFCovarOperation {
 
 // UDFSum function based on "src/function/aggregate/distributive/sum.cpp"
 
+//------------------ UDFSum --------------------------------//
 struct UDFSum {
 	typedef struct {
 		double value;
@@ -488,21 +489,6 @@ struct UDFSum {
 			}
 		}
 	}
-
-	// template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
-	// 	if (!source.isset) {
-	// 		// source is NULL, nothing to do
-	// 		return;
-	// 	}
-	// 	if (!target->isset) {
-	// 		// target is NULL, use source value directly
-	// 		*target = source;
-	// 	} else {
-	// 		// else perform the operation
-	// 		target->value += source.value;
-	// 	}
-	// }
-
 
 	template <class STATE_TYPE, class RESULT_TYPE>
 	static void Finalize(Vector &states, Vector &result, idx_t count) {
