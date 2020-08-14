@@ -255,9 +255,6 @@ BenchmarkConfiguration parse_arguments(const int arg_counter, char const *const 
 		if (arg == "--list") {
 			// list names of all benchmarks
 			for (auto &benchmark : benchmarks) {
-				if (StringUtil::StartsWith(benchmark->name, "sqlite_")) {
-					continue;
-				}
 				fprintf(stdout, "%s\n", benchmark->name.c_str());
 			}
 			exit(0);
