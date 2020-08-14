@@ -152,19 +152,15 @@ public:
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	//----------------------------- Non-parallalel aggregate ------------------------------//
-	template<typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateNonParallelAggregateFunction(string name, SQLType ret_type, SQLType input_typeA) {
-		AggregateFunction function = UDFWrapper::CreateNonParallelAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_typeA);
+	void CreateAggregateFunction(string name, vector<SQLType> arguments, SQLType return_type, aggregate_size_t state_size,
+                                 aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
+                                 aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
+                                 bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr) {
+
+		AggregateFunction function = UDFWrapper::CreateAggregateFunction(name, arguments, return_type, state_size, initialize,
+																		 update, combine, finalize, simple_update, bind, destructor);
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
-
-	template<typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateNonParallelAggregateFunction(string name, SQLType ret_type, SQLType input_typeA, SQLType input_typeB) {
-		AggregateFunction function = UDFWrapper::CreateNonParallelAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(string query, vector<Value> &values);

@@ -369,78 +369,172 @@ struct UDFCovarPopOperation : public UDFCovarOperation {
 	}
 };
 
+// UDFSum function based on "src/function/aggregate/distributive/sum.cpp"
 
-// STRING_AGG function copied from "src/function/aggregate/distributive/string_agg.cpp"
+struct UDFSum {
+	typedef struct {
+		double value;
+		bool isset;
+	} sum_state_t;
 
-//------------------ STRING_AGG --------------------------------//
-
-struct udf_string_agg_state_t {
-	char *dataptr;
-	idx_t size;
-	idx_t alloc_size;
-};
-
-struct UDFStringAggFunction {
-	template <class STATE> static void Initialize(STATE *state) {
-		state->dataptr = nullptr;
-		state->alloc_size = 0;
-		state->size = 0;
+	template <class STATE> static idx_t StateSize() {
+		return sizeof(STATE);
 	}
 
-	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, A_TYPE *str_data, B_TYPE *sep_data, nullmask_t &str_nullmask,
-	                      nullmask_t &sep_nullmask, idx_t str_idx, idx_t sep_idx) {
-		auto str = str_data[str_idx].GetData();
-		auto sep = sep_data[sep_idx].GetData();
-		auto str_size = str_data[str_idx].GetSize() + 1;
-		auto sep_size = sep_data[sep_idx].GetSize();
+	template <class STATE> static void Initialize(data_ptr_t state) {
+		((STATE *)state)->value = 0;
+		((STATE *)state)->isset = false;
+	}
 
-		if (state->dataptr == nullptr) {
-			// first iteration: allocate space for the string and copy it into the state
-			state->alloc_size = std::max((idx_t)8, (idx_t)NextPowerOfTwo(str_size));
-			state->dataptr = new char[state->alloc_size];
-			state->size = str_size - 1;
-			memcpy(state->dataptr, str, str_size);
-		} else {
-			// subsequent iteration: first check if we have space to place the string and separator
-			idx_t required_size = state->size + str_size + sep_size;
-			if (required_size > state->alloc_size) {
-				// no space! allocate extra space
-				while (state->alloc_size < required_size) {
-					state->alloc_size *= 2;
-				}
-				auto new_data = new char[state->alloc_size];
-				memcpy(new_data, state->dataptr, state->size);
-				delete[] state->dataptr;
-				state->dataptr = new_data;
+	template <class INPUT_TYPE, class STATE>
+	static void Operation(STATE *state, INPUT_TYPE *input, idx_t idx) {
+		state->isset = true;
+		state->value += input[idx];
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void ConstantOperation(STATE *state, INPUT_TYPE *input, idx_t count) {
+		state->isset = true;
+		state->value += (INPUT_TYPE)input[0] * (INPUT_TYPE)count;
+	}
+
+	template <class STATE_TYPE, class INPUT_TYPE>
+	static void Update(Vector inputs[], idx_t input_count, Vector &states, idx_t count) {
+		assert(input_count == 1);
+
+		if (inputs[0].vector_type == VectorType::CONSTANT_VECTOR && states.vector_type == VectorType::CONSTANT_VECTOR) {
+			if (ConstantVector::IsNull(inputs[0])) {
+				// constant NULL input in function that ignores NULL values
+				return;
 			}
-			// copy the separator
-			memcpy(state->dataptr + state->size, sep, sep_size);
-			state->size += sep_size;
-			// copy the string
-			memcpy(state->dataptr + state->size, str, str_size);
-			state->size += str_size - 1;
+			// regular constant: get first state
+			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>(*sdata, idata, count);
+		} else if (inputs[0].vector_type == VectorType::FLAT_VECTOR && states.vector_type == VectorType::FLAT_VECTOR) {
+			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto nullmask = FlatVector::Nullmask(inputs[0]);
+			if (nullmask.any()) {
+				// potential NULL values and NULL values are ignored
+				for (idx_t i = 0; i < count; i++) {
+					if (!nullmask[i]) {
+						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], idata, i);
+					}
+				}
+			} else {
+				// quick path: no NULL values or NULL values are not ignored
+				for (idx_t i = 0; i < count; i++) {
+					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>(sdata[i], idata, i);
+				}
+			}
+		} else {
+			throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
+		}
+	}
+
+	template <class STATE_TYPE, class INPUT_TYPE>
+	static void SimpleUpdate(Vector inputs[], idx_t input_count, data_ptr_t state, idx_t count) {
+		assert(input_count == 1);
+		switch (inputs[0].vector_type) {
+			case VectorType::CONSTANT_VECTOR: {
+				if (ConstantVector::IsNull(inputs[0])) {
+					return;
+				}
+				auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
+				UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, count);
+				break;
+			}
+			case VectorType::FLAT_VECTOR: {
+				auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
+				auto nullmask = FlatVector::Nullmask(inputs[0]);
+				if (nullmask.any()) {
+					// potential NULL values and NULL values are ignored
+					for (idx_t i = 0; i < count; i++) {
+						if (!nullmask[i]) {
+							UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, i);
+						}
+					}
+				} else {
+					// quick path: no NULL values or NULL values are not ignored
+					for (idx_t i = 0; i < count; i++) {
+						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, idata, i);
+					}
+				}
+				break;
+			}
+			default: {
+				throw duckdb::NotImplementedException("UDFSum only supports CONSTANT and FLAT vectors!");
+			}
+		}
+	}
+
+	template <class STATE_TYPE> static void Combine(Vector &source, Vector &target, idx_t count) {
+		assert(source.type == TypeId::POINTER && target.type == TypeId::POINTER);
+		auto sdata = FlatVector::GetData<STATE_TYPE *>(source);
+		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
+		// OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
+		for (idx_t i = 0; i < count; i++) {
+			if (!sdata[i]->isset) {
+				// source is NULL, nothing to do
+				return;
+			}
+			if (!tdata[i]->isset) {
+				// target is NULL, use source value directly
+				*tdata[i] = *sdata[i];
+			} else {
+				// else perform the operation
+				tdata[i]->value += sdata[i]->value;
+			}
+		}
+	}
+
+	// template <class STATE, class OP> static void Combine(STATE source, STATE *target) {
+	// 	if (!source.isset) {
+	// 		// source is NULL, nothing to do
+	// 		return;
+	// 	}
+	// 	if (!target->isset) {
+	// 		// target is NULL, use source value directly
+	// 		*target = source;
+	// 	} else {
+	// 		// else perform the operation
+	// 		target->value += source.value;
+	// 	}
+	// }
+
+
+	template <class STATE_TYPE, class RESULT_TYPE>
+	static void Finalize(Vector &states, Vector &result, idx_t count) {
+		if (states.vector_type == VectorType::CONSTANT_VECTOR) {
+			result.vector_type = VectorType::CONSTANT_VECTOR;
+
+			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
+			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
+			UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, *sdata, rdata, ConstantVector::Nullmask(result), 0);
+		} else {
+			assert(states.vector_type == VectorType::FLAT_VECTOR);
+			result.vector_type = VectorType::FLAT_VECTOR;
+
+			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+			for (idx_t i = 0; i < count; i++) {
+				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Nullmask(result), i);
+			}
 		}
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, STATE *state, T *target, nullmask_t &nullmask, idx_t idx) {
-		if (!state->dataptr) {
+		if (!state->isset) {
 			nullmask[idx] = true;
 		} else {
-			target[idx] = StringVector::AddString(result, state->dataptr, state->size);
+			if (!Value::DoubleIsValid(state->value)) {
+				throw OutOfRangeException("SUM is out of range!");
+			}
+			target[idx] = state->value;
 		}
 	}
-
-	template <class STATE> static void Destroy(STATE *state) {
-		if (state->dataptr) {
-			delete[] state->dataptr;
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
+}; // end UDFSum
 
 }; //end namespace

@@ -112,15 +112,19 @@ TEST_CASE("Aggregate UDFs", "[udf_function]") {
 		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_double_args(1)"));
 	}
 
-	SECTION("Testing no-parallel UDFs") {
-		REQUIRE_NOTHROW(con.CreateNonParallelAggregateFunction<UDFStringAggFunction, udf_string_agg_state_t, string_t, string_t, string_t>
-																("udf_string_agg_again",
-																SQLType::VARCHAR,
-																SQLType::VARCHAR,
-																SQLType::VARCHAR));
+	SECTION("Testing the generic CreateAggregateFunction()") {
+		REQUIRE_NOTHROW(con.CreateAggregateFunction("udf_sum", {SQLType::DOUBLE}, SQLType::DOUBLE, &UDFSum::StateSize<UDFSum::sum_state_t>,
+                                                    &UDFSum::Initialize<UDFSum::sum_state_t>, &UDFSum::Update<UDFSum::sum_state_t, double>,
+                                                    &UDFSum::Combine<UDFSum::sum_state_t>, &UDFSum::Finalize<UDFSum::sum_state_t, double>,
+                                                    &UDFSum::SimpleUpdate<UDFSum::sum_state_t, double>));
 
-		REQUIRE_NO_FAIL(con.Query("SELECT udf_string_agg_again('a',',')"));
+		REQUIRE_NO_FAIL(con.Query("SELECT udf_sum(1)"));
+		result = con.Query("SELECT udf_sum(1)");
+		REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
-		// TODO it's missing to test an unary non-parallel aggregate (e.g., maybe nested/list.cpp)
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("INSERT INTO integers SELECT * FROM range(0, 1000, 1)"));
+		result = con.Query("SELECT udf_sum(i) FROM integers");
+		REQUIRE(CHECK_COLUMN(result, 0, {499500}));
 	}
 }
