@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 //! Represents a Table producing function

@@ -1,5 +1,5 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/serializer.hpp"
 
 namespace duckdb {

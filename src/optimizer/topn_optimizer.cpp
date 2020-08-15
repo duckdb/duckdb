@@ -2,6 +2,7 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 using namespace std;
