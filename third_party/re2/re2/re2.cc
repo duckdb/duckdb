@@ -1221,14 +1221,14 @@ bool RE2::Arg::parse_float(const char* str, size_t n, void* dest) {
     return parse_##name##_radix(str, n, dest, 0);                              \
   }
 
-DEFINE_INTEGER_PARSER(short);
-DEFINE_INTEGER_PARSER(ushort);
-DEFINE_INTEGER_PARSER(int);
-DEFINE_INTEGER_PARSER(uint);
-DEFINE_INTEGER_PARSER(long);
-DEFINE_INTEGER_PARSER(ulong);
-DEFINE_INTEGER_PARSER(longlong);
-DEFINE_INTEGER_PARSER(ulonglong);
+DEFINE_INTEGER_PARSER(short)
+DEFINE_INTEGER_PARSER(ushort)
+DEFINE_INTEGER_PARSER(int)
+DEFINE_INTEGER_PARSER(uint)
+DEFINE_INTEGER_PARSER(long)
+DEFINE_INTEGER_PARSER(ulong)
+DEFINE_INTEGER_PARSER(longlong)
+DEFINE_INTEGER_PARSER(ulonglong)
 
 #undef DEFINE_INTEGER_PARSER
 
