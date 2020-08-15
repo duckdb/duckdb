@@ -6,7 +6,7 @@
 using namespace duckdb;
 using namespace std;
 
-PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {};
+PostgresParser::PostgresParser() : success(false), parse_tree(nullptr), error_message(""), error_location(0) {}
 
 
 void PostgresParser::Parse(string query) {
@@ -21,8 +21,8 @@ void PostgresParser::Parse(string query) {
 		error_message = string(res.error_message);
 		error_location = res.error_location;
 	}
-};
+}
 
 PostgresParser::~PostgresParser()  {
     duckdb_libpgquery::pg_parser_cleanup();
-};
+}

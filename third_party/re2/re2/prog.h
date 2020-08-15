@@ -155,7 +155,7 @@ class Prog {
                            //   means there are no remaining possibilities,
                            //   which is most likely for character classes.
                            //   foldcase: A-Z -> a-z before checking range.
-      };
+      } ;
 
       EmptyOp empty_;       // opcode == kInstEmptyWidth
                             //   empty_ is bitwise OR of kEmpty* flags above.

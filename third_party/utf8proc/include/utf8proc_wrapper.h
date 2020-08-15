@@ -19,5 +19,5 @@ size_t utf8proc_prev_grapheme_cluster(const char *s, size_t len, size_t pos);
 size_t utf8proc_render_width(const char *s, size_t len, size_t pos);
 
 #ifdef __cplusplus
-};
+}
 #endif
