@@ -42,16 +42,19 @@ private:
 
 		int col_idx = 0;
 		for (auto &schema : res->table->schemas) {
-			if (string(schema->format) == "l") {
+			auto format = string(schema->format);
+			if (format == "l") {
 				return_types.push_back(duckdb::LogicalType::BIGINT);
-				auto name = string(schema->name);
-				if (name.empty()) {
-					name = string("v") + to_string(col_idx);
-				}
-				names.push_back(name);
+			} else if (format == "u") {
+				return_types.push_back(duckdb::LogicalType::VARCHAR);
 			} else {
-				throw std::runtime_error("Invalid type");
+				throw duckdb::NotImplementedException("Invalid Arrow type %s", format);
 			}
+			auto name = string(schema->name);
+			if (name.empty()) {
+				name = string("v") + to_string(col_idx);
+			}
+			names.push_back(name);
 			col_idx++;
 		}
 
@@ -68,15 +71,29 @@ private:
 		}
 
 		// FIXME support scanning with offsets
+		// FIXME handle NULLs
 		assert(data.table->columns[0]->length < STANDARD_VECTOR_SIZE);
 
 		output.SetCardinality(data.table->columns[0]->length);
 		for (duckdb::idx_t col_idx = 0; col_idx < output.column_count(); col_idx++) {
 			switch (output.data[col_idx].type.id()) {
-			case duckdb::LogicalTypeId::BIGINT: {
-				duckdb::Vector bigint_vec(duckdb::LogicalType::BIGINT,
-				                          (duckdb::data_ptr_t)data.table->columns[col_idx]->buffers[1]);
-				output.data[col_idx].Reference(bigint_vec);
+			case duckdb::LogicalTypeId::BIGINT:
+
+				duckdb::FlatVector::SetData(output.data[col_idx],
+				                            (duckdb::data_ptr_t)data.table->columns[col_idx]->buffers[1]);
+				break;
+
+			case duckdb::LogicalTypeId::VARCHAR: {
+				auto &array = data.table->columns[col_idx];
+				auto offsets = (uint32_t *)array->buffers[1];
+				auto cdata = (char *)array->buffers[2];
+
+				for (int i = 0; i < array->length; i++) {
+					duckdb::FlatVector::GetData<duckdb::string_t>(output.data[col_idx])[i] =
+					    duckdb::StringVector::AddString(output.data[col_idx], cdata + offsets[i],
+					                                    offsets[i + 1] - offsets[i]);
+				}
+
 				break;
 			}
 			default:
@@ -95,6 +112,22 @@ static string ptr_to_string(void const *ptr) {
 
 int main(int argc, char *argv[]) {
 
+	arrow::StringBuilder sbuilder;
+	sbuilder.Append("1");
+	sbuilder.Append("2");
+	sbuilder.Append("3222");
+	sbuilder.AppendNull();
+	sbuilder.Append("5");
+	sbuilder.Append("6");
+	sbuilder.Append("733");
+	sbuilder.Append("8");
+
+	std::shared_ptr<arrow::Array> sarray;
+	auto sst = sbuilder.Finish(&sarray);
+	if (!sst.ok()) {
+		// ... do something on array building failure
+	}
+
 	arrow::Int64Builder builder;
 	builder.Append(1);
 	builder.Append(2);
@@ -106,7 +139,7 @@ int main(int argc, char *argv[]) {
 	builder.Append(8);
 
 	std::shared_ptr<arrow::Array> array;
-	arrow::Status st = builder.Finish(&array);
+	auto st = builder.Finish(&array);
 	if (!st.ok()) {
 		// ... do something on array building failure
 	}
@@ -126,8 +159,12 @@ int main(int argc, char *argv[]) {
 
 	ArrowArray c_array;
 	ArrowSchema c_schema;
+	ArrowArray c_sarray;
+	ArrowSchema c_sschema;
 	arrow::ExportArray(*array, &c_array, &c_schema);
-	// printf("%s %lld %d \n", c_schema.format, c_array.length, c_array.n_buffers);
+	arrow::ExportArray(*sarray, &c_sarray, &c_sschema);
+
+	// printf("%s %lld %d \n", c_sschema.format, c_sarray.length, c_sarray.n_buffers);
 
 	assert(c_schema.children == nullptr);
 	assert(c_schema.n_children == 0);
@@ -145,22 +182,24 @@ int main(int argc, char *argv[]) {
 
 	assert(c_array.n_buffers == 2);
 	// lets try to read those buffers
-	auto int64_buf = (int64_t *)c_array.buffers[1];
-
-	for (int i = 0; i < c_array.length; i++) {
-		printf("%d %lld\n", i, int64_buf[i]);
-	}
 
 	MyArrowTable arrow_table;
 	arrow_table.schemas.push_back(&c_schema);
 	arrow_table.columns.push_back(&c_array);
 
+	arrow_table.schemas.push_back(&c_sschema);
+	arrow_table.columns.push_back(&c_sarray);
+
 	auto res = conn.TableFunction("read_arrow", {duckdb::Value::POINTER((uintptr_t)&arrow_table)})
 	               ->Query("arrow", "SELECT * FROM arrow");
 	res->Print();
 
+	// TODO release whenever scan function completes?
 	c_schema.release(&c_schema);
 	c_array.release(&c_array);
+
+	c_sschema.release(&c_sschema);
+	c_sarray.release(&c_sarray);
 
 	return 0;
 }
