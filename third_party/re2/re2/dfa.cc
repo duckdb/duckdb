@@ -123,7 +123,13 @@ class DFA {
                         // into this state, along with kFlagMatch if this
                         // is a matching state.
 
+// Work around the bug affecting flexible array members in GCC 6.x (for x >= 1).
+// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70932)
+#if !defined(__clang__) && defined(__GNUC__) && __GNUC__ == 6 && __GNUC_MINOR__ >= 1
     std::atomic<State*> next_[0];   // Outgoing arrows from State,
+#else
+    std::atomic<State*> next_[];    // Outgoing arrows from State,
+#endif
 
                         // one per input byte class
   };
