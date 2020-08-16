@@ -24,7 +24,10 @@ string Decimal::ToString(int64_t value, uint8_t scale) {
 }
 
 string Decimal::ToString(hugeint_t value, uint8_t scale) {
-	throw NotImplementedException("FIXME: format hugeint");
+	auto len = HugeintToStringCast::DecimalLength(value, scale);
+	auto data = unique_ptr<char[]>(new char[len + 1]);
+	HugeintToStringCast::FormatDecimal(value, scale, data.get(), len);
+	return string(data.get(), len);
 }
 
 

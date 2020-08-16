@@ -111,6 +111,7 @@ template<> bool Hugeint::TryCast(hugeint_t input, int8_t &result);
 template<> bool Hugeint::TryCast(hugeint_t input, int16_t &result);
 template<> bool Hugeint::TryCast(hugeint_t input, int32_t &result);
 template<> bool Hugeint::TryCast(hugeint_t input, int64_t &result);
+template<> bool Hugeint::TryCast(hugeint_t input, hugeint_t &result);
 template<> bool Hugeint::TryCast(hugeint_t input, float &result);
 template<> bool Hugeint::TryCast(hugeint_t input, double &result);
 

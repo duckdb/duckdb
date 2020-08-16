@@ -44,8 +44,8 @@ LogicalType Transformer::TransformTypeName(PGTypeName *type_name) {
 			// only width is provided: set scale to 0
 			scale = 0;
 		}
-		if (width > Decimal::MAX_WIDTH_DECIMAL) {
-			throw ParserException("Width bigger than %d is not supported!", (int) Decimal::MAX_WIDTH_DECIMAL);
+		if (width <= 0 || width > Decimal::MAX_WIDTH_DECIMAL) {
+			throw ParserException("Width must be between 1 and %d!", (int) Decimal::MAX_WIDTH_DECIMAL);
 		}
 		if (scale > width) {
 			throw ParserException("Scale cannot be bigger than width");

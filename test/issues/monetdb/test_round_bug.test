@@ -18,7 +18,9 @@ query IR
 SELECT * FROM test_num_data ORDER BY id
 ----
 1	0.000000
-2	-34338492.215397
+2	-34338492.215397047
+
+mode skip
 
 query IIR
 SELECT t1.id, t2.id, t1.val * t2.val FROM test_num_data t1, test_num_data t2 ORDER BY 1, 2;

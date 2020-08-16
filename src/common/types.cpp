@@ -110,6 +110,7 @@ const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
 const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
+const LogicalType LogicalType::DECIMAL = LogicalType(LogicalTypeId::DECIMAL);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
 const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
@@ -131,7 +132,7 @@ const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                   LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
-                                                  LogicalType::DOUBLE};
+                                                  LogicalType::DOUBLE, LogicalType::DECIMAL};
 
 const vector<LogicalType> LogicalType::INTEGRAL = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
                                                    LogicalType::BIGINT, LogicalType::HUGEINT};
@@ -342,7 +343,7 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (width_ == 0) {
-			return "DECIMAL(?,?)";
+			return "DECIMAL";
 		}
 		return StringUtil::Format("DECIMAL(%d,%d)", width_, scale_);
 	}

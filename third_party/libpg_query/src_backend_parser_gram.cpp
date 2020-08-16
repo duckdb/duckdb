@@ -18223,7 +18223,7 @@ yyreduce:
   case 623:
 #line 1281 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.typnam) = SystemTypeName("float8");
+					(yyval.typnam) = SystemTypeName("float4");
 				;}
     break;
 

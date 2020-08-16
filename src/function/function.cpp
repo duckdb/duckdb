@@ -148,7 +148,7 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &argum
 	}
 	int64_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i] == func.arguments[i]) {
+		if (arguments[i].id() == func.arguments[i].id()) {
 			// arguments match: do nothing
 			continue;
 		}
@@ -231,7 +231,7 @@ idx_t Function::BindFunction(string name, vector<TableFunction> &functions, vect
 void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children, vector<LogicalType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
-		if (target_type.id() != LogicalTypeId::ANY && types[i] != target_type) {
+		if (target_type.id() != LogicalTypeId::ANY && types[i].id() != target_type.id()) {
 			// type of child does not match type of function argument: add a cast
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 			types[i] = target_type;

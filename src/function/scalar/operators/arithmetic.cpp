@@ -134,7 +134,11 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
+		}
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
@@ -168,6 +172,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::NUMERIC) {
 		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
 	}
+	functions.AddFunction(ScalarFunction({LogicalType(LogicalTypeId::DECIMAL)}, LogicalType(LogicalTypeId::DECIMAL), ScalarFunction::NopFunction));
 	set.AddFunction(functions);
 }
 
@@ -227,7 +232,11 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<SubtractOperator>(type)));
+		}
 	}
 	// we can subtract dates from each other
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
@@ -254,8 +263,12 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(
-		    ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(
+				ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
+		}
 	}
 	set.AddFunction(functions);
 }
@@ -293,7 +306,11 @@ template <> interval_t MultiplyOperator::Operation(int64_t left, interval_t righ
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type)));
+		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
@@ -383,7 +400,11 @@ template <class OP> static scalar_function_t GetBinaryFunctionIgnoreZero(Logical
 void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("/");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<DivideOperator>(type)));
+		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
@@ -408,7 +429,11 @@ template <> double ModuloOperator::Operation(double left, double right) {
 void ModFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("%");
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			continue;
+		} else {
+			functions.AddFunction(ScalarFunction({type, type}, type, GetBinaryFunctionIgnoreZero<ModuloOperator>(type)));
+		}
 	}
 	set.AddFunction(functions);
 	functions.name = "mod";

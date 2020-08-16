@@ -329,6 +329,7 @@ public:
 	static const LogicalType BIGINT;
 	static const LogicalType FLOAT;
 	static const LogicalType DOUBLE;
+	static const LogicalType DECIMAL;
 	static const LogicalType DATE;
 	static const LogicalType TIMESTAMP;
 	static const LogicalType TIME;

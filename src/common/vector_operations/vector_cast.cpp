@@ -37,49 +37,6 @@ static void null_cast(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class SRC> static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
-	// now switch on the result type
-	switch (result.type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		UnaryExecutor::Execute<SRC, bool, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::TINYINT:
-		UnaryExecutor::Execute<SRC, int8_t, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::SMALLINT:
-		UnaryExecutor::Execute<SRC, int16_t, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::INTEGER:
-		UnaryExecutor::Execute<SRC, int32_t, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::BIGINT:
-		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::HUGEINT:
-		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::FLOAT:
-		UnaryExecutor::Execute<SRC, float, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::DOUBLE:
-		UnaryExecutor::Execute<SRC, double, duckdb::Cast, true>(source, result, count);
-		break;
-	case LogicalTypeId::VARCHAR: {
-		string_cast<SRC, duckdb::StringCast>(source, result, count);
-		break;
-	}
-	case LogicalTypeId::LIST: {
-		auto list_child = make_unique<ChunkCollection>();
-		ListVector::SetEntry(result, move(list_child));
-		null_cast(source, result, count);
-		break;
-	}
-	default:
-		null_cast(source, result, count);
-		break;
-	}
-}
-
 template<class T>
 static void to_decimal_cast(Vector &source, Vector &result, idx_t count) {
 	switch(result.type.InternalType()) {
@@ -270,6 +227,52 @@ static void decimal_cast_switch(Vector &source, Vector &result, idx_t count) {
 		default:
 			throw NotImplementedException("Unimplemented internal decimal type");
 		}
+		break;
+	}
+	default:
+		null_cast(source, result, count);
+		break;
+	}
+}
+
+template <class SRC> static void numeric_cast_switch(Vector &source, Vector &result, idx_t count) {
+	// now switch on the result type
+	switch (result.type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		UnaryExecutor::Execute<SRC, bool, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::TINYINT:
+		UnaryExecutor::Execute<SRC, int8_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		UnaryExecutor::Execute<SRC, int16_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::INTEGER:
+		UnaryExecutor::Execute<SRC, int32_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::BIGINT:
+		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::HUGEINT:
+		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::FLOAT:
+		UnaryExecutor::Execute<SRC, float, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::DOUBLE:
+		UnaryExecutor::Execute<SRC, double, duckdb::Cast, true>(source, result, count);
+		break;
+	case LogicalTypeId::DECIMAL:
+		to_decimal_cast<SRC>(source, result, count);
+		break;
+	case LogicalTypeId::VARCHAR: {
+		string_cast<SRC, duckdb::StringCast>(source, result, count);
+		break;
+	}
+	case LogicalTypeId::LIST: {
+		auto list_child = make_unique<ChunkCollection>();
+		ListVector::SetEntry(result, move(list_child));
+		null_cast(source, result, count);
 		break;
 	}
 	default:

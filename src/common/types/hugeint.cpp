@@ -388,6 +388,11 @@ template<> bool Hugeint::TryCast(hugeint_t input, int64_t &result) {
 	return hugeint_try_cast_integer<int64_t>(input, result);
 }
 
+template<> bool Hugeint::TryCast(hugeint_t input, hugeint_t &result) {
+	result = input;
+	return true;
+}
+
 template<> bool Hugeint::TryCast(hugeint_t input, float &result) {
 	double dbl_result;
 	Hugeint::TryCast(input, dbl_result);
