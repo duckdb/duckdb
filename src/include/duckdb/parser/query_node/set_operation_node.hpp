@@ -42,4 +42,4 @@ public:
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 };
 
-}; // namespace duckdb
+} // namespace duckdb

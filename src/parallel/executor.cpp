@@ -149,7 +149,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 			BuildPipelines(child.get(), parent);
 		}
 	}
-};
+}
 
 vector<LogicalType> Executor::GetTypes() {
 	assert(physical_plan);

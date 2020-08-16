@@ -8,6 +8,7 @@
 #include "duckdb/execution/operator/helper/physical_execute.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/limits.hpp"
 
 #include <iostream>
 #include <utility>
@@ -36,7 +37,7 @@ void QueryProfiler::StartQuery(string query, SQLStatement &statement) {
 }
 
 bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
-	switch(op_type) {
+	switch (op_type) {
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:

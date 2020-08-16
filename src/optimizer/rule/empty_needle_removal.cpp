@@ -25,6 +25,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
                                                      bool &changes_made) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	assert(root->children.size() == 2);
+	(void)root;
 	auto prefix_expr = bindings[2];
 
 	// the constant_expr is a scalar expression that we have to fold
