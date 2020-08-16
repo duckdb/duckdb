@@ -1,4 +1,6 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/limits.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
@@ -22,6 +24,32 @@ struct FMTFormat {
 		    format_str, duckdb_fmt::basic_format_args<ctx>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
+
+unique_ptr<FunctionData> bind_printf_function(BoundFunctionExpression &expr, ClientContext &context) {
+	for(idx_t i = 1; i < expr.children.size(); i++) {
+		switch(expr.children[i]->return_type.id()) {
+		case LogicalTypeId::BOOLEAN:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::FLOAT:
+		case LogicalTypeId::DOUBLE:
+		case LogicalTypeId::VARCHAR:
+			// these types are natively supported
+			break;
+		case LogicalTypeId::DECIMAL:
+			// decimal type: add cast to double
+			expr.children[i] = BoundCastExpression::AddCastToType(move(expr.children[i]), LogicalType::DOUBLE);
+			break;
+		default:
+			// all other types: add cast to string
+			expr.children[i] = BoundCastExpression::AddCastToType(move(expr.children[i]), LogicalType::VARCHAR);
+			break;
+		}
+	}
+	return nullptr;
+}
 
 template <class FORMAT_FUN, class ctx>
 static void printf_function(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -64,49 +92,49 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 		for (idx_t col_idx = 1; col_idx < args.column_count(); col_idx++) {
 			auto &col = args.data[col_idx];
 			idx_t arg_idx = col.vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
-			switch (col.type.InternalType()) {
-			case PhysicalType::BOOL: {
+			switch (col.type.id()) {
+			case LogicalTypeId::BOOLEAN: {
 				auto arg_data = FlatVector::GetData<bool>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::INT8: {
+			case LogicalTypeId::TINYINT: {
 				auto arg_data = FlatVector::GetData<int8_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::INT16: {
+			case LogicalTypeId::SMALLINT: {
 				auto arg_data = FlatVector::GetData<int8_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::INT32: {
+			case LogicalTypeId::INTEGER: {
 				auto arg_data = FlatVector::GetData<int32_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::INT64: {
+			case LogicalTypeId::BIGINT: {
 				auto arg_data = FlatVector::GetData<int64_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::FLOAT: {
+			case LogicalTypeId::FLOAT: {
 				auto arg_data = FlatVector::GetData<float>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::DOUBLE: {
+			case LogicalTypeId::DOUBLE: {
 				auto arg_data = FlatVector::GetData<double>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx]));
 				break;
 			}
-			case PhysicalType::VARCHAR: {
+			case LogicalTypeId::VARCHAR: {
 				auto arg_data = FlatVector::GetData<string_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<ctx>(arg_data[arg_idx].GetData()));
 				break;
 			}
 			default:
-				throw Exception("Unsupported type for format!");
+				throw InvalidInputException("Unsupported type for format: \"%s\"!", col.type.ToString());
 			}
 		}
 		// finally actually perform the format
@@ -118,13 +146,15 @@ static void printf_function(DataChunk &args, ExpressionState &state, Vector &res
 void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun = ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                           printf_function<FMTPrintf, duckdb_fmt::printf_context>);
+	                                           printf_function<FMTPrintf, duckdb_fmt::printf_context>,
+											   false, bind_printf_function);
 	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun = ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                           printf_function<FMTFormat, duckdb_fmt::format_context>);
+	                                           printf_function<FMTFormat, duckdb_fmt::format_context>,
+											   false, bind_printf_function);
 	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }

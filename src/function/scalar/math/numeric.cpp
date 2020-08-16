@@ -406,7 +406,6 @@ static void decimal_round_positive_precision_function(DataChunk &input, Expressi
 };
 
 unique_ptr<FunctionData> bind_decimal_round_precision(BoundFunctionExpression &expr, ClientContext &context) {
-	// ceil essentially removes the scale
 	auto decimal_type = expr.children[0]->return_type;
 	if (!expr.children[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");

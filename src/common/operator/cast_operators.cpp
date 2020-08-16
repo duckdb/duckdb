@@ -1546,38 +1546,43 @@ template<> hugeint_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, 
 	return CastHugeDecimalToNumeric<hugeint_t>(input, scale);
 }
 
+template<class SRC, class DST>
+DST CastDecimalToFloatingPoint(SRC input, uint8_t scale) {
+	return Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DoublePowersOfTen[scale]);
+}
+
 // DECIMAL -> FLOAT
 template<> float CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int16_t, float>(input, scale);
+	return CastDecimalToFloatingPoint<int16_t, float>(input, scale);
 }
 
 template<> float CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int32_t, float>(input, scale);
+	return CastDecimalToFloatingPoint<int32_t, float>(input, scale);
 }
 
 template<> float CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int64_t, float>(input, scale);
+	return CastDecimalToFloatingPoint<int64_t, float>(input, scale);
 }
 
 template<> float CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
-	return CastHugeDecimalToNumeric<float>(input, scale);
+	return CastDecimalToFloatingPoint<hugeint_t, float>(input, scale);
 }
 
 // DECIMAL -> DOUBLE
 template<> double CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int16_t, double>(input, scale);
+	return CastDecimalToFloatingPoint<int16_t, double>(input, scale);
 }
 
 template<> double CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int32_t, double>(input, scale);
+	return CastDecimalToFloatingPoint<int32_t, double>(input, scale);
 }
 
 template<> double CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale) {
-	return CastDecimalToNumeric<int64_t, double>(input, scale);
+	return CastDecimalToFloatingPoint<int64_t, double>(input, scale);
 }
 
 template<> double CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale) {
-	return CastHugeDecimalToNumeric<double>(input, scale);
+	return CastDecimalToFloatingPoint<hugeint_t, double>(input, scale);
 }
 
 

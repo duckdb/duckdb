@@ -73,7 +73,7 @@ DELETE FROM decimals WHERE d <> d::DECIMAL(9,1)
 
 #
 # test ABS function
-query II
+query III
 SELECT ABS('-0.1'::DECIMAL), ABS('0.1'::DECIMAL), ABS(NULL::DECIMAL)
 ----
 0.1	0.1	NULL
@@ -225,6 +225,12 @@ SELECT ROUND('1049578239572094512.32415'::DECIMAL(30,10), 0)::VARCHAR,
 0
 0
 0
+
+query I
+SELECT printf('%.2f', '0.12345'::DECIMAL(30,10))
+----
+0.12
+
 
 # addition
 # query I
