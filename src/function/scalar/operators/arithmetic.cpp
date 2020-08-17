@@ -1,8 +1,10 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/numeric_binary_operators.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -130,12 +132,23 @@ template <> timestamp_t AddOperator::Operation(interval_t left, timestamp_t righ
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
+template<class OP>
+unique_ptr<FunctionData> bind_decimal_arithmetic(BoundFunctionExpression &expr, ClientContext &context) {
+	expr.return_type = expr.children[0]->return_type;
+	return nullptr;
+}
+
+unique_ptr<FunctionData> nop_decimal_bind(BoundFunctionExpression &expr, ClientContext &context) {
+	expr.return_type = expr.children[0]->return_type;
+	return nullptr;
+}
+
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("+");
 	// binary add function adds two numbers together
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			continue;
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, false, bind_decimal_arithmetic<AddOperator>));
 		} else {
 			functions.AddFunction(ScalarFunction({type, type}, type, GetScalarBinaryFunction<AddOperator>(type)));
 		}
@@ -170,9 +183,12 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	                   ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>));
 	// unary add function is a nop, but only exists for numeric types
 	for (auto &type : LogicalType::NUMERIC) {
-		functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction, false, nop_decimal_bind));
+		} else {
+			functions.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+		}
 	}
-	functions.AddFunction(ScalarFunction({LogicalType(LogicalTypeId::DECIMAL)}, LogicalType(LogicalTypeId::DECIMAL), ScalarFunction::NopFunction));
 	set.AddFunction(functions);
 }
 
@@ -228,6 +244,22 @@ template <> interval_t SubtractOperator::Operation(timestamp_t left, timestamp_t
 	return Interval::GetDifference(left, right);
 }
 
+unique_ptr<FunctionData> decimal_negate_bind(BoundFunctionExpression &expr, ClientContext &context) {
+	auto decimal_type = expr.children[0]->return_type;
+	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INTEGER);
+	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT);
+	} else {
+		assert(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
+	}
+	expr.return_type = decimal_type;
+	return nullptr;
+}
+
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("-");
 	// binary subtract function "a - b", subtracts b from a
@@ -264,7 +296,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// unary subtract function, negates the input (i.e. multiplies by -1)
 	for (auto &type : LogicalType::NUMERIC) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			continue;
+			functions.AddFunction(
+				ScalarFunction({type}, type, nullptr, false, decimal_negate_bind));
 		} else {
 			functions.AddFunction(
 				ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type)));
